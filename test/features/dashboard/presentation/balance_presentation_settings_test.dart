@@ -214,27 +214,27 @@ void main() {
   );
 
   test(
-    'TOPO-01 RED: the line renderer is a persisted presentation choice independent from the Header graph kind',
+    'MTC-02: the four-way monthly spending renderer is a persisted presentation choice independent from the Header graph kind',
     () {
       final controller = BalancePresentationController();
       addTearDown(controller.dispose);
 
       expect(
-        controller.value.headerLineChartPresentation,
-        BalanceHeaderLineChartPresentation.current,
+        controller.value.monthlySpendingChartPresentation,
+        BalanceMonthlySpendingChartPresentation.current,
       );
       expect(
         controller.value.headerGraphPresentation,
         BalanceHeaderGraphPresentation.lineChart,
       );
 
-      controller.setHeaderLineChartPresentation(
-        BalanceHeaderLineChartPresentation.topographic,
+      controller.setMonthlySpendingChartPresentation(
+        BalanceMonthlySpendingChartPresentation.shaderAtmosphere,
       );
 
       expect(
-        controller.value.headerLineChartPresentation,
-        BalanceHeaderLineChartPresentation.topographic,
+        controller.value.monthlySpendingChartPresentation,
+        BalanceMonthlySpendingChartPresentation.shaderAtmosphere,
       );
       expect(
         controller.value.headerGraphPresentation,

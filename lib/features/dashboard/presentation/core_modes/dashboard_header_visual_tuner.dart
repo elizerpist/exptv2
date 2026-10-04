@@ -1039,25 +1039,33 @@ final class _BalancePresentationSection extends StatelessWidget {
             ],
           ),
         ),
-        if (settings.headerGraphPresentation ==
-            BalanceHeaderGraphPresentation.lineChart)
-          SwitchListTile(
-            key: const ValueKey<String>(
-              'balance-header-topographic-chart-switch',
-            ),
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('3D topografikus vonaldiagram'),
-            subtitle: Text(settings.headerLineChartPresentation.tunerLabel),
-            value:
-                settings.headerLineChartPresentation ==
-                BalanceHeaderLineChartPresentation.topographic,
-            onChanged: (enabled) => controller.setHeaderLineChartPresentation(
-              enabled
-                  ? BalanceHeaderLineChartPresentation.topographic
-                  : BalanceHeaderLineChartPresentation.current,
-            ),
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text('Havi költés diagram'),
+        ),
+        RadioGroup<BalanceMonthlySpendingChartPresentation>(
+          groupValue: settings.monthlySpendingChartPresentation,
+          onChanged: (presentation) {
+            if (presentation != null) {
+              controller.setMonthlySpendingChartPresentation(presentation);
+            }
+          },
+          child: Column(
+            children: <Widget>[
+              for (final presentation
+                  in BalanceMonthlySpendingChartPresentation.values)
+                RadioListTile<BalanceMonthlySpendingChartPresentation>(
+                  key: ValueKey<String>(
+                    'balance-monthly-spending-chart-${presentation.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(presentation.tunerLabel),
+                  value: presentation,
+                ),
+            ],
           ),
+        ),
         if (settings.headerGraphPresentation !=
             BalanceHeaderGraphPresentation.lineChart)
           _BalanceHeaderGlassControls(

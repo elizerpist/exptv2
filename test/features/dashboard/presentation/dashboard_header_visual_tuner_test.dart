@@ -255,7 +255,7 @@ void main() {
   );
 
   testWidgets(
-    'TOPO-01: the Balance Settings switch changes only the live line renderer and disappears for partition visuals',
+    'MTC-01 RED: the Balance Header keeps only its established line renderer and exposes no terrain switch',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -278,30 +278,39 @@ void main() {
         DashboardHeaderTunerSection.balancePresentation,
       ]);
 
-      final toggle = find.byKey(
-        const ValueKey<String>('balance-header-topographic-chart-switch'),
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-topographic-chart-switch'),
+        ),
+        findsNothing,
       );
-      expect(toggle, findsOneWidget);
-      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
-
-      await tester.tap(toggle);
+      for (final presentation
+          in BalanceMonthlySpendingChartPresentation.values) {
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              'balance-monthly-spending-chart-${presentation.name}',
+            ),
+          ),
+          findsOneWidget,
+        );
+      }
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('balance-monthly-spending-chart-reactiveSvg'),
+        ),
+      );
       await tester.pump();
       expect(
-        balance.value.headerLineChartPresentation,
-        BalanceHeaderLineChartPresentation.topographic,
+        balance.value.monthlySpendingChartPresentation,
+        BalanceMonthlySpendingChartPresentation.reactiveSvg,
       );
       expect(
         balance.value.headerGraphPresentation,
         BalanceHeaderGraphPresentation.lineChart,
         reason:
-            'The renderer is subordinate to, not a replacement for, the existing Header graph kind.',
+            'Monthly spending renderers must never replace the established Header graph.',
       );
-
-      balance.setHeaderGraphPresentation(
-        BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
-      );
-      await tester.pump();
-      expect(toggle, findsNothing);
 
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();

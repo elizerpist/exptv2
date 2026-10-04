@@ -545,9 +545,7 @@ final class _BalanceDashboardCoreSurfaceState
               _BalanceAlternativeScopeScaffold(
                 geometry: geometry,
                 presentation: widget.balanceLinkedPresentation,
-                usesChildCards: settings.usesChildCards,
-                monthCombinedCardPresentation:
-                    settings.monthCombinedCardPresentation,
+                presentationSettings: widget.presentationSettings,
               ),
             DashboardCoreModeHeaderScaffold(
               bounds: geometry.headerBounds,
@@ -925,21 +923,36 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
   const _BalanceAlternativeScopeScaffold({
     required this.geometry,
     required this.presentation,
-    required this.usesChildCards,
-    required this.monthCombinedCardPresentation,
+    required this.presentationSettings,
   });
 
   final DashboardLayoutFrame geometry;
   final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
-  final bool usesChildCards;
-  final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
+  final ValueListenable<BalancePresentationSettings>? presentationSettings;
 
   @override
   Widget build(BuildContext context) {
+    final settings = presentationSettings;
+    if (settings == null) {
+      return _withSettings(
+        context,
+        const BalancePresentationSettings.defaults(),
+      );
+    }
+    return ValueListenableBuilder<BalancePresentationSettings>(
+      valueListenable: settings,
+      builder: (context, value, _) => _withSettings(context, value),
+    );
+  }
+
+  Widget _withSettings(
+    BuildContext context,
+    BalancePresentationSettings settings,
+  ) {
     final linked = presentation;
     if (linked == null) {
       return BalanceAlternativeChildCardScope(
-        usesChildCards: usesChildCards,
+        usesChildCards: settings.usesChildCards,
         child: _BalanceFourSectionScaffold(geometry: geometry),
       );
     }
@@ -948,7 +961,7 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
       builder: (context, value, _) {
         if (value == null) {
           return BalanceAlternativeChildCardScope(
-            usesChildCards: usesChildCards,
+            usesChildCards: settings.usesChildCards,
             child: _BalanceFourSectionScaffold(geometry: geometry),
           );
         }
@@ -956,7 +969,7 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
           value,
         );
         return BalanceAlternativeChildCardScope(
-          usesChildCards: usesChildCards,
+          usesChildCards: settings.usesChildCards,
           child: switch (alternative) {
             BalanceAlternativeSumPresentation() =>
               _BalanceSumExtendedSheetScaffold(
@@ -972,7 +985,10 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
               _BalanceMonthExtendedSheetScaffold(
                 geometry: geometry,
                 presentation: alternative,
-                combinedCardPresentation: monthCombinedCardPresentation,
+                combinedCardPresentation:
+                    settings.monthCombinedCardPresentation,
+                monthlySpendingChartPresentation:
+                    settings.monthlySpendingChartPresentation,
               ),
             BalanceAlternativeDayPresentation() =>
               _BalanceDayExtendedSheetScaffold(
@@ -1146,11 +1162,14 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
     required this.geometry,
     required this.presentation,
     required this.combinedCardPresentation,
+    required this.monthlySpendingChartPresentation,
   });
 
   final DashboardLayoutFrame geometry;
   final BalanceAlternativeMonthPresentation presentation;
   final BalanceMonthCombinedCardPresentation combinedCardPresentation;
+  final BalanceMonthlySpendingChartPresentation
+  monthlySpendingChartPresentation;
 
   @override
   Widget build(BuildContext context) => _BalanceExtendedSheetFrame(
@@ -1177,6 +1196,7 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
             child: BalanceAlternativeDailySpendCard(
               presentation: dailySpend,
               timeScope: presentation.timeScope,
+              chartPresentation: monthlySpendingChartPresentation,
             ),
           ),
         ),
@@ -1595,7 +1615,6 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
             series: history,
             expansionProgress: expansionProgress,
             chartMode: settings.chartMode,
-            lineChartPresentation: settings.headerLineChartPresentation,
             lineColor:
                 frame?.chartColor ?? DashboardHeaderTrendChartStyle.lineColor,
             areaFadeColor:

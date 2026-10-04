@@ -91,6 +91,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.0"
+  flutter_shaders_ui:
+    dependency: "direct main"
+    description:
+      name: flutter_shaders_ui
+      sha256: "2282d062ff0f1ddcfb3aed6a38fe31837e6f5a08179c2eb8ee4b1c204b814316"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
   flutter_svg:
     dependency: "direct main"
     description:

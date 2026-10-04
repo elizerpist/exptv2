@@ -264,7 +264,7 @@ class MainActivity : FlutterActivity() {
                             "showDayContentViewChooser" to preferences.getBoolean("showDayContentViewChooser", false),
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
                             "balanceHeaderGraphPresentation" to preferences.getInt("balanceHeaderGraphPresentation", 0),
-                            "balanceHeaderLineChartPresentation" to preferences.getInt("balanceHeaderLineChartPresentation", 0),
+                            "balanceMonthlySpendingChartPresentation" to preferences.getInt("balanceMonthlySpendingChartPresentation", 0),
                             "balanceHeaderPartitionHeightPercent" to preferences.getInt("balanceHeaderPartitionHeightPercent", 50),
                             "balanceMonthCombinedCardPresentation" to preferences.getInt("balanceMonthCombinedCardPresentation", 0),
                             "balanceHeaderGlassConfigurationJson" to preferences.getString("balanceHeaderGlassConfigurationJson", ""),
@@ -291,9 +291,9 @@ class MainActivity : FlutterActivity() {
                         val balanceHeaderGraphPresentation = (values["balanceHeaderGraphPresentation"] as? Number)?.toInt()
                             ?: throw IllegalArgumentException("Missing Balance Header graph presentation.")
                         require(balanceHeaderGraphPresentation in 0..2) { "Invalid Balance Header graph presentation." }
-                        val balanceHeaderLineChartPresentation = (values["balanceHeaderLineChartPresentation"] as? Number)?.toInt()
-                            ?: throw IllegalArgumentException("Missing Balance Header line chart presentation.")
-                        require(balanceHeaderLineChartPresentation in 0..1) { "Invalid Balance Header line chart presentation." }
+                        val balanceMonthlySpendingChartPresentation = (values["balanceMonthlySpendingChartPresentation"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing Balance monthly spending chart presentation.")
+                        require(balanceMonthlySpendingChartPresentation in 0..3) { "Invalid Balance monthly spending chart presentation." }
                         val balanceHeaderPartitionHeightPercent = (values["balanceHeaderPartitionHeightPercent"] as? Number)?.toInt()
                             ?: throw IllegalArgumentException("Missing Balance Header partition height.")
                         require(balanceHeaderPartitionHeightPercent in 0..100) { "Invalid Balance Header partition height." }
@@ -311,7 +311,7 @@ class MainActivity : FlutterActivity() {
                             .putBoolean("showDayContentViewChooser", showDayContentViewChooser)
                             .putBoolean("balanceUsesChildCards", balanceChildren)
                             .putInt("balanceHeaderGraphPresentation", balanceHeaderGraphPresentation)
-                            .putInt("balanceHeaderLineChartPresentation", balanceHeaderLineChartPresentation)
+                            .putInt("balanceMonthlySpendingChartPresentation", balanceMonthlySpendingChartPresentation)
                             .putInt("balanceHeaderPartitionHeightPercent", balanceHeaderPartitionHeightPercent)
                             .putInt("balanceMonthCombinedCardPresentation", balanceMonthCombinedCardPresentation)
                             .putString("balanceHeaderGlassConfigurationJson", balanceHeaderGlassConfigurationJson)

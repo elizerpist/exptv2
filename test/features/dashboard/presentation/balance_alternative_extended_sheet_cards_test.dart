@@ -2,6 +2,8 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alterna
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_extended_sheet_layout.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:flutter/material.dart';
@@ -46,6 +48,111 @@ void main() {
         BalanceAlternativeHtmlTokens.annualIncomeExpenseMonthLabelSize,
         greaterThan(BalanceAlternativeHtmlTokens.logical(20)),
       );
+    },
+  );
+
+  testWidgets(
+    'MTC-02/06: only the monthly Költés child receives the three additive terrain renderers',
+    (tester) async {
+      for (final chartPresentation in <BalanceMonthlySpendingChartPresentation>[
+        BalanceMonthlySpendingChartPresentation.topographic,
+        BalanceMonthlySpendingChartPresentation.reactiveSvg,
+        BalanceMonthlySpendingChartPresentation.shaderAtmosphere,
+      ]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 500,
+                height: 420,
+                child: BalanceAlternativeDailySpendCard(
+                  timeScope: MonthScope(const YearMonth(year: 2026, month: 3)),
+                  chartPresentation: chartPresentation,
+                  presentation: BalanceAlternativeMonthlySpendPresentation(
+                    points: const <BalanceAlternativeDailySpendPoint>[
+                      BalanceAlternativeDailySpendPoint(
+                        day: 1,
+                        expenseMinor: 12000,
+                      ),
+                      BalanceAlternativeDailySpendPoint(
+                        day: 2,
+                        expenseMinor: 42000,
+                      ),
+                      BalanceAlternativeDailySpendPoint(
+                        day: 3,
+                        expenseMinor: 18000,
+                      ),
+                    ],
+                    currentExpenseMinor: 72000,
+                    previousExpenseMinor: 64000,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              'balance-monthly-spending-wave-${switch (chartPresentation) {
+                BalanceMonthlySpendingChartPresentation.topographic => FluviTopographicWaveStyle.terrain.name,
+                BalanceMonthlySpendingChartPresentation.reactiveSvg => FluviTopographicWaveStyle.svgReference.name,
+                BalanceMonthlySpendingChartPresentation.shaderAtmosphere => FluviTopographicWaveStyle.shaderAtmosphere.name,
+                BalanceMonthlySpendingChartPresentation.current => throw StateError('Current is excluded.'),
+              }}',
+            ),
+          ),
+          findsOneWidget,
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'MTC-07 visual: the original and all three additive monthly spending choices remain phone-safe and visibly distinct',
+    (tester) async {
+      for (final chartPresentation
+          in BalanceMonthlySpendingChartPresentation.values) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              backgroundColor: const Color(0xfff7f8fe),
+              body: Align(
+                alignment: Alignment.topLeft,
+                child: RepaintBoundary(
+                  key: ValueKey<String>(
+                    'balance-monthly-spending-${chartPresentation.name}-golden',
+                  ),
+                  child: SizedBox(
+                    width: 360,
+                    height: 360,
+                    child: BalanceAlternativeDailySpendCard(
+                      timeScope: MonthScope(
+                        const YearMonth(year: 2026, month: 6),
+                      ),
+                      chartPresentation: chartPresentation,
+                      presentation: _monthlySpendForTerrainGolden(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        await expectLater(
+          find.byKey(
+            ValueKey<String>(
+              'balance-monthly-spending-${chartPresentation.name}-golden',
+            ),
+          ),
+          matchesGoldenFile(
+            '../../../goldens/balance_monthly_spending_${chartPresentation.name}.png',
+          ),
+        );
+      }
     },
   );
 
@@ -443,6 +550,25 @@ void main() {
     },
   );
 }
+
+BalanceAlternativeMonthlySpendPresentation _monthlySpendForTerrainGolden() =>
+    BalanceAlternativeMonthlySpendPresentation(
+      points: const <BalanceAlternativeDailySpendPoint>[
+        BalanceAlternativeDailySpendPoint(day: 1, expenseMinor: 4000),
+        BalanceAlternativeDailySpendPoint(day: 4, expenseMinor: 17000),
+        BalanceAlternativeDailySpendPoint(day: 7, expenseMinor: 6200),
+        BalanceAlternativeDailySpendPoint(day: 10, expenseMinor: 11000),
+        BalanceAlternativeDailySpendPoint(day: 13, expenseMinor: 7600),
+        BalanceAlternativeDailySpendPoint(day: 16, expenseMinor: 29000),
+        BalanceAlternativeDailySpendPoint(day: 19, expenseMinor: 8300),
+        BalanceAlternativeDailySpendPoint(day: 22, expenseMinor: 14500),
+        BalanceAlternativeDailySpendPoint(day: 25, expenseMinor: 5700),
+        BalanceAlternativeDailySpendPoint(day: 28, expenseMinor: 21000),
+        BalanceAlternativeDailySpendPoint(day: 30, expenseMinor: 12000),
+      ],
+      currentExpenseMinor: 146300,
+      previousExpenseMinor: 132000,
+    );
 
 Widget _slot(Rect rect, EdgeInsets padding, Widget child) =>
     Positioned.fromRect(

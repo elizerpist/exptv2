@@ -9,6 +9,8 @@ import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../widgets/dashboard_rounded_metric_bar.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_alternative_visual_tokens.dart';
+import 'balance_presentation_settings.dart';
+import 'fluvi_topographic_wave_chart.dart';
 
 /// Shared render-only switch for the Balance extended-sheet child shells.
 /// The scope deliberately owns no financial data or layout geometry: turning
@@ -101,10 +103,12 @@ final class BalanceAlternativeDailySpendCard extends StatelessWidget {
     super.key,
     required this.presentation,
     required this.timeScope,
+    this.chartPresentation = BalanceMonthlySpendingChartPresentation.current,
   });
 
   final BalanceAlternativeMonthlySpendPresentation presentation;
   final LedgerTimeScope timeScope;
+  final BalanceMonthlySpendingChartPresentation chartPresentation;
 
   @override
   Widget build(BuildContext context) {
@@ -215,14 +219,9 @@ final class BalanceAlternativeDailySpendCard extends StatelessWidget {
             ),
             SizedBox(height: BalanceAlternativeHtmlTokens.dailyGap),
             Expanded(
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  key: const ValueKey<String>(
-                    'balance-alternative-month-daily-spend-plot',
-                  ),
-                  painter: _DailySpendPainter(points: presentation.points),
-                  child: const SizedBox.expand(),
-                ),
+              child: _DailySpendChart(
+                points: presentation.points,
+                presentation: chartPresentation,
               ),
             ),
             SizedBox(height: BalanceAlternativeHtmlTokens.dailyGap),
@@ -235,6 +234,54 @@ final class BalanceAlternativeDailySpendCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Keeps the original line chart byte-for-byte as the catalog's baseline and
+/// maps the three additive terrain selections to one reusable data-bound
+/// component. It owns no data and no persisted selection state.
+final class _DailySpendChart extends StatelessWidget {
+  const _DailySpendChart({required this.points, required this.presentation});
+
+  final List<BalanceAlternativeDailySpendPoint> points;
+  final BalanceMonthlySpendingChartPresentation presentation;
+
+  @override
+  Widget build(BuildContext context) => switch (presentation) {
+    BalanceMonthlySpendingChartPresentation.current => RepaintBoundary(
+      child: CustomPaint(
+        key: const ValueKey<String>(
+          'balance-alternative-month-daily-spend-plot',
+        ),
+        painter: _DailySpendPainter(points: points),
+        child: const SizedBox.expand(),
+      ),
+    ),
+    BalanceMonthlySpendingChartPresentation.topographic ||
+    BalanceMonthlySpendingChartPresentation.reactiveSvg ||
+    BalanceMonthlySpendingChartPresentation.shaderAtmosphere =>
+      FluviTopographicWaveChart(
+        values: <FluviTopographicWaveDatum>[
+          for (final point in points)
+            FluviTopographicWaveDatum(
+              key: point.day,
+              value: point.expenseMinor,
+              label: '${point.day}',
+            ),
+        ],
+        style: switch (presentation) {
+          BalanceMonthlySpendingChartPresentation.topographic =>
+            FluviTopographicWaveStyle.terrain,
+          BalanceMonthlySpendingChartPresentation.reactiveSvg =>
+            FluviTopographicWaveStyle.svgReference,
+          BalanceMonthlySpendingChartPresentation.shaderAtmosphere =>
+            FluviTopographicWaveStyle.shaderAtmosphere,
+          BalanceMonthlySpendingChartPresentation.current => throw StateError(
+            'The current renderer is handled above.',
+          ),
+        },
+        tooltipForValue: DashboardPreparedFormatter.compactAmountMinor,
+      ),
+  };
 }
 
 final class _AlternativeTallIcon extends StatelessWidget {

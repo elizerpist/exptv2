@@ -29,8 +29,8 @@ void main() {
           'balanceUsesChildCards': false,
           'balanceHeaderGraphPresentation':
               BalanceHeaderGraphPresentation.simpleIncomeExpensePartition.index,
-          'balanceHeaderLineChartPresentation':
-              BalanceHeaderLineChartPresentation.topographic.index,
+          'balanceMonthlySpendingChartPresentation':
+              BalanceMonthlySpendingChartPresentation.reactiveSvg.index,
           'balanceHeaderPartitionHeightPercent': 80,
           'balanceMonthCombinedCardPresentation':
               BalanceMonthCombinedCardPresentation.spendingRhythm.index,
@@ -55,8 +55,8 @@ void main() {
         BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
       );
       expect(
-        preferences.balanceHeaderLineChartPresentation,
-        BalanceHeaderLineChartPresentation.topographic,
+        preferences.balanceMonthlySpendingChartPresentation,
+        BalanceMonthlySpendingChartPresentation.reactiveSvg,
       );
       expect(preferences.balanceHeaderPartitionHeightPercent, 80);
       expect(
@@ -87,8 +87,8 @@ void main() {
         balanceUsesChildCards: false,
         balanceHeaderGraphPresentation:
             BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
-        balanceHeaderLineChartPresentation:
-            BalanceHeaderLineChartPresentation.topographic,
+        balanceMonthlySpendingChartPresentation:
+            BalanceMonthlySpendingChartPresentation.reactiveSvg,
         balanceHeaderPartitionHeightPercent: 80,
         balanceMonthCombinedCardPresentation:
             BalanceMonthCombinedCardPresentation.spendingRhythm,
@@ -107,8 +107,8 @@ void main() {
       'balanceUsesChildCards': false,
       'balanceHeaderGraphPresentation':
           BalanceHeaderGraphPresentation.simpleIncomeExpensePartition.index,
-      'balanceHeaderLineChartPresentation':
-          BalanceHeaderLineChartPresentation.topographic.index,
+      'balanceMonthlySpendingChartPresentation':
+          BalanceMonthlySpendingChartPresentation.reactiveSvg.index,
       'balanceHeaderPartitionHeightPercent': 80,
       'balanceMonthCombinedCardPresentation':
           BalanceMonthCombinedCardPresentation.spendingRhythm.index,

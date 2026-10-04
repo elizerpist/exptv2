@@ -17,6 +17,7 @@ dependencies:
   iconsax_plus: ^1.0.0
   vector_graphics: ^1.2.2
   web: ^1.1.1
+  flutter_shaders_ui: ^1.2.0
 
 dev_dependencies:
   flutter_test:

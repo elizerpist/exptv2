@@ -141,18 +141,21 @@ enum BalanceHeaderGraphPresentation {
   };
 }
 
-/// A material-only choice beneath the established Header graph kind.
-///
-/// This intentionally does not compete with [BalanceHeaderGraphPresentation]:
-/// the partition choices remain partitions, while either line style renders
-/// the exact same resident Balance history and pointer selection.
-enum BalanceHeaderLineChartPresentation {
+/// Renderer-only choices for Havi → Költés over its existing immutable daily
+/// spend points. The Header has no terrain alternative: it keeps its original
+/// history-chart renderer.
+enum BalanceMonthlySpendingChartPresentation {
   current,
-  topographic;
+  topographic,
+  reactiveSvg,
+  shaderAtmosphere;
 
   String get tunerLabel => switch (this) {
-    BalanceHeaderLineChartPresentation.current => 'Jelenlegi',
-    BalanceHeaderLineChartPresentation.topographic => '3D topografikus',
+    BalanceMonthlySpendingChartPresentation.current => 'Jelenlegi',
+    BalanceMonthlySpendingChartPresentation.topographic => '3D topografikus',
+    BalanceMonthlySpendingChartPresentation.reactiveSvg => 'Reaktív SVG',
+    BalanceMonthlySpendingChartPresentation.shaderAtmosphere =>
+      'Shaderes atmoszféra',
   };
 }
 
@@ -190,8 +193,8 @@ final class BalancePresentationSettings {
     this.contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
     this.unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
     this.headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
-    this.headerLineChartPresentation =
-        BalanceHeaderLineChartPresentation.current,
+    this.monthlySpendingChartPresentation =
+        BalanceMonthlySpendingChartPresentation.current,
     this.headerPartitionHeightPercent = 50,
     this.headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
     this.monthCombinedCardPresentation =
@@ -248,7 +251,8 @@ final class BalancePresentationSettings {
       contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
       unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
       headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
-      headerLineChartPresentation = BalanceHeaderLineChartPresentation.current,
+      monthlySpendingChartPresentation =
+          BalanceMonthlySpendingChartPresentation.current,
       headerPartitionHeightPercent = 50,
       headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
       monthCombinedCardPresentation =
@@ -274,7 +278,8 @@ final class BalancePresentationSettings {
   final BalanceContentSurfaceStyle contentSurfaceStyle;
   final BalanceUnifiedBodyLayout unifiedBodyLayout;
   final BalanceHeaderGraphPresentation headerGraphPresentation;
-  final BalanceHeaderLineChartPresentation headerLineChartPresentation;
+  final BalanceMonthlySpendingChartPresentation
+  monthlySpendingChartPresentation;
   final double headerPartitionHeightPercent;
   final BalanceHeaderGlassConfiguration headerGlassConfiguration;
   final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
@@ -318,7 +323,7 @@ final class BalancePresentationSettings {
     BalanceContentSurfaceStyle? contentSurfaceStyle,
     BalanceUnifiedBodyLayout? unifiedBodyLayout,
     BalanceHeaderGraphPresentation? headerGraphPresentation,
-    BalanceHeaderLineChartPresentation? headerLineChartPresentation,
+    BalanceMonthlySpendingChartPresentation? monthlySpendingChartPresentation,
     double? headerPartitionHeightPercent,
     BalanceHeaderGlassConfiguration? headerGlassConfiguration,
     BalanceMonthCombinedCardPresentation? monthCombinedCardPresentation,
@@ -359,8 +364,9 @@ final class BalancePresentationSettings {
     unifiedBodyLayout: unifiedBodyLayout ?? this.unifiedBodyLayout,
     headerGraphPresentation:
         headerGraphPresentation ?? this.headerGraphPresentation,
-    headerLineChartPresentation:
-        headerLineChartPresentation ?? this.headerLineChartPresentation,
+    monthlySpendingChartPresentation:
+        monthlySpendingChartPresentation ??
+        this.monthlySpendingChartPresentation,
     headerPartitionHeightPercent:
         headerPartitionHeightPercent ?? this.headerPartitionHeightPercent,
     headerGlassConfiguration:
@@ -400,7 +406,8 @@ final class BalancePresentationSettings {
       other.contentSurfaceStyle == contentSurfaceStyle &&
       other.unifiedBodyLayout == unifiedBodyLayout &&
       other.headerGraphPresentation == headerGraphPresentation &&
-      other.headerLineChartPresentation == headerLineChartPresentation &&
+      other.monthlySpendingChartPresentation ==
+          monthlySpendingChartPresentation &&
       other.headerPartitionHeightPercent == headerPartitionHeightPercent &&
       other.headerGlassConfiguration == headerGlassConfiguration &&
       other.monthCombinedCardPresentation == monthCombinedCardPresentation &&
@@ -429,7 +436,7 @@ final class BalancePresentationSettings {
     contentSurfaceStyle,
     unifiedBodyLayout,
     headerGraphPresentation,
-    headerLineChartPresentation,
+    monthlySpendingChartPresentation,
     headerPartitionHeightPercent,
     headerGlassConfiguration,
     monthCombinedCardPresentation,
@@ -583,11 +590,13 @@ final class BalancePresentationController
     );
   }
 
-  void setHeaderLineChartPresentation(BalanceHeaderLineChartPresentation next) {
+  void setMonthlySpendingChartPresentation(
+    BalanceMonthlySpendingChartPresentation next,
+  ) {
     final current = value;
-    if (current.headerLineChartPresentation == next) return;
+    if (current.monthlySpendingChartPresentation == next) return;
     value = current.copyWith(
-      headerLineChartPresentation: next,
+      monthlySpendingChartPresentation: next,
       revision: current.revision + 1,
     );
   }

@@ -540,8 +540,8 @@ class _CoreDashboardState extends State<CoreDashboard>
       );
       _balancePresentationSettings
         ..setHeaderGraphPresentation(restored.balanceHeaderGraphPresentation)
-        ..setHeaderLineChartPresentation(
-          restored.balanceHeaderLineChartPresentation,
+        ..setMonthlySpendingChartPresentation(
+          restored.balanceMonthlySpendingChartPresentation,
         )
         ..setHeaderPartitionHeightPercent(
           restored.balanceHeaderPartitionHeightPercent,
@@ -573,8 +573,8 @@ class _CoreDashboardState extends State<CoreDashboard>
             _balancePresentationSettings.value.usesChildCards,
         balanceHeaderGraphPresentation:
             _balancePresentationSettings.value.headerGraphPresentation,
-        balanceHeaderLineChartPresentation:
-            _balancePresentationSettings.value.headerLineChartPresentation,
+        balanceMonthlySpendingChartPresentation:
+            _balancePresentationSettings.value.monthlySpendingChartPresentation,
         balanceHeaderPartitionHeightPercent:
             _balancePresentationSettings.value.headerPartitionHeightPercent,
         balanceMonthCombinedCardPresentation:

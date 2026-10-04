@@ -103,7 +103,13 @@ References re-inspected: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20
 | ARC-04 | Global AGENTS.md | affected production files | Corrections extend existing preference, palette, and painter owners; no duplicate state, query, or renderer path. | Source inspection and focused boundary tests. | DONE |
 | DEL-04 | Global AGENTS.md | GitHub Actions | Only after every corrective item is DONE, the app commit is pushed and the exact online Human APK is downloaded and hash-verified. | Actions `37230252239`; release `fluvi-human-diagnostic-7084fce`; APK SHA-256 `e0a01a4817a91934bfaeb7befb6be6b741445e900edd9968900e331bcd16c890`; ZIP and embedded `7084fcebc337761456be36990c407ea3ebb91620` inspection. | DONE |
 
-## Acceptance checklist — 2026-10-04 / Balance topographic Header chart
+## Historical acceptance checklist — 2026-10-04 / Balance topographic Header chart
+
+This records the earlier Header experiment as delivered at `6193ef23`.
+It is retained as forensic history only: the user subsequently rejected its
+placement and MTC-01 below retires the Header terrain renderer in favour of the
+established Header trend chart. Nothing in this historical block describes the
+current product architecture.
 
 ### Architecture card
 
@@ -122,3 +128,28 @@ References re-inspected: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20
 | TOPO-04 | User prompt | existing Header chart interaction composition | The optional selected/highest marker retains concise value bubble behaviour; time labels, pointer observer and expanded-only mounting work in both line styles. | RED→GREEN mounted interaction test. | DONE |
 | TOPO-05 | User prompt + Global AGENTS.md | renderer and surface integration | Rendering is clipped, RepaintBoundary-bounded, uses a very small number of painters, performs no query/repository work, and recomputes only on series/size/style changes. | Boundary/source test, repaint contract tests, focused analysis. | DONE |
 | TOPO-06 | Global AGENTS.md | GitHub Actions | After all visual and behavioral requirements pass, one app commit is pushed and exact Human APK is downloaded, integrity-checked and hash-recorded. | Application `6193ef23b61c165e93de84758bdafd5db7586e6f`; Actions `37236655324` normal gates PASS; `fluvi-human-diagnostic-6193ef2` downloaded as `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_6193ef2.apk`, 93,256,896 bytes, SHA-256 `7ec3a993f54221bcb2822bd2209383fbe44a11aef531d55f9a9ca7f3458a2540`, ZIP-valid and embedded full commit verified. | DONE |
+
+## Corrective acceptance checklist — 2026-10-05 / Monthly Balance spending terrain catalog
+
+References inspected: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20261004-224646.png`, `/storage/emulated/0/Pictures/Screenshots/Screenshot_20261004-223635.png`, and `/storage/emulated/0/spendee/asset/fluvi_3d_wave_chart_asset.svg` (including its `atmosphere-*`, `area-fill`, `depth-*`, `ridge-glow`, `ridge-highlight`, `main-ridge`, `marker`, and `tooltip` structure).
+
+### Architecture card
+
+| Concern | Single owner / extension | State and write path | Boundary |
+| --- | --- | --- | --- |
+| Header line chart | Existing `BalanceHeaderHistoryChart` and `DashboardHeaderTrendPainter` | Existing Header graph choice only; its removed terrain renderer has no persisted alternative | Header retains its established trend data, pointer interaction, and expanded-only geometry. |
+| Monthly spending data | `BalanceAlternativeMonthlySpendPresentation` | Existing prepared `primary.dailyPoints` → immutable daily-expense points | The visual component receives those points only; it cannot query or aggregate transactions. |
+| Four-way monthly renderer choice | `BalancePresentationSettings.monthlySpendingChartPresentation` and `BalancePresentationController` | One persisted enum write path through the existing presentation preferences codec/channel | Current, Canvas terrain, SVG-reference terrain, and shader-atmosphere are renderer-only choices. |
+| Spline, terrain and marker | `FluviTopographicWaveChart` geometry/cache | Immutable points plus selected index and size; widget-local selection only | One reusable Canvas core handles all three new presets; no copied financial path or per-layer widgets. |
+| Atmospheric GPU effects | `flutter_shaders_ui` adapter inside the monthly chart only | Same geometry/preset read model, with reduced-motion choosing the static Canvas atmosphere | A shader may affect only decorative atmosphere/glow, never the spending ridge or financial values. |
+
+| ID | Requirement source | Code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| MTC-01 | User correction | Header renderer, Balance settings/tuner/preferences | The Balance Header returns to its original current line renderer; no topographic Header toggle, setting, persisted key, or Header terrain paint remains. | RED→GREEN Header/tuner/preferences regression test. | DONE |
+| MTC-02 | User “eredeti plusz 3 extra” | Balance presentation settings, codec/channel, tuner | One persistent monthly spending catalog exposes exactly Current, 3D topographic, Reactive SVG, and Shader atmosphere; switching updates only Havi → Költés. | RED→GREEN settings/codec/tuner/production-surface test. | DONE |
+| MTC-03 | User + SVG reference | `FluviTopographicWaveChart` | Each non-current terrain derives a monotonic Catmull–Rom ridge from existing daily spend points, with about 30 baseline-flattened depth contours, translucent body, glow, highlight, marker and formatted tooltip. | Deterministic geometry, edge-case and golden tests. | DONE |
+| MTC-04 | SVG `atmosphere-*` + user prompt | shared terrain component | Canvas and SVG-reference presets render 3–5 soft mint/aqua/lilac atmospheric waves behind the real ridge; waves are decorative, clipped and secondary. | Layer-order/structural test plus inspected golden. | DONE |
+| MTC-05 | User shader prompt | shader-atmosphere adapter | Only the shader-atmosphere preset loads `flutter_shaders_ui`; it affects atmosphere/glow only, honors reduced motion statically, and cannot move/distort the actual ridge. | Dependency/boundary test plus widget/golden test. | DONE |
+| MTC-06 | User scope restriction | Balance Month alternative card and surrounding surfaces | No Header, Savings, income/expense, filtering, navigation, other Balance scopes, query, repository or financial behavior changes. | Fail-closed boundary test and existing Balance suites. | DONE |
+| MTC-07 | Global AGENTS.md | visual reference checkpoints | The supplied SVG and screenshots are re-inspected after implementation; Current and all three terrain choices are screenshot/golden-verified at phone-safe bounds. | Re-read reference + four-state golden/direct inspection. | DONE |
+| MTC-08 | Global AGENTS.md | GitHub Actions | Only after MTC-01…MTC-07 are DONE is one application commit pushed and its exact Human APK downloaded, ZIP-checked and SHA-256 recorded. | Exact GitHub run/release/artifact evidence. | NOT DONE |

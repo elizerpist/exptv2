@@ -61,10 +61,10 @@ final class MethodChannelDashboardPresentationPreferencesStore
           values['balanceHeaderGraphPresentation'] as int?,
           BalanceHeaderGraphPresentation.lineChart,
         ),
-        balanceHeaderLineChartPresentation: _enumValue(
-          BalanceHeaderLineChartPresentation.values,
-          values['balanceHeaderLineChartPresentation'] as int?,
-          BalanceHeaderLineChartPresentation.current,
+        balanceMonthlySpendingChartPresentation: _enumValue(
+          BalanceMonthlySpendingChartPresentation.values,
+          values['balanceMonthlySpendingChartPresentation'] as int?,
+          BalanceMonthlySpendingChartPresentation.current,
         ),
         balanceHeaderPartitionHeightPercent:
             ((values['balanceHeaderPartitionHeightPercent'] as num?)
@@ -101,8 +101,8 @@ final class MethodChannelDashboardPresentationPreferencesStore
           'balanceUsesChildCards': preferences.balanceUsesChildCards,
           'balanceHeaderGraphPresentation':
               preferences.balanceHeaderGraphPresentation.index,
-          'balanceHeaderLineChartPresentation':
-              preferences.balanceHeaderLineChartPresentation.index,
+          'balanceMonthlySpendingChartPresentation':
+              preferences.balanceMonthlySpendingChartPresentation.index,
           'balanceHeaderPartitionHeightPercent':
               preferences.balanceHeaderPartitionHeightPercent,
           'balanceMonthCombinedCardPresentation':

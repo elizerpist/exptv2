@@ -20,8 +20,8 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dar
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_glass_configuration.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_topographic_chart.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_category_movers_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
@@ -765,6 +765,50 @@ void main() {
         ),
         findsOneWidget,
       );
+      for (final chart in BalanceMonthlySpendingChartPresentation.values) {
+        settings.setMonthlySpendingChartPresentation(chart);
+        await tester.pump();
+        expect(settings.value.monthlySpendingChartPresentation, chart);
+        expect(
+          tester
+              .widget<BalanceAlternativeDailySpendCard>(
+                find.byType(BalanceAlternativeDailySpendCard),
+              )
+              .chartPresentation,
+          chart,
+          reason:
+              'The real month scaffold must receive the live settings value '
+              'before its renderer is selected.',
+        );
+        final terrainStyleName = switch (chart) {
+          BalanceMonthlySpendingChartPresentation.current => null,
+          BalanceMonthlySpendingChartPresentation.topographic => 'terrain',
+          BalanceMonthlySpendingChartPresentation.reactiveSvg => 'svgReference',
+          BalanceMonthlySpendingChartPresentation.shaderAtmosphere =>
+            'shaderAtmosphere',
+        };
+        expect(
+          find.byKey(
+            ValueKey<String>('balance-monthly-spending-wave-$terrainStyleName'),
+          ),
+          chart == BalanceMonthlySpendingChartPresentation.current
+              ? findsNothing
+              : findsOneWidget,
+          reason:
+              'Only the production Month → Költés child card may mount '
+              'the selected additive terrain renderer.',
+        );
+        expect(
+          find.byKey(
+            const ValueKey<String>(
+              'balance-alternative-month-daily-spend-plot',
+            ),
+          ),
+          chart == BalanceMonthlySpendingChartPresentation.current
+              ? findsOneWidget
+              : findsNothing,
+        );
+      }
 
       linked.value = _linked(cashflow: _alternativeDayCashflow());
       await tester.pump();
@@ -789,6 +833,15 @@ void main() {
           const ValueKey<String>('balance-alternative-income-expense-bar-card'),
         ),
         findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-monthly-spending-wave-shaderAtmosphere',
+          ),
+        ),
+        findsNothing,
+        reason: 'A persisted monthly chart choice cannot leak to the Day body.',
       );
     },
   );
@@ -3470,6 +3523,19 @@ void main() {
           const ValueKey<String>('balance-header-history-chart-paint'),
         ),
       );
+      expect(
+        tester
+            .widget<CustomPaint>(
+              find.byKey(
+                const ValueKey<String>('balance-header-history-chart-paint'),
+              ),
+            )
+            .painter,
+        isA<DashboardHeaderTrendPainter>(),
+        reason:
+            'The rejected terrain experiment belongs only in the monthly '
+            'Költés card; the Header keeps its established trend painter.',
+      );
       expect(plot.left, closeTo(header.left + 16, .01));
       expect(plot.top, closeTo(header.top + 48, .01));
       expect(plot.width, 346);
@@ -3483,53 +3549,6 @@ void main() {
             )
             .height,
         60,
-      );
-    },
-  );
-
-  testWidgets(
-    'TOPO-04 integration: Balance Header routes the persisted 3D line renderer through the existing expanded monthly history surface',
-    (tester) async {
-      final balance = ValueNotifier<DashboardBalancePresentation?>(
-        _balance().copyWith(history: _history()),
-      );
-      final settings = BalancePresentationController()
-        ..setHeaderLineChartPresentation(
-          BalanceHeaderLineChartPresentation.topographic,
-        );
-      addTearDown(balance.dispose);
-      addTearDown(settings.dispose);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: BalanceDashboardCoreSurface(
-              presentation: _balanceModePresentation(),
-              balancePresentation: balance,
-              presentationSettings: settings,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(
-        tester
-            .widget<CustomPaint>(
-              find.byKey(
-                const ValueKey<String>('balance-header-history-chart-paint'),
-              ),
-            )
-            .painter,
-        isA<BalanceHeaderTopographicPainter>(),
-      );
-      expect(
-        find.byKey(
-          const ValueKey<String>(
-            'balance-header-topographic-chart-repaint-boundary',
-          ),
-        ),
-        findsOneWidget,
       );
     },
   );
