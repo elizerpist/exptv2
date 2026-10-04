@@ -115,4 +115,19 @@ void main() {
       expect(preferences, DashboardPresentationPreferences.defaults);
     },
   );
+
+  test(
+    'PRESENTATION-PREFERENCES-05 missing SUM style starts from SUM-A without rewriting valid stored choices',
+    () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'readDashboardPresentationSettings');
+        return <String, Object?>{};
+      });
+
+      final preferences =
+          await MethodChannelDashboardPresentationPreferencesStore().read();
+
+      expect(preferences.sumVisualStyle, MindSumVisualStyle.sumA);
+    },
+  );
 }

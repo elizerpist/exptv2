@@ -174,19 +174,19 @@ void main() {
         final controller = MindYearHeatmapPresentationController();
         addTearDown(controller.dispose);
 
-        expect(controller.value.sumVisualStyle, MindSumVisualStyle.current);
+        expect(controller.value.sumVisualStyle, MindSumVisualStyle.sumA);
         controller.setSumVisualStyle(MindSumVisualStyle.sumA);
         expect(controller.value.sumVisualStyle, MindSumVisualStyle.sumA);
-        expect(controller.value.revision, 1);
+        expect(controller.value.revision, 0);
         controller.setSumVisualStyle(MindSumVisualStyle.sumB);
         expect(controller.value.sumVisualStyle, MindSumVisualStyle.sumB);
-        expect(controller.value.revision, 2);
+        expect(controller.value.revision, 1);
         controller.setSumVisualStyle(MindSumVisualStyle.microDayRibbon);
         expect(
           controller.value.sumVisualStyle,
           MindSumVisualStyle.microDayRibbon,
         );
-        expect(controller.value.revision, 3);
+        expect(controller.value.revision, 2);
       },
     );
 

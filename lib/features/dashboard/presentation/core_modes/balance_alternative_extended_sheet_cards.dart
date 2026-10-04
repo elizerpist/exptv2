@@ -1678,9 +1678,9 @@ final class _AnnualClosingsPainter extends CustomPainter {
     );
     final baseline = size.height * .47;
     final step = size.width / buckets.length;
-    final barWidth = math.min(
-      BalanceAlternativeHtmlTokens.logical(16),
-      step * .54,
+    final barWidth = BalanceAlternativeHtmlTokens.annualClosingBarWidthFor(
+      plotWidth: size.width,
+      bucketCount: buckets.length,
     );
     final cumulative = <int>[];
     var running = 0;
@@ -1800,14 +1800,17 @@ final class _AnnualIncomeExpensePainter extends CustomPainter {
           expensePath.lineTo(expensePoint.dx, expensePoint.dy);
         }
       } else {
-        final width = math.min(
-          BalanceAlternativeHtmlTokens.logical(10),
-          step * .29,
-        );
+        final width =
+            BalanceAlternativeHtmlTokens.annualIncomeExpenseBarWidthFor(
+              plotWidth: size.width,
+              bucketCount: groups.length,
+            );
         _drawGradientBar(
           canvas,
           Rect.fromLTWH(
-            xCenter - width - BalanceAlternativeHtmlTokens.logical(2),
+            xCenter -
+                width -
+                BalanceAlternativeHtmlTokens.annualIncomeExpenseBarGap,
             baseline - incomeHeight,
             width,
             math.max(1, incomeHeight),
@@ -1817,7 +1820,7 @@ final class _AnnualIncomeExpensePainter extends CustomPainter {
         _drawGradientBar(
           canvas,
           Rect.fromLTWH(
-            xCenter + BalanceAlternativeHtmlTokens.logical(2),
+            xCenter + BalanceAlternativeHtmlTokens.annualIncomeExpenseBarGap,
             baseline - expenseHeight,
             width,
             math.max(1, expenseHeight),
@@ -1828,7 +1831,7 @@ final class _AnnualIncomeExpensePainter extends CustomPainter {
       labelPaint.text = TextSpan(
         text: group.label,
         style: _text(
-          BalanceAlternativeHtmlTokens.logical(13),
+          BalanceAlternativeHtmlTokens.annualIncomeExpenseMonthLabelSize,
           BalanceAlternativeHtmlTokens.textSecondary,
           FontWeight.w600,
           height: 1,

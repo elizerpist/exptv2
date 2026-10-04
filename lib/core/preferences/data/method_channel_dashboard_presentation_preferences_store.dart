@@ -24,7 +24,8 @@ final class MethodChannelDashboardPresentationPreferencesStore
         'readDashboardPresentationSettings',
       );
       if (values == null) return DashboardPresentationPreferences.defaults;
-      final styleIndex = values['sumVisualStyle'] as int? ?? 0;
+      final styleIndex =
+          values['sumVisualStyle'] as int? ?? MindSumVisualStyle.sumA.index;
       final yearGridLayoutIndex =
           values['yearGridLayout'] as int? ??
           MindYearHeatmapGridLayout.fourByThree.index;
@@ -36,7 +37,7 @@ final class MethodChannelDashboardPresentationPreferencesStore
         sumVisualStyle:
             styleIndex >= 0 && styleIndex < MindSumVisualStyle.values.length
             ? MindSumVisualStyle.values[styleIndex]
-            : MindSumVisualStyle.current,
+            : MindSumVisualStyle.sumA,
         showSumLayoutChooser: values['showSumLayoutChooser'] as bool? ?? true,
         yearGridLayout:
             yearGridLayoutIndex >= 0 &&

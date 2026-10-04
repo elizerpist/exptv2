@@ -308,6 +308,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     this.showsDepth = true,
     this.showsBorder = true,
     this.borderSurface = DashboardBorderSurface.header,
+    this.visualInset = const EdgeInsets.all(1),
   });
 
   final DashboardBounds bounds;
@@ -329,6 +330,11 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final bool showsDepth;
   final bool showsBorder;
   final DashboardBorderSurface borderSurface;
+
+  /// Keeps the animated material inside a physical card seam where required.
+  /// A linked Budget Header deliberately selects zero so its palette fills the
+  /// unified Mother Card rather than exposing that white parent seam.
+  final EdgeInsets visualInset;
 
   @override
   Widget build(BuildContext context) {
@@ -353,6 +359,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
             showsDepth: showsDepth,
             showsBorder: showsBorder,
             borderSurface: borderSurface,
+            visualInset: visualInset,
           ),
           if (showModeLabel)
             Positioned(
@@ -539,6 +546,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     required this.showsDepth,
     required this.showsBorder,
     required this.borderSurface,
+    required this.visualInset,
   });
 
   final DashboardBounds bounds;
@@ -550,6 +558,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
   final bool showsDepth;
   final bool showsBorder;
   final DashboardBorderSurface borderSurface;
+  final EdgeInsets visualInset;
 
   @override
   Widget build(BuildContext context) {
@@ -589,7 +598,8 @@ final class _HeaderPhysicalShell extends StatelessWidget {
           // Layer 2: only this clipped painter listens to the shared ticker.
           Positioned.fill(
             child: Padding(
-              padding: const EdgeInsets.all(1),
+              key: const ValueKey<String>('dashboard-header-visual-inset'),
+              padding: visualInset,
               child: ClipRRect(
                 borderRadius: borderRadius,
                 child: ValueListenableBuilder<DashboardHeaderVisualFrame>(

@@ -350,6 +350,45 @@ void main() {
       expect(find.text('Cashflow stabilitás'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'BAL-DENSITY-01 RED: Cashflow stability uses the wide lower-card field rather than preserving broad side gutters',
+    (tester) async {
+      final distribution =
+          DashboardBalanceMonthlyNetDistributionProjection.build(
+            stability: _stability(),
+          );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 220,
+              child: BalanceAlternativeCashflowStabilityBandCard(
+                presentation: distribution.cashflowBand,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey<String>(
+                  'balance-alternative-sum-stability-band',
+                ),
+              ),
+            )
+            .width,
+        greaterThan(350),
+        reason:
+            'The chart should approach both card edges; data semantics do '
+            'not need side whitespace.',
+      );
+    },
+  );
 }
 
 DashboardBalanceStabilityPresentation _stability() =>

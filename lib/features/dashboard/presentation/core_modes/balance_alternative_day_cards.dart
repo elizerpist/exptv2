@@ -229,9 +229,9 @@ final class BalanceAlternativeDailyMomentumRhythmCard extends StatelessWidget {
         BalanceAlternativeHtmlTokens.napi4RhythmCardMinimumContentSize,
     child: Padding(
       padding: EdgeInsets.fromLTRB(
-        BalanceAlternativeHtmlTokens.logical(22),
+        BalanceAlternativeHtmlTokens.napi4RhythmHorizontalInset,
         BalanceAlternativeHtmlTokens.logical(18),
-        BalanceAlternativeHtmlTokens.logical(22),
+        BalanceAlternativeHtmlTokens.napi4RhythmHorizontalInset,
         BalanceAlternativeHtmlTokens.logical(20),
       ),
       child: Column(
@@ -578,9 +578,7 @@ final class _ImpactCallToAction extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Icon(
-              negative
-                  ? Icons.priority_high_rounded
-                  : Icons.bar_chart_rounded,
+              negative ? Icons.priority_high_rounded : Icons.bar_chart_rounded,
               color: color,
               size: BalanceAlternativeHtmlTokens.logical(29),
             ),

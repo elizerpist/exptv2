@@ -13,7 +13,7 @@ void main() {
       );
       addTearDown(controller.dispose);
 
-      expect(controller.value.sumVisualStyle, MindSumVisualStyle.current);
+      expect(controller.value.sumVisualStyle, MindSumVisualStyle.sumA);
       controller.setPreferences(
         const DashboardPresentationPreferences(
           sumVisualStyle: MindSumVisualStyle.sumB,

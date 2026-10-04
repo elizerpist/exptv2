@@ -45,11 +45,9 @@ final class Bnb03FabDirectionVisual {
     return Bnb03FabDirectionVisual._(
       gradient: gradient,
       ringColor: iconPresentation == FluviFabIconPresentation.directionArtwork
-          ? FluviDirectionColorPaletteCatalog.midpoint(source)
+          ? null
           : FluviVisualTokens.appHighlightBorderColor,
-      coreColor: iconPresentation == FluviFabIconPresentation.directionArtwork
-          ? Colors.white
-          : null,
+      coreColor: null,
       showsArtwork:
           iconPresentation == FluviFabIconPresentation.directionArtwork,
       artworkAssetPath: income
@@ -62,7 +60,7 @@ final class Bnb03FabDirectionVisual {
   }
 
   final LinearGradient gradient;
-  final Color ringColor;
+  final Color? ringColor;
   final Color? coreColor;
   final bool showsArtwork;
   final String artworkAssetPath;
@@ -498,34 +496,36 @@ class Bnb03BottomNavigation extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: SizedBox.expand(
-                          child: CustomPaint(
-                            key: const ValueKey('bnb03-fab-outer-purple-ring'),
-                            painter: _Bnb03FabRingPainter(
-                              color: fabVisual.ringColor,
-                            ),
-                            child: Padding(
-                              padding: EdgeInsets.all(s(6)),
-                              child: SizedBox.expand(
-                                child: CustomPaint(
-                                  key: const ValueKey('bnb03-fab-core'),
-                                  painter: _Bnb03FabCorePainter(
-                                    gradient: fabVisual.showsArtwork
-                                        ? null
-                                        : FluviVisualTokens
-                                              .appHighlightGradient,
-                                    color: fabVisual.coreColor,
+                          key: const ValueKey<String>(
+                            'bnb03-fab-visible-footprint',
+                          ),
+                          child: fabVisual.showsArtwork
+                              ? Image.asset(
+                                  fabVisual.artworkAssetPath,
+                                  key: fabVisual.artworkKey,
+                                  width: fabVisibleDiameter,
+                                  height: fabVisibleDiameter,
+                                  fit: BoxFit.contain,
+                                  filterQuality: FilterQuality.high,
+                                )
+                              : CustomPaint(
+                                  key: const ValueKey(
+                                    'bnb03-fab-outer-purple-ring',
                                   ),
-                                  child: Center(
-                                    child: fabVisual.showsArtwork
-                                        ? Image.asset(
-                                            fabVisual.artworkAssetPath,
-                                            key: fabVisual.artworkKey,
-                                            width: s(44),
-                                            height: s(44),
-                                            fit: BoxFit.contain,
-                                            filterQuality: FilterQuality.high,
-                                          )
-                                        : Icon(
+                                  painter: _Bnb03FabRingPainter(
+                                    color: fabVisual.ringColor!,
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsets.all(s(6)),
+                                    child: SizedBox.expand(
+                                      child: CustomPaint(
+                                        key: const ValueKey('bnb03-fab-core'),
+                                        painter: _Bnb03FabCorePainter(
+                                          gradient: FluviVisualTokens
+                                              .appHighlightGradient,
+                                        ),
+                                        child: Center(
+                                          child: Icon(
                                             selected == Bnb03Item.shop
                                                 ? IconsaxPlusBold.shop
                                                 : IconsaxPlusLinear.shop,
@@ -535,11 +535,11 @@ class Bnb03BottomNavigation extends StatelessWidget {
                                             color: Colors.white,
                                             size: s(24),
                                           ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          ),
                         ),
                       ),
                     ),

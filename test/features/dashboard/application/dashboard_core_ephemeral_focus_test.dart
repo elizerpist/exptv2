@@ -662,6 +662,57 @@ void main() {
   );
 
   test(
+    'BALANCE-FOCUS-ISOLATION RED: category and partner LogBox focus never clears or narrows the Balance Header or content',
+    () async {
+      final repository = _BalancePreparedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 2),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.setBalanceLinkedPresentationActive(true);
+
+      void expectUnfilteredBalance() {
+        expect(core.balancePresentation.value, isNotNull);
+        expect(core.balancePresentation.value?.formattedNetTotal, '850 Ft');
+        expect(
+          core.balanceLinkedPresentation.value?.cashflow.incomeTotalMinor,
+          120000,
+        );
+        expect(
+          core.balanceLinkedPresentation.value?.cashflow.expenseTotalMinor,
+          35000,
+        );
+      }
+
+      expectUnfilteredBalance();
+      final preparedCalls = repository.prepareCalls;
+
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'salary', displayName: 'Salary'),
+        ),
+        isTrue,
+      );
+      expectUnfilteredBalance();
+
+      expect(await core.clearAllEphemeralFocus(), isTrue);
+      expect(
+        await core.requestPartnerFocus(
+          const DashboardFocusFacet(id: 'employer', displayName: 'Employer'),
+        ),
+        isTrue,
+      );
+      expectUnfilteredBalance();
+      expect(repository.prepareCalls, preparedCalls);
+    },
+  );
+
+  test(
     'L8-RED: a direct Balance direction change publishes active-direction ranks without source work',
     () async {
       final repository = _BalancePreparedRepository();

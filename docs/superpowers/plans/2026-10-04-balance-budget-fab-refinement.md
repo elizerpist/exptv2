@@ -55,3 +55,26 @@ Before final build/commit, re-open the screenshot above and re-check every row.
 | BAL-DEFAULT-01 | User follow-up | `dashboard_header_balance_color_scale.dart` | Fresh Balance header color state defaults to **Telítettebb** / `saturated`; existing persisted selections are not remapped. | RED→GREEN default-state test. | DONE |
 | ARC-02 | Global AGENTS.md | affected sources | No duplicate state owner, geometry resolver, query/repository access, or copied direction palette. | Extended fail-closed boundary test. | DONE |
 | DEL-02 | Global AGENTS.md | GitHub Actions | One final production application commit is pushed and its exact Human APK is downloaded and hash-verified. | Run `37217684866`, release `fluvi-human-diagnostic-bf491ca`, SHA-256 `71e890905966b57268dffa9dd1d071c1d5130d79fe3a8112149e30e394f65c59`, ZIP inspection, embedded `bf491ca486b1a1c5169181dce3e219048a94cb03`. | DONE |
+
+## Follow-up acceptance checklist — 2026-10-04 / Balance isolation and visual density
+
+### Architecture card
+
+| Concern | Single owner / extension | State and write path | Boundary |
+| --- | --- | --- | --- |
+| Budget Header colour fill | `DashboardCoreModeHeaderScaffold` physical shell | Budget selects zero visual inset through the existing Header primitive | No alternate Budget Header paint stack or colour source. |
+| Artwork FAB physical shell | `Bnb03BottomNavigation` | Existing `FluviFabIconPresentation` and transaction-direction controller | Artwork has no coloured ring/core; legacy retains its existing shell. |
+| Mind SUM default | `MindYearHeatmapPresentationSettings` and existing preference codec | Defaults and missing-preference fallback select `sumA`; explicit persisted values remain intact | No second Mind presentation owner or migration of a valid user choice. |
+| Balance financial source during LogBox focus | `DashboardCoreController` | Existing unfiltered prepared base index feeds Header and linked Balance content | Focus remains a transaction-list concern; no repository/query work or focus-owned Balance presentation. |
+| Balance density tokens | `BalanceAlternativeHtmlTokens` | Stateless render geometry for Cashflow/rhythm/annual closings | Existing prepared Balance data and temporal semantics remain unchanged. |
+
+| ID | Requirement source | Code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| BUD-HDR-02 | User follow-up | `budget_dashboard_core_surface.dart`, Header primitive | Budget Header has no exposed white visual inset/outline and its colour fills its authored bounds like Balance. | Mounted Budget visual-inset test. | DONE |
+| FAB-ART-03 | User follow-up | `bnb03_bottom_navigation.dart` | In Artwork mode there is no coloured ring or inner core; the selected PNG occupies the former visible ring footprint. Legacy white-store mode remains unchanged. | BNB geometry/layer test + inspected golden. | DONE |
+| MIND-SUM-DEFAULT-01 | User follow-up | Mind settings and preference codec | Fresh/unpersisted Mind SUM starts as SUM-A, while explicitly stored styles round-trip unchanged. | Settings + preferences tests. | DONE |
+| BAL-FOCUS-01 | User follow-up | `DashboardCoreController` Balance publication | Category or partner transaction-list focus never clears or narrows Balance Header or linked Balance content. | Focused prepared-core category/partner regression. | DONE |
+| BAL-DENSITY-01 | User follow-up | Balance alternative SUM/Day tokens | Cashflow stability and comparison rhythm use the available horizontal card space without changing data/semantics. | Mounted geometry tests + inspected goldens. | DONE |
+| BAL-YEAR-01 | User follow-up | annual-closings painter/legend tokens | Year bars are materially wider and month labels slightly larger while remaining non-overlapping. | Token/painter test + inspected annual golden. | DONE |
+| ARC-03 | Global AGENTS.md | affected sources | The follow-up uses existing setting/controller/token owners and introduces no repository/query paths or duplicate UI engines. | Source inspection + focused analysis/tests. | DONE |
+| DEL-03 | Global AGENTS.md | GitHub Actions | One app commit is pushed and the exact online Human APK is downloaded, hashed and identity-checked. | Exact workflow/artifact verification. | NOT DONE |

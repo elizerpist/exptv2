@@ -15803,7 +15803,7 @@ final class DashboardCoreController {
   }
 
   void _publishBalancePresentationForVisibleFrame(DashboardVisibleFrame frame) {
-    final index = presentation.index ?? _activePreparedRevisionBundle?.index;
+    final index = _balanceSourceIndexFor(coreRevision: frame.coreRevision);
     if (index == null || index.coreRevision != frame.coreRevision) {
       _setBalancePresentation(null);
       return;
@@ -15867,7 +15867,7 @@ final class DashboardCoreController {
   void _publishBalanceLinkedPresentationForVisibleFrame(
     DashboardVisibleFrame frame,
   ) {
-    final index = presentation.index ?? _activePreparedRevisionBundle?.index;
+    final index = _balanceSourceIndexFor(coreRevision: frame.coreRevision);
     if (index == null || index.coreRevision != frame.coreRevision) {
       _setBalanceLinkedPresentation(null);
       return;
@@ -15944,38 +15944,31 @@ final class DashboardCoreController {
     if (frame != null) _publishBalanceLinkedPresentationForVisibleFrame(frame);
   }
 
-  /// Resolves one direction's exact resident Balance membership. A direct
-  /// category/partner/search focus deliberately retains its base index, so
-  /// its focused partition has no duplicate seed. Re-select that existing
-  /// base seed here instead of treating a valid focused or empty direction as
-  /// an unavailable chart.
+  /// Balance is an all-ledger presentation: LogBox category/partner/search
+  /// focus may narrow the transaction list, but never this Header or its
+  /// content card. Prefer the resident pre-focus base through every focus
+  /// phase, then fall back to the current prepared revision only when no
+  /// focus transaction is active.
+  PreparedDashboardIndex? _balanceSourceIndexFor({required int coreRevision}) {
+    for (final candidate in <PreparedDashboardIndex?>[
+      _focusBaseIndex,
+      _provisionalFocusBaseIndex,
+      _activePreparedRevisionBundle?.index,
+      presentation.index,
+    ]) {
+      if (candidate?.coreRevision == coreRevision) return candidate;
+    }
+    return null;
+  }
+
+  /// Resolves one direction's complete resident Balance membership. The
+  /// caller already selected the immutable all-ledger source index above, so
+  /// this renderer-adjacent projection must not reapply transaction-list
+  /// focus to either directional lane.
   Iterable<DashboardLedgerEntry> _balancePrimaryEntriesFor({
     required PreparedDashboardIndex index,
     required LedgerDirection direction,
   }) {
-    final active = focus.state;
-    final base = _focusBaseIndex;
-    final baseScope = currentQuery.scopeFor(direction);
-    final hasExactFocus =
-        active != null &&
-        active.anchor.direction == direction &&
-        base != null &&
-        base.coreRevision == index.coreRevision &&
-        active.anchor.matches(
-          baseScope: baseScope,
-          revision: base.coreRevision,
-        );
-    if (hasExactFocus) {
-      final seed = base.partitionFor(direction).focusMembershipSeed;
-      if (seed == null) return const <DashboardLedgerEntry>[];
-      return seed
-          .select(
-            categoryId: active.category?.id,
-            partnerId: active.partner?.id,
-            normalizedSearch: active.normalizedSearch,
-          )
-          .entries;
-    }
     return index.partitionFor(direction).focusMembershipSeed?.entries ??
         const <DashboardLedgerEntry>[];
   }

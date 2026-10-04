@@ -219,7 +219,7 @@ final class MindYearHeatmapPresentationSettings {
     this.scaleMode = MindHeatmapScaleMode.dynamicMixed,
     this.sliderHandleSize = MindSliderHandleSize.normal,
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
-    this.sumVisualStyle = MindSumVisualStyle.current,
+    this.sumVisualStyle = MindSumVisualStyle.sumA,
     this.showSumLayoutChooser = true,
     this.yearMonthlyAmountPresentation =
         MindYearMonthlyAmountPresentation.inline,
@@ -246,7 +246,7 @@ final class MindYearHeatmapPresentationSettings {
       scaleMode = MindHeatmapScaleMode.dynamicMixed,
       sliderHandleSize = MindSliderHandleSize.normal,
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
-      sumVisualStyle = MindSumVisualStyle.current,
+      sumVisualStyle = MindSumVisualStyle.sumA,
       showSumLayoutChooser = true,
       yearMonthlyAmountPresentation = MindYearMonthlyAmountPresentation.inline,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,

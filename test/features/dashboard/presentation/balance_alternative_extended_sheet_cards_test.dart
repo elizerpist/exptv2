@@ -8,6 +8,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'BAL-YEAR-01 RED: annual closing bars and month-facing legend type use the available year-card density',
+    () {
+      expect(
+        BalanceAlternativeHtmlTokens.annualLegendSize,
+        greaterThan(BalanceAlternativeHtmlTokens.logical(15)),
+      );
+      expect(
+        BalanceAlternativeHtmlTokens.annualClosingBarWidthFor(
+          plotWidth: 360,
+          bucketCount: 12,
+        ),
+        greaterThan(BalanceAlternativeHtmlTokens.logical(16)),
+      );
+      expect(
+        BalanceAlternativeHtmlTokens.annualIncomeExpenseBarWidthFor(
+          plotWidth: 360,
+          bucketCount: 12,
+        ),
+        greaterThan(BalanceAlternativeHtmlTokens.logical(10)),
+      );
+    },
+  );
+
   testWidgets(
     'ALT-HAVI2-UI-RED: month card renders real daily, no-spend, savings and strip data',
     (tester) async {

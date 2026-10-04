@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/design/dashboard_core_mode_presentation.dart';
@@ -15,6 +16,7 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewpo
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_dashboard_core_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_section_order.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_presentation.dart';
@@ -264,6 +266,48 @@ void main() {
             'a rounded content clip, but it may not paint a second card '
             'background, border or shadow inside that surface.',
       );
+    },
+  );
+
+  testWidgets(
+    'BUD-HDR-02: linked Budget Header fills the Mother Card instead of exposing a white visual inset',
+    (tester) async {
+      final harness = _BudgetHeaderHarness();
+      addTearDown(harness.dispose);
+      final visual = DashboardHeaderVisualController(vsync: tester)
+        ..selectEffect(DashboardHeaderEffectId.staticEffect);
+      final frames = ValueNotifier<DashboardHeaderVisualFrame>(
+        const DashboardHeaderVisualFrame(
+          colors: <Color>[Color(0xFF7045D8), Color(0xFF7045D8)],
+          stops: <double>[0, 1],
+          opacity: 1,
+          colorA: Color(0xFF7045D8),
+          colorB: Color(0xFF7045D8),
+        ),
+      );
+
+      await tester.pumpWidget(
+        _host(
+          harness,
+          collapseProgress: 0,
+          headerVisualController: visual,
+          headerVisualFrame: frames,
+        ),
+      );
+
+      expect(
+        tester
+            .widget<Padding>(
+              find.byKey(
+                const ValueKey<String>('dashboard-header-visual-inset'),
+              ),
+            )
+            .padding,
+        EdgeInsets.zero,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      visual.dispose();
+      frames.dispose();
     },
   );
 
@@ -706,6 +750,8 @@ Widget _host(
   _BudgetHeaderHarness harness, {
   required double collapseProgress,
   DashboardBudgetHeaderPresentationController? headerPresentation,
+  DashboardHeaderVisualController? headerVisualController,
+  ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame,
 }) {
   final surface = Scaffold(
     body: Stack(
@@ -723,6 +769,8 @@ Widget _host(
             ),
           ),
           presentationController: harness.presentation,
+          headerVisualController: headerVisualController,
+          headerVisualFrame: headerVisualFrame,
         ),
       ],
     ),

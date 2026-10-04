@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'dashboard_header_balance_color_scale.dart';
@@ -169,8 +171,21 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get annualClosingsLegendHeight => logical(31);
   static double get annualTitleSize => logical(30);
   static double get annualSubtitleSize => logical(19);
-  static double get annualLegendSize => logical(15);
+  static double get annualLegendSize => logical(18);
   static double get annualGap => logical(8);
+  static double get annualClosingBarMaximumWidth => logical(28);
+  static const double annualClosingBarStepFraction = .74;
+
+  static double annualClosingBarWidthFor({
+    required double plotWidth,
+    required int bucketCount,
+  }) {
+    if (plotWidth <= 0 || bucketCount <= 0) return 0;
+    return math.min(
+      annualClosingBarMaximumWidth,
+      plotWidth / bucketCount * annualClosingBarStepFraction,
+    );
+  }
 
   // Shared Havi 2 small-card chrome. HTML: 21px 16px / 20px title and 66px
   // no-spend metric; those source units are converted by [logical].
@@ -191,6 +206,21 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get annualIncomeExpenseIconExtent => logical(42);
   static double get annualIncomeExpenseLegendSize => logical(17);
   static double get annualIncomeExpenseToggleExtent => logical(34);
+  static double get annualIncomeExpenseBarMaximumWidth => logical(14);
+  static const double annualIncomeExpenseBarStepFraction = .38;
+  static double get annualIncomeExpenseBarGap => logical(2);
+  static double get annualIncomeExpenseMonthLabelSize => logical(16);
+
+  static double annualIncomeExpenseBarWidthFor({
+    required double plotWidth,
+    required int bucketCount,
+  }) {
+    if (plotWidth <= 0 || bucketCount <= 0) return 0;
+    return math.min(
+      annualIncomeExpenseBarMaximumWidth,
+      plotWidth / bucketCount * annualIncomeExpenseBarStepFraction,
+    );
+  }
 
   // SUM Card 3: canonical `sum-histogram-card` CSS.
   static EdgeInsets get sumHistogramPadding =>
@@ -217,8 +247,13 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get sumStreakBodySize => logical(12);
 
   // SUM lower combined card: canonical `cashflow-stability-card` CSS.
-  static EdgeInsets get sumStabilityPadding =>
-      EdgeInsets.fromLTRB(logical(22), logical(18), logical(22), logical(20));
+  static double get sumStabilityHorizontalInset => logical(8);
+  static EdgeInsets get sumStabilityPadding => EdgeInsets.fromLTRB(
+    sumStabilityHorizontalInset,
+    logical(18),
+    sumStabilityHorizontalInset,
+    logical(20),
+  );
   static double get sumStabilityHeadingHeight => logical(48);
   static double get sumStabilityChartHeight => logical(126);
   static double get sumStabilityGap => logical(10);
@@ -226,6 +261,8 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get sumStabilitySubtitleSize => logical(14);
   static double get sumStabilityChipSize => logical(15);
   static double get sumStabilityLegendSize => logical(16);
+
+  static double get napi4RhythmHorizontalInset => logical(8);
 
   static BoxDecoration childCardDecoration() => BoxDecoration(
     color: childSurface,

@@ -278,6 +278,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     showsDepth: !isHeaderLinked,
                     showsBorder: !isHeaderLinked,
                     borderSurface: DashboardBorderSurface.budgetHeader,
+                    visualInset: EdgeInsets.zero,
                     // The source title starts at x=20/y=16. Text keeps the
                     // existing tuner/menu clearance internally; the partition
                     // lane itself now owns equal 16px physical insets.

@@ -111,7 +111,7 @@ void main() {
         findsOneWidget,
       );
       return tester.getRect(
-        find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+        find.byKey(const ValueKey('bnb03-fab-visible-footprint')),
       );
     }
 
@@ -148,7 +148,7 @@ void main() {
       find.byKey(const ValueKey('bnb03-physical-bar-surface')),
     );
     final fab = tester.getRect(
-      find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+      find.byKey(const ValueKey('bnb03-fab-visible-footprint')),
     );
     expect(fab.center.dx, bar.center.dx);
   });
@@ -178,7 +178,7 @@ void main() {
         find.byKey(const ValueKey('bnb03-physical-bar-surface')),
       );
       final visibleFab = tester.getRect(
-        find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+        find.byKey(const ValueKey('bnb03-fab-visible-footprint')),
       );
       final hitTarget = tester.getRect(
         find.byKey(const ValueKey('bnb03-fab-hit-target')),
@@ -226,7 +226,7 @@ void main() {
       find.byKey(const ValueKey('bnb03-physical-bar-surface')),
     );
     final visibleFab = tester.getRect(
-      find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+      find.byKey(const ValueKey('bnb03-fab-visible-footprint')),
     );
     expect(navigation.height, 99);
     expect(bar.top - navigation.top, 24);
@@ -313,7 +313,7 @@ void main() {
       find.byKey(const ValueKey('bnb03-physical-bar-surface')),
     );
     final ring = tester.getRect(
-      find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+      find.byKey(const ValueKey('bnb03-fab-visible-footprint')),
     );
     expect(
       find.byKey(const ValueKey('bnb03-top-contour-overlay')),
@@ -511,7 +511,7 @@ void main() {
   );
 
   test(
-    'FAB visual resolves the active pill endpoints diagonally and its centre color for the outer ring',
+    'FAB visual resolves active direction artwork without retaining a hidden coloured ring',
     () {
       final income = Bnb03FabDirectionVisual.resolve(
         direction: TransactionDirection.income,
@@ -531,15 +531,9 @@ void main() {
       expect(income.gradient.begin, Alignment.topLeft);
       expect(income.gradient.end, Alignment.bottomRight);
       expect(income.gradient.colors, expectedIncome.colors);
-      expect(
-        income.ringColor,
-        FluviDirectionColorPaletteCatalog.midpoint(expectedIncome),
-      );
+      expect(income.ringColor, isNull);
       expect(expense.gradient.colors, expectedExpense.colors);
-      expect(
-        expense.ringColor,
-        FluviDirectionColorPaletteCatalog.midpoint(expectedExpense),
-      );
+      expect(expense.ringColor, isNull);
       expect(income.artworkAssetPath, 'assets/fluvi/actions/addnew_income.png');
       expect(
         expense.artworkAssetPath,
@@ -573,14 +567,45 @@ void main() {
   });
 
   testWidgets(
-    'FAB artwork uses a white core and a direction-derived ring while legacy retains the white shop glyph',
+    'FAB artwork fills the former ring footprint without a ring or inner core while legacy retains the white shop glyph',
     (tester) async {
       final artwork = Bnb03FabDirectionVisual.resolve(
         direction: TransactionDirection.expense,
         profile: FluviDirectionColorProfile.vivid,
         iconPresentation: FluviFabIconPresentation.directionArtwork,
       );
-      expect(artwork.coreColor, Colors.white);
+      expect(artwork.coreColor, isNull);
+      expect(artwork.ringColor, isNull);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Bnb03BottomNavigation(
+            width: 428,
+            selected: Bnb03Item.home,
+            transactionDirection: TransactionDirection.expense,
+            directionColorProfile: FluviDirectionColorProfile.vivid,
+            onChanged: (_) {},
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-outer-purple-ring')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-core')),
+        findsNothing,
+      );
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey<String>('bnb03-fab-expense-artwork')),
+        ),
+        const Size(84, 84),
+        reason:
+            'Artwork owns the visible ring footprint instead of the former '
+            'small inner-glyph area.',
+      );
 
       await tester.pumpWidget(
         MaterialApp(
@@ -599,8 +624,42 @@ void main() {
         find.byKey(const ValueKey<String>('bnb03-fab-expense-artwork')),
         findsNothing,
       );
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-outer-purple-ring')),
+        findsOneWidget,
+      );
     },
   );
+
+  testWidgets('FAB artwork has one ring-free full-footprint visual state', (
+    tester,
+  ) async {
+    const boundaryKey = ValueKey<String>('bnb03-artwork-golden-boundary');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: RepaintBoundary(
+              key: boundaryKey,
+              child: Bnb03BottomNavigation(
+                width: 428,
+                selected: Bnb03Item.home,
+                transactionDirection: TransactionDirection.expense,
+                directionColorProfile: FluviDirectionColorProfile.vivid,
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await expectLater(
+      find.byKey(boundaryKey),
+      matchesGoldenFile('../goldens/bnb03_fab_direction_artwork.png'),
+    );
+  });
 }
 
 bool _hasBorderPixelNear(

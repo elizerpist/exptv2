@@ -77,6 +77,34 @@ void main() {
   });
 
   testWidgets(
+    'BAL-DENSITY-01 RED: comparison rhythm strip uses the available wide lower-card field',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 220,
+              child: BalanceAlternativeDailyMomentumRhythmCard(
+                presentation: momentum,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey<String>('balance-napi4-rhythm-strip')),
+            )
+            .width,
+        greaterThan(350),
+      );
+    },
+  );
+
+  testWidgets(
     'a worsening daily impact retains the real value and uses a coral pill',
     (tester) async {
       const impact = DashboardBalanceDailyImpactPresentation(

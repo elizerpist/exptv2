@@ -34,7 +34,7 @@ final class DashboardPresentationPreferences {
   final String balanceHeaderGlassConfigurationJson;
 
   static const defaults = DashboardPresentationPreferences(
-    sumVisualStyle: MindSumVisualStyle.current,
+    sumVisualStyle: MindSumVisualStyle.sumA,
     showSumLayoutChooser: true,
     yearGridLayout: MindYearHeatmapGridLayout.fourByThree,
     yearMonthlyAmountPresentation: MindYearMonthlyAmountPresentation.inline,
