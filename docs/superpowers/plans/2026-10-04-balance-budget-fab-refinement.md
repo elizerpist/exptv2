@@ -102,3 +102,23 @@ References re-inspected: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20
 | BAL-RHYTHM-02 | User + Day screenshot | daily-rhythm painter | Both 30-day rhythm halves expand to their available plot width while preserving the centre separator and all 60 data points. | RED→GREEN painter plot-bounds test and updated Day golden inspection. | DONE |
 | ARC-04 | Global AGENTS.md | affected production files | Corrections extend existing preference, palette, and painter owners; no duplicate state, query, or renderer path. | Source inspection and focused boundary tests. | DONE |
 | DEL-04 | Global AGENTS.md | GitHub Actions | Only after every corrective item is DONE, the app commit is pushed and the exact online Human APK is downloaded and hash-verified. | Actions `37230252239`; release `fluvi-human-diagnostic-7084fce`; APK SHA-256 `e0a01a4817a91934bfaeb7befb6be6b741445e900edd9968900e331bcd16c890`; ZIP and embedded `7084fcebc337761456be36990c407ea3ebb91620` inspection. | DONE |
+
+## Acceptance checklist — 2026-10-04 / Balance topographic Header chart
+
+### Architecture card
+
+| Concern | Single owner / extension | State and write path | Boundary |
+| --- | --- | --- | --- |
+| Monthly Balance data and selection | Existing `BalanceHeaderHistoryChart` projection and pointer observer | Existing resident `DashboardBalanceHistorySeries`, current scope projection, and selected epoch | The new painter cannot aggregate transactions, query a repository, or own a second selection/tooltip model. |
+| Line-chart visual choice | `BalancePresentationSettings` and its existing preference codec | One persisted `BalanceHeaderLineChartPresentation` field, changed through the existing presentation controller | This is a renderer choice only; it cannot replace the existing Header graph/partition selector. |
+| 3D geometry and paint | Dedicated topographic painter/model beside the existing Header chart kernel | Immutable projected points and paint-size-derived cached paths | One bounded `CustomPaint`/`RepaintBoundary`; no chart package, BackdropFilter stack, or per-layer widgets. |
+| Palette | One semantic `BalanceHeaderTopographicPalette` in the renderer module | Static app-owned role palette, not financial/category colour state | Pearl/lavender/periwinkle/violet/icy-blue roles are local to this one visual and do not replace the dynamic Header palette engine. |
+
+| ID | Requirement source | Code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| TOPO-01 | User prompt | `BalancePresentationSettings`, tuner, preference codec | Settings exposes a persisted Current / 3D topographic switch only while Header visual is Line chart; both styles retain the current Header graph mode and data. | RED→GREEN settings/controller/codec + tuner widget test. | DONE |
+| TOPO-02 | User prompt | dedicated `CustomPainter` | The real projected monthly series becomes a dense Catmull–Rom main ridge with a 28–34 layer, non-linear-fade contour surface, lavender area fill, glow and rounded dominant ridge. | RED→GREEN deterministic geometry/raster tests. | DONE |
+| TOPO-03 | User prompt | dedicated `CustomPainter` | Three to five very soft procedural atmospheric waves render behind the true data surface, depend only subtly on data range/volatility, and cannot be mistaken for financial series. | RED→GREEN painter-layer and golden test. | DONE |
+| TOPO-04 | User prompt | existing Header chart interaction composition | The optional selected/highest marker retains concise value bubble behaviour; time labels, pointer observer and expanded-only mounting work in both line styles. | RED→GREEN mounted interaction test. | DONE |
+| TOPO-05 | User prompt + Global AGENTS.md | renderer and surface integration | Rendering is clipped, RepaintBoundary-bounded, uses a very small number of painters, performs no query/repository work, and recomputes only on series/size/style changes. | Boundary/source test, repaint contract tests, focused analysis. | DONE |
+| TOPO-06 | Global AGENTS.md | GitHub Actions | After all visual and behavioral requirements pass, one app commit is pushed and exact Human APK is downloaded, integrity-checked and hash-recorded. | Application `6193ef23b61c165e93de84758bdafd5db7586e6f`; Actions `37236655324` normal gates PASS; `fluvi-human-diagnostic-6193ef2` downloaded as `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_6193ef2.apk`, 93,256,896 bytes, SHA-256 `7ec3a993f54221bcb2822bd2209383fbe44a11aef531d55f9a9ca7f3458a2540`, ZIP-valid and embedded full commit verified. | DONE |
