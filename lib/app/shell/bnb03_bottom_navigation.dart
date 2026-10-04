@@ -46,7 +46,7 @@ final class Bnb03FabDirectionVisual {
       gradient: gradient,
       ringColor: iconPresentation == FluviFabIconPresentation.directionArtwork
           ? null
-          : FluviVisualTokens.appHighlightBorderColor,
+          : FluviDirectionColorPaletteCatalog.midpoint(source),
       coreColor: null,
       showsArtwork:
           iconPresentation == FluviFabIconPresentation.directionArtwork,
@@ -65,6 +65,24 @@ final class Bnb03FabDirectionVisual {
   final bool showsArtwork;
   final String artworkAssetPath;
   final ValueKey<String> artworkKey;
+}
+
+/// The supplied Spendee artwork PNGs are 1024px square, but their visible
+/// illustration occupies only 820px horizontally. Scale the image once at
+/// this shell boundary so the *opaque* artwork, not its transparent bitmap
+/// box, reaches the legacy coloured-ring footprint.
+abstract final class Bnb03FabArtworkGeometry {
+  static const double sourceImageWidth = 1024;
+  static const double opaqueArtworkWidth = 820;
+  static const double opticalScale = sourceImageWidth / opaqueArtworkWidth;
+
+  static double opaqueWidthFor({
+    required double visibleFootprintDiameter,
+    required double scale,
+  }) =>
+      visibleFootprintDiameter *
+      (opaqueArtworkWidth / sourceImageWidth) *
+      scale;
 }
 
 /// The one physical BottomNav path owner. It keeps the centre FAB arc and the
@@ -500,13 +518,21 @@ class Bnb03BottomNavigation extends StatelessWidget {
                             'bnb03-fab-visible-footprint',
                           ),
                           child: fabVisual.showsArtwork
-                              ? Image.asset(
-                                  fabVisual.artworkAssetPath,
-                                  key: fabVisual.artworkKey,
-                                  width: fabVisibleDiameter,
-                                  height: fabVisibleDiameter,
-                                  fit: BoxFit.contain,
-                                  filterQuality: FilterQuality.high,
+                              ? ClipRect(
+                                  child: Transform.scale(
+                                    key: const ValueKey<String>(
+                                      'bnb03-fab-artwork-optical-scale',
+                                    ),
+                                    scale: Bnb03FabArtworkGeometry.opticalScale,
+                                    child: Image.asset(
+                                      fabVisual.artworkAssetPath,
+                                      key: fabVisual.artworkKey,
+                                      width: fabVisibleDiameter,
+                                      height: fabVisibleDiameter,
+                                      fit: BoxFit.contain,
+                                      filterQuality: FilterQuality.high,
+                                    ),
+                                  ),
                                 )
                               : CustomPaint(
                                   key: const ValueKey(
@@ -521,8 +547,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                                       child: CustomPaint(
                                         key: const ValueKey('bnb03-fab-core'),
                                         painter: _Bnb03FabCorePainter(
-                                          gradient: FluviVisualTokens
-                                              .appHighlightGradient,
+                                          gradient: fabVisual.gradient,
                                         ),
                                         child: Center(
                                           child: Icon(

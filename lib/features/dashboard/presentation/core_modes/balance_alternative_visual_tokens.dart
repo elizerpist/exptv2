@@ -35,12 +35,14 @@ abstract final class BalanceAlternativeHtmlTokens {
   // hierarchy rather than overflowing or changing Mother geometry.
   static Size get sumSideCardMinimumContentSize =>
       Size(logical(252), logical(300));
-  static Size get sumCombinedCardMinimumContentSize =>
-      Size(logical(720), logical(340));
+
+  /// Wide lower cards protect only their authored horizontal composition.
+  /// Their actual production slots can be shorter than the reference art, so
+  /// height must adapt internally instead of centring a FittedBox-shrunk plot.
+  static Size get sumCombinedCardMinimumContentSize => Size(logical(720), 0);
   static Size get napi4ImpactCardMinimumContentSize =>
       Size(logical(252), logical(600));
-  static Size get napi4RhythmCardMinimumContentSize =>
-      Size(logical(720), logical(340));
+  static Size get napi4RhythmCardMinimumContentSize => Size(logical(720), 0);
 
   // HTML: .variant-card / .baseline-card.
   static double get childBorderRadius => logical(25);
@@ -206,19 +208,25 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get annualIncomeExpenseIconExtent => logical(42);
   static double get annualIncomeExpenseLegendSize => logical(17);
   static double get annualIncomeExpenseToggleExtent => logical(34);
-  static double get annualIncomeExpenseBarMaximumWidth => logical(14);
-  static const double annualIncomeExpenseBarStepFraction = .38;
+
+  /// A pair consumes most of a month's available step. The old fixed source
+  /// width cap was applied after device scaling and left the annual chart
+  /// visibly sparse on phones with plenty of horizontal space.
+  static const double annualIncomeExpenseBarPairStepFraction = .84;
   static double get annualIncomeExpenseBarGap => logical(2);
-  static double get annualIncomeExpenseMonthLabelSize => logical(16);
+  static double get annualIncomeExpenseMonthLabelSize => logical(22);
 
   static double annualIncomeExpenseBarWidthFor({
     required double plotWidth,
     required int bucketCount,
   }) {
     if (plotWidth <= 0 || bucketCount <= 0) return 0;
-    return math.min(
-      annualIncomeExpenseBarMaximumWidth,
-      plotWidth / bucketCount * annualIncomeExpenseBarStepFraction,
+    final step = plotWidth / bucketCount;
+    return math.max(
+      0,
+      (step * annualIncomeExpenseBarPairStepFraction -
+              annualIncomeExpenseBarGap) /
+          2,
     );
   }
 
@@ -255,7 +263,6 @@ abstract final class BalanceAlternativeHtmlTokens {
     logical(20),
   );
   static double get sumStabilityHeadingHeight => logical(48);
-  static double get sumStabilityChartHeight => logical(126);
   static double get sumStabilityGap => logical(10);
   static double get sumStabilityTitleSize => logical(24);
   static double get sumStabilitySubtitleSize => logical(14);

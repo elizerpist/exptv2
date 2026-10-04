@@ -78,3 +78,27 @@ Before final build/commit, re-open the screenshot above and re-check every row.
 | BAL-YEAR-01 | User follow-up | annual-closings painter/legend tokens | Year bars are materially wider and month labels slightly larger while remaining non-overlapping. | Token/painter test + inspected annual golden. | DONE |
 | ARC-03 | Global AGENTS.md | affected sources | The follow-up uses existing setting/controller/token owners and introduces no repository/query paths or duplicate UI engines. | Source inspection + focused analysis/tests. | DONE |
 | DEL-03 | Global AGENTS.md | GitHub Actions | One app commit is pushed and the exact online Human APK is downloaded, hashed and identity-checked. | Actions `37225041605`; release `fluvi-human-diagnostic-41ed1fd`; SHA-256 `4ab40b86eb1e0f6b07426081188bc011b8f3488bac2a3753faeb585471336a5d`; ZIP and embedded commit inspection. | DONE |
+
+## Corrective acceptance checklist — 2026-10-04 / initialization and Balance visual span
+
+References re-inspected: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20261004-210845.png`, `/storage/emulated/0/Pictures/Screenshots/Screenshot_20261004-210849.png`, and `/storage/emulated/0/Pictures/Screenshots/Screenshot_20261004-210855.png`.
+
+### Architecture card
+
+| Concern | Single owner / extension | State and write path | Boundary |
+| --- | --- | --- | --- |
+| Fresh Mind SUM selection | Existing Android dashboard-presentation channel and `MindSumVisualStyle` codec | Native missing-preference fallback returns the existing `sumA` enum index; explicit saved values remain untouched | No second Mind settings owner or reset of a valid user preference. |
+| FAB legacy and artwork treatment | `Bnb03FabDirectionVisual` using `FluviDirectionColorPaletteCatalog` | Existing global icon-presentation and transaction-direction owners | FAB derives the current pill gradient; it owns neither direction nor palette persistence. |
+| Balance annual bar density | `BalanceAlternativeHtmlTokens` shared by the annual painter | Stateless plot geometry derived from the available width and bucket count | Prepared annual income/expense values and temporal semantics remain unchanged. |
+| SUM stability and daily rhythm span | Existing SUM/Day painters with shared alternative-card geometry tokens | Stateless rendered-plot bounds derived from the supplied canvas | No query, aggregation, or content-card state changes. |
+
+| ID | Requirement source | Code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| MIND-INIT-02 | User correction | `MainActivity.kt`, existing dashboard-preference codec | A truly missing native `sumVisualStyle` preference restores SUM-A; a saved valid choice still restores unchanged. | RED→GREEN native-channel boundary test plus existing Dart preference tests. | DONE |
+| FAB-ART-04 | User correction | `bnb03_bottom_navigation.dart` | Artwork has no coloured ring/core and its visible illustration occupies the former coloured-ring diameter rather than being optically undersized by PNG transparency. | RED→GREEN image/geometry widget test and updated FAB golden inspection. | DONE |
+| FAB-LEGACY-04 | User correction | `Bnb03FabDirectionVisual`, existing direction palette resolver | White-store-icon mode uses the active Income/Expense pill's diagonal gradient and its exact midpoint for the ring, live for every profile. | RED→GREEN resolver and widget tests for both directions/profiles. | DONE |
+| BAL-YEAR-02 | User + year screenshot | annual income/expense painter/tokens | Twelve monthly income/expense pairs materially use their available step width; labels are visibly larger without overlap. | RED→GREEN deterministic geometry test and updated annual golden inspection. | DONE |
+| BAL-SUM-02 | User + SUM screenshot | stability-band painter | Cashflow stability spans the actual lower-card plot width instead of retaining unexplained side whitespace. | RED→GREEN painter plot-bounds test and updated SUM golden inspection. | DONE |
+| BAL-RHYTHM-02 | User + Day screenshot | daily-rhythm painter | Both 30-day rhythm halves expand to their available plot width while preserving the centre separator and all 60 data points. | RED→GREEN painter plot-bounds test and updated Day golden inspection. | DONE |
+| ARC-04 | Global AGENTS.md | affected production files | Corrections extend existing preference, palette, and painter owners; no duplicate state, query, or renderer path. | Source inspection and focused boundary tests. | DONE |
+| DEL-04 | Global AGENTS.md | GitHub Actions | Only after every corrective item is DONE, the app commit is pushed and the exact online Human APK is downloaded and hash-verified. | Exact workflow, artifact checksum, ZIP, and embedded commit check. | NOT DONE |

@@ -310,7 +310,7 @@ void main() {
   );
 
   testWidgets(
-    'SUM-UI: physically constrained side and lower slots use a complete-card scale fallback without overflow',
+    'SUM-UI: physically constrained side and lower slots keep their direct-width layouts without overflow',
     (tester) async {
       final distribution =
           DashboardBalanceMonthlyNetDistributionProjection.build(
@@ -352,7 +352,7 @@ void main() {
   );
 
   testWidgets(
-    'BAL-DENSITY-01 RED: Cashflow stability uses the wide lower-card field rather than preserving broad side gutters',
+    'BAL-SUM-02 RED: Cashflow stability keeps its full horizontal plot width even in the short production lower slot',
     (tester) async {
       final distribution =
           DashboardBalanceMonthlyNetDistributionProjection.build(
@@ -363,7 +363,7 @@ void main() {
           home: Scaffold(
             body: SizedBox(
               width: 360,
-              height: 220,
+              height: 120,
               child: BalanceAlternativeCashflowStabilityBandCard(
                 presentation: distribution.cashflowBand,
               ),
@@ -382,10 +382,10 @@ void main() {
               ),
             )
             .width,
-        greaterThan(350),
+        greaterThan(340),
         reason:
-            'The chart should approach both card edges; data semantics do '
-            'not need side whitespace.',
+            'Height pressure must adapt the vertical lanes, not FittedBox '
+            'the whole lower card and center a narrow chart.',
       );
     },
   );

@@ -433,8 +433,8 @@ final class BalanceAlternativeCashflowStabilityBandCard
             child: _StabilityHeading(presentation: presentation),
           ),
           SizedBox(height: BalanceAlternativeHtmlTokens.sumStabilityGap),
-          SizedBox(
-            height: BalanceAlternativeHtmlTokens.sumStabilityChartHeight,
+          Flexible(
+            flex: 2,
             child: RepaintBoundary(
               child: CustomPaint(
                 key: const ValueKey<String>(
@@ -446,7 +446,7 @@ final class BalanceAlternativeCashflowStabilityBandCard
             ),
           ),
           SizedBox(height: BalanceAlternativeHtmlTokens.sumStabilityGap),
-          const Expanded(child: _StabilityLegend()),
+          const Flexible(flex: 3, child: _StabilityLegend()),
         ],
       ),
     ),
@@ -550,7 +550,7 @@ final class _StabilityLegend extends StatelessWidget {
         color: const Color(0xFFB69AFF),
         copy: 'A havi eredményeid jellemzően ebben a sávban mozognak.',
       ),
-      SizedBox(height: BalanceAlternativeHtmlTokens.logical(12)),
+      SizedBox(height: BalanceAlternativeHtmlTokens.logical(10)),
       _legendRow(
         size: BalanceAlternativeHtmlTokens.logical(15),
         color: const Color(0xFFE5DCFF),

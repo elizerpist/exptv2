@@ -77,14 +77,14 @@ void main() {
   });
 
   testWidgets(
-    'BAL-DENSITY-01 RED: comparison rhythm strip uses the available wide lower-card field',
+    'BAL-RHYTHM-02 RED: comparison rhythm keeps both 30-day halves across the full short lower-card plot',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SizedBox(
               width: 360,
-              height: 220,
+              height: 120,
               child: BalanceAlternativeDailyMomentumRhythmCard(
                 presentation: momentum,
               ),
@@ -99,7 +99,42 @@ void main() {
               find.byKey(const ValueKey<String>('balance-napi4-rhythm-strip')),
             )
             .width,
-        greaterThan(350),
+        greaterThan(340),
+        reason:
+            'The 60 daily bars should not be horizontally shrunk merely '
+            'because the lower card is short.',
+      );
+    },
+  );
+
+  testWidgets(
+    'BAL-RHYTHM-02 visual: the short production rhythm card keeps its 60-bar field edge-to-edge',
+    (tester) async {
+      const boundaryKey = ValueKey<String>(
+        'balance-napi4-rhythm-span-golden-boundary',
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 120,
+              child: RepaintBoundary(
+                key: boundaryKey,
+                child: BalanceAlternativeDailyMomentumRhythmCard(
+                  presentation: momentum,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        find.byKey(boundaryKey),
+        matchesGoldenFile(
+          '../../../goldens/balance_alternative_day_rhythm_span.png',
+        ),
       );
     },
   );

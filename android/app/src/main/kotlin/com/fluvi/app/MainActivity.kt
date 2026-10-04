@@ -253,7 +253,11 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "readDashboardPresentationSettings" -> result.success(
                         mapOf(
-                            "sumVisualStyle" to preferences.getInt("sumVisualStyle", 0),
+                            // SUM-A is the fresh-install presentation default. Only
+                            // an absent SharedPreferences key gets this fallback;
+                            // an explicit saved Current/SUM-A/SUM-B/Micro-day choice
+                            // remains an authoritative user preference.
+                            "sumVisualStyle" to preferences.getInt("sumVisualStyle", 1),
                             "showSumLayoutChooser" to preferences.getBoolean("showSumLayoutChooser", true),
                             "yearGridLayout" to preferences.getInt("yearGridLayout", 1),
                             "yearMonthlyAmountPresentation" to if (preferences.contains("yearMonthlyAmountPresentation")) preferences.getInt("yearMonthlyAmountPresentation", 1) else if (preferences.getBoolean("showYearFourByThreeScopeAmounts", true)) 1 else 0,

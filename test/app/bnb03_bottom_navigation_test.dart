@@ -606,6 +606,21 @@ void main() {
             'Artwork owns the visible ring footprint instead of the former '
             'small inner-glyph area.',
       );
+      final artworkScale = tester.widget<Transform>(
+        find.byKey(const ValueKey<String>('bnb03-fab-artwork-optical-scale')),
+      );
+      final scale = artworkScale.transform.storage[0];
+      expect(scale, greaterThan(1));
+      expect(
+        Bnb03FabArtworkGeometry.opaqueWidthFor(
+          visibleFootprintDiameter: 84,
+          scale: scale,
+        ),
+        closeTo(84, .01),
+        reason:
+            'The 820px opaque width inside the supplied 1024px PNG must '
+            'visually reach the former 84px coloured-ring diameter.',
+      );
 
       await tester.pumpWidget(
         MaterialApp(
@@ -628,6 +643,34 @@ void main() {
         find.byKey(const ValueKey<String>('bnb03-fab-outer-purple-ring')),
         findsOneWidget,
       );
+    },
+  );
+
+  test(
+    'FAB legacy white-store mode derives its ring midpoint and diagonal core from the active direction pill',
+    () {
+      for (final direction in TransactionDirection.values) {
+        for (final profile in FluviDirectionColorProfile.values) {
+          final visual = Bnb03FabDirectionVisual.resolve(
+            direction: direction,
+            profile: profile,
+            iconPresentation: FluviFabIconPresentation.legacyWhiteStore,
+          );
+          final expected = direction == TransactionDirection.income
+              ? FluviDirectionColorPaletteCatalog.income(profile)
+              : FluviDirectionColorPaletteCatalog.expense(profile);
+
+          expect(visual.showsArtwork, isFalse);
+          expect(visual.gradient.begin, Alignment.topLeft);
+          expect(visual.gradient.end, Alignment.bottomRight);
+          expect(visual.gradient.colors, expected.colors);
+          expect(visual.gradient.stops, expected.stops);
+          expect(
+            visual.ringColor,
+            FluviDirectionColorPaletteCatalog.midpoint(expected),
+          );
+        }
+      }
     },
   );
 

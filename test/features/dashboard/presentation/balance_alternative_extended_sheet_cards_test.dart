@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'BAL-YEAR-01 RED: annual closing bars and month-facing legend type use the available year-card density',
+    'BAL-YEAR-02 RED: annual income/expense pairs visibly occupy their month steps and labels remain readable',
     () {
       expect(
         BalanceAlternativeHtmlTokens.annualLegendSize,
@@ -27,7 +27,24 @@ void main() {
           plotWidth: 360,
           bucketCount: 12,
         ),
-        greaterThan(BalanceAlternativeHtmlTokens.logical(10)),
+        greaterThanOrEqualTo(360 / 12 * .36),
+        reason:
+            'Each income/expense column needs over a third of its month '
+            'step; the former logical(14) cap stranded most of the plot.',
+      );
+      expect(
+        2 *
+                BalanceAlternativeHtmlTokens.annualIncomeExpenseBarWidthFor(
+                  plotWidth: 360,
+                  bucketCount: 12,
+                ) +
+            BalanceAlternativeHtmlTokens.annualIncomeExpenseBarGap,
+        lessThanOrEqualTo(360 / 12),
+        reason: 'Wider paired columns must still stay within one month step.',
+      );
+      expect(
+        BalanceAlternativeHtmlTokens.annualIncomeExpenseMonthLabelSize,
+        greaterThan(BalanceAlternativeHtmlTokens.logical(20)),
       );
     },
   );
