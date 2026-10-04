@@ -985,6 +985,44 @@ final class _BalancePresentationSection extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.only(top: 4),
+          child: Text('Header grafikon tartalma'),
+        ),
+        RadioGroup<BalanceHeaderGraphPresentation>(
+          groupValue: settings.headerGraphPresentation,
+          onChanged: (presentation) {
+            if (presentation != null) {
+              controller.setHeaderGraphPresentation(presentation);
+            }
+          },
+          child: Column(
+            children: <Widget>[
+              for (final presentation in BalanceHeaderGraphPresentation.values)
+                RadioListTile<BalanceHeaderGraphPresentation>(
+                  key: ValueKey<String>(
+                    'balance-header-graph-presentation-${presentation.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(presentation.tunerLabel),
+                  value: presentation,
+                ),
+            ],
+          ),
+        ),
+        if (settings.headerGraphPresentation ==
+            BalanceHeaderGraphPresentation.incomeExpensePartition)
+          _TunerSlider(
+            key: const ValueKey<String>('balance-header-partition-height'),
+            label: 'Bevétel–kiadás sáv magassága',
+            valueLabel: '${settings.headerPartitionHeightPercent.round()}%',
+            min: 0,
+            max: 100,
+            divisions: 100,
+            value: settings.headerPartitionHeightPercent,
+            onChanged: controller.setHeaderPartitionHeightPercent,
+          ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
           child: Text('Line chart időjelölések'),
         ),
         RadioGroup<BalanceHeaderChartTimeLabels>(
@@ -1137,6 +1175,33 @@ final class _BalancePresentationSection extends StatelessWidget {
           divisions: 100,
           value: settings.balanceContentCardBorderOpacity,
           onChanged: controller.setBalanceContentCardBorderOpacity,
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 12),
+          child: Text('HAVI ALSÓ KÁRTYA'),
+        ),
+        RadioGroup<BalanceMonthCombinedCardPresentation>(
+          groupValue: settings.monthCombinedCardPresentation,
+          onChanged: (presentation) {
+            if (presentation != null) {
+              controller.setMonthCombinedCardPresentation(presentation);
+            }
+          },
+          child: Column(
+            children: <Widget>[
+              for (final presentation
+                  in BalanceMonthCombinedCardPresentation.values)
+                RadioListTile<BalanceMonthCombinedCardPresentation>(
+                  key: ValueKey<String>(
+                    'balance-month-combined-card-presentation-${presentation.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(presentation.tunerLabel),
+                  value: presentation,
+                ),
+            ],
+          ),
         ),
         const Padding(
           padding: EdgeInsets.only(top: 12),

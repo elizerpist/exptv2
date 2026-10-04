@@ -63,7 +63,7 @@ extension MindYearHeatmapGridLayoutPresentation on MindYearHeatmapGridLayout {
 /// Controls how current slider-filtered monthly amounts appear in Year.
 /// This changes only rendering over the resident Year frame; it cannot admit
 /// transactions, change the amount range, or create a financial projection.
-enum MindYearMonthlyAmountPresentation { hidden, inline, veil }
+enum MindYearMonthlyAmountPresentation { hidden, inline, veil, whiteMotherCard }
 
 extension MindYearMonthlyAmountPresentationLabel
     on MindYearMonthlyAmountPresentation {
@@ -71,6 +71,7 @@ extension MindYearMonthlyAmountPresentationLabel
     MindYearMonthlyAmountPresentation.hidden => 'Rejtve',
     MindYearMonthlyAmountPresentation.inline => 'Sorban',
     MindYearMonthlyAmountPresentation.veil => 'Éves fátyol',
+    MindYearMonthlyAmountPresentation.whiteMotherCard => 'Fehér mother card',
   };
 }
 

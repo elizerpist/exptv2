@@ -1,7 +1,6 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
+import '../../presentation/widgets/dashboard_rounded_metric_bar.dart';
 import '../domain/mind_day_hourly_comparison_projection.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
@@ -249,128 +248,45 @@ final class _MindDayHourlyBars extends StatelessWidget {
   static const _minimumVisibleAmountBarHeight = 4.0;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      const labelHeight = 15.0;
-      const gap = 4.0;
-      final plotHeight = math.max(0.0, constraints.maxHeight - labelHeight);
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: comparison.hours
-            .map((hour) {
-              final fullHeight =
-                  MindFullVsFilteredBarGeometry.heightForFraction(
-                    plotHeight: plotHeight,
-                    fraction: hour.fullFraction,
-                    hasAmount: MindFullVsFilteredBarGeometry.hasReference(
-                      hour.fullTotal,
-                    ),
-                    minimumVisibleHeight: _minimumVisibleAmountBarHeight,
-                  );
-              final selectedHeight =
-                  MindFullVsFilteredBarGeometry.heightForFraction(
-                    plotHeight: plotHeight,
-                    fraction: hour.selectedFraction,
-                    hasAmount: MindFullVsFilteredBarGeometry.hasForeground(
-                      hour.selectedTotal,
-                    ),
-                    minimumVisibleHeight: _minimumVisibleAmountBarHeight,
-                  );
-              final selectedPalette = _paletteFor(
-                style: paletteStyle,
-                scaleResolution: scaleResolution,
-                dynamicScale: dynamicScale,
-                fraction: hour.selectedFraction,
-                isEmpty: hour.selectedTotal == 0,
-              );
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: SizedBox(
-                            key: ValueKey<String>(
-                              'mind-day-all-slider-hour-${hour.hour.toString().padLeft(2, '0')}',
-                            ),
-                            height: math.max(5.0, plotHeight),
-                            child:
-                                MindFullVsFilteredBarGeometry.hasReference(
-                                  hour.fullTotal,
-                                )
-                                ? Stack(
-                                    fit: StackFit.expand,
-                                    children: <Widget>[
-                                      Align(
-                                        alignment: Alignment.bottomCenter,
-                                        child: SizedBox(
-                                          height: fullHeight,
-                                          width: double.infinity,
-                                          child: DecoratedBox(
-                                            key: ValueKey<String>(
-                                              'mind-day-all-slider-reference-${hour.hour.toString().padLeft(2, '0')}',
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xffd4d7dc),
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      if (MindFullVsFilteredBarGeometry.hasForeground(
-                                        hour.selectedTotal,
-                                      ))
-                                        Align(
-                                          alignment: Alignment.bottomCenter,
-                                          child: SizedBox(
-                                            height: selectedHeight,
-                                            width: double.infinity,
-                                            child: DecoratedBox(
-                                              key: ValueKey<String>(
-                                                'mind-day-all-slider-selected-${hour.hour.toString().padLeft(2, '0')}',
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    selectedPalette.background,
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  )
-                                : const SizedBox.shrink(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: gap),
-                      SizedBox(
-                        height: labelHeight,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            hour.hour.toString().padLeft(2, '0'),
-                            style: const TextStyle(
-                              color: Color(0xff6982b2),
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: comparison.hours
+        .map((hour) {
+          final selectedPalette = _paletteFor(
+            style: paletteStyle,
+            scaleResolution: scaleResolution,
+            dynamicScale: dynamicScale,
+            fraction: hour.selectedFraction,
+            isEmpty: hour.selectedTotal == 0,
+          );
+          final label = hour.hour.toString().padLeft(2, '0');
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1.5),
+              child: DashboardRoundedMetricBar(
+                label: label,
+                hasReference: MindFullVsFilteredBarGeometry.hasReference(
+                  hour.fullTotal,
                 ),
-              );
-            })
-            .toList(growable: false),
-      );
-    },
+                referenceFraction: hour.fullFraction,
+                hasForeground: MindFullVsFilteredBarGeometry.hasForeground(
+                  hour.selectedTotal,
+                ),
+                foregroundFraction: hour.selectedFraction,
+                foregroundColor: selectedPalette.background,
+                minimumVisibleHeight: _minimumVisibleAmountBarHeight,
+                barKey: ValueKey<String>('mind-day-all-slider-hour-$label'),
+                referenceKey: ValueKey<String>(
+                  'mind-day-all-slider-reference-$label',
+                ),
+                foregroundKey: ValueKey<String>(
+                  'mind-day-all-slider-selected-$label',
+                ),
+              ),
+            ),
+          );
+        })
+        .toList(growable: false),
   );
 }
 

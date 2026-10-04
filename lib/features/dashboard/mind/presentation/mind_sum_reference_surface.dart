@@ -56,6 +56,10 @@ final class MindSumReferenceSurface extends StatelessWidget {
               subtitle: period,
               titleKey: const ValueKey<String>('mind-sum-heatmap-title'),
               subtitleKey: const ValueKey<String>('mind-sum-heatmap-period'),
+              trailing: MindNoSpendDaysHeaderMetric(
+                noSpendDayCount: frame.noSpendDayCount,
+                keyPrefix: 'mind-sum-no-spend-days',
+              ),
             ),
             const SizedBox(height: 8),
             Expanded(

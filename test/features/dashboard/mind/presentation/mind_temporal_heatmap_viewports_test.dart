@@ -140,6 +140,14 @@ void main() {
 
       expect(find.text('SUM aktivitás'), findsOneWidget);
       expect(find.text('2024–2025 · 24 hónap'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mind-sum-no-spend-days-title')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-sum-no-spend-days-value')),
+        findsOneWidget,
+      );
       expect(find.text('Éves aktivitás'), findsNothing);
       expect(
         find.byKey(const ValueKey('mind-sum-heatmap-surface')),
@@ -840,9 +848,9 @@ void main() {
       );
 
       expect(find.text('Havi aktivitás'), findsOneWidget);
-      expect(find.text('31 nap'), findsOneWidget);
       expect(find.text('július 2026'), findsOneWidget);
-      expect(find.text('0 aktív nap'), findsOneWidget);
+      expect(find.text('Költésmentes'), findsOneWidget);
+      expect(find.text('31 nap'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('mind-month-heatmap-grid')),
         findsOneWidget,
@@ -859,17 +867,21 @@ void main() {
       final titleRect = tester.getRect(
         find.byKey(const ValueKey<String>('mind-month-heatmap-title')),
       );
-      final dayCountRect = tester.getRect(
-        find.byKey(const ValueKey<String>('mind-month-heatmap-day-count')),
+      final noSpendTitleRect = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('mind-month-heatmap-no-spend-days-title'),
+        ),
       );
       final monthRect = tester.getRect(find.text('július 2026'));
-      final activeRect = tester.getRect(
-        find.byKey(const ValueKey<String>('mind-month-heatmap-active-days')),
+      final noSpendValueRect = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('mind-month-heatmap-no-spend-days-value'),
+        ),
       );
-      expect(titleRect.center.dy, closeTo(dayCountRect.center.dy, .5));
-      expect(monthRect.center.dy, closeTo(activeRect.center.dy, .5));
-      expect(titleRect.left, lessThan(dayCountRect.left));
-      expect(monthRect.left, lessThan(activeRect.left));
+      expect(titleRect.center.dy, closeTo(noSpendTitleRect.center.dy, .5));
+      expect(monthRect.center.dy, closeTo(noSpendValueRect.center.dy, .5));
+      expect(titleRect.left, lessThan(noSpendTitleRect.left));
+      expect(monthRect.left, lessThan(noSpendValueRect.left));
       expect(
         find.byKey(const ValueKey('mind-month-heatmap-pager')),
         findsOneWidget,

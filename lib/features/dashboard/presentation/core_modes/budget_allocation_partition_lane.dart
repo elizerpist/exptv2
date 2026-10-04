@@ -7,6 +7,7 @@ import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../dashboard_budget_header_presentation.dart';
+import 'dashboard_partition_lane_geometry.dart';
 
 /// One narrow paint lane for the prepared Budget category-allocation
 /// partition. It traverses the retained canonical bank; the allocation total
@@ -43,14 +44,16 @@ final class BudgetAllocationPartitionPainter extends CustomPainter {
   final DashboardBudgetPartitionPresentation partition;
   final bool showOuterContour;
 
-  static const _cornerRadius = Radius.circular(4);
   static const _allocatedRemainderOpacity = .38;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     final track = Offset.zero & size;
-    final clip = RRect.fromRectAndRadius(track, _cornerRadius);
+    final clip = RRect.fromRectAndRadius(
+      track,
+      DashboardPartitionLaneGeometry.cornerRadius,
+    );
     canvas
       ..save()
       ..clipRRect(clip)

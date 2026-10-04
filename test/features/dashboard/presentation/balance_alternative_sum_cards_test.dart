@@ -1,12 +1,12 @@
 import 'package:fluvi/features/dashboard/application/dashboard_balance_monthly_net_distribution_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_retention_stability_projection.dart';
+import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_sum_cards.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_extended_sheet_layout.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:flutter/material.dart';
@@ -20,43 +20,64 @@ const _identity = DashboardBalancePrimaryIdentity(
 
 void main() {
   testWidgets(
-    'BS-RED-01: Savings is one tappable shared 3D progress component',
+    'BS-RED-01: Savings is one shared 3D progress component with percentage and amount simultaneously visible',
     (tester) async {
-      final controller = BalancePresentationController();
-      addTearDown(controller.dispose);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SizedBox(
               width: 180,
               height: 180,
-              child: ValueListenableBuilder<BalancePresentationSettings>(
-                valueListenable: controller,
-                builder: (context, settings, _) =>
-                    BalanceAlternativeSavingsRingCard(
-                      presentation: const BalanceAlternativeSavingsPresentation(
-                        netMinor: 620000,
-                        retentionBasisPoints: 6200,
-                      ),
-                      displayMode: settings.savingsDisplayMode,
-                      onDisplayModeToggle: controller.toggleSavingsDisplayMode,
-                    ),
+              child: BalanceAlternativeSavingsRingCard(
+                presentation: const BalanceAlternativeSavingsPresentation(
+                  netMinor: 620000,
+                  retentionBasisPoints: 6200,
+                ),
               ),
             ),
           ),
         ),
       );
 
-      final card = find.byKey(
-        const ValueKey('balance-alternative-savings-card'),
-      );
-      expect(card, findsOneWidget);
       expect(
         find.byKey(const ValueKey('balance-alternative-savings-budget-3d')),
         findsOneWidget,
       );
-      await tester.tap(card);
-      await tester.pump();
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(
+                const ValueKey('balance-alternative-savings-percentage'),
+              ),
+            )
+            .data,
+        '62%',
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(
+                const ValueKey('balance-alternative-savings-percentage'),
+              ),
+            )
+            .style
+            ?.fontSize,
+        greaterThanOrEqualTo(20),
+        reason: 'The number is intentionally overlaid at a readable size.',
+      );
+      expect(
+        tester
+            .widget<BudgetCategoryAvatarSelectionChrome>(
+              find.byKey(
+                const ValueKey('balance-alternative-savings-budget-3d'),
+              ),
+            )
+            .sourceProgress,
+        .62,
+        reason:
+            'The existing Budget 3D ring receives the real Savings progress, '
+            'rather than an empty decorative shell.',
+      );
       expect(
         tester
             .widget<Text>(
@@ -64,6 +85,85 @@ void main() {
             )
             .data,
         '6 k Ft',
+      );
+    },
+  );
+
+  testWidgets(
+    'BALANCE-MONTH-RHYTHM: the user-selected lower card fits every real month day and leaves no-spend days barless',
+    (tester) async {
+      final points = List<BalanceAlternativeDailySpendPoint>.generate(
+        31,
+        (index) => BalanceAlternativeDailySpendPoint(
+          day: index + 1,
+          expenseMinor: switch (index) {
+            0 => 120000,
+            1 => 0,
+            2 => 10000,
+            30 => 5000,
+            _ => 25000,
+          },
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 150,
+              child: BalanceAlternativeMonthlySpendingRhythmCard(
+                presentation: BalanceAlternativeMonthlySpendPresentation(
+                  points: points,
+                  currentExpenseMinor: 815000,
+                  previousExpenseMinor: null,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-month-rhythm-card'),
+        ),
+        findsOneWidget,
+      );
+      for (var day = 1; day <= 31; day += 1) {
+        expect(
+          find.byKey(
+            ValueKey<String>('balance-alternative-month-rhythm-day-$day'),
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-month-rhythm-fill-2'),
+        ),
+        findsNothing,
+      );
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey<String>(
+                  'balance-alternative-month-rhythm-fill-1',
+                ),
+              ),
+            )
+            .height,
+        greaterThan(
+          tester
+              .getSize(
+                find.byKey(
+                  const ValueKey<String>(
+                    'balance-alternative-month-rhythm-fill-31',
+                  ),
+                ),
+              )
+              .height,
+        ),
       );
     },
   );

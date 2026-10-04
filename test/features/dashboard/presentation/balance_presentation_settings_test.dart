@@ -166,6 +166,46 @@ void main() {
   );
 
   test(
+    'BALANCE-REFINEMENT-SETTINGS: header partition and Month rhythm stay revisioned presentation-only choices',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(
+        controller.value.headerGraphPresentation,
+        BalanceHeaderGraphPresentation.lineChart,
+      );
+      expect(controller.value.headerPartitionHeightPercent, 50);
+      expect(
+        controller.value.monthCombinedCardPresentation,
+        BalanceMonthCombinedCardPresentation.incomeExpense,
+      );
+
+      controller
+        ..setHeaderGraphPresentation(
+          BalanceHeaderGraphPresentation.incomeExpensePartition,
+        )
+        ..setHeaderPartitionHeightPercent(140)
+        ..setMonthCombinedCardPresentation(
+          BalanceMonthCombinedCardPresentation.spendingRhythm,
+        );
+
+      expect(
+        controller.value.headerGraphPresentation,
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
+      );
+      expect(controller.value.headerPartitionHeightPercent, 100);
+      expect(
+        controller.value.monthCombinedCardPresentation,
+        BalanceMonthCombinedCardPresentation.spendingRhythm,
+      );
+      final copy = controller.value.copyWith();
+      expect(copy, controller.value);
+      expect(copy.hashCode, controller.value.hashCode);
+    },
+  );
+
+  test(
     'BWA-SETTINGS RED: tint visibility gates stored background opacity without changing wave or border choices',
     () {
       final controller = BalancePresentationController();

@@ -7,27 +7,34 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_carouse
 void main() {
   group('Balance carousel wave motion', () {
     test(
-      'Savings display mode is one revisioned presentation state for every temporal card',
+      'Balance header and Month-body presentation choices are one revisioned presentation state',
       () {
         final controller = BalancePresentationController();
         addTearDown(controller.dispose);
 
         expect(
-          controller.value.savingsDisplayMode,
-          BalanceSavingsDisplayMode.percentage,
+          controller.value.headerGraphPresentation,
+          BalanceHeaderGraphPresentation.lineChart,
         );
-        controller.toggleSavingsDisplayMode();
         expect(
-          controller.value.savingsDisplayMode,
-          BalanceSavingsDisplayMode.amount,
+          controller.value.monthCombinedCardPresentation,
+          BalanceMonthCombinedCardPresentation.incomeExpense,
         );
-        expect(controller.value.revision, 1);
-        controller.toggleSavingsDisplayMode();
-        expect(
-          controller.value.savingsDisplayMode,
-          BalanceSavingsDisplayMode.percentage,
+        controller.setHeaderGraphPresentation(
+          BalanceHeaderGraphPresentation.incomeExpensePartition,
+        );
+        controller.setMonthCombinedCardPresentation(
+          BalanceMonthCombinedCardPresentation.spendingRhythm,
         );
         expect(controller.value.revision, 2);
+        expect(
+          controller.value.headerGraphPresentation,
+          BalanceHeaderGraphPresentation.incomeExpensePartition,
+        );
+        expect(
+          controller.value.monthCombinedCardPresentation,
+          BalanceMonthCombinedCardPresentation.spendingRhythm,
+        );
       },
     );
 

@@ -116,7 +116,7 @@ final class _MindYearHeatmapViewportState
   late final ScrollController _ownedAnnualScrollController;
   late final ScrollController _barPageScrollController;
   late final ScrollController _linePageScrollController;
-  var _isMonthlyAmountVeilOpen = false;
+  var _isMonthlyAmountOverlayOpen = false;
 
   @override
   void initState() {
@@ -194,9 +194,8 @@ final class _MindYearHeatmapViewportState
     setState(() {
       _presentationSettings = next;
       _directGridLayout = next.yearGridLayout;
-      if (next.yearMonthlyAmountPresentation !=
-          MindYearMonthlyAmountPresentation.veil) {
-        _isMonthlyAmountVeilOpen = false;
+      if (!_usesMonthlyAmountOverlay(next.yearMonthlyAmountPresentation)) {
+        _isMonthlyAmountOverlayOpen = false;
       }
     });
     // A 2×6 → 3×4 transition shortens the one existing viewport. Preserve
@@ -239,7 +238,7 @@ final class _MindYearHeatmapViewportState
       _hasFrame = hasFrame;
       _geometryYear = geometryYear;
       _acceptStaticFrame(frame);
-      if (geometryYearChanged) _isMonthlyAmountVeilOpen = false;
+      if (geometryYearChanged) _isMonthlyAmountOverlayOpen = false;
     });
   }
 
@@ -283,8 +282,9 @@ final class _MindYearHeatmapViewportState
             _presentationSettings.yearMonthlyAmountPresentation;
         final showsInlineAmounts =
             amountPresentation == MindYearMonthlyAmountPresentation.inline;
-        final usesMonthlyAmountVeil =
-            amountPresentation == MindYearMonthlyAmountPresentation.veil;
+        final usesMonthlyAmountOverlay = _usesMonthlyAmountOverlay(
+          amountPresentation,
+        );
         final contentWidth = (constraints.maxWidth - horizontalPadding * 2)
             .clamp(0.0, double.infinity)
             .toDouble();
@@ -379,10 +379,10 @@ final class _MindYearHeatmapViewportState
                                     inspectionScope: _inspectionScope,
                                     activeDirectionIsIncome:
                                         _activeDirectionIsIncome,
-                                    onTap: usesMonthlyAmountVeil
+                                    onTap: usesMonthlyAmountOverlay
                                         ? () => setState(
-                                            () =>
-                                                _isMonthlyAmountVeilOpen = true,
+                                            () => _isMonthlyAmountOverlayOpen =
+                                                true,
                                           )
                                         : null,
                                   ),
@@ -463,9 +463,9 @@ final class _MindYearHeatmapViewportState
                           scopedMonthlyAggregates: _scopedMonthlyAggregates,
                           inspectionScope: _inspectionScope,
                           activeDirectionIsIncome: _activeDirectionIsIncome,
-                          onTap: usesMonthlyAmountVeil
+                          onTap: usesMonthlyAmountOverlay
                               ? () => setState(
-                                  () => _isMonthlyAmountVeilOpen = true,
+                                  () => _isMonthlyAmountOverlayOpen = true,
                                 )
                               : null,
                         ),
@@ -494,12 +494,21 @@ final class _MindYearHeatmapViewportState
                       children: <Widget>[
                         Padding(
                           padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
-                          child: MindTemporalContentHeader(
-                            title: 'Éves aktivitás',
-                            subtitle: '$year · 12 hónap',
-                            titleKey: const ValueKey<String>(
-                              'mind-year-direct-title',
-                            ),
+                          child: ValueListenableBuilder<MindYearHeatmapFrame?>(
+                            valueListenable: widget.frameListenable,
+                            builder: (context, frame, _) =>
+                                MindTemporalContentHeader(
+                                  title: 'Éves aktivitás',
+                                  subtitle: '$year · 12 hónap',
+                                  titleKey: const ValueKey<String>(
+                                    'mind-year-direct-title',
+                                  ),
+                                  trailing: MindNoSpendDaysHeaderMetric(
+                                    noSpendDayCount:
+                                        frame?.noSpendDayCount ?? 0,
+                                    keyPrefix: 'mind-year-no-spend-days',
+                                  ),
+                                ),
                           ),
                         ),
                         Expanded(
@@ -507,13 +516,14 @@ final class _MindYearHeatmapViewportState
                             fit: StackFit.expand,
                             children: <Widget>[
                               heatmapPage,
-                              if (usesMonthlyAmountVeil &&
-                                  _isMonthlyAmountVeilOpen)
-                                _MindYearMonthlyAmountVeil(
+                              if (usesMonthlyAmountOverlay &&
+                                  _isMonthlyAmountOverlayOpen)
+                                _MindYearMonthlyAmountOverlay(
                                   frameListenable: widget.frameListenable,
                                   columns: columns,
+                                  presentation: amountPresentation,
                                   onDismiss: () => setState(
-                                    () => _isMonthlyAmountVeilOpen = false,
+                                    () => _isMonthlyAmountOverlayOpen = false,
                                   ),
                                 ),
                             ],
@@ -544,6 +554,12 @@ final class _MindYearHeatmapViewportState
       },
     );
   }
+
+  static bool _usesMonthlyAmountOverlay(
+    MindYearMonthlyAmountPresentation presentation,
+  ) =>
+      presentation == MindYearMonthlyAmountPresentation.veil ||
+      presentation == MindYearMonthlyAmountPresentation.whiteMotherCard;
 
   void _scheduleVisiblePaintDiagnostics(MindYearHeatmapFrame frame) {
     if (_lastVisibleIdentity == frame.identity) return;
@@ -612,15 +628,17 @@ final class _MindYearHeatmapViewportState
 
 /// A single annual information veil. It deliberately receives the same live
 /// resident frame as the heatmap and contains no per-month popup state.
-final class _MindYearMonthlyAmountVeil extends StatelessWidget {
-  const _MindYearMonthlyAmountVeil({
+final class _MindYearMonthlyAmountOverlay extends StatelessWidget {
+  const _MindYearMonthlyAmountOverlay({
     required this.frameListenable,
     required this.columns,
+    required this.presentation,
     required this.onDismiss,
   });
 
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
   final int columns;
+  final MindYearMonthlyAmountPresentation presentation;
   final VoidCallback onDismiss;
 
   @override
@@ -628,91 +646,102 @@ final class _MindYearMonthlyAmountVeil extends StatelessWidget {
     BuildContext context,
   ) => ValueListenableBuilder<MindYearHeatmapFrame?>(
     valueListenable: frameListenable,
-    builder: (context, frame, _) => Semantics(
-      label: 'Éves havi összegek',
-      button: true,
-      child: GestureDetector(
-        key: const ValueKey<String>('mind-year-monthly-amount-veil'),
-        behavior: HitTestBehavior.opaque,
-        onTap: onDismiss,
-        child: DecoratedBox(
-          decoration: const BoxDecoration(color: Color(0xB56B7280)),
-          child: IgnorePointer(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                const padding = EdgeInsets.fromLTRB(10, 5, 10, 4);
-                final rows = (12 + columns - 1) ~/ columns;
-                final usableWidth = (constraints.maxWidth - padding.horizontal)
-                    .clamp(0.0, double.infinity)
-                    .toDouble();
-                final usableHeight = (constraints.maxHeight - padding.vertical)
-                    .clamp(0.0, double.infinity)
-                    .toDouble();
-                // The veil is one annual field: solve its month cells from
-                // its actual body bounds, rather than letting a 2×6 grid
-                // become taller than the Year surface and clip months.
-                final cellWidth = usableWidth / columns;
-                final cellHeight = usableHeight / rows;
-                final childAspectRatio = cellHeight == 0
-                    ? 1.0
-                    : cellWidth / cellHeight;
-                return GridView.count(
-                  key: const ValueKey<String>(
-                    'mind-year-monthly-amount-veil-grid',
-                  ),
-                  crossAxisCount: columns,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: padding,
-                  childAspectRatio: childAspectRatio,
-                  children: List<Widget>.generate(12, (index) {
-                    final month = index + 1;
-                    final amount =
-                        (frame?.month(month) ?? const <MindYearHeatmapDay>[])
-                            .fold<int>(0, (sum, day) => sum + (day.total ?? 0));
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Text(
-                            DashboardTimeLabelFormatter.monthName(month),
-                            key: ValueKey<String>(
-                              'mind-year-monthly-amount-veil-name-$month',
+    builder: (context, frame, _) {
+      final isWhiteMotherCard =
+          presentation == MindYearMonthlyAmountPresentation.whiteMotherCard;
+      final keyPrefix = isWhiteMotherCard
+          ? 'mind-year-monthly-amount-white-mother-card'
+          : 'mind-year-monthly-amount-veil';
+      final foreground = isWhiteMotherCard
+          ? FluviVisualTokens.textSecondary
+          : Colors.white;
+      return Semantics(
+        label: 'Éves havi összegek',
+        button: true,
+        child: GestureDetector(
+          key: ValueKey<String>(keyPrefix),
+          behavior: HitTestBehavior.opaque,
+          onTap: onDismiss,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: isWhiteMotherCard ? Colors.white : const Color(0xB56B7280),
+            ),
+            child: IgnorePointer(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const padding = EdgeInsets.fromLTRB(10, 5, 10, 4);
+                  final rows = (12 + columns - 1) ~/ columns;
+                  final usableWidth =
+                      (constraints.maxWidth - padding.horizontal)
+                          .clamp(0.0, double.infinity)
+                          .toDouble();
+                  final usableHeight =
+                      (constraints.maxHeight - padding.vertical)
+                          .clamp(0.0, double.infinity)
+                          .toDouble();
+                  // The veil is one annual field: solve its month cells from
+                  // its actual body bounds, rather than letting a 2×6 grid
+                  // become taller than the Year surface and clip months.
+                  final cellWidth = usableWidth / columns;
+                  final cellHeight = usableHeight / rows;
+                  final childAspectRatio = cellHeight == 0
+                      ? 1.0
+                      : cellWidth / cellHeight;
+                  return GridView.count(
+                    key: ValueKey<String>('$keyPrefix-grid'),
+                    crossAxisCount: columns,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: padding,
+                    childAspectRatio: childAspectRatio,
+                    children: List<Widget>.generate(12, (index) {
+                      final month = index + 1;
+                      final amount =
+                          (frame?.month(month) ?? const <MindYearHeatmapDay>[])
+                              .fold<int>(
+                                0,
+                                (sum, day) => sum + (day.total ?? 0),
+                              );
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text(
+                              DashboardTimeLabelFormatter.monthName(month),
+                              key: ValueKey<String>('$keyPrefix-name-$month'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: foreground,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
+                            const SizedBox(height: 2),
+                            Text(
+                              QueryMenuFormatters.money(amount),
+                              key: ValueKey<String>('$keyPrefix-total-$month'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: foreground,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            QueryMenuFormatters.money(amount),
-                            key: ValueKey<String>(
-                              'mind-year-monthly-amount-veil-total-$month',
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }, growable: false),
-                );
-              },
+                          ],
+                        ),
+                      );
+                    }, growable: false),
+                  );
+                },
+              ),
             ),
           ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 

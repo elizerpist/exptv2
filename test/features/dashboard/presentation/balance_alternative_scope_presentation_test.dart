@@ -45,6 +45,12 @@ void main() {
       final sumPresentation = sum as BalanceAlternativeSumPresentation;
       expect(sumPresentation.distribution.histogram.sampleCount, 0);
       expect(sumPresentation.savings.netMinor, 220000);
+      expect(
+        sumPresentation.savings.retentionBasisPoints,
+        3667,
+        reason:
+            'A primary-only scope still has a resident income/expense ratio, so the Budget 3D savings ring must receive a real progress value.',
+      );
 
       final year = BalanceAlternativeScopePresentation.fromPrimary(
         DashboardBalancePrimaryPresentation(

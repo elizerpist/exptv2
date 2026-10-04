@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 
 void main() {
   test(
@@ -22,6 +23,11 @@ void main() {
               MindYearMonthlyAmountPresentation.hidden,
           showDayContentViewChooser: true,
           balanceUsesChildCards: false,
+          balanceHeaderGraphPresentation:
+              BalanceHeaderGraphPresentation.incomeExpensePartition,
+          balanceHeaderPartitionHeightPercent: 80,
+          balanceMonthCombinedCardPresentation:
+              BalanceMonthCombinedCardPresentation.spendingRhythm,
         ),
       );
       await Future<void>.delayed(Duration.zero);
@@ -38,6 +44,15 @@ void main() {
       );
       expect(restored.value.showDayContentViewChooser, isTrue);
       expect(restored.value.balanceUsesChildCards, isFalse);
+      expect(
+        restored.value.balanceHeaderGraphPresentation,
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
+      );
+      expect(restored.value.balanceHeaderPartitionHeightPercent, 80);
+      expect(
+        restored.value.balanceMonthCombinedCardPresentation,
+        BalanceMonthCombinedCardPresentation.spendingRhythm,
+      );
     },
   );
 }

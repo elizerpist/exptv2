@@ -259,6 +259,9 @@ class MainActivity : FlutterActivity() {
                             "yearMonthlyAmountPresentation" to if (preferences.contains("yearMonthlyAmountPresentation")) preferences.getInt("yearMonthlyAmountPresentation", 1) else if (preferences.getBoolean("showYearFourByThreeScopeAmounts", true)) 1 else 0,
                             "showDayContentViewChooser" to preferences.getBoolean("showDayContentViewChooser", false),
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
+                            "balanceHeaderGraphPresentation" to preferences.getInt("balanceHeaderGraphPresentation", 0),
+                            "balanceHeaderPartitionHeightPercent" to preferences.getInt("balanceHeaderPartitionHeightPercent", 50),
+                            "balanceMonthCombinedCardPresentation" to preferences.getInt("balanceMonthCombinedCardPresentation", 0),
                         ),
                     )
                     "writeDashboardPresentationSettings" -> {
@@ -274,11 +277,20 @@ class MainActivity : FlutterActivity() {
                         require(yearGridLayout in 0..2) { "Invalid Year grid layout." }
                         val yearMonthlyAmountPresentation = (values["yearMonthlyAmountPresentation"] as? Number)?.toInt()
                             ?: throw IllegalArgumentException("Missing Year monthly amount presentation.")
-                        require(yearMonthlyAmountPresentation in 0..2) { "Invalid Year monthly amount presentation." }
+                        require(yearMonthlyAmountPresentation in 0..3) { "Invalid Year monthly amount presentation." }
                         val showDayContentViewChooser = values["showDayContentViewChooser"] as? Boolean
                             ?: throw IllegalArgumentException("Missing Day view chooser visibility.")
                         val balanceChildren = values["balanceUsesChildCards"] as? Boolean
                             ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
+                        val balanceHeaderGraphPresentation = (values["balanceHeaderGraphPresentation"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing Balance Header graph presentation.")
+                        require(balanceHeaderGraphPresentation in 0..1) { "Invalid Balance Header graph presentation." }
+                        val balanceHeaderPartitionHeightPercent = (values["balanceHeaderPartitionHeightPercent"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing Balance Header partition height.")
+                        require(balanceHeaderPartitionHeightPercent in 0..100) { "Invalid Balance Header partition height." }
+                        val balanceMonthCombinedCardPresentation = (values["balanceMonthCombinedCardPresentation"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing Balance Month combined card presentation.")
+                        require(balanceMonthCombinedCardPresentation in 0..1) { "Invalid Balance Month combined card presentation." }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
@@ -286,6 +298,9 @@ class MainActivity : FlutterActivity() {
                             .putInt("yearMonthlyAmountPresentation", yearMonthlyAmountPresentation)
                             .putBoolean("showDayContentViewChooser", showDayContentViewChooser)
                             .putBoolean("balanceUsesChildCards", balanceChildren)
+                            .putInt("balanceHeaderGraphPresentation", balanceHeaderGraphPresentation)
+                            .putInt("balanceHeaderPartitionHeightPercent", balanceHeaderPartitionHeightPercent)
+                            .putInt("balanceMonthCombinedCardPresentation", balanceMonthCombinedCardPresentation)
                             .apply()
                         result.success(null)
                     }

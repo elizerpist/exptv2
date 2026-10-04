@@ -1,6 +1,7 @@
 import 'package:fluvi/core/preferences/data/method_channel_dashboard_presentation_preferences_store.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,6 +27,11 @@ void main() {
               MindYearMonthlyAmountPresentation.veil.index,
           'showDayContentViewChooser': true,
           'balanceUsesChildCards': false,
+          'balanceHeaderGraphPresentation':
+              BalanceHeaderGraphPresentation.incomeExpensePartition.index,
+          'balanceHeaderPartitionHeightPercent': 80,
+          'balanceMonthCombinedCardPresentation':
+              BalanceMonthCombinedCardPresentation.spendingRhythm.index,
         };
       });
 
@@ -41,6 +47,15 @@ void main() {
       );
       expect(preferences.showDayContentViewChooser, isTrue);
       expect(preferences.balanceUsesChildCards, isFalse);
+      expect(
+        preferences.balanceHeaderGraphPresentation,
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
+      );
+      expect(preferences.balanceHeaderPartitionHeightPercent, 80);
+      expect(
+        preferences.balanceMonthCombinedCardPresentation,
+        BalanceMonthCombinedCardPresentation.spendingRhythm,
+      );
     },
   );
 
@@ -59,6 +74,11 @@ void main() {
         yearMonthlyAmountPresentation: MindYearMonthlyAmountPresentation.inline,
         showDayContentViewChooser: false,
         balanceUsesChildCards: false,
+        balanceHeaderGraphPresentation:
+            BalanceHeaderGraphPresentation.incomeExpensePartition,
+        balanceHeaderPartitionHeightPercent: 80,
+        balanceMonthCombinedCardPresentation:
+            BalanceMonthCombinedCardPresentation.spendingRhythm,
       ),
     );
 
@@ -71,6 +91,11 @@ void main() {
           MindYearMonthlyAmountPresentation.inline.index,
       'showDayContentViewChooser': false,
       'balanceUsesChildCards': false,
+      'balanceHeaderGraphPresentation':
+          BalanceHeaderGraphPresentation.incomeExpensePartition.index,
+      'balanceHeaderPartitionHeightPercent': 80,
+      'balanceMonthCombinedCardPresentation':
+          BalanceMonthCombinedCardPresentation.spendingRhythm.index,
     });
   });
 

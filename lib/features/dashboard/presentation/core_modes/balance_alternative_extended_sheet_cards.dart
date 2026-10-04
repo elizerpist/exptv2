@@ -6,9 +6,9 @@ import '../../../../core/categories/presentation/budget_category_avatar_artwork.
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
+import '../widgets/dashboard_rounded_metric_bar.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_alternative_visual_tokens.dart';
-import 'balance_presentation_settings.dart';
 
 /// Shared render-only switch for the Balance extended-sheet child shells.
 /// The scope deliberately owns no financial data or layout geometry: turning
@@ -380,6 +380,84 @@ final class _DailySpendInsight extends StatelessWidget {
   );
 }
 
+/// A Month-wide alternate for the established income/expense strip. It reads
+/// the exact prepared daily spend values already displayed by Card 3 and
+/// normalizes all non-empty bars to their shared month maximum. Empty days do
+/// not receive a track or synthetic bar.
+final class BalanceAlternativeMonthlySpendingRhythmCard
+    extends StatelessWidget {
+  const BalanceAlternativeMonthlySpendingRhythmCard({
+    super.key,
+    required this.presentation,
+  });
+
+  final BalanceAlternativeMonthlySpendPresentation presentation;
+
+  @override
+  Widget build(BuildContext context) {
+    final maximum = presentation.points.fold<int>(
+      0,
+      (current, point) => math.max(current, point.expenseMinor),
+    );
+    return KeyedSubtree(
+      key: const ValueKey<String>('balance-alternative-month-rhythm-card'),
+      child: BalanceAlternativeHtmlCardSurface(
+        minimumContentSize:
+            BalanceAlternativeHtmlTokens.extendedSheetCombinedCardMinimumSize,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              const Text(
+                'Napi költési ritmus',
+                style: TextStyle(
+                  color: BalanceAlternativeHtmlTokens.textPrimary,
+                  fontSize: 9,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    for (final point in presentation.points)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: .8),
+                          child: DashboardRoundedMetricBar(
+                            label: '${point.day}',
+                            hasReference: false,
+                            referenceFraction: 0,
+                            hasForeground: point.expenseMinor > 0,
+                            foregroundFraction: maximum == 0
+                                ? 0
+                                : point.expenseMinor / maximum,
+                            foregroundColor:
+                                BalanceAlternativeHtmlTokens.purple,
+                            minimumVisibleHeight: 3.5,
+                            barKey: ValueKey<String>(
+                              'balance-alternative-month-rhythm-day-${point.day}',
+                            ),
+                            foregroundKey: ValueKey<String>(
+                              'balance-alternative-month-rhythm-fill-${point.day}',
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 final class BalanceAlternativeNoSpendCard extends StatelessWidget {
   const BalanceAlternativeNoSpendCard({
     super.key,
@@ -452,14 +530,10 @@ final class BalanceAlternativeSavingsRingCard extends StatelessWidget {
     super.key,
     required this.presentation,
     this.minimumContentSize,
-    this.displayMode = BalanceSavingsDisplayMode.percentage,
-    this.onDisplayModeToggle,
   });
 
   final BalanceAlternativeSavingsPresentation presentation;
   final Size? minimumContentSize;
-  final BalanceSavingsDisplayMode displayMode;
-  final VoidCallback? onDisplayModeToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -469,115 +543,201 @@ final class BalanceAlternativeSavingsRingCard extends StatelessWidget {
     final amountLabel = DashboardPreparedFormatter.compactAmountMinor(
       presentation.netMinor,
     );
-    final isPercentage = displayMode == BalanceSavingsDisplayMode.percentage;
-    final metricLabel = isPercentage ? percentageLabel : amountLabel;
     return BalanceAlternativeHtmlCardSurface(
       minimumContentSize:
           minimumContentSize ??
           BalanceAlternativeHtmlTokens.extendedSheetSideCardMinimumSize,
       child: Semantics(
-        button: onDisplayModeToggle != null,
-        label: 'Megtakarítás: $metricLabel. Érintse meg a nézet váltásához.',
-        child: GestureDetector(
-          key: const ValueKey<String>('balance-alternative-savings-card'),
-          behavior: HitTestBehavior.opaque,
-          onTap: onDisplayModeToggle,
-          child: Padding(
-            padding: BalanceAlternativeHtmlTokens.smallCardPadding,
-            child: Column(
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Icon(
-                      Icons.savings_rounded,
-                      size: BalanceAlternativeHtmlTokens.logical(29),
-                      color: BalanceAlternativeHtmlTokens.purple,
-                    ),
-                    SizedBox(width: BalanceAlternativeHtmlTokens.logical(9)),
-                    Expanded(
-                      child: Text(
-                        'Megtakarítás',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _text(
-                          BalanceAlternativeHtmlTokens.smallTitleSize,
-                          BalanceAlternativeHtmlTokens.textPrimary,
-                          FontWeight.w800,
-                          height: 1.05,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                SizedBox.square(
-                  dimension: BalanceAlternativeHtmlTokens.smallRingSize,
-                  child: FittedBox(
-                    fit: BoxFit.contain,
-                    child: SizedBox.square(
-                      dimension: BudgetCategoryAvatarGeometry
-                          .selectionShellVisualDiameter,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: <Widget>[
-                          BudgetCategoryAvatarSelectionChrome(
-                            key: const ValueKey<String>(
-                              'balance-alternative-savings-budget-3d',
-                            ),
-                            categoryColor: BalanceAlternativeHtmlTokens.purple,
-                            progressColor: BalanceAlternativeHtmlTokens.purple,
-                            sourceProgress: isPercentage ? percentage ?? 0 : 0,
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                metricLabel,
-                                key: ValueKey<String>(
-                                  isPercentage
-                                      ? 'balance-alternative-savings-percentage'
-                                      : 'balance-alternative-savings-amount',
-                                ),
-                                textAlign: TextAlign.center,
-                                style: _text(
-                                  isPercentage
-                                      ? BalanceAlternativeHtmlTokens.logical(24)
-                                      : BalanceAlternativeHtmlTokens.logical(
-                                          18,
-                                        ),
-                                  BalanceAlternativeHtmlTokens.purple,
-                                  FontWeight.w800,
-                                  height: 1,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  isPercentage ? 'arány a bevételhez' : 'félretett összeg',
-                  key: const ValueKey<String>(
-                    'balance-alternative-savings-supporting-label',
-                  ),
-                  style: _text(
-                    BalanceAlternativeHtmlTokens.smallBodySize,
-                    BalanceAlternativeHtmlTokens.textSecondary,
-                    FontWeight.w600,
-                    height: 1,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        label: 'Megtakarítás: $percentageLabel; $amountLabel.',
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact =
+                constraints.maxHeight < 88 || constraints.maxWidth < 96;
+            return compact
+                ? _CompactSavingsCard(
+                    percentageLabel: percentageLabel,
+                    amountLabel: amountLabel,
+                    progress: percentage,
+                  )
+                : _ExpandedSavingsCard(
+                    percentageLabel: percentageLabel,
+                    amountLabel: amountLabel,
+                    progress: percentage,
+                  );
+          },
         ),
       ),
     );
   }
+}
+
+/// Reuses Budget's authored 3D shell, but intentionally overlays the number
+/// after scaling the shell. The previous whole-stack FittedBox scaled the
+/// percentage down with the asset and made it unreadable in the tall Savings
+/// card.
+final class _SavingsProgressRing extends StatelessWidget {
+  const _SavingsProgressRing({
+    required this.dimension,
+    required this.percentageLabel,
+    required this.progress,
+  });
+
+  final double dimension;
+  final String percentageLabel;
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: dimension,
+    child: Stack(
+      fit: StackFit.expand,
+      alignment: Alignment.center,
+      children: <Widget>[
+        Center(
+          child: Transform.scale(
+            scale:
+                dimension /
+                BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+            alignment: Alignment.center,
+            child: SizedBox.square(
+              dimension:
+                  BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
+              child: BudgetCategoryAvatarSelectionChrome(
+                key: const ValueKey<String>(
+                  'balance-alternative-savings-budget-3d',
+                ),
+                categoryColor: BalanceAlternativeHtmlTokens.purple,
+                progressColor: BalanceAlternativeHtmlTokens.purple,
+                sourceProgress: (progress ?? 0).clamp(0.0, 1.0).toDouble(),
+              ),
+            ),
+          ),
+        ),
+        Center(
+          child: Text(
+            percentageLabel,
+            key: const ValueKey<String>(
+              'balance-alternative-savings-percentage',
+            ),
+            textAlign: TextAlign.center,
+            style: _text(
+              math.max(14, dimension * .28),
+              BalanceAlternativeHtmlTokens.purple,
+              FontWeight.w900,
+              height: 1,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+final class _ExpandedSavingsCard extends StatelessWidget {
+  const _ExpandedSavingsCard({
+    required this.percentageLabel,
+    required this.amountLabel,
+    required this.progress,
+  });
+
+  final String percentageLabel;
+  final String amountLabel;
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final ringSize = math.min(
+          76.0,
+          // Keep the title and the amount visible even in the short
+          // reference-sheet allocation. The value is still overlaid outside
+          // the scaled Budget asset, so its 14px minimum stays readable.
+          math.max(32.0, constraints.maxHeight - 59),
+        );
+        return Column(
+          children: <Widget>[
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Megtakarítás',
+                style: TextStyle(
+                  color: BalanceAlternativeHtmlTokens.textPrimary,
+                  fontSize: 10,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            _SavingsProgressRing(
+              dimension: ringSize,
+              percentageLabel: percentageLabel,
+              progress: progress,
+            ),
+            const SizedBox(height: 2),
+            const Divider(height: 1, thickness: .5),
+            const SizedBox(height: 3),
+            Text(
+              amountLabel,
+              key: const ValueKey<String>('balance-alternative-savings-amount'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: _text(
+                11,
+                BalanceAlternativeHtmlTokens.textPrimary,
+                FontWeight.w800,
+                height: 1,
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+final class _CompactSavingsCard extends StatelessWidget {
+  const _CompactSavingsCard({
+    required this.percentageLabel,
+    required this.amountLabel,
+    required this.progress,
+  });
+
+  final String percentageLabel;
+  final String amountLabel;
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(5),
+    child: Row(
+      children: <Widget>[
+        _SavingsProgressRing(
+          dimension: 34,
+          percentageLabel: percentageLabel,
+          progress: progress,
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            amountLabel,
+            key: const ValueKey<String>('balance-alternative-savings-amount'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: _text(
+              8,
+              BalanceAlternativeHtmlTokens.textPrimary,
+              FontWeight.w800,
+              height: 1,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 final class BalanceAlternativeIncomeExpenseStripCard extends StatelessWidget {
@@ -596,127 +756,227 @@ final class BalanceAlternativeIncomeExpenseStripCard extends StatelessWidget {
     return BalanceAlternativeHtmlCardSurface(
       minimumContentSize:
           BalanceAlternativeHtmlTokens.extendedSheetCombinedCardMinimumSize,
-      child: Padding(
-        padding: BalanceAlternativeHtmlTokens.incomeExpensePadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            SizedBox(
-              height: BalanceAlternativeHtmlTokens.incomeExpenseHeadingHeight,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxHeight < 120) {
+            return _CompactIncomeExpenseStrip(presentation: presentation);
+          }
+          return Padding(
+            padding: BalanceAlternativeHtmlTokens.incomeExpensePadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                SizedBox(
+                  height:
+                      BalanceAlternativeHtmlTokens.incomeExpenseHeadingHeight,
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.swap_horiz_rounded,
+                        size: BalanceAlternativeHtmlTokens.logical(30),
+                        color: BalanceAlternativeHtmlTokens.purple,
+                      ),
+                      SizedBox(width: BalanceAlternativeHtmlTokens.logical(12)),
+                      Text(
+                        'Bevétel vs. Kiadás',
+                        style: _text(
+                          BalanceAlternativeHtmlTokens.incomeExpenseTitleSize,
+                          BalanceAlternativeHtmlTokens.textPrimary,
+                          FontWeight.w800,
+                          height: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: BalanceAlternativeHtmlTokens.incomeExpenseGap),
+                SizedBox(
+                  height: BalanceAlternativeHtmlTokens.incomeExpenseStripHeight,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => Stack(
+                      clipBehavior: Clip.none,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              flex: math.max(1, presentation.incomeBasisPoints),
+                              child: _IncomeExpensePanel(
+                                income: true,
+                                value: presentation.incomeMinor,
+                                percentage: incomePercent,
+                              ),
+                            ),
+                            Expanded(
+                              flex: math.max(
+                                1,
+                                10000 - presentation.incomeBasisPoints,
+                              ),
+                              child: _IncomeExpensePanel(
+                                income: false,
+                                value: presentation.expenseMinor,
+                                percentage: expensePercent,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Positioned(
+                          left:
+                              constraints.maxWidth *
+                                  presentation.incomeBasisPoints /
+                                  10000 -
+                              BalanceAlternativeHtmlTokens
+                                      .incomeExpenseSwitchExtent /
+                                  2,
+                          top:
+                              (constraints.maxHeight -
+                                  BalanceAlternativeHtmlTokens
+                                      .incomeExpenseSwitchExtent) /
+                              2,
+                          child: DecoratedBox(
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: Color(0x1F14213A),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: SizedBox.square(
+                              dimension: BalanceAlternativeHtmlTokens
+                                  .incomeExpenseSwitchExtent,
+                              child: Icon(
+                                Icons.swap_horiz_rounded,
+                                color: const Color(0xFF52658A),
+                                size: BalanceAlternativeHtmlTokens.logical(30),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: BalanceAlternativeHtmlTokens.incomeExpenseGap),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      positive
+                          ? 'Ebben a hónapban a bevételed meghaladja a kiadásaidat.'
+                          : 'Ebben a hónapban a kiadásaid meghaladják a bevételedet.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _text(
+                        BalanceAlternativeHtmlTokens.incomeExpenseBodySize,
+                        BalanceAlternativeHtmlTokens.supportingText,
+                        FontWeight.w500,
+                        height: 1.25,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The same income/expense lane remains readable in the shallow lower Month
+/// allocation without inventing a second financial model. The full card above
+/// is retained whenever there is room for its explanatory copy.
+final class _CompactIncomeExpenseStrip extends StatelessWidget {
+  const _CompactIncomeExpenseStrip({required this.presentation});
+
+  final BalanceAlternativeIncomeExpenseStripPresentation presentation;
+
+  @override
+  Widget build(BuildContext context) {
+    final incomeBasisPoints = presentation.incomeBasisPoints;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text(
+            'Bevétel vs. kiadás',
+            style: TextStyle(
+              color: BalanceAlternativeHtmlTokens.textPrimary,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
               child: Row(
                 children: <Widget>[
-                  Icon(
-                    Icons.swap_horiz_rounded,
-                    size: BalanceAlternativeHtmlTokens.logical(30),
-                    color: BalanceAlternativeHtmlTokens.purple,
+                  Expanded(
+                    flex: math.max(1, incomeBasisPoints),
+                    child: _CompactIncomeExpenseSide(
+                      label: '${(incomeBasisPoints / 100).round()}%',
+                      color: BalanceAlternativeHtmlTokens.incomeStripEnd,
+                      alignment: Alignment.centerLeft,
+                    ),
                   ),
-                  SizedBox(width: BalanceAlternativeHtmlTokens.logical(12)),
-                  Text(
-                    'Bevétel vs. Kiadás',
-                    style: _text(
-                      BalanceAlternativeHtmlTokens.incomeExpenseTitleSize,
-                      BalanceAlternativeHtmlTokens.textPrimary,
-                      FontWeight.w800,
-                      height: 1,
+                  Expanded(
+                    flex: math.max(1, 10000 - incomeBasisPoints),
+                    child: _CompactIncomeExpenseSide(
+                      label: '${((10000 - incomeBasisPoints) / 100).round()}%',
+                      color: BalanceAlternativeHtmlTokens.expenseStripEnd,
+                      alignment: Alignment.centerRight,
                     ),
                   ),
                 ],
               ),
             ),
-            SizedBox(height: BalanceAlternativeHtmlTokens.incomeExpenseGap),
-            SizedBox(
-              height: BalanceAlternativeHtmlTokens.incomeExpenseStripHeight,
-              child: LayoutBuilder(
-                builder: (context, constraints) => Stack(
-                  clipBehavior: Clip.none,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          flex: math.max(1, presentation.incomeBasisPoints),
-                          child: _IncomeExpensePanel(
-                            income: true,
-                            value: presentation.incomeMinor,
-                            percentage: incomePercent,
-                          ),
-                        ),
-                        Expanded(
-                          flex: math.max(
-                            1,
-                            10000 - presentation.incomeBasisPoints,
-                          ),
-                          child: _IncomeExpensePanel(
-                            income: false,
-                            value: presentation.expenseMinor,
-                            percentage: expensePercent,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Positioned(
-                      left:
-                          constraints.maxWidth *
-                              presentation.incomeBasisPoints /
-                              10000 -
-                          BalanceAlternativeHtmlTokens
-                                  .incomeExpenseSwitchExtent /
-                              2,
-                      top:
-                          (constraints.maxHeight -
-                              BalanceAlternativeHtmlTokens
-                                  .incomeExpenseSwitchExtent) /
-                          2,
-                      child: DecoratedBox(
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: <BoxShadow>[
-                            BoxShadow(
-                              color: Color(0x1F14213A),
-                              blurRadius: 6,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: SizedBox.square(
-                          dimension: BalanceAlternativeHtmlTokens
-                              .incomeExpenseSwitchExtent,
-                          child: Icon(
-                            Icons.swap_horiz_rounded,
-                            color: const Color(0xFF52658A),
-                            size: BalanceAlternativeHtmlTokens.logical(30),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(height: BalanceAlternativeHtmlTokens.incomeExpenseGap),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  positive
-                      ? 'Ebben a hónapban a bevételed meghaladja a kiadásaidat.'
-                      : 'Ebben a hónapban a kiadásaid meghaladják a bevételedet.',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: _text(
-                    BalanceAlternativeHtmlTokens.incomeExpenseBodySize,
-                    BalanceAlternativeHtmlTokens.supportingText,
-                    FontWeight.w500,
-                    height: 1.25,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
+
+final class _CompactIncomeExpenseSide extends StatelessWidget {
+  const _CompactIncomeExpenseSide({
+    required this.label,
+    required this.color,
+    required this.alignment,
+  });
+
+  final String label;
+  final Color color;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(color: color),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      child: Align(
+        alignment: alignment,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: BalanceAlternativeHtmlTokens.textPrimary,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 final class _IncomeExpensePanel extends StatelessWidget {

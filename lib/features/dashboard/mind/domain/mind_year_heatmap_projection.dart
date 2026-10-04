@@ -549,6 +549,11 @@ final class MindYearHeatmapFrame implements MindTemporalHeatmapFrame {
   final MindYearHeatmapScopedMonthlyAggregates scopedMonthlyAggregates;
   final MindYearHeatmapInspectionScope inspectionScope;
 
+  /// Header-only metadata derived from this same filtered year frame. Empty
+  /// daily cells and the no-spend count can therefore never disagree while a
+  /// range thumb is being previewed.
+  int get noSpendDayCount => days.where((day) => day.isEmpty).length;
+
   List<MindYearHeatmapDay> month(int month) {
     if (month < 1 || month > 12) throw RangeError.range(month, 1, 12);
     return _months[month - 1];

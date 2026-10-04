@@ -124,10 +124,31 @@ enum BalanceUnifiedBodyLayout {
   };
 }
 
-/// One presentation state for the Savings card across SUM, Month and Year.
-/// It is intentionally dashboard-session UI state, never a scoped financial
-/// value or a second savings calculation.
-enum BalanceSavingsDisplayMode { percentage, amount }
+/// Chooses only the Balance Header renderer. Both choices consume the same
+/// resident Balance presentation; this is not a second history projection.
+enum BalanceHeaderGraphPresentation {
+  lineChart,
+  incomeExpensePartition;
+
+  String get tunerLabel => switch (this) {
+    BalanceHeaderGraphPresentation.lineChart => 'Vonaldiagram',
+    BalanceHeaderGraphPresentation.incomeExpensePartition =>
+      'Bevétel vs. kiadás',
+  };
+}
+
+/// Chooses the lower Month-wide Balance renderer over the existing immutable
+/// scope payload. The rhythm alternative reads prepared daily spend points.
+enum BalanceMonthCombinedCardPresentation {
+  incomeExpense,
+  spendingRhythm;
+
+  String get tunerLabel => switch (this) {
+    BalanceMonthCombinedCardPresentation.incomeExpense => 'Bevétel vs. kiadás',
+    BalanceMonthCombinedCardPresentation.spendingRhythm =>
+      'Napi költési ritmus',
+  };
+}
 
 /// Session-only alternatives over the immutable all-time Balance history.
 /// Financial totals and the latest transaction are never settings-dependent.
@@ -149,7 +170,10 @@ final class BalancePresentationSettings {
     required this.balanceContentCardBorderOpacity,
     this.contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
     this.unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
-    this.savingsDisplayMode = BalanceSavingsDisplayMode.percentage,
+    this.headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
+    this.headerPartitionHeightPercent = 50,
+    this.monthCombinedCardPresentation =
+        BalanceMonthCombinedCardPresentation.incomeExpense,
     this.alternativeMotherCardVisible = true,
     this.usesChildCards = true,
     Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds =
@@ -178,6 +202,10 @@ final class BalancePresentationSettings {
        assert(
          balanceContentCardBorderOpacity >= 0 &&
              balanceContentCardBorderOpacity <= 1,
+       ),
+       assert(
+         headerPartitionHeightPercent >= 0 &&
+             headerPartitionHeightPercent <= 100,
        );
 
   const BalancePresentationSettings.defaults()
@@ -197,7 +225,10 @@ final class BalancePresentationSettings {
       balanceContentCardBorderOpacity = 1,
       contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
       unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
-      savingsDisplayMode = BalanceSavingsDisplayMode.percentage,
+      headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
+      headerPartitionHeightPercent = 50,
+      monthCombinedCardPresentation =
+          BalanceMonthCombinedCardPresentation.incomeExpense,
       alternativeMotherCardVisible = true,
       usesChildCards = true,
       hiddenBalanceCarouselCardKinds = const <BalanceCarouselCardKind>{},
@@ -218,7 +249,9 @@ final class BalancePresentationSettings {
   final double balanceContentCardBorderOpacity;
   final BalanceContentSurfaceStyle contentSurfaceStyle;
   final BalanceUnifiedBodyLayout unifiedBodyLayout;
-  final BalanceSavingsDisplayMode savingsDisplayMode;
+  final BalanceHeaderGraphPresentation headerGraphPresentation;
+  final double headerPartitionHeightPercent;
+  final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
 
   /// Controls only the physical unified parent/backplate. The alternative
   /// content composition and dashboard geometry retain their existing owners.
@@ -258,7 +291,9 @@ final class BalancePresentationSettings {
     double? balanceContentCardBorderOpacity,
     BalanceContentSurfaceStyle? contentSurfaceStyle,
     BalanceUnifiedBodyLayout? unifiedBodyLayout,
-    BalanceSavingsDisplayMode? savingsDisplayMode,
+    BalanceHeaderGraphPresentation? headerGraphPresentation,
+    double? headerPartitionHeightPercent,
+    BalanceMonthCombinedCardPresentation? monthCombinedCardPresentation,
     bool? alternativeMotherCardVisible,
     bool? usesChildCards,
     Set<BalanceCarouselCardKind>? hiddenBalanceCarouselCardKinds,
@@ -294,7 +329,12 @@ final class BalancePresentationSettings {
         balanceContentCardBorderOpacity ?? this.balanceContentCardBorderOpacity,
     contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
     unifiedBodyLayout: unifiedBodyLayout ?? this.unifiedBodyLayout,
-    savingsDisplayMode: savingsDisplayMode ?? this.savingsDisplayMode,
+    headerGraphPresentation:
+        headerGraphPresentation ?? this.headerGraphPresentation,
+    headerPartitionHeightPercent:
+        headerPartitionHeightPercent ?? this.headerPartitionHeightPercent,
+    monthCombinedCardPresentation:
+        monthCombinedCardPresentation ?? this.monthCombinedCardPresentation,
     alternativeMotherCardVisible:
         alternativeMotherCardVisible ?? this.alternativeMotherCardVisible,
     usesChildCards: usesChildCards ?? this.usesChildCards,
@@ -327,7 +367,9 @@ final class BalancePresentationSettings {
           balanceContentCardBorderOpacity &&
       other.contentSurfaceStyle == contentSurfaceStyle &&
       other.unifiedBodyLayout == unifiedBodyLayout &&
-      other.savingsDisplayMode == savingsDisplayMode &&
+      other.headerGraphPresentation == headerGraphPresentation &&
+      other.headerPartitionHeightPercent == headerPartitionHeightPercent &&
+      other.monthCombinedCardPresentation == monthCombinedCardPresentation &&
       other.alternativeMotherCardVisible == alternativeMotherCardVisible &&
       other.usesChildCards == usesChildCards &&
       setEquals(
@@ -337,7 +379,7 @@ final class BalancePresentationSettings {
       other.revision == revision;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll(<Object?>[
     chartMode,
     timeLabels,
     latestTransactionCardPresentation,
@@ -352,12 +394,14 @@ final class BalancePresentationSettings {
     balanceContentCardBorderOpacity,
     contentSurfaceStyle,
     unifiedBodyLayout,
-    savingsDisplayMode,
+    headerGraphPresentation,
+    headerPartitionHeightPercent,
+    monthCombinedCardPresentation,
     alternativeMotherCardVisible,
     usesChildCards,
     Object.hashAllUnordered(hiddenBalanceCarouselCardKinds),
     revision,
-  );
+  ]);
 }
 
 /// The one Dashboard-lifetime presentation owner for Balance-only chart and
@@ -494,15 +538,32 @@ final class BalancePresentationController
     );
   }
 
-  void toggleSavingsDisplayMode() {
+  void setHeaderGraphPresentation(BalanceHeaderGraphPresentation next) {
     final current = value;
+    if (current.headerGraphPresentation == next) return;
     value = current.copyWith(
-      savingsDisplayMode: switch (current.savingsDisplayMode) {
-        BalanceSavingsDisplayMode.percentage =>
-          BalanceSavingsDisplayMode.amount,
-        BalanceSavingsDisplayMode.amount =>
-          BalanceSavingsDisplayMode.percentage,
-      },
+      headerGraphPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setHeaderPartitionHeightPercent(double next) {
+    final normalized = _normalizedPercent(next);
+    final current = value;
+    if (current.headerPartitionHeightPercent == normalized) return;
+    value = current.copyWith(
+      headerPartitionHeightPercent: normalized,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setMonthCombinedCardPresentation(
+    BalanceMonthCombinedCardPresentation next,
+  ) {
+    final current = value;
+    if (current.monthCombinedCardPresentation == next) return;
+    value = current.copyWith(
+      monthCombinedCardPresentation: next,
       revision: current.revision + 1,
     );
   }
@@ -554,6 +615,8 @@ final class BalancePresentationController
   void reset() => value = const BalancePresentationSettings.defaults();
 
   double _normalizedOpacity(double value) => value.clamp(0, 1).toDouble();
+
+  double _normalizedPercent(double value) => value.clamp(0, 100).toDouble();
 
   double _normalizedWaveSpeed(double value) => value
       .clamp(

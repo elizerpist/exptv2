@@ -125,10 +125,17 @@ void main() {
     });
 
     test(
-      'YEAR-AMOUNT-PRESENTATION-01: hidden, inline and veil are one presentation-only revisioned value',
+      'YEAR-AMOUNT-PRESENTATION-01: hidden, inline, veil and white mother card are one presentation-only revisioned value',
       () {
         final controller = MindYearHeatmapPresentationController();
         addTearDown(controller.dispose);
+
+        expect(
+          MindYearMonthlyAmountPresentation.values.map((value) => value.name),
+          contains('whiteMotherCard'),
+          reason:
+              'The white all-month amount surface is a user-selectable alternative to the gray veil.',
+        );
 
         final defaults = controller.value;
         final hidden = defaults.copyWith(

@@ -73,7 +73,12 @@ void main() {
         reason:
             'The obsolete boolean must not remain as a dead settings switch.',
       );
-      for (final mode in <String>['hidden', 'inline', 'veil']) {
+      for (final mode in <String>[
+        'hidden',
+        'inline',
+        'veil',
+        'whiteMotherCard',
+      ]) {
         expect(
           find.byKey(ValueKey('mind-year-monthly-amount-presentation-$mode')),
           findsOneWidget,
@@ -480,6 +485,43 @@ void main() {
       await tester.tap(adaptive);
       await tester.pump();
       expect(balance.value.chartMode, BalanceHeaderChartMode.adaptiveSummary);
+
+      final incomeExpenseHeader = find.byKey(
+        const ValueKey<String>(
+          'balance-header-graph-presentation-incomeExpensePartition',
+        ),
+      );
+      await tester.ensureVisible(incomeExpenseHeader);
+      await tester.tap(incomeExpenseHeader);
+      await tester.pump();
+      expect(
+        balance.value.headerGraphPresentation,
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
+      );
+      final partitionHeight = find.byKey(
+        const ValueKey<String>('balance-header-partition-height'),
+      );
+      expect(partitionHeight, findsOneWidget);
+      tester
+          .widget<Slider>(
+            find.descendant(of: partitionHeight, matching: find.byType(Slider)),
+          )
+          .onChanged!(80);
+      await tester.pump();
+      expect(balance.value.headerPartitionHeightPercent, 80);
+
+      final rhythm = find.byKey(
+        const ValueKey<String>(
+          'balance-month-combined-card-presentation-spendingRhythm',
+        ),
+      );
+      await tester.ensureVisible(rhythm);
+      await tester.tap(rhythm);
+      await tester.pump();
+      expect(
+        balance.value.monthCombinedCardPresentation,
+        BalanceMonthCombinedCardPresentation.spendingRhythm,
+      );
 
       final labels = find.byKey(
         const ValueKey<String>(

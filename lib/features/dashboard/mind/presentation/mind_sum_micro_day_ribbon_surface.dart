@@ -45,6 +45,10 @@ final class MindSumMicroDayRibbonSurface extends StatelessWidget {
             subtitleKey: const ValueKey<String>(
               'mind-sum-micro-day-ribbon-period',
             ),
+            trailing: MindNoSpendDaysHeaderMetric(
+              noSpendDayCount: frame.noSpendDayCount,
+              keyPrefix: 'mind-sum-no-spend-days',
+            ),
           ),
           const SizedBox(height: 6),
           Expanded(

@@ -29,6 +29,7 @@ import 'balance_alternative_visual_tokens.dart';
 import 'balance_extended_sheet_layout.dart';
 import 'balance_four_section_layout.dart';
 import 'balance_header_history_chart.dart';
+import 'balance_header_income_expense_partition.dart';
 import 'balance_insight_indicators.dart';
 import 'balance_category_visual_badge.dart';
 import 'balance_category_movers_presentation.dart';
@@ -544,13 +545,8 @@ final class _BalanceDashboardCoreSurfaceState
                 geometry: geometry,
                 presentation: widget.balanceLinkedPresentation,
                 usesChildCards: settings.usesChildCards,
-                savingsDisplayMode: settings.savingsDisplayMode,
-                onSavingsDisplayModeToggle:
-                    widget.presentationSettings is BalancePresentationController
-                    ? (widget.presentationSettings
-                              as BalancePresentationController)
-                          .toggleSavingsDisplayMode
-                    : null,
+                monthCombinedCardPresentation:
+                    settings.monthCombinedCardPresentation,
               ),
             DashboardCoreModeHeaderScaffold(
               bounds: geometry.headerBounds,
@@ -929,15 +925,13 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
     required this.geometry,
     required this.presentation,
     required this.usesChildCards,
-    required this.savingsDisplayMode,
-    required this.onSavingsDisplayModeToggle,
+    required this.monthCombinedCardPresentation,
   });
 
   final DashboardLayoutFrame geometry;
   final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
   final bool usesChildCards;
-  final BalanceSavingsDisplayMode savingsDisplayMode;
-  final VoidCallback? onSavingsDisplayModeToggle;
+  final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
 
   @override
   Widget build(BuildContext context) {
@@ -967,22 +961,17 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
               _BalanceSumExtendedSheetScaffold(
                 geometry: geometry,
                 presentation: alternative,
-                savingsDisplayMode: savingsDisplayMode,
-                onSavingsDisplayModeToggle: onSavingsDisplayModeToggle,
               ),
             BalanceAlternativeYearPresentation() =>
               _BalanceYearExtendedSheetScaffold(
                 geometry: geometry,
                 presentation: alternative,
-                savingsDisplayMode: savingsDisplayMode,
-                onSavingsDisplayModeToggle: onSavingsDisplayModeToggle,
               ),
             BalanceAlternativeMonthPresentation() =>
               _BalanceMonthExtendedSheetScaffold(
                 geometry: geometry,
                 presentation: alternative,
-                savingsDisplayMode: savingsDisplayMode,
-                onSavingsDisplayModeToggle: onSavingsDisplayModeToggle,
+                combinedCardPresentation: monthCombinedCardPresentation,
               ),
             BalanceAlternativeDayPresentation() =>
               _BalanceDayExtendedSheetScaffold(
@@ -1074,14 +1063,10 @@ final class _BalanceSumExtendedSheetScaffold extends StatelessWidget {
   const _BalanceSumExtendedSheetScaffold({
     required this.geometry,
     required this.presentation,
-    required this.savingsDisplayMode,
-    required this.onSavingsDisplayModeToggle,
   });
 
   final DashboardLayoutFrame geometry;
   final BalanceAlternativeSumPresentation presentation;
-  final BalanceSavingsDisplayMode savingsDisplayMode;
-  final VoidCallback? onSavingsDisplayModeToggle;
 
   @override
   Widget build(BuildContext context) => _BalanceExtendedSheetFrame(
@@ -1122,8 +1107,6 @@ final class _BalanceSumExtendedSheetScaffold extends StatelessWidget {
             label: 'Megtakarítási arány',
             child: BalanceAlternativeSavingsRingCard(
               presentation: presentation.savings,
-              displayMode: savingsDisplayMode,
-              onDisplayModeToggle: onSavingsDisplayModeToggle,
               minimumContentSize:
                   BalanceAlternativeHtmlTokens.sumSideCardMinimumContentSize,
             ),
@@ -1154,14 +1137,12 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
   const _BalanceMonthExtendedSheetScaffold({
     required this.geometry,
     required this.presentation,
-    required this.savingsDisplayMode,
-    required this.onSavingsDisplayModeToggle,
+    required this.combinedCardPresentation,
   });
 
   final DashboardLayoutFrame geometry;
   final BalanceAlternativeMonthPresentation presentation;
-  final BalanceSavingsDisplayMode savingsDisplayMode;
-  final VoidCallback? onSavingsDisplayModeToggle;
+  final BalanceMonthCombinedCardPresentation combinedCardPresentation;
 
   @override
   Widget build(BuildContext context) => _BalanceExtendedSheetFrame(
@@ -1171,6 +1152,12 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
       final dailySpend = presentation.dailySpend;
       final savings = presentation.savings;
       final incomeExpense = presentation.incomeExpense;
+      final mergedSavings = Rect.fromLTRB(
+        layout.card4.left,
+        layout.card4.top,
+        layout.card5.right,
+        layout.card5.bottom,
+      );
       return <Widget>[
         _BalanceAlternativeSectionSlot(
           slot: layout.card3,
@@ -1185,39 +1172,32 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
           ),
         ),
         _BalanceAlternativeSectionSlot(
-          slot: layout.card4,
-          allocationKey: const ValueKey<String>('balance-tetris-slot-4'),
-          surfaceKey: const ValueKey<String>('balance-tetris-card-4'),
+          slot: mergedSavings,
+          allocationKey: const ValueKey<String>('balance-tetris-slot-savings'),
+          surfaceKey: const ValueKey<String>('balance-tetris-card-savings'),
           child: Semantics(
-            label: 'Költésmentes napok: ${dailySpend.noSpendDayCount}',
-            child: BalanceAlternativeNoSpendCard(
-              noSpendDayCount: dailySpend.noSpendDayCount,
-            ),
-          ),
-        ),
-        _BalanceAlternativeSectionSlot(
-          slot: layout.card5,
-          allocationKey: const ValueKey<String>('balance-tetris-slot-5'),
-          surfaceKey: const ValueKey<String>('balance-tetris-card-5'),
-          child: Semantics(
-            label: 'Megtakarítási arány',
-            child: BalanceAlternativeSavingsRingCard(
-              presentation: savings,
-              displayMode: savingsDisplayMode,
-              onDisplayModeToggle: onSavingsDisplayModeToggle,
-            ),
+            label: 'Megtakarítás',
+            child: BalanceAlternativeSavingsRingCard(presentation: savings),
           ),
         ),
         _BalanceAlternativeSectionSlot(
           slot: layout.combined,
           allocationKey: const ValueKey<String>('balance-tetris-slot-combined'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-combined'),
-          child: Semantics(
-            label: 'Bevétel és kiadás összehasonlítás',
-            child: BalanceAlternativeIncomeExpenseStripCard(
-              presentation: incomeExpense,
+          child: switch (combinedCardPresentation) {
+            BalanceMonthCombinedCardPresentation.incomeExpense => Semantics(
+              label: 'Bevétel és kiadás összehasonlítás',
+              child: BalanceAlternativeIncomeExpenseStripCard(
+                presentation: incomeExpense,
+              ),
             ),
-          ),
+            BalanceMonthCombinedCardPresentation.spendingRhythm => Semantics(
+              label: 'Napi költési ritmus',
+              child: BalanceAlternativeMonthlySpendingRhythmCard(
+                presentation: dailySpend,
+              ),
+            ),
+          },
         ),
       ];
     },
@@ -1230,14 +1210,10 @@ final class _BalanceYearExtendedSheetScaffold extends StatelessWidget {
   const _BalanceYearExtendedSheetScaffold({
     required this.geometry,
     required this.presentation,
-    required this.savingsDisplayMode,
-    required this.onSavingsDisplayModeToggle,
   });
 
   final DashboardLayoutFrame geometry;
   final BalanceAlternativeYearPresentation presentation;
-  final BalanceSavingsDisplayMode savingsDisplayMode;
-  final VoidCallback? onSavingsDisplayModeToggle;
 
   @override
   Widget build(BuildContext context) => _BalanceExtendedSheetFrame(
@@ -1247,6 +1223,12 @@ final class _BalanceYearExtendedSheetScaffold extends StatelessWidget {
       final closings = presentation.closings;
       final savings = presentation.savings;
       final incomeExpense = presentation.incomeExpense;
+      final mergedSavings = Rect.fromLTRB(
+        layout.card4.left,
+        layout.card4.top,
+        layout.card5.right,
+        layout.card5.bottom,
+      );
       return <Widget>[
         _BalanceAlternativeSectionSlot(
           slot: layout.card3,
@@ -1261,27 +1243,12 @@ final class _BalanceYearExtendedSheetScaffold extends StatelessWidget {
           ),
         ),
         _BalanceAlternativeSectionSlot(
-          slot: layout.card4,
-          allocationKey: const ValueKey<String>('balance-tetris-slot-4'),
-          surfaceKey: const ValueKey<String>('balance-tetris-card-4'),
-          child: Semantics(
-            label: 'Pozitív zárások: ${closings.positiveBucketCount}',
-            child: BalanceAlternativePositiveCloseCard(
-              positiveBucketCount: closings.positiveBucketCount,
-            ),
-          ),
-        ),
-        _BalanceAlternativeSectionSlot(
-          slot: layout.card5,
-          allocationKey: const ValueKey<String>('balance-tetris-slot-5'),
-          surfaceKey: const ValueKey<String>('balance-tetris-card-5'),
+          slot: mergedSavings,
+          allocationKey: const ValueKey<String>('balance-tetris-slot-savings'),
+          surfaceKey: const ValueKey<String>('balance-tetris-card-savings'),
           child: Semantics(
             label: 'Megtakarítás',
-            child: BalanceAlternativeSavingsRingCard(
-              presentation: savings,
-              displayMode: savingsDisplayMode,
-              onDisplayModeToggle: onSavingsDisplayModeToggle,
-            ),
+            child: BalanceAlternativeSavingsRingCard(presentation: savings),
           ),
         ),
         _BalanceAlternativeSectionSlot(
@@ -1585,10 +1552,14 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
     final typography = frame?.typography ?? FluviTypographyProfile.app;
     final foreground =
         frame?.foregroundTextColor ?? FluviVisualTokens.textOnAction;
+    final history = balance?.history;
+    final balancePresentation = balance;
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        if (balance?.history case final history?)
+        if (settings.headerGraphPresentation ==
+                BalanceHeaderGraphPresentation.lineChart &&
+            history != null)
           BalanceHeaderHistoryChart(
             series: history,
             expansionProgress: expansionProgress,
@@ -1603,6 +1574,16 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
             adaptiveScope: adaptiveScope,
             pointerObserver: pointerObserver,
             layout: chartLayout,
+          ),
+        if (settings.headerGraphPresentation ==
+                BalanceHeaderGraphPresentation.incomeExpensePartition &&
+            balancePresentation != null)
+          BalanceHeaderIncomeExpensePartition(
+            incomeMinor: balancePresentation.incomeTotalMinor,
+            expenseMinor: balancePresentation.expenseTotalMinor,
+            heightPercent: settings.headerPartitionHeightPercent,
+            plotTop: chartLayout.plotTop,
+            plotHeight: chartLayout.plotHeight,
           ),
         if (chartLayout.showsModeLabelAboveValue)
           Positioned(

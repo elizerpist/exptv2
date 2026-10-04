@@ -9,7 +9,6 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
-import '../../query/presentation/query_menu_formatters.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../domain/mind_temporal_heatmap_frame.dart';
 import '../domain/mind_detailed_sum_chart_model.dart';
@@ -247,8 +246,11 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
             subtitle: period,
             titleKey: const ValueKey<String>('mind-sum-heatmap-title'),
             subtitleKey: const ValueKey<String>('mind-sum-heatmap-period'),
-            trailing: widget.showLayoutChooser
-                ? ToggleButtons(
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (widget.showLayoutChooser) ...<Widget>[
+                  ToggleButtons(
                     key: const ValueKey<String>('mind-sum-detail-mode-toggle'),
                     constraints: const BoxConstraints.tightFor(
                       width: 42,
@@ -282,8 +284,15 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                         child: Icon(Icons.bar_chart_rounded, size: 13),
                       ),
                     ],
-                  )
-                : null,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                MindNoSpendDaysHeaderMetric(
+                  noSpendDayCount: widget.frame.noSpendDayCount,
+                  keyPrefix: 'mind-sum-no-spend-days',
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 5),
           Expanded(
@@ -1112,20 +1121,16 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
                 subtitle:
                     '${DashboardTimeLabelFormatter.monthName(frame.month)} ${frame.year}',
                 titleKey: const ValueKey<String>('mind-month-heatmap-title'),
-                trailingTitle: '${frame.days.length} nap',
-                trailingSubtitle: '${frame.activeDayCount} aktív nap',
-                trailingTitleKey: const ValueKey<String>(
-                  'mind-month-heatmap-day-count',
-                ),
-                trailingSubtitleKey: const ValueKey<String>(
-                  'mind-month-heatmap-active-days',
+                trailing: MindNoSpendDaysHeaderMetric(
+                  noSpendDayCount: frame.noSpendDayCount,
+                  keyPrefix: 'mind-month-heatmap-no-spend-days',
                 ),
               ),
               const SizedBox(height: 7),
               MindSumScopeTotalHeader(
                 key: const ValueKey<String>('mind-month-heatmap-total-header'),
                 label: 'Összesen',
-                amount: QueryMenuFormatters.money(frame.total),
+                amount: formatMindCompactForints(frame.total ~/ 100),
                 surface: 'month-heatmap',
                 labelKey: const ValueKey<String>(
                   'mind-month-heatmap-total-label',

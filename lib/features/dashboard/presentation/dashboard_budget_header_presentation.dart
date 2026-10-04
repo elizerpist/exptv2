@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/design/dashboard_mode_palette.dart';
+import 'core_modes/dashboard_partition_lane_geometry.dart';
 
 enum DashboardBudgetHeaderForeground { white, black }
 
@@ -62,7 +63,8 @@ final class DashboardBudgetHeaderPresentationSettings {
 final class DashboardBudgetHeaderPresentationProfile {
   const DashboardBudgetHeaderPresentationProfile(this.settings);
 
-  static const baselinePartitionThickness = 7.0;
+  static const baselinePartitionThickness =
+      DashboardPartitionLaneGeometry.baselineThickness;
 
   final DashboardBudgetHeaderPresentationSettings settings;
 

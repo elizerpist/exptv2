@@ -35,6 +35,18 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
+/// Historical carousel assertions deliberately opt into the now non-default
+/// Balance composition. Production defaults remain the unified four-section
+/// Mother Card; these tests verify the separately selectable legacy rail.
+final ValueNotifier<BalancePresentationSettings>
+_legacyCarouselPresentationSettings =
+    ValueNotifier<BalancePresentationSettings>(
+      const BalancePresentationSettings.defaults().copyWith(
+        contentSurfaceStyle: BalanceContentSurfaceStyle.separateCards,
+        unifiedBodyLayout: BalanceUnifiedBodyLayout.currentCarouselDetail,
+      ),
+    );
+
 void main() {
   // The physical default intentionally runs the ambient wave. Most surface
   // tests verify static geometry and use pumpAndSettle, so model the platform
@@ -302,6 +314,77 @@ void main() {
   );
 
   testWidgets(
+    'BAL-SAVINGS-UNIFIED-RED: Year and Month replace the two narrow right slots with one readable savings card',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(cashflow: _alternativeYearCashflow()),
+      );
+      final settings = BalancePresentationController();
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-savings')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-4')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-5')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-savings-percentage'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-savings-amount'),
+        ),
+        findsOneWidget,
+      );
+
+      linked.value = _linked(cashflow: _alternativeMonthCashflow());
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-savings')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-4')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-5')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-savings-budget-3d'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'BAL-UNI-02/SUM-UI: unified surface routes SUM through the approved extended sheet and preserves selected topic',
     (tester) async {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
@@ -517,7 +600,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('balance-tetris-card-5')),
+        find.byKey(const ValueKey<String>('balance-tetris-card-savings')),
         findsOneWidget,
       );
       expect(
@@ -544,7 +627,7 @@ void main() {
       linked.value = _linked(cashflow: _alternativeMonthCashflow());
       await tester.pump();
       expect(
-        find.byKey(const ValueKey<String>('balance-tetris-card-5')),
+        find.byKey(const ValueKey<String>('balance-tetris-card-savings')),
         findsOneWidget,
       );
       expect(
@@ -563,7 +646,7 @@ void main() {
       linked.value = _linked(cashflow: _alternativeDayCashflow());
       await tester.pump();
       expect(
-        find.byKey(const ValueKey<String>('balance-tetris-card-5')),
+        find.byKey(const ValueKey<String>('balance-tetris-card-savings')),
         findsNothing,
       );
       expect(
@@ -862,7 +945,9 @@ void main() {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(),
       );
-      final settings = BalancePresentationController();
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.separateCards)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.currentCarouselDetail);
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
       await tester.pumpWidget(
@@ -965,6 +1050,8 @@ void main() {
         _linked(),
       );
       final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.separateCards)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.currentCarouselDetail)
         ..setBalanceCarouselCardVisible(
           BalanceCarouselCardKind.cashflow,
           false,
@@ -1123,6 +1210,7 @@ void main() {
                   ),
                 ),
                 balanceLinkedPresentation: linked,
+                presentationSettings: _legacyCarouselPresentationSettings,
               ),
             ),
           ),
@@ -1179,6 +1267,7 @@ void main() {
                 ),
               ),
               balanceLinkedPresentation: linked,
+              presentationSettings: _legacyCarouselPresentationSettings,
             ),
           ),
         ),
@@ -1221,6 +1310,7 @@ void main() {
                 ),
               ),
               balanceLinkedPresentation: linked,
+              presentationSettings: _legacyCarouselPresentationSettings,
             ),
           ),
         ),
@@ -1331,6 +1421,7 @@ void main() {
                 ),
               ),
               balanceLinkedPresentation: linked,
+              presentationSettings: _legacyCarouselPresentationSettings,
             ),
           ),
         ),
@@ -1515,6 +1606,8 @@ void main() {
       final settings = ValueNotifier<BalancePresentationSettings>(
         const BalancePresentationSettings.defaults().copyWith(
           balanceCarouselWaveAnimationEnabled: false,
+          contentSurfaceStyle: BalanceContentSurfaceStyle.separateCards,
+          unifiedBodyLayout: BalanceUnifiedBodyLayout.currentCarouselDetail,
         ),
       );
       addTearDown(linked.dispose);
@@ -1727,7 +1820,10 @@ void main() {
         _linked(),
       );
       final settings = ValueNotifier<BalancePresentationSettings>(
-        const BalancePresentationSettings.defaults(),
+        const BalancePresentationSettings.defaults().copyWith(
+          contentSurfaceStyle: BalanceContentSurfaceStyle.separateCards,
+          unifiedBodyLayout: BalanceUnifiedBodyLayout.currentCarouselDetail,
+        ),
       );
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
@@ -1954,6 +2050,8 @@ void main() {
       final settings = ValueNotifier<BalancePresentationSettings>(
         const BalancePresentationSettings.defaults().copyWith(
           balanceCarouselWaveAnimationEnabled: false,
+          contentSurfaceStyle: BalanceContentSurfaceStyle.separateCards,
+          unifiedBodyLayout: BalanceUnifiedBodyLayout.currentCarouselDetail,
         ),
       );
       addTearDown(linked.dispose);
@@ -2096,6 +2194,7 @@ void main() {
                       principalModeContentExtraHeight,
                 ),
                 balanceLinkedPresentation: linked,
+                presentationSettings: _legacyCarouselPresentationSettings,
               ),
             ),
           ),
@@ -2264,6 +2363,7 @@ void main() {
               presentation: _balanceModePresentation(),
               balancePresentation: balance,
               balanceLinkedPresentation: linked,
+              presentationSettings: _legacyCarouselPresentationSettings,
             ),
           ),
         ),
@@ -2504,6 +2604,7 @@ void main() {
               presentation: _balanceModePresentation(),
               balancePresentation: balance,
               balanceLinkedPresentation: linked,
+              presentationSettings: _legacyCarouselPresentationSettings,
             ),
           ),
         ),
@@ -2541,7 +2642,9 @@ void main() {
         _linked(),
       );
       final immutablePayload = linked.value;
-      final settings = BalancePresentationController();
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.separateCards)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.currentCarouselDetail);
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
       await tester.pumpWidget(
@@ -2757,6 +2860,7 @@ void main() {
                   balancePresentation: presentation,
                   balanceLinkedPresentation: linked,
                   onCarouselMotionInterrupted: () => interruptionCount += 1,
+                  presentationSettings: _legacyCarouselPresentationSettings,
                 ),
               ],
             ),
@@ -3005,6 +3109,7 @@ void main() {
             body: BalanceDashboardCoreSurface(
               presentation: modePresentation,
               balancePresentation: balance,
+              presentationSettings: _legacyCarouselPresentationSettings,
             ),
           ),
         ),
@@ -3084,6 +3189,7 @@ void main() {
                 BalanceDashboardCoreSurface(
                   presentation: modePresentation,
                   balancePresentation: balance,
+                  presentationSettings: _legacyCarouselPresentationSettings,
                 ),
               ],
             ),
@@ -3261,7 +3367,9 @@ void main() {
     'BALANCE-GEOMETRY-10PCT RED: Balance alone transfers exactly ten percent of upper height from lower card',
     (tester) async {
       final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
-      final settings = BalancePresentationController();
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.separateCards)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.currentCarouselDetail);
       addTearDown(balance.dispose);
       addTearDown(settings.dispose);
       final modePresentation = _balanceModePresentation();
@@ -3350,6 +3458,7 @@ void main() {
                 body: BalanceDashboardCoreSurface(
                   presentation: modePresentation,
                   balancePresentation: balance,
+                  presentationSettings: _legacyCarouselPresentationSettings,
                 ),
               ),
             ),
@@ -3424,7 +3533,9 @@ void main() {
       final balance = ValueNotifier<DashboardBalancePresentation?>(
         _balance().copyWith(history: _history()),
       );
-      final settings = BalancePresentationController();
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.separateCards)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.currentCarouselDetail);
       addTearDown(balance.dispose);
       addTearDown(settings.dispose);
       final modePresentation = _balanceModePresentation();
@@ -3564,6 +3675,7 @@ void main() {
               body: BalanceDashboardCoreSurface(
                 presentation: mode,
                 balancePresentation: balance,
+                presentationSettings: _legacyCarouselPresentationSettings,
               ),
             ),
           ),
@@ -3621,6 +3733,7 @@ void main() {
             body: BalanceDashboardCoreSurface(
               presentation: _balanceModePresentation(),
               balanceLinkedPresentation: linked,
+              presentationSettings: _legacyCarouselPresentationSettings,
             ),
           ),
         ),
@@ -3713,8 +3826,7 @@ void _expectHtmlCardSurfaceSizes(WidgetTester tester) {
   );
   for (final key in <String>[
     'balance-tetris-card-3',
-    'balance-tetris-card-4',
-    'balance-tetris-card-5',
+    'balance-tetris-card-savings',
     'balance-tetris-card-combined',
   ]) {
     final actual = tester.getRect(find.byKey(ValueKey<String>(key)));

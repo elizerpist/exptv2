@@ -139,3 +139,26 @@ final class _MindTemporalHeaderTrailingLines extends StatelessWidget {
     ],
   );
 }
+
+/// One global, scope-level counter for real calendar days with no activity in
+/// Mind's current resident amount-range frame. It deliberately shares the
+/// temporal header’s small right-aligned typography, rather than making a
+/// competing card or a per-year SUM label.
+final class MindNoSpendDaysHeaderMetric extends StatelessWidget {
+  const MindNoSpendDaysHeaderMetric({
+    super.key,
+    required this.noSpendDayCount,
+    this.keyPrefix = 'mind-no-spend-days',
+  });
+
+  final int noSpendDayCount;
+  final String keyPrefix;
+
+  @override
+  Widget build(BuildContext context) => _MindTemporalHeaderTrailingLines(
+    title: 'Költésmentes',
+    subtitle: '$noSpendDayCount nap',
+    titleKey: ValueKey<String>('$keyPrefix-title'),
+    subtitleKey: ValueKey<String>('$keyPrefix-value'),
+  );
+}

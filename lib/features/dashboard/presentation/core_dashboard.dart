@@ -537,6 +537,14 @@ class _CoreDashboardState extends State<CoreDashboard>
       _balancePresentationSettings.setUsesChildCards(
         restored.balanceUsesChildCards,
       );
+      _balancePresentationSettings
+        ..setHeaderGraphPresentation(restored.balanceHeaderGraphPresentation)
+        ..setHeaderPartitionHeightPercent(
+          restored.balanceHeaderPartitionHeightPercent,
+        )
+        ..setMonthCombinedCardPresentation(
+          restored.balanceMonthCombinedCardPresentation,
+        );
     } finally {
       _applyingDashboardPresentationPreferences = false;
     }
@@ -554,6 +562,12 @@ class _CoreDashboardState extends State<CoreDashboard>
         showDayContentViewChooser: mind.showDayContentViewChooser,
         balanceUsesChildCards:
             _balancePresentationSettings.value.usesChildCards,
+        balanceHeaderGraphPresentation:
+            _balancePresentationSettings.value.headerGraphPresentation,
+        balanceHeaderPartitionHeightPercent:
+            _balancePresentationSettings.value.headerPartitionHeightPercent,
+        balanceMonthCombinedCardPresentation:
+            _balancePresentationSettings.value.monthCombinedCardPresentation,
       ),
     );
   }

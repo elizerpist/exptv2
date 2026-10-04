@@ -116,6 +116,18 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
   List<MindSumHeatmapDailyPoint> dailyPointsForYear(int year) =>
       _dailyPointsByYear[year] ?? const <MindSumHeatmapDailyPoint>[];
 
+  /// Real calendar days without a range-approved daily total in the current
+  /// resident SUM preview. This is header metadata only; no renderer needs
+  /// transaction access to determine it.
+  int get noSpendDayCount => years.fold<int>(0, (count, year) {
+    final daysInYear = DateTime.utc(
+      year + 1,
+      1,
+      1,
+    ).difference(DateTime.utc(year, 1, 1)).inDays;
+    return count + daysInYear - dailyPointsForYear(year).length;
+  });
+
   /// Resolves the chart's current visible domain from the same admitted
   /// prepared contribution set as the Sum heatmap. Broad windows use already
   /// range-previewed daily aggregates; once the user has narrowed to a small
@@ -447,6 +459,11 @@ final class MindMonthHeatmapFrame implements MindTemporalHeatmapFrame {
   final int total;
   final int? minimumNonEmptyTotal;
   final int? maximumNonEmptyTotal;
+
+  /// The selected month’s real calendar days which are empty in the active
+  /// amount-range preview. The day grid and this header metric consequently
+  /// share the same immutable frame.
+  int get noSpendDayCount => days.length - activeDayCount;
 
   MindYearHeatmapDay day(int value) => days[value - 1];
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
+import '../presentation/core_modes/balance_presentation_settings.dart';
 
 /// Persisted presentation-only choices. Financial membership, query state,
 /// selected time and prepared data are deliberately outside this value.
@@ -14,6 +15,9 @@ final class DashboardPresentationPreferences {
     required this.yearMonthlyAmountPresentation,
     required this.showDayContentViewChooser,
     required this.balanceUsesChildCards,
+    required this.balanceHeaderGraphPresentation,
+    required this.balanceHeaderPartitionHeightPercent,
+    required this.balanceMonthCombinedCardPresentation,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -22,6 +26,10 @@ final class DashboardPresentationPreferences {
   final MindYearMonthlyAmountPresentation yearMonthlyAmountPresentation;
   final bool showDayContentViewChooser;
   final bool balanceUsesChildCards;
+  final BalanceHeaderGraphPresentation balanceHeaderGraphPresentation;
+  final double balanceHeaderPartitionHeightPercent;
+  final BalanceMonthCombinedCardPresentation
+  balanceMonthCombinedCardPresentation;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.current,
@@ -30,6 +38,10 @@ final class DashboardPresentationPreferences {
     yearMonthlyAmountPresentation: MindYearMonthlyAmountPresentation.inline,
     showDayContentViewChooser: false,
     balanceUsesChildCards: true,
+    balanceHeaderGraphPresentation: BalanceHeaderGraphPresentation.lineChart,
+    balanceHeaderPartitionHeightPercent: 50,
+    balanceMonthCombinedCardPresentation:
+        BalanceMonthCombinedCardPresentation.incomeExpense,
   );
 
   @override
@@ -40,7 +52,12 @@ final class DashboardPresentationPreferences {
       other.yearGridLayout == yearGridLayout &&
       other.yearMonthlyAmountPresentation == yearMonthlyAmountPresentation &&
       other.showDayContentViewChooser == showDayContentViewChooser &&
-      other.balanceUsesChildCards == balanceUsesChildCards;
+      other.balanceUsesChildCards == balanceUsesChildCards &&
+      other.balanceHeaderGraphPresentation == balanceHeaderGraphPresentation &&
+      other.balanceHeaderPartitionHeightPercent ==
+          balanceHeaderPartitionHeightPercent &&
+      other.balanceMonthCombinedCardPresentation ==
+          balanceMonthCombinedCardPresentation;
 
   @override
   int get hashCode => Object.hash(
@@ -50,6 +67,9 @@ final class DashboardPresentationPreferences {
     yearMonthlyAmountPresentation,
     showDayContentViewChooser,
     balanceUsesChildCards,
+    balanceHeaderGraphPresentation,
+    balanceHeaderPartitionHeightPercent,
+    balanceMonthCombinedCardPresentation,
   );
 }
 

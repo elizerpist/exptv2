@@ -499,7 +499,7 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-AMOUNT-MODES-01: hidden, inline and veil retire day popups without changing resident cells',
+    'YEAR-AMOUNT-MODES-01: hidden, inline, veil and white mother card retire day popups without changing resident cells',
     (tester) async {
       final frame = ValueNotifier(_inspectionProjection().preview(range));
       final settings = MindYearHeatmapPresentationController()
@@ -537,6 +537,14 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('mind-year-heatmap-month-cells-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-no-spend-days-title')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-no-spend-days-value')),
         findsOneWidget,
       );
 
@@ -589,6 +597,41 @@ void main() {
         find.byKey(const ValueKey('mind-year-day-infocard')),
         findsNothing,
       );
+
+      settings.setYearMonthlyAmountPresentation(
+        MindYearMonthlyAmountPresentation.whiteMotherCard,
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-heatmap-month-tap-1')),
+      );
+      await tester.pump();
+      final whiteMother = find.byKey(
+        const ValueKey('mind-year-monthly-amount-white-mother-card'),
+      );
+      expect(whiteMother, findsOneWidget);
+      expect(
+        tester.getRect(whiteMother),
+        tester.getRect(
+          find.byKey(const ValueKey('mind-year-heatmap-fit-scroll')),
+        ),
+        reason:
+            'The opaque alternative replaces the entire visible month-cell '
+            'field rather than opening a local detail card.',
+      );
+      for (var index = 1; index <= 12; index += 1) {
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              'mind-year-monthly-amount-white-mother-card-total-$index',
+            ),
+          ),
+          findsOneWidget,
+        );
+      }
+      await tester.tap(whiteMother);
+      await tester.pump();
+      expect(whiteMother, findsNothing);
     },
   );
 

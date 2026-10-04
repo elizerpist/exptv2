@@ -377,10 +377,22 @@ final class BalanceAlternativeSavingsPresentation {
     required int incomeMinor,
     required int expenseMinor,
     required int? retentionBasisPoints,
-  }) => BalanceAlternativeSavingsPresentation(
-    netMinor: incomeMinor - expenseMinor,
-    retentionBasisPoints: retentionBasisPoints,
-  );
+  }) {
+    // Linked retention has priority, but all primary scopes already contain
+    // the two truthful totals needed for the same ratio. Leaving this null
+    // made the shared Budget 3D chrome receive zero progress even while a
+    // Savings amount was present. This is a render-ready scalar derivation,
+    // not another financial projection.
+    final resolvedRetention =
+        retentionBasisPoints ??
+        (incomeMinor <= 0
+            ? null
+            : ((incomeMinor - expenseMinor) * 10000 / incomeMinor).round());
+    return BalanceAlternativeSavingsPresentation(
+      netMinor: incomeMinor - expenseMinor,
+      retentionBasisPoints: resolvedRetention,
+    );
+  }
 
   factory BalanceAlternativeSavingsPresentation.fromRetention(
     DashboardBalanceRetentionPresentation retention, {

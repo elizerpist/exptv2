@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 
 import '../../../features/dashboard/application/dashboard_presentation_preferences.dart';
 import '../../../features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
+import '../../../features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 
 /// Native SharedPreferences adapter for presentation-only dashboard choices.
 ///
@@ -54,6 +55,22 @@ final class MethodChannelDashboardPresentationPreferencesStore
         showDayContentViewChooser:
             values['showDayContentViewChooser'] as bool? ?? false,
         balanceUsesChildCards: values['balanceUsesChildCards'] as bool? ?? true,
+        balanceHeaderGraphPresentation: _enumValue(
+          BalanceHeaderGraphPresentation.values,
+          values['balanceHeaderGraphPresentation'] as int?,
+          BalanceHeaderGraphPresentation.lineChart,
+        ),
+        balanceHeaderPartitionHeightPercent:
+            ((values['balanceHeaderPartitionHeightPercent'] as num?)
+                        ?.toDouble() ??
+                    50)
+                .clamp(0, 100)
+                .toDouble(),
+        balanceMonthCombinedCardPresentation: _enumValue(
+          BalanceMonthCombinedCardPresentation.values,
+          values['balanceMonthCombinedCardPresentation'] as int?,
+          BalanceMonthCombinedCardPresentation.incomeExpense,
+        ),
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -74,6 +91,17 @@ final class MethodChannelDashboardPresentationPreferencesStore
               preferences.yearMonthlyAmountPresentation.index,
           'showDayContentViewChooser': preferences.showDayContentViewChooser,
           'balanceUsesChildCards': preferences.balanceUsesChildCards,
+          'balanceHeaderGraphPresentation':
+              preferences.balanceHeaderGraphPresentation.index,
+          'balanceHeaderPartitionHeightPercent':
+              preferences.balanceHeaderPartitionHeightPercent,
+          'balanceMonthCombinedCardPresentation':
+              preferences.balanceMonthCombinedCardPresentation.index,
         },
       );
 }
+
+T _enumValue<T extends Enum>(List<T> values, int? index, T fallback) =>
+    index != null && index >= 0 && index < values.length
+    ? values[index]
+    : fallback;
