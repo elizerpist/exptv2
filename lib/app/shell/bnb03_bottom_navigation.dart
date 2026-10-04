@@ -67,10 +67,10 @@ final class Bnb03FabDirectionVisual {
   final ValueKey<String> artworkKey;
 }
 
-/// The supplied Spendee artwork PNGs are 1024px square, but their visible
+/// The supplied direction artwork PNGs are 1024px square, but their visible
 /// illustration occupies only 820px horizontally. Scale the image once at
 /// this shell boundary so the *opaque* artwork, not its transparent bitmap
-/// box, reaches the legacy coloured-ring footprint.
+/// box, reaches the former coloured-ring footprint.
 abstract final class Bnb03FabArtworkGeometry {
   static const double sourceImageWidth = 1024;
   static const double opaqueArtworkWidth = 820;
