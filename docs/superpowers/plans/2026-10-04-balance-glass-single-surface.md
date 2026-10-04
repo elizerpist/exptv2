@@ -21,7 +21,7 @@ It is visual acceptance evidence, not a build-identity proof.
 | BGF-10 | Current user prompt | Balance Header mount | Collapsed and line-chart modes mount zero glass; ratio/financial semantics and zero data stay exact. | `BGF-10` surface plus ratio tests. | DONE |
 | BGF-11 | Current user prompt/milestones | protected controls | Header selector 0.5 gain, shared carousel, Summary and Avatar contracts are unchanged. | Protected suite and unchanged shared-motion diff. | DONE |
 | ARC-01 | Global architecture gate | presentation configuration | Existing `BalancePresentationSettings` remains the only persistence/state owner; no financial/query authority changes. | Source audit and existing boundary/Balance suite. | DONE |
-| DEL-01 | User delivery instructions | git/CI | One focused application commit descends from `e3beb27`; push, exact Human APK, final matching SCIP and journal-only child commit are delivered. | Git/CI/APK/graph evidence. | PARTIAL |
+| DEL-01 | User delivery instructions | git/CI | One focused application commit descends from `e3beb27`; push, exact Human APK, final matching SCIP and journal-only child commit are delivered. | Git/CI/APK/graph evidence. | DONE |
 | PHYS-01 | User prompt | Android device | Device glass appearance is personally accepted by the user. | User feedback only. | BLOCKED — USER ONLY |
 
 ## Architecture decision
