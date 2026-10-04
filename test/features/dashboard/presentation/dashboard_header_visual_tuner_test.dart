@@ -255,6 +255,61 @@ void main() {
   );
 
   testWidgets(
+    'TOPO-01: the Balance Settings switch changes only the live line renderer and disappears for partition visuals',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final balance = BalancePresentationController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 1500,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              balancePresentationSettings: balance,
+            ),
+          ),
+        ),
+      );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.balancePresentation,
+      ]);
+
+      final toggle = find.byKey(
+        const ValueKey<String>('balance-header-topographic-chart-switch'),
+      );
+      expect(toggle, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(
+        balance.value.headerLineChartPresentation,
+        BalanceHeaderLineChartPresentation.topographic,
+      );
+      expect(
+        balance.value.headerGraphPresentation,
+        BalanceHeaderGraphPresentation.lineChart,
+        reason:
+            'The renderer is subordinate to, not a replacement for, the existing Header graph kind.',
+      );
+
+      balance.setHeaderGraphPresentation(
+        BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+      );
+      await tester.pump();
+      expect(toggle, findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      balance.dispose();
+    },
+  );
+
+  testWidgets(
     'custom settings use compact topic collapsibles without resetting controls',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1800));

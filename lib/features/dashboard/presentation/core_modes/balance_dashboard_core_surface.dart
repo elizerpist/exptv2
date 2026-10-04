@@ -1595,6 +1595,7 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
             series: history,
             expansionProgress: expansionProgress,
             chartMode: settings.chartMode,
+            lineChartPresentation: settings.headerLineChartPresentation,
             lineColor:
                 frame?.chartColor ?? DashboardHeaderTrendChartStyle.lineColor,
             areaFadeColor:

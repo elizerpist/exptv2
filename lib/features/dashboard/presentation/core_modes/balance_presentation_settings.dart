@@ -141,6 +141,21 @@ enum BalanceHeaderGraphPresentation {
   };
 }
 
+/// A material-only choice beneath the established Header graph kind.
+///
+/// This intentionally does not compete with [BalanceHeaderGraphPresentation]:
+/// the partition choices remain partitions, while either line style renders
+/// the exact same resident Balance history and pointer selection.
+enum BalanceHeaderLineChartPresentation {
+  current,
+  topographic;
+
+  String get tunerLabel => switch (this) {
+    BalanceHeaderLineChartPresentation.current => 'Jelenlegi',
+    BalanceHeaderLineChartPresentation.topographic => '3D topografikus',
+  };
+}
+
 /// Chooses the lower Month-wide Balance renderer over the existing immutable
 /// scope payload. The rhythm alternative reads prepared daily spend points.
 enum BalanceMonthCombinedCardPresentation {
@@ -175,6 +190,8 @@ final class BalancePresentationSettings {
     this.contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
     this.unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
     this.headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
+    this.headerLineChartPresentation =
+        BalanceHeaderLineChartPresentation.current,
     this.headerPartitionHeightPercent = 50,
     this.headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
     this.monthCombinedCardPresentation =
@@ -231,6 +248,7 @@ final class BalancePresentationSettings {
       contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
       unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
       headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
+      headerLineChartPresentation = BalanceHeaderLineChartPresentation.current,
       headerPartitionHeightPercent = 50,
       headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
       monthCombinedCardPresentation =
@@ -256,6 +274,7 @@ final class BalancePresentationSettings {
   final BalanceContentSurfaceStyle contentSurfaceStyle;
   final BalanceUnifiedBodyLayout unifiedBodyLayout;
   final BalanceHeaderGraphPresentation headerGraphPresentation;
+  final BalanceHeaderLineChartPresentation headerLineChartPresentation;
   final double headerPartitionHeightPercent;
   final BalanceHeaderGlassConfiguration headerGlassConfiguration;
   final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
@@ -299,6 +318,7 @@ final class BalancePresentationSettings {
     BalanceContentSurfaceStyle? contentSurfaceStyle,
     BalanceUnifiedBodyLayout? unifiedBodyLayout,
     BalanceHeaderGraphPresentation? headerGraphPresentation,
+    BalanceHeaderLineChartPresentation? headerLineChartPresentation,
     double? headerPartitionHeightPercent,
     BalanceHeaderGlassConfiguration? headerGlassConfiguration,
     BalanceMonthCombinedCardPresentation? monthCombinedCardPresentation,
@@ -339,6 +359,8 @@ final class BalancePresentationSettings {
     unifiedBodyLayout: unifiedBodyLayout ?? this.unifiedBodyLayout,
     headerGraphPresentation:
         headerGraphPresentation ?? this.headerGraphPresentation,
+    headerLineChartPresentation:
+        headerLineChartPresentation ?? this.headerLineChartPresentation,
     headerPartitionHeightPercent:
         headerPartitionHeightPercent ?? this.headerPartitionHeightPercent,
     headerGlassConfiguration:
@@ -378,6 +400,7 @@ final class BalancePresentationSettings {
       other.contentSurfaceStyle == contentSurfaceStyle &&
       other.unifiedBodyLayout == unifiedBodyLayout &&
       other.headerGraphPresentation == headerGraphPresentation &&
+      other.headerLineChartPresentation == headerLineChartPresentation &&
       other.headerPartitionHeightPercent == headerPartitionHeightPercent &&
       other.headerGlassConfiguration == headerGlassConfiguration &&
       other.monthCombinedCardPresentation == monthCombinedCardPresentation &&
@@ -406,6 +429,7 @@ final class BalancePresentationSettings {
     contentSurfaceStyle,
     unifiedBodyLayout,
     headerGraphPresentation,
+    headerLineChartPresentation,
     headerPartitionHeightPercent,
     headerGlassConfiguration,
     monthCombinedCardPresentation,
@@ -555,6 +579,15 @@ final class BalancePresentationController
     if (current.headerGraphPresentation == next) return;
     value = current.copyWith(
       headerGraphPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setHeaderLineChartPresentation(BalanceHeaderLineChartPresentation next) {
+    final current = value;
+    if (current.headerLineChartPresentation == next) return;
+    value = current.copyWith(
+      headerLineChartPresentation: next,
       revision: current.revision + 1,
     );
   }

@@ -1039,6 +1039,25 @@ final class _BalancePresentationSection extends StatelessWidget {
             ],
           ),
         ),
+        if (settings.headerGraphPresentation ==
+            BalanceHeaderGraphPresentation.lineChart)
+          SwitchListTile(
+            key: const ValueKey<String>(
+              'balance-header-topographic-chart-switch',
+            ),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('3D topografikus vonaldiagram'),
+            subtitle: Text(settings.headerLineChartPresentation.tunerLabel),
+            value:
+                settings.headerLineChartPresentation ==
+                BalanceHeaderLineChartPresentation.topographic,
+            onChanged: (enabled) => controller.setHeaderLineChartPresentation(
+              enabled
+                  ? BalanceHeaderLineChartPresentation.topographic
+                  : BalanceHeaderLineChartPresentation.current,
+            ),
+          ),
         if (settings.headerGraphPresentation !=
             BalanceHeaderGraphPresentation.lineChart)
           _BalanceHeaderGlassControls(

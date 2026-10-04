@@ -25,6 +25,8 @@ void main() {
           balanceUsesChildCards: false,
           balanceHeaderGraphPresentation:
               BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+          balanceHeaderLineChartPresentation:
+              BalanceHeaderLineChartPresentation.topographic,
           balanceHeaderPartitionHeightPercent: 80,
           balanceMonthCombinedCardPresentation:
               BalanceMonthCombinedCardPresentation.spendingRhythm,
@@ -48,6 +50,10 @@ void main() {
       expect(
         restored.value.balanceHeaderGraphPresentation,
         BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+      );
+      expect(
+        restored.value.balanceHeaderLineChartPresentation,
+        BalanceHeaderLineChartPresentation.topographic,
       );
       expect(restored.value.balanceHeaderPartitionHeightPercent, 80);
       expect(

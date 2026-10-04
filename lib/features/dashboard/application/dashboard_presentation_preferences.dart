@@ -16,6 +16,8 @@ final class DashboardPresentationPreferences {
     required this.showDayContentViewChooser,
     required this.balanceUsesChildCards,
     required this.balanceHeaderGraphPresentation,
+    this.balanceHeaderLineChartPresentation =
+        BalanceHeaderLineChartPresentation.current,
     required this.balanceHeaderPartitionHeightPercent,
     required this.balanceMonthCombinedCardPresentation,
     this.balanceHeaderGlassConfigurationJson = '',
@@ -28,6 +30,7 @@ final class DashboardPresentationPreferences {
   final bool showDayContentViewChooser;
   final bool balanceUsesChildCards;
   final BalanceHeaderGraphPresentation balanceHeaderGraphPresentation;
+  final BalanceHeaderLineChartPresentation balanceHeaderLineChartPresentation;
   final double balanceHeaderPartitionHeightPercent;
   final BalanceMonthCombinedCardPresentation
   balanceMonthCombinedCardPresentation;
@@ -41,6 +44,8 @@ final class DashboardPresentationPreferences {
     showDayContentViewChooser: false,
     balanceUsesChildCards: true,
     balanceHeaderGraphPresentation: BalanceHeaderGraphPresentation.lineChart,
+    balanceHeaderLineChartPresentation:
+        BalanceHeaderLineChartPresentation.current,
     balanceHeaderPartitionHeightPercent: 50,
     balanceMonthCombinedCardPresentation:
         BalanceMonthCombinedCardPresentation.incomeExpense,
@@ -57,6 +62,8 @@ final class DashboardPresentationPreferences {
       other.showDayContentViewChooser == showDayContentViewChooser &&
       other.balanceUsesChildCards == balanceUsesChildCards &&
       other.balanceHeaderGraphPresentation == balanceHeaderGraphPresentation &&
+      other.balanceHeaderLineChartPresentation ==
+          balanceHeaderLineChartPresentation &&
       other.balanceHeaderPartitionHeightPercent ==
           balanceHeaderPartitionHeightPercent &&
       other.balanceMonthCombinedCardPresentation ==
@@ -73,6 +80,7 @@ final class DashboardPresentationPreferences {
     showDayContentViewChooser,
     balanceUsesChildCards,
     balanceHeaderGraphPresentation,
+    balanceHeaderLineChartPresentation,
     balanceHeaderPartitionHeightPercent,
     balanceMonthCombinedCardPresentation,
     balanceHeaderGlassConfigurationJson,

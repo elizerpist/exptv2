@@ -9,6 +9,8 @@ import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../widgets/dashboard_header_trend_visual_kernel.dart';
+import 'balance_header_topographic_chart.dart';
+import 'balance_presentation_settings.dart';
 
 /// Balance-local passive relay for the existing Header gesture layer. It has
 /// no gesture-arena or financial-data ownership; the chart only observes the
@@ -63,6 +65,7 @@ final class BalanceHeaderHistoryChart extends StatefulWidget {
     this.areaFadeColor,
     this.showsAreaFade = true,
     this.layout = const DashboardHeaderTrendChartLayout.normal(),
+    this.lineChartPresentation = BalanceHeaderLineChartPresentation.current,
   });
 
   final DashboardBalanceHistorySeries series;
@@ -75,6 +78,7 @@ final class BalanceHeaderHistoryChart extends StatefulWidget {
   final Color? areaFadeColor;
   final bool showsAreaFade;
   final DashboardHeaderTrendChartLayout layout;
+  final BalanceHeaderLineChartPresentation lineChartPresentation;
 
   @visibleForTesting
   static List<int> projectedTimeLabelEpochMinutes(
@@ -99,6 +103,8 @@ final class _BalanceHeaderHistoryChartState
   final GlobalKey _plotKey = GlobalKey(
     debugLabel: 'balance-header-history-plot',
   );
+  final BalanceHeaderTopographicGeometryCache _topographicGeometryCache =
+      BalanceHeaderTopographicGeometryCache();
   Offset? _pointerDownPosition;
   var _pointerExceededTapSlop = false;
   int? _selectedEpochMinute;
@@ -191,20 +197,26 @@ final class _BalanceHeaderHistoryChartState
                           width: DashboardHeaderTrendChartStyle.plotWidth,
                           height: widget.layout.plotHeight,
                           child: RepaintBoundary(
+                            key:
+                                widget.lineChartPresentation ==
+                                    BalanceHeaderLineChartPresentation
+                                        .topographic
+                                ? const ValueKey<String>(
+                                    'balance-header-topographic-chart-repaint-boundary',
+                                  )
+                                : null,
                             child: CustomPaint(
                               key: const ValueKey<String>(
                                 'balance-header-history-chart-paint',
                               ),
-                              painter: DashboardHeaderTrendPainter(
-                                series: trend,
-                                minimumValue: values.reduce(math.min),
-                                maximumValue: values.reduce(math.max),
-                                selectedTemporalCoordinate:
-                                    selected?.epochMinute,
-                                lineColor: widget.lineColor,
-                                areaFadeColor:
-                                    widget.areaFadeColor ?? widget.lineColor,
-                                showsAreaFade: widget.showsAreaFade,
+                              painter: _painterFor(
+                                trend: trend,
+                                values: values,
+                                selectedEpochMinute: selected?.epochMinute,
+                                size: Size(
+                                  DashboardHeaderTrendChartStyle.plotWidth,
+                                  widget.layout.plotHeight,
+                                ),
                               ),
                             ),
                           ),
@@ -243,6 +255,38 @@ final class _BalanceHeaderHistoryChartState
       if (point.epochMinute == selected) return point;
     }
     return null;
+  }
+
+  CustomPainter _painterFor({
+    required DashboardHeaderTrendSeries trend,
+    required List<double> values,
+    required int? selectedEpochMinute,
+    required Size size,
+  }) {
+    final minimum = values.reduce(math.min);
+    final maximum = values.reduce(math.max);
+    return switch (widget.lineChartPresentation) {
+      BalanceHeaderLineChartPresentation.current => DashboardHeaderTrendPainter(
+        series: trend,
+        minimumValue: minimum,
+        maximumValue: maximum,
+        selectedTemporalCoordinate: selectedEpochMinute,
+        lineColor: widget.lineColor,
+        areaFadeColor: widget.areaFadeColor ?? widget.lineColor,
+        showsAreaFade: widget.showsAreaFade,
+      ),
+      BalanceHeaderLineChartPresentation.topographic =>
+        BalanceHeaderTopographicPainter(
+          terrain: _topographicGeometryCache.resolve(
+            series: trend,
+            minimumValue: minimum,
+            maximumValue: maximum,
+            size: size,
+          ),
+          selectedTemporalCoordinate: selectedEpochMinute,
+          showsAreaFade: widget.showsAreaFade,
+        ),
+    };
   }
 
   DashboardBalanceHistorySeries? _projectedSeries() {

@@ -214,6 +214,38 @@ void main() {
   );
 
   test(
+    'TOPO-01 RED: the line renderer is a persisted presentation choice independent from the Header graph kind',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(
+        controller.value.headerLineChartPresentation,
+        BalanceHeaderLineChartPresentation.current,
+      );
+      expect(
+        controller.value.headerGraphPresentation,
+        BalanceHeaderGraphPresentation.lineChart,
+      );
+
+      controller.setHeaderLineChartPresentation(
+        BalanceHeaderLineChartPresentation.topographic,
+      );
+
+      expect(
+        controller.value.headerLineChartPresentation,
+        BalanceHeaderLineChartPresentation.topographic,
+      );
+      expect(
+        controller.value.headerGraphPresentation,
+        BalanceHeaderGraphPresentation.lineChart,
+      );
+      expect(controller.value.copyWith(), controller.value);
+      expect(controller.value.hashCode, controller.value.copyWith().hashCode);
+    },
+  );
+
+  test(
     'BWA-SETTINGS RED: tint visibility gates stored background opacity without changing wave or border choices',
     () {
       final controller = BalancePresentationController();

@@ -21,6 +21,7 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dar
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_glass_configuration.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_topographic_chart.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_category_movers_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
@@ -3482,6 +3483,53 @@ void main() {
             )
             .height,
         60,
+      );
+    },
+  );
+
+  testWidgets(
+    'TOPO-04 integration: Balance Header routes the persisted 3D line renderer through the existing expanded monthly history surface',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(
+        _balance().copyWith(history: _history()),
+      );
+      final settings = BalancePresentationController()
+        ..setHeaderLineChartPresentation(
+          BalanceHeaderLineChartPresentation.topographic,
+        );
+      addTearDown(balance.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balancePresentation: balance,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<CustomPaint>(
+              find.byKey(
+                const ValueKey<String>('balance-header-history-chart-paint'),
+              ),
+            )
+            .painter,
+        isA<BalanceHeaderTopographicPainter>(),
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-header-topographic-chart-repaint-boundary',
+          ),
+        ),
+        findsOneWidget,
       );
     },
   );

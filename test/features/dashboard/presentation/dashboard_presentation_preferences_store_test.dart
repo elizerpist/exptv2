@@ -29,6 +29,8 @@ void main() {
           'balanceUsesChildCards': false,
           'balanceHeaderGraphPresentation':
               BalanceHeaderGraphPresentation.simpleIncomeExpensePartition.index,
+          'balanceHeaderLineChartPresentation':
+              BalanceHeaderLineChartPresentation.topographic.index,
           'balanceHeaderPartitionHeightPercent': 80,
           'balanceMonthCombinedCardPresentation':
               BalanceMonthCombinedCardPresentation.spendingRhythm.index,
@@ -51,6 +53,10 @@ void main() {
       expect(
         preferences.balanceHeaderGraphPresentation,
         BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+      );
+      expect(
+        preferences.balanceHeaderLineChartPresentation,
+        BalanceHeaderLineChartPresentation.topographic,
       );
       expect(preferences.balanceHeaderPartitionHeightPercent, 80);
       expect(
@@ -81,6 +87,8 @@ void main() {
         balanceUsesChildCards: false,
         balanceHeaderGraphPresentation:
             BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+        balanceHeaderLineChartPresentation:
+            BalanceHeaderLineChartPresentation.topographic,
         balanceHeaderPartitionHeightPercent: 80,
         balanceMonthCombinedCardPresentation:
             BalanceMonthCombinedCardPresentation.spendingRhythm,
@@ -99,6 +107,8 @@ void main() {
       'balanceUsesChildCards': false,
       'balanceHeaderGraphPresentation':
           BalanceHeaderGraphPresentation.simpleIncomeExpensePartition.index,
+      'balanceHeaderLineChartPresentation':
+          BalanceHeaderLineChartPresentation.topographic.index,
       'balanceHeaderPartitionHeightPercent': 80,
       'balanceMonthCombinedCardPresentation':
           BalanceMonthCombinedCardPresentation.spendingRhythm.index,
