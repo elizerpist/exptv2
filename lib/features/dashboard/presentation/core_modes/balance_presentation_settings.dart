@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../application/dashboard_balance_history_projection.dart';
+import 'balance_header_glass_configuration.dart';
 
 /// Stable semantic identities for the finite Balance carousel catalog.
 ///
@@ -172,6 +173,7 @@ final class BalancePresentationSettings {
     this.unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
     this.headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
     this.headerPartitionHeightPercent = 50,
+    this.headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
     this.monthCombinedCardPresentation =
         BalanceMonthCombinedCardPresentation.incomeExpense,
     this.alternativeMotherCardVisible = true,
@@ -221,12 +223,13 @@ final class BalancePresentationSettings {
           balanceCarouselWaveDefaultSpeedMultiplier,
       balanceCarouselTintedBackgroundEnabled = true,
       balanceCarouselWaveAnimationEnabled = true,
-      balanceContentCardColoredBorderEnabled = true,
+      balanceContentCardColoredBorderEnabled = false,
       balanceContentCardBorderOpacity = 1,
       contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
       unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
       headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
       headerPartitionHeightPercent = 50,
+      headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
       monthCombinedCardPresentation =
           BalanceMonthCombinedCardPresentation.incomeExpense,
       alternativeMotherCardVisible = true,
@@ -251,6 +254,7 @@ final class BalancePresentationSettings {
   final BalanceUnifiedBodyLayout unifiedBodyLayout;
   final BalanceHeaderGraphPresentation headerGraphPresentation;
   final double headerPartitionHeightPercent;
+  final BalanceHeaderGlassConfiguration headerGlassConfiguration;
   final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
 
   /// Controls only the physical unified parent/backplate. The alternative
@@ -293,6 +297,7 @@ final class BalancePresentationSettings {
     BalanceUnifiedBodyLayout? unifiedBodyLayout,
     BalanceHeaderGraphPresentation? headerGraphPresentation,
     double? headerPartitionHeightPercent,
+    BalanceHeaderGlassConfiguration? headerGlassConfiguration,
     BalanceMonthCombinedCardPresentation? monthCombinedCardPresentation,
     bool? alternativeMotherCardVisible,
     bool? usesChildCards,
@@ -333,6 +338,8 @@ final class BalancePresentationSettings {
         headerGraphPresentation ?? this.headerGraphPresentation,
     headerPartitionHeightPercent:
         headerPartitionHeightPercent ?? this.headerPartitionHeightPercent,
+    headerGlassConfiguration:
+        headerGlassConfiguration ?? this.headerGlassConfiguration,
     monthCombinedCardPresentation:
         monthCombinedCardPresentation ?? this.monthCombinedCardPresentation,
     alternativeMotherCardVisible:
@@ -369,6 +376,7 @@ final class BalancePresentationSettings {
       other.unifiedBodyLayout == unifiedBodyLayout &&
       other.headerGraphPresentation == headerGraphPresentation &&
       other.headerPartitionHeightPercent == headerPartitionHeightPercent &&
+      other.headerGlassConfiguration == headerGlassConfiguration &&
       other.monthCombinedCardPresentation == monthCombinedCardPresentation &&
       other.alternativeMotherCardVisible == alternativeMotherCardVisible &&
       other.usesChildCards == usesChildCards &&
@@ -396,6 +404,7 @@ final class BalancePresentationSettings {
     unifiedBodyLayout,
     headerGraphPresentation,
     headerPartitionHeightPercent,
+    headerGlassConfiguration,
     monthCombinedCardPresentation,
     alternativeMotherCardVisible,
     usesChildCards,
@@ -553,6 +562,15 @@ final class BalancePresentationController
     if (current.headerPartitionHeightPercent == normalized) return;
     value = current.copyWith(
       headerPartitionHeightPercent: normalized,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setHeaderGlassConfiguration(BalanceHeaderGlassConfiguration next) {
+    final current = value;
+    if (current.headerGlassConfiguration == next) return;
+    value = current.copyWith(
+      headerGlassConfiguration: next,
       revision: current.revision + 1,
     );
   }

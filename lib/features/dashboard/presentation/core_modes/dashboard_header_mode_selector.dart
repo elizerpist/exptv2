@@ -1,5 +1,15 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart' show DragStartBehavior;
+import 'package:flutter/gestures.dart'
+    show
+        Drag,
+        DragEndDetails,
+        DragStartBehavior,
+        DragStartDetails,
+        DragUpdateDetails,
+        GestureRecognizer,
+        PointerDeviceKind,
+        Velocity,
+        VerticalDragGestureRecognizer;
 import 'package:flutter/material.dart';
 
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
@@ -34,9 +44,17 @@ final class DashboardHeaderModeSelector extends StatefulWidget {
 
 final class _DashboardHeaderModeSelectorState
     extends State<DashboardHeaderModeSelector> {
+  // The Header's 32px visual lane deliberately remains compact.  Scaling
+  // input here—not item spacing or shared physics—means every semantic
+  // boundary needs twice the physical finger travel while the established
+  // carousel paints the same continuous outgoing/incoming icon motion.
+  static const _inputGain = .5;
+
   late final CenteredCarouselController _carouselController =
       CenteredCarouselController(initialIndex: _indexOf(widget.selectedMode));
   late int _lastLogicalIndex = _indexOf(widget.selectedMode);
+  Drag? _scaledDrag;
+  var _directInputIsDown = false;
   var _initialCenterReady = false;
 
   @override
@@ -105,6 +123,9 @@ final class _DashboardHeaderModeSelectorState
             children: <Widget>[
               if (!_initialCenterReady)
                 Center(
+                  key: const ValueKey<String>(
+                    'dashboard-header-mode-selector-fallback',
+                  ),
                   child: KeyedSubtree(
                     key: ValueKey<String>(
                       'dashboard-header-mode-icon-${widget.selectedMode.mode.name}',
@@ -112,7 +133,14 @@ final class _DashboardHeaderModeSelectorState
                     child: _visualFor(widget.selectedMode.mode),
                   ),
                 ),
+              // The shared carousel still owns the real ScrollPosition and
+              // physics.  Once ready, the Header-local overlay wins hit
+              // testing above this subtree and forwards its transformed drag
+              // lifecycle into the same position.
               IgnorePointer(
+                key: const ValueKey<String>(
+                  'dashboard-header-mode-selector-carousel',
+                ),
                 ignoring: !_initialCenterReady,
                 child: Opacity(
                   opacity: _initialCenterReady ? 1 : 0,
@@ -137,11 +165,6 @@ final class _DashboardHeaderModeSelectorState
                       enableHaptics: true,
                       enableTapToCenter: false,
                       clipBehavior: Clip.hardEdge,
-                      // The Header's 32px viewport is smaller than the
-                      // platform touch slop. Starting at pointer-down lets a
-                      // user see real directional travel before the 16px
-                      // centered-index crossing, while the shared physics
-                      // remains entirely unchanged.
                       dragStartBehavior: DragStartBehavior.down,
                     ),
                     height: viewportExtent,
@@ -169,6 +192,38 @@ final class _DashboardHeaderModeSelectorState
                   ),
                 ),
               ),
+              if (_initialCenterReady)
+                Positioned.fill(
+                  child: Listener(
+                    key: const ValueKey<String>(
+                      'dashboard-header-mode-selector-input-gain',
+                    ),
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: (_) => _beginDirectInput(),
+                    onPointerUp: (_) => _finishDirectInput(),
+                    onPointerCancel: (_) => _finishDirectInput(),
+                    child: RawGestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      gestures:
+                          <Type, GestureRecognizerFactory<GestureRecognizer>>{
+                            _HeaderModeInputGainDragRecognizer:
+                                GestureRecognizerFactoryWithHandlers<
+                                  _HeaderModeInputGainDragRecognizer
+                                >(() => _HeaderModeInputGainDragRecognizer(), (
+                                  recognizer,
+                                ) {
+                                  recognizer
+                                    ..dragStartBehavior = DragStartBehavior.down
+                                    ..onStart = _startScaledDrag
+                                    ..onUpdate = _updateScaledDrag
+                                    ..onEnd = _endScaledDrag
+                                    ..onCancel = _cancelScaledDrag;
+                                }),
+                          },
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -198,6 +253,78 @@ final class _DashboardHeaderModeSelectorState
       color: frame?.headerIconColor ?? Colors.white,
       sizePercent: frame?.headerModeIconSizePercent ?? 0,
     );
+  }
+
+  void _beginDirectInput() {
+    if (_directInputIsDown) return;
+    _directInputIsDown = true;
+    _carouselController.noteDirectPointerDown();
+    _carouselController.interruptForDirectPointer();
+  }
+
+  void _startScaledDrag(DragStartDetails details) {
+    if (!_directInputIsDown) {
+      _beginDirectInput();
+    }
+    if (!_carouselController.scrollController.hasClients) return;
+    _carouselController.beginUserMotionCommand();
+    _scaledDrag = _carouselController.scrollController.position.drag(
+      details,
+      _onScaledDragCancelledByPosition,
+    );
+  }
+
+  void _updateScaledDrag(DragUpdateDetails details) {
+    final drag = _scaledDrag;
+    if (drag == null) return;
+    final scaledDelta = Offset(0, details.delta.dy * _inputGain);
+    drag.update(
+      DragUpdateDetails(
+        globalPosition: details.globalPosition,
+        localPosition: details.localPosition,
+        sourceTimeStamp: details.sourceTimeStamp,
+        delta: scaledDelta,
+        primaryDelta: details.primaryDelta == null
+            ? null
+            : details.primaryDelta! * _inputGain,
+        kind: details.kind,
+      ),
+    );
+  }
+
+  void _endScaledDrag(DragEndDetails details) {
+    final velocity = details.velocity.pixelsPerSecond;
+    _scaledDrag?.end(
+      DragEndDetails(
+        globalPosition: details.globalPosition,
+        localPosition: details.localPosition,
+        velocity: Velocity(
+          pixelsPerSecond: Offset(0, velocity.dy * _inputGain),
+        ),
+        primaryVelocity: details.primaryVelocity == null
+            ? null
+            : details.primaryVelocity! * _inputGain,
+      ),
+    );
+    _scaledDrag = null;
+    _finishDirectInput();
+  }
+
+  void _cancelScaledDrag() {
+    _scaledDrag?.cancel();
+    _scaledDrag = null;
+    _finishDirectInput();
+  }
+
+  void _onScaledDragCancelledByPosition() {
+    _scaledDrag = null;
+    _finishDirectInput();
+  }
+
+  void _finishDirectInput() {
+    if (!_directInputIsDown) return;
+    _directInputIsDown = false;
+    _carouselController.noteDirectPointerEnded();
   }
 
   void _commitCrossing(int logicalIndex) {
@@ -239,8 +366,23 @@ final class _DashboardHeaderModeSelectorState
 
   @override
   void dispose() {
+    _scaledDrag?.cancel();
     _detachVisualListeners(widget);
     _carouselController.dispose();
     super.dispose();
   }
+}
+
+/// This is intentionally local to the Header. The shared carousel's stock
+/// scroll recognizer must keep its normal platform slop and physics for every
+/// other consumer. The compact 32px Header lane needs its first real motion
+/// sample immediately so the scaled delta remains a linear .5 mapping rather
+/// than a delayed touch-slop approximation.
+final class _HeaderModeInputGainDragRecognizer
+    extends VerticalDragGestureRecognizer {
+  @override
+  bool hasSufficientGlobalDistanceToAccept(
+    PointerDeviceKind pointerDeviceKind,
+    double? deviceTouchSlop,
+  ) => true;
 }

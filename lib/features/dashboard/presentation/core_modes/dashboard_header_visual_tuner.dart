@@ -26,6 +26,7 @@ import '../../mind/domain/mind_behavioral_score_settings.dart';
 import '../../mind/domain/mind_header_score_chart_presentation.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../application/dashboard_balance_history_projection.dart';
+import 'balance_header_glass_configuration.dart';
 import 'balance_presentation_settings.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_category_scale.dart';
@@ -984,8 +985,12 @@ final class _BalancePresentationSection extends StatelessWidget {
           ),
         ),
         const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text('Balance header visual'),
+        ),
+        const Padding(
           padding: EdgeInsets.only(top: 4),
-          child: Text('Header grafikon tartalma'),
+          child: Text('Header visual'),
         ),
         RadioGroup<BalanceHeaderGraphPresentation>(
           groupValue: settings.headerGraphPresentation,
@@ -1011,15 +1016,9 @@ final class _BalancePresentationSection extends StatelessWidget {
         ),
         if (settings.headerGraphPresentation ==
             BalanceHeaderGraphPresentation.incomeExpensePartition)
-          _TunerSlider(
-            key: const ValueKey<String>('balance-header-partition-height'),
-            label: 'Bevétel–kiadás sáv magassága',
-            valueLabel: '${settings.headerPartitionHeightPercent.round()}%',
-            min: 0,
-            max: 100,
-            divisions: 100,
-            value: settings.headerPartitionHeightPercent,
-            onChanged: controller.setHeaderPartitionHeightPercent,
+          _BalanceHeaderGlassControls(
+            controller: controller,
+            settings: settings,
           ),
         const Padding(
           padding: EdgeInsets.only(top: 4),
@@ -1285,6 +1284,764 @@ final class _BalancePresentationSection extends StatelessWidget {
         ),
       ],
     ),
+  );
+}
+
+/// Progressive-disclosure controls for the selected Balance Header material.
+/// They update the existing Balance presentation authority live; the configs
+/// are serializable primitives and persist with the Dashboard preferences.
+final class _BalanceHeaderGlassControls extends StatelessWidget {
+  const _BalanceHeaderGlassControls({
+    required this.controller,
+    required this.settings,
+  });
+
+  final BalancePresentationController controller;
+  final BalancePresentationSettings settings;
+
+  void _set(BalanceHeaderGlassConfiguration next) =>
+      controller.setHeaderGlassConfiguration(next);
+
+  @override
+  Widget build(BuildContext context) {
+    final glass = settings.headerGlassConfiguration;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _TunerSlider(
+          key: const ValueKey<String>('balance-header-partition-height'),
+          label: 'Bar size',
+          valueLabel: '${settings.headerPartitionHeightPercent.round()}%',
+          min: 0,
+          max: 100,
+          divisions: 100,
+          value: settings.headerPartitionHeightPercent,
+          onChanged: controller.setHeaderPartitionHeightPercent,
+        ),
+        _TunerSlider(
+          key: const ValueKey<String>('balance-header-glass-vertical-position'),
+          label: 'Vertical position',
+          valueLabel: '${(glass.verticalPosition * 100).round()}%',
+          min: 0,
+          max: 1,
+          divisions: 100,
+          value: glass.verticalPosition,
+          onChanged: (value) => _set(glass.copyWith(verticalPosition: value)),
+        ),
+        _TunerSlider(
+          key: const ValueKey<String>('balance-header-glass-income-intensity'),
+          label: 'Income fill intensity',
+          valueLabel: '${(glass.incomeFillIntensity * 100).round()}%',
+          min: 0,
+          max: 1,
+          divisions: 100,
+          value: glass.incomeFillIntensity,
+          onChanged: (value) =>
+              _set(glass.copyWith(incomeFillIntensity: value)),
+        ),
+        const SizedBox(height: 4),
+        const Text('Glass renderer'),
+        DropdownButtonFormField<BalanceHeaderGlassRenderer>(
+          key: const ValueKey<String>('balance-header-glass-renderer'),
+          initialValue: glass.renderer,
+          isExpanded: true,
+          items: <DropdownMenuItem<BalanceHeaderGlassRenderer>>[
+            for (final renderer in BalanceHeaderGlassRenderer.values)
+              DropdownMenuItem<BalanceHeaderGlassRenderer>(
+                value: renderer,
+                child: Text(renderer.tunerLabel),
+              ),
+          ],
+          onChanged: (renderer) {
+            if (renderer != null) _set(glass.copyWith(renderer: renderer));
+          },
+        ),
+        if (glass.renderer == BalanceHeaderGlassRenderer.liquidGlassWidgets)
+          _BalanceGlassEnumField<BalanceGlassQuality>(
+            label: 'Quality',
+            value: glass.quality,
+            values: BalanceGlassQuality.values,
+            onChanged: (quality) => _set(glass.copyWith(quality: quality)),
+          ),
+        SwitchListTile.adaptive(
+          key: const ValueKey<String>(
+            'balance-header-glass-independent-income-fill',
+          ),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('Independent income fill settings'),
+          value: glass.independentIncomeFillSettings,
+          onChanged: (value) =>
+              _set(glass.copyWith(independentIncomeFillSettings: value)),
+        ),
+        ExpansionTile(
+          key: const ValueKey<String>('balance-header-glass-renderer-settings'),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          title: const Text('Renderer settings'),
+          children: <Widget>[
+            _BalanceGlassMaterialControls(
+              title: glass.independentIncomeFillSettings ? 'Track' : null,
+              renderer: glass.renderer,
+              material: glass.materialFor(incomeFill: false),
+              onChanged: (material) => _set(
+                glass.updateMaterial(incomeFill: false, material: material),
+              ),
+            ),
+            if (glass.independentIncomeFillSettings)
+              _BalanceGlassMaterialControls(
+                title: 'Income fill',
+                renderer: glass.renderer,
+                material: glass.materialFor(incomeFill: true),
+                onChanged: (material) => _set(
+                  glass.updateMaterial(incomeFill: true, material: material),
+                ),
+              ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey<String>(
+                  'balance-header-glass-reset-renderer',
+                ),
+                onPressed: () => _set(glass.resetSelectedRenderer()),
+                child: const Text('Reset renderer defaults'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+final class _BalanceGlassMaterialControls extends StatelessWidget {
+  const _BalanceGlassMaterialControls({
+    required this.renderer,
+    required this.material,
+    required this.onChanged,
+    this.title,
+  });
+
+  final String? title;
+  final BalanceHeaderGlassRenderer renderer;
+  final BalanceGlassMaterialConfiguration material;
+  final ValueChanged<BalanceGlassMaterialConfiguration> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final common = <Widget>[
+      if (title != null)
+        Padding(padding: const EdgeInsets.only(top: 6), child: Text(title!)),
+      _BalanceGlassSlider(
+        label: 'Glass tint opacity',
+        value: material.tintOpacity,
+        min: 0,
+        max: 1,
+        onChanged: (value) => onChanged(material.copyWith(tintOpacity: value)),
+      ),
+      _BalanceGlassColorField(
+        label: 'Glass tint color',
+        value: material.tintArgb,
+        onChanged: (value) => onChanged(material.copyWith(tintArgb: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'Border width',
+        value: material.borderWidth,
+        min: 0,
+        max: 5,
+        onChanged: (value) => onChanged(material.copyWith(borderWidth: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'Border opacity',
+        value: material.borderOpacity,
+        min: 0,
+        max: 1,
+        onChanged: (value) =>
+            onChanged(material.copyWith(borderOpacity: value)),
+      ),
+      _BalanceGlassColorField(
+        label: 'Border color',
+        value: material.borderArgb,
+        onChanged: (value) => onChanged(material.copyWith(borderArgb: value)),
+      ),
+      _BalanceGlassGradientControls(material: material, onChanged: onChanged),
+      SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: const Text('Shadow enabled'),
+        value: material.shadowEnabled,
+        onChanged: (value) =>
+            onChanged(material.copyWith(shadowEnabled: value)),
+      ),
+      if (material.shadowEnabled) ...<Widget>[
+        _BalanceGlassColorField(
+          label: 'Shadow color',
+          value: material.shadowArgb,
+          onChanged: (value) => onChanged(material.copyWith(shadowArgb: value)),
+        ),
+        _BalanceGlassSlider(
+          label: 'Shadow opacity',
+          value: material.shadowOpacity,
+          min: 0,
+          max: 1,
+          onChanged: (value) =>
+              onChanged(material.copyWith(shadowOpacity: value)),
+        ),
+        _BalanceGlassSlider(
+          label: 'Shadow blur',
+          value: material.shadowBlur,
+          min: 0,
+          max: 40,
+          onChanged: (value) => onChanged(material.copyWith(shadowBlur: value)),
+        ),
+        _BalanceGlassSlider(
+          label: 'Shadow spread',
+          value: material.shadowSpread,
+          min: -20,
+          max: 20,
+          onChanged: (value) =>
+              onChanged(material.copyWith(shadowSpread: value)),
+        ),
+        _BalanceGlassSlider(
+          label: 'Shadow offset X',
+          value: material.shadowOffsetX,
+          min: -20,
+          max: 20,
+          onChanged: (value) =>
+              onChanged(material.copyWith(shadowOffsetX: value)),
+        ),
+        _BalanceGlassSlider(
+          label: 'Shadow offset Y',
+          value: material.shadowOffsetY,
+          min: -20,
+          max: 20,
+          onChanged: (value) =>
+              onChanged(material.copyWith(shadowOffsetY: value)),
+        ),
+      ],
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        ...switch (renderer) {
+          BalanceHeaderGlassRenderer.baseline => common,
+          BalanceHeaderGlassRenderer.flutterNative => <Widget>[
+            _BalanceGlassSlider(
+              label: 'Blur X',
+              value: material.blurX,
+              min: 0,
+              max: 40,
+              onChanged: (value) => onChanged(material.copyWith(blurX: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Blur Y',
+              value: material.blurY,
+              min: 0,
+              max: 40,
+              onChanged: (value) => onChanged(material.copyWith(blurY: value)),
+            ),
+            _BalanceGlassBoolean(
+              label: 'Bounded blur',
+              value: material.boundedBlur,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(boundedBlur: value)),
+            ),
+            _BalanceGlassBoolean(
+              label: 'Backdrop grouping',
+              value: material.backdropGrouping,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(backdropGrouping: value)),
+            ),
+            _BalanceGlassEnumField<BalanceGlassTileMode>(
+              label: 'Tile mode',
+              value: material.tileMode,
+              values: BalanceGlassTileMode.values,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(tileMode: value)),
+            ),
+            _BalanceGlassEnumField<BalanceGlassBlendMode>(
+              label: 'Blend mode',
+              value: material.blendMode,
+              values: BalanceGlassBlendMode.values,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(blendMode: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Specular highlight opacity',
+              value: material.specularOpacity,
+              min: 0,
+              max: 1,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(specularOpacity: value)),
+            ),
+            ...common,
+          ],
+          BalanceHeaderGlassRenderer.glassKit => <Widget>[
+            _BalanceGlassSlider(
+              label: 'Blur',
+              value: material.blurX,
+              min: 0,
+              max: 40,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(blurX: value, blurY: value)),
+            ),
+            _BalanceGlassBoolean(
+              label: 'Frosted glass',
+              value: material.frostedGlass,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(frostedGlass: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Frosted opacity',
+              value: material.frostedOpacity,
+              min: 0,
+              max: 1,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(frostedOpacity: value)),
+            ),
+            ...common,
+          ],
+          BalanceHeaderGlassRenderer.glassmorphism => <Widget>[
+            _BalanceGlassSlider(
+              label: 'Blur',
+              value: material.blurX,
+              min: 0,
+              max: 40,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(blurX: value, blurY: value)),
+            ),
+            ...common,
+          ],
+          BalanceHeaderGlassRenderer.flutterGlassUiKit => <Widget>[
+            _BalanceGlassSlider(
+              label: 'Blur',
+              value: material.blurX,
+              min: 0,
+              max: 40,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(blurX: value, blurY: value)),
+            ),
+            _BalanceGlassBoolean(
+              label: 'Low performance',
+              value: material.performanceLow,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(performanceLow: value)),
+            ),
+            ...common,
+          ],
+          BalanceHeaderGlassRenderer.liquidGlassWidgets => <Widget>[
+            _BalanceGlassSlider(
+              label: 'Thickness',
+              value: material.thickness,
+              min: 0,
+              max: 60,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(thickness: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Blur',
+              value: material.blurX,
+              min: 0,
+              max: 20,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(blurX: value, blurY: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Chromatic aberration',
+              value: material.chromaticAberration,
+              min: 0,
+              max: .2,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(chromaticAberration: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Light intensity',
+              value: material.lightIntensity,
+              min: 0,
+              max: 1,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(lightIntensity: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Light angle',
+              value: material.lightAngle,
+              min: -3.14,
+              max: 3.14,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(lightAngle: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Ambient strength',
+              value: material.ambientStrength,
+              min: 0,
+              max: 1,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(ambientStrength: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Ambient rim',
+              value: material.ambientRim,
+              min: 0,
+              max: 1,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(ambientRim: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Fresnel strength',
+              value: material.fresnelStrength,
+              min: 0,
+              max: 2,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(fresnelStrength: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Refractive index',
+              value: material.refractiveIndex,
+              min: 1,
+              max: 1.5,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(refractiveIndex: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Saturation',
+              value: material.saturation,
+              min: 0,
+              max: 3,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(saturation: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Glow intensity',
+              value: material.glowIntensity,
+              min: 0,
+              max: 1,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(glowIntensity: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Standard opacity multiplier',
+              value: material.standardOpacityMultiplier,
+              min: 0,
+              max: 2,
+              onChanged: (value) => onChanged(
+                material.copyWith(standardOpacityMultiplier: value),
+              ),
+            ),
+            _BalanceGlassSlider(
+              label: 'Shadow elevation',
+              value: material.shadowElevation,
+              min: 0,
+              max: 20,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(shadowElevation: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Whiten strength',
+              value: material.whitenStrength,
+              min: 0,
+              max: 1,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(whitenStrength: value)),
+            ),
+            _BalanceGlassSlider(
+              label: 'Edge absorption',
+              value: material.edgeAbsorption,
+              min: 0,
+              max: 1,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(edgeAbsorption: value)),
+            ),
+            _BalanceGlassEnumField<BalanceGlassSpecularSharpness>(
+              label: 'Specular sharpness',
+              value: material.specularSharpness,
+              values: BalanceGlassSpecularSharpness.values,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(specularSharpness: value)),
+            ),
+            _BalanceGlassEnumField<BalanceGlassBodyMode>(
+              label: 'Body mode',
+              value: material.bodyMode,
+              values: BalanceGlassBodyMode.values,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(bodyMode: value)),
+            ),
+            _BalanceGlassEnumField<BalanceGlassPlatformViewMode>(
+              label: 'Platform view mode',
+              value: material.platformViewMode,
+              values: BalanceGlassPlatformViewMode.values,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(platformViewMode: value)),
+            ),
+            _BalanceGlassColorField(
+              label: 'Backer color',
+              value: material.backerArgb,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(backerArgb: value)),
+            ),
+            _BalanceGlassColorField(
+              label: 'Platform fallback color',
+              value: material.platformViewFallbackArgb,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(platformViewFallbackArgb: value)),
+            ),
+            _BalanceGlassBoolean(
+              label: 'Whiten gated',
+              value: material.whitenGated,
+              onChanged: (value) =>
+                  onChanged(material.copyWith(whitenGated: value)),
+            ),
+            ...common,
+          ],
+        },
+      ],
+    );
+  }
+}
+
+final class _BalanceGlassGradientControls extends StatelessWidget {
+  const _BalanceGlassGradientControls({
+    required this.material,
+    required this.onChanged,
+  });
+
+  final BalanceGlassMaterialConfiguration material;
+  final ValueChanged<BalanceGlassMaterialConfiguration> onChanged;
+
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    tilePadding: EdgeInsets.zero,
+    childrenPadding: EdgeInsets.zero,
+    title: const Text('Gradient'),
+    children: <Widget>[
+      _BalanceGlassColorField(
+        label: 'Start color',
+        value: material.gradientStartArgb,
+        onChanged: (value) =>
+            onChanged(material.copyWith(gradientStartArgb: value)),
+      ),
+      _BalanceGlassColorField(
+        label: 'End color',
+        value: material.gradientEndArgb,
+        onChanged: (value) =>
+            onChanged(material.copyWith(gradientEndArgb: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'Start opacity',
+        value: material.gradientStartOpacity,
+        min: 0,
+        max: 1,
+        onChanged: (value) =>
+            onChanged(material.copyWith(gradientStartOpacity: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'End opacity',
+        value: material.gradientEndOpacity,
+        min: 0,
+        max: 1,
+        onChanged: (value) =>
+            onChanged(material.copyWith(gradientEndOpacity: value)),
+      ),
+      _BalanceGlassEnumField<BalanceGlassDirection>(
+        label: 'Direction',
+        value: material.gradientDirection,
+        values: BalanceGlassDirection.values,
+        onChanged: (value) =>
+            onChanged(material.copyWith(gradientDirection: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'Start stop',
+        value: material.gradientStartStop,
+        min: 0,
+        max: 1,
+        onChanged: (value) =>
+            onChanged(material.copyWith(gradientStartStop: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'End stop',
+        value: material.gradientEndStop,
+        min: 0,
+        max: 1,
+        onChanged: (value) =>
+            onChanged(material.copyWith(gradientEndStop: value)),
+      ),
+      _BalanceGlassBorderGradientControls(
+        material: material,
+        onChanged: onChanged,
+      ),
+    ],
+  );
+}
+
+final class _BalanceGlassBorderGradientControls extends StatelessWidget {
+  const _BalanceGlassBorderGradientControls({
+    required this.material,
+    required this.onChanged,
+  });
+
+  final BalanceGlassMaterialConfiguration material;
+  final ValueChanged<BalanceGlassMaterialConfiguration> onChanged;
+
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    tilePadding: EdgeInsets.zero,
+    childrenPadding: EdgeInsets.zero,
+    title: const Text('Border gradient'),
+    children: <Widget>[
+      _BalanceGlassColorField(
+        label: 'Border start color',
+        value: material.borderGradientStartArgb,
+        onChanged: (value) =>
+            onChanged(material.copyWith(borderGradientStartArgb: value)),
+      ),
+      _BalanceGlassColorField(
+        label: 'Border end color',
+        value: material.borderGradientEndArgb,
+        onChanged: (value) =>
+            onChanged(material.copyWith(borderGradientEndArgb: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'Border start opacity',
+        value: material.borderGradientStartOpacity,
+        min: 0,
+        max: 1,
+        onChanged: (value) =>
+            onChanged(material.copyWith(borderGradientStartOpacity: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'Border end opacity',
+        value: material.borderGradientEndOpacity,
+        min: 0,
+        max: 1,
+        onChanged: (value) =>
+            onChanged(material.copyWith(borderGradientEndOpacity: value)),
+      ),
+      _BalanceGlassEnumField<BalanceGlassDirection>(
+        label: 'Border direction',
+        value: material.borderGradientDirection,
+        values: BalanceGlassDirection.values,
+        onChanged: (value) =>
+            onChanged(material.copyWith(borderGradientDirection: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'Border start stop',
+        value: material.borderGradientStartStop,
+        min: 0,
+        max: 1,
+        onChanged: (value) =>
+            onChanged(material.copyWith(borderGradientStartStop: value)),
+      ),
+      _BalanceGlassSlider(
+        label: 'Border end stop',
+        value: material.borderGradientEndStop,
+        min: 0,
+        max: 1,
+        onChanged: (value) =>
+            onChanged(material.copyWith(borderGradientEndStop: value)),
+      ),
+    ],
+  );
+}
+
+final class _BalanceGlassSlider extends StatelessWidget {
+  const _BalanceGlassSlider({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) => _TunerSlider(
+    label: label,
+    valueLabel: value.toStringAsFixed(2),
+    min: min,
+    max: max,
+    divisions: 100,
+    value: value,
+    onChanged: onChanged,
+  );
+}
+
+final class _BalanceGlassBoolean extends StatelessWidget {
+  const _BalanceGlassBoolean({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SwitchListTile.adaptive(
+    contentPadding: EdgeInsets.zero,
+    dense: true,
+    title: Text(label),
+    value: value,
+    onChanged: onChanged,
+  );
+}
+
+final class _BalanceGlassEnumField<T extends Enum> extends StatelessWidget {
+  const _BalanceGlassEnumField({
+    required this.label,
+    required this.value,
+    required this.values,
+    required this.onChanged,
+  });
+
+  final String label;
+  final T value;
+  final List<T> values;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 4),
+    child: DropdownButtonFormField<T>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label, isDense: true),
+      items: <DropdownMenuItem<T>>[
+        for (final choice in values)
+          DropdownMenuItem<T>(value: choice, child: Text(choice.name)),
+      ],
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
+    ),
+  );
+}
+
+final class _BalanceGlassColorField extends StatelessWidget {
+  const _BalanceGlassColorField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) => TextFormField(
+    key: ValueKey<String>('balance-glass-color-${label.toLowerCase()}'),
+    initialValue: value.toRadixString(16).padLeft(8, '0').toUpperCase(),
+    decoration: InputDecoration(labelText: '$label (AARRGGBB)', isDense: true),
+    onFieldSubmitted: (input) {
+      final normalized = input.replaceAll('#', '').trim();
+      final parsed = int.tryParse(normalized, radix: 16);
+      if (parsed != null && normalized.length <= 8) onChanged(parsed);
+    },
   );
 }
 

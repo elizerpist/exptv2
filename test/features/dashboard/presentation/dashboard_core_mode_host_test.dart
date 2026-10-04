@@ -91,6 +91,7 @@ void main() {
         ),
       );
       await tester.pump();
+      await tester.pump();
 
       final button = tester.getRect(
         find.byKey(
@@ -188,6 +189,8 @@ void main() {
       addTearDown(controller.dispose);
 
       await tester.pumpWidget(_ModeHostHarness(controller: controller));
+      await tester.pump();
+      await tester.pump();
 
       expect(
         find.byKey(ValueKey('dashboard-core-mode-${mode.mode.name}')),
@@ -195,8 +198,10 @@ void main() {
       );
       expect(_mountedModeRootCount(tester), 1);
       expect(
-        find.byKey(ValueKey('dashboard-header-mode-icon-${mode.mode.name}')),
-        findsOneWidget,
+        _headerModeVisual(mode.mode),
+        findsAtLeastNWidgets(1),
+        reason:
+            'The clipped cyclic belt can be between its keyed center frames during an initial programmatic mount, but it must already bind the canonical visual.',
       );
 
       if (mode == DashboardModeSpec.mind) {
@@ -238,6 +243,7 @@ void main() {
       addTearDown(controller.dispose);
       await tester.pumpWidget(_ModeHostHarness(controller: controller));
       await tester.pump();
+      await tester.pump();
 
       expect(
         find.byKey(const ValueKey<String>('dashboard-core-mode-label-balance')),
@@ -251,6 +257,9 @@ void main() {
       );
       final selector = find.byKey(
         const ValueKey<String>('dashboard-header-mode-selector-viewport'),
+      );
+      final selectorInput = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-selector-input-gain'),
       );
       expect(selector, findsOneWidget);
       expect(
@@ -277,11 +286,11 @@ void main() {
         reason: 'Horizontal Header swipes no longer own mode selection.',
       );
 
-      await tester.tap(selector);
+      await tester.tap(selectorInput);
       await tester.pump();
       expect(controller.committedMode, DashboardModeSpec.balance);
 
-      await tester.drag(selector, const Offset(0, -36));
+      await tester.drag(selectorInput, const Offset(0, -68));
       await tester.pump();
       expect(controller.committedMode, DashboardModeSpec.budget);
       expect(controller.committedModeEpoch, 1);
@@ -303,7 +312,7 @@ void main() {
         'assets/fluvi/header_mode_icons/budget-sliders-vertical.svg',
       );
 
-      await tester.drag(selector, const Offset(0, -36));
+      await tester.drag(selectorInput, const Offset(0, -68));
       await tester.pump();
       expect(controller.committedMode, DashboardModeSpec.mind);
       expect(
@@ -315,11 +324,11 @@ void main() {
         'assets/fluvi/header_mode_icons/mind-brain.svg',
       );
 
-      await tester.drag(selector, const Offset(0, -36));
+      await tester.drag(selectorInput, const Offset(0, -68));
       await tester.pump();
       expect(controller.committedMode, DashboardModeSpec.balance);
 
-      await tester.drag(selector, const Offset(0, 36));
+      await tester.drag(selectorInput, const Offset(0, 68));
       await tester.pump();
       expect(controller.committedMode, DashboardModeSpec.mind);
       expect(controller.committedModeEpoch, 4);
@@ -367,6 +376,51 @@ void main() {
   );
 
   testWidgets(
+    'HSG-01 RED: Header-local gain doubles both cumulative finger-distance boundaries before release',
+    (tester) async {
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_ModeHostHarness(controller: controller));
+      await tester.pump();
+      await tester.pump();
+
+      final selector = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-selector-viewport'),
+      );
+      final extent = tester.getSize(selector).height;
+      expect(extent, closeTo(32, .1));
+      final gesture = await tester.startGesture(tester.getCenter(selector));
+
+      await gesture.moveBy(Offset(0, -(extent - 1)));
+      await tester.pump();
+      expect(
+        controller.committedMode,
+        DashboardModeSpec.balance,
+        reason: 'The first crossing needs roughly one full visual extent.',
+      );
+
+      await gesture.moveBy(const Offset(0, -2));
+      await tester.pump();
+      expect(controller.committedMode, DashboardModeSpec.budget);
+
+      await gesture.moveBy(Offset(0, -(extent * 2 - 3)));
+      await tester.pump();
+      expect(
+        controller.committedMode,
+        DashboardModeSpec.budget,
+        reason: 'The second boundary must be scaled too, not only delayed.',
+      );
+
+      await gesture.moveBy(const Offset(0, -4));
+      await tester.pump();
+      expect(controller.committedMode, DashboardModeSpec.mind);
+      await gesture.up();
+    },
+  );
+
+  testWidgets(
     'HMS-03 RED: selector input is isolated from Header expansion and preserves the physical carousel owner',
     (tester) async {
       final controller = DashboardCoreModeController(
@@ -385,15 +439,15 @@ void main() {
       final carouselController = carousel.controller;
       final scrollController = carouselController.scrollController;
       final physicsCreations = carouselController.physicsCreationCount;
-      final selector = find.byKey(
-        const ValueKey<String>('dashboard-header-mode-selector-viewport'),
+      final selectorInput = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-selector-input-gain'),
       );
 
-      await tester.drag(selector, const Offset(0, -36));
+      await tester.drag(selectorInput, const Offset(0, -68));
       await tester.pump();
-      await tester.drag(selector, const Offset(0, -36));
+      await tester.drag(selectorInput, const Offset(0, -68));
       await tester.pump();
-      await tester.drag(selector, const Offset(0, -36));
+      await tester.drag(selectorInput, const Offset(0, -68));
       await tester.pump();
 
       final after = tester.widget<CenteredCarousel<DashboardModeSpec>>(

@@ -1136,6 +1136,7 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
                   'mind-month-heatmap-total-label',
                 ),
                 amountKey: const ValueKey<String>('mind-month-heatmap-total'),
+                prominentAmount: true,
               ),
               const SizedBox(height: 7),
               Align(

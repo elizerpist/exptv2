@@ -18,6 +18,7 @@ final class DashboardPresentationPreferences {
     required this.balanceHeaderGraphPresentation,
     required this.balanceHeaderPartitionHeightPercent,
     required this.balanceMonthCombinedCardPresentation,
+    this.balanceHeaderGlassConfigurationJson = '',
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -30,6 +31,7 @@ final class DashboardPresentationPreferences {
   final double balanceHeaderPartitionHeightPercent;
   final BalanceMonthCombinedCardPresentation
   balanceMonthCombinedCardPresentation;
+  final String balanceHeaderGlassConfigurationJson;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.current,
@@ -42,6 +44,7 @@ final class DashboardPresentationPreferences {
     balanceHeaderPartitionHeightPercent: 50,
     balanceMonthCombinedCardPresentation:
         BalanceMonthCombinedCardPresentation.incomeExpense,
+    balanceHeaderGlassConfigurationJson: '',
   );
 
   @override
@@ -57,7 +60,9 @@ final class DashboardPresentationPreferences {
       other.balanceHeaderPartitionHeightPercent ==
           balanceHeaderPartitionHeightPercent &&
       other.balanceMonthCombinedCardPresentation ==
-          balanceMonthCombinedCardPresentation;
+          balanceMonthCombinedCardPresentation &&
+      other.balanceHeaderGlassConfigurationJson ==
+          balanceHeaderGlassConfigurationJson;
 
   @override
   int get hashCode => Object.hash(
@@ -70,6 +75,7 @@ final class DashboardPresentationPreferences {
     balanceHeaderGraphPresentation,
     balanceHeaderPartitionHeightPercent,
     balanceMonthCombinedCardPresentation,
+    balanceHeaderGlassConfigurationJson,
   );
 }
 

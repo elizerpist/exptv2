@@ -1712,6 +1712,7 @@ void main() {
         balanceCarouselBorderOpacity: .4,
         balanceCarouselWaveOpacity: .5,
         balanceCarouselTintedBackgroundEnabled: false,
+        balanceContentCardColoredBorderEnabled: true,
         balanceContentCardBorderOpacity: .3,
         revision: 3,
       );
@@ -1744,7 +1745,7 @@ void main() {
       expect(updatedContentBorder.top.width, initialContentBorder.top.width);
       expect(
         updatedContentBorder.top.color.a,
-        closeTo(initialContentBorder.top.color.a * .3, .01),
+        closeTo(.3, .01),
         reason: 'The independent content-border slider owns its alpha only.',
       );
       expect(tester.getRect(cardFinder), cardRect);

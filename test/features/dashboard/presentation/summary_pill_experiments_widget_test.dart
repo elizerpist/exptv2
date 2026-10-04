@@ -29,17 +29,17 @@ void main() {
       const hostWidth = 252.59302325581396;
       const inset = 6.0;
       const activeTracks = <int>[0, 1, 2, 3];
-      final minimumNavigationWidth = SummarySegmentedTrackGeometry.minimumWidthFor(
-        activeTrackIndices: activeTracks,
-        preRegressionInset: inset,
-      );
-      final amountWidth =
-          math
-              .min(
-                hostWidth * .40,
-                math.max(0, hostWidth - inset - minimumNavigationWidth),
-              )
-              .toDouble();
+      final minimumNavigationWidth =
+          SummarySegmentedTrackGeometry.minimumWidthFor(
+            activeTrackIndices: activeTracks,
+            preRegressionInset: inset,
+          );
+      final amountWidth = math
+          .min(
+            hostWidth * .40,
+            math.max(0, hostWidth - inset - minimumNavigationWidth),
+          )
+          .toDouble();
       final navigationWidth = hostWidth - amountWidth - inset;
       final geometry = SummarySegmentedTrackGeometry.resolve(
         width: navigationWidth,
@@ -1608,7 +1608,10 @@ void main() {
           bounds: _bounds,
           navigation: navigation,
           visibleFrames: visibleFrames,
-          presentation: const DashboardSummaryPresentationSettings.defaults(),
+          presentation: const DashboardSummaryPresentationSettings(
+            showSeparators: true,
+            temporalFlingPresentation: SummaryTemporalFlingPresentation.current,
+          ),
           onLevelCrossed: (_, _) {},
           onComponentCrossed: (_, _) {},
         ),
@@ -1743,8 +1746,7 @@ void main() {
           visibleFrames: visibleFrames,
           presentation: const DashboardSummaryPresentationSettings(
             showSeparators: true,
-            temporalFlingPresentation:
-                SummaryTemporalFlingPresentation.current,
+            temporalFlingPresentation: SummaryTemporalFlingPresentation.current,
             segmentedOrientation: SummarySegmentedOrientation.normal,
           ),
           onLevelCrossed: (_, _) {},

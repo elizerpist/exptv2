@@ -938,6 +938,14 @@ void main() {
         tester.getRect(label).center.dy,
         closeTo(tester.getRect(total).center.dy, .01),
       );
+      final totalText = tester.widget<Text>(total);
+      expect(totalText.style?.fontSize, 13);
+      expect(totalText.style?.color, const Color(0xff06194f));
+      expect(
+        find.descendant(of: header, matching: find.byType(DecoratedBox)),
+        findsNothing,
+        reason: 'The Month total is no longer wrapped in the old muted pill.',
+      );
       expect(tester.getRect(header).bottom, lessThan(tester.getRect(grid).top));
       expect(find.byType(ListView), findsNothing);
     },

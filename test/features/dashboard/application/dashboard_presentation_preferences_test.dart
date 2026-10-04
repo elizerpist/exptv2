@@ -28,6 +28,7 @@ void main() {
           balanceHeaderPartitionHeightPercent: 80,
           balanceMonthCombinedCardPresentation:
               BalanceMonthCombinedCardPresentation.spendingRhythm,
+          balanceHeaderGlassConfigurationJson: '{"renderer":"glassKit"}',
         ),
       );
       await Future<void>.delayed(Duration.zero);
@@ -52,6 +53,10 @@ void main() {
       expect(
         restored.value.balanceMonthCombinedCardPresentation,
         BalanceMonthCombinedCardPresentation.spendingRhythm,
+      );
+      expect(
+        restored.value.balanceHeaderGlassConfigurationJson,
+        '{"renderer":"glassKit"}',
       );
     },
   );

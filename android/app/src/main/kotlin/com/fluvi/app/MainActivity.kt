@@ -262,6 +262,7 @@ class MainActivity : FlutterActivity() {
                             "balanceHeaderGraphPresentation" to preferences.getInt("balanceHeaderGraphPresentation", 0),
                             "balanceHeaderPartitionHeightPercent" to preferences.getInt("balanceHeaderPartitionHeightPercent", 50),
                             "balanceMonthCombinedCardPresentation" to preferences.getInt("balanceMonthCombinedCardPresentation", 0),
+                            "balanceHeaderGlassConfigurationJson" to preferences.getString("balanceHeaderGlassConfigurationJson", ""),
                         ),
                     )
                     "writeDashboardPresentationSettings" -> {
@@ -291,6 +292,9 @@ class MainActivity : FlutterActivity() {
                         val balanceMonthCombinedCardPresentation = (values["balanceMonthCombinedCardPresentation"] as? Number)?.toInt()
                             ?: throw IllegalArgumentException("Missing Balance Month combined card presentation.")
                         require(balanceMonthCombinedCardPresentation in 0..1) { "Invalid Balance Month combined card presentation." }
+                        val balanceHeaderGlassConfigurationJson = values["balanceHeaderGlassConfigurationJson"] as? String
+                            ?: throw IllegalArgumentException("Missing Balance Header glass configuration.")
+                        require(balanceHeaderGlassConfigurationJson.length <= 32768) { "Balance Header glass configuration is too large." }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
@@ -301,6 +305,7 @@ class MainActivity : FlutterActivity() {
                             .putInt("balanceHeaderGraphPresentation", balanceHeaderGraphPresentation)
                             .putInt("balanceHeaderPartitionHeightPercent", balanceHeaderPartitionHeightPercent)
                             .putInt("balanceMonthCombinedCardPresentation", balanceMonthCombinedCardPresentation)
+                            .putString("balanceHeaderGlassConfigurationJson", balanceHeaderGlassConfigurationJson)
                             .apply()
                         result.success(null)
                     }

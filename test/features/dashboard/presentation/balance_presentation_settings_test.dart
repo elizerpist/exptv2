@@ -29,7 +29,7 @@ void main() {
       );
       expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
       expect(controller.value.balanceCarouselWaveAnimationEnabled, isTrue);
-      expect(controller.value.balanceContentCardColoredBorderEnabled, isTrue);
+      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
       expect(controller.value.balanceContentCardBorderOpacity, 1);
       expect(
         controller.value.visibleBalanceCarouselCardKinds,
@@ -237,7 +237,7 @@ void main() {
       addTearDown(controller.dispose);
 
       expect(controller.value.balanceCarouselWaveAnimationEnabled, isTrue);
-      expect(controller.value.balanceContentCardColoredBorderEnabled, isTrue);
+      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
       expect(controller.value.balanceCarouselBorderOpacity, 1);
       expect(controller.value.balanceContentCardBorderOpacity, 1);
 

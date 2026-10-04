@@ -32,6 +32,7 @@ void main() {
           'balanceHeaderPartitionHeightPercent': 80,
           'balanceMonthCombinedCardPresentation':
               BalanceMonthCombinedCardPresentation.spendingRhythm.index,
+          'balanceHeaderGlassConfigurationJson': '{"renderer":"glassKit"}',
         };
       });
 
@@ -56,6 +57,10 @@ void main() {
         preferences.balanceMonthCombinedCardPresentation,
         BalanceMonthCombinedCardPresentation.spendingRhythm,
       );
+      expect(
+        preferences.balanceHeaderGlassConfigurationJson,
+        '{"renderer":"glassKit"}',
+      );
     },
   );
 
@@ -79,6 +84,7 @@ void main() {
         balanceHeaderPartitionHeightPercent: 80,
         balanceMonthCombinedCardPresentation:
             BalanceMonthCombinedCardPresentation.spendingRhythm,
+        balanceHeaderGlassConfigurationJson: '{"renderer":"glassKit"}',
       ),
     );
 
@@ -96,6 +102,7 @@ void main() {
       'balanceHeaderPartitionHeightPercent': 80,
       'balanceMonthCombinedCardPresentation':
           BalanceMonthCombinedCardPresentation.spendingRhythm.index,
+      'balanceHeaderGlassConfigurationJson': '{"renderer":"glassKit"}',
     });
   });
 

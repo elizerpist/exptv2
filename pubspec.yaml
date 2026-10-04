@@ -10,6 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_svg: ^2.3.0
+  glass_kit: ^4.0.2
+  glassmorphism: ^4.0.0
+  flutter_glass_ui_kit: ^1.0.5
+  liquid_glass_widgets: ^1.8.1
   iconsax_plus: ^1.0.0
   vector_graphics: ^1.2.2
   web: ^1.1.1

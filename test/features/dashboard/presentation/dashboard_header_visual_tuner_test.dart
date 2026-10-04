@@ -21,6 +21,7 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_setti
 import 'package:fluvi/features/dashboard/mind/domain/mind_header_score_chart_presentation.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_glass_configuration.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_history_projection.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
@@ -96,6 +97,101 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
       settings.dispose();
+    },
+  );
+
+  testWidgets(
+    'BGV-04: Balance glass controls are progressive, live, and retain independent material panels',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final balance = BalancePresentationController();
+      addTearDown(balance.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 1700,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              balancePresentationSettings: balance,
+            ),
+          ),
+        ),
+      );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.balancePresentation,
+      ]);
+
+      expect(find.text('Balance header visual'), findsOneWidget);
+      expect(find.text('Glass renderer'), findsNothing);
+
+      final partition = find.byKey(
+        const ValueKey<String>(
+          'balance-header-graph-presentation-incomeExpensePartition',
+        ),
+      );
+      await tester.ensureVisible(partition);
+      await tester.tap(partition);
+      await tester.pump();
+      expect(
+        balance.value.headerGraphPresentation,
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
+      );
+      for (final key in <ValueKey<String>>[
+        const ValueKey<String>('balance-header-partition-height'),
+        const ValueKey<String>('balance-header-glass-vertical-position'),
+        const ValueKey<String>('balance-header-glass-income-intensity'),
+        const ValueKey<String>('balance-header-glass-renderer'),
+        const ValueKey<String>('balance-header-glass-independent-income-fill'),
+      ]) {
+        await tester.ensureVisible(find.byKey(key));
+        expect(find.byKey(key), findsOneWidget);
+      }
+
+      final renderer = find.byKey(
+        const ValueKey<String>('balance-header-glass-renderer'),
+      );
+      final selector = tester
+          .widget<DropdownButtonFormField<BalanceHeaderGlassRenderer>>(
+            renderer,
+          );
+      selector.onChanged!(BalanceHeaderGlassRenderer.liquidGlassWidgets);
+      await tester.pump();
+      expect(
+        balance.value.headerGlassConfiguration.renderer,
+        BalanceHeaderGlassRenderer.liquidGlassWidgets,
+      );
+      expect(find.text('Quality'), findsOneWidget);
+
+      final independent = find.byKey(
+        const ValueKey<String>('balance-header-glass-independent-income-fill'),
+      );
+      await tester.ensureVisible(independent);
+      await tester.tap(independent);
+      await tester.pump();
+      expect(
+        balance.value.headerGlassConfiguration.independentIncomeFillSettings,
+        isTrue,
+      );
+      final materialPanel = find.byKey(
+        const ValueKey<String>('balance-header-glass-renderer-settings'),
+      );
+      await tester.ensureVisible(materialPanel);
+      await tester.tap(materialPanel);
+      // The header tuning controller intentionally owns a continuously running
+      // preview ticker, so settling the whole tree is neither meaningful nor
+      // finite. Advance only the ExpansionTile's authored transition.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Track'), findsOneWidget);
+      expect(find.text('Income fill'), findsOneWidget);
+      expect(find.text('Thickness'), findsNWidgets(2));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
     },
   );
 

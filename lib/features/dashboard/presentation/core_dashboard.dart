@@ -40,6 +40,7 @@ import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'core_modes/balance_presentation_settings.dart';
+import 'core_modes/balance_header_glass_configuration.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
 import 'core_modes/budget_category_distribution_visual_bank.dart';
@@ -542,6 +543,11 @@ class _CoreDashboardState extends State<CoreDashboard>
         ..setHeaderPartitionHeightPercent(
           restored.balanceHeaderPartitionHeightPercent,
         )
+        ..setHeaderGlassConfiguration(
+          BalanceHeaderGlassConfiguration.decode(
+            restored.balanceHeaderGlassConfigurationJson,
+          ),
+        )
         ..setMonthCombinedCardPresentation(
           restored.balanceMonthCombinedCardPresentation,
         );
@@ -568,6 +574,10 @@ class _CoreDashboardState extends State<CoreDashboard>
             _balancePresentationSettings.value.headerPartitionHeightPercent,
         balanceMonthCombinedCardPresentation:
             _balancePresentationSettings.value.monthCombinedCardPresentation,
+        balanceHeaderGlassConfigurationJson: _balancePresentationSettings
+            .value
+            .headerGlassConfiguration
+            .encode(),
       ),
     );
   }

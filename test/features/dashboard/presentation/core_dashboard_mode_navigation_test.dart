@@ -55,7 +55,7 @@ void main() {
       );
 
       for (var index = 0; index < 30; index += 1) {
-        await _dragHeaderSelector(tester, const Offset(0, -36));
+        await _dragHeaderSelector(tester, const Offset(0, -68));
         // This parent-owner regression deliberately observes thirty distinct
         // completed crossings, so a new gesture cannot overlap the prior
         // snap and turn the assertion into a gesture-arena timing test.
@@ -148,7 +148,7 @@ void main() {
       await tester.pump();
       expect(modes.committedMode, DashboardModeSpec.balance);
       await gesture.up();
-      await _dragHeaderSelector(tester, const Offset(0, -36));
+      await _dragHeaderSelector(tester, const Offset(0, -68));
       expect(modes.committedMode, DashboardModeSpec.budget);
       final buildsAfterAtomicSwitch = dashboard.performanceCounters.value(
         DashboardPerformanceMetric.dashboardRootBuild,
@@ -188,7 +188,7 @@ void main() {
       expect(dashboard.expansion.progress, dashboard.metrics.collapseTravel);
       expect(modes.committedMode, DashboardModeSpec.balance);
 
-      await _dragHeaderSelector(tester, const Offset(0, -36));
+      await _dragHeaderSelector(tester, const Offset(0, -68));
       expect(modes.committedMode, DashboardModeSpec.budget);
       expect(dashboard.expansion.progress, dashboard.metrics.collapseTravel);
     },
@@ -274,7 +274,7 @@ Future<void> _dragHeader(WidgetTester tester, Offset offset) async {
 Future<void> _dragHeaderSelector(WidgetTester tester, Offset offset) async {
   await tester.drag(
     find.byKey(
-      const ValueKey<String>('dashboard-header-mode-selector-viewport'),
+      const ValueKey<String>('dashboard-header-mode-selector-input-gain'),
     ),
     offset,
   );

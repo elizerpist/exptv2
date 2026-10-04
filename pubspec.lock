@@ -75,6 +75,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_glass_ui_kit:
+    dependency: "direct main"
+    description:
+      name: flutter_glass_ui_kit
+      sha256: bd877dd1b9aa5286d94ec38717d106666aa3fb8e6ed1b80dc2a1d9a8366b8361
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.5"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -101,6 +109,22 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  glass_kit:
+    dependency: "direct main"
+    description:
+      name: glass_kit
+      sha256: ca071693b6b1c5ddc628aee030df0eb99a4063b55b5928cf84bb82f9bc32595f
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.0.2"
+  glassmorphism:
+    dependency: "direct main"
+    description:
+      name: glassmorphism
+      sha256: f4f36b7a04cc82ec6fb6cee4734ce94e91234e270c255f70d56c45f289df0ba2
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.0.0"
   http:
     dependency: transitive
     description:
@@ -162,6 +186,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
+  liquid_glass_widgets:
+    dependency: "direct main"
+    description:
+      name: liquid_glass_widgets
+      sha256: "07910c3ccabaacadb5519ded78a970d7fdb8718b4b4211c284b3d34614d26a42"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.8.1"
   matcher:
     dependency: transitive
     description:
@@ -361,4 +393,4 @@ packages:
     version: "7.0.1"
 sdks:
   dart: ">=3.11.1 <4.0.0"
-  flutter: ">=3.35.0"
+  flutter: ">=3.41.0"

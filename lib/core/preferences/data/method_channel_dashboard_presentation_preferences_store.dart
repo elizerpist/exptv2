@@ -71,6 +71,8 @@ final class MethodChannelDashboardPresentationPreferencesStore
           values['balanceMonthCombinedCardPresentation'] as int?,
           BalanceMonthCombinedCardPresentation.incomeExpense,
         ),
+        balanceHeaderGlassConfigurationJson:
+            values['balanceHeaderGlassConfigurationJson'] as String? ?? '',
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -97,6 +99,8 @@ final class MethodChannelDashboardPresentationPreferencesStore
               preferences.balanceHeaderPartitionHeightPercent,
           'balanceMonthCombinedCardPresentation':
               preferences.balanceMonthCombinedCardPresentation.index,
+          'balanceHeaderGlassConfigurationJson':
+              preferences.balanceHeaderGlassConfigurationJson,
         },
       );
 }

@@ -27,6 +27,7 @@ final class MindSumScopeTotalHeader extends StatelessWidget {
     this.labelKey,
     this.amountKey,
     this.amountCompatibilityKey,
+    this.prominentAmount = false,
   });
 
   static const height = 18.0;
@@ -37,6 +38,7 @@ final class MindSumScopeTotalHeader extends StatelessWidget {
   final Key? labelKey;
   final Key? amountKey;
   final Key? amountCompatibilityKey;
+  final bool prominentAmount;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -58,27 +60,43 @@ final class MindSumScopeTotalHeader extends StatelessWidget {
             ),
           ),
         ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: FluviVisualTokens.surfaceMuted,
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            child: KeyedSubtree(
-              key: amountCompatibilityKey,
-              child: Text(
-                amount,
-                key: amountKey,
-                style: const TextStyle(
-                  color: FluviVisualTokens.textSecondary,
-                  fontSize: 8,
-                  fontWeight: FontWeight.w800,
+        prominentAmount
+            ? KeyedSubtree(
+                key: amountCompatibilityKey,
+                child: Text(
+                  amount,
+                  key: amountKey,
+                  style: const TextStyle(
+                    color: Color(0xff06194f),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              )
+            : DecoratedBox(
+                decoration: BoxDecoration(
+                  color: FluviVisualTokens.surfaceMuted,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  child: KeyedSubtree(
+                    key: amountCompatibilityKey,
+                    child: Text(
+                      amount,
+                      key: amountKey,
+                      style: const TextStyle(
+                        color: FluviVisualTokens.textSecondary,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ),
       ],
     ),
   );
