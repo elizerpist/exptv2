@@ -23,8 +23,18 @@ void main() {
                 .materials[BalanceHeaderGlassRenderer.liquidGlassWidgets]!
                 .copyWith(thickness: 35),
           );
+      final incomeField = liquid
+          .copyWith(independentIncomeFillSettings: true)
+          .updateMaterial(
+            incomeFill: true,
+            material: liquid
+                .materialFor(incomeFill: true)
+                .copyWith(tintArgb: 0xff84c7ff, tintOpacity: .21),
+          );
 
-      final restored = BalanceHeaderGlassConfiguration.decode(liquid.encode());
+      final restored = BalanceHeaderGlassConfiguration.decode(
+        incomeField.encode(),
+      );
       expect(
         restored.materials[BalanceHeaderGlassRenderer.glassKit]!.blurX,
         18,
@@ -35,6 +45,8 @@ void main() {
             .thickness,
         35,
       );
+      expect(restored.materialFor(incomeFill: true).tintArgb, 0xff84c7ff);
+      expect(restored.materialFor(incomeFill: true).tintOpacity, .21);
     },
   );
 
@@ -64,6 +76,49 @@ void main() {
     expect(top, lessThan(bottom));
     expect(top, greaterThanOrEqualTo(41));
   });
+
+  test(
+    'BGV-01: reset restores only the selected renderer track and field defaults',
+    () {
+      const defaults = BalanceHeaderGlassConfiguration();
+      final otherRenderer = defaults
+          .copyWith(renderer: BalanceHeaderGlassRenderer.glassKit)
+          .updateMaterial(
+            incomeFill: false,
+            material: defaults.materials[BalanceHeaderGlassRenderer.glassKit]!
+                .copyWith(blurX: 17),
+          );
+      final selected = otherRenderer
+          .copyWith(
+            renderer: BalanceHeaderGlassRenderer.flutterNative,
+            independentIncomeFillSettings: true,
+          )
+          .updateMaterial(
+            incomeFill: false,
+            material: otherRenderer
+                .materials[BalanceHeaderGlassRenderer.flutterNative]!
+                .copyWith(blurX: 22),
+          )
+          .updateMaterial(
+            incomeFill: true,
+            material: otherRenderer
+                .fillMaterials[BalanceHeaderGlassRenderer.flutterNative]!
+                .copyWith(tintOpacity: .31),
+          );
+
+      final reset = selected.resetSelectedRenderer();
+
+      expect(
+        reset.materials[BalanceHeaderGlassRenderer.flutterNative],
+        defaults.materials[BalanceHeaderGlassRenderer.flutterNative],
+      );
+      expect(
+        reset.fillMaterials[BalanceHeaderGlassRenderer.flutterNative],
+        defaults.fillMaterials[BalanceHeaderGlassRenderer.flutterNative],
+      );
+      expect(reset.materials[BalanceHeaderGlassRenderer.glassKit]!.blurX, 17);
+    },
+  );
 
   testWidgets(
     'BGV-03: every selected renderer mounts exactly one shared live geometry',

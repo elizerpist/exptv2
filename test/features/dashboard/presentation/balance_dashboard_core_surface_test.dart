@@ -20,6 +20,7 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dar
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_glass_configuration.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_category_movers_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
@@ -221,6 +222,86 @@ void main() {
       visual.dispose();
       frame.dispose();
       balance.dispose();
+    },
+  );
+
+  testWidgets(
+    'BGF-10: expanded partition mounts one glass body while line and collapsed endpoints mount none',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
+      final settings = ValueNotifier<BalancePresentationSettings>(
+        const BalancePresentationSettings.defaults().copyWith(
+          headerGraphPresentation:
+              BalanceHeaderGraphPresentation.incomeExpensePartition,
+          headerGlassConfiguration: BalanceHeaderGlassConfiguration(
+            renderer: BalanceHeaderGlassRenderer.flutterNative,
+          ),
+          revision: 1,
+        ),
+      );
+      addTearDown(balance.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balancePresentation: balance,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-glass-physical-body'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(BackdropFilter), findsOneWidget);
+
+      settings.value = settings.value.copyWith(
+        headerGraphPresentation: BalanceHeaderGraphPresentation.lineChart,
+        revision: 2,
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-glass-physical-body'),
+        ),
+        findsNothing,
+      );
+      expect(find.byType(BackdropFilter), findsNothing);
+
+      settings.value = settings.value.copyWith(
+        headerGraphPresentation:
+            BalanceHeaderGraphPresentation.incomeExpensePartition,
+        revision: 3,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(collapseFraction: 1),
+              balancePresentation: balance,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-glass-physical-body'),
+        ),
+        findsNothing,
+      );
+      expect(find.byType(BackdropFilter), findsNothing);
     },
   );
 
@@ -3844,6 +3925,7 @@ DashboardCoreModePresentation _balanceModePresentation({
   DashboardLayoutMetrics? metrics,
   double principalModeContentExtraHeight = 0,
   bool hasPhysicalRail = true,
+  double collapseFraction = 0,
 }) {
   final resolvedMetrics =
       metrics ??
@@ -3852,7 +3934,7 @@ DashboardCoreModePresentation _balanceModePresentation({
     geometry: DashboardGeometryResolver.resolve(
       metrics: resolvedMetrics,
       mode: DashboardModeSpec.balance,
-      collapseProgress: 0,
+      collapseProgress: resolvedMetrics.collapseTravel * collapseFraction,
       isRailExpanded: false,
       hasPhysicalRail: hasPhysicalRail,
       principalModeContentExtraHeight: principalModeContentExtraHeight,

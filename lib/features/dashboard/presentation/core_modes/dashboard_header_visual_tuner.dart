@@ -1393,6 +1393,7 @@ final class _BalanceHeaderGlassControls extends StatelessWidget {
                 title: 'Income fill',
                 renderer: glass.renderer,
                 material: glass.materialFor(incomeFill: true),
+                isIncomeMaterialField: true,
                 onChanged: (material) => _set(
                   glass.updateMaterial(incomeFill: true, material: material),
                 ),
@@ -1420,15 +1421,55 @@ final class _BalanceGlassMaterialControls extends StatelessWidget {
     required this.material,
     required this.onChanged,
     this.title,
+    this.isIncomeMaterialField = false,
   });
 
   final String? title;
   final BalanceHeaderGlassRenderer renderer;
   final BalanceGlassMaterialConfiguration material;
   final ValueChanged<BalanceGlassMaterialConfiguration> onChanged;
+  final bool isIncomeMaterialField;
 
   @override
   Widget build(BuildContext context) {
+    if (isIncomeMaterialField) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (title != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(title!),
+            ),
+          _BalanceGlassSlider(
+            label: 'Glass tint opacity',
+            value: material.tintOpacity,
+            min: 0,
+            max: 1,
+            onChanged: (value) =>
+                onChanged(material.copyWith(tintOpacity: value)),
+          ),
+          _BalanceGlassColorField(
+            label: 'Glass tint color',
+            value: material.tintArgb,
+            onChanged: (value) => onChanged(material.copyWith(tintArgb: value)),
+          ),
+          _BalanceGlassGradientControls(
+            material: material,
+            onChanged: onChanged,
+            includeBorderGradient: false,
+          ),
+          _BalanceGlassSlider(
+            label: 'Specular highlight opacity',
+            value: material.specularOpacity,
+            min: 0,
+            max: 1,
+            onChanged: (value) =>
+                onChanged(material.copyWith(specularOpacity: value)),
+          ),
+        ],
+      );
+    }
     final common = <Widget>[
       if (title != null)
         Padding(padding: const EdgeInsets.only(top: 6), child: Text(title!)),
@@ -1545,12 +1586,6 @@ final class _BalanceGlassMaterialControls extends StatelessWidget {
               value: material.boundedBlur,
               onChanged: (value) =>
                   onChanged(material.copyWith(boundedBlur: value)),
-            ),
-            _BalanceGlassBoolean(
-              label: 'Backdrop grouping',
-              value: material.backdropGrouping,
-              onChanged: (value) =>
-                  onChanged(material.copyWith(backdropGrouping: value)),
             ),
             _BalanceGlassEnumField<BalanceGlassTileMode>(
               label: 'Tile mode',
@@ -1802,10 +1837,12 @@ final class _BalanceGlassGradientControls extends StatelessWidget {
   const _BalanceGlassGradientControls({
     required this.material,
     required this.onChanged,
+    this.includeBorderGradient = true,
   });
 
   final BalanceGlassMaterialConfiguration material;
   final ValueChanged<BalanceGlassMaterialConfiguration> onChanged;
+  final bool includeBorderGradient;
 
   @override
   Widget build(BuildContext context) => ExpansionTile(
@@ -1864,10 +1901,11 @@ final class _BalanceGlassGradientControls extends StatelessWidget {
         onChanged: (value) =>
             onChanged(material.copyWith(gradientEndStop: value)),
       ),
-      _BalanceGlassBorderGradientControls(
-        material: material,
-        onChanged: onChanged,
-      ),
+      if (includeBorderGradient)
+        _BalanceGlassBorderGradientControls(
+          material: material,
+          onChanged: onChanged,
+        ),
     ],
   );
 }

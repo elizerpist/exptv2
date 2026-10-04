@@ -94,7 +94,6 @@ final class BalanceHeaderGlassBar extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final radius = height / 2;
-          final fillWidth = constraints.maxWidth * ratio;
           return RepaintBoundary(
             key: ValueKey<String>(
               'balance-header-glass-${configuration.renderer.name}',
@@ -103,38 +102,16 @@ final class BalanceHeaderGlassBar extends StatelessWidget {
               fit: StackFit.expand,
               children: <Widget>[
                 _BalanceGlassMaterial(
-                  material: configuration.materialFor(incomeFill: false),
+                  physicalKey: const ValueKey<String>(
+                    'balance-header-glass-physical-body',
+                  ),
+                  trackMaterial: configuration.materialFor(incomeFill: false),
+                  incomeMaterial: configuration.materialFor(incomeFill: true),
+                  incomeRatio: ratio,
                   renderer: configuration.renderer,
                   quality: configuration.quality,
                   borderRadius: radius,
-                  isIncomeFill: false,
                 ),
-                if (fillWidth > 0)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      key: const ValueKey<String>(
-                        'balance-header-income-expense-income',
-                      ),
-                      width: fillWidth,
-                      height: height,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.horizontal(
-                          left: Radius.circular(radius),
-                          right: ratio == 1
-                              ? Radius.circular(radius)
-                              : Radius.zero,
-                        ),
-                        child: _BalanceGlassMaterial(
-                          material: configuration.materialFor(incomeFill: true),
-                          renderer: configuration.renderer,
-                          quality: configuration.quality,
-                          borderRadius: radius,
-                          isIncomeFill: true,
-                        ),
-                      ),
-                    ),
-                  ),
                 _BalanceGlassBarLabels(incomeRatio: ratio),
               ],
             ),
@@ -182,210 +159,143 @@ final class _BalanceGlassBarLabels extends StatelessWidget {
   }
 }
 
-/// One package-specific material surface. It deliberately owns no size or
-/// financial inputs: callers have already resolved the common capsule.
+/// One package-specific physical material surface. Geometry and financial
+/// inputs are already resolved by the host. The income ratio is deliberately
+/// an internal material field, never another backdrop or glass surface.
 final class _BalanceGlassMaterial extends StatelessWidget {
   const _BalanceGlassMaterial({
-    required this.material,
+    required this.physicalKey,
+    required this.trackMaterial,
+    required this.incomeMaterial,
+    required this.incomeRatio,
     required this.renderer,
     required this.quality,
     required this.borderRadius,
-    required this.isIncomeFill,
   });
 
-  final BalanceGlassMaterialConfiguration material;
+  final Key physicalKey;
+  final BalanceGlassMaterialConfiguration trackMaterial;
+  final BalanceGlassMaterialConfiguration incomeMaterial;
+  final double incomeRatio;
   final BalanceHeaderGlassRenderer renderer;
   final BalanceGlassQuality quality;
   final double borderRadius;
-  final bool isIncomeFill;
 
   @override
-  Widget build(BuildContext context) {
-    final child = const SizedBox.expand();
-    return switch (renderer) {
-      BalanceHeaderGlassRenderer.baseline => _baseline(child),
-      BalanceHeaderGlassRenderer.flutterNative => _native(child),
-      BalanceHeaderGlassRenderer.glassKit => _glassKit(child),
-      BalanceHeaderGlassRenderer.glassmorphism => _glassmorphism(child),
-      BalanceHeaderGlassRenderer.flutterGlassUiKit => _flutterGlassUiKit(child),
-      BalanceHeaderGlassRenderer.liquidGlassWidgets => _liquidGlass(child),
-    };
-  }
-
-  Widget _baseline(Widget child) => DecoratedBox(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(borderRadius),
-      gradient: LinearGradient(
-        colors: <Color>[
-          (isIncomeFill ? const Color(0xff24ad73) : const Color(0xffe05672))
-              .withValues(alpha: .95),
-          isIncomeFill ? const Color(0xff24ad73) : const Color(0xffe05672),
-        ],
-      ),
-    ),
-    child: child,
+  Widget build(BuildContext context) => SizedBox.expand(
+    key: physicalKey,
+    child: switch (renderer) {
+      BalanceHeaderGlassRenderer.baseline => _baseline(),
+      BalanceHeaderGlassRenderer.flutterNative => _native(),
+      BalanceHeaderGlassRenderer.glassKit => _glassKit(),
+      BalanceHeaderGlassRenderer.glassmorphism => _glassmorphism(),
+      BalanceHeaderGlassRenderer.flutterGlassUiKit => _flutterGlassUiKit(),
+      BalanceHeaderGlassRenderer.liquidGlassWidgets => _liquidGlass(),
+    },
   );
 
-  Widget _native(Widget child) {
-    final inner = Stack(
+  Widget _baseline() => DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(borderRadius),
+      gradient: _baselineGradient(const Color(0xffdc4e75), trackMaterial),
+      boxShadow: _shadows(trackMaterial),
+    ),
+    child: Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(borderRadius),
-            gradient: _gradient(
-              material.gradientStartArgb,
-              material.gradientStartOpacity,
-              material.gradientEndArgb,
-              material.gradientEndOpacity,
-              material.gradientDirection,
-              startStop: material.gradientStartStop,
-              endStop: material.gradientEndStop,
-            ),
-            border: Border.all(
-              color: _color(material.borderArgb, material.borderOpacity),
-              width: material.borderWidth,
-            ),
-            boxShadow: _shadows(material),
-          ),
-          child: child,
+        _BalanceGlassIncomeMaterialField(
+          material: incomeMaterial,
+          incomeRatio: incomeRatio,
+          borderRadius: borderRadius,
+          baseline: true,
         ),
-        if (material.specularOpacity > 0)
+        if (trackMaterial.borderWidth > 0)
           IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(borderRadius),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[
-                    Colors.white.withValues(alpha: material.specularOpacity),
-                    Colors.white.withValues(alpha: 0),
-                  ],
-                  stops: const <double>[0, .55],
-                ),
+            child: CustomPaint(
+              painter: _BalanceGlassGradientBorderPainter(
+                gradient: _borderGradient(trackMaterial),
+                borderRadius: borderRadius,
+                borderWidth: trackMaterial.borderWidth,
               ),
             ),
           ),
       ],
+    ),
+  );
+
+  Widget _native() {
+    final body = _BalanceGlassMaterialFields(
+      trackMaterial: trackMaterial,
+      incomeMaterial: incomeMaterial,
+      incomeRatio: incomeRatio,
+      borderRadius: borderRadius,
+      paintsTrack: true,
+      paintsLocalizedRim: true,
     );
-    final filtered = material.backdropGrouping
-        ? BackdropFilter.grouped(
-            filterConfig: ImageFilterConfig.blur(
-              sigmaX: material.blurX,
-              sigmaY: material.blurY,
-              bounded: material.boundedBlur,
-              tileMode: _tileMode(material.tileMode),
-            ),
-            blendMode: _blendMode(material.blendMode),
-            child: inner,
-          )
-        : BackdropFilter(
-            filterConfig: ImageFilterConfig.blur(
-              sigmaX: material.blurX,
-              sigmaY: material.blurY,
-              bounded: material.boundedBlur,
-              tileMode: _tileMode(material.tileMode),
-            ),
-            blendMode: _blendMode(material.blendMode),
-            child: inner,
-          );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: material.backdropGrouping
-          ? BackdropGroup(child: filtered)
-          : filtered,
+    return _shadowWrapper(
+      trackMaterial,
+      ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: BackdropFilter(
+          filterConfig: ImageFilterConfig.blur(
+            sigmaX: trackMaterial.blurX,
+            sigmaY: trackMaterial.blurY,
+            bounded: trackMaterial.boundedBlur,
+            tileMode: _tileMode(trackMaterial.tileMode),
+          ),
+          blendMode: _blendMode(trackMaterial.blendMode),
+          child: body,
+        ),
+      ),
     );
   }
 
-  Widget _glassKit(Widget child) => glass_kit.GlassContainer(
-    blur: material.blurX,
-    isFrostedGlass: material.frostedGlass,
-    frostedOpacity: material.frostedOpacity,
-    color: _color(material.tintArgb, material.tintOpacity),
-    gradient: _gradient(
-      material.gradientStartArgb,
-      material.gradientStartOpacity,
-      material.gradientEndArgb,
-      material.gradientEndOpacity,
-      material.gradientDirection,
-      startStop: material.gradientStartStop,
-      endStop: material.gradientEndStop,
-    ),
-    borderColor: _color(material.borderArgb, material.borderOpacity),
-    borderGradient: _gradient(
-      material.borderGradientStartArgb,
-      material.borderGradientStartOpacity,
-      material.borderGradientEndArgb,
-      material.borderGradientEndOpacity,
-      material.borderGradientDirection,
-      startStop: material.borderGradientStartStop,
-      endStop: material.borderGradientEndStop,
-    ),
-    borderWidth: material.borderWidth,
+  Widget _glassKit() => glass_kit.GlassContainer(
+    blur: trackMaterial.blurX,
+    isFrostedGlass: trackMaterial.frostedGlass,
+    frostedOpacity: trackMaterial.frostedOpacity,
+    color: _color(trackMaterial.tintArgb, trackMaterial.tintOpacity),
+    gradient: _materialGradient(trackMaterial, blendTint: true),
+    borderColor: _color(trackMaterial.borderArgb, trackMaterial.borderOpacity),
+    borderGradient: _borderGradient(trackMaterial),
+    borderWidth: trackMaterial.borderWidth,
     borderRadius: BorderRadius.circular(borderRadius),
-    boxShadow: _shadows(material),
-    child: child,
+    boxShadow: _shadows(trackMaterial),
+    child: _packageMaterialField(),
   );
 
-  Widget _glassmorphism(Widget child) => glassmorphism.GlassmorphicContainer(
+  Widget _glassmorphism() => glassmorphism.GlassmorphicContainer(
     borderRadius: borderRadius,
-    blur: material.blurX,
-    border: material.borderWidth,
-    linearGradient: _gradient(
-      material.gradientStartArgb,
-      material.gradientStartOpacity,
-      material.gradientEndArgb,
-      material.gradientEndOpacity,
-      material.gradientDirection,
-      startStop: material.gradientStartStop,
-      endStop: material.gradientEndStop,
-    ),
-    borderGradient: _gradient(
-      material.borderGradientStartArgb,
-      material.borderGradientStartOpacity,
-      material.borderGradientEndArgb,
-      material.borderGradientEndOpacity,
-      material.borderGradientDirection,
-      startStop: material.borderGradientStartStop,
-      endStop: material.borderGradientEndStop,
-    ),
-    boxShadow: _shadows(material),
-    child: child,
+    blur: trackMaterial.blurX,
+    border: trackMaterial.borderWidth,
+    linearGradient: _materialGradient(trackMaterial, blendTint: true),
+    borderGradient: _borderGradient(trackMaterial),
+    boxShadow: _shadows(trackMaterial),
+    child: _packageMaterialField(),
   );
 
-  Widget _flutterGlassUiKit(Widget child) => glass_ui.GlassContainer(
-    blur: material.blurX,
-    opacity: material.tintOpacity,
-    frostColor: _color(material.tintArgb, material.tintOpacity),
-    borderRadius: BorderRadius.circular(borderRadius),
-    borderWidth: material.borderWidth,
-    borderGradient: _gradient(
-      material.borderGradientStartArgb,
-      material.borderGradientStartOpacity,
-      material.borderGradientEndArgb,
-      material.borderGradientEndOpacity,
-      material.borderGradientDirection,
-      startStop: material.borderGradientStartStop,
-      endStop: material.borderGradientEndStop,
+  Widget _flutterGlassUiKit() => _shadowWrapper(
+    trackMaterial,
+    glass_ui.GlassContainer(
+      blur: trackMaterial.blurX,
+      opacity: trackMaterial.tintOpacity,
+      frostColor: _color(trackMaterial.tintArgb, trackMaterial.tintOpacity),
+      borderRadius: BorderRadius.circular(borderRadius),
+      borderWidth: trackMaterial.borderWidth,
+      borderGradient: _borderGradient(trackMaterial),
+      backgroundGradient: _materialGradient(trackMaterial),
+      performance: trackMaterial.performanceLow
+          ? glass_ui.GlassPerformance.low
+          : glass_ui.GlassPerformance.medium,
+      enableBlur: trackMaterial.blurX > 0,
+      child: _packageMaterialField(),
     ),
-    backgroundGradient: _gradient(
-      material.gradientStartArgb,
-      material.gradientStartOpacity,
-      material.gradientEndArgb,
-      material.gradientEndOpacity,
-      material.gradientDirection,
-      startStop: material.gradientStartStop,
-      endStop: material.gradientEndStop,
-    ),
-    performance: material.performanceLow
-        ? glass_ui.GlassPerformance.low
-        : glass_ui.GlassPerformance.medium,
-    enableBlur: material.blurX > 0,
-    child: child,
   );
 
-  Widget _liquidGlass(Widget child) => liquid.GlassContainer(
+  Widget _liquidGlass() => liquid.GlassContainer(
+    // The exact 1.8.1 source documents this as the valid independent
+    // per-widget Premium path. A page-wide sampling scope is not required by
+    // Impeller Premium and would broaden this small Header-only surface.
     useOwnLayer: true,
     quality: switch (quality) {
       BalanceGlassQuality.minimal => liquid.GlassQuality.minimal,
@@ -394,20 +304,20 @@ final class _BalanceGlassMaterial extends StatelessWidget {
     },
     shape: liquid.LiquidRoundedRectangle(borderRadius: borderRadius),
     settings: liquid.LiquidGlassSettings(
-      visibility: material.tintOpacity,
-      glassColor: _color(material.tintArgb, material.tintOpacity),
-      thickness: material.thickness,
-      blur: material.blurX,
-      chromaticAberration: material.chromaticAberration,
-      lightAngle: material.lightAngle,
-      lightIntensity: material.lightIntensity,
-      ambientStrength: material.ambientStrength,
-      ambientRim: material.ambientRim,
-      fresnelStrength: material.fresnelStrength,
-      refractiveIndex: material.refractiveIndex,
-      saturation: material.saturation,
-      glowIntensity: material.glowIntensity,
-      specularSharpness: switch (material.specularSharpness) {
+      visibility: trackMaterial.tintOpacity,
+      glassColor: _color(trackMaterial.tintArgb, trackMaterial.tintOpacity),
+      thickness: trackMaterial.thickness,
+      blur: trackMaterial.blurX,
+      chromaticAberration: trackMaterial.chromaticAberration,
+      lightAngle: trackMaterial.lightAngle,
+      lightIntensity: trackMaterial.lightIntensity,
+      ambientStrength: trackMaterial.ambientStrength,
+      ambientRim: trackMaterial.ambientRim,
+      fresnelStrength: trackMaterial.fresnelStrength,
+      refractiveIndex: trackMaterial.refractiveIndex,
+      saturation: trackMaterial.saturation,
+      glowIntensity: trackMaterial.glowIntensity,
+      specularSharpness: switch (trackMaterial.specularSharpness) {
         BalanceGlassSpecularSharpness.soft =>
           liquid.GlassSpecularSharpness.soft,
         BalanceGlassSpecularSharpness.medium =>
@@ -415,42 +325,111 @@ final class _BalanceGlassMaterial extends StatelessWidget {
         BalanceGlassSpecularSharpness.sharp =>
           liquid.GlassSpecularSharpness.sharp,
       },
-      standardOpacityMultiplier: material.standardOpacityMultiplier,
-      shadowElevation: material.shadowElevation,
-      shadow: _shadows(material),
-      whitenStrength: material.whitenStrength,
-      whitenGated: material.whitenGated,
-      edgeAbsorption: material.edgeAbsorption,
-      backerColor: material.backerArgb == 0 ? null : Color(material.backerArgb),
-      bodyMode: switch (material.bodyMode) {
+      standardOpacityMultiplier: trackMaterial.standardOpacityMultiplier,
+      shadowElevation: trackMaterial.shadowElevation,
+      shadow: _shadows(trackMaterial),
+      whitenStrength: trackMaterial.whitenStrength,
+      whitenGated: trackMaterial.whitenGated,
+      edgeAbsorption: trackMaterial.edgeAbsorption,
+      backerColor: trackMaterial.backerArgb == 0
+          ? null
+          : Color(trackMaterial.backerArgb),
+      bodyMode: switch (trackMaterial.bodyMode) {
         BalanceGlassBodyMode.adaptive => liquid.GlassBodyMode.adaptive,
         BalanceGlassBodyMode.clear => liquid.GlassBodyMode.clear,
       },
-      platformViewMode: switch (material.platformViewMode) {
+      platformViewMode: switch (trackMaterial.platformViewMode) {
         BalanceGlassPlatformViewMode.fallbackColor =>
           liquid.PlatformViewGlassMode.fallbackColor,
         BalanceGlassPlatformViewMode.passthrough =>
           liquid.PlatformViewGlassMode.passthrough,
       },
-      platformViewFallbackColor: material.platformViewFallbackArgb == 0
+      platformViewFallbackColor: trackMaterial.platformViewFallbackArgb == 0
           ? null
-          : Color(material.platformViewFallbackArgb),
+          : Color(trackMaterial.platformViewFallbackArgb),
     ),
-    allowElevation: material.shadowEnabled,
-    glowIntensity: material.glowIntensity,
+    allowElevation: trackMaterial.shadowEnabled,
+    glowIntensity: trackMaterial.glowIntensity,
     platformViewBackdrop:
-        material.platformViewMode == BalanceGlassPlatformViewMode.fallbackColor,
-    child: child,
+        trackMaterial.platformViewMode ==
+        BalanceGlassPlatformViewMode.fallbackColor,
+    child: _BalanceGlassMaterialFields(
+      trackMaterial: trackMaterial,
+      incomeMaterial: incomeMaterial,
+      incomeRatio: incomeRatio,
+      borderRadius: borderRadius,
+      paintsTrack: true,
+      paintsLocalizedRim: true,
+    ),
+  );
+
+  Widget _packageMaterialField() => _BalanceGlassIncomeMaterialField(
+    material: incomeMaterial,
+    incomeRatio: incomeRatio,
+    borderRadius: borderRadius,
   );
 
   static Color _color(int argb, double opacity) =>
       Color(argb).withValues(alpha: opacity.clamp(0, 1).toDouble());
 
+  static Color _materialColor(
+    BalanceGlassMaterialConfiguration material,
+    int argb,
+    double opacity, {
+    required bool blendTint,
+  }) {
+    final base = _color(argb, opacity);
+    return blendTint
+        ? Color.alphaBlend(
+            _color(material.tintArgb, material.tintOpacity),
+            base,
+          )
+        : base;
+  }
+
+  static LinearGradient _materialGradient(
+    BalanceGlassMaterialConfiguration material, {
+    bool blendTint = false,
+  }) => _gradient(
+    _materialColor(
+      material,
+      material.gradientStartArgb,
+      material.gradientStartOpacity,
+      blendTint: blendTint,
+    ),
+    _materialColor(
+      material,
+      material.gradientEndArgb,
+      material.gradientEndOpacity,
+      blendTint: blendTint,
+    ),
+    material.gradientDirection,
+    startStop: material.gradientStartStop,
+    endStop: material.gradientEndStop,
+  );
+
+  static LinearGradient _borderGradient(
+    BalanceGlassMaterialConfiguration material,
+  ) => _gradient(
+    Color.alphaBlend(
+      _color(material.borderArgb, material.borderOpacity),
+      _color(
+        material.borderGradientStartArgb,
+        material.borderGradientStartOpacity,
+      ),
+    ),
+    Color.alphaBlend(
+      _color(material.borderArgb, material.borderOpacity),
+      _color(material.borderGradientEndArgb, material.borderGradientEndOpacity),
+    ),
+    material.borderGradientDirection,
+    startStop: material.borderGradientStartStop,
+    endStop: material.borderGradientEndStop,
+  );
+
   static LinearGradient _gradient(
-    int startArgb,
-    double startOpacity,
-    int endArgb,
-    double endOpacity,
+    Color start,
+    Color end,
     BalanceGlassDirection direction, {
     double startStop = 0,
     double endStop = 1,
@@ -470,13 +449,38 @@ final class _BalanceGlassMaterial extends StatelessWidget {
         BalanceGlassDirection.diagonalDown => Alignment.bottomRight,
         BalanceGlassDirection.diagonalUp => Alignment.topRight,
       },
-      colors: <Color>[
-        _color(startArgb, startOpacity),
-        _color(endArgb, endOpacity),
-      ],
+      colors: <Color>[start, end],
       stops: <double>[normalizedStart, normalizedEnd],
     );
   }
+
+  static LinearGradient _baselineGradient(
+    Color base,
+    BalanceGlassMaterialConfiguration material,
+  ) => _gradient(
+    Color.alphaBlend(
+      _color(material.gradientStartArgb, material.gradientStartOpacity),
+      Color.alphaBlend(_color(material.tintArgb, material.tintOpacity), base),
+    ),
+    Color.alphaBlend(
+      _color(material.gradientEndArgb, material.gradientEndOpacity),
+      Color.alphaBlend(_color(material.tintArgb, material.tintOpacity), base),
+    ),
+    material.gradientDirection,
+    startStop: material.gradientStartStop,
+    endStop: material.gradientEndStop,
+  );
+
+  static Widget _shadowWrapper(
+    BalanceGlassMaterialConfiguration material,
+    Widget child,
+  ) => DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(999),
+      boxShadow: _shadows(material),
+    ),
+    child: child,
+  );
 
   static List<BoxShadow> _shadows(BalanceGlassMaterialConfiguration material) =>
       material.shadowEnabled
@@ -503,4 +507,193 @@ final class _BalanceGlassMaterial extends StatelessWidget {
     BalanceGlassBlendMode.plus => BlendMode.plus,
     BalanceGlassBlendMode.softLight => BlendMode.softLight,
   };
+}
+
+/// Native material paint under the one [BackdropFilter]. The track is painted
+/// once; only a bounded internal material field changes at the income ratio.
+final class _BalanceGlassMaterialFields extends StatelessWidget {
+  const _BalanceGlassMaterialFields({
+    required this.trackMaterial,
+    required this.incomeMaterial,
+    required this.incomeRatio,
+    required this.borderRadius,
+    required this.paintsTrack,
+    required this.paintsLocalizedRim,
+  });
+
+  final BalanceGlassMaterialConfiguration trackMaterial;
+  final BalanceGlassMaterialConfiguration incomeMaterial;
+  final double incomeRatio;
+  final double borderRadius;
+  final bool paintsTrack;
+  final bool paintsLocalizedRim;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: <Widget>[
+      if (paintsTrack) _nativeTrack(),
+      _BalanceGlassIncomeMaterialField(
+        material: incomeMaterial,
+        incomeRatio: incomeRatio,
+        borderRadius: borderRadius,
+      ),
+      if (paintsLocalizedRim && trackMaterial.specularOpacity > 0)
+        Align(
+          alignment: Alignment.topCenter,
+          child: FractionallySizedBox(
+            heightFactor: .18,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      Colors.white.withValues(
+                        alpha: trackMaterial.specularOpacity,
+                      ),
+                      Colors.white.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      if (paintsTrack && trackMaterial.borderWidth > 0)
+        IgnorePointer(
+          child: CustomPaint(
+            painter: _BalanceGlassGradientBorderPainter(
+              gradient: _BalanceGlassMaterial._borderGradient(trackMaterial),
+              borderRadius: borderRadius,
+              borderWidth: trackMaterial.borderWidth,
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _nativeTrack() => DecoratedBox(
+    key: const ValueKey<String>('balance-header-glass-native-track-tint'),
+    decoration: BoxDecoration(
+      color: _BalanceGlassMaterial._color(
+        trackMaterial.tintArgb,
+        trackMaterial.tintOpacity,
+      ),
+    ),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: _BalanceGlassMaterial._materialGradient(trackMaterial),
+      ),
+    ),
+  );
+}
+
+final class _BalanceGlassGradientBorderPainter extends CustomPainter {
+  const _BalanceGlassGradientBorderPainter({
+    required this.gradient,
+    required this.borderRadius,
+    required this.borderWidth,
+  });
+
+  final Gradient gradient;
+  final double borderRadius;
+  final double borderWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final inset = borderWidth / 2;
+    final borderRect = rect.deflate(inset);
+    final radius = math.max(0, borderRadius - inset).toDouble();
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(borderRect, Radius.circular(radius)),
+      Paint()
+        ..shader = gradient.createShader(rect)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_BalanceGlassGradientBorderPainter oldDelegate) =>
+      oldDelegate.gradient != gradient ||
+      oldDelegate.borderRadius != borderRadius ||
+      oldDelegate.borderWidth != borderWidth;
+}
+
+/// A bounded tint/gradient field inside an existing glass sheet. It has no
+/// filter, package glass container, shadow or independent backdrop owner.
+final class _BalanceGlassIncomeMaterialField extends StatelessWidget {
+  const _BalanceGlassIncomeMaterialField({
+    required this.material,
+    required this.incomeRatio,
+    required this.borderRadius,
+    this.baseline = false,
+  });
+
+  final BalanceGlassMaterialConfiguration material;
+  final double incomeRatio;
+  final double borderRadius;
+  final bool baseline;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = incomeRatio.clamp(0, 1).toDouble();
+    if (ratio == 0) return const SizedBox.expand();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: ratio,
+        child: ClipRRect(
+          key: const ValueKey<String>(
+            'balance-header-glass-income-material-field',
+          ),
+          borderRadius: BorderRadius.horizontal(
+            left: Radius.circular(borderRadius),
+            right: ratio == 1 ? Radius.circular(borderRadius) : Radius.zero,
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: baseline
+                      ? _BalanceGlassMaterial._baselineGradient(
+                          const Color(0xff1f9f70),
+                          material,
+                        )
+                      : _BalanceGlassMaterial._materialGradient(material),
+                ),
+              ),
+              if (material.specularOpacity > 0)
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: FractionallySizedBox(
+                    heightFactor: .20,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: <Color>[
+                              Colors.white.withValues(
+                                alpha: material.specularOpacity,
+                              ),
+                              Colors.white.withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

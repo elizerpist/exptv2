@@ -158,6 +158,20 @@ void main() {
           .widget<DropdownButtonFormField<BalanceHeaderGlassRenderer>>(
             renderer,
           );
+      selector.onChanged!(BalanceHeaderGlassRenderer.flutterNative);
+      await tester.pump();
+      final nativeMaterialPanel = find.byKey(
+        const ValueKey<String>('balance-header-glass-renderer-settings'),
+      );
+      await tester.ensureVisible(nativeMaterialPanel);
+      await tester.tap(nativeMaterialPanel);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Backdrop grouping'), findsNothing);
+      await tester.ensureVisible(nativeMaterialPanel);
+      await tester.tap(nativeMaterialPanel);
+      await tester.pump(const Duration(milliseconds: 300));
+
       selector.onChanged!(BalanceHeaderGlassRenderer.liquidGlassWidgets);
       await tester.pump();
       expect(
@@ -188,7 +202,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Track'), findsOneWidget);
       expect(find.text('Income fill'), findsOneWidget);
-      expect(find.text('Thickness'), findsNWidgets(2));
+      expect(
+        find.text('Thickness'),
+        findsOneWidget,
+        reason:
+            'The independent income configuration is an internal material '
+            'field, so it intentionally exposes only field-capable controls.',
+      );
 
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
