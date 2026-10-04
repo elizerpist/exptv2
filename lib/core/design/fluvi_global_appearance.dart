@@ -51,6 +51,18 @@ extension FluviDirectionControlStylePresentation on FluviDirectionControlStyle {
   };
 }
 
+/// Presentation-only visual treatment of the one central transaction FAB.
+/// It is deliberately independent from [showsDirectionArtwork], which owns
+/// the semantic income/expense control rather than the FAB artwork itself.
+enum FluviFabIconPresentation { legacyWhiteStore, directionArtwork }
+
+extension FluviFabIconPresentationPresentation on FluviFabIconPresentation {
+  String get label => switch (this) {
+    FluviFabIconPresentation.legacyWhiteStore => 'Fehér bolt ikon',
+    FluviFabIconPresentation.directionArtwork => 'Artwork',
+  };
+}
+
 /// The visual location of the one existing expansion tap/drag affordance.
 enum FluviCollapseHandleStyle { standalone, headerNotch, headerTranslucentPill }
 
@@ -127,6 +139,7 @@ final class FluviGlobalAppearance {
     required this.showsDirectionArtwork,
     required this.typography,
     this.directionControlStyle = FluviDirectionControlStyle.splitButtons,
+    this.fabIconPresentation = FluviFabIconPresentation.directionArtwork,
     this.collapseHandleStyle = FluviCollapseHandleStyle.standalone,
     this.activeDirectionLabelTone = FluviActiveDirectionLabelTone.softenedWhite,
     this.inactiveDirectionLabelTone =
@@ -142,6 +155,7 @@ final class FluviGlobalAppearance {
       showsDirectionArtwork = true,
       typography = FluviTypographyProfile.app,
       directionControlStyle = FluviDirectionControlStyle.splitButtons,
+      fabIconPresentation = FluviFabIconPresentation.directionArtwork,
       collapseHandleStyle = FluviCollapseHandleStyle.standalone,
       activeDirectionLabelTone = FluviActiveDirectionLabelTone.softenedWhite,
       inactiveDirectionLabelTone = FluviInactiveDirectionLabelTone.softenedGray,
@@ -154,6 +168,7 @@ final class FluviGlobalAppearance {
   final bool showsDirectionArtwork;
   final FluviTypographyProfile typography;
   final FluviDirectionControlStyle directionControlStyle;
+  final FluviFabIconPresentation fabIconPresentation;
   final FluviCollapseHandleStyle collapseHandleStyle;
   final FluviActiveDirectionLabelTone activeDirectionLabelTone;
   final FluviInactiveDirectionLabelTone inactiveDirectionLabelTone;
@@ -167,6 +182,7 @@ final class FluviGlobalAppearance {
     bool? showsDirectionArtwork,
     FluviTypographyProfile? typography,
     FluviDirectionControlStyle? directionControlStyle,
+    FluviFabIconPresentation? fabIconPresentation,
     FluviCollapseHandleStyle? collapseHandleStyle,
     FluviActiveDirectionLabelTone? activeDirectionLabelTone,
     FluviInactiveDirectionLabelTone? inactiveDirectionLabelTone,
@@ -179,6 +195,7 @@ final class FluviGlobalAppearance {
     showsDirectionArtwork: showsDirectionArtwork ?? this.showsDirectionArtwork,
     typography: typography ?? this.typography,
     directionControlStyle: directionControlStyle ?? this.directionControlStyle,
+    fabIconPresentation: fabIconPresentation ?? this.fabIconPresentation,
     collapseHandleStyle: collapseHandleStyle ?? this.collapseHandleStyle,
     activeDirectionLabelTone:
         activeDirectionLabelTone ?? this.activeDirectionLabelTone,
@@ -200,6 +217,7 @@ final class FluviGlobalAppearance {
       showsDirectionArtwork == other.showsDirectionArtwork &&
       typography == other.typography &&
       directionControlStyle == other.directionControlStyle &&
+      fabIconPresentation == other.fabIconPresentation &&
       collapseHandleStyle == other.collapseHandleStyle &&
       activeDirectionLabelTone == other.activeDirectionLabelTone &&
       inactiveDirectionLabelTone == other.inactiveDirectionLabelTone &&
@@ -214,6 +232,7 @@ final class FluviGlobalAppearance {
     showsDirectionArtwork,
     typography,
     directionControlStyle,
+    fabIconPresentation,
     collapseHandleStyle,
     activeDirectionLabelTone,
     inactiveDirectionLabelTone,

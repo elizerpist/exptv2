@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_glass_bar.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_glass_configuration.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_income_expense_partition.dart';
 
 void main() {
   test(
@@ -75,6 +76,19 @@ void main() {
     );
     expect(top, lessThan(bottom));
     expect(top, greaterThanOrEqualTo(41));
+    expect(
+      BalanceHeaderIncomeExpensePartition.topFor(
+        plotTop: 48,
+        plotHeight: 80,
+        valueTop: 16,
+        height: 20,
+        verticalPosition: 0,
+      ),
+      bottom,
+      reason:
+          'The simple and glass bars share the one Balance partition geometry '
+          'resolver, including the Budget-baseline lower endpoint.',
+    );
   });
 
   test(

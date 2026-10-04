@@ -22,6 +22,8 @@ void main() {
                     heightPercent: 50,
                     plotTop: 48,
                     plotHeight: 60,
+                    valueTop: 16,
+                    verticalPosition: 0,
                   ),
                 ],
               ),
@@ -94,6 +96,14 @@ void main() {
       expect(
         tester.getSize(income).width,
         greaterThan(tester.getSize(expense).width),
+      );
+      expect(
+        tester.getRect(lane).bottom,
+        108,
+        reason:
+            'At vertical position 0 the simple bar must share the exact '
+            'expanded-header lower baseline used by the Budget partition and '
+            'the material Balance bar.',
       );
     },
   );

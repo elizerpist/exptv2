@@ -199,6 +199,12 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       const sheet = Rect.fromLTWH(12, 12, 388, 620);
       final layout = BalanceExtendedSheetLayout.resolve(sheet);
+      final mergedSavings = Rect.fromLTRB(
+        layout.card4.left,
+        layout.card4.top,
+        layout.card5.right,
+        layout.card5.bottom,
+      );
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -211,6 +217,7 @@ void main() {
                   children: <Widget>[
                     _slot(
                       layout.card3,
+                      layout.childInsetsFor(layout.card3),
                       BalanceAlternativeDailySpendCard(
                         timeScope: MonthScope(
                           const YearMonth(year: 2026, month: 8),
@@ -253,12 +260,14 @@ void main() {
                       ),
                     ),
                     _slot(
-                      layout.card4,
-                      const BalanceAlternativeNoSpendCard(noSpendDayCount: 9),
-                    ),
-                    _slot(
-                      layout.card5,
+                      mergedSavings,
+                      layout.childInsetsFor(mergedSavings),
                       BalanceAlternativeSavingsRingCard(
+                        expandedRingMaximum: 132,
+                        expandedRingHorizontalInset: 0,
+                        expandedPercentageFontSize:
+                            BalanceAlternativeSavingsRingCard
+                                .monthYearPercentageFontSize,
                         presentation:
                             BalanceAlternativeSavingsPresentation.fromTotals(
                               incomeMinor: 500000,
@@ -269,6 +278,7 @@ void main() {
                     ),
                     _slot(
                       layout.combined,
+                      layout.childInsetsFor(layout.combined),
                       BalanceAlternativeIncomeExpenseStripCard(
                         presentation:
                             BalanceAlternativeIncomeExpenseStripPresentation(
@@ -301,6 +311,12 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       const sheet = Rect.fromLTWH(12, 12, 388, 620);
       final layout = BalanceExtendedSheetLayout.resolve(sheet);
+      final mergedSavings = Rect.fromLTRB(
+        layout.card4.left,
+        layout.card4.top,
+        layout.card5.right,
+        layout.card5.bottom,
+      );
       final closings = BalanceAlternativeYearClosingsPresentation(
         buckets: <BalanceAlternativeYearClosingBucket>[
           for (var month = 1; month <= 12; month += 1)
@@ -338,20 +354,21 @@ void main() {
                   children: <Widget>[
                     _slot(
                       layout.card3,
+                      layout.childInsetsFor(layout.card3),
                       BalanceAlternativeAnnualClosingsCard(
                         timeScope: const YearScope(2026),
                         presentation: closings,
                       ),
                     ),
                     _slot(
-                      layout.card4,
-                      BalanceAlternativePositiveCloseCard(
-                        positiveBucketCount: closings.positiveBucketCount,
-                      ),
-                    ),
-                    _slot(
-                      layout.card5,
+                      mergedSavings,
+                      layout.childInsetsFor(mergedSavings),
                       BalanceAlternativeSavingsRingCard(
+                        expandedRingMaximum: 132,
+                        expandedRingHorizontalInset: 0,
+                        expandedPercentageFontSize:
+                            BalanceAlternativeSavingsRingCard
+                                .monthYearPercentageFontSize,
                         presentation:
                             BalanceAlternativeSavingsPresentation.fromTotals(
                               incomeMinor: incomeExpense.incomeTotalMinor,
@@ -362,6 +379,7 @@ void main() {
                     ),
                     _slot(
                       layout.combined,
+                      layout.childInsetsFor(layout.combined),
                       BalanceAlternativeAnnualIncomeExpenseCard(
                         presentation: incomeExpense,
                         timeScope: const YearScope(2026),
@@ -385,7 +403,8 @@ void main() {
   );
 }
 
-Widget _slot(Rect rect, Widget child) => Positioned.fromRect(
-  rect: rect,
-  child: Padding(padding: const EdgeInsets.all(3), child: child),
-);
+Widget _slot(Rect rect, EdgeInsets padding, Widget child) =>
+    Positioned.fromRect(
+      rect: rect,
+      child: Padding(padding: padding, child: child),
+    );

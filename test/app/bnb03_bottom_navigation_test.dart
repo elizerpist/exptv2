@@ -571,6 +571,36 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+    'FAB artwork uses a white core and a direction-derived ring while legacy retains the white shop glyph',
+    (tester) async {
+      final artwork = Bnb03FabDirectionVisual.resolve(
+        direction: TransactionDirection.expense,
+        profile: FluviDirectionColorProfile.vivid,
+        iconPresentation: FluviFabIconPresentation.directionArtwork,
+      );
+      expect(artwork.coreColor, Colors.white);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Bnb03BottomNavigation(
+            selected: Bnb03Item.home,
+            transactionDirection: TransactionDirection.expense,
+            directionColorProfile: FluviDirectionColorProfile.vivid,
+            fabIconPresentation: FluviFabIconPresentation.legacyWhiteStore,
+            onChanged: (_) {},
+          ),
+        ),
+      );
+
+      expect(find.byIcon(IconsaxPlusLinear.shop), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-expense-artwork')),
+        findsNothing,
+      );
+    },
+  );
 }
 
 bool _hasBorderPixelNear(

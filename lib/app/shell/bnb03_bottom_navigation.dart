@@ -18,6 +18,8 @@ final class Bnb03FabDirectionVisual {
   const Bnb03FabDirectionVisual._({
     required this.gradient,
     required this.ringColor,
+    required this.coreColor,
+    required this.showsArtwork,
     required this.artworkAssetPath,
     required this.artworkKey,
   });
@@ -25,6 +27,8 @@ final class Bnb03FabDirectionVisual {
   factory Bnb03FabDirectionVisual.resolve({
     required TransactionDirection direction,
     required FluviDirectionColorProfile profile,
+    FluviFabIconPresentation iconPresentation =
+        FluviFabIconPresentation.directionArtwork,
   }) {
     final source = direction == TransactionDirection.income
         ? FluviDirectionColorPaletteCatalog.income(profile)
@@ -40,7 +44,14 @@ final class Bnb03FabDirectionVisual {
     final income = direction == TransactionDirection.income;
     return Bnb03FabDirectionVisual._(
       gradient: gradient,
-      ringColor: FluviDirectionColorPaletteCatalog.midpoint(source),
+      ringColor: iconPresentation == FluviFabIconPresentation.directionArtwork
+          ? FluviDirectionColorPaletteCatalog.midpoint(source)
+          : FluviVisualTokens.appHighlightBorderColor,
+      coreColor: iconPresentation == FluviFabIconPresentation.directionArtwork
+          ? Colors.white
+          : null,
+      showsArtwork:
+          iconPresentation == FluviFabIconPresentation.directionArtwork,
       artworkAssetPath: income
           ? 'assets/fluvi/actions/addnew_income.png'
           : 'assets/fluvi/actions/addnew_expense.png',
@@ -52,6 +63,8 @@ final class Bnb03FabDirectionVisual {
 
   final LinearGradient gradient;
   final Color ringColor;
+  final Color? coreColor;
+  final bool showsArtwork;
   final String artworkAssetPath;
   final ValueKey<String> artworkKey;
 }
@@ -216,9 +229,11 @@ class _Bnb03TopContourPainter extends CustomPainter {
 }
 
 class _Bnb03FabCorePainter extends CustomPainter {
-  const _Bnb03FabCorePainter({required this.gradient});
+  const _Bnb03FabCorePainter({this.gradient, this.color})
+    : assert((gradient == null) != (color == null));
 
-  final Gradient gradient;
+  final Gradient? gradient;
+  final Color? color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -226,18 +241,18 @@ class _Bnb03FabCorePainter extends CustomPainter {
     final radius = size.shortestSide / 2;
     final bounds = Rect.fromCircle(center: center, radius: radius);
 
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..isAntiAlias = true
-        ..shader = gradient.createShader(bounds),
-    );
+    final paint = Paint()..isAntiAlias = true;
+    if (gradient case final gradient?) {
+      paint.shader = gradient.createShader(bounds);
+    } else {
+      paint.color = color!;
+    }
+    canvas.drawCircle(center, radius, paint);
   }
 
   @override
   bool shouldRepaint(covariant _Bnb03FabCorePainter oldDelegate) {
-    return oldDelegate.gradient != gradient;
+    return oldDelegate.gradient != gradient || oldDelegate.color != color;
   }
 }
 
@@ -291,6 +306,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
     this.layoutStyle = DashboardBottomNavLayoutStyle.raisedFab,
     this.transactionDirection = TransactionDirection.income,
     this.directionColorProfile = FluviDirectionColorProfile.original,
+    this.fabIconPresentation = FluviFabIconPresentation.directionArtwork,
   });
 
   final Bnb03Item selected;
@@ -307,6 +323,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
   final DashboardBottomNavLayoutStyle layoutStyle;
   final TransactionDirection transactionDirection;
   final FluviDirectionColorProfile directionColorProfile;
+  final FluviFabIconPresentation fabIconPresentation;
 
   static const double _figmaWidth =
       DashboardFlatBottomNavStretchLayout.referenceBottomNavWidth;
@@ -358,6 +375,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
         final fabVisual = Bnb03FabDirectionVisual.resolve(
           direction: transactionDirection,
           profile: directionColorProfile,
+          iconPresentation: fabIconPresentation,
         );
 
         return SizedBox(
@@ -491,17 +509,32 @@ class Bnb03BottomNavigation extends StatelessWidget {
                                 child: CustomPaint(
                                   key: const ValueKey('bnb03-fab-core'),
                                   painter: _Bnb03FabCorePainter(
-                                    gradient: fabVisual.gradient,
+                                    gradient: fabVisual.showsArtwork
+                                        ? null
+                                        : FluviVisualTokens
+                                              .appHighlightGradient,
+                                    color: fabVisual.coreColor,
                                   ),
                                   child: Center(
-                                    child: Image.asset(
-                                      fabVisual.artworkAssetPath,
-                                      key: fabVisual.artworkKey,
-                                      width: s(44),
-                                      height: s(44),
-                                      fit: BoxFit.contain,
-                                      filterQuality: FilterQuality.high,
-                                    ),
+                                    child: fabVisual.showsArtwork
+                                        ? Image.asset(
+                                            fabVisual.artworkAssetPath,
+                                            key: fabVisual.artworkKey,
+                                            width: s(44),
+                                            height: s(44),
+                                            fit: BoxFit.contain,
+                                            filterQuality: FilterQuality.high,
+                                          )
+                                        : Icon(
+                                            selected == Bnb03Item.shop
+                                                ? IconsaxPlusBold.shop
+                                                : IconsaxPlusLinear.shop,
+                                            key: const ValueKey<String>(
+                                              'bnb03-fab-legacy-store-icon',
+                                            ),
+                                            color: Colors.white,
+                                            size: s(24),
+                                          ),
                                   ),
                                 ),
                               ),

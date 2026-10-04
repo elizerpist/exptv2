@@ -1013,6 +1013,7 @@ final class _BalanceDayExtendedSheetScaffold extends StatelessWidget {
       return <Widget>[
         _BalanceAlternativeSectionSlot(
           slot: layout.card3,
+          padding: layout.childInsetsFor(layout.card3),
           allocationKey: const ValueKey<String>('balance-tetris-slot-3'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-3'),
           child: Semantics(
@@ -1026,6 +1027,7 @@ final class _BalanceDayExtendedSheetScaffold extends StatelessWidget {
         ),
         _BalanceAlternativeSectionSlot(
           slot: mergedImpact,
+          padding: layout.childInsetsFor(mergedImpact),
           allocationKey: const ValueKey<String>(
             'balance-tetris-slot-daily-impact',
           ),
@@ -1043,6 +1045,7 @@ final class _BalanceDayExtendedSheetScaffold extends StatelessWidget {
         ),
         _BalanceAlternativeSectionSlot(
           slot: layout.combined,
+          padding: layout.childInsetsFor(layout.combined),
           allocationKey: const ValueKey<String>('balance-tetris-slot-combined'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-combined'),
           child: Semantics(
@@ -1078,6 +1081,7 @@ final class _BalanceSumExtendedSheetScaffold extends StatelessWidget {
       return <Widget>[
         _BalanceAlternativeSectionSlot(
           slot: layout.card3,
+          padding: layout.childInsetsFor(layout.card3),
           allocationKey: const ValueKey<String>('balance-tetris-slot-3'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-3'),
           child: Semantics(
@@ -1090,6 +1094,7 @@ final class _BalanceSumExtendedSheetScaffold extends StatelessWidget {
         ),
         _BalanceAlternativeSectionSlot(
           slot: layout.card4,
+          padding: layout.childInsetsFor(layout.card4),
           allocationKey: const ValueKey<String>('balance-tetris-slot-4'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-4'),
           child: Semantics(
@@ -1102,6 +1107,7 @@ final class _BalanceSumExtendedSheetScaffold extends StatelessWidget {
         ),
         _BalanceAlternativeSectionSlot(
           slot: layout.card5,
+          padding: layout.childInsetsFor(layout.card5),
           allocationKey: const ValueKey<String>('balance-tetris-slot-5'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-5'),
           child: Semantics(
@@ -1115,6 +1121,7 @@ final class _BalanceSumExtendedSheetScaffold extends StatelessWidget {
         ),
         _BalanceAlternativeSectionSlot(
           slot: layout.combined,
+          padding: layout.childInsetsFor(layout.combined),
           allocationKey: const ValueKey<String>('balance-tetris-slot-combined'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-combined'),
           child: Semantics(
@@ -1162,6 +1169,7 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
       return <Widget>[
         _BalanceAlternativeSectionSlot(
           slot: layout.card3,
+          padding: layout.childInsetsFor(layout.card3),
           allocationKey: const ValueKey<String>('balance-tetris-slot-3'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-3'),
           child: Semantics(
@@ -1174,15 +1182,23 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
         ),
         _BalanceAlternativeSectionSlot(
           slot: mergedSavings,
+          padding: layout.childInsetsFor(mergedSavings),
           allocationKey: const ValueKey<String>('balance-tetris-slot-savings'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-savings'),
           child: Semantics(
             label: 'Megtakarítás',
-            child: BalanceAlternativeSavingsRingCard(presentation: savings),
+            child: BalanceAlternativeSavingsRingCard(
+              presentation: savings,
+              expandedRingMaximum: 132,
+              expandedRingHorizontalInset: 0,
+              expandedPercentageFontSize:
+                  BalanceAlternativeSavingsRingCard.monthYearPercentageFontSize,
+            ),
           ),
         ),
         _BalanceAlternativeSectionSlot(
           slot: layout.combined,
+          padding: layout.childInsetsFor(layout.combined),
           allocationKey: const ValueKey<String>('balance-tetris-slot-combined'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-combined'),
           child: switch (combinedCardPresentation) {
@@ -1233,6 +1249,7 @@ final class _BalanceYearExtendedSheetScaffold extends StatelessWidget {
       return <Widget>[
         _BalanceAlternativeSectionSlot(
           slot: layout.card3,
+          padding: layout.childInsetsFor(layout.card3),
           allocationKey: const ValueKey<String>('balance-tetris-slot-3'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-3'),
           child: Semantics(
@@ -1245,15 +1262,23 @@ final class _BalanceYearExtendedSheetScaffold extends StatelessWidget {
         ),
         _BalanceAlternativeSectionSlot(
           slot: mergedSavings,
+          padding: layout.childInsetsFor(mergedSavings),
           allocationKey: const ValueKey<String>('balance-tetris-slot-savings'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-savings'),
           child: Semantics(
             label: 'Megtakarítás',
-            child: BalanceAlternativeSavingsRingCard(presentation: savings),
+            child: BalanceAlternativeSavingsRingCard(
+              presentation: savings,
+              expandedRingMaximum: 132,
+              expandedRingHorizontalInset: 0,
+              expandedPercentageFontSize:
+                  BalanceAlternativeSavingsRingCard.monthYearPercentageFontSize,
+            ),
           ),
         ),
         _BalanceAlternativeSectionSlot(
           slot: layout.combined,
+          padding: layout.childInsetsFor(layout.combined),
           allocationKey: const ValueKey<String>('balance-tetris-slot-combined'),
           surfaceKey: const ValueKey<String>('balance-tetris-card-combined'),
           child: Semantics(
@@ -1374,9 +1399,9 @@ Rect _balanceAlternativeBodyRect(
   const outerInset = BalanceAlternativeHtmlTokens.outerInset;
   final bodyHeight = math.max(0.0, constraints.maxHeight - headerHeight);
   return Rect.fromLTWH(
-    outerInset,
+    0,
     headerHeight + outerInset,
-    math.max(0.0, constraints.maxWidth - outerInset * 2),
+    math.max(0.0, constraints.maxWidth),
     math.max(0.0, bodyHeight - outerInset * 2),
   );
 }
@@ -1434,12 +1459,16 @@ final class _BalanceAlternativeSectionSlot extends StatelessWidget {
     required this.allocationKey,
     required this.surfaceKey,
     required this.child,
+    this.padding = const EdgeInsets.all(
+      BalanceAlternativeHtmlTokens.halfGutter,
+    ),
   });
 
   final Rect slot;
   final Key allocationKey;
   final Key surfaceKey;
   final Widget child;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
@@ -1450,9 +1479,7 @@ final class _BalanceAlternativeSectionSlot extends StatelessWidget {
       child: SizedBox.expand(
         key: allocationKey,
         child: Padding(
-          padding: const EdgeInsets.all(
-            BalanceAlternativeHtmlTokens.halfGutter,
-          ),
+          padding: padding,
           child: KeyedSubtree(key: surfaceKey, child: child),
         ),
       ),
@@ -1602,6 +1629,9 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
             heightPercent: settings.headerPartitionHeightPercent,
             plotTop: chartLayout.plotTop,
             plotHeight: chartLayout.plotHeight,
+            valueTop: chartLayout.valueTop,
+            verticalPosition:
+                settings.headerGlassConfiguration.verticalPosition,
           ),
         if (chartLayout.showsModeLabelAboveValue)
           Positioned(

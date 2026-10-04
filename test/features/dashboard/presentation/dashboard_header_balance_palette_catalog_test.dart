@@ -169,7 +169,13 @@ void main() {
   test('default, copy and sampler preserve variant identity and geometry', () {
     const defaults = DashboardBalanceHeaderColorState.defaults();
     expect(defaults.palette, DashboardBalanceHeaderPalette.softRainbow);
-    expect(defaults.variant, DashboardBalanceHeaderPaletteVariant.original);
+    expect(
+      defaults.variant,
+      DashboardBalanceHeaderPaletteVariant.saturated,
+      reason:
+          'A fresh Balance header must start from the user-requested '
+          'Telítettebb palette while persisted selections remain untouched.',
+    );
     expect(defaults.positionPercent, 50);
     expect(defaults.windowWidthPercent, 15);
 
@@ -182,7 +188,9 @@ void main() {
     expect(vivid, isNot(defaults));
     expect(vivid.hashCode, isNot(defaults.hashCode));
 
-    final original = DashboardBalanceHeaderWindowSampler.sample(defaults);
+    final original = DashboardBalanceHeaderWindowSampler.sample(
+      defaults.copyWith(variant: DashboardBalanceHeaderPaletteVariant.original),
+    );
     final saturated = DashboardBalanceHeaderWindowSampler.sample(
       defaults.copyWith(
         variant: DashboardBalanceHeaderPaletteVariant.saturated,

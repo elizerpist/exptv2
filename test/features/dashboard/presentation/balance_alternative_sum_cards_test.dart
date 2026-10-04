@@ -29,9 +29,13 @@ void main() {
               width: 180,
               height: 180,
               child: BalanceAlternativeSavingsRingCard(
+                expandedRingMaximum: 132,
+                expandedRingHorizontalInset: 0,
+                expandedPercentageFontSize: BalanceAlternativeSavingsRingCard
+                    .monthYearPercentageFontSize,
                 presentation: const BalanceAlternativeSavingsPresentation(
                   netMinor: 620000,
-                  retentionBasisPoints: 6200,
+                  retentionBasisPoints: 10000,
                 ),
               ),
             ),
@@ -51,7 +55,7 @@ void main() {
               ),
             )
             .data,
-        '62%',
+        '100%',
       );
       expect(
         tester
@@ -62,7 +66,7 @@ void main() {
             )
             .style
             ?.fontSize,
-        greaterThanOrEqualTo(27),
+        BalanceAlternativeSavingsRingCard.monthYearPercentageFontSize,
         reason:
             'Month and Year share this card: the 3D Budget ring must use the '
             'available tall-card space while the percentage remains readable.',
@@ -75,10 +79,23 @@ void main() {
               ),
             )
             .sourceProgress,
-        .62,
+        1,
         reason:
             'The existing Budget 3D ring receives the real Savings progress, '
             'rather than an empty decorative shell.',
+      );
+      expect(
+        tester
+            .getRect(
+              find.byKey(
+                const ValueKey('balance-alternative-savings-budget-3d'),
+              ),
+            )
+            .width,
+        greaterThanOrEqualTo(120),
+        reason:
+            'The shared Month/Year Savings ring should use the available '
+            'wider card space without scaling the percentage label itself.',
       );
       expect(
         tester
@@ -88,6 +105,18 @@ void main() {
             .data,
         '6 k Ft',
       );
+      final ring = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-savings-budget-3d'),
+        ),
+      );
+      final percentage = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-savings-percentage'),
+        ),
+      );
+      expect(ring.contains(percentage.topLeft), isTrue);
+      expect(ring.contains(percentage.bottomRight), isTrue);
     },
   );
 

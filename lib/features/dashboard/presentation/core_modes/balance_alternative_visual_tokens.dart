@@ -18,12 +18,12 @@ abstract final class BalanceAlternativeHtmlTokens {
   static const double halfGutter = 3;
   static const double directContentMinimumTolerance = .01;
 
-  // The canonical SUM Mother Card is intentionally narrower and shorter than
-  // the historical capture. Havi 2 / Éves children therefore render directly:
-  // fixed typography/padding stay authored, while flexible plots receive the
-  // remaining space. A whole-card FittedBox would break the approved 1:1 HTML
-  // hierarchy, including for the 30%-wide side card.
-  static const Size extendedSheetPrimaryCardMinimumSize = Size.zero;
+  // The primary monthly/yearly charts contain a fixed title/subtitle lane,
+  // plot and legend. Keep that authored composition at a stable source floor;
+  // unusually compact transient slots scale it as one unit rather than
+  // clipping headings or emitting RenderFlex overflow diagnostics.
+  static Size get extendedSheetPrimaryCardMinimumSize =>
+      Size(logical(480), logical(420));
   static const Size extendedSheetSideCardMinimumSize = Size.zero;
   static const Size extendedSheetCombinedCardMinimumSize = Size.zero;
 
@@ -132,7 +132,10 @@ abstract final class BalanceAlternativeHtmlTokens {
   // HTML .daily-spend-card: 24px 24px 20px; 10px inter-row gap.
   static EdgeInsets get dailyCardPadding =>
       EdgeInsets.fromLTRB(logical(24), logical(24), logical(24), logical(20));
-  static double get dailyHeaderHeight => logical(64);
+  // The historical source lane was shorter than Flutter's actual two-line
+  // title/subtitle metrics. Give the semantic heading a real lane so it does
+  // not overlap the chart or overflow when the core surface changes scope.
+  static double get dailyHeaderHeight => logical(108);
   static double get dailyInsightHeight => logical(102);
   static double get dailyGap => logical(10);
   static double get dailyTitleSize => logical(30);
@@ -160,7 +163,9 @@ abstract final class BalanceAlternativeHtmlTokens {
   // HTML .annual-closings-card: 24px 22px 20px, 63px title and 31px legend.
   static EdgeInsets get annualClosingsPadding =>
       EdgeInsets.fromLTRB(logical(22), logical(24), logical(22), logical(20));
-  static double get annualClosingsHeadingHeight => logical(63);
+  // Annual title/subtitle use the same explicit rendered-metric contract as
+  // the daily heading above.
+  static double get annualClosingsHeadingHeight => logical(108);
   static double get annualClosingsLegendHeight => logical(31);
   static double get annualTitleSize => logical(30);
   static double get annualSubtitleSize => logical(19);

@@ -1,4 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
+import '../widgets/dashboard_header_trend_visual_kernel.dart';
 
 /// The common physical token set for compact header partition lanes.
 ///
@@ -31,4 +35,23 @@ abstract final class DashboardPartitionLaneGeometry {
       (balanceHeaderMaximumThickness - baselineThickness) *
           percent.clamp(0.0, 100.0) /
           100.0;
+
+  /// Resolves the one vertical lane shared by both Balance header bar
+  /// presentations. At zero the lane ends exactly at the expanded Header's
+  /// safe plot bottom (the Budget partition baseline); at one it sits directly
+  /// beneath the primary Balance value. The range re-solves with lane height.
+  static double balanceHeaderTopFor({
+    required double plotTop,
+    required double plotHeight,
+    required double valueTop,
+    required double height,
+    required double verticalPosition,
+  }) {
+    final metrics = DashboardHeaderTrendChartStyle.primaryValueTextMetrics;
+    final valueBottom = valueTop + metrics.fontSize! * metrics.height!;
+    final topLimit = valueBottom + 7;
+    final bottomLimit = math.max(topLimit, plotTop + plotHeight - height);
+    return bottomLimit -
+        (bottomLimit - topLimit) * verticalPosition.clamp(0.0, 1.0);
+  }
 }

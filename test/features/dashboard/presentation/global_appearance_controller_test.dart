@@ -22,6 +22,10 @@ void main() {
       MindExpandedSurfaceStyle.seamlessCard,
       reason: 'Fresh expanded Mind now joins Header and content by default.',
     );
+    expect(
+      controller.tuning.value.globalAppearance.fabIconPresentation,
+      FluviFabIconPresentation.directionArtwork,
+    );
 
     controller.setDirectionColorProfile(FluviDirectionColorProfile.vivid);
     expect(
@@ -35,6 +39,9 @@ void main() {
 
     controller.setAvatarColorProfile(CategoryAvatarColorProfile.pastel);
     controller.setShowsDirectionArtwork(false);
+    controller.setFabIconPresentation(
+      FluviFabIconPresentation.legacyWhiteStore,
+    );
     controller.setGlobalTypography(FluviTypographyProfile.colorLab);
     controller.setDirectionControlStyle(FluviDirectionControlStyle.slidingRail);
     controller.setCollapseHandleStyle(
@@ -60,6 +67,7 @@ void main() {
         directionColorProfile: FluviDirectionColorProfile.vivid,
         avatarColorProfile: CategoryAvatarColorProfile.pastel,
         showsDirectionArtwork: false,
+        fabIconPresentation: FluviFabIconPresentation.legacyWhiteStore,
         typography: FluviTypographyProfile.colorLab,
         directionControlStyle: FluviDirectionControlStyle.slidingRail,
         collapseHandleStyle: FluviCollapseHandleStyle.headerTranslucentPill,
@@ -70,7 +78,7 @@ void main() {
         budgetAvatarContentStyle: BudgetAvatarContentStyle.overlappingGlow,
       ),
     );
-    expect(controller.tuning.value.generation, initialGeneration + 12);
+    expect(controller.tuning.value.generation, initialGeneration + 13);
     expect(controller.tickerIdentity, same(ticker));
   });
 }

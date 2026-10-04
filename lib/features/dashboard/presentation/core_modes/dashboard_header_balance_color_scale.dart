@@ -60,7 +60,7 @@ final class DashboardBalanceHeaderColorState {
 
   const DashboardBalanceHeaderColorState.defaults()
     : palette = DashboardBalanceHeaderPalette.softRainbow,
-      variant = DashboardBalanceHeaderPaletteVariant.original,
+      variant = DashboardBalanceHeaderPaletteVariant.saturated,
       positionPercent = 50,
       windowWidthPercent = 15;
 

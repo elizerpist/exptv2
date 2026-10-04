@@ -815,6 +815,8 @@ class _FluviAppShellState extends State<FluviAppShell>
                                   _controller.transactionDirection.direction,
                               directionColorProfile:
                                   tuning.globalAppearance.directionColorProfile,
+                              fabIconPresentation:
+                                  tuning.globalAppearance.fabIconPresentation,
                               onChanged: (item) {
                                 if (item == Bnb03Item.search) {
                                   _openQueryMenu();

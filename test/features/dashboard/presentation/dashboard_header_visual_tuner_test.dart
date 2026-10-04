@@ -210,6 +210,45 @@ void main() {
             'field, so it intentionally exposes only field-capable controls.',
       );
 
+      final simplePartition = find.byKey(
+        const ValueKey<String>(
+          'balance-header-graph-presentation-simpleIncomeExpensePartition',
+        ),
+      );
+      expect(simplePartition, findsOneWidget);
+      // RadioGroup owns the callback in current Flutter, so the leaf tile is
+      // deliberately null. Publish through the same presentation controller
+      // and assert that the mounted settings immediately reflow to the simple
+      // bar's shared placement controls.
+      balance.setHeaderGraphPresentation(
+        BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+      );
+      await tester.pump();
+      expect(
+        balance.value.headerGraphPresentation,
+        BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-header-partition-height')),
+        findsOneWidget,
+        reason:
+            'The simple Balance partition must share the existing Bar size '
+            'control rather than gaining a separate size setting.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-glass-vertical-position'),
+        ),
+        findsOneWidget,
+        reason:
+            'The simple Balance partition must use the same persisted '
+            'vertical-position source as the material bar.',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-header-glass-renderer')),
+        findsNothing,
+      );
+
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
     },
@@ -326,6 +365,8 @@ void main() {
         const ValueKey<String>('fluvi-direction-color-profile-selector'),
         const ValueKey<String>('fluvi-avatar-color-profile-selector'),
         const ValueKey<String>('fluvi-direction-artwork-toggle'),
+        const ValueKey<String>('fluvi-fab-icon-presentation-legacyWhiteStore'),
+        const ValueKey<String>('fluvi-fab-icon-presentation-directionArtwork'),
         const ValueKey<String>('fluvi-global-typography-selector'),
       ]) {
         expect(find.byKey(key), findsOneWidget);
@@ -344,6 +385,13 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey<String>('fluvi-global-typography-colorLab')),
       );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>(
+            'fluvi-fab-icon-presentation-legacyWhiteStore',
+          ),
+        ),
+      );
       await tester.pump();
 
       expect(
@@ -361,6 +409,10 @@ void main() {
       expect(
         controller.tuning.value.globalAppearance.typography,
         FluviTypographyProfile.colorLab,
+      );
+      expect(
+        controller.tuning.value.globalAppearance.fabIconPresentation,
+        FluviFabIconPresentation.legacyWhiteStore,
       );
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();

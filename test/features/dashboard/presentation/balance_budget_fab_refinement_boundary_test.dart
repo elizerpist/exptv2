@@ -53,4 +53,46 @@ void main() {
           'it must not create a second direction controller.',
     );
   });
+
+  test(
+    'ARC-02: FAB choice and Balance partition geometry retain one owner',
+    () {
+      final appearance = File(
+        'lib/core/design/fluvi_global_appearance.dart',
+      ).readAsStringSync();
+      final controller = File(
+        'lib/features/dashboard/presentation/core_modes/'
+        'dashboard_header_visual_engine.dart',
+      ).readAsStringSync();
+      final geometry = File(
+        'lib/features/dashboard/presentation/core_modes/'
+        'dashboard_partition_lane_geometry.dart',
+      ).readAsStringSync();
+      final simple = File(
+        'lib/features/dashboard/presentation/core_modes/'
+        'balance_header_income_expense_partition.dart',
+      ).readAsStringSync();
+      final glass = File(
+        'lib/features/dashboard/presentation/core_modes/'
+        'balance_header_glass_bar.dart',
+      ).readAsStringSync();
+
+      expect(appearance, contains('enum FluviFabIconPresentation'));
+      expect(controller, contains('void setFabIconPresentation'));
+      expect(controller, contains('_setGlobalAppearance('));
+      expect(geometry, contains('static double balanceHeaderTopFor('));
+      expect(
+        simple,
+        contains('DashboardPartitionLaneGeometry.balanceHeaderTopFor'),
+      );
+      expect(
+        glass,
+        contains('DashboardPartitionLaneGeometry.balanceHeaderTopFor'),
+      );
+      for (final source in <String>[simple, glass]) {
+        expect(source, isNot(contains('Repository')));
+        expect(source, isNot(contains('QueryController')));
+      }
+    },
+  );
 }

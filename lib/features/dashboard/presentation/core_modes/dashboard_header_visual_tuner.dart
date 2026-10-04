@@ -585,6 +585,30 @@ final class _GlobalAppearanceControls extends StatelessWidget {
         value: appearance.showsDirectionArtwork,
         onChanged: controller.setShowsDirectionArtwork,
       ),
+      Text('FAB ikon', style: Theme.of(context).textTheme.labelMedium),
+      RadioGroup<FluviFabIconPresentation>(
+        groupValue: appearance.fabIconPresentation,
+        onChanged: (value) {
+          if (value != null) controller.setFabIconPresentation(value);
+        },
+        child: Wrap(
+          children: <Widget>[
+            for (final candidate in FluviFabIconPresentation.values)
+              SizedBox(
+                width: 160,
+                child: RadioListTile<FluviFabIconPresentation>(
+                  key: ValueKey<String>(
+                    'fluvi-fab-icon-presentation-${candidate.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(candidate.label),
+                  value: candidate,
+                ),
+              ),
+          ],
+        ),
+      ),
       Text(
         'Direction elrendezés',
         style: Theme.of(context).textTheme.labelMedium,
@@ -1015,11 +1039,14 @@ final class _BalancePresentationSection extends StatelessWidget {
             ],
           ),
         ),
-        if (settings.headerGraphPresentation ==
-            BalanceHeaderGraphPresentation.incomeExpensePartition)
+        if (settings.headerGraphPresentation !=
+            BalanceHeaderGraphPresentation.lineChart)
           _BalanceHeaderGlassControls(
             controller: controller,
             settings: settings,
+            showsMaterialControls:
+                settings.headerGraphPresentation ==
+                BalanceHeaderGraphPresentation.incomeExpensePartition,
           ),
         const Padding(
           padding: EdgeInsets.only(top: 4),
@@ -1288,17 +1315,20 @@ final class _BalancePresentationSection extends StatelessWidget {
   );
 }
 
-/// Progressive-disclosure controls for the selected Balance Header material.
+/// Shared placement controls for both Balance Header partitions, followed by
+/// progressive material controls when the glass presentation is selected.
 /// They update the existing Balance presentation authority live; the configs
 /// are serializable primitives and persist with the Dashboard preferences.
 final class _BalanceHeaderGlassControls extends StatelessWidget {
   const _BalanceHeaderGlassControls({
     required this.controller,
     required this.settings,
+    required this.showsMaterialControls,
   });
 
   final BalancePresentationController controller;
   final BalancePresentationSettings settings;
+  final bool showsMaterialControls;
 
   void _set(BalanceHeaderGlassConfiguration next) =>
       controller.setHeaderGlassConfiguration(next);
@@ -1329,88 +1359,94 @@ final class _BalanceHeaderGlassControls extends StatelessWidget {
           value: glass.verticalPosition,
           onChanged: (value) => _set(glass.copyWith(verticalPosition: value)),
         ),
-        _TunerSlider(
-          key: const ValueKey<String>('balance-header-glass-income-intensity'),
-          label: 'Income fill intensity',
-          valueLabel: '${(glass.incomeFillIntensity * 100).round()}%',
-          min: 0,
-          max: 1,
-          divisions: 100,
-          value: glass.incomeFillIntensity,
-          onChanged: (value) =>
-              _set(glass.copyWith(incomeFillIntensity: value)),
-        ),
-        const SizedBox(height: 4),
-        const Text('Glass renderer'),
-        DropdownButtonFormField<BalanceHeaderGlassRenderer>(
-          key: const ValueKey<String>('balance-header-glass-renderer'),
-          initialValue: glass.renderer,
-          isExpanded: true,
-          items: <DropdownMenuItem<BalanceHeaderGlassRenderer>>[
-            for (final renderer in BalanceHeaderGlassRenderer.values)
-              DropdownMenuItem<BalanceHeaderGlassRenderer>(
-                value: renderer,
-                child: Text(renderer.tunerLabel),
-              ),
-          ],
-          onChanged: (renderer) {
-            if (renderer != null) _set(glass.copyWith(renderer: renderer));
-          },
-        ),
-        if (glass.renderer == BalanceHeaderGlassRenderer.liquidGlassWidgets)
-          _BalanceGlassEnumField<BalanceGlassQuality>(
-            label: 'Quality',
-            value: glass.quality,
-            values: BalanceGlassQuality.values,
-            onChanged: (quality) => _set(glass.copyWith(quality: quality)),
-          ),
-        SwitchListTile.adaptive(
-          key: const ValueKey<String>(
-            'balance-header-glass-independent-income-fill',
-          ),
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          title: const Text('Independent income fill settings'),
-          value: glass.independentIncomeFillSettings,
-          onChanged: (value) =>
-              _set(glass.copyWith(independentIncomeFillSettings: value)),
-        ),
-        ExpansionTile(
-          key: const ValueKey<String>('balance-header-glass-renderer-settings'),
-          tilePadding: EdgeInsets.zero,
-          childrenPadding: EdgeInsets.zero,
-          title: const Text('Renderer settings'),
-          children: <Widget>[
-            _BalanceGlassMaterialControls(
-              title: glass.independentIncomeFillSettings ? 'Track' : null,
-              renderer: glass.renderer,
-              material: glass.materialFor(incomeFill: false),
-              onChanged: (material) => _set(
-                glass.updateMaterial(incomeFill: false, material: material),
-              ),
+        if (showsMaterialControls) ...<Widget>[
+          _TunerSlider(
+            key: const ValueKey<String>(
+              'balance-header-glass-income-intensity',
             ),
-            if (glass.independentIncomeFillSettings)
+            label: 'Income fill intensity',
+            valueLabel: '${(glass.incomeFillIntensity * 100).round()}%',
+            min: 0,
+            max: 1,
+            divisions: 100,
+            value: glass.incomeFillIntensity,
+            onChanged: (value) =>
+                _set(glass.copyWith(incomeFillIntensity: value)),
+          ),
+          const SizedBox(height: 4),
+          const Text('Glass renderer'),
+          DropdownButtonFormField<BalanceHeaderGlassRenderer>(
+            key: const ValueKey<String>('balance-header-glass-renderer'),
+            initialValue: glass.renderer,
+            isExpanded: true,
+            items: <DropdownMenuItem<BalanceHeaderGlassRenderer>>[
+              for (final renderer in BalanceHeaderGlassRenderer.values)
+                DropdownMenuItem<BalanceHeaderGlassRenderer>(
+                  value: renderer,
+                  child: Text(renderer.tunerLabel),
+                ),
+            ],
+            onChanged: (renderer) {
+              if (renderer != null) _set(glass.copyWith(renderer: renderer));
+            },
+          ),
+          if (glass.renderer == BalanceHeaderGlassRenderer.liquidGlassWidgets)
+            _BalanceGlassEnumField<BalanceGlassQuality>(
+              label: 'Quality',
+              value: glass.quality,
+              values: BalanceGlassQuality.values,
+              onChanged: (quality) => _set(glass.copyWith(quality: quality)),
+            ),
+          SwitchListTile.adaptive(
+            key: const ValueKey<String>(
+              'balance-header-glass-independent-income-fill',
+            ),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Independent income fill settings'),
+            value: glass.independentIncomeFillSettings,
+            onChanged: (value) =>
+                _set(glass.copyWith(independentIncomeFillSettings: value)),
+          ),
+          ExpansionTile(
+            key: const ValueKey<String>(
+              'balance-header-glass-renderer-settings',
+            ),
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: const Text('Renderer settings'),
+            children: <Widget>[
               _BalanceGlassMaterialControls(
-                title: 'Income fill',
+                title: glass.independentIncomeFillSettings ? 'Track' : null,
                 renderer: glass.renderer,
-                material: glass.materialFor(incomeFill: true),
-                isIncomeMaterialField: true,
+                material: glass.materialFor(incomeFill: false),
                 onChanged: (material) => _set(
-                  glass.updateMaterial(incomeFill: true, material: material),
+                  glass.updateMaterial(incomeFill: false, material: material),
                 ),
               ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                key: const ValueKey<String>(
-                  'balance-header-glass-reset-renderer',
+              if (glass.independentIncomeFillSettings)
+                _BalanceGlassMaterialControls(
+                  title: 'Income fill',
+                  renderer: glass.renderer,
+                  material: glass.materialFor(incomeFill: true),
+                  isIncomeMaterialField: true,
+                  onChanged: (material) => _set(
+                    glass.updateMaterial(incomeFill: true, material: material),
+                  ),
                 ),
-                onPressed: () => _set(glass.resetSelectedRenderer()),
-                child: const Text('Reset renderer defaults'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const ValueKey<String>(
+                    'balance-header-glass-reset-renderer',
+                  ),
+                  onPressed: () => _set(glass.resetSelectedRenderer()),
+                  child: const Text('Reset renderer defaults'),
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ],
     );
   }

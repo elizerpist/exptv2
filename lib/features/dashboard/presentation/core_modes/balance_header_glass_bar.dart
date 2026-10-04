@@ -54,20 +54,13 @@ final class BalanceHeaderGlassBar extends StatelessWidget {
     required double valueTop,
     required double height,
     required double verticalPosition,
-  }) {
-    // The upper bound derives from the same Header primary-value typography
-    // token as the displayed Balance amount; the lower bound is the actual
-    // chart safe bottom. A size change therefore automatically re-resolves
-    // both bounds without magic fixed bar coordinates.
-    final valueBottom =
-        valueTop +
-        DashboardHeaderTrendChartStyle.primaryValueTextMetrics.fontSize! *
-            DashboardHeaderTrendChartStyle.primaryValueTextMetrics.height!;
-    final topLimit = valueBottom + 7;
-    final bottomLimit = math.max(topLimit, plotTop + plotHeight - height);
-    return bottomLimit -
-        (bottomLimit - topLimit) * verticalPosition.clamp(0.0, 1.0);
-  }
+  }) => DashboardPartitionLaneGeometry.balanceHeaderTopFor(
+    plotTop: plotTop,
+    plotHeight: plotHeight,
+    valueTop: valueTop,
+    height: height,
+    verticalPosition: verticalPosition,
+  );
 
   @override
   Widget build(BuildContext context) {

@@ -1,5 +1,4 @@
-import 'dart:ui';
-
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_extended_sheet_layout.dart';
 
@@ -34,6 +33,32 @@ void main() {
       expect(layout.combined.left, body.left);
       expect(layout.combined.width, body.width);
       expect(layout.combined.bottom, body.bottom);
+    },
+  );
+
+  test(
+    'BAL-CARD-01: child insets consume no Mother-Card outer horizontal space while retaining internal seams',
+    () {
+      final layout = BalanceExtendedSheetLayout.resolve(
+        const Rect.fromLTWH(0, 0, 1000, 1000),
+      );
+
+      expect(
+        layout.childInsetsFor(layout.card3),
+        const EdgeInsets.fromLTRB(0, 3, 3, 3),
+      );
+      expect(
+        layout.childInsetsFor(layout.card4),
+        const EdgeInsets.fromLTRB(3, 3, 0, 3),
+      );
+      expect(
+        layout.childInsetsFor(layout.card5),
+        const EdgeInsets.fromLTRB(3, 3, 0, 3),
+      );
+      expect(
+        layout.childInsetsFor(layout.combined),
+        const EdgeInsets.fromLTRB(0, 3, 0, 3),
+      );
     },
   );
 }

@@ -526,14 +526,24 @@ final class BalanceAlternativeNoSpendCard extends StatelessWidget {
 }
 
 final class BalanceAlternativeSavingsRingCard extends StatelessWidget {
+  /// Keeps the Month/Year percentage at its delivered readable scale while
+  /// the decorative Budget 3D chrome grows around it.
+  static const double monthYearPercentageFontSize = 29.12;
+
   const BalanceAlternativeSavingsRingCard({
     super.key,
     required this.presentation,
     this.minimumContentSize,
+    this.expandedRingMaximum = 104,
+    this.expandedRingHorizontalInset = 8,
+    this.expandedPercentageFontSize,
   });
 
   final BalanceAlternativeSavingsPresentation presentation;
   final Size? minimumContentSize;
+  final double expandedRingMaximum;
+  final double expandedRingHorizontalInset;
+  final double? expandedPercentageFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -563,6 +573,9 @@ final class BalanceAlternativeSavingsRingCard extends StatelessWidget {
                     percentageLabel: percentageLabel,
                     amountLabel: amountLabel,
                     progress: percentage,
+                    ringMaximum: expandedRingMaximum,
+                    ringHorizontalInset: expandedRingHorizontalInset,
+                    percentageFontSize: expandedPercentageFontSize,
                   );
           },
         ),
@@ -578,11 +591,13 @@ final class BalanceAlternativeSavingsRingCard extends StatelessWidget {
 final class _SavingsProgressRing extends StatelessWidget {
   const _SavingsProgressRing({
     required this.dimension,
+    this.labelFontSize,
     required this.percentageLabel,
     required this.progress,
   });
 
   final double dimension;
+  final double? labelFontSize;
   final String percentageLabel;
   final double? progress;
 
@@ -621,7 +636,11 @@ final class _SavingsProgressRing extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
             style: _text(
-              math.max(14, dimension * .28),
+              // The percent is a fixed readable metric in the real expanded
+              // Month/Year card. Enlarging the decorative Budget shell must
+              // never silently alter that type scale. The compact fallback
+              // supplies its own smaller, physically fitting size.
+              labelFontSize ?? math.max(14, dimension * .28),
               BalanceAlternativeHtmlTokens.purple,
               FontWeight.w900,
               height: 1,
@@ -638,23 +657,41 @@ final class _ExpandedSavingsCard extends StatelessWidget {
     required this.percentageLabel,
     required this.amountLabel,
     required this.progress,
+    required this.ringMaximum,
+    required this.ringHorizontalInset,
+    required this.percentageFontSize,
   });
 
   final String percentageLabel;
   final String amountLabel;
   final double? progress;
+  final double ringMaximum;
+  final double ringHorizontalInset;
+  final double? percentageFontSize;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
+    padding: EdgeInsets.fromLTRB(
+      ringHorizontalInset,
+      7,
+      ringHorizontalInset,
+      7,
+    ),
     child: LayoutBuilder(
       builder: (context, constraints) {
+        final maximumWidth = ringHorizontalInset == 0
+            ? constraints.maxWidth
+            : double.infinity;
         final ringSize = math.min(
-          104.0,
+          math.min(ringMaximum, maximumWidth),
           // Both Month and Year allocate the same tall savings side card.
           // Reserve only the authored title/amount lanes, then let the
           // existing Budget 3D ring occupy the remaining central region.
-          math.max(40.0, constraints.maxHeight - 54),
+          math.max(
+            40.0,
+            constraints.maxHeight -
+                (constraints.maxHeight >= 150 ? 34.0 : 42.0),
+          ),
         );
         return Column(
           children: <Widget>[
@@ -675,6 +712,7 @@ final class _ExpandedSavingsCard extends StatelessWidget {
               dimension: ringSize,
               percentageLabel: percentageLabel,
               progress: progress,
+              labelFontSize: percentageFontSize,
             ),
             const SizedBox(height: 2),
             const Divider(height: 1, thickness: .5),
@@ -717,6 +755,7 @@ final class _CompactSavingsCard extends StatelessWidget {
       children: <Widget>[
         _SavingsProgressRing(
           dimension: 34,
+          labelFontSize: 14,
           percentageLabel: percentageLabel,
           progress: progress,
         ),

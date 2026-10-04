@@ -2677,6 +2677,15 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     );
   }
 
+  /// Changes only the FAB renderer through the existing app-wide appearance
+  /// owner. It never owns transaction direction, action routing or assets.
+  void setFabIconPresentation(FluviFabIconPresentation value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(fabIconPresentation: value),
+      'FAB_ICON_PRESENTATION_CHANGED',
+    );
+  }
+
   /// Changes only the renderer of the existing semantic direction selector.
   void setDirectionControlStyle(FluviDirectionControlStyle value) {
     _setGlobalAppearance(
@@ -2748,6 +2757,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       'direction=${next.directionColorProfile.name} '
       'avatar=${next.avatarColorProfile.name} '
       'artwork=${next.showsDirectionArtwork} '
+      'fabIcon=${next.fabIconPresentation.name} '
       'typography=${next.typography.name} '
       'directionStyle=${next.directionControlStyle.name} '
       'handleStyle=${next.collapseHandleStyle.name} '

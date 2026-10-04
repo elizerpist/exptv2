@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import 'dashboard_partition_lane_geometry.dart';
+import '../widgets/dashboard_header_trend_visual_kernel.dart';
 
 /// Header-local, two-way Balance comparison. Its inputs are already-published
 /// scope totals; it has no history, query, or transaction dependency.
@@ -15,6 +16,8 @@ final class BalanceHeaderIncomeExpensePartition extends StatelessWidget {
     required this.heightPercent,
     required this.plotTop,
     required this.plotHeight,
+    required this.valueTop,
+    required this.verticalPosition,
   });
 
   final int incomeMinor;
@@ -22,6 +25,24 @@ final class BalanceHeaderIncomeExpensePartition extends StatelessWidget {
   final double heightPercent;
   final double plotTop;
   final double plotHeight;
+  final double valueTop;
+  final double verticalPosition;
+
+  /// Delegates to the single Balance partition geometry owner so the simple
+  /// and glass renderers cannot drift apart as their shared sliders move.
+  static double topFor({
+    required double plotTop,
+    required double plotHeight,
+    required double valueTop,
+    required double height,
+    required double verticalPosition,
+  }) => DashboardPartitionLaneGeometry.balanceHeaderTopFor(
+    plotTop: plotTop,
+    plotHeight: plotHeight,
+    valueTop: valueTop,
+    height: height,
+    verticalPosition: verticalPosition,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +56,15 @@ final class BalanceHeaderIncomeExpensePartition extends StatelessWidget {
     );
     return Positioned(
       key: const ValueKey<String>('balance-header-income-expense-partition'),
-      left: 16,
-      right: 16,
-      top: plotTop + (plotHeight - height) / 2,
+      left: DashboardHeaderTrendChartStyle.plotLeft,
+      right: DashboardHeaderTrendChartStyle.plotLeft,
+      top: topFor(
+        plotTop: plotTop,
+        plotHeight: plotHeight,
+        valueTop: valueTop,
+        height: height,
+        verticalPosition: verticalPosition,
+      ),
       height: height,
       child: ClipRRect(
         borderRadius: const BorderRadius.all(
