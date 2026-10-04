@@ -18,7 +18,7 @@ all Mind range previews and Balance scope totals remain resident projections.
 | BHG-02 | Header partition height is user-adjustable through the existing Balance presentation authority | same | settings/controller and tuner test | DONE |
 | ARC-01 | No second financial query, aggregation owner, amount range, or settings controller | all changes | source audit + resident-projection and boundary tests | DONE |
 | REG-01 | Mind Day/SUM/Year heatmap and Balance/Budget existing modes remain live and visually intact outside listed presentation choices | focused tests + analyze | 434-test fast suite, Balance surface suite, analyzer | DONE |
-| REL-01 | Formatting, focused tests, analyzer, one final remote Human APK build/download for the exact app SHA | repository / GitHub Actions | command and artifact evidence | PARTIAL — commit/push/remote APK pending |
+| REL-01 | Formatting, focused tests, analyzer, one final remote Human APK build/download for the exact app SHA | repository / GitHub Actions | command and artifact evidence | DONE — `271445da`; Actions `37184131561`; verified Human APK downloaded |
 
 ## Architecture decisions recorded before implementation
 
