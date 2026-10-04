@@ -28,7 +28,7 @@ void main() {
           'showDayContentViewChooser': true,
           'balanceUsesChildCards': false,
           'balanceHeaderGraphPresentation':
-              BalanceHeaderGraphPresentation.incomeExpensePartition.index,
+              BalanceHeaderGraphPresentation.simpleIncomeExpensePartition.index,
           'balanceHeaderPartitionHeightPercent': 80,
           'balanceMonthCombinedCardPresentation':
               BalanceMonthCombinedCardPresentation.spendingRhythm.index,
@@ -50,7 +50,7 @@ void main() {
       expect(preferences.balanceUsesChildCards, isFalse);
       expect(
         preferences.balanceHeaderGraphPresentation,
-        BalanceHeaderGraphPresentation.incomeExpensePartition,
+        BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
       );
       expect(preferences.balanceHeaderPartitionHeightPercent, 80);
       expect(
@@ -80,7 +80,7 @@ void main() {
         showDayContentViewChooser: false,
         balanceUsesChildCards: false,
         balanceHeaderGraphPresentation:
-            BalanceHeaderGraphPresentation.incomeExpensePartition,
+            BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
         balanceHeaderPartitionHeightPercent: 80,
         balanceMonthCombinedCardPresentation:
             BalanceMonthCombinedCardPresentation.spendingRhythm,
@@ -98,7 +98,7 @@ void main() {
       'showDayContentViewChooser': false,
       'balanceUsesChildCards': false,
       'balanceHeaderGraphPresentation':
-          BalanceHeaderGraphPresentation.incomeExpensePartition.index,
+          BalanceHeaderGraphPresentation.simpleIncomeExpensePartition.index,
       'balanceHeaderPartitionHeightPercent': 80,
       'balanceMonthCombinedCardPresentation':
           BalanceMonthCombinedCardPresentation.spendingRhythm.index,

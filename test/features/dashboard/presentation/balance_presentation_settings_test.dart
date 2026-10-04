@@ -202,6 +202,14 @@ void main() {
       final copy = controller.value.copyWith();
       expect(copy, controller.value);
       expect(copy.hashCode, controller.value.hashCode);
+
+      controller.setHeaderGraphPresentation(
+        BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+      );
+      expect(
+        controller.value.headerGraphPresentation,
+        BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+      );
     },
   );
 

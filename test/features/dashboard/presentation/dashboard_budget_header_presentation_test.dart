@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_partition_lane_geometry.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_presentation.dart';
 
 void main() {
@@ -36,11 +37,32 @@ void main() {
       expect(profile.foreground, FluviVisualTokens.textOnAction);
 
       controller
-        ..setPartitionHeightPercent(-1)
+        ..setPartitionHeightPercent(-51)
         ..selectForeground(DashboardBudgetHeaderForeground.black);
       profile = DashboardBudgetHeaderPresentationProfile(controller.value);
-      expect(profile.partitionThickness, 7);
+      expect(controller.value.partitionHeightPercent, -50);
+      expect(profile.partitionThickness, 3.5);
       expect(profile.foreground, FluviVisualTokens.textPrimary);
+    },
+  );
+
+  test(
+    'Budget Header partition-height slider admits a lower authored minimum',
+    () {
+      final controller = DashboardBudgetHeaderPresentationController();
+      addTearDown(controller.dispose);
+
+      controller.setPartitionHeightPercent(-50);
+      final profile = DashboardBudgetHeaderPresentationProfile(
+        controller.value,
+      );
+
+      expect(controller.value.partitionHeightPercent, -50);
+      expect(profile.partitionThickness, 3.5);
+      expect(
+        profile.partitionThickness,
+        lessThan(DashboardPartitionLaneGeometry.baselineThickness),
+      );
     },
   );
 

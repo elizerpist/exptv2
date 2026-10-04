@@ -24,7 +24,7 @@ void main() {
           showDayContentViewChooser: true,
           balanceUsesChildCards: false,
           balanceHeaderGraphPresentation:
-              BalanceHeaderGraphPresentation.incomeExpensePartition,
+              BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
           balanceHeaderPartitionHeightPercent: 80,
           balanceMonthCombinedCardPresentation:
               BalanceMonthCombinedCardPresentation.spendingRhythm,
@@ -47,7 +47,7 @@ void main() {
       expect(restored.value.balanceUsesChildCards, isFalse);
       expect(
         restored.value.balanceHeaderGraphPresentation,
-        BalanceHeaderGraphPresentation.incomeExpensePartition,
+        BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
       );
       expect(restored.value.balanceHeaderPartitionHeightPercent, 80);
       expect(

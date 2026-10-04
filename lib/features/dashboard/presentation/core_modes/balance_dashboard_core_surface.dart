@@ -30,6 +30,7 @@ import 'balance_extended_sheet_layout.dart';
 import 'balance_four_section_layout.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_header_glass_bar.dart';
+import 'balance_header_income_expense_partition.dart';
 import 'balance_insight_indicators.dart';
 import 'balance_category_visual_badge.dart';
 import 'balance_category_movers_presentation.dart';
@@ -1590,6 +1591,17 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
             plotTop: chartLayout.plotTop,
             plotHeight: chartLayout.plotHeight,
             valueTop: chartLayout.valueTop,
+          ),
+        if (expansionProgress > 0 &&
+            settings.headerGraphPresentation ==
+                BalanceHeaderGraphPresentation.simpleIncomeExpensePartition &&
+            balancePresentation != null)
+          BalanceHeaderIncomeExpensePartition(
+            incomeMinor: balancePresentation.incomeTotalMinor,
+            expenseMinor: balancePresentation.expenseTotalMinor,
+            heightPercent: settings.headerPartitionHeightPercent,
+            plotTop: chartLayout.plotTop,
+            plotHeight: chartLayout.plotHeight,
           ),
         if (chartLayout.showsModeLabelAboveValue)
           Positioned(

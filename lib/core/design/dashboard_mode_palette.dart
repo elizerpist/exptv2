@@ -10,6 +10,16 @@ abstract final class FluviVisualTokens {
   static const surface = Color(0xFFFFFFFF);
   static const surfaceMuted = Color(0xFFF8FAFC);
   static const surfaceInactive = Color(0xFFF4F0F8);
+
+  /// Shared empty material for compact financial partition lanes. Budget owns
+  /// the original allocation lane; Balance reuses this exact token rather
+  /// than approximating an independent "empty" color.
+  static const partitionEmptyTrack = Color(0x47FFFFFF);
+
+  /// The subdued dark action material for a single-value Balance partition.
+  /// It is intentionally softer than [textPrimary] while still reading over
+  /// the neutral [partitionEmptyTrack].
+  static const balancePartitionSoftenedDark = Color(0xD9172554);
   static const border = Color(0xFFE2E8F0);
   static const textPrimary = Color(0xFF172554);
   static const textSecondary = Color(0xFF64748B);

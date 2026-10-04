@@ -28,6 +28,7 @@ import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../application/dashboard_balance_history_projection.dart';
 import 'balance_header_glass_configuration.dart';
 import 'balance_presentation_settings.dart';
+import 'dashboard_partition_lane_geometry.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_category_scale.dart';
 import 'dashboard_header_balance_color_scale.dart';
@@ -4172,82 +4173,83 @@ final class _DashboardBudgetHeaderPresentationSection extends StatelessWidget {
   final DashboardBudgetHeaderPresentationController controller;
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<DashboardBudgetHeaderPresentationSettings>(
-        valueListenable: controller,
-        builder: (context, settings, _) => _TunerSection(
-          title: 'Budget Header',
-          children: <Widget>[
-            _TunerSlider(
-              key: const ValueKey('dashboard-header-partition-height'),
-              label: 'Partíció magasság',
-              valueLabel: '+${settings.partitionHeightPercent.round()}%',
-              min: 0,
-              max: 100,
-              divisions: 100,
-              value: settings.partitionHeightPercent,
-              onChanged: controller.setPartitionHeightPercent,
-            ),
-            RadioGroup<DashboardBudgetHeaderForeground>(
-              groupValue: settings.foreground,
-              onChanged: (value) {
-                if (value != null) controller.selectForeground(value);
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final foreground
-                      in DashboardBudgetHeaderForeground.values)
-                    RadioListTile<DashboardBudgetHeaderForeground>(
-                      key: ValueKey(
-                        'dashboard-header-foreground-${foreground.name}',
-                      ),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        foreground == DashboardBudgetHeaderForeground.white
-                            ? 'Fehér'
-                            : 'Fekete',
-                      ),
-                      value: foreground,
-                    ),
-                ],
-              ),
-            ),
-            SwitchListTile(
-              key: const ValueKey('dashboard-header-partition-contour'),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Partíció kontúr'),
-              value: settings.showPartitionContour,
-              onChanged: controller.setPartitionContour,
-            ),
-            RadioGroup<DashboardHeaderTextContrastStyle>(
-              groupValue: settings.textContrastStyle,
-              onChanged: (style) {
-                if (style != null) controller.selectTextContrastStyle(style);
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final style in DashboardHeaderTextContrastStyle.values)
-                    RadioListTile<DashboardHeaderTextContrastStyle>(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(switch (style) {
-                        DashboardHeaderTextContrastStyle.none =>
-                          'Szöveg kontraszt: Nincs',
-                        DashboardHeaderTextContrastStyle.hardOppositeShadow =>
-                          'Szöveg kontraszt: Éles árnyék',
-                        DashboardHeaderTextContrastStyle.oppositeOutline =>
-                          'Szöveg kontraszt: Körvonal',
-                      }),
-                      value: style,
-                    ),
-                ],
-              ),
-            ),
-          ],
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<DashboardBudgetHeaderPresentationSettings>(
+    valueListenable: controller,
+    builder: (context, settings, _) => _TunerSection(
+      title: 'Budget Header',
+      children: <Widget>[
+        _TunerSlider(
+          key: const ValueKey('dashboard-header-partition-height'),
+          label: 'Partíció magasság',
+          valueLabel:
+              '${DashboardPartitionLaneGeometry.budgetHeaderThicknessFor(settings.partitionHeightPercent).toStringAsFixed(1)} px',
+          min: DashboardPartitionLaneGeometry.budgetHeaderMinimumHeightPercent,
+          max: 100,
+          divisions: 150,
+          value: settings.partitionHeightPercent,
+          onChanged: controller.setPartitionHeightPercent,
         ),
-      );
+        RadioGroup<DashboardBudgetHeaderForeground>(
+          groupValue: settings.foreground,
+          onChanged: (value) {
+            if (value != null) controller.selectForeground(value);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final foreground in DashboardBudgetHeaderForeground.values)
+                RadioListTile<DashboardBudgetHeaderForeground>(
+                  key: ValueKey(
+                    'dashboard-header-foreground-${foreground.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    foreground == DashboardBudgetHeaderForeground.white
+                        ? 'Fehér'
+                        : 'Fekete',
+                  ),
+                  value: foreground,
+                ),
+            ],
+          ),
+        ),
+        SwitchListTile(
+          key: const ValueKey('dashboard-header-partition-contour'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Partíció kontúr'),
+          value: settings.showPartitionContour,
+          onChanged: controller.setPartitionContour,
+        ),
+        RadioGroup<DashboardHeaderTextContrastStyle>(
+          groupValue: settings.textContrastStyle,
+          onChanged: (style) {
+            if (style != null) controller.selectTextContrastStyle(style);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final style in DashboardHeaderTextContrastStyle.values)
+                RadioListTile<DashboardHeaderTextContrastStyle>(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(switch (style) {
+                    DashboardHeaderTextContrastStyle.none =>
+                      'Szöveg kontraszt: Nincs',
+                    DashboardHeaderTextContrastStyle.hardOppositeShadow =>
+                      'Szöveg kontraszt: Éles árnyék',
+                    DashboardHeaderTextContrastStyle.oppositeOutline =>
+                      'Szöveg kontraszt: Körvonal',
+                  }),
+                  value: style,
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 final class _DashboardBottomNavPresentationSection extends StatelessWidget {

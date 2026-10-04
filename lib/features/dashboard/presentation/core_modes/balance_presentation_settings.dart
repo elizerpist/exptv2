@@ -129,12 +129,15 @@ enum BalanceUnifiedBodyLayout {
 /// resident Balance presentation; this is not a second history projection.
 enum BalanceHeaderGraphPresentation {
   lineChart,
-  incomeExpensePartition;
+  incomeExpensePartition,
+  simpleIncomeExpensePartition;
 
   String get tunerLabel => switch (this) {
     BalanceHeaderGraphPresentation.lineChart => 'Vonaldiagram',
     BalanceHeaderGraphPresentation.incomeExpensePartition =>
       'Bevétel vs. kiadás',
+    BalanceHeaderGraphPresentation.simpleIncomeExpensePartition =>
+      'Egyszerű bevétel vs. kiadás',
   };
 }
 

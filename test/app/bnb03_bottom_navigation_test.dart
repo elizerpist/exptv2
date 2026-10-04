@@ -4,8 +4,10 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
+import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shell_presentation.dart';
 
 void main() {
@@ -484,6 +486,89 @@ void main() {
       find.textContaining('SF Pro Text'),
       findsNothing,
       reason: 'The former hardcoded bottom-navigation family must not survive.',
+    );
+  });
+
+  testWidgets(
+    'BNB FAB defaults to the active income add-transaction artwork instead of the shop glyph',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Bnb03BottomNavigation(
+            selected: Bnb03Item.home,
+            onChanged: (_) {},
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-income-artwork')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(IconsaxPlusLinear.shop), findsNothing);
+      expect(find.byIcon(IconsaxPlusBold.shop), findsNothing);
+    },
+  );
+
+  test(
+    'FAB visual resolves the active pill endpoints diagonally and its centre color for the outer ring',
+    () {
+      final income = Bnb03FabDirectionVisual.resolve(
+        direction: TransactionDirection.income,
+        profile: FluviDirectionColorProfile.vivid,
+      );
+      final expense = Bnb03FabDirectionVisual.resolve(
+        direction: TransactionDirection.expense,
+        profile: FluviDirectionColorProfile.vivid,
+      );
+      final expectedIncome = FluviDirectionColorPaletteCatalog.income(
+        FluviDirectionColorProfile.vivid,
+      );
+      final expectedExpense = FluviDirectionColorPaletteCatalog.expense(
+        FluviDirectionColorProfile.vivid,
+      );
+
+      expect(income.gradient.begin, Alignment.topLeft);
+      expect(income.gradient.end, Alignment.bottomRight);
+      expect(income.gradient.colors, expectedIncome.colors);
+      expect(
+        income.ringColor,
+        FluviDirectionColorPaletteCatalog.midpoint(expectedIncome),
+      );
+      expect(expense.gradient.colors, expectedExpense.colors);
+      expect(
+        expense.ringColor,
+        FluviDirectionColorPaletteCatalog.midpoint(expectedExpense),
+      );
+      expect(income.artworkAssetPath, 'assets/fluvi/actions/addnew_income.png');
+      expect(
+        expense.artworkAssetPath,
+        'assets/fluvi/actions/addnew_expense.png',
+      );
+    },
+  );
+
+  testWidgets('FAB switches to expense artwork with the active direction', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Bnb03BottomNavigation(
+          selected: Bnb03Item.home,
+          transactionDirection: TransactionDirection.expense,
+          directionColorProfile: FluviDirectionColorProfile.pastel,
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('bnb03-fab-expense-artwork')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('bnb03-fab-income-artwork')),
+      findsNothing,
     );
   });
 }

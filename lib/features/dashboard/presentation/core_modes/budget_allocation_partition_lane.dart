@@ -57,10 +57,7 @@ final class BudgetAllocationPartitionPainter extends CustomPainter {
     canvas
       ..save()
       ..clipRRect(clip)
-      ..drawRect(
-        track,
-        Paint()..color = FluviVisualTokens.surface.withValues(alpha: .28),
-      );
+      ..drawRect(track, Paint()..color = FluviVisualTokens.partitionEmptyTrack);
 
     if (partition.hasPositiveAggregateLimit) {
       final bank = partition.bank;

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/dashboard_mode_palette.dart';
 import 'dashboard_partition_lane_geometry.dart';
 
 /// Header-local, two-way Balance comparison. Its inputs are already-published
@@ -42,28 +43,70 @@ final class BalanceHeaderIncomeExpensePartition extends StatelessWidget {
         borderRadius: const BorderRadius.all(
           DashboardPartitionLaneGeometry.cornerRadius,
         ),
-        child: Row(
+        child: Stack(
+          fit: StackFit.expand,
           children: <Widget>[
-            Expanded(
-              flex: math.max(1, incomeBasisPoints),
-              child: _BalanceHeaderPartitionSide(
-                key: const ValueKey<String>(
-                  'balance-header-income-expense-income',
-                ),
-                color: const Color(0xff24ad73),
-                label: '${(incomeBasisPoints / 100).round()}%',
-                alignment: Alignment.centerLeft,
+            const DecoratedBox(
+              key: ValueKey<String>(
+                'balance-header-income-expense-empty-track',
+              ),
+              decoration: BoxDecoration(
+                color: FluviVisualTokens.partitionEmptyTrack,
               ),
             ),
-            Expanded(
-              flex: math.max(1, expenseBasisPoints),
-              child: _BalanceHeaderPartitionSide(
-                key: const ValueKey<String>(
-                  'balance-header-income-expense-expense',
+            FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: incomeBasisPoints / 10000,
+              child: const DecoratedBox(
+                key: ValueKey<String>(
+                  'balance-header-income-expense-softened-fill',
                 ),
-                color: const Color(0xffe05672),
-                label: '${(expenseBasisPoints / 100).round()}%',
-                alignment: Alignment.centerRight,
+                decoration: BoxDecoration(
+                  color: FluviVisualTokens.balancePartitionSoftenedDark,
+                ),
+              ),
+            ),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  flex: math.max(1, incomeBasisPoints),
+                  child: const SizedBox.expand(
+                    key: ValueKey<String>(
+                      'balance-header-income-expense-income',
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: math.max(1, expenseBasisPoints),
+                  child: const SizedBox.expand(
+                    key: ValueKey<String>(
+                      'balance-header-income-expense-expense',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _BalanceHeaderPartitionLabel(
+                        label: '${(incomeBasisPoints / 100).round()}%',
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _BalanceHeaderPartitionLabel(
+                        label: '${(expenseBasisPoints / 100).round()}%',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -73,41 +116,21 @@ final class BalanceHeaderIncomeExpensePartition extends StatelessWidget {
   }
 }
 
-final class _BalanceHeaderPartitionSide extends StatelessWidget {
-  const _BalanceHeaderPartitionSide({
-    super.key,
-    required this.color,
-    required this.label,
-    required this.alignment,
-  });
+final class _BalanceHeaderPartitionLabel extends StatelessWidget {
+  const _BalanceHeaderPartitionLabel({required this.label});
 
-  final Color color;
   final String label;
-  final Alignment alignment;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: <Color>[color.withValues(alpha: .95), color],
-      ),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: Align(
-        alignment: alignment,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              height: 1,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
+  Widget build(BuildContext context) => FittedBox(
+    fit: BoxFit.scaleDown,
+    child: Text(
+      label,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 10,
+        height: 1,
+        fontWeight: FontWeight.w900,
       ),
     ),
   );

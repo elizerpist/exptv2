@@ -804,22 +804,26 @@ class _FluviAppShellState extends State<FluviAppShell>
                           DashboardShellPresentationSettings
                         >(
                           valueListenable: _shellPresentation,
-                          builder: (context, settings, _) =>
-                              Bnb03BottomNavigation(
-                                selected: _selectedNavigationItem,
-                                edgeShape: settings.bottomNavEdgeShape,
-                                topBorder: settings.bottomNavTopBorder,
-                                layoutStyle: settings.bottomNavLayoutStyle,
-                                onChanged: (item) {
-                                  if (item == Bnb03Item.search) {
-                                    _openQueryMenu();
-                                    return;
-                                  }
-                                  setState(
-                                    () => _selectedNavigationItem = item,
-                                  );
-                                },
-                              ),
+                          builder: (context, settings, _) => AnimatedBuilder(
+                            animation: _controller.transactionDirection,
+                            builder: (context, _) => Bnb03BottomNavigation(
+                              selected: _selectedNavigationItem,
+                              edgeShape: settings.bottomNavEdgeShape,
+                              topBorder: settings.bottomNavTopBorder,
+                              layoutStyle: settings.bottomNavLayoutStyle,
+                              transactionDirection:
+                                  _controller.transactionDirection.direction,
+                              directionColorProfile:
+                                  tuning.globalAppearance.directionColorProfile,
+                              onChanged: (item) {
+                                if (item == Bnb03Item.search) {
+                                  _openQueryMenu();
+                                  return;
+                                }
+                                setState(() => _selectedNavigationItem = item);
+                              },
+                            ),
+                          ),
                         ),
                   ),
                 ),

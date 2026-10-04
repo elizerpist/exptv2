@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_income_expense_partition.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_partition_lane_geometry.dart';
 
 void main() {
   testWidgets(
-    'BALANCE-HEADER-PARTITION: resident income and expense totals form one red-green Budget-shaped lane with in-lane percentages',
+    'BALANCE-HEADER-PARTITION: resident income and expense totals form one neutral Budget-track lane with a softened-dark income fill',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -41,6 +42,49 @@ void main() {
       expect(lane, findsOneWidget);
       expect(income, findsOneWidget);
       expect(expense, findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-income-expense-empty-track'),
+        ),
+        findsOneWidget,
+        reason:
+            'The entire lane must begin from the same neutral empty material '
+            'as the Budget allocation partition.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-income-expense-softened-fill'),
+        ),
+        findsOneWidget,
+        reason:
+            'Income is one softened-dark overlay, not the old green/red pair.',
+      );
+      expect(
+        tester
+            .widget<DecoratedBox>(
+              find.byKey(
+                const ValueKey<String>(
+                  'balance-header-income-expense-empty-track',
+                ),
+              ),
+            )
+            .decoration,
+        const BoxDecoration(color: FluviVisualTokens.partitionEmptyTrack),
+      );
+      expect(
+        tester
+            .widget<DecoratedBox>(
+              find.byKey(
+                const ValueKey<String>(
+                  'balance-header-income-expense-softened-fill',
+                ),
+              ),
+            )
+            .decoration,
+        const BoxDecoration(
+          color: FluviVisualTokens.balancePartitionSoftenedDark,
+        ),
+      );
       expect(find.text('70%'), findsOneWidget);
       expect(find.text('30%'), findsOneWidget);
       expect(

@@ -289,6 +289,35 @@ abstract final class FluviDirectionColorPaletteCatalog {
         FluviDirectionColorProfile.vivid => _vividExpense,
       };
 
+  /// Samples an authored direction gradient at its exact centre stop. The
+  /// active direction pill and the BNB FAB therefore share a source palette:
+  /// a future user-selected profile change automatically keeps their middle
+  /// color in sync without a second FAB palette.
+  static Color midpoint(LinearGradient gradient) {
+    final stops =
+        gradient.stops ??
+        List<double>.generate(
+          gradient.colors.length,
+          (index) => gradient.colors.length == 1
+              ? 0
+              : index / (gradient.colors.length - 1),
+        );
+    for (var index = 1; index < stops.length; index += 1) {
+      if (stops[index] < .5) continue;
+      final lowerStop = stops[index - 1];
+      final upperStop = stops[index];
+      final fraction = upperStop == lowerStop
+          ? 0.0
+          : (.5 - lowerStop) / (upperStop - lowerStop);
+      return Color.lerp(
+        gradient.colors[index - 1],
+        gradient.colors[index],
+        fraction.clamp(0.0, 1.0),
+      )!;
+    }
+    return gradient.colors.last;
+  }
+
   /// The rail paints one immutable purple-to-pink field in rail coordinates.
   /// The moving active pill is only a rounded window into this full-width
   /// shader; it must never carry a pill-local gradient with it.

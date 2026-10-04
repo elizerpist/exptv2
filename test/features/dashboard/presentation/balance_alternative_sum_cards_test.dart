@@ -62,8 +62,10 @@ void main() {
             )
             .style
             ?.fontSize,
-        greaterThanOrEqualTo(20),
-        reason: 'The number is intentionally overlaid at a readable size.',
+        greaterThanOrEqualTo(27),
+        reason:
+            'Month and Year share this card: the 3D Budget ring must use the '
+            'available tall-card space while the percentage remains readable.',
       );
       expect(
         tester

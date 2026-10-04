@@ -305,6 +305,47 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Balance simple income-expense header visual mounts the neutral one-fill lane without a glass tree',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
+      final settings = ValueNotifier<BalancePresentationSettings>(
+        const BalancePresentationSettings.defaults().copyWith(
+          headerGraphPresentation:
+              BalanceHeaderGraphPresentation.simpleIncomeExpensePartition,
+          revision: 1,
+        ),
+      );
+      addTearDown(balance.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balancePresentation: balance,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-income-expense-empty-track'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-glass-physical-body'),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
   test('BX1: Balance has eleven real linked topics and no prototype', () {
     expect(
       balanceCarouselCardsFor(null).map((card) => card.kind),

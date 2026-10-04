@@ -650,11 +650,11 @@ final class _ExpandedSavingsCard extends StatelessWidget {
     child: LayoutBuilder(
       builder: (context, constraints) {
         final ringSize = math.min(
-          76.0,
-          // Keep the title and the amount visible even in the short
-          // reference-sheet allocation. The value is still overlaid outside
-          // the scaled Budget asset, so its 14px minimum stays readable.
-          math.max(32.0, constraints.maxHeight - 59),
+          104.0,
+          // Both Month and Year allocate the same tall savings side card.
+          // Reserve only the authored title/amount lanes, then let the
+          // existing Budget 3D ring occupy the remaining central region.
+          math.max(40.0, constraints.maxHeight - 54),
         );
         return Column(
           children: <Widget>[

@@ -4,10 +4,57 @@ import 'package:flutter/material.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
 
 import '../../core/design/dashboard_mode_palette.dart';
+import '../../core/design/fluvi_global_appearance.dart';
 import '../../core/design/fluvi_highlight.dart';
+import '../../features/dashboard/application/transaction_direction_controller.dart';
 import '../../features/dashboard/presentation/dashboard_shell_presentation.dart';
 
 enum Bnb03Item { home, search, shop, cart, profile }
+
+/// Render-ready FAB treatment derived only from the existing direction-pill
+/// palette source. It owns no selection or persisted state.
+@immutable
+final class Bnb03FabDirectionVisual {
+  const Bnb03FabDirectionVisual._({
+    required this.gradient,
+    required this.ringColor,
+    required this.artworkAssetPath,
+    required this.artworkKey,
+  });
+
+  factory Bnb03FabDirectionVisual.resolve({
+    required TransactionDirection direction,
+    required FluviDirectionColorProfile profile,
+  }) {
+    final source = direction == TransactionDirection.income
+        ? FluviDirectionColorPaletteCatalog.income(profile)
+        : FluviDirectionColorPaletteCatalog.expense(profile);
+    // The active source supplies the same left/middle/right color stops; only
+    // the FAB's authored diagonal geometry differs from the wide pill.
+    final gradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: source.colors,
+      stops: source.stops,
+    );
+    final income = direction == TransactionDirection.income;
+    return Bnb03FabDirectionVisual._(
+      gradient: gradient,
+      ringColor: FluviDirectionColorPaletteCatalog.midpoint(source),
+      artworkAssetPath: income
+          ? 'assets/fluvi/actions/addnew_income.png'
+          : 'assets/fluvi/actions/addnew_expense.png',
+      artworkKey: ValueKey<String>(
+        income ? 'bnb03-fab-income-artwork' : 'bnb03-fab-expense-artwork',
+      ),
+    );
+  }
+
+  final LinearGradient gradient;
+  final Color ringColor;
+  final String artworkAssetPath;
+  final ValueKey<String> artworkKey;
+}
 
 /// The one physical BottomNav path owner. It keeps the centre FAB arc and the
 /// selected outer top-edge termination in one coordinate system, so fill and
@@ -242,6 +289,8 @@ class Bnb03BottomNavigation extends StatelessWidget {
     this.edgeShape = DashboardBottomNavEdgeShape.rounded,
     this.topBorder = DashboardBottomNavTopBorder.off,
     this.layoutStyle = DashboardBottomNavLayoutStyle.raisedFab,
+    this.transactionDirection = TransactionDirection.income,
+    this.directionColorProfile = FluviDirectionColorProfile.original,
   });
 
   final Bnb03Item selected;
@@ -256,6 +305,8 @@ class Bnb03BottomNavigation extends StatelessWidget {
   final DashboardBottomNavEdgeShape edgeShape;
   final DashboardBottomNavTopBorder topBorder;
   final DashboardBottomNavLayoutStyle layoutStyle;
+  final TransactionDirection transactionDirection;
+  final FluviDirectionColorProfile directionColorProfile;
 
   static const double _figmaWidth =
       DashboardFlatBottomNavStretchLayout.referenceBottomNavWidth;
@@ -303,6 +354,10 @@ class Bnb03BottomNavigation extends StatelessWidget {
           fabRadius: s(48),
           cornerRadius: s(32),
           hasCentralProtrusion: isRaised,
+        );
+        final fabVisual = Bnb03FabDirectionVisual.resolve(
+          direction: transactionDirection,
+          profile: directionColorProfile,
         );
 
         return SizedBox(
@@ -427,25 +482,25 @@ class Bnb03BottomNavigation extends StatelessWidget {
                         child: SizedBox.expand(
                           child: CustomPaint(
                             key: const ValueKey('bnb03-fab-outer-purple-ring'),
-                            painter: const _Bnb03FabRingPainter(
-                              color: FluviVisualTokens.appHighlightBorderColor,
+                            painter: _Bnb03FabRingPainter(
+                              color: fabVisual.ringColor,
                             ),
                             child: Padding(
                               padding: EdgeInsets.all(s(6)),
                               child: SizedBox.expand(
                                 child: CustomPaint(
                                   key: const ValueKey('bnb03-fab-core'),
-                                  painter: const _Bnb03FabCorePainter(
-                                    gradient:
-                                        FluviVisualTokens.appHighlightGradient,
+                                  painter: _Bnb03FabCorePainter(
+                                    gradient: fabVisual.gradient,
                                   ),
                                   child: Center(
-                                    child: Icon(
-                                      selected == Bnb03Item.shop
-                                          ? IconsaxPlusBold.shop
-                                          : IconsaxPlusLinear.shop,
-                                      size: s(24),
-                                      color: Colors.white,
+                                    child: Image.asset(
+                                      fabVisual.artworkAssetPath,
+                                      key: fabVisual.artworkKey,
+                                      width: s(44),
+                                      height: s(44),
+                                      fit: BoxFit.contain,
+                                      filterQuality: FilterQuality.high,
                                     ),
                                   ),
                                 ),

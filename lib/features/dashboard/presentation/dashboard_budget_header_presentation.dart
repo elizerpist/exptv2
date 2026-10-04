@@ -18,7 +18,14 @@ final class DashboardBudgetHeaderPresentationSettings {
     this.foreground = DashboardBudgetHeaderForeground.black,
     this.showPartitionContour = false,
     this.textContrastStyle = DashboardHeaderTextContrastStyle.none,
-  }) : assert(partitionHeightPercent >= 0 && partitionHeightPercent <= 100);
+  }) : assert(
+         partitionHeightPercent >=
+                 DashboardPartitionLaneGeometry
+                     .budgetHeaderMinimumHeightPercent &&
+             partitionHeightPercent <=
+                 DashboardPartitionLaneGeometry
+                     .budgetHeaderMaximumHeightPercent,
+       );
 
   static const defaults = DashboardBudgetHeaderPresentationSettings();
 
@@ -58,7 +65,9 @@ final class DashboardBudgetHeaderPresentationSettings {
 }
 
 /// Paint/layout profile for Budget Header controls. The slider changes only
-/// the partition lane thickness around its authored centerline.
+/// the partition lane thickness around its authored centerline. The original
+/// fixed thickness remains 0%; negative presentation values only unlock the
+/// intentionally thinner lower endpoint requested by the user.
 @immutable
 final class DashboardBudgetHeaderPresentationProfile {
   const DashboardBudgetHeaderPresentationProfile(this.settings);
@@ -69,7 +78,9 @@ final class DashboardBudgetHeaderPresentationProfile {
   final DashboardBudgetHeaderPresentationSettings settings;
 
   double get partitionThickness =>
-      baselinePartitionThickness * (1 + settings.partitionHeightPercent / 100);
+      DashboardPartitionLaneGeometry.budgetHeaderThicknessFor(
+        settings.partitionHeightPercent,
+      );
 
   /// The baseline lane ends 4px above the Header's physical lower edge. As
   /// the painted lane grows, give half of that extra extent to the lower side
@@ -91,7 +102,12 @@ final class DashboardBudgetHeaderPresentationController
 
   void setPartitionHeightPercent(double percent) {
     final next = value.copyWith(
-      partitionHeightPercent: percent.clamp(0.0, 100.0).toDouble(),
+      partitionHeightPercent: percent
+          .clamp(
+            DashboardPartitionLaneGeometry.budgetHeaderMinimumHeightPercent,
+            DashboardPartitionLaneGeometry.budgetHeaderMaximumHeightPercent,
+          )
+          .toDouble(),
     );
     if (next != value) value = next;
   }
