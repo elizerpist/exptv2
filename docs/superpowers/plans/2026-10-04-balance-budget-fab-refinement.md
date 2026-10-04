@@ -26,7 +26,7 @@ Reference inspected: `/storage/emulated/0/Pictures/Screenshots/Screenshot_202610
 | FAB-DIR-03 | User | `fluvi_app_shell.dart` | Direction change reaches the FAB through the existing transaction-direction controller; no new source of truth. | Boundary test + source inspection. | DONE |
 | ARC-01 | Global AGENTS.md | affected presentation files | No UI repository/query work; one existing state owner per setting and one central direction-color token resolver. | Fail-closed boundary/import test. | DONE |
 | REG-01 | User | affected tests | Existing Budget progress, direction-pill, BNB/FAB, and Balance card behavior remains green. | Focused suites + 434-test fast suite. | DONE |
-| DEL-01 | Global AGENTS.md | GitHub Actions | Application commit is pushed; exact online Human APK is downloaded and SHA-256 checked. | Workflow and local artifact. | NOT DONE |
+| DEL-01 | Global AGENTS.md | GitHub Actions | Application commit is pushed; exact online Human APK is downloaded and SHA-256 checked. | Run `37209966301`, release `fluvi-human-diagnostic-953d7fe`, local artifact checksum and ZIP inspection. | DONE |
 
 ## Reference re-read checkpoint
 
