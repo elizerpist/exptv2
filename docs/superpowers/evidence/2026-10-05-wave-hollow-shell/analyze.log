@@ -1,0 +1,7 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+Waiting for another flutter command to release the startup lock...
+Analyzing fluvi-balance-wave-defaults...
+No issues found! (ran in 94.4s)

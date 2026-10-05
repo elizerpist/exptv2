@@ -1,0 +1,27 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_shell_test.dart
+00:00 +0: HS-04 inner return retains corresponding financial peak landmarks
+00:00 +0 -1: HS-04 inner return retains corresponding financial peak landmarks [E]
+  Expected: a value less than <118.33709361771207>
+    Actual: <118.48745047962474>
+     Which: is not a value less than <118.33709361771207>
+
+  package:matcher                                                       expect
+  package:flutter_test/src/widget_tester.dart 473:18                    expect
+  test/features/dashboard/presentation/fluvi_wave_shell_test.dart 17:9  main.<fn>
+
+00:00 +0 -1: HS-04 corresponding shell features continue right and down
+00:01 +0 -2: HS-04 corresponding shell features continue right and down [E]
+  Expected: a value greater than <10.0>
+    Actual: <10.0>
+     Which: is not a value greater than <10.0>
+  Corresponding feature 0 must enter rightward depth.
+
+  package:matcher                                                       expect
+  package:flutter_test/src/widget_tester.dart 473:18                    expect
+  test/features/dashboard/presentation/fluvi_wave_shell_test.dart 33:9  main.<fn>
+
+00:01 +0 -2: Some tests failed.

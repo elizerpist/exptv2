@@ -1,0 +1,16 @@
+{
+  "head": "50e34a51021fab6268bf6515f770bb9ebee864bd",
+  "trackedProductionDiffEmpty": false,
+  "chartSourceHashes": "bc627e61ef9540a522777b1996b348aae4ed61448f4906af3a3a51c7c724e143  lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart\n6b6a3fcd54390f5d79254cfc613ec926890df0a05fa86dc0e6e85ddc151cdb8f  lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart\n2839175578cae61751af21f8bef31dbe9e0e53f0b8cef76e50692d2094b7f769  lib/features/dashboard/presentation/core_modes/fluvi_wave_material.dart\n865fea99afdddff6cd993952cfa50075941f0c5affe9b9870e8a85f6d9625462  lib/features/dashboard/presentation/core_modes/fluvi_wave_shell.dart\n3b0dee338595ff6e90e193cf5f1e5deacba2924cc3be617e29ac60fd600cc538  lib/features/dashboard/presentation/core_modes/fluvi_wave_surface_lookup.dart\n918e8bb7135ba173c414ec6210e471f0905919858942eb668b72f72bd853846b  lib/core/design/fluvi_bounded_curve.dart\n73d55ba3ddf05a04923a387aec9cc1274466c2d88c343c6a6607032e2ae04915  shaders/fluvi_wave_surface.frag\n",
+  "backend": "flutter_test software rasterizer; not physical Android",
+  "width": 32,
+  "height": 32,
+  "pixelRatio": 2,
+  "blend": "srcOver",
+  "pixel": [
+    150,
+    130,
+    242,
+    255
+  ]
+}

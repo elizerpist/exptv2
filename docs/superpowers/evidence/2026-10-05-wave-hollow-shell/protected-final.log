@@ -1,0 +1,190 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart
+00:00 +0: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: real daily values retain bounded interpolation and size-adaptive contour detail
+00:00 +1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-05: terrain resolves a continuous local-depth material body rather than a rectangle-global baseline fill
+00:00 +2: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: real production cache reuses equal data and invalidates size/data
+00:01 +3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: an all-zero month has an empty surface without inventing a spend ridge or marker
+00:01 +4: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-05: a sparse real spike keeps its datum ridge exact while retaining a finite local material body
+00:01 +5: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-06: the registered local wave material compiles to a FragmentShader
+00:01 +6: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-04/05: every terrain option mounts one clipped Canvas terrain without an atmospheric overlay
+00:01 +7: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: a tap callback selects the exact nearest real datum
+00:02 +8: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-07 visual: SVG-reference preset retains the reviewed oblique shell
+00:02 +9: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-07 visual: a narrow monthly card keeps a true shaded surface for a sparse real spike
+00:02 +10: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-07 visual: a zero month has no decorative landscape or financial marker
+00:02 +11: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_scope_presentation_test.dart
+00:04 +11: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_scope_presentation_test.dart: ALT2-01: primary-only scope adapter retains an empty SUM distribution fallback
+00:04 +12: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_scope_presentation_test.dart: ALT2-01: Month and Day have independent alternative presentation types
+00:04 +13: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_scope_presentation_test.dart: ALT-HAVI2-RED: Month mixed presentation derives daily expense, no-spend, retention, and prior-month comparison from linked DTOs
+00:04 +14: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_scope_presentation_test.dart: ALT-EVES-RED: Year alternative derives closing buckets and the selected real savings value from linked DTOs
+00:04 +15: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_scope_presentation_test.dart: SUM-ADAPTER: linked SUM maps its established stability sample, savings and distribution without a second ledger query
+00:04 +16: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_scope_presentation_test.dart: ALT-HTML-RED: shared logical tokens are calculated from Havi 2 CSS
+00:04 +17: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart
+00:06 +17: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: BAL-YEAR-02: annual income/expense pairs reserve ten percent more breathing room while labels remain readable
+00:06 +18: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: MTC-02/06: only the monthly Költés child receives the three additive terrain renderers
+00:08 +19: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: BMR-01/02: Month savings uses a centred large metric without a separator and the Költés chart keeps the recovered insight height
+00:08 +20: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: BMR-03: the Monthly income/expense strip has no explanatory copy, aligns the expense metric to its end, and reuses Budget 3D chrome at the partition
+00:08 +21: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: MTC-07 visual: the original and all three additive monthly spending choices remain phone-safe and visibly distinct
+00:09 +22: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: ALT-HAVI2-UI-RED: month card renders real daily, no-spend, savings and strip data
+00:09 +23: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: ALT-EVES-UI-RED: annual cards expose real closing chart and live bar/line switch
+00:09 +24: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: ALT-HAVI2-UI-RED: income and expense strip retains the HTML fixed row height
+00:09 +25: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: ALT-VISUAL: Havi 2 extended sheet keeps its HTML-derived card proportions
+00:09 +26: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart: ALT-VISUAL: Éves extended sheet keeps its HTML-derived card proportions
+00:09 +27: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_income_expense_bar_card_test.dart
+00:11 +27: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_income_expense_bar_card_test.dart: ALT2-03/04: YEAR Card 3 keeps all twelve groups inside one fixed plot
+00:12 +28: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_income_expense_bar_card_test.dart: ALT2-05: SUM scrolls only overflowing plot chrome and keeps newest years reachable
+00:12 +29: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_income_expense_bar_card_test.dart: ALT2-05: SUM keeps the fixed lane when all years fit
+00:13 +30: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/balance_alternative_income_expense_bar_card_test.dart: ALT2-05: a harmless SUM presentation refresh preserves user history position
+00:13 +31: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart
+00:15 +31: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: P2-SUM/YEAR RED: resident directional membership produces exact annual and twelve-month paired totals
+00:15 +32: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: P2-MONTH-REBASE RED: daily Income and Expense steps begin at month-local zero and end at exact metrics
+00:15 +33: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: P2-DAY-OUT-OF-SCOPE RED: Day has no Balance chart payload
+00:15 +34: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: L3-RED: Day keeps scope-local Cashflow totals although its large chart is unsupported
+00:15 +35: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: L4-RED: linked latest transactions stay in scope and order both directions
+00:15 +36: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: LATEST-VISUAL-RED: latest projection retains admitted category visual metadata
+00:15 +37: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: LATEST-TIME-RED: latest projection retains the authoritative local minutes
+00:15 +38: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: LATEST-TIME: a visible local-time change invalidates linked presentation even with fixed UTC ordering
+00:15 +39: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: L5-RED: linked top category ranks absolute amount on active direction only
+00:15 +40: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: L6-RED: linked top partner ranks transaction count on active direction only
+00:15 +41: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: MOVERS: linked payload publishes the bounded selected-direction projection
+00:15 +42: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: PC1/BM1 RED: one linked Balance payload carries dual-direction Closings and Momentum from resident histories
+00:15 +43: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_balance_primary_projection_test.dart: BX-OWNER RED: one linked presentation owns both-direction Retention and Stability once
+00:15 +44: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart
+00:21 +44: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: (setUpAll)
+00:21 +44: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: BALANCE-HEADER-ROUTE/BUTTON RED: production Header relay inspects Balance points and the tuner sits in the brand lane
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:23 +45: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: settled host mounts exactly the committed mode root
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+00:24 +46: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: HMS-01 RED: the Header mode icon is a bounded vertical selector and normal tap never cycles the core mode
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+Carousel snap: stiffness=175.0, settle=864ms
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+Carousel snap: stiffness=175.0, settle=944ms
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+Carousel snap: stiffness=175.0, settle=992ms
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+Carousel snap: stiffness=175.0, settle=944ms
+00:24 +47: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: HMS-02 RED: a partial vertical drag moves the real clipped items before semantic crossing
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel snap: stiffness=175.0, settle=960ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel snap: stiffness=175.0, settle=960ms
+00:24 +48: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: HSG-01 RED: Header-local gain doubles both cumulative finger-distance boundaries before release
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+Carousel snap: stiffness=175.0, settle=1072ms
+00:24 +49: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: HMS-03 RED: selector input is isolated from Header expansion and preserves the physical carousel owner
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+Carousel snap: stiffness=175.0, settle=864ms
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+Carousel snap: stiffness=175.0, settle=944ms
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=32.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+Carousel snap: stiffness=175.0, settle=992ms
+00:25 +50: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: HEADER-MODE-ICON-SIZE/WAVE RED: the icon scales from its base without owning Header tap waves
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=52.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:25 +51: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: Mind uses the central unified envelope endpoints
+00:25 +52: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: Budget replaces only card1 content with a rail in the existing card1 envelope
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:25 +53: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: header and cards stay stationary before horizontal acceptance
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:25 +54: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: long left header swipe remains inert after mode navigation moved to the icon
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:25 +55: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: repeated horizontal header movement never changes a logical mode
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:25 +56: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: pointer up leaves the inert Header horizontal contract intact
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:25 +57: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: right header swipe remains inert
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:26 +58: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: vertical header drag uses only expansion callbacks
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:26 +59: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: diagonal Header movement only claims vertical expansion
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:26 +60: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: card and Mind-body drags never claim global mode navigation
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+
+Warning: A call to drag() with finder "Found 1 widget with key [<'dashboard-core-mode-balance-card-1'>]: [
+  KeyedSubtree-[<'dashboard-core-mode-balance-card-1'>],
+]" derived an Offset (Offset(206.0, 280.6)) that would not hit test on the specified widget.
+Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+The finder corresponds to this RenderBox: RenderConstrainedBox#4b2b3
+The hit test result at that offset is: HitTestResult(RenderDecoratedBox#40f75@Offset(186.0, 35.6), RenderSemanticsAnnotations#317f0@Offset(186.0, 35.6), RenderPadding#27d22@Offset(189.0, 38.6), RenderConstrainedBox#1749d@Offset(189.0, 38.6), RenderStack#046b1@Offset(189.0, 176.6), _RenderLayoutBuilder#de58c@Offset(189.0, 176.6), RenderStack#15624@Offset(206.0, 280.6), RenderConstrainedBox#6303f@Offset(206.0, 280.6), RenderPointerListener#04264@Offset(206.0, 280.6), RenderSemanticsGestureHandler#45aa4@Offset(206.0, 280.6), RenderStack#24094@Offset(206.0, 280.6), RenderConstrainedBox#8d5e9@Offset(206.0, 280.6), RenderPositionedBox#2a448@Offset(206.0, 280.6), RenderCustomMultiChildLayoutBox#a9e8e@Offset(206.0, 280.6), _RenderInkFeatures#5b34e@Offset(206.0, 280.6), RenderPhysicalModel#5ee7c@Offset(206.0, 280.6), RenderSemanticsAnnotations#e901c@Offset(206.0, 280.6), RenderRepaintBoundary#641f2@Offset(206.0, 280.6), RenderIgnorePointer#38fdc@Offset(206.0, 280.6), RenderAnimatedOpacity#a073f@Offset(206.0, 280.6), RenderAnimatedOpacity#cfbcd@Offset(206.0, 280.6), _RenderColoredBox#4fc12@Offset(206.0, 280.6), RenderAnimatedOpacity#09ace@Offset(206.0, 280.6), RenderIgnorePointer#c4a4a@Offset(206.0, 280.6), RenderAnimatedOpacity#5e9b3@Offset(206.0, 280.6), RenderRepaintBoundary#616c0@Offset(206.0, 280.6), RenderSemanticsAnnotations#a51cb@Offset(206.0, 280.6), RenderOffstage#ad5d3@Offset(206.0, 280.6), RenderSemanticsAnnotations#7eecb@Offset(206.0, 280.6), _RenderTheater#a0afb@Offset(206.0, 280.6), RenderAbsorbPointer#4ca49@Offset(206.0, 280.6), RenderPointerListener#3bf9d@Offset(206.0, 280.6), RenderSemanticsAnnotations#f0d36@Offset(206.0, 280.6), RenderCustomPaint#af3bf@Offset(206.0, 280.6), RenderSemanticsAnnotations#1b216@Offset(206.0, 280.6), RenderSemanticsAnnotations#42fbc@Offset(206.0, 280.6), RenderSemanticsAnnotations#1c854@Offset(206.0, 280.6), RenderTapRegionSurface#487b8@Offset(206.0, 280.6), RenderSemanticsAnnotations#3e50c@Offset(206.0, 280.6), RenderSemanticsAnnotations#e7b46@Offset(206.0, 280.6), HitTestEntry<HitTestTarget>#42c2c(_ReusableRenderView#5c47d), HitTestEntry<HitTestTarget>#4abea(<AutomatedTestWidgetsFlutterBinding>))
+#0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2158:25)
+#1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1942:12)
+#2      WidgetController.drag (package:flutter_test/src/controller.dart:1599:7)
+#3      main.<anonymous closure> (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart:768:18)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+#6      StackZoneSpecification._registerCallback.<anonymous closure> (package:stack_trace/src/stack_zone_specification.dart:114:42)
+<asynchronous suspension>
+To silence this warning, pass "warnIfMissed: false" to "drag()".
+To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+00:26 +61: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: a physical vertical drag on the Budget content-card background uses the Header expansion owner
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:26 +62: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: atomic replacement preserves the current expansion geometry
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=130.32, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=130.32, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+00:26 +63: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_core_mode_host_test.dart: (tearDownAll)
+00:27 +63: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart
+00:29 +63: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: MHC-01 expanded-only chart is absent when Header expansion is zero
+00:30 +64: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: MHC foreground line color is independent from score data
+00:30 +65: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: HIV: Mind receives an independent optional chart-underlay veil
+00:30 +66: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: MHC-01 chart reveal is continuously clipped by existing Header expansion
+00:30 +67: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: MHC-03/04 plot keeps the reference line, endpoint and white fade specification
+00:30 +68: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: CHART-X-01/02: sparse points, label anchors and hit testing share one epoch-day projection
+00:30 +69: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: CHART-TAP-01/02/03/04/07: clean taps select, move and toggle immutable points independently of static labels
+00:30 +70: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: CHART-X-02: static time labels use the same rounded epoch-day projection as the line
+00:30 +71: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: CHART-TAP-05/06/10: series change clears selection, labels honor explicit mode, and edge boxes clamp inside Header
+00:30 +72: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: RED CLB-01/03: visible time-label projection renders exactly five actual-domain dates without changing the plot
+00:30 +73: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: RED CLB-01: time labels stay absent by default and collapsed
+00:30 +74: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/mind_header_score_chart_test.dart: RED CLB-02: time labels reproject from each immutable chart domain without changing score points
+00:31 +75: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_budget_secondary_analysis_test.dart
+00:32 +75: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_budget_secondary_analysis_test.dart: DashboardBudgetSecondaryAnalysisProjector SUM uses equal closed-month utilization and keeps zero spend
+00:32 +76: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_budget_secondary_analysis_test.dart: DashboardBudgetSecondaryAnalysisProjector YEAR preserves 12 slots, product bar orientation and future truth
+00:32 +77: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_budget_secondary_analysis_test.dart: DashboardBudgetSecondaryAnalysisProjector MONTH follows calendar days and projects only the current month
+00:32 +78: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_budget_secondary_analysis_test.dart: DashboardBudgetSecondaryAnalysisProjector DAY calculates category-specific before, after and terminal safety
+00:32 +79: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_budget_secondary_analysis_test.dart: DashboardBudgetSecondaryAnalysisProjector a missing limit is unavailable rather than a fabricated zero
+00:32 +80: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_budget_secondary_analysis_test.dart: DashboardBudgetSecondaryAnalysisProjector MONTH keeps real 28, 29, 30 and 31-day calendar denominators
+00:32 +81: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/budget_secondary_analysis_card_test.dart
+00:35 +81: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/budget_secondary_analysis_card_test.dart: SUM mounts exactly one overspend-capable semicircle
+00:36 +82: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/budget_secondary_analysis_card_test.dart: YEAR mounts a centered zero-axis chart with prepared signed bars
+00:36 +83: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/budget_secondary_analysis_card_test.dart: MONTH mounts exactly two side-by-side semicircles and pp insight
+00:36 +84: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/budget_secondary_analysis_card_test.dart: DAY mounts Before After blocks, one arrow and one impact band
+00:37 +85: All tests passed!

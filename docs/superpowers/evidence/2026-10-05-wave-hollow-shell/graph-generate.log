@@ -1,0 +1,12 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+SOURCE_HEAD=c3e62bb0835456601d7c6036715b31bb5cec4fd2
+SOURCE_PARENT=50e34a51021fab6268bf6515f770bb9ebee864bd
+SOURCE_REF=c3e62bb0835456601d7c6036715b31bb5cec4fd2
+INDEX_SHA256=f2b53838b101b4ca481885057885f2c7e3defc758ecf55c1075ca950abb8394d
+ARTIFACT symbols storage=jsonl_shards records=15340 bytes=6533899
+ARTIFACT refs storage=jsonl_shards records=110753 bytes=36021382
+ARTIFACT edges storage=jsonl_shards records=32590 bytes=11596156
+ARTIFACT changed-impact storage=json records=12 bytes=124678

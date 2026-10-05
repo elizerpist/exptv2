@@ -1,0 +1,11 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_visual_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: WR-18 actual Month material reference and ablation scenes
+HS-05 static shader preset background pixel [255, 255, 255]
+WR-18 same-data shader/mesh mean channel difference=0.24450520559469976 /255
+00:13 +1: (tearDownAll)
+00:13 +1: All tests passed!

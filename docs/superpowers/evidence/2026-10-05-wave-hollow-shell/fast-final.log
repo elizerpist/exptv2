@@ -1,0 +1,879 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart
+00:00 +0: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: HS-05 no chart atmosphere generation, overlay or animation owner
+00:00 +1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: WR-28 bounded controls have one owner shared by Mind and Month
+00:00 +2: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: MTC-02 RED: the four-choice monthly chart catalog is owned by Balance presentation settings
+00:00 +3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: BMR-06 boundary: the terrain uses one cached material painter with a vertex-lit fallback and registered FragmentProgram rather than contour widgets
+00:00 +4: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_native_platform_boundary_test.dart
+00:03 +4: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_native_platform_boundary_test.dart: MTC-02 boundary: Android persists the four-choice monthly spending renderer independently from Header graph selection
+00:03 +5: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_native_platform_boundary_test.dart: MTC-06 boundary: the monthly terrain is presentation-only and does not acquire ledger/query or backdrop-filter ownership
+00:03 +6: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/core/design/fluvi_bounded_curve_test.dart
+00:06 +6: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/core/design/fluvi_bounded_curve_test.dart: wider renderer span keeps endpoints and control bounds
+00:06 +7: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/core/design/fluvi_bounded_curve_test.dart: WR-26 preserves the existing Mind segment constructor and exact controls
+00:06 +8: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart
+00:09 +8: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: (setUpAll)
+00:09 +8: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08 isolated peaks are rounded without clipped flat samples
+00:09 +9: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-15/19 real Dashboard host preserves tap/vertical ownership and warm cache
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+WR-19 software/proot only: 30 warm selections 437589 us; {geometryId: 677791931, textureGeometryId: null, size: Size(240.1, 128.3), clip: Rect.fromLTRB(0.0, 0.0, 240.1, 128.3), plot: Rect.fromLTRB(10.0, 36.0, 185.6, 124.3), financialBaseline: 90.72909090909091, shellVertices: 13472, projectedDepth: 40.80870033670033, styleRoute: mesh, shaderState: not-requested, shaderError: null, geometryBuilds: 1, geometryMicros: 100684, textureRequests: 0, texturePublications: 0, textureDisposals: 0, textureMicros: 0, paints: 25, selectedIndex: 30, selectedKey: 31, selectedValueMinor: 60000, tooltipText: 600 Ft, lookupRequestToPaintMicros: null, markerBounds: Rect.fromLTRB(179.3, 81.7, 191.8, 94.2), tooltipBounds: Rect.fromLTRB(147.6, 51.0, 223.6, 75.0), disposed: false}
+00:12 +10: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08/09 exact calendar and oblique shell depth, 28 calendar days
+00:12 +11: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08/09 exact calendar and oblique shell depth, 29 calendar days
+00:12 +12: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08/09 exact calendar and oblique shell depth, 30 calendar days
+00:12 +13: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08/09 exact calendar and oblique shell depth, 31 calendar days
+00:12 +14: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-12 isolated vertex-colour pixel probe
+WR-12 vertex pixels {srcOver: [150, 130, 242, 255], dst: [150, 130, 242, 255]}
+00:12 +15: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: HS-07 lookup carries visible projected normals and section depth
+00:12 +16: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: HS-07 sloped normals and recessed overlap match the visible shell
+HS-07 atlas sloped outer=18 inner=5 overlaps=18
+00:13 +17: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-15 exact edge selection and painted marker/tooltip containment
+00:13 +18: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-12 failed shader load keeps the same-data painted fallback
+00:13 +19: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-13 production async owner never paints another terrain lookup
+WR-19 retained production resource lifecycle {geometryId: 162024322, textureGeometryId: null, size: Size(240.0, 128.0), clip: Rect.fromLTRB(0.0, 0.0, 240.0, 128.0), plot: Rect.fromLTRB(10.0, 36.0, 185.5, 124.0), financialBaseline: 90.56, shellVertices: 13472, projectedDepth: 40.800000000000004, styleRoute: mesh, shaderState: not-requested, shaderError: null, geometryBuilds: 7, geometryMicros: 115896, textureRequests: 6, texturePublications: 2, textureDisposals: 6, textureMicros: 228235, paints: 13, selectedIndex: 30, selectedKey: 31, selectedValueMinor: 26800000, tooltipText: 268 k Ft, lookupRequestToPaintMicros: 15585, markerBounds: Rect.fromLTRB(179.3, 29.8, 191.8, 42.3), tooltipBounds: Rect.fromLTRB(137.5, 2.0, 233.5, 26.0), disposed: true}
+00:13 +20: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-06 production-parent baseline, complete sparse month
+WR-06 {dataset: sparse-31-synthetic-268k, selectedStyle: terrain, route: mesh, chartLocalSize: Size(240.1, 128.3), chartGlobalBounds: Rect.fromLTRB(27.8, 308.7, 267.8, 437.0), transformToRoot: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 27.774410774410775, 308.7485970819304, 0.0, 1.0], financialPlot: Rect.fromLTRB(10.0, 36.0, 185.6, 124.3), minCorrespondingDownDepth: 15.88909090909091, highestDay: 2}
+00:14 +21: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: (tearDownAll)
+00:14 +21: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_shell_test.dart
+00:16 +21: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_shell_test.dart: HS-04 the inner return preserves the mountain cross-section
+00:16 +22: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_shell_test.dart: HS-04 the visible outer turn is oblique, not only its far endpoint
+00:16 +23: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_shell_test.dart: HS-04 the rounded turn must not collapse peaks to a common floor
+00:17 +24: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_shell_test.dart: HS-04 curved turn, foreshortening and normals belong to one shell
+00:17 +25: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_shell_test.dart: HS-04 inner return retains corresponding financial peak landmarks
+00:17 +26: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_shell_test.dart: HS-04 corresponding shell features continue right and down
+00:17 +27: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_visual_test.dart
+00:19 +27: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_visual_test.dart: (setUpAll)
+00:20 +27: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_visual_test.dart: WR-18 actual Month material reference and ablation scenes
+HS-05 static shader preset background pixel [255, 255, 255]
+WR-18 same-data shader/mesh mean channel difference=0.2405898865042834 /255
+00:23 +28: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_visual_test.dart: (tearDownAll)
+00:23 +28: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/query_menu_boundary_test.dart
+00:25 +28: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/query_menu_boundary_test.dart: Query Menu keeps one SQL owner and one reusable sheet boundary
+00:25 +29: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_interaction_performance_boundary_test.dart
+00:28 +29: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_interaction_performance_boundary_test.dart: keeps scene-window maintenance off dashboard input gates
+00:28 +30: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_interaction_performance_boundary_test.dart: keeps dashboard interaction ownership fail closed
+00:29 +31: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_motion_data_isolation_boundary_test.dart
+00:31 +31: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_motion_data_isolation_boundary_test.dart: records live committed demand while deferring ready work during vertical input
+00:31 +32: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_motion_data_isolation_boundary_test.dart: keeps committed page preparation free of scheduler handoffs
+00:31 +33: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_motion_data_isolation_boundary_test.dart: keeps reverse committed-page demand owned by signed viewport intent
+00:31 +34: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_motion_data_isolation_boundary_test.dart: keeps dashboard motion and data ownership fail closed
+00:32 +35: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_single_data_runtime_boundary_test.dart
+00:35 +35: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_single_data_runtime_boundary_test.dart: dashboard production has one index runtime and no live/deck fallback
+00:36 +36: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_single_data_runtime_boundary_test.dart: Balance UI renders one Core-owned immutable model and the shared trend kernel has no financial acquisition path
+00:36 +37: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_avatar_target_liveness_boundary_test.dart
+00:39 +37: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_avatar_target_liveness_boundary_test.dart: Avatar transaction reuses the single Core/cache/visible/focus owners
+00:40 +38: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_avatar_profile_boundary_test.dart
+00:42 +38: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_avatar_profile_boundary_test.dart: profile host persists raw response before fail-closed acceptance
+00:42 +39: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_avatar_profile_boundary_test.dart: suite completion is written after every existing suite assertion
+00:42 +40: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_avatar_profile_boundary_test.dart: suite budgets are finite and leave reporting and teardown margins
+00:42 +41: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_avatar_profile_boundary_test.dart: K observes production owners and validates each actual fling
+00:42 +42: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_avatar_profile_boundary_test.dart: G waits for its final direction visible publication before evidence
+00:42 +43: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/dashboard_avatar_profile_boundary_test.dart: K waits for each fling-local Avatar motion transition
+00:42 +44: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart
+00:45 +44: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: complete exact roots preserve nonempty aggregate and category8 payloads
+00:45 +45: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: pending plan cannot be described as a ready window
+00:45 +46: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: empty required keys is distinguished from a missing entry
+00:45 +47: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: retired aggregate frame is classified without swallowing other errors
+00:45 +48: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: nonempty payload from another scope is rejected
+00:45 +49: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: same query from an older revision is rejected
+00:45 +50: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: retired bank identity and foreground ownership are distinct
+00:45 +51: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: scope rejection preserves the actual wrong payload identity
+00:45 +52: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart
+00:48 +52: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: current nonempty target prepares exact resources with no broad hotset
+00:50 +53: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: target 8 coalesces held target 1 and replays its original order once
+00:51 +54: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: returning to current target 1 coalesces held target 8 in the same pointer
+00:52 +55: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: new pointer terminally cancels pending work before stale cache completion
+00:53 +56: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: disposal resolves the pending request exactly once and drops its owner
+00:54 +57: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: Avatar category and aggregate requests behind Time foreground terminate as staleRejected
+00:55 +58: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: Avatar category and aggregate requests after disposal terminate as disposed
+00:56 +59: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: exact preparation failure terminates explicitly
+00:57 +60: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: exact preparation cancellation terminates explicitly
+00:58 +61: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: new accepted target replaces the older deferred canonical installation
+00:58 +62: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart
+01:02 +62: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: (setUpAll)
+01:02 +62: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time scenario=cold
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+01:17 +63: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time scenario=persistent20cycles
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+02:17 +64: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time scenario=sparse
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+02:24 +65: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL physical startup sequence 3 2 1 0 8 7 6 scenario=month
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99998, target=99998, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99997, target=99997, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+02:29 +66: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL physical startup sequence 3 2 1 0 8 7 6 scenario=monthTimeControl
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99998, target=99998, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99997, target=99997, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99994, target=99994, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99993, target=99993, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99992, target=99992, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99991, target=99991, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99990, target=99990, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99989, target=99989, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99988, target=99988, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+02:38 +67: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL physical startup sequence 3 2 1 0 8 7 6 scenario=day
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99998, target=99998, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99997, target=99997, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+02:43 +68: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL earlier target 1 paints before final physical target 8 exact binder miss
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+02:45 +69: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL retained painted target 1 yields to cold final 8 after real resource replacement
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+02:47 +70: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL real CoreDashboard correlates accepted target 3 phase-A and Budget fan-out
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+02:49 +71: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: RED: real CoreDashboard joins an exact Avatar target resource preparation to row-discovery work
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+02:51 +72: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: (tearDownAll)
+02:51 +72: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart
+02:55 +72: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete A-K suite response is accepted
+02:55 +73: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: RED MYH-15: B rejects a heatmap slider profile without bounded live evidence
+02:55 +74: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: observed a047 response without J and completion is rejected
+02:55 +75: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects null response
+02:55 +76: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects list response
+02:55 +77: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects empty map response
+02:55 +78: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects non-string keys response
+02:55 +79: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects missing completion
+02:55 +80: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects scalar completion
+02:55 +81: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects empty completion
+02:55 +82: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects unsupported completion schema
+02:55 +83: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects failed suite assertions
+02:55 +84: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects incomplete completion keys
+02:55 +85: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects duplicate completion key
+02:55 +86: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects non-string completion key
+02:55 +87: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing A_summary_sum_year_month report
+02:55 +88: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing B_year_month_rail_populated report
+02:55 +89: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing C_year_month_rail_empty report
+02:55 +90: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing D_month_day_rail_94 report
+02:55 +91: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing E_month_day_rail_empty report
+02:55 +92: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing F_parent_while_rail_open report
+02:55 +93: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing G_direction_while_rail_open report
+02:55 +94: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing H_pulse_parent_navigation report
+02:55 +95: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing I_first_fling report
+02:55 +96: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing J_tenth_fling report
+02:55 +97: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing K_avatar_first_target report
+02:55 +98: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects null report
+02:55 +99: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects scalar report
+02:55 +100: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects empty report
+02:55 +101: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite rejects non-string report keys
+02:55 +102: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite retains K and post-renderer exact-paint validation
+02:55 +103: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: complete suite retains motion-isolation thresholds
+02:55 +104: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: G direction profile requires the remembered target to reach circle paint without Avatar input
+02:55 +105: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar exact renderer accepts a real rich-only nonempty paint
+02:55 +106: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar exact renderer accepts a positive Phase-A nonempty paint
+02:55 +107: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar exact renderer rejects empty and zero-row paint counters
+02:55 +108: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K accepts rich-only exact paints without claiming Phase A
+02:55 +109: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects a profile without target-correlated row-discovery evidence
+02:55 +110: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects a profile without a cold exact target preparation
+02:55 +111: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects an all-warm exact target preparation
+02:56 +112: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects empty despite claimed final paint
+02:56 +113: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects zero rows in both renderer phases
+02:56 +114: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects negative Phase A despite positive rich rows
+02:56 +115: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects negative rich rows despite positive Phase A
+02:56 +116: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects missing raw empty flag
+02:56 +117: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects missing raw paint counters
+02:56 +118: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects stale painted core revision
+02:56 +119: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects missing visible core revision
+02:56 +120: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects zero overall renderer paints
+02:56 +121: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects not every renderer acknowledgement is nonempty painted
+02:56 +122: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: adds exact p50 p90 p95 and p99 frame percentiles
+02:56 +123: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: RED PRF-02: normalizes SDK frame summaries with p95 evidence
+02:56 +124: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: required scenario schema includes every requested duration lane
+02:56 +125: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: scenario schema validation rejects a missing metric
+02:56 +126: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: scenario schema rejects invalid rail-flight evidence
+02:56 +127: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar profile evidence requires an exact painted target and matching progress pixels
+02:56 +128: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects the supplied aa61242 empty-only false green
+02:56 +129: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in physical_settle_target_handle
+02:56 +130: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in latest_desired_target_handle
+02:56 +131: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in latest_semantic_target_handle
+02:56 +132: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in latest_exact_painted_target_handle
+02:56 +133: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in selected_budget_target_handle
+02:56 +134: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in focus_target_handle
+02:56 +135: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in header_target_handle
+02:56 +136: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in progress_target_handle
+02:56 +137: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in logbox_target_handle
+02:56 +138: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in focus_category_digest
+02:56 +139: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in visible_query_category_digest
+02:56 +140: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in canonical_query_category_digest
+02:56 +141: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in logbox_query_digest
+02:56 +142: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in header_display_numerator_scaled100
+02:56 +143: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in progress_display_denominator_scaled100
+02:56 +144: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects unresolved or reset-dependent unresolved_pending_candidate_count
+02:56 +145: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects unresolved or reset-dependent generic_coordinator_rejected_count
+02:56 +146: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects unresolved or reset-dependent time_interaction_count
+02:56 +147: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects empty-only nonempty_preview_requested_count despite positive total paints
+02:56 +148: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects empty-only nonempty_preview_accepted_count despite positive total paints
+02:56 +149: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects empty-only nonempty_preview_painted_count despite positive total paints
+02:56 +150: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects earlier paint with final target still pending
+02:56 +151: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects a failed earlier flight even when final flight passes
+02:56 +152: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects a single real fling
+02:56 +153: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects repeated flings that omit a target handle
+02:56 +154: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K permits a superseded first request with strict final proof
+02:56 +155: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects terminal classification unknown
+02:56 +156: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects terminal classification explicitInvariantFailure
+02:56 +157: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K rejects requests without exactly one terminal completion
+02:56 +158: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: Avatar K accepts accounted coalescing with an exact nonempty final paint
+02:56 +159: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: motion isolation gate records renderer misses without masking I/O
+02:56 +160: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: motion isolation gate retains a long CI frame sample when direct preparation slices remain bounded
+02:56 +161: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: motion isolation gate retains an atomic scene-layout measurement without device-time rejection
+02:56 +162: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: motion isolation gate rejects an invalid scene-layout measurement
+02:56 +163: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: motion-scoped scene preparation ignores a completed pre-capture bank
+02:56 +164: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: motion isolation gate rejects paint-time LogBox text layout
+02:56 +165: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: motion isolation gate rejects vector decoding during motion
+02:56 +166: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: motion isolation gate rejects rail-flight interruption evidence
+02:56 +167: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: motion isolation gate permits one structural LogBox bind but rejects a rebuild stream
+02:56 +168: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: physical frame targets report and reject exact p95/p99 lanes
+02:56 +169: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: semantic traversal retains every crossed cyclic boundary
+02:56 +170: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/performance/dashboard_profile_report_test.dart: semantic traversal is deterministic in both directions
+02:57 +171: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart
+02:58 +171: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart: combined visual motion remains active until every lane is idle
+02:59 +172: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart: database revision stays pending until every visual lane reaches idle
+02:59 +173: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart: all dashboard navigation remains RAM-only after one bootstrap
+03:00 +174: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart: multiple crossings in one display frame publish only the last target
+03:01 +175: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart
+03:03 +175: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: a SUM preview is retained before close and reopen synchronously recenters it
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=5, target=5, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+03:06 +176: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: a settled SUM rail child reopens at that canonical retained year
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=5, target=5, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+03:07 +177: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: structural rail exits retain the one hierarchical year month and day anchor
+03:07 +178: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: bootstrap and every structural target select only the installed index
+03:08 +179: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: crossing publishes prepared values and settle is a visual no-op
+03:08 +180: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: experimental DAY crossing publishes the existing prepared child directly
+03:08 +181: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: experimental MONTH crossing publishes its exact prepared frame directly
+03:08 +182: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: RED POST-df1: an unpainted Segmented target cannot become canonical before its queued display frame
+03:08 +183: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: POST-df1: Segmented painted promotion keeps the real SummaryPill on its exact live child
+03:09 +184: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: experimental YEAR crossing publishes its exact prepared frame directly
+03:09 +185: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: experimental component projection validates a frozen selector origin through the installed canonical catalog
+03:09 +186: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: separate display frames expose intermediate values on the first fling
+03:09 +187: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: revision index replacement keeps motion/controller/physics identity
+03:10 +188: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: open-rail parent changes publish the deterministically retained child
+03:10 +189: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: year parent and rapid A-B-C changes retain the exact child key
+03:10 +190: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: Year 2024 then 2026 switches to Month 2026 in one atomic frame
+03:10 +191: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: Month to Year to Month roundtrip retains the canonical July
+03:11 +192: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: bounded index rejects an out-of-window parent in RAM
+03:11 +193: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: direction replacement rejects an unflushed old-direction preview
+03:11 +194: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: seeded random navigation preserves visible index invariants
+03:14 +195: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart
+03:17 +195: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: rail-critical window covers every prepared query exactly once
+03:19 +196: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: RED direction change records the existing controller-to-visible boundary chain
+03:20 +197: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: query publication bundle separates the visible parent from its immediate rail domain
+03:20 +198: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a prepared revision bundle rejects a Budget bank from another revision
+03:21 +199: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an initially open rail activates its full immediate interaction domain before the first fling
+03:23 +200: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an open-rail structural publication includes only its retained child twins
+03:24 +201: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: initial activation retains the exact minimal scene window it activated
+03:24 +202: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: demanded navigation window stays canonical when a full bank is active
+03:25 +203: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: input cancels speculative preparation without rejecting navigation
+03:26 +204: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a revision publishes its index and complete rail bank together
+03:27 +205: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an open-rail revision activates its immediate sibling domain before the first fling
+03:28 +206: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a complete active rail bank eliminates sibling rebase work
+03:36 +207: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: minimal publication bank keeps the direction twin paint-ready synchronously
+03:38 +208: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: minimal publication bank rebases exact scenes across plane transitions
+03:39 +209: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: plane navigation keeps the current visible scope until its exact window is active
+03:40 +210: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: parent navigation keeps the current visible scope until its exact window is active
+03:41 +211: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an open-rail Summary parent transition publishes its O(1) first frame before interaction warmup
+03:41 +212: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an idle adjacent parent hotset makes the next open-rail Summary move a retained interaction hit
+03:42 +213: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: RED profile: a Summary-only retained-bank capacity race defers without an unhandled Future
+03:43 +214: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: RED LIVE-TIME: an experimental MONTH crossing activates its retained root before settle
+03:44 +215: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: restricted Summary parent hotset retains the wrapped boundary target
+03:46 +216: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: input keeps an in-flight required scene preparation alive instead of restarting it
+03:47 +217: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a newer deferred coverage target supersedes a cancelled in-flight target
+03:48 +218: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: motion keeps rail warming deferred while foreground plane publication proceeds
+03:49 +219: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an old SUM settle cannot supersede a pending SUM to YEAR transition
+03:50 +220: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: repeated identical Summary Pill intents join one pending preparation
+03:51 +221: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an old settle and repeated same target keep one pending YEAR intent
+03:52 +222: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: prepared-index publication cancels old-index scene work immediately
+03:53 +223: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: rail interaction warmup follows structural publication without delaying it
+03:54 +224: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: idle rail warmup prewarms both adjacent Summary Pill publication targets
+03:55 +225: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: opening an unwarmed rail keeps the current frame until its interaction bank is ready
+03:56 +226: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a close intent supersedes an in-flight rail-open preparation
+03:56 +227: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a rapid open close open sequence commits only the latest rail intent
+03:57 +228: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: structural plane publication windows stay independent of rail sibling count
+03:59 +229: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an open-rail Summary plane transition prepares only its first-frame hotset
+04:00 +230: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a structural foreground publication request begins while summary motion is active
+04:01 +231: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart
+04:04 +231: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: emits the canonical profile-safe event envelope
+04:04 +232: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: semantic diagnostics are disabled by default without losing counts
+04:04 +233: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: motion hot-path data operations fail hard and emit violations
+04:04 +234: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: data work is counted for the complete physical motion interval
+04:04 +235: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: defines every required diagnostic event wire name
+04:04 +236: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: core emits the complete runtime and RAM-navigation lifecycle
+04:06 +237: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: core records canonical temporal derivation in the bounded ring
+04:06 +238: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart
+04:09 +238: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: direction selection reads the independent applied Query before opening a draft
+04:10 +239: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: direction selection is ignored while a Query draft is open
+04:11 +240: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: direction tap updates the live direction owner before held scene coverage commits
+04:12 +241: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: Apply publishes one prepared restricted query scope atomically
+04:13 +242: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: accepted Query Menu Apply binds its exact facet presentation before hotset replacement
+04:15 +243: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: same applied composer draft closes without building another index
+04:16 +244: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: closing and reopening the composer cancels an older Apply before it can publish
+04:17 +245: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: Query Apply publishes after its local critical window without waiting for full-bank warmup
+04:18 +246: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: Query Apply invalidates a blocked old-index structural scene transition
+04:19 +247: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a 2025 category Query publishes through the symmetric backing window
+04:21 +248: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a zero-result restrictive Query is a valid publication
+04:22 +249: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a failed Query index preparation returns false and can be retried
+04:23 +250: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: concurrent Apply intents share one Query index preparation
+04:25 +251: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: draft preparation stays invisible and Apply consumes that exact index
+04:26 +252: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a staged Query candidate includes the current parent interaction domain before Apply
+04:28 +253: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: Apply re-stages a ready candidate whose bounded retained bank was evicted
+04:30 +254: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: discarding a ready draft candidate has no rollback publication
+04:31 +255: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: closing and reopening an exact ready draft reuses its immutable index
+04:33 +256: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: an Expense draft keeps the active prepared year window after parent navigation
+04:35 +257: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a prewarmed category chip removes its Query without a tap-time build
+04:37 +258: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: a seven-target chip hotset defers clear-all before its Query index build
+04:44 +259: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a deferred clear-all candidate is foreground-admitted once and then reused
+04:46 +260: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: five applied category chips retain every removal target plus clear-all
+04:53 +261: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: an editor foreground candidate displaces a full applied chip hotset and activates
+04:59 +262: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: direction commit replaces the protected chip hotset before an Income editor stages
+05:05 +263: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: Cancel restores the active direction chip-hotset protection without publication
+05:07 +264: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a prewarmed partner chip removes its Query without a tap-time build
+05:10 +265: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: Query chip speculation waits for the explicit sheet-removal boundary
+05:12 +266: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: direct prepared chip publication settles committed ready-ahead before speculation
+05:15 +267: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: each admitted Query-chip neighbour needs a fresh input-fair idle grant
+05:18 +268: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: disposing revokes a pending input-fair Query idle grant
+05:20 +269: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a capacity-rejected Summary hotset is deferred once per cache admission epoch
+05:21 +270: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: direct prepared chip publication rejects a scene-owner warmup callback before ready-ahead settles
+05:25 +271: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a queued rail warmup callback fails closed after direct publication reservation
+05:27 +272: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a direct prepared miss holds scene-owner speculation behind exact ready-ahead
+05:31 +273: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a zero-page direct publication binds and releases readiness without a page read
+05:32 +274: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a multi-page direct publication settles exact ready-ahead before speculation
+05:38 +275: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a one-page direct publication settles its reservation without a repository read
+05:44 +276: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a structurally superseded publication cannot release newer readiness reservation
+05:46 +277: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a publication activation failure releases only its own reservation
+05:48 +278: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: foreground chip Apply promotes a matching in-flight hotset acquisition
+05:52 +279: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: foreground chip Apply adopts an exact hotset candidate already scene-preparing
+05:55 +280: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a different foreground chip target still supersedes hotset work
+05:59 +281: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: a promoted hotset continuation cannot publish after a newer chip target
+06:02 +282: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: rapid distinct chip removals acquire each exact target at most once
+06:05 +283: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: raw pointer intent pauses direct-chip speculation before formal vertical drag
+06:08 +284: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: pointer release resumes an exact deferred page and live ready-ahead while vertical interaction remains active
+06:15 +285: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: motion idle resumes deferred presentation and live ready-ahead while vertical interaction remains active
+06:20 +286: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: structural motion idle without vertical input uses the full ready-ahead drain after a deferred page
+06:27 +287: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: decorative summary text motion does not strand committed ready-ahead
+06:32 +288: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: an aborted accepted Apply releases the route-sensitive speculative boundary
+06:33 +289: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/application/dashboard_core_query_application_test.dart: income and expense applied queries remain independent across selection
+06:35 +290: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_composer_controller_test.dart
+06:38 +290: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_composer_controller_test.dart: editing a composer draft does not mutate the applied query
+06:38 +291: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_composer_controller_test.dart: each edit session and draft mutation has a new cancellation identity
+06:38 +292: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_composer_controller_test.dart: the composer only closes after the core has committed its draft
+06:38 +293: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_composer_controller_test.dart: an accepted Apply survives visual dismissal but not a newer edit session
+06:38 +294: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_composer_controller_test.dart: a failed accepted Apply restores the same editable draft session
+06:38 +295: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_composer_controller_test.dart: the applied owner retains bounded facet presentation with its scope
+06:38 +296: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_composer_controller_test.dart: opening a direction-scoped draft never copies the other direction
+06:38 +297: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_menu_data_controller_test.dart
+06:41 +297: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_menu_data_controller_test.dart: latest draft facet response wins without clearing the prior result
+06:41 +298: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_menu_data_controller_test.dart: RED: Apply joins the exact in-flight facet request without a second read
+06:41 +299: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/query_menu_data_controller_test.dart: a superseded facet response cannot resolve a newer Apply identity
+06:41 +300: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/saved_query_controller_test.dart
+06:42 +300: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/saved_query_controller_test.dart: loading a saved query changes the draft but never the applied scope
+06:43 +301: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/application/saved_query_controller_test.dart: named save update rename and delete stay separate from applied scope
+06:43 +302: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/data/method_channel_query_menu_repository_test.dart
+06:45 +302: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/data/method_channel_query_menu_repository_test.dart: facet bridge carries real bounded months and canonical time filter
+06:45 +303: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/domain/query_temporal_filter_test.dart
+06:47 +303: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/domain/query_temporal_filter_test.dart: canonicalizes one multi-period time group independently of navigation
+06:47 +304: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/domain/query_temporal_filter_test.dart: all time remains a non-restrictive canonical filter
+06:47 +305: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/presentation/query_menu_sheet_test.dart
+06:50 +305: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/presentation/query_menu_sheet_test.dart: Query exact-HUF formatter keeps the established whole-forint policy
+06:50 +306: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/presentation/query_menu_sheet_test.dart: opens the HTML query hierarchy and its category picker in one sheet
+06:53 +307: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/presentation/query_menu_sheet_test.dart: keeps the query sheet inside standard mobile widths
+06:54 +308: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/presentation/query_menu_sheet_test.dart: keeps amount-slider movement local until the range ends
+06:54 +309: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/query/presentation/query_menu_sheet_test.dart: keeps the last confirmed CTA count visible while the latest draft loads
+06:54 +310: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart
+06:56 +310: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: a sparse deferred payload arms Phase-A geometry only through its bounded resource owner
+06:56 +311: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: preview frames always select the prepared rail-scene domain
+06:56 +312: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: only the exact active committed root selects the vertical domain
+06:56 +313: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: a committed presentation binding activates the vertical domain without a payload rebind
+06:56 +314: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: a ready committed root fallback paints automatically when its rail scene is absent
+06:57 +315: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: a complete readable Phase-A bank keeps a dormant committed fallback in rail preview
+06:57 +316: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart
+06:59 +316: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: RED: exact committed resources arm before O(1) vertical domain activation
+06:59 +317: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: rail preview root stages before takeover and transfers without pointer work
+06:59 +318: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a complete page advances only resource state, never immutable geometry
+06:59 +319: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a new committed scope clears an obsolete row-height transition
+06:59 +320: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: idle ready-ahead commit has complete text resources before publication
+07:00 +321: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: RED: ready drawable frontier and visible resource gap stay distinct from immutable virtual geometry
+07:00 +322: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a bounded rail preview never activates the virtual surface as a partial root page
+07:00 +323: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: resumable page preparation publishes only after complete bounded slices
+07:00 +324: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: superseding a private preparation publishes no partial page
+07:00 +325: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a stale or noncontiguous page cannot partially publish geometry
+07:00 +326: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a payload whose local day grouping disagrees with the manifest fails closed
+07:00 +327: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: root remains pinned while the five movable slots rotate
+07:00 +328: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a visible ordinal beyond the ready frontier cannot invert retention clamp bounds
+07:00 +329: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: ephemeral focus transfers and restores the exact bounded base hotset
+07:00 +330: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a changed base identity rejects and disposes an ephemeral focus hotset
+07:00 +331: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: backward retention keeps the immediate reverse safety page
+07:01 +332: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a width change rebuilds complete pages atomically
+07:01 +333: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a root fallback is prepared before vertical activation
+07:01 +334: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a superseded scope rejects old page identity without stale rows
+07:01 +335: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart
+07:03 +335: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: default scene preparation budget reserves TextPainter headroom
+07:03 +336: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: global typography invalidates only cached LogBox scenes and reuses the immutable payload
+07:03 +337: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: an empty retained window reuses the active canonical empty scene without construction
+07:03 +338: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: render-critical readiness preparation cannot be superseded by Summary maintenance
+07:03 +339: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: generic maintenance cancellation cannot terminate render-critical readiness
+07:03 +340: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: retained Summary preparation is denied before layout when every candidate bank is protected
+07:03 +341: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: rejected retained-candidate diagnostics use a bounded identity digest
+07:03 +342: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: the active rail-critical bank exposes complete exact scenes and lookup metrics
+07:03 +343: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a prepared scene window makes each populated row and header atomically available
+07:03 +344: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: a retained focus base restores exact payloads across a new presentation identity
+07:03 +345: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: rotation keeps a completed later parent scene private until activation
+07:03 +346: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a completed staging bank is invisible and discardable until activation
+07:04 +347: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: bounded Query candidate banks stay invisible and activate independently
+07:04 +348: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: retained candidate lookup promotes the exact bank before bounded LRU eviction
+07:04 +349: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: protected chip-neighbour banks survive LRU pressure before unrelated banks
+07:04 +350: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: candidate preparation rejects self-eviction behind a full protected hotset
+07:04 +351: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: candidate hotset admission preserves deterministic protected priority before work
+07:04 +352: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a retained candidate shares exact active layouts without owning their disposal
+07:04 +353: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: evicting a creator candidate preserves the active borrower resource
+07:04 +354: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: final candidate lease releases shared resources exactly once
+07:04 +355: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: creator eviction waits for active and retained sibling leases
+07:04 +356: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: same-key candidate replacement retains shared resources before old release
+07:04 +357: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: cache disposal releases active staged retained and focus-base leases once
+07:04 +358: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: discarding a focus-base lease preserves an active candidate borrower
+07:04 +359: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: six prepared chip removals keep every active borrower drawable before input
+07:04 +360: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: an active base window can be retained and restored without rebuilding its scene
+07:04 +361: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a focused subset can stage from active prepared resources without TextPainter work
+07:04 +362: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED LIVE-ROOT: a compact focused payload stages from prepared row resources
+07:04 +363: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED PHASE-A: an invisible live resource bank exposes exact readable rows without rich-scene activation
+07:04 +364: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED AVATAR PHASE-A AUTHORITY: a prearmed base scene cannot stand in for the focused painter payload
+07:04 +365: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: FPA: a same-key live Time resource rebinds at changed surface metrics
+07:05 +366: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED REENTRANT-MIND: a borrowing release candidate coexists with an oversized bounded live resource bank
+07:05 +367: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: b166 regression: Avatar preparation retains a Mind resource and Mind replacement is lane-local
+07:05 +368: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: MIND-LIVE-RESOURCE-01: two bounded direction lanes retain both ready Mind roots
+07:05 +369: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: b166 regression: a superseded Avatar preparation releases only its stale lane candidate
+07:05 +370: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: FPA: a newer Time foreground lease cancels an in-flight Avatar resource without delaying Time readiness
+07:05 +371: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: FPA: a deferred Time lease cannot cancel a different active Avatar lane
+07:05 +372: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: live resource baseline does not admit additional unique rows beyond its bounded footprint
+07:05 +373: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: discarding a stale active-resource stage releases only its exact bank
+07:05 +374: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: retained candidate memory counts shared layouts once
+07:05 +375: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: mid-preparation cancellation leaves every active populated and empty scene drawable
+07:05 +376: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: disposing during a cooperative private lease releases its resources before teardown
+07:05 +377: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: time-budgeted preparation does not yield once per eight rows when a slice has budget
+07:05 +378: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: deferred rich projection checkpoints inside one payload before it becomes visible
+07:05 +379: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: completed preparation epoch advances only for a fully prepared bank
+07:05 +380: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: 100 deterministic cancellation boundaries preserve the active bank
+07:05 +381: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a scene-window cap fails before it can become partially active
+07:05 +382: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: runtime scene lookup requires the exact prepared content and width
+07:05 +383: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: one complete active bank serves 100 child selections without layout work
+07:05 +384: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: scene assembly yields by bounded row work rather than by scene count
+07:06 +385: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: one large scene assembles its row map in bounded work units
+07:06 +386: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: cooperative preparation yields before a slow row batch reaches its time budget
+07:06 +387: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_visible_scene_continuity_test.dart
+07:08 +387: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_visible_scene_continuity_test.dart: (setUpAll)
+07:09 +387: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_visible_scene_continuity_test.dart: 2025 June remains drawable when real rail input cancels preparation
+07:13 +388: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_visible_scene_continuity_test.dart: the first vertical drag takes over the current dense 2025 rail preview
+07:15 +389: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_visible_scene_continuity_test.dart: (tearDownAll)
+07:15 +389: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart
+07:18 +389: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: (setUpAll)
+07:18 +389: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: SearchPill resolves the global Search family
+07:19 +390: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: query facet presentation defaults and hidden SearchPill fallback are stable
+07:19 +391: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: Ledger chrome orders count, SearchPill, and scroll lane without a result amount
+07:20 +392: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: SearchPill owns stable editable focus and keeps text on unfocus
+07:21 +393: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: hiding SearchPill removes its exact slot without replacing the LogBox scroll position
+07:21 +394: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: SearchPill header has no clipping envelope around its own physical surface
+07:21 +395: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a constrained LogBox header clips before its structural slot
+07:21 +396: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: Ledger count tracks one committed frame across query states
+07:22 +397: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: Ledger count follows the accepted live count lane instead of the committed payload
+07:22 +398: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: Ledger chrome keeps count and SearchPill inside scaled structural slots
+07:22 +399: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: the LogBox scroll viewport owns a hard physical paint clip
+07:22 +400: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a raw LogBox pointer forwards foreground intent before drag recognition
+07:22 +401: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: the first single vertical partner-row move after direct Query publication advances the existing scrollable
+07:23 +402: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: the physical hard-edge host begins at screen left while the resting LogBox surface remains inset
+07:23 +403: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: the active canonical segment crosses the resting inset inside the same hard-edged vertical viewport
+07:23 +404: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: the LogBox scroll viewport begins below its structural count header
+07:23 +405: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: the LogBox scroll viewport begins below active Query facet chips
+07:24 +406: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: inside SearchPill facets remove external chrome and hidden SearchPill falls back safely
+07:24 +407: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: hidden SearchPill exposes an active search facet in the body-top fallback
+07:24 +408: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: rail-preview keeps its own bounded extent until a real vertical gesture takes ownership
+07:25 +409: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: first real vertical gesture activates already-armed committed resources only
+07:25 +410: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a genuinely unavailable committed virtual page remains fail-closed
+07:25 +411: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: interaction summaries retain a current visible resource gap after virtual-miss deduplication
+07:25 +412: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a common fling adopts the idle-ready bank without foreground reads or identity replacement
+07:25 +413: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: one interaction emits one aggregate ready-ahead summary without per-frame logs
+07:25 +414: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: interaction diagnostics keep preparation, pointer, and ballistic scopes explicit
+07:26 +415: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: a no-scroll pointer summary cannot inherit an older ballistic velocity
+07:26 +416: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a boundary-suppressed framework handoff has one no-ballistic terminal classification
+07:26 +417: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: page resource commits do not change full virtual extent or restart ballistic metrics
+07:27 +418: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: a row-height geometry generation keeps the same logical page anchor and scroll owner
+07:27 +419: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: deferred exact-page presentation during ballistic preserves scroll identities and geometry
+07:27 +420: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: only a signed backward update asks for an immediate reverse page
+07:27 +421: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: (tearDownAll)
+07:27 +421: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_rebuild_isolation_test.dart
+07:30 +421: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_rebuild_isolation_test.dart: (setUpAll)
+07:30 +421: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_rebuild_isolation_test.dart: structural dashboard changes preserve the rail controller, position and physics
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=6, target=6, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=6, target=6, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=6, target=6, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+07:37 +422: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_rebuild_isolation_test.dart: (tearDownAll)
+07:37 +422: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_query_facet_chips_test.dart
+07:40 +422: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_query_facet_chips_test.dart: renders applied category and partner chips and removes one facet
+07:42 +423: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_query_facet_chips_test.dart: RED: projects focus chips without mutating or removing base-query facets
+07:42 +424: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_query_facet_chips_test.dart: solid facet style uses the canonical avatar color at full opacity
+07:42 +425: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/dashboard_query_facet_chips_test.dart: a hidden SearchPill fallback exposes and individually clears live search
+07:42 +426: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/domain/dashboard_temporal_availability_test.dart
+07:45 +426: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/domain/dashboard_temporal_availability_test.dart: all-time availability keeps the rail domain unrestricted
+07:45 +427: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/domain/dashboard_temporal_availability_test.dart: a restricted time filter omits excluded years and months
+07:45 +428: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/domain/dashboard_temporal_availability_test.dart: broader OR time selections do not accidentally restrict day rails
+07:45 +429: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart
+07:46 +429: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: navigation state contains structural identity and no preview lane
+07:46 +430: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: rail open is structural but settle retention emits no notification
+07:46 +431: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: stale settle cannot mutate a replaced navigation target
+07:47 +432: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: July day 31 to June clamps to day 30
+07:47 +433: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: June day 30 to July preserves day 30
+07:47 +434: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: year parent navigation preserves retained May and December
+07:47 +435: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: parent candidate is read-only and uses the exact future key
+07:47 +436: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: plane transitions preserve semantic child intent
+07:47 +437: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: settled primary targets stay canonical for axis and mother controls
+07:47 +438: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: mother offsets fail closed outside the supported calendar range
+07:47 +439: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: direction changes exact key but preserves time navigation
+07:47 +440: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: seed demo navigation uses the same structural month intent
+07:47 +441: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: applying a restricted Query reconciles an excluded current child
+07:47 +442: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: removing a query restores unrestricted time availability
+07:47 +443: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: restricted parent navigation wraps excluded years and months
+07:47 +444: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: restricted month parents wrap through allowed semantic values only
+07:47 +445: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: a single restricted parent does not create a self-navigation target
+07:47 +446: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: restricted multi-offsets never resolve back to the current parent
+07:47 +447: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: direct hierarchy targets reuse the canonical day child scope
+07:47 +448: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: segmented month offsets wrap within the selected year without carry
+07:47 +449: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: segmented day offsets wrap within the selected calendar month
+07:47 +450: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: segmented field cycles respect restricted local availability
+07:47 +451: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: one experimental fling stays anchored while each crossing publishes
+07:48 +452: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart
+07:50 +452: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: memoizes the exact canonical QueryKey object
+07:50 +453: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: month parent catalog precomputes exact day keys and labels
+07:50 +454: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: year parent catalog preserves Hungarian month labels
+07:50 +455: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: SUM catalog is an explicit retained year plus-minus twelve window
+07:50 +456: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: restricted availability removes excluded years and months from rail data
+07:50 +457: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: a single restricted value remains stationary instead of duplicating
+07:50 +458: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: three consecutive restricted months wrap in both logical directions
+07:50 +459: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: rejects an incompatible parent and child kind
+07:50 +460: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/shared/presentation/fluvi_slide_up_sheet_test.dart
+07:52 +460: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/shared/presentation/fluvi_slide_up_sheet_test.dart: reports reverse completion only after the sheet layer is removed
+07:54 +461: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/shared/presentation/fluvi_slide_up_sheet_test.dart: uses one slide-up layer with a sticky footer and releases hits after close
+07:54 +462: All tests passed!

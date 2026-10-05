@@ -1,0 +1,28 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: WR-08 isolated peaks are rounded without clipped flat samples
+00:00 +1: WR-15/19 real Dashboard host preserves tap/vertical ownership and warm cache
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=32.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+WR-19 software/proot only: 30 warm selections 402425 us; {geometryId: 436284764, textureGeometryId: null, size: Size(240.1, 128.3), clip: Rect.fromLTRB(0.0, 0.0, 240.1, 128.3), plot: Rect.fromLTRB(10.0, 36.0, 192.9, 124.3), financialBaseline: 97.79090909090908, shellVertices: 13472, projectedDepth: 16.803582491582493, styleRoute: mesh, shaderState: not-requested, shaderError: null, geometryBuilds: 1, geometryMicros: 76237, textureRequests: 0, texturePublications: 0, textureDisposals: 0, textureMicros: 0, paints: 26, selectedIndex: 30, selectedKey: 31, selectedValueMinor: 60000, tooltipText: 600 Ft, lookupRequestToPaintMicros: null, markerBounds: Rect.fromLTRB(186.7, 88.5, 199.2, 101.0), tooltipBounds: Rect.fromLTRB(154.9, 57.7, 230.9, 81.7), disposed: false}
+00:02 +2: WR-08/09 exact calendar and oblique shell depth, 28 calendar days
+00:02 +3: WR-08/09 exact calendar and oblique shell depth, 29 calendar days
+00:03 +4: WR-08/09 exact calendar and oblique shell depth, 30 calendar days
+00:03 +5: WR-08/09 exact calendar and oblique shell depth, 31 calendar days
+00:03 +6: WR-12 isolated vertex-colour pixel probe
+WR-12 vertex pixels {srcOver: [150, 130, 242, 255], dst: [150, 130, 242, 255]}
+00:03 +7: HS-07 lookup carries visible projected normals and section depth
+00:03 +8: HS-07 sloped normals and recessed overlap match the visible shell
+HS-07 atlas sloped outer=21 inner=3 overlaps=21
+00:03 +9: WR-15 exact edge selection and painted marker/tooltip containment
+00:03 +10: WR-12 failed shader load keeps the same-data painted fallback
+00:03 +11: WR-13 production async owner never paints another terrain lookup
+WR-19 retained production resource lifecycle {geometryId: 606868151, textureGeometryId: null, size: Size(240.0, 128.0), clip: Rect.fromLTRB(0.0, 0.0, 240.0, 128.0), plot: Rect.fromLTRB(10.0, 36.0, 192.9, 124.0), financialBaseline: 97.6, shellVertices: 13472, projectedDepth: 16.8, styleRoute: mesh, shaderState: not-requested, shaderError: null, geometryBuilds: 7, geometryMicros: 78250, textureRequests: 6, texturePublications: 2, textureDisposals: 6, textureMicros: 147375, paints: 13, selectedIndex: 30, selectedKey: 31, selectedValueMinor: 26800000, tooltipText: 268 k Ft, lookupRequestToPaintMicros: 14830, markerBounds: Rect.fromLTRB(186.7, 29.8, 199.2, 42.3), tooltipBounds: Rect.fromLTRB(144.0, 2.0, 240.0, 26.0), disposed: true}
+00:04 +12: WR-06 production-parent baseline, complete sparse month
+WR-06 {dataset: sparse-31-synthetic-268k, selectedStyle: terrain, route: mesh, chartLocalSize: Size(240.1, 128.3), chartGlobalBounds: Rect.fromLTRB(27.8, 308.7, 267.8, 437.0), transformToRoot: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 27.774410774410775, 308.7485970819304, 0.0, 1.0], financialPlot: Rect.fromLTRB(10.0, 36.0, 192.9, 124.3), minCorrespondingDownDepth: 7.061818181818182, highestDay: 2}
+00:04 +13: (tearDownAll)
+00:04 +13: All tests passed!

@@ -1,0 +1,124 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart
+00:00 +0: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: real daily values retain bounded interpolation and size-adaptive contour detail
+00:00 +1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-05: terrain resolves a continuous local-depth material body rather than a rectangle-global baseline fill
+00:00 +2: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: real production cache reuses equal data and invalidates size/data
+00:01 +3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: an all-zero month has an empty surface without inventing a spend ridge or marker
+00:01 +4: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-05: a sparse real spike keeps its datum ridge exact while retaining a finite local material body
+00:01 +5: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-06: the registered local wave material compiles to a FragmentShader
+00:01 +6: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-04/05: every terrain option mounts one clipped Canvas terrain without an atmospheric overlay
+00:01 +7: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: a tap callback selects the exact nearest real datum
+00:01 +8: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-07 visual: SVG-reference preset retains the reviewed oblique shell
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown while running async test code:
+Golden "../../../goldens/balance_monthly_spending_svg_reference.png": Pixel test failed, 65.14%,
+49585px diff detected.
+Failure feedback can be found at
+/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/failures
+
+When the exception was thrown, this was the stack:
+#0      LocalFileComparator.compare (package:flutter_test/src/_goldens_io.dart:108:5)
+<asynchronous suspension>
+#1      MatchesGoldenFile.matchAsync.<anonymous closure> (package:flutter_test/src/_matchers_io.dart:124:32)
+<asynchronous suspension>
+<asynchronous suspension>
+#3      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+<asynchronous suspension>
+#5      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:306:7)
+<asynchronous suspension>
+#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+The exception was caught asynchronously.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +8 -1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-07 visual: SVG-reference preset retains the reviewed oblique shell [E]
+  Test failed. See exception logs above.
+  The test description was: MTC-07 visual: SVG-reference preset retains the reviewed oblique shell
+
+00:02 +8 -1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-07 visual: a narrow monthly card keeps a true shaded surface for a sparse real spike
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown while running async test code:
+Golden "../../../goldens/balance_monthly_spending_sparse_spike.png": Pixel test failed, 42.51%,
+25994px diff detected.
+Failure feedback can be found at
+/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/failures
+
+When the exception was thrown, this was the stack:
+#0      LocalFileComparator.compare (package:flutter_test/src/_goldens_io.dart:108:5)
+<asynchronous suspension>
+#1      MatchesGoldenFile.matchAsync.<anonymous closure> (package:flutter_test/src/_matchers_io.dart:124:32)
+<asynchronous suspension>
+<asynchronous suspension>
+#3      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+<asynchronous suspension>
+#5      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:347:7)
+<asynchronous suspension>
+#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+The exception was caught asynchronously.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +8 -2: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-07 visual: a narrow monthly card keeps a true shaded surface for a sparse real spike [E]
+  Test failed. See exception logs above.
+  The test description was: BMR-07 visual: a narrow monthly card keeps a true shaded surface for a sparse real spike
+
+00:02 +8 -2: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-07 visual: a zero month has no decorative landscape or financial marker
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown while running async test code:
+Golden "../../../goldens/balance_monthly_spending_zero.png": Pixel test failed, 5.79%, 3541px diff
+detected.
+Failure feedback can be found at
+/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/failures
+
+When the exception was thrown, this was the stack:
+#0      LocalFileComparator.compare (package:flutter_test/src/_goldens_io.dart:108:5)
+<asynchronous suspension>
+#1      MatchesGoldenFile.matchAsync.<anonymous closure> (package:flutter_test/src/_matchers_io.dart:124:32)
+<asynchronous suspension>
+<asynchronous suspension>
+#3      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)
+<asynchronous suspension>
+<asynchronous suspension>
+#5      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:403:7)
+<asynchronous suspension>
+#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from dart:async and package:stack_trace)
+
+The exception was caught asynchronously.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +8 -3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-07 visual: a zero month has no decorative landscape or financial marker [E]
+  Test failed. See exception logs above.
+  The test description was: BMR-07 visual: a zero month has no decorative landscape or financial marker
+
+00:02 +8 -3: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart
+00:05 +8 -3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: HS-05 no chart atmosphere generation, overlay or animation owner
+00:05 +9 -3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: WR-28 bounded controls have one owner shared by Mind and Month
+00:05 +10 -3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: MTC-02 RED: the four-choice monthly chart catalog is owned by Balance presentation settings
+00:05 +11 -3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: BMR-06 boundary: the terrain uses one cached material painter with a vertex-lit fallback and registered FragmentProgram rather than contour widgets
+00:05 +12 -3: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_native_platform_boundary_test.dart
+00:07 +12 -3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_native_platform_boundary_test.dart: MTC-02 boundary: Android persists the four-choice monthly spending renderer independently from Header graph selection
+00:08 +13 -3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_native_platform_boundary_test.dart: MTC-06 boundary: the monthly terrain is presentation-only and does not acquire ledger/query or backdrop-filter ownership
+00:08 +14 -3: Some tests failed.

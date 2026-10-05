@@ -1,0 +1,19 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart
+00:00 +0: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: real daily values retain bounded interpolation and size-adaptive contour detail
+00:00 +1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-05: terrain resolves a continuous local-depth material body rather than a rectangle-global baseline fill
+00:00 +2: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: real production cache reuses equal data and invalidates size/data
+00:01 +3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: an all-zero month has an empty surface without inventing a spend ridge or marker
+00:01 +4: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-05: a sparse real spike keeps its datum ridge exact while retaining a finite local material body
+00:01 +5: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: BMR-06: the registered local wave material compiles to a FragmentShader
+00:01 +6: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-04/05: every terrain option mounts one clipped Canvas terrain without an atmospheric overlay
+00:02 +7: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart: MTC-03: a tap callback selects the exact nearest real datum
+00:02 +8: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart
+00:05 +8: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: HS-05 no chart atmosphere generation, overlay or animation owner
+00:05 +9: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: WR-28 bounded controls have one owner shared by Mind and Month
+00:05 +10: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: MTC-02 RED: the four-choice monthly chart catalog is owned by Balance presentation settings
+00:05 +11: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/boundary/balance_monthly_topographic_chart_boundary_test.dart: BMR-06 boundary: the terrain uses one cached material painter with a vertex-lit fallback and registered FragmentProgram rather than contour widgets
+00:05 +12: All tests passed!

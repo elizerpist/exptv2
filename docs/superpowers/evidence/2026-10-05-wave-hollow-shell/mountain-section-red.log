@@ -1,0 +1,16 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_shell_test.dart
+00:00 +0: HS-04 depth preserves a mountain cross-section, not a flattened wall
+00:00 +0 -1: HS-04 depth preserves a mountain cross-section, not a flattened wall [E]
+  Expected: a value greater than <27.206666666666663>
+    Actual: <9.79440000000001>
+     Which: is not a value greater than <27.206666666666663>
+
+  package:matcher                                                       expect
+  package:flutter_test/src/widget_tester.dart 473:18                    expect
+  test/features/dashboard/presentation/fluvi_wave_shell_test.dart 18:7  main.<fn>
+
+00:00 +0 -1: Some tests failed.
