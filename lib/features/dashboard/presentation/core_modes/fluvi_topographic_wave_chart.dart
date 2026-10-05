@@ -139,8 +139,12 @@ final class _FluviTopographicWaveChartState
       setState(() => _surfaceShader = shader);
       previous?.dispose();
     } catch (error) {
-      _metrics.shaderState = 'failed';
-      _metrics.shaderError = error.toString();
+      if (!mounted || generation != _shaderGeneration) return;
+      _surfaceProgram = null; // A failed load must not poison a later retry.
+      setState(() {
+        _metrics.shaderState = 'failed';
+        _metrics.shaderError = error.toString();
+      });
       // The shader is a material enhancement only. The cached vertex-lit
       // surface below is deliberately equivalent financial geometry and is
       // retained for test software rendering and unsupported GPU backends.
@@ -148,8 +152,15 @@ final class _FluviTopographicWaveChartState
   }
 
   void _synchronizeCurveTexture(FluviTopographicWaveTerrain terrain) {
-    if (terrain.ridgeSamples.isEmpty ||
-        identical(_curveTextureTerrain, terrain) ||
+    if (terrain.ridgeSamples.isEmpty) {
+      _pendingCurveTextureTerrain = null;
+      _curveTexture?.dispose();
+      if (_curveTexture != null) _metrics.textureDisposals++;
+      _curveTexture = null;
+      _curveTextureTerrain = null;
+      return;
+    }
+    if (identical(_curveTextureTerrain, terrain) ||
         identical(_pendingCurveTextureTerrain, terrain)) {
       return;
     }
@@ -236,10 +247,13 @@ final class _FluviTopographicWaveChartState
         _metrics.geometryBuilds++;
         _metrics.geometryMicros += clock.elapsedMicroseconds;
       }
-      _metrics.textureTerrain = _curveTextureTerrain;
       if (widget.style == FluviTopographicWaveStyle.shaderAtmosphere) {
         _synchronizeCurveTexture(terrain);
       }
+      final boundTexture = identical(_curveTextureTerrain, terrain)
+          ? _curveTexture
+          : null;
+      _metrics.textureTerrain = boundTexture == null ? null : terrain;
       return Semantics(
         label: 'Költés napi topografikus idősor',
         hint: 'Érintse meg a napi összeg kiválasztásához',
@@ -284,7 +298,7 @@ final class _FluviTopographicWaveChartState
                       curveTexture:
                           widget.style ==
                               FluviTopographicWaveStyle.shaderAtmosphere
-                          ? _curveTexture
+                          ? boundTexture
                           : null,
                       selectedIndex: _selectedIndex,
                       tooltipForValue: widget.tooltipForValue,

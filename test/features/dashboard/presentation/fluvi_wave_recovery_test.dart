@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -100,6 +101,120 @@ void main() {
     expect(observed['dst'], [150, 130, 242, 255]);
     debugPrint('WR-12 vertex pixels $observed');
   });
+
+  testWidgets(
+    'WR-13 production async owner never paints another terrain lookup',
+    (tester) async {
+      final pending = <(FluviTopographicWaveTerrain, Completer<ui.Image>)>[];
+      Future<ui.Image> load(FluviTopographicWaveTerrain terrain) {
+        final result = Completer<ui.Image>();
+        pending.add((terrain, result));
+        return result.future;
+      }
+
+      FluviWaveRenderMetrics? metrics;
+      final a = waveData(waveLinked(waveSparseForints(31)));
+      final b = waveData(waveLinked(waveReferenceForints));
+      final c = waveData(waveLinked(waveSparseForints(31, peak: 30)));
+      Widget host(
+        List<FluviTopographicWaveDatum> data, {
+        FluviTopographicWaveStyle style =
+            FluviTopographicWaveStyle.shaderAtmosphere,
+      }) => MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 240,
+            height: 128,
+            child: FluviWaveDebugScope(
+              textureLoader: load,
+              atmosphere: false,
+              onPaint: (value) => metrics = value,
+              child: FluviTopographicWaveChart(
+                values: data,
+                style: style,
+                tooltipForValue: DashboardPreparedFormatter.compactAmountMinor,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpWidget(host(a));
+      for (var i = 0; i < 40 && metrics!.shaderState != 'ready'; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 25)),
+        );
+        await tester.pump();
+      }
+      expect(metrics!.shaderState, 'ready');
+      expect(
+        metrics!.route,
+        'mesh',
+        reason: 'cold same-data fallback while lookup pending',
+      );
+      Future<void> complete(int index) async {
+        final image = (await tester.runAsync(
+          () => FluviWaveDebugScope.createTexture(pending[index].$1),
+        ))!;
+        pending[index].$2.complete(image);
+        await tester.pump();
+        await tester.pump();
+      }
+
+      await complete(0);
+      expect(
+        metrics!.route,
+        'shader',
+        reason: 'actual shader paint, not compilation alone',
+      );
+      expect(identical(metrics!.terrain, metrics!.textureTerrain), isTrue);
+      await tester.pumpWidget(host(b));
+      expect(
+        metrics!.route,
+        'mesh',
+        reason: 'B must not use already-loaded A lookup',
+      );
+      await tester.pumpWidget(host(c));
+      await complete(2);
+      expect(metrics!.route, 'shader');
+      expect(identical(metrics!.terrain, pending[2].$1), isTrue);
+      await complete(1); // B finishes after C; no stale publication.
+      expect(identical(metrics!.textureTerrain, pending[2].$1), isTrue);
+      final requests = metrics!.textureRequests;
+      final geometryBuilds = metrics!.geometryBuilds;
+      for (final x in [1.0, 238.0, 110.0]) {
+        await tester.tapAt(
+          tester.getTopLeft(find.byType(FluviTopographicWaveChart)) +
+              Offset(x, 80),
+        );
+        await tester.pump();
+      }
+      expect(metrics!.textureRequests, requests);
+      expect(metrics!.geometryBuilds, geometryBuilds);
+      await tester.pumpWidget(host(a)); // pending A2
+      await tester.pumpWidget(host(waveData(waveLinked(List.filled(31, 0)))));
+      expect(metrics!.route, 'empty');
+      final publications = metrics!.texturePublications;
+      await complete(3);
+      expect(
+        metrics!.texturePublications,
+        publications,
+        reason: 'zero month cancels pending data',
+      );
+      await tester.pumpWidget(host(b));
+      await tester.pumpWidget(
+        host(b, style: FluviTopographicWaveStyle.terrain),
+      );
+      await complete(4);
+      expect(metrics!.route, 'mesh');
+      expect(metrics!.textureTerrain, isNull);
+      await tester.pumpWidget(host(c));
+      await tester.pumpWidget(const SizedBox());
+      await complete(5);
+      expect(metrics!.disposed, isTrue);
+      expect(metrics!.textureDisposals, metrics!.textureRequests);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('WR-06 production-parent baseline, complete sparse month', (
     tester,

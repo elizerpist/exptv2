@@ -1,0 +1,39 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: WR-13 production async owner never paints another terrain lookup
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: 'mesh'
+  Actual: 'shader'
+   Which: is different.
+          Expected: mesh
+            Actual: shader
+                    ^
+           Differ at offset 0
+B must not use already-loaded A lookup
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart:142:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart line 142
+The test description was:
+  WR-13 production async owner never paints another terrain lookup
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +0 -1: WR-13 production async owner never paints another terrain lookup [E]
+  Test failed. See exception logs above.
+  The test description was: WR-13 production async owner never paints another terrain lookup
+  
+00:01 +0 -1: (tearDownAll)
+00:01 +0 -1: Some tests failed.

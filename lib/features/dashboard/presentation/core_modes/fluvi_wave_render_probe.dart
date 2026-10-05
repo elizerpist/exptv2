@@ -28,6 +28,12 @@ final class FluviWaveDebugScope extends InheritedWidget {
   static FluviWaveDebugScope? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<FluviWaveDebugScope>();
 
+  @visibleForTesting
+  static Future<ui.Image> createTexture(FluviTopographicWaveTerrain terrain) =>
+      _FluviWaveSurfaceTexture.fromTerrain(
+        terrain,
+      ).then((value) => value.image);
+
   @override
   bool updateShouldNotify(FluviWaveDebugScope oldWidget) =>
       opaqueBody != oldWidget.opaqueBody ||
