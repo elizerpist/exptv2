@@ -1209,7 +1209,7 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
             label: 'Megtakarítás',
             child: BalanceAlternativeSavingsRingCard(
               presentation: savings,
-              expandedRingMaximum: 132,
+              expandedRingMaximum: 148,
               expandedRingHorizontalInset: 0,
               expandedPercentageFontSize:
                   BalanceAlternativeSavingsRingCard.monthYearPercentageFontSize,
@@ -1289,7 +1289,7 @@ final class _BalanceYearExtendedSheetScaffold extends StatelessWidget {
             label: 'Megtakarítás',
             child: BalanceAlternativeSavingsRingCard(
               presentation: savings,
-              expandedRingMaximum: 132,
+              expandedRingMaximum: 148,
               expandedRingHorizontalInset: 0,
               expandedPercentageFontSize:
                   BalanceAlternativeSavingsRingCard.monthYearPercentageFontSize,

@@ -159,7 +159,8 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get incomeExpenseStripHeight => logical(145);
   static double get incomeExpenseGap => logical(13);
   static double get incomeExpenseTitleSize => logical(27);
-  static double get incomeExpenseValueSize => logical(23);
+  static double get incomeExpenseValueSize => logical(29);
+  static double get incomeExpensePercentageSize => logical(20);
   static double get incomeExpenseBodySize => logical(17);
   static double get incomeExpenseStripRadius => logical(25);
   static double get incomeExpenseSwitchExtent => logical(56);
@@ -212,7 +213,7 @@ abstract final class BalanceAlternativeHtmlTokens {
   /// A pair consumes most of a month's available step. The old fixed source
   /// width cap was applied after device scaling and left the annual chart
   /// visibly sparse on phones with plenty of horizontal space.
-  static const double annualIncomeExpenseBarPairStepFraction = .84;
+  static const double annualIncomeExpenseBarPairStepFraction = .756;
   static double get annualIncomeExpenseBarGap => logical(2);
   static double get annualIncomeExpenseMonthLabelSize => logical(22);
 

@@ -40,4 +40,19 @@ void main() {
       );
     },
   );
+
+  test(
+    'BMR-06 boundary: the terrain uses one cached material painter with a vertex-lit fallback and registered FragmentProgram rather than contour widgets',
+    () async {
+      final chartSource = await File(
+        'lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart',
+      ).readAsString();
+      final pubspec = await File('pubspec.yaml').readAsString();
+
+      expect(chartSource, contains('FragmentProgram.fromAsset'));
+      expect(chartSource, contains('drawVertices'));
+      expect(chartSource, contains('surfaceFootSamples'));
+      expect(pubspec, contains('shaders/fluvi_wave_surface.frag'));
+    },
+  );
 }

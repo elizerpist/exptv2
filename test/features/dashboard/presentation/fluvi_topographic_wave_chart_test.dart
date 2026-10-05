@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:fluvi/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,13 @@ void main() {
     FluviTopographicWaveDatum(key: 4, value: 9000, label: '4'),
     FluviTopographicWaveDatum(key: 5, value: 4000, label: '5'),
     FluviTopographicWaveDatum(key: 6, value: 6800, label: '6'),
+  ];
+  const sparseSpike = <FluviTopographicWaveDatum>[
+    FluviTopographicWaveDatum(key: 1, value: 0, label: '1'),
+    FluviTopographicWaveDatum(key: 2, value: 1200, label: '2'),
+    FluviTopographicWaveDatum(key: 3, value: 268000, label: '3'),
+    FluviTopographicWaveDatum(key: 4, value: 800, label: '4'),
+    FluviTopographicWaveDatum(key: 5, value: 0, label: '5'),
   ];
 
   test(
@@ -27,10 +36,11 @@ void main() {
       expect(terrain.depthLayers.last.depth, closeTo(1, .001));
       expect(
         terrain.depthLayers.first.opacity,
-        greaterThanOrEqualTo(.18),
+        inInclusiveRange(.12, .14),
         reason:
-            'At the real monthly-card scale the source SVG has visibly '
-            'merged terrain volume, not imperceptible contour bookkeeping.',
+            'The contour is a restrained surface-detail layer; the filled '
+            'locally-lit body, rather than a high-alpha line stack, owns '
+            'the visible terrain volume.',
       );
       expect(
         terrain.depthLayers.first.opacity,
@@ -50,6 +60,32 @@ void main() {
           expect(y, inInclusiveRange(lower, upper));
         }
       }
+    },
+  );
+
+  test(
+    'BMR-05: terrain resolves a continuous local-depth material body rather than a rectangle-global baseline fill',
+    () {
+      final terrain = FluviTopographicWaveTerrain.resolve(
+        values: values,
+        size: const Size(346, 132),
+      );
+
+      expect(
+        terrain.surfaceFootSamples,
+        hasLength(terrain.ridgeSamples.length),
+      );
+      expect(terrain.surfacePath.contains(terrain.ridgeSamples.first), isTrue);
+      expect(
+        terrain.surfaceFootSamples.first.dy,
+        greaterThan(terrain.ridgeSamples.first.dy),
+      );
+      expect(
+        terrain.surfaceFootSamples.map((point) => point.dy).toSet().length,
+        greaterThan(1),
+        reason:
+            'The material foot follows local terrain, not one global baseline.',
+      );
     },
   );
 
@@ -89,6 +125,45 @@ void main() {
       expect(terrain.highestIndex, isNull);
       expect(terrain.atmospheres, hasLength(4));
       expect(terrain.nearestIndexForX(173), isNull);
+    },
+  );
+
+  test(
+    'BMR-05: a sparse real spike keeps its datum ridge exact while retaining a finite local material body',
+    () {
+      final terrain = FluviTopographicWaveTerrain.resolve(
+        values: sparseSpike,
+        size: const Size(312, 196),
+      );
+
+      expect(terrain.highestIndex, 2);
+      expect(
+        terrain.dataOffsets.every(
+          (point) => terrain.dataOffsets[2].dy <= point.dy,
+        ),
+        isTrue,
+      );
+      expect(
+        terrain.surfaceFootSamples[2].dy,
+        greaterThan(terrain.dataOffsets[2].dy),
+      );
+      expect(
+        terrain.surfaceFootSamples.every(
+          (point) => point.dy.isFinite && point.dy <= terrain.plot.bottom,
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'BMR-06: the registered local wave material compiles to a FragmentShader',
+    () async {
+      final program = await ui.FragmentProgram.fromAsset(
+        'shaders/fluvi_wave_surface.frag',
+      );
+      final shader = program.fragmentShader();
+      shader.dispose();
     },
   );
 
@@ -199,6 +274,90 @@ void main() {
         matchesGoldenFile(
           '../../../goldens/balance_monthly_spending_svg_reference.png',
         ),
+      );
+    },
+  );
+
+  testWidgets(
+    'BMR-07 visual: a narrow monthly card keeps a true shaded surface for a sparse real spike',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            backgroundColor: const Color(0xfffdfdff),
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: RepaintBoundary(
+                key: const ValueKey<String>(
+                  'balance-monthly-spending-sparse-spike-golden',
+                ),
+                child: SizedBox(
+                  width: 312,
+                  height: 196,
+                  child: FluviTopographicWaveChart(
+                    values: sparseSpike,
+                    style: FluviTopographicWaveStyle.svgReference,
+                    tooltipForValue: (value) => '$value Ft',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-monthly-spending-sparse-spike-golden',
+          ),
+        ),
+        matchesGoldenFile(
+          '../../../goldens/balance_monthly_spending_sparse_spike.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'BMR-07 visual: a zero month retains only decorative atmosphere and no financial marker',
+    (tester) async {
+      const zeroValues = <FluviTopographicWaveDatum>[
+        FluviTopographicWaveDatum(key: 1, value: 0, label: '1'),
+        FluviTopographicWaveDatum(key: 2, value: 0, label: '2'),
+        FluviTopographicWaveDatum(key: 3, value: 0, label: '3'),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            backgroundColor: const Color(0xfffdfdff),
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: RepaintBoundary(
+                key: const ValueKey<String>(
+                  'balance-monthly-spending-zero-golden',
+                ),
+                child: SizedBox(
+                  width: 312,
+                  height: 196,
+                  child: FluviTopographicWaveChart(
+                    values: zeroValues,
+                    style: FluviTopographicWaveStyle.svgReference,
+                    tooltipForValue: (value) => '$value Ft',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('0 Ft'), findsNothing);
+      await expectLater(
+        find.byKey(
+          const ValueKey<String>('balance-monthly-spending-zero-golden'),
+        ),
+        matchesGoldenFile('../../../goldens/balance_monthly_spending_zero.png'),
       );
     },
   );

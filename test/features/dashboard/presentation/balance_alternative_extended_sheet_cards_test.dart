@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'BAL-YEAR-02 RED: annual income/expense pairs visibly occupy their month steps and labels remain readable',
+    'BAL-YEAR-02: annual income/expense pairs reserve ten percent more breathing room while labels remain readable',
     () {
       expect(
         BalanceAlternativeHtmlTokens.annualLegendSize,
@@ -29,10 +29,15 @@ void main() {
           plotWidth: 360,
           bucketCount: 12,
         ),
-        greaterThanOrEqualTo(360 / 12 * .36),
+        closeTo(
+          (360 / 12 * .756 -
+                  BalanceAlternativeHtmlTokens.annualIncomeExpenseBarGap) /
+              2,
+          .001,
+        ),
         reason:
-            'Each income/expense column needs over a third of its month '
-            'step; the former logical(14) cap stranded most of the plot.',
+            'The pair fraction is exactly 10% narrower than the earlier .84 '
+            'allocation, leaving deliberate month-to-month space.',
       );
       expect(
         2 *
@@ -106,6 +111,116 @@ void main() {
           findsOneWidget,
         );
       }
+    },
+  );
+
+  testWidgets(
+    'BMR-01/02: Month savings uses a centred large metric without a separator and the Költés chart keeps the recovered insight height',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 500,
+              height: 440,
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: BalanceAlternativeDailySpendCard(
+                      timeScope: MonthScope(
+                        const YearMonth(year: 2026, month: 8),
+                      ),
+                      chartPresentation:
+                          BalanceMonthlySpendingChartPresentation.topographic,
+                      presentation: _monthlySpendForTerrainGolden(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 170,
+                    child: BalanceAlternativeSavingsRingCard(
+                      expandedRingMaximum: 150,
+                      expandedRingHorizontalInset: 0,
+                      expandedPercentageFontSize:
+                          BalanceAlternativeSavingsRingCard
+                              .monthYearPercentageFontSize,
+                      presentation:
+                          BalanceAlternativeSavingsPresentation.fromTotals(
+                            incomeMinor: 500000,
+                            expenseMinor: 200000,
+                            retentionBasisPoints: 6000,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Javuló tendencia'), findsNothing);
+      expect(find.byType(Divider), findsNothing);
+      final amount = tester.widget<Text>(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-savings-amount'),
+        ),
+      );
+      expect(amount.style?.fontSize, greaterThanOrEqualTo(16));
+      expect(
+        find.byKey(const ValueKey<String>('balance-alternative-savings-ring')),
+        findsOneWidget,
+      );
+      final chart = find.byKey(
+        const ValueKey<String>('balance-monthly-spending-wave-terrain'),
+      );
+      expect(tester.getSize(chart).height, greaterThan(180));
+    },
+  );
+
+  testWidgets(
+    'BMR-03: the Monthly income/expense strip has no explanatory copy, aligns the expense metric to its end, and reuses Budget 3D chrome at the partition',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 440,
+              height: 300,
+              child: BalanceAlternativeIncomeExpenseStripCard(
+                presentation: BalanceAlternativeIncomeExpenseStripPresentation(
+                  incomeMinor: 250000,
+                  expenseMinor: 750000,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.textContaining('Ebben a hónapban'), findsNothing);
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-alternative-income-expense-3d-switch',
+          ),
+        ),
+        findsOneWidget,
+      );
+      final expensePanel = find.byKey(
+        const ValueKey<String>('balance-alternative-expense-panel'),
+      );
+      final expenseAmount = find.byKey(
+        const ValueKey<String>('balance-alternative-expense-amount'),
+      );
+      expect(
+        tester.getTopRight(expenseAmount).dx,
+        closeTo(tester.getTopRight(expensePanel).dx, 14),
+      );
+      expect(
+        tester.widget<Text>(expenseAmount).style?.fontSize,
+        greaterThanOrEqualTo(BalanceAlternativeHtmlTokens.logical(27)),
+      );
     },
   );
 

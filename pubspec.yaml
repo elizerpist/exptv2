@@ -31,6 +31,7 @@ flutter:
   uses-material-design: true
   shaders:
     - shaders/dashboard_header_field.frag
+    - shaders/fluvi_wave_surface.frag
   assets:
     - assets/fluvi/actions/
     - assets/fluvi/brand/

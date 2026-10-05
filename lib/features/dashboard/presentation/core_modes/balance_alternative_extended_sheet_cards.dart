@@ -224,11 +224,6 @@ final class BalanceAlternativeDailySpendCard extends StatelessWidget {
                 presentation: chartPresentation,
               ),
             ),
-            SizedBox(height: BalanceAlternativeHtmlTokens.dailyGap),
-            _DailySpendInsight(
-              lowerSpend: lowerSpend,
-              hasComparison: change != null,
-            ),
           ],
         ),
       ),
@@ -299,129 +294,6 @@ final class _AlternativeTallIcon extends StatelessWidget {
         icon,
         size: BalanceAlternativeHtmlTokens.dailyIconWidth,
         color: BalanceAlternativeHtmlTokens.purple,
-      ),
-    ),
-  );
-}
-
-final class _DailySpendInsight extends StatelessWidget {
-  const _DailySpendInsight({
-    required this.lowerSpend,
-    required this.hasComparison,
-  });
-
-  final bool lowerSpend;
-  final bool hasComparison;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    height: BalanceAlternativeHtmlTokens.dailyInsightHeight,
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(
-          BalanceAlternativeHtmlTokens.dailyInsightRadius,
-        ),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFFEFFBF5), Color(0xFFE5F8EF)],
-        ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: BalanceAlternativeHtmlTokens.logical(18),
-          vertical: BalanceAlternativeHtmlTokens.logical(15),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxHeight <
-                BalanceAlternativeHtmlTokens.logical(40)) {
-              return Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    lowerSpend ? 'Javuló tendencia' : 'Növekvő költés',
-                    style: _text(
-                      BalanceAlternativeHtmlTokens.dailyInsightTitleSize,
-                      BalanceAlternativeHtmlTokens.textPrimary,
-                      FontWeight.w800,
-                      height: 1,
-                    ),
-                  ),
-                ),
-              );
-            }
-            return Row(
-              children: <Widget>[
-                DecoratedBox(
-                  decoration: const BoxDecoration(
-                    color: BalanceAlternativeHtmlTokens.positiveLight,
-                    shape: BoxShape.circle,
-                  ),
-                  child: SizedBox.square(
-                    dimension:
-                        BalanceAlternativeHtmlTokens.dailyInsightIconExtent,
-                    child: Icon(
-                      lowerSpend
-                          ? Icons.trending_down_rounded
-                          : Icons.trending_up_rounded,
-                      color: BalanceAlternativeHtmlTokens.positive,
-                      size: BalanceAlternativeHtmlTokens.logical(29),
-                    ),
-                  ),
-                ),
-                SizedBox(width: BalanceAlternativeHtmlTokens.logical(14)),
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      width: BalanceAlternativeHtmlTokens.logical(188),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            !hasComparison
-                                ? 'Nincs összehasonlítás'
-                                : lowerSpend
-                                ? 'Javuló tendencia'
-                                : 'Növekvő költés',
-                            style: _text(
-                              BalanceAlternativeHtmlTokens
-                                  .dailyInsightTitleSize,
-                              BalanceAlternativeHtmlTokens.textPrimary,
-                              FontWeight.w800,
-                              height: 1,
-                            ),
-                          ),
-                          SizedBox(
-                            height: BalanceAlternativeHtmlTokens.logical(7),
-                          ),
-                          Text(
-                            !hasComparison
-                                ? 'A következő összehasonlítható időszakban itt jelenik meg a változás.'
-                                : lowerSpend
-                                ? 'A napi költésed csökkenő tendenciát mutat az előző időszakhoz képest.'
-                                : 'A napi költésed emelkedő tendenciát mutat az előző időszakhoz képest.',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: _text(
-                              BalanceAlternativeHtmlTokens.dailyBodySize,
-                              BalanceAlternativeHtmlTokens.supportingText,
-                              FontWeight.w500,
-                              height: 1.23,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
       ),
     ),
   );
@@ -650,6 +522,7 @@ final class _SavingsProgressRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
+    key: const ValueKey<String>('balance-alternative-savings-ring'),
     dimension: dimension,
     child: Stack(
       fit: StackFit.expand,
@@ -743,7 +616,7 @@ final class _ExpandedSavingsCard extends StatelessWidget {
         return Column(
           children: <Widget>[
             const Align(
-              alignment: Alignment.centerLeft,
+              alignment: Alignment.center,
               child: Text(
                 'Megtakarítás',
                 style: TextStyle(
@@ -755,15 +628,6 @@ final class _ExpandedSavingsCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            _SavingsProgressRing(
-              dimension: ringSize,
-              percentageLabel: percentageLabel,
-              progress: progress,
-              labelFontSize: percentageFontSize,
-            ),
-            const SizedBox(height: 2),
-            const Divider(height: 1, thickness: .5),
-            const SizedBox(height: 3),
             Text(
               amountLabel,
               key: const ValueKey<String>('balance-alternative-savings-amount'),
@@ -771,11 +635,18 @@ final class _ExpandedSavingsCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: _text(
-                11,
+                17,
                 BalanceAlternativeHtmlTokens.textPrimary,
                 FontWeight.w800,
                 height: 1,
               ),
+            ),
+            const Spacer(),
+            _SavingsProgressRing(
+              dimension: ringSize,
+              percentageLabel: percentageLabel,
+              progress: progress,
+              labelFontSize: percentageFontSize,
             ),
           ],
         );
@@ -838,7 +709,6 @@ final class BalanceAlternativeIncomeExpenseStripCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final incomePercent = presentation.incomeBasisPoints / 100;
     final expensePercent = 100 - incomePercent;
-    final positive = presentation.incomeMinor >= presentation.expenseMinor;
     return BalanceAlternativeHtmlCardSurface(
       minimumContentSize:
           BalanceAlternativeHtmlTokens.extendedSheetCombinedCardMinimumSize,
@@ -918,49 +788,45 @@ final class BalanceAlternativeIncomeExpenseStripCard extends StatelessWidget {
                                   BalanceAlternativeHtmlTokens
                                       .incomeExpenseSwitchExtent) /
                               2,
-                          child: DecoratedBox(
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: <BoxShadow>[
-                                BoxShadow(
-                                  color: Color(0x1F14213A),
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
+                          child: SizedBox.square(
+                            dimension: BalanceAlternativeHtmlTokens
+                                .incomeExpenseSwitchExtent,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: <Widget>[
+                                Transform.scale(
+                                  scale:
+                                      BalanceAlternativeHtmlTokens
+                                          .incomeExpenseSwitchExtent /
+                                      BudgetCategoryAvatarGeometry
+                                          .selectionShellVisualDiameter,
+                                  child: const SizedBox.square(
+                                    dimension: BudgetCategoryAvatarGeometry
+                                        .selectionShellVisualDiameter,
+                                    child: BudgetCategoryAvatarSelectionChrome(
+                                      key: ValueKey<String>(
+                                        'balance-alternative-income-expense-3d-switch',
+                                      ),
+                                      categoryColor:
+                                          BalanceAlternativeHtmlTokens.purple,
+                                      progressColor:
+                                          BalanceAlternativeHtmlTokens.purple,
+                                      sourceProgress: .5,
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.swap_horiz_rounded,
+                                  color: const Color(0xFF52658A),
+                                  size: BalanceAlternativeHtmlTokens.logical(
+                                    30,
+                                  ),
                                 ),
                               ],
-                            ),
-                            child: SizedBox.square(
-                              dimension: BalanceAlternativeHtmlTokens
-                                  .incomeExpenseSwitchExtent,
-                              child: Icon(
-                                Icons.swap_horiz_rounded,
-                                color: const Color(0xFF52658A),
-                                size: BalanceAlternativeHtmlTokens.logical(30),
-                              ),
                             ),
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: BalanceAlternativeHtmlTokens.incomeExpenseGap),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      positive
-                          ? 'Ebben a hónapban a bevételed meghaladja a kiadásaidat.'
-                          : 'Ebben a hónapban a kiadásaid meghaladják a bevételedet.',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: _text(
-                        BalanceAlternativeHtmlTokens.incomeExpenseBodySize,
-                        BalanceAlternativeHtmlTokens.supportingText,
-                        FontWeight.w500,
-                        height: 1.25,
-                      ),
                     ),
                   ),
                 ),
@@ -1077,88 +943,112 @@ final class _IncomeExpensePanel extends StatelessWidget {
   final double percentage;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.horizontal(
-        left: income
-            ? Radius.circular(
-                BalanceAlternativeHtmlTokens.incomeExpenseStripRadius,
-              )
-            : Radius.zero,
-        right: income
-            ? Radius.zero
-            : Radius.circular(
-                BalanceAlternativeHtmlTokens.incomeExpenseStripRadius,
+  Widget build(BuildContext context) {
+    final crossAxisAlignment = income
+        ? CrossAxisAlignment.start
+        : CrossAxisAlignment.end;
+    final textAlign = income ? TextAlign.left : TextAlign.right;
+    return DecoratedBox(
+      key: ValueKey<String>(
+        income
+            ? 'balance-alternative-income-panel'
+            : 'balance-alternative-expense-panel',
+      ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.horizontal(
+          left: income
+              ? Radius.circular(
+                  BalanceAlternativeHtmlTokens.incomeExpenseStripRadius,
+                )
+              : Radius.zero,
+          right: income
+              ? Radius.zero
+              : Radius.circular(
+                  BalanceAlternativeHtmlTokens.incomeExpenseStripRadius,
+                ),
+        ),
+        border: income
+            ? null
+            : Border(
+                left: BorderSide(
+                  color: Colors.white,
+                  width: BalanceAlternativeHtmlTokens.logical(6),
+                ),
               ),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: income
+              ? const <Color>[
+                  BalanceAlternativeHtmlTokens.incomeStripStart,
+                  BalanceAlternativeHtmlTokens.incomeStripEnd,
+                ]
+              : const <Color>[
+                  BalanceAlternativeHtmlTokens.expenseStripStart,
+                  BalanceAlternativeHtmlTokens.expenseStripEnd,
+                ],
+        ),
       ),
-      border: income
-          ? null
-          : Border(
-              left: BorderSide(
-                color: Colors.white,
-                width: BalanceAlternativeHtmlTokens.logical(6),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          BalanceAlternativeHtmlTokens.logical(13),
+          BalanceAlternativeHtmlTokens.logical(18),
+          BalanceAlternativeHtmlTokens.logical(13),
+          BalanceAlternativeHtmlTokens.logical(15),
+        ),
+        child: Column(
+          crossAxisAlignment: crossAxisAlignment,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(
+              income ? 'Bevétel' : 'Kiadás',
+              textAlign: textAlign,
+              style: _text(
+                BalanceAlternativeHtmlTokens.smallBodySize,
+                const Color(0xFF1B3560),
+                FontWeight.w600,
+                height: 1,
               ),
             ),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: income
-            ? const <Color>[
-                BalanceAlternativeHtmlTokens.incomeStripStart,
-                BalanceAlternativeHtmlTokens.incomeStripEnd,
-              ]
-            : const <Color>[
-                BalanceAlternativeHtmlTokens.expenseStripStart,
-                BalanceAlternativeHtmlTokens.expenseStripEnd,
-              ],
-      ),
-    ),
-    child: Padding(
-      padding: EdgeInsets.fromLTRB(
-        BalanceAlternativeHtmlTokens.logical(13),
-        BalanceAlternativeHtmlTokens.logical(18),
-        BalanceAlternativeHtmlTokens.logical(13),
-        BalanceAlternativeHtmlTokens.logical(15),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Text(
-            income ? 'Bevétel' : 'Kiadás',
-            style: _text(
-              BalanceAlternativeHtmlTokens.smallBodySize,
-              const Color(0xFF1B3560),
-              FontWeight.w600,
-              height: 1,
+            SizedBox(height: BalanceAlternativeHtmlTokens.logical(5)),
+            Text(
+              DashboardPreparedFormatter.compactAmountMinor(value),
+              key: ValueKey<String>(
+                income
+                    ? 'balance-alternative-income-amount'
+                    : 'balance-alternative-expense-amount',
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: textAlign,
+              style: _text(
+                BalanceAlternativeHtmlTokens.incomeExpenseValueSize,
+                BalanceAlternativeHtmlTokens.textPrimary,
+                FontWeight.w800,
+                height: 1,
+              ),
             ),
-          ),
-          SizedBox(height: BalanceAlternativeHtmlTokens.logical(5)),
-          Text(
-            DashboardPreparedFormatter.compactAmountMinor(value),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _text(
-              BalanceAlternativeHtmlTokens.incomeExpenseValueSize,
-              BalanceAlternativeHtmlTokens.textPrimary,
-              FontWeight.w800,
-              height: 1,
+            SizedBox(height: BalanceAlternativeHtmlTokens.logical(5)),
+            Text(
+              '${percentage.round()}%',
+              key: ValueKey<String>(
+                income
+                    ? 'balance-alternative-income-percentage'
+                    : 'balance-alternative-expense-percentage',
+              ),
+              textAlign: textAlign,
+              style: _text(
+                BalanceAlternativeHtmlTokens.incomeExpensePercentageSize,
+                const Color(0xFF395A83),
+                FontWeight.w600,
+                height: 1,
+              ),
             ),
-          ),
-          SizedBox(height: BalanceAlternativeHtmlTokens.logical(5)),
-          Text(
-            '${percentage.round()}%',
-            style: _text(
-              BalanceAlternativeHtmlTokens.smallBodySize,
-              const Color(0xFF395A83),
-              FontWeight.w600,
-              height: 1,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Éves Card 3, with the reference positive/negative monthly close bars and
