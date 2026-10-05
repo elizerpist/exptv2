@@ -7,6 +7,7 @@ final class FluviWaveDebugScope extends InheritedWidget {
     super.key,
     required super.child,
     this.opaqueBody = false,
+    this.materialOnly = false,
     this.bounds = false,
     this.glow = true,
     this.contours = true,
@@ -17,6 +18,7 @@ final class FluviWaveDebugScope extends InheritedWidget {
   });
 
   final bool opaqueBody;
+  final bool materialOnly;
   final bool bounds;
   final bool glow;
   final bool contours;
@@ -37,6 +39,7 @@ final class FluviWaveDebugScope extends InheritedWidget {
   @override
   bool updateShouldNotify(FluviWaveDebugScope oldWidget) =>
       opaqueBody != oldWidget.opaqueBody ||
+      materialOnly != oldWidget.materialOnly ||
       bounds != oldWidget.bounds ||
       glow != oldWidget.glow ||
       contours != oldWidget.contours ||

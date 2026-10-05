@@ -1,63 +1,49 @@
 #include <flutter/runtime_effect.glsl>
 
-// Bounded 2.5D material for the real Balance Month spending ridge. The Dart
-// side supplies two opaque 16-bit lookup rows: ridge Y and material foot Y.
-// Physical x and texel centres coincide. The financial curve is never displaced; the
-// shader only shades the already-clipped material surface.
+// Same analytic height field as _FluviWaveMaterial. Palette and lighting
+// authority stays in Dart, supplied as uniforms. No invented financial ridge.
 uniform vec2 uSize;
 uniform float uOpacity;
 uniform vec4 uPlot;
+uniform vec3 uShade;
+uniform vec3 uBody;
+uniform vec3 uPearl;
+uniform vec3 uPeriwinkle;
+uniform vec3 uMist;
+uniform vec3 uLight;
+uniform float uRoundness;
+uniform float uLookupWidth;
 uniform sampler2D uCurveTexture;
-
-vec3 ramp(float depth) {
-  vec3 pearl = vec3(0.984, 0.980, 1.0);
-  vec3 top = vec3(0.718, 0.671, 1.0);
-  vec3 shade = vec3(0.447, 0.361, 0.831);
-  vec3 body = vec3(0.580, 0.510, 0.949);
-  vec3 periwinkle = vec3(0.784, 0.773, 0.980);
-  vec3 ice = vec3(0.863, 0.922, 0.980);
-  vec3 mist = vec3(0.961, 0.969, 1.0);
-  if (depth < .04) return mix(pearl, top, depth / .04);
-  if (depth < .16) return mix(top, shade, (depth - .04) / .12);
-  if (depth < .52) return mix(shade, body, (depth - .16) / .36);
-  if (depth < .84) return mix(body, ice, (depth - .52) / .32);
-  return mix(ice, mist, (depth - .84) / .16);
-}
-
 out vec4 fragColor;
 
 vec2 boundaries(float x) {
-  float u = (clamp(x, 0.0, 1.0) * 1023.0 + .5) / 1024.0;
+  float u = (clamp(x, 0.0, 1.0) * (uLookupWidth - 1.0) + .5) / uLookupWidth;
   vec2 ridge = texture(uCurveTexture, vec2(u, .25)).rg;
   vec2 foot = texture(uCurveTexture, vec2(u, .75)).rg;
   return vec2(dot(ridge, vec2(65280.0, 255.0)), dot(foot, vec2(65280.0, 255.0))) / 65535.0;
 }
 
 void main() {
-  // The lookup is encoded in the actual padded data plot, not in the outer
-  // CustomPaint bounds. Keeping that coordinate space explicit guarantees
-  // that the material's local ridge/foot interpolation matches Canvas.
-  vec2 local = (FlutterFragCoord().xy - uPlot.xy) / max(uPlot.zw, vec2(1.0));
+  vec2 local = (FlutterFragCoord().xy - uPlot.xy) / uPlot.zw;
   vec2 curve = boundaries(local.x);
-  float ridge = curve.x;
-  float foot = curve.y;
-  if (foot <= ridge) { fragColor = vec4(0.0); return; }
-  float depth = clamp((local.y - ridge) / (foot - ridge), 0.0, 1.0);
-  float slope = (boundaries(local.x + 1.0 / 1023.0).x - boundaries(local.x - 1.0 / 1023.0).x) * uPlot.w / (2.0 * uPlot.z / 1023.0);
-
-  // Normal approximates a left/top/front light falling across the locally
-  // sampled material. The bright rim stays near v=0; volumetric light comes
-  // from the filled body, not a broad glowing chart line.
-  vec3 normal = normalize(vec3(-slope * 2.0, -0.95, .72));
-  vec3 light = normalize(vec3(-.42, -.76, .64));
-  float diffuse = clamp(dot(normal, light), .18, 1.0);
-  float fresnel = pow(1.0 - clamp(normal.z, 0.0, 1.0), 2.0) * .18;
-  float pixelScale = 1.0 / max(1.0, min(uSize.x, uSize.y));
-  float ridgeBand = exp(-depth * (25.0 + pixelScale)) * .24;
-  float occlusion = smoothstep(.02, .28, depth) * (1.0 - depth) * .12;
-  vec3 color = ramp(depth);
-  color = mix(color * .72, color * 1.12, diffuse);
-  color += vec3(.15, .13, .22) * (fresnel + ridgeBand - occlusion);
-  float alpha = pow(1.0 - depth, .58) * .94 * uOpacity;
+  if (curve.y <= curve.x) { fragColor = vec4(0.0); return; }
+  float depth = clamp((local.y - curve.x) / (curve.y - curve.x), 0.0, 1.0);
+  float stepX = 1.0 / (uLookupWidth - 1.0);
+  float lo = max(0.0, local.x - stepX);
+  float hi = min(1.0, local.x + stepX);
+  vec2 slopes = (boundaries(hi) - boundaries(lo)) * uPlot.w / ((hi - lo) * uPlot.z);
+  float dw = slopes.y - slopes.x;
+  float dd = -1.57079632679 * sin(1.57079632679 * depth);
+  float zx = uRoundness * (dw * cos(1.57079632679 * depth) - dd * (slopes.x + depth * dw));
+  float zy = uRoundness * dd;
+  vec3 normal = normalize(vec3(-zx, -zy, 1.0));
+  vec3 light = normalize(uLight);
+  float diffuse = clamp(dot(normal, light), 0.0, 1.0);
+  float specular = pow(max(0.0, dot(normal, normalize(light + vec3(0.0, 0.0, 1.0)))), 14.0);
+  vec3 color = mix(uShade, uBody, smoothstep(.10, .95, diffuse));
+  color = mix(color, uPearl, specular * .28 + exp(-depth * 48.0) * .20);
+  color = mix(color, uPeriwinkle, smoothstep(.48, .95, depth) * .8);
+  color = mix(color, uMist, smoothstep(.85, 1.0, depth) * .4);
+  float alpha = .98 * (1.0 - smoothstep(.72, 1.0, depth)) * uOpacity;
   fragColor = vec4(color * alpha, alpha);
 }

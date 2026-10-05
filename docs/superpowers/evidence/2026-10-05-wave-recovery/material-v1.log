@@ -1,0 +1,13 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_visual_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: WR-18 actual Month material reference and ablation scenes
+WR-18 reference-mesh-body-412 substantial violet body coverage=0.3081776778274833 {geometryId: 682155752, textureGeometryId: null, size: Size(240.1, 128.3), clip: Rect.fromLTRB(0.0, 0.0, 240.1, 128.3), plot: Rect.fromLTRB(10.0, 36.0, 230.1, 124.3), financialBaseline: 93.37727272727273, styleRoute: mesh, shaderState: not-requested, shaderError: null, geometryBuilds: 1, geometryMicros: 347044, textureRequests: 0, texturePublications: 0, textureDisposals: 0, textureMicros: 0, paints: 2, selectedIndex: null, markerBounds: null, tooltipBounds: null, disposed: false}
+WR-18 reference-shader-body-412 substantial violet body coverage=0.3090432545685464 {geometryId: 682155752, textureGeometryId: 682155752, size: Size(240.1, 128.3), clip: Rect.fromLTRB(0.0, 0.0, 240.1, 128.3), plot: Rect.fromLTRB(10.0, 36.0, 230.1, 124.3), financialBaseline: 93.37727272727273, styleRoute: shader, shaderState: ready, shaderError: null, geometryBuilds: 1, geometryMicros: 347044, textureRequests: 1, texturePublications: 1, textureDisposals: 0, textureMicros: 248271, paints: 8, selectedIndex: null, markerBounds: null, tooltipBounds: null, disposed: false}
+WR-18 sparse-mesh-body-412 substantial violet body coverage=0.19227937904980708 {geometryId: 141117488, textureGeometryId: null, size: Size(240.1, 128.3), clip: Rect.fromLTRB(0.0, 0.0, 240.1, 128.3), plot: Rect.fromLTRB(10.0, 36.0, 230.1, 124.3), financialBaseline: 93.37727272727273, styleRoute: mesh, shaderState: not-requested, shaderError: null, geometryBuilds: 2, geometryMicros: 408604, textureRequests: 2, texturePublications: 2, textureDisposals: 2, textureMicros: 338902, paints: 13, selectedIndex: null, markerBounds: null, tooltipBounds: null, disposed: false}
+WR-18 same-data shader/mesh mean channel difference=0.21198742891349895 /255
+00:34 +1: (tearDownAll)
+00:34 +1: All tests passed!

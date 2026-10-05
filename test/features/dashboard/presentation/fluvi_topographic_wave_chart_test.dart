@@ -13,16 +13,23 @@ void main() {
     FluviTopographicWaveDatum(key: 5, value: 4000, label: '5'),
     FluviTopographicWaveDatum(key: 6, value: 6800, label: '6'),
   ];
-  const sparseSpike = <FluviTopographicWaveDatum>[
-    FluviTopographicWaveDatum(key: 1, value: 0, label: '1'),
-    FluviTopographicWaveDatum(key: 2, value: 1200, label: '2'),
-    FluviTopographicWaveDatum(key: 3, value: 268000, label: '3'),
-    FluviTopographicWaveDatum(key: 4, value: 800, label: '4'),
-    FluviTopographicWaveDatum(key: 5, value: 0, label: '5'),
-  ];
+  final sparseSpike = List.generate(
+    31,
+    (index) => FluviTopographicWaveDatum(
+      key: index + 1,
+      value: index == 2
+          ? 26800000
+          : index == 18
+          ? 13000000
+          : index % 4 == 0
+          ? 100000
+          : 0,
+      label: '${index + 1}',
+    ),
+  );
 
   test(
-    'MTC-03: real daily values produce a cached Catmull–Rom ridge and thirty progressively flattened contours',
+    'MTC-03: real daily values retain bounded interpolation and size-adaptive contour detail',
     () {
       final terrain = FluviTopographicWaveTerrain.resolve(
         values: values,
@@ -30,13 +37,13 @@ void main() {
       );
 
       expect(terrain.ridgeSamples.length, greaterThan(60));
-      expect(terrain.depthLayers, hasLength(30));
-      expect(terrain.atmospheres, hasLength(4));
+      expect(terrain.depthLayers.length, inInclusiveRange(6, 14));
+      expect(terrain.atmospheres, hasLength(3));
       expect(terrain.depthLayers.first.depth, 0);
       expect(terrain.depthLayers.last.depth, closeTo(1, .001));
       expect(
         terrain.depthLayers.first.opacity,
-        inInclusiveRange(.12, .14),
+        inInclusiveRange(.06, .08),
         reason:
             'The contour is a restrained surface-detail layer; the filled '
             'locally-lit body, rather than a high-alpha line stack, owns '
@@ -46,8 +53,8 @@ void main() {
         terrain.depthLayers.first.opacity,
         greaterThan(terrain.depthLayers.last.opacity),
       );
-      expect(terrain.ridgeSamples.first.dx, closeTo(2, .01));
-      expect(terrain.ridgeSamples.last.dx, closeTo(344, .01));
+      expect(terrain.ridgeSamples.first.dx, closeTo(10, .01));
+      expect(terrain.ridgeSamples.last.dx, closeTo(336, .01));
       // 14 dense samples per source segment: the smooth spline never creates
       // a false financial peak outside the two real adjacent values.
       for (var segment = 0; segment < values.length - 1; segment += 1) {
@@ -75,7 +82,16 @@ void main() {
         terrain.surfaceFootSamples,
         hasLength(terrain.ridgeSamples.length),
       );
-      expect(terrain.surfacePath.contains(terrain.ridgeSamples.first), isTrue);
+      expect(
+        terrain.surfacePath.contains(
+          Offset.lerp(
+            terrain.ridgeSamples[20],
+            terrain.surfaceFootSamples[20],
+            .5,
+          )!,
+        ),
+        isTrue,
+      );
       expect(
         terrain.surfaceFootSamples.first.dy,
         greaterThan(terrain.ridgeSamples.first.dy),
@@ -89,19 +105,38 @@ void main() {
     },
   );
 
-  test(
-    'MTC-03: cached terrain remains stable for value-equivalent values and invalidates only for changed geometry',
-    () {
-      final cache = _TestTerrainCache();
-      final first = cache.resolve(values, const Size(346, 132));
-      final repeated = cache.resolve(
-        List<FluviTopographicWaveDatum>.of(values),
-        const Size(346, 132),
-      );
-      final resized = cache.resolve(values, const Size(300, 132));
-
-      expect(identical(first, repeated), isTrue);
-      expect(identical(first, resized), isFalse);
+  testWidgets(
+    'MTC-03: real production cache reuses equal data and invalidates size/data',
+    (tester) async {
+      FluviWaveRenderMetrics? metrics;
+      Widget host(List<FluviTopographicWaveDatum> data, double width) =>
+          MaterialApp(
+            home: Center(
+              child: SizedBox(
+                width: width,
+                height: 132,
+                child: FluviWaveDebugScope(
+                  onPaint: (value) => metrics = value,
+                  child: FluviTopographicWaveChart(
+                    values: data,
+                    style: FluviTopographicWaveStyle.terrain,
+                    tooltipForValue: (v) => '$v Ft',
+                  ),
+                ),
+              ),
+            ),
+          );
+      await tester.pumpWidget(host(values, 346));
+      final first = metrics!.terrain;
+      expect(metrics!.geometryBuilds, 1);
+      await tester.pumpWidget(host(List.of(values), 346));
+      expect(identical(metrics!.terrain, first), isTrue);
+      expect(metrics!.geometryBuilds, 1);
+      await tester.pumpWidget(host(values, 300));
+      expect(identical(metrics!.terrain, first), isFalse);
+      expect(metrics!.geometryBuilds, 2);
+      await tester.pumpWidget(host(sparseSpike, 300));
+      expect(metrics!.geometryBuilds, 3);
     },
   );
 
@@ -123,7 +158,7 @@ void main() {
       expect(terrain.depthLayers, isEmpty);
       expect(terrain.dataOffsets, isEmpty);
       expect(terrain.highestIndex, isNull);
-      expect(terrain.atmospheres, hasLength(4));
+      expect(terrain.atmospheres, hasLength(3));
       expect(terrain.nearestIndexForX(173), isNull);
     },
   );
@@ -143,10 +178,13 @@ void main() {
         ),
         isTrue,
       );
-      expect(
-        terrain.surfaceFootSamples[2].dy,
-        greaterThan(terrain.dataOffsets[2].dy),
-      );
+      for (var i = 0; i < terrain.ridgeSamples.length; i++) {
+        expect(terrain.surfaceFootSamples[i].dx, terrain.ridgeSamples[i].dx);
+        expect(
+          terrain.surfaceFootSamples[i].dy,
+          greaterThan(terrain.ridgeSamples[i].dy),
+        );
+      }
       expect(
         terrain.surfaceFootSamples.every(
           (point) => point.dy.isFinite && point.dy <= terrain.plot.bottom,
@@ -207,32 +245,31 @@ void main() {
     },
   );
 
-  testWidgets(
-    'MTC-03: a tap selects a real datum and keeps the marker inside the terrain bounds',
-    (tester) async {
-      int? selected;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 346,
-              height: 132,
-              child: FluviTopographicWaveChart(
-                values: values,
-                style: FluviTopographicWaveStyle.svgReference,
-                tooltipForValue: (value) => '$value Ft',
-                onSelectedIndexChanged: (index) => selected = index,
-              ),
+  testWidgets('MTC-03: a tap callback selects the exact nearest real datum', (
+    tester,
+  ) async {
+    int? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 346,
+            height: 132,
+            child: FluviTopographicWaveChart(
+              values: values,
+              style: FluviTopographicWaveStyle.svgReference,
+              tooltipForValue: (value) => '$value Ft',
+              onSelectedIndexChanged: (index) => selected = index,
             ),
           ),
         ),
-      );
+      ),
+    );
 
-      await tester.tapAt(const Offset(282, 72));
-      await tester.pump();
-      expect(selected, inInclusiveRange(0, values.length - 1));
-    },
-  );
+    await tester.tapAt(const Offset(282, 72));
+    await tester.pump();
+    expect(selected, 4);
+  });
 
   testWidgets(
     'MTC-07 visual: SVG-reference terrain is a clipped lavender landscape rather than a conventional line chart',
@@ -352,7 +389,16 @@ void main() {
         ),
       );
 
-      expect(find.text('0 Ft'), findsNothing);
+      final paintFinder = find
+          .descendant(
+            of: find.byType(FluviTopographicWaveChart),
+            matching: find.byType(CustomPaint),
+          )
+          .last;
+      final dynamic painter = tester.widget<CustomPaint>(paintFinder).painter;
+      expect((painter.metrics as FluviWaveRenderMetrics).markerBounds, isNull);
+      expect((painter.metrics as FluviWaveRenderMetrics).tooltipBounds, isNull);
+      expect((painter.metrics as FluviWaveRenderMetrics).route, 'empty');
       await expectLater(
         find.byKey(
           const ValueKey<String>('balance-monthly-spending-zero-golden'),
@@ -361,37 +407,4 @@ void main() {
       );
     },
   );
-}
-
-/// Mirrors the chart's structural cache contract without exposing its private
-/// state as part of the component API.
-final class _TestTerrainCache {
-  List<FluviTopographicWaveDatum>? _values;
-  Size? _size;
-  FluviTopographicWaveTerrain? _terrain;
-
-  FluviTopographicWaveTerrain resolve(
-    List<FluviTopographicWaveDatum> values,
-    Size size,
-  ) {
-    if (_terrain != null && _size == size && _sameValues(_values!, values)) {
-      return _terrain!;
-    }
-    _values = List<FluviTopographicWaveDatum>.of(values);
-    _size = size;
-    return _terrain = FluviTopographicWaveTerrain.resolve(
-      values: values,
-      size: size,
-    );
-  }
-
-  bool _sameValues(
-    List<FluviTopographicWaveDatum> left,
-    List<FluviTopographicWaveDatum> right,
-  ) =>
-      left.length == right.length &&
-      List<bool>.generate(
-        left.length,
-        (index) => left[index] == right[index],
-      ).every((same) => same);
 }

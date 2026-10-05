@@ -145,6 +145,7 @@ Widget waveProductionParent({
   Size viewport = const Size(412, 892),
   Widget Function(Widget)? wrap,
 }) => MaterialApp(
+  theme: ThemeData(fontFamily: 'FluviColorLabInter'),
   home: Scaffold(
     backgroundColor: const Color(0xfff5f7ff),
     body: RepaintBoundary(

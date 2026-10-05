@@ -13,6 +13,7 @@ import '../../../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 
 part 'fluvi_wave_render_probe.dart';
 part 'fluvi_wave_surface_lookup.dart';
+part 'fluvi_wave_material.dart';
 
 /// A render-ready daily value from the established Balance Month projection.
 ///
@@ -48,12 +49,13 @@ final class FluviTopographicWaveDatum {
 enum FluviTopographicWaveStyle { terrain, svgReference, shaderAtmosphere }
 
 abstract final class FluviTopographicWavePalette {
-  static const pearl = Color(0xfff5f3ff);
-  static const lavender = Color(0xffdcd8ff);
-  static const periwinkle = Color(0xffaaa6ff);
-  static const violet = Color(0xff7667f6);
-  static const deepViolet = Color(0xff6254da);
-  static const icyBlue = Color(0xff8fc9f5);
+  static const pearl = Color(0xfffbfaff);
+  static const lavender = Color(0xffb7abff);
+  static const periwinkle = Color(0xffc8c5fa);
+  static const violet = Color(0xff9682f2);
+  static const deepViolet = Color(0xff725cd4);
+  static const icyBlue = Color(0xffdcebfa);
+  static const mist = Color(0xfff5f7ff);
   static const mint = Color(0xffbfede7);
 }
 
@@ -278,6 +280,7 @@ final class _FluviTopographicWaveChartState
               children: <Widget>[
                 if (widget.style ==
                         FluviTopographicWaveStyle.shaderAtmosphere &&
+                    !MediaQuery.disableAnimationsOf(context) &&
                     !(_debug?.opaqueBody ?? false) &&
                     (_debug?.atmosphere ?? true))
                   const _ShaderAtmosphereLayer(),
@@ -290,6 +293,9 @@ final class _FluviTopographicWaveChartState
                       terrain: terrain,
                       metrics: _metrics,
                       debug: _debug,
+                      fontFamily: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.fontFamily,
                       style: widget.style,
                       surfaceShader:
                           widget.style ==
@@ -366,6 +372,7 @@ final class FluviTopographicWaveAtmosphericLayer {
     required this.color,
     required this.opacity,
     required this.blurSigma,
+    required this.mesh,
   });
 
   final Path path;
@@ -374,6 +381,7 @@ final class FluviTopographicWaveAtmosphericLayer {
   final Color color;
   final double opacity;
   final double blurSigma;
+  final ui.Vertices? mesh;
 }
 
 /// Size- and data-specific cached drawing geometry. It is immutable after
@@ -513,7 +521,7 @@ final class FluviTopographicWaveTerrain {
     final ridgePath = _pathFor(samples);
     final feet = _surfaceFeet(samples, plot);
     final surfacePath = _closedPath(samples, feet);
-    const layerCount = 30;
+    final layerCount = (plot.height / 8).round().clamp(6, 14);
     final depths = List<FluviTopographicWaveDepthLayer>.generate(layerCount, (
       index,
     ) {
@@ -529,7 +537,7 @@ final class FluviTopographicWaveTerrain {
       return FluviTopographicWaveDepthLayer(
         depth: depth,
         path: _pathFor(flattened),
-        opacity: .135 * math.pow(1 - depth, 1.7).toDouble(),
+        opacity: .07 * math.pow(1 - depth, 1.7).toDouble(),
       );
     }, growable: false);
     final normalizedMean =
@@ -594,15 +602,18 @@ final class FluviTopographicWaveTerrain {
   static ui.Vertices? _surfaceMesh(
     List<Offset> ridge,
     List<Offset> feet,
-    Rect plot,
-  ) {
+    Rect plot, {
+    double opacity = 1,
+    double distance = 0,
+  }) {
     if (ridge.length < 2 || ridge.length != feet.length) return null;
-    const rows = 12;
+    const rows = 24;
     final columns = ridge.length;
     final positions = Float32List(columns * rows * 2);
     final colors = Int32List(columns * rows);
     for (var column = 0; column < columns; column += 1) {
       final slope = _slopeAt(ridge, column);
+      final footSlope = _slopeAt(feet, column);
       for (var row = 0; row < rows; row += 1) {
         final depth = row / (rows - 1);
         final vertex = column * rows + row;
@@ -612,7 +623,12 @@ final class FluviTopographicWaveTerrain {
           feet[column].dy,
           depth,
         );
-        colors[vertex] = _surfaceColor(depth, slope).toARGB32();
+        final color = _FluviWaveMaterial.color(depth, slope, footSlope);
+        colors[vertex] = Color.lerp(
+          color,
+          FluviTopographicWavePalette.periwinkle.withValues(alpha: color.a),
+          distance,
+        )!.withValues(alpha: color.a * opacity).toARGB32();
       }
     }
     final indices = Uint16List((columns - 1) * (rows - 1) * 6);
@@ -639,42 +655,6 @@ final class FluviTopographicWaveTerrain {
     );
   }
 
-  static Color _surfaceColor(double depth, double slope) {
-    final material = switch (depth) {
-      < .045 => Color.lerp(
-        const Color(0xfffbfaff),
-        const Color(0xffb7abff),
-        depth / .045,
-      )!,
-      < .18 => Color.lerp(
-        const Color(0xff9a84f4),
-        const Color(0xff725cd4),
-        (depth - .045) / .135,
-      )!,
-      < .56 => Color.lerp(
-        const Color(0xff8e78e6),
-        const Color(0xffc8c5fa),
-        (depth - .18) / .38,
-      )!,
-      < .86 => Color.lerp(
-        const Color(0xffc8c5fa),
-        const Color(0xffdcebfa),
-        (depth - .56) / .30,
-      )!,
-      _ => Color.lerp(
-        const Color(0xffdcebfa),
-        const Color(0xfff5f7ff),
-        (depth - .86) / .14,
-      )!,
-    };
-    // A small local normal approximation gives the left/front light a
-    // continuous response across the material rather than a global wash.
-    final light = (.72 - slope * .32).clamp(.42, .96).toDouble();
-    final lit = Color.lerp(const Color(0xffffffff), material, light)!;
-    final alpha = (.94 * math.pow(1 - depth, .62)).clamp(.08, .94).toDouble();
-    return lit.withValues(alpha: alpha);
-  }
-
   static double _volatility(
     List<FluviTopographicWaveDatum> values,
     int maximum,
@@ -694,38 +674,23 @@ final class FluviTopographicWaveTerrain {
     required double volatility,
   }) {
     const profiles = <List<double>>[
-      <double>[-.30, .20, -.12, .35, -.08],
-      <double>[.16, -.34, .26, -.14, .10],
-      <double>[-.07, .32, -.38, .18, -.20],
-      <double>[.24, -.08, .24, -.28, .04],
+      [.83, .63, .33, .59, .71, .42, .54, .68, .30, .60, .67, .83],
+      [.87, .78, .59, .74, .45, .67, .78, .46, .63, .72, .52, .88],
+      [.90, .80, .72, .46, .74, .79, .40, .68, .78, .47, .75, .91],
     ];
-    const colors = <Color>[
-      FluviTopographicWavePalette.mint,
-      FluviTopographicWavePalette.icyBlue,
-      FluviTopographicWavePalette.lavender,
-      FluviTopographicWavePalette.pearl,
-    ];
-    // These are actual closed decorative surfaces, not a global baseline
-    // fill. Their independent silhouettes make depth readable even beneath a
-    // highly spiked real month.
-    const opacities = <double>[.14, .115, .09, .064];
-    const blurSigmas = <double>[3.5, 3, 2.2, 1.5];
-    const amplitudes = <double>[.16, .13, .11, .08];
-    const xFractions = <double>[0, .23, .52, .78, 1];
-    final influence = .86 + volatility * .24;
+    final empty = normalizedMean == 0 && volatility == 0;
     return List<FluviTopographicWaveAtmosphericLayer>.generate(
       profiles.length,
       (index) {
-        final baseY =
-            plot.top +
-            plot.height * (.18 + index * .105) +
-            (normalizedMean - .5) * plot.height * .07;
-        final amplitude = plot.height * amplitudes[index] * influence;
         final controls = <Offset>[
-          for (var point = 0; point < xFractions.length; point += 1)
+          for (var point = 0; point < profiles[index].length; point += 1)
             Offset(
-              plot.left + plot.width * xFractions[point],
-              baseY + profiles[index][point] * amplitude,
+              plot.left + plot.width * point / (profiles[index].length - 1),
+              plot.top +
+                  plot.height *
+                      (empty
+                          ? .82 + profiles[index][point] * .12
+                          : profiles[index][point]),
             ),
         ];
         final sampled = _catmullRomSamples(
@@ -734,24 +699,23 @@ final class FluviTopographicWaveTerrain {
           samplesPerSegment: 18,
         );
         final path = _pathFor(sampled);
-        final feet = List<Offset>.generate(sampled.length, (sampleIndex) {
-          final point = sampled[sampleIndex];
-          final thickness =
-              plot.height * (.13 + index * .018) +
-              math.sin(sampleIndex * .11 + index) * plot.height * .012;
-          return Offset(
-            point.dx,
-            math.min(plot.bottom - 2, point.dy + thickness),
-          );
-        }, growable: false);
+        final feet = _surfaceFeet(sampled, plot);
         final fillPath = _closedPath(sampled, feet);
+        final opacity = empty ? .13 : .48 + index * .10;
         return FluviTopographicWaveAtmosphericLayer(
           path: path,
           fillPath: fillPath,
           surfaceBounds: fillPath.getBounds(),
-          color: colors[index],
-          opacity: opacities[index],
-          blurSigma: blurSigmas[index],
+          color: FluviTopographicWavePalette.periwinkle,
+          opacity: opacity,
+          blurSigma: 0,
+          mesh: _surfaceMesh(
+            sampled,
+            feet,
+            plot,
+            opacity: opacity,
+            distance: .65 - index * .16,
+          ),
         );
       },
       growable: false,
@@ -869,6 +833,7 @@ final class _FluviTopographicWavePainter extends CustomPainter {
     required this.tooltipForValue,
     required this.metrics,
     required this.debug,
+    required this.fontFamily,
   });
 
   final FluviTopographicWaveTerrain terrain;
@@ -879,6 +844,7 @@ final class _FluviTopographicWavePainter extends CustomPainter {
   final String Function(int value) tooltipForValue;
   final FluviWaveRenderMetrics metrics;
   final FluviWaveDebugScope? debug;
+  final String? fontFamily;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -890,7 +856,9 @@ final class _FluviTopographicWavePainter extends CustomPainter {
     metrics.markerBounds = null;
     metrics.tooltipBounds = null;
     metrics.selectedIndex = null;
-    if (!(debug?.opaqueBody ?? false) && (debug?.atmosphere ?? true)) {
+    if (!(debug?.opaqueBody ?? false) &&
+        !(debug?.materialOnly ?? false) &&
+        (debug?.atmosphere ?? true)) {
       _drawAtmospheres(canvas);
     }
     if (terrain.ridgeSamples.isEmpty) {
@@ -906,11 +874,13 @@ final class _FluviTopographicWavePainter extends CustomPainter {
       );
       metrics.recordPaint(terrain, 'opaque-diagnostic');
     } else {
-      _drawGuides(canvas);
+      if (!(debug?.materialOnly ?? false)) _drawGuides(canvas);
       _drawSurface(canvas);
-      if (debug?.contours ?? true) _drawContours(canvas);
-      _drawRidge(canvas);
-      _drawMarkerAndTooltip(canvas, size);
+      if (!(debug?.materialOnly ?? false)) {
+        if (debug?.contours ?? true) _drawContours(canvas);
+        _drawRidge(canvas);
+        _drawMarkerAndTooltip(canvas, size);
+      }
       metrics.recordPaint(
         terrain,
         surfaceShader != null && curveTexture != null ? 'shader' : 'mesh',
@@ -952,38 +922,22 @@ final class _FluviTopographicWavePainter extends CustomPainter {
   }
 
   void _drawAtmospheres(Canvas canvas) {
-    final reduction = switch (style) {
-      FluviTopographicWaveStyle.terrain => .82,
-      FluviTopographicWaveStyle.svgReference => 1.0,
-      FluviTopographicWaveStyle.shaderAtmosphere => .9,
-    };
     for (final wave in terrain.atmospheres) {
-      canvas.drawPath(
-        wave.fillPath,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              wave.color.withValues(alpha: wave.opacity * reduction),
-              Color.lerp(
-                wave.color,
-                FluviTopographicWavePalette.pearl,
-                .5,
-              )!.withValues(alpha: wave.opacity * .18 * reduction),
-              wave.color.withValues(alpha: 0),
-            ],
-            stops: const <double>[0, .54, 1],
-          ).createShader(wave.surfaceBounds)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, wave.blurSigma)
-          ..isAntiAlias = true,
-      );
+      if (wave.mesh != null) {
+        canvas.drawVertices(
+          wave.mesh!,
+          BlendMode.srcOver,
+          Paint()..isAntiAlias = true,
+        );
+      }
       canvas.drawPath(
         wave.path,
         Paint()
-          ..color = wave.color.withValues(alpha: wave.opacity * .9 * reduction)
+          ..color = FluviTopographicWavePalette.pearl.withValues(
+            alpha: wave.opacity * .45,
+          )
           ..style = PaintingStyle.stroke
-          ..strokeWidth = .8
+          ..strokeWidth = .5
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round,
       );
@@ -1017,15 +971,12 @@ final class _FluviTopographicWavePainter extends CustomPainter {
       canvas.clipPath(terrain.surfacePath);
       shader.setFloat(0, terrain.size.width);
       shader.setFloat(1, terrain.size.height);
-      shader.setFloat(2, switch (style) {
-        FluviTopographicWaveStyle.terrain => .82,
-        FluviTopographicWaveStyle.svgReference => .94,
-        FluviTopographicWaveStyle.shaderAtmosphere => 1.0,
-      });
+      shader.setFloat(2, 1);
       shader.setFloat(3, terrain.plot.left);
       shader.setFloat(4, terrain.plot.top);
       shader.setFloat(5, terrain.plot.width);
       shader.setFloat(6, terrain.plot.height);
+      _FluviWaveMaterial.bind(shader);
       shader.setImageSampler(0, texture, filterQuality: FilterQuality.medium);
       canvas.drawRect(terrain.plot, Paint()..shader = shader);
       canvas.restore();
@@ -1064,8 +1015,8 @@ final class _FluviTopographicWavePainter extends CustomPainter {
 
   void _drawRidge(Canvas canvas) {
     final glowOpacity = style == FluviTopographicWaveStyle.svgReference
-        ? .25
-        : .18;
+        ? .13
+        : .08;
     if (debug?.glow ?? true) {
       canvas.drawPath(
         terrain.ridgePath,
@@ -1074,36 +1025,19 @@ final class _FluviTopographicWavePainter extends CustomPainter {
             alpha: glowOpacity,
           )
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 4.6
+          ..strokeWidth = 2
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.4)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2)
           ..isAntiAlias = true,
       );
     }
     canvas.drawPath(
       terrain.ridgePath,
       Paint()
-        ..color = FluviTopographicWavePalette.pearl.withValues(alpha: .86)
+        ..color = FluviTopographicWavePalette.pearl.withValues(alpha: .78)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.8
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..isAntiAlias = true,
-    );
-    canvas.drawPath(
-      terrain.ridgePath,
-      Paint()
-        ..shader = const LinearGradient(
-          colors: <Color>[
-            FluviTopographicWavePalette.periwinkle,
-            Color(0xff8d7df8),
-            FluviTopographicWavePalette.violet,
-            FluviTopographicWavePalette.deepViolet,
-          ],
-        ).createShader(terrain.plot)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.9
+        ..strokeWidth = .9
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
         ..isAntiAlias = true,
@@ -1134,22 +1068,23 @@ final class _FluviTopographicWavePainter extends CustomPainter {
       point,
       5.1,
       Paint()
-        ..color = FluviTopographicWavePalette.pearl
+        ..color = FluviTopographicWavePalette.violet
         ..style = PaintingStyle.fill,
     );
     canvas.drawCircle(
       point,
       5.1,
       Paint()
-        ..color = const Color(0xff8c7bfa)
+        ..color = FluviTopographicWavePalette.pearl
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.3,
+        ..strokeWidth = 1.7,
     );
     final label = tooltipForValue(terrain.values[index].value);
     final text = TextPainter(
       text: TextSpan(
         text: label,
-        style: const TextStyle(
+        style: TextStyle(
+          fontFamily: fontFamily,
           color: Color(0xff6874f1),
           fontSize: 10,
           fontWeight: FontWeight.w800,
@@ -1191,6 +1126,7 @@ final class _FluviTopographicWavePainter extends CustomPainter {
   bool shouldRepaint(covariant _FluviTopographicWavePainter oldDelegate) =>
       oldDelegate.terrain != terrain ||
       oldDelegate.debug != debug ||
+      oldDelegate.fontFamily != fontFamily ||
       oldDelegate.style != style ||
       oldDelegate.surfaceShader != surfaceShader ||
       oldDelegate.curveTexture != curveTexture ||
