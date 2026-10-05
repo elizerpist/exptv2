@@ -160,6 +160,45 @@ pins all final artifacts and source files. The final application commit is
 identified in the subsequent journal/delivery record; unrelated WIP is not
 silently represented as committed application content.
 
+### Final-source graph delivery
+
+Application source `6df3abe533964507638a48c4743e733cd22bbc52` was indexed from a
+clean detached worktree after verifying every final source/artifact hash there.
+Tooling commit `73f239be15ed5982c21ba926b99deb41c5106cd0`, parent
+`1782078bd90c8457d3ee5a727f5f02f431d0104f`, is pushed on
+`tooling/3d-linechart-final-graph` (documentation/tooling only; `[skip ci]`, no
+build started). Raw SCIP SHA-256 is
+`8c406b642bf62af6d53f6ff25fc7b6cca9e41eaa801f71d6e6244e0a307482cd`.
+Two generations had identical sorted artifact-hash digest
+`e82d6aa3d29a9b2f061ad4839c769bd88a5cc67920a6d5d26cc395b4ccf0b2bf`.
+
+607 indexed documents yield 15,153 repository symbols, 109,637 references and
+32,191 static reference edges. Tooling's 15 tests passed. Queries in
+`final-graph-impact.log` were verified against current source: only the monthly
+card externally constructs the wave chart, the Balance core surface owns that
+card, and the shared bounded-curve function has exactly two production users
+(Mind adapter and Month sampler). This does not claim runtime causality or
+device performance. Raw `index.scip` was not committed.
+
+### Human APK delivery
+
+- Application: `6df3abe533964507638a48c4743e733cd22bbc52`, parent `0b5982ffaaaf6d209c2d2d101e6f788c8ada464c`; pushed on `3d-linechart`.
+- Separate post-application journal: `3c7157a3b2b9c7fbca23b2298de60564c00107fa` (`[skip ci]`). Later documentation-only commits do not change the built application source.
+- [Exact-source CI run](https://github.com/elizerpist/exptv2/actions/runs/37288361696): `test-flutter` PASS (full analysis, **454 tests**), `test-core` PASS, `build-human-diagnostic-apk` PASS. Optional nightly/baseline jobs were skipped. The separate Dashboard A–K profile was still IN PROGRESS at the delivery audit; overall CI is **not** claimed green. The earlier f34 baseline's Mind canonical-range failure is not silently attributed to this unfinished run.
+- [Published normal Human APK](https://github.com/elizerpist/exptv2/releases/download/fluvi-human-diagnostic-6df3abe/fluvi_HUMAN_DIAGNOSTIC_6df3abe.apk), built by the existing script with the normal `lib/main.dart` entrypoint; not a harness artifact.
+- Downloaded and verified: `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_6df3abe.apk`, **102,725,920 bytes**.
+- SHA-256: `f148f174b0ab0d353b868b7f969e83ccd027e066aa68a9491051ecf00d8e681e`, equal to the release asset digest.
+- ZIP integrity PASS; all `arm64-v8a`, `armeabi-v7a` and `x86_64` `libapp.so` payloads contain the full exact application SHA. See `final-apk-verification.log`; exact-source online material/cache measurements are in `ci-flutter-summary.log`.
+
+To view the result: Balance → Month → the existing visual tuner's **Havi költés
+diagram → 3D topografikus** (or the other two terrain presets). Existing persisted
+choices and the **Jelenlegi** option are deliberately preserved, not reset by
+this repair. Synthetic render data is test-only, not a replacement for the
+user's ledger. Installation, physical backend/frame evidence and visual approval
+of this exact APK are **PENDING — USER ONLY**. All software implementation,
+verification, source-graph and normal APK-delivery steps are complete; no merge
+or unrelated FAB change is included.
+
 Application investigation source: `f34d6afb6ee7475864f36075395c505126b37758`.
 Development base: `75e4e158f340ae1d2da9493fb5c53b4361f80057` (documentation only
 after f34d6af). Branch: `3d-linechart`.

@@ -5,9 +5,9 @@
 The user explicitly requests completion, with the desired screenshot as the
 visual source of truth and a substantially similar result as the acceptance
 target. Both original local phone captures and the `material-v3` reference and
-sparse parent renders were reopened. The current render still has abrupt dark
+sparse parent renders were reopened. At resumption, v3 still had abrupt dark
 vertical bands, a block-like foreground and repetitive disconnected background
-hills. Successful pixel coverage tests alone do not satisfy WR-10/11/18.
+hills. Successful pixel coverage tests alone did not satisfy WR-10/11/18.
 
 Continue the existing inline plan in the existing linked `3d-linechart`
 worktree. The rendering/inspection steps share one material and geometry owner
@@ -106,9 +106,9 @@ Statuses are implementation/evidence status, never physical acceptance.
 | WR-19 | Performance gate | Production parent/runtime diagnostics | Count generation/publications/paint, resource duration/latency; report FrameTiming availability honestly; no FPS from counters | Measured reports, bounded diagnostics | DONE |
 | WR-20 | Verification | Focused + curated + boundary gates | Exact PASS/FAIL/NOT RUN commands; classify baseline Mind failure; no build substituted for visual requirements | Saved command outcomes | DONE |
 | WR-21 | Commit/journal | Git + engineering journal | Atomic application commits with full required body; journal after each app commit in separate skip-ci commit | SHA/parent/diff audit | DONE |
-| WR-22 | Build delivery | GitHub Human APK | Push final source, monitor exact run, download normal main.dart APK; verify size/hash/embedded SHA | Release, ZIP, payload identity | NOT DONE |
-| WR-23 | Graph regeneration | Separate tooling branch | Final application source graph, deterministic manifest/index hash and tooling commit | Final generation/query/hash/remote | NOT DONE |
-| WR-24 | Completion | Report/checklist/final git | Honest full evidence report and all outstanding requirements disclosed | Final checklist reread | NOT DONE |
+| WR-22 | Build delivery | GitHub Human APK | Push final source, monitor exact run, download normal main.dart APK; verify size/hash/embedded SHA | Release, ZIP, payload identity | DONE |
+| WR-23 | Graph regeneration | Separate tooling branch | Final application source graph, deterministic manifest/index hash and tooling commit | Final generation/query/hash/remote | DONE |
+| WR-24 | Completion | Report/checklist/final git | Honest full evidence report and all outstanding requirements disclosed | Final checklist reread | DONE |
 | WR-25 | Physical acceptance | User only | Exact APK physically accepted by user | User Android test | BLOCKED |
 | WR-26 | Newer global mandatory reuse rule; WR-08 rounded peaks | Neutral bounded-curve helper + existing Mind adapter + monthly sampler | Reuse existing monotone-control mechanism without duplicating it; preserve Mind constructor/output/behaviour exactly | b0e503ee matching impact graph, frozen Mind control fixture, monthly clipped-peak red test, Mind regressions | DONE |
 
@@ -134,7 +134,12 @@ Statuses are implementation/evidence status, never physical acceptance.
    Regenerate graph for final application SHA on separate tooling branch and
    complete evidence report. Physical validation remains PENDING — USER ONLY.
 
-## Current evidence classification
+## Initial pre-repair evidence classification (historical)
+
+The initial list below records the diagnostic starting point, not the final
+delivery state. Final statuses are in the acceptance inventory and the evidence
+README; historical installed identity, original attachment bytes and the absent
+physical wave trace remain unavailable after delivery.
 
 PROVEN: visible result rejected; correct local reference opened; baseline/source
 clips zero-day feet above their ridge; only one preset requests surface shader;
