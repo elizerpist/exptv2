@@ -79,7 +79,7 @@
 | BMR-06 | SVG + 3D repair prompt | shader + chart painter | Material uses upper-left/front local lighting; shader path is bounded, uses a cached ridge lookup and has cached vertex-lit fallback | Structural widget test, source boundary test, visual golden | DONE |
 | BMR-07 | SVG + user prompt | chart painter | 3–4 distinct filled atmospheric waves remain clearly decorative, behind financial terrain; markers/tooltips represent only data | Zero/sparse/spike/widget tests and visual review | DONE |
 | BMR-08 | User constraints | presentation layers | No repository/query/index work or new persistent owner; Header and original `current` chart stay untouched | Existing boundary tests + direct inspection | DONE |
-| BMR-09 | User delivery requirement | repository/CI | Focused tests, full fast suite, analysis, format, diff check, push, exact normal Human APK and its hash | Command output + GitHub run/APK | PARTIAL — local verification done; commit, CI and exact APK delivery remain |
+| BMR-09 | User delivery requirement | repository/CI | Focused tests, full fast suite, analysis, format, diff check, push, exact normal Human APK and its hash | Command output + GitHub run/APK | DONE — application commit `f34d6afb...`; Actions `37251032162` normal gates and exact APK/hash verified |
 
 ---
 
@@ -129,7 +129,7 @@
 
 ### Task 5: Final delivery
 
-- [ ] Re-read this checklist and update every status only from fresh evidence.
-- [ ] Format changed Dart/GLSL, run focused analysis, broad analysis, fast suite and diff check.
-- [ ] Commit one focused application change, push it, monitor the exact GitHub Human APK job, download the exact APK to `/storage/emulated/0/Download/fluvi`, then verify hash and embedded SHA.
-- [ ] Append factual delivery evidence in one separate journal-only `[skip ci]` commit.
+- [x] Re-read this checklist and update every status only from fresh evidence.
+- [x] Format changed Dart/GLSL, run focused analysis, broad analysis, fast suite and diff check.
+- [x] Commit one focused application change, push it, monitor the exact GitHub Human APK job, download the exact APK to `/storage/emulated/0/Download/fluvi`, then verify hash and embedded SHA.
+- [x] Append factual delivery evidence in one separate journal-only `[skip ci]` commit.
