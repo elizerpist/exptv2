@@ -1,0 +1,4 @@
+96a9fbae069e6b1161e7a284754b8dfe4de057350a104ab2874aa8b635cd56da  docs/superpowers/evidence/2026-10-05-wave-recovery/bounds-lookup-fixed/production-opaque-bounds.png
+15563e6b34248363ff0e72ea865a924b18bfa8d12fb45364eb9b6cd7355cbb01  docs/superpowers/evidence/2026-10-05-wave-recovery/bounds-lookup-fixed/production-sparse.png
+2ec8fe76f8fbcd0787318c3f16738042c792df197165c693fc1e2b47880c9309  docs/superpowers/evidence/2026-10-05-wave-recovery/bounds-lookup-fixed/vertex-dst.png
+2ec8fe76f8fbcd0787318c3f16738042c792df197165c693fc1e2b47880c9309  docs/superpowers/evidence/2026-10-05-wave-recovery/bounds-lookup-fixed/vertex-srcOver.png

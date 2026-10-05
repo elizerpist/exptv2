@@ -1,0 +1,16 @@
+{
+  "head": "31a55a28ebb6bee006074220ad38625ddfe40fce",
+  "trackedProductionDiffEmpty": false,
+  "chartSourceHashes": "acfc6907157e2d71d3c7b5cdeadd4e3f251a738ea6b549f1ed96ad0744d0cf38  lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart\n65dad0697013c158374ca72d8516790f97bcb5f8c59ff88f2f113b2d64d566a5  lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart\n9537d5cd5df4d585014f24a9d10c902b407b86a9bfcdfa93466afb83ec24b9dc  shaders/fluvi_wave_surface.frag\n",
+  "backend": "flutter_test software rasterizer; not physical Android",
+  "width": 32,
+  "height": 32,
+  "pixelRatio": 2,
+  "blend": "dst",
+  "pixel": [
+    150,
+    130,
+    242,
+    255
+  ]
+}

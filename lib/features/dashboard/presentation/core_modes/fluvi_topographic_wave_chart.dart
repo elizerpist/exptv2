@@ -12,6 +12,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 
 part 'fluvi_wave_render_probe.dart';
+part 'fluvi_wave_surface_lookup.dart';
 
 /// A render-ready daily value from the established Balance Month projection.
 ///
@@ -400,7 +401,7 @@ final class FluviTopographicWaveTerrain {
   final Rect plot;
   double get financialBaseline => _baselineFor(plot);
 
-  static double _baselineFor(Rect plot) => plot.bottom - plot.height * .25;
+  static double _baselineFor(Rect plot) => plot.top + plot.height * .65;
   final List<Offset> ridgeSamples;
   final Path ridgePath;
 
@@ -439,10 +440,10 @@ final class FluviTopographicWaveTerrain {
     required Size size,
   }) {
     final plot = Rect.fromLTRB(
-      2,
-      4,
-      math.max(2, size.width - 2),
-      math.max(4, size.height - 4),
+      math.min(10, size.width / 2),
+      math.min(36, size.height * .4),
+      math.max(10, size.width - 10),
+      math.max(36, size.height - 4),
     );
     if (size.isEmpty || values.isEmpty || plot.width <= 0 || plot.height <= 0) {
       return FluviTopographicWaveTerrain._(
@@ -489,8 +490,8 @@ final class FluviTopographicWaveTerrain {
     }
     // The financial zero is not the clipping boundary. Keep a real foreground
     // below zero, so small and zero days in a nonempty month retain a body.
-    final drawableHeight = plot.height * .62;
     final baseline = _baselineFor(plot);
+    final drawableHeight = baseline - plot.top;
     final offsets = <Offset>[];
     var highestIndex = 0;
     for (var index = 0; index < values.length; index += 1) {
@@ -561,19 +562,13 @@ final class FluviTopographicWaveTerrain {
   static List<Offset> _surfaceFeet(List<Offset> ridge, Rect plot) =>
       List<Offset>.generate(ridge.length, (index) {
         final point = ridge[index];
-        final heightAboveFloor = plot.bottom - point.dy;
-        // The shallow foreground remains an authored material thickness, not
-        // a financial transform. It lets a low-but-real day receive the same
-        // light/shadow grammar as a tall day while preserving ridge Y exactly.
-        final thickness = math.max(
-          plot.height * .14,
-          heightAboveFloor * .60 + plot.height * .02,
-        );
-        final localSlope = _slopeAt(ridge, index).abs();
-        final slopeLift = math.min(plot.height * .045, localSlope * 8);
+        final x = (point.dx - plot.left) / plot.width;
+        // A calm material shore, not a displaced copy of financial peaks.
+        // Its highest point is below the genuine zero baseline at every x.
         return Offset(
           point.dx,
-          math.min(plot.bottom - 1.2, point.dy + thickness + slopeLift),
+          plot.bottom -
+              plot.height * (.04 + .025 * math.cos(x * math.pi * 2 - .4)),
         );
       }, growable: false);
 
@@ -801,12 +796,7 @@ final class FluviTopographicWaveTerrain {
             (-p0 + p2) * t +
             (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
             (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
-    final x = interpolate(
-      previous.dx,
-      start.dx,
-      end.dx,
-      next.dx,
-    ).clamp(plot.left, plot.right).toDouble();
+    final x = _lerp(start.dx, end.dx, t);
     // Catmull–Rom continuity, bounded by this segment's two genuine daily
     // values, prevents an invented spend spike or dip between measurements.
     final lowerY = math.min(start.dy, end.dy);
@@ -867,66 +857,6 @@ final class _FluviTopographicWaveCacheKey {
 
   @override
   int get hashCode => Object.hash(size, Object.hashAll(values));
-}
-
-/// A compact, cached 1-D ridge/foot/slope lookup for the bounded material
-/// shader. It is rebuilt only with [FluviTopographicWaveTerrain], never per
-/// animation frame or marker interaction.
-final class _FluviWaveSurfaceTexture {
-  const _FluviWaveSurfaceTexture._(this.image);
-
-  final ui.Image image;
-
-  static Future<_FluviWaveSurfaceTexture> fromTerrain(
-    FluviTopographicWaveTerrain terrain,
-  ) {
-    const width = 256;
-    final bytes = Uint8List(width * 4);
-    final samples = terrain.ridgeSamples;
-    final feet = terrain.surfaceFootSamples;
-    for (var index = 0; index < width; index += 1) {
-      final position = index / (width - 1) * (samples.length - 1);
-      final lower = position.floor();
-      final upper = position.ceil().clamp(0, samples.length - 1);
-      final amount = position - lower;
-      final ridgeY = FluviTopographicWaveTerrain._lerp(
-        samples[lower].dy,
-        samples[upper].dy,
-        amount,
-      );
-      final footY = FluviTopographicWaveTerrain._lerp(
-        feet[lower].dy,
-        feet[upper].dy,
-        amount,
-      );
-      final slope =
-          (feet[upper].dx == feet[lower].dx
-                  ? 0
-                  : (samples[upper].dy - samples[lower].dy) /
-                        (feet[upper].dx - feet[lower].dx))
-              .clamp(-1.0, 1.0)
-              .toDouble();
-      final offset = index * 4;
-      bytes[offset] = ((ridgeY - terrain.plot.top) / terrain.plot.height * 255)
-          .clamp(0, 255)
-          .round();
-      bytes[offset +
-          1] = ((footY - terrain.plot.top) / terrain.plot.height * 255)
-          .clamp(0, 255)
-          .round();
-      bytes[offset + 2] = ((slope + 1) * .5 * 255).clamp(0, 255).round();
-      bytes[offset + 3] = 255;
-    }
-    final result = Completer<_FluviWaveSurfaceTexture>();
-    ui.decodeImageFromPixels(
-      bytes,
-      width,
-      1,
-      ui.PixelFormat.rgba8888,
-      (image) => result.complete(_FluviWaveSurfaceTexture._(image)),
-    );
-    return result.future;
-  }
 }
 
 final class _FluviTopographicWavePainter extends CustomPainter {

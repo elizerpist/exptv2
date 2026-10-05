@@ -1,8 +1,8 @@
 #include <flutter/runtime_effect.glsl>
 
 // Bounded 2.5D material for the real Balance Month spending ridge. The Dart
-// side supplies a cached 1-D texture: red=ridge Y, green=local material foot,
-// blue=local ridge slope. The financial curve is never displaced here; the
+// side supplies two opaque 16-bit lookup rows: ridge Y and material foot Y.
+// Physical x and texel centres coincide. The financial curve is never displaced; the
 // shader only shades the already-clipped material surface.
 uniform vec2 uSize;
 uniform float uOpacity;
@@ -26,16 +26,24 @@ vec3 ramp(float depth) {
 
 out vec4 fragColor;
 
+vec2 boundaries(float x) {
+  float u = (clamp(x, 0.0, 1.0) * 1023.0 + .5) / 1024.0;
+  vec2 ridge = texture(uCurveTexture, vec2(u, .25)).rg;
+  vec2 foot = texture(uCurveTexture, vec2(u, .75)).rg;
+  return vec2(dot(ridge, vec2(65280.0, 255.0)), dot(foot, vec2(65280.0, 255.0))) / 65535.0;
+}
+
 void main() {
   // The lookup is encoded in the actual padded data plot, not in the outer
   // CustomPaint bounds. Keeping that coordinate space explicit guarantees
   // that the material's local ridge/foot interpolation matches Canvas.
   vec2 local = (FlutterFragCoord().xy - uPlot.xy) / max(uPlot.zw, vec2(1.0));
-  vec4 curve = texture(uCurveTexture, vec2(clamp(local.x, 0.0, 1.0), .5));
-  float ridge = curve.r;
-  float foot = max(ridge + .002, curve.g);
+  vec2 curve = boundaries(local.x);
+  float ridge = curve.x;
+  float foot = curve.y;
+  if (foot <= ridge) { fragColor = vec4(0.0); return; }
   float depth = clamp((local.y - ridge) / (foot - ridge), 0.0, 1.0);
-  float slope = curve.b * 2.0 - 1.0;
+  float slope = (boundaries(local.x + 1.0 / 1023.0).x - boundaries(local.x - 1.0 / 1023.0).x) * uPlot.w / (2.0 * uPlot.z / 1023.0);
 
   // Normal approximates a left/top/front light falling across the locally
   // sampled material. The bright rim stays near v=0; volumetric light comes

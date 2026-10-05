@@ -102,6 +102,97 @@ void main() {
     debugPrint('WR-12 vertex pixels $observed');
   });
 
+  testWidgets('WR-12 lookup decodes the ridge at the same physical x', (
+    tester,
+  ) async {
+    final terrain = FluviTopographicWaveTerrain.resolve(
+      values: waveData(waveLinked(waveSparseForints(31))),
+      size: const Size(240, 128),
+    );
+    final texture = (await tester.runAsync(
+      () => FluviWaveDebugScope.createTexture(terrain),
+    ))!;
+    final bytes = (await tester.runAsync(() => texture.toByteData()))!;
+    var maxError = 0.0;
+    var segment = 0;
+    for (var i = 0; i < texture.width; i++) {
+      final x =
+          terrain.plot.left + terrain.plot.width * i / (texture.width - 1);
+      while (segment < terrain.ridgeSamples.length - 2 &&
+          terrain.ridgeSamples[segment + 1].dx < x) {
+        segment++;
+      }
+      final left = terrain.ridgeSamples[segment];
+      final right = terrain.ridgeSamples[segment + 1];
+      final expected =
+          left.dy + (right.dy - left.dy) * (x - left.dx) / (right.dx - left.dx);
+      final normalized = texture.height == 1
+          ? bytes.getUint8(i * 4) / 255
+          : (bytes.getUint8(i * 4) * 256 + bytes.getUint8(i * 4 + 1)) / 65535;
+      final decoded = terrain.plot.top + normalized * terrain.plot.height;
+      maxError = math.max(maxError, (decoded - expected).abs());
+    }
+    texture.dispose();
+    debugPrint('WR-12 max same-x lookup error $maxError px');
+    expect(
+      maxError,
+      lessThan(.015),
+      reason:
+          'one coordinate parameterization and subpixel precision, including edges',
+    );
+  });
+
+  testWidgets(
+    'WR-15 exact edge selection and painted marker/tooltip containment',
+    (tester) async {
+      const viewport = Size(320, 692);
+      await tester.binding.setSurfaceSize(viewport);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        waveLinked(waveSparseForints(31, peak: 0)),
+      );
+      final settings = BalancePresentationController(
+        initial: const BalancePresentationSettings.defaults().copyWith(
+          monthlySpendingChartPresentation:
+              BalanceMonthlySpendingChartPresentation.topographic,
+        ),
+      );
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      FluviWaveRenderMetrics? metrics;
+      await tester.pumpWidget(
+        waveProductionParent(
+          linked: linked,
+          settings: settings,
+          viewport: viewport,
+          wrap: (child) => FluviWaveDebugScope(
+            onPaint: (value) => metrics = value,
+            child: child,
+          ),
+        ),
+      );
+      final initial = metrics!.terrain;
+      for (final (fraction, index) in [(0.0, 0), (1.0, 30)]) {
+        final bounds = tester.getRect(find.byType(FluviTopographicWaveChart));
+        await tester.tapAt(
+          Offset(
+            bounds.left + 1 + (bounds.width - 2) * fraction,
+            bounds.center.dy,
+          ),
+        );
+        await tester.pump();
+        expect(metrics!.selectedIndex, index);
+        expect(identical(initial, metrics!.terrain), isTrue);
+        for (final rect in [metrics!.markerBounds!, metrics!.tooltipBounds!]) {
+          expect(rect.left, greaterThanOrEqualTo(0));
+          expect(rect.top, greaterThanOrEqualTo(0));
+          expect(rect.right, lessThanOrEqualTo(metrics!.terrain!.size.width));
+          expect(rect.bottom, lessThanOrEqualTo(metrics!.terrain!.size.height));
+        }
+      }
+    },
+  );
+
   testWidgets(
     'WR-13 production async owner never paints another terrain lookup',
     (tester) async {
