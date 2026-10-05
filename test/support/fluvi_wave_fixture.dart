@@ -150,22 +150,27 @@ Widget waveProductionParent({
     backgroundColor: const Color(0xfff5f7ff),
     body: RepaintBoundary(
       key: const ValueKey('wave-production-parent'),
-      child: (wrap ?? (child) => child)(
-        BalanceDashboardCoreSurface(
-          presentation: DashboardCoreModePresentation(
-            geometry: DashboardGeometryResolver.resolve(
-              metrics: DashboardLayoutMetrics.reference.fitToViewport(viewport),
-              mode: DashboardModeSpec.balance,
-              collapseProgress: 0,
-              isRailExpanded: false,
-              hasPhysicalRail: false,
+      child: ColoredBox(
+        color: const Color(0xfff5f7ff),
+        child: (wrap ?? (child) => child)(
+          BalanceDashboardCoreSurface(
+            presentation: DashboardCoreModePresentation(
+              geometry: DashboardGeometryResolver.resolve(
+                metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                  viewport,
+                ),
+                mode: DashboardModeSpec.balance,
+                collapseProgress: 0,
+                isRailExpanded: false,
+                hasPhysicalRail: false,
+              ),
+              palette: DashboardModePaletteResolver.resolve(
+                DashboardModeSpec.balance,
+              ),
             ),
-            palette: DashboardModePaletteResolver.resolve(
-              DashboardModeSpec.balance,
-            ),
+            balanceLinkedPresentation: linked,
+            presentationSettings: settings,
           ),
-          balanceLinkedPresentation: linked,
-          presentationSettings: settings,
         ),
       ),
     ),
@@ -208,6 +213,9 @@ Future<void> waveWriteEvidence(
         'chartSourceHashes': Process.runSync('sha256sum', [
           'lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart',
           'lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart',
+          'lib/features/dashboard/presentation/core_modes/fluvi_wave_material.dart',
+          'lib/features/dashboard/presentation/core_modes/fluvi_wave_surface_lookup.dart',
+          'lib/core/design/fluvi_bounded_curve.dart',
           'shaders/fluvi_wave_surface.frag',
         ]).stdout.toString(),
         'backend': 'flutter_test software rasterizer; not physical Android',

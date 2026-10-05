@@ -2,19 +2,51 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
+import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/prepared/data/dashboard_prepared_formatter.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../support/fluvi_wave_fixture.dart';
+import '../../../support/dashboard_render_resources.dart';
 
 void main() {
+  test('WR-08 isolated peaks are rounded without clipped flat samples', () {
+    final data = waveData(waveLinked(waveReferenceForints));
+    final terrain = FluviTopographicWaveTerrain.resolve(
+      values: data,
+      size: const Size(240, 128),
+    );
+    for (var i = 1; i < data.length - 1; i++) {
+      if (data[i].value > data[i - 1].value &&
+          data[i].value > data[i + 1].value) {
+        final y = terrain.dataOffsets[i].dy;
+        expect(
+          terrain.ridgeSamples[i * 14 - 1].dy,
+          greaterThan(y),
+          reason: 'left of isolated day ${i + 1} peak',
+        );
+        expect(
+          terrain.ridgeSamples[i * 14 + 1].dy,
+          greaterThan(y),
+          reason: 'right of isolated day ${i + 1} peak',
+        );
+      }
+    }
+  });
   setUpAll(() async {
+    await prepareDashboardTestRenderResources();
     final font = FontLoader('Ahem')
       ..addFont(rootBundle.load('assets/fonts/inter/InterVariable.ttf'));
     await font.load();
@@ -30,6 +62,106 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher
         .clearAccessibilityFeaturesTestValue();
   });
+
+  testWidgets(
+    'WR-15/19 real Dashboard host preserves tap/vertical ownership and warm cache',
+    (tester) async {
+      const viewport = Size(412, 892);
+      await tester.binding.setSurfaceSize(viewport);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        waveLinked(waveReferenceForints),
+      );
+      final settings = BalancePresentationController(
+        initial: const BalancePresentationSettings.defaults().copyWith(
+          usesChildCards: false,
+          monthlySpendingChartPresentation:
+              BalanceMonthlySpendingChartPresentation.topographic,
+        ),
+      );
+      addTearDown(controller.dispose);
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      var starts = 0;
+      var ends = 0;
+      var delta = 0.0;
+      FluviWaveRenderMetrics? metrics;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: FluviWaveDebugScope(
+              onPaint: (value) => metrics = value,
+              child: DashboardCoreModeHost(
+                controller: controller,
+                presentationFor: (mode) => DashboardCoreModePresentation(
+                  geometry: DashboardGeometryResolver.resolve(
+                    metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                      viewport,
+                    ),
+                    mode: mode,
+                    collapseProgress: 0,
+                    isRailExpanded: false,
+                    hasPhysicalRail: false,
+                  ),
+                  palette: DashboardModePaletteResolver.resolve(mode),
+                ),
+                balanceLinkedPresentation: linked,
+                balancePresentationSettings: settings,
+                onVerticalExpansionStart: () => starts++,
+                onVerticalExpansionDragBy: (value) => delta += value,
+                onVerticalExpansionEnd: () => ends++,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final chart = find.byType(FluviTopographicWaveChart);
+      final state = tester.state(chart);
+      final terrain = metrics!.terrain;
+      final builds = metrics!.geometryBuilds;
+      final requests = metrics!.textureRequests;
+      final bounds = tester.getRect(chart);
+      final clock = Stopwatch()..start();
+      for (var i = 0; i < 30; i++) {
+        await tester.tapAt(
+          Offset(
+            bounds.left + 10 + (bounds.width - 20) * i / 29,
+            bounds.center.dy,
+          ),
+        );
+        await tester.pump();
+      }
+      clock.stop();
+      expect(starts, 0);
+      expect(metrics!.selectedKey, 31);
+      expect(identical(tester.state(chart), state), isTrue);
+      expect(identical(metrics!.terrain, terrain), isTrue);
+      expect(metrics!.geometryBuilds, builds);
+      expect(metrics!.textureRequests, requests);
+      await tester.drag(chart, const Offset(0, -65));
+      await tester.pump();
+      expect(starts, 1);
+      expect(ends, 1);
+      expect(delta, lessThan(0));
+      expect(
+        metrics!.selectedKey,
+        31,
+        reason: 'a vertical drag is not a selection',
+      );
+      expect(controller.committedMode, DashboardModeSpec.balance);
+      expect(identical(tester.state(chart), state), isTrue);
+      expect(tester.takeException(), isNull);
+      debugPrint(
+        'WR-19 software/proot only: 30 warm selections ${clock.elapsedMicroseconds} us; ${metrics!.snapshot()}',
+      );
+      await tester.pumpWidget(const SizedBox());
+      expect(metrics!.disposed, isTrue);
+    },
+  );
 
   for (final (year, month, days) in [
     (2026, 2, 28),
@@ -55,6 +187,28 @@ void main() {
           values: data,
           size: size,
         );
+        for (var day = 0; day < days; day++) {
+          final point = terrain.dataOffsets[day];
+          expect(
+            point.dx,
+            closeTo(
+              terrain.plot.left + terrain.plot.width * day / (days - 1),
+              1e-9,
+            ),
+          );
+          expect(
+            terrain.financialBaseline - point.dy,
+            closeTo(
+              (terrain.financialBaseline - terrain.plot.top) *
+                  amounts[day] /
+                  268000,
+              1e-9,
+            ),
+            reason:
+                'every exact daily amount uses one linear scale, including genuine zero days',
+          );
+          expect(terrain.ridgeSamples[day * 14], point);
+        }
         for (var i = 0; i < terrain.ridgeSamples.length; i++) {
           final ridge = terrain.ridgeSamples[i];
           final foot = terrain.surfaceFootSamples[i];
@@ -172,6 +326,7 @@ void main() {
         ),
       );
       final initial = metrics!.terrain;
+      final initialState = tester.state(find.byType(FluviTopographicWaveChart));
       for (final (fraction, index) in [(0.0, 0), (1.0, 30)]) {
         final bounds = tester.getRect(find.byType(FluviTopographicWaveChart));
         await tester.tapAt(
@@ -182,6 +337,25 @@ void main() {
         );
         await tester.pump();
         expect(metrics!.selectedIndex, index);
+        expect(
+          identical(
+            initialState,
+            tester.state(find.byType(FluviTopographicWaveChart)),
+          ),
+          isTrue,
+        );
+        expect(metrics!.terrain!.values[index].key, index + 1);
+        expect(metrics!.selectedKey, index + 1);
+        expect(
+          metrics!.selectedValueMinor,
+          metrics!.terrain!.values[index].value,
+        );
+        expect(
+          metrics!.tooltipText,
+          DashboardPreparedFormatter.compactAmountMinor(
+            metrics!.selectedValueMinor!,
+          ),
+        );
         expect(identical(initial, metrics!.terrain), isTrue);
         for (final rect in [metrics!.markerBounds!, metrics!.tooltipBounds!]) {
           expect(rect.left, greaterThanOrEqualTo(0));
@@ -192,6 +366,46 @@ void main() {
       }
     },
   );
+
+  testWidgets('WR-12 failed shader load keeps the same-data painted fallback', (
+    tester,
+  ) async {
+    FluviWaveRenderMetrics? metrics;
+    final values = waveData(waveLinked(waveReferenceForints));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 240,
+            height: 128,
+            child: FluviWaveDebugScope(
+              programLoader: () =>
+                  Future.error(StateError('controlled shader load failure')),
+              atmosphere: false,
+              onPaint: (value) => metrics = value,
+              child: FluviTopographicWaveChart(
+                values: values,
+                style: FluviTopographicWaveStyle.shaderAtmosphere,
+                tooltipForValue: DashboardPreparedFormatter.compactAmountMinor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(metrics!.shaderState, 'failed');
+    expect(metrics!.shaderError, contains('controlled shader load failure'));
+    expect(metrics!.route, 'mesh');
+    expect(metrics!.terrain!.values, values);
+    expect(metrics!.selectedIndex, 14);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 30)),
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'WR-13 production async owner never paints another terrain lookup',
@@ -258,6 +472,7 @@ void main() {
         reason: 'actual shader paint, not compilation alone',
       );
       expect(identical(metrics!.terrain, metrics!.textureTerrain), isTrue);
+      expect(metrics!.lookupRequestToPaintMicros, greaterThan(0));
       await tester.pumpWidget(host(b));
       expect(
         metrics!.route,
@@ -303,6 +518,9 @@ void main() {
       await complete(5);
       expect(metrics!.disposed, isTrue);
       expect(metrics!.textureDisposals, metrics!.textureRequests);
+      debugPrint(
+        'WR-19 retained production resource lifecycle ${metrics!.snapshot()}',
+      );
       expect(tester.takeException(), isNull);
     },
   );

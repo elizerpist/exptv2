@@ -37,13 +37,13 @@ void main() {
       );
 
       expect(terrain.ridgeSamples.length, greaterThan(60));
-      expect(terrain.depthLayers.length, inInclusiveRange(6, 14));
+      expect(terrain.depthLayers.length, inInclusiveRange(8, 24));
       expect(terrain.atmospheres, hasLength(3));
       expect(terrain.depthLayers.first.depth, 0);
       expect(terrain.depthLayers.last.depth, closeTo(1, .001));
       expect(
         terrain.depthLayers.first.opacity,
-        inInclusiveRange(.06, .08),
+        inInclusiveRange(.10, .12),
         reason:
             'The contour is a restrained surface-detail layer; the filled '
             'locally-lit body, rather than a high-alpha line stack, owns '

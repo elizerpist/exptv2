@@ -14,6 +14,9 @@ void main() {
     final font = FontLoader('FluviColorLabInter')
       ..addFont(rootBundle.load('assets/fonts/inter/InterVariable.ttf'));
     await font.load();
+    await (FontLoader(
+      'MaterialIcons',
+    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
 
   testWidgets('WR-18 actual Month material reference and ablation scenes', (
@@ -85,6 +88,14 @@ void main() {
         width: 412.0,
       ),
       (
+        name: 'reference-animated',
+        shader: true,
+        body: false,
+        glow: true,
+        contours: true,
+        width: 412.0,
+      ),
+      (
         name: 'sparse',
         shader: false,
         body: false,
@@ -143,6 +154,10 @@ void main() {
     ];
     final bodyRasters = <String, List<int>>{};
     for (final scene in cases) {
+      tester.binding.platformDispatcher.accessibilityFeaturesTestValue =
+          FakeAccessibilityFeatures(
+            disableAnimations: scene.name != 'reference-animated',
+          );
       final viewport = Size(scene.width, scene.width * 892 / 412);
       await tester.binding.setSurfaceSize(viewport);
       linked.value = waveLinked(
@@ -210,6 +225,24 @@ void main() {
       final image = (await tester.runAsync(
         () => picture.toImage(crop.width.ceil(), crop.height.ceil()),
       ))!;
+      if (scene.name == 'reference-animated') {
+        final pixels = (await tester.runAsync(() => image.toByteData()))!;
+        final pixel =
+            ((image.height * .32).floor() * image.width +
+                (image.width * .7).floor()) *
+            4;
+        final rgb = List.generate(
+          3,
+          (channel) => pixels.getUint8(pixel + channel),
+        );
+        debugPrint('WR-27 optional animated atmosphere background pixel $rgb');
+        expect(
+          rgb.every((channel) => channel >= 247),
+          isTrue,
+          reason:
+              'The optional animated layer must not wash the reference white background grey.',
+        );
+      }
       final label =
           '${scene.name}-${scene.shader ? 'shader' : 'mesh'}-${scene.body ? 'body' : 'full'}-${scene.width.toInt()}';
       final metadata = <String, Object?>{

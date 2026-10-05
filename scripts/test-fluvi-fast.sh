@@ -5,6 +5,11 @@ set -euo pipefail
 # in the nightly/profile lanes; do not grow this list by duplicating an
 # invariant already owned below.
 flutter test \
+  test/boundary/balance_monthly_topographic_chart_boundary_test.dart \
+  test/boundary/balance_monthly_topographic_native_platform_boundary_test.dart \
+  test/core/design/fluvi_bounded_curve_test.dart \
+  test/features/dashboard/presentation/fluvi_wave_recovery_test.dart \
+  test/features/dashboard/presentation/fluvi_wave_visual_test.dart \
   test/boundary/query_menu_boundary_test.dart \
   test/boundary/dashboard_interaction_performance_boundary_test.dart \
   test/boundary/dashboard_motion_data_isolation_boundary_test.dart \

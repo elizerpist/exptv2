@@ -1,0 +1,13 @@
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart
+00:00 +0: MTC-03: real daily values retain bounded interpolation and size-adaptive contour detail
+00:00 +1: BMR-05: terrain resolves a continuous local-depth material body rather than a rectangle-global baseline fill
+00:00 +2: MTC-03: real production cache reuses equal data and invalidates size/data
+00:01 +3: MTC-03: an all-zero month keeps a calm atmospheric empty state without inventing a spend ridge or marker
+00:01 +4: BMR-05: a sparse real spike keeps its datum ridge exact while retaining a finite local material body
+00:01 +5: BMR-06: the registered local wave material compiles to a FragmentShader
+00:01 +6: MTC-04/05: every terrain option mounts one clipped Canvas terrain while only the shader option mounts the atmospheric shader
+00:01 +7: MTC-03: a tap callback selects the exact nearest real datum
+00:02 +8: MTC-07 visual: SVG-reference terrain is a clipped lavender landscape rather than a conventional line chart
+00:02 +9: BMR-07 visual: a narrow monthly card keeps a true shaded surface for a sparse real spike
+00:02 +10: BMR-07 visual: a zero month retains only decorative atmosphere and no financial marker
+00:02 +11: All tests passed!

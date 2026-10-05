@@ -13,6 +13,7 @@ uniform vec3 uMist;
 uniform vec3 uLight;
 uniform float uRoundness;
 uniform float uLookupWidth;
+uniform float uHorizontalUnit;
 uniform sampler2D uCurveTexture;
 out vec4 fragColor;
 
@@ -33,17 +34,17 @@ void main() {
   float hi = min(1.0, local.x + stepX);
   vec2 slopes = (boundaries(hi) - boundaries(lo)) * uPlot.w / ((hi - lo) * uPlot.z);
   float dw = slopes.y - slopes.x;
-  float dd = -1.57079632679 * sin(1.57079632679 * depth);
-  float zx = uRoundness * (dw * cos(1.57079632679 * depth) - dd * (slopes.x + depth * dw));
+  float dd = 3.14159265359 * cos(3.14159265359 * depth);
+  float zx = uRoundness * (dw * sin(3.14159265359 * depth) - dd * (slopes.x + depth * dw));
   float zy = uRoundness * dd;
-  vec3 normal = normalize(vec3(-zx, -zy, 1.0));
+  vec3 normal = normalize(vec3(-zx / uHorizontalUnit, -zy, 1.0));
   vec3 light = normalize(uLight);
   float diffuse = clamp(dot(normal, light), 0.0, 1.0);
-  float specular = pow(max(0.0, dot(normal, normalize(light + vec3(0.0, 0.0, 1.0)))), 14.0);
-  vec3 color = mix(uShade, uBody, smoothstep(.10, .95, diffuse));
-  color = mix(color, uPearl, specular * .28 + exp(-depth * 48.0) * .20);
-  color = mix(color, uPeriwinkle, smoothstep(.48, .95, depth) * .8);
-  color = mix(color, uMist, smoothstep(.85, 1.0, depth) * .4);
-  float alpha = .98 * (1.0 - smoothstep(.72, 1.0, depth)) * uOpacity;
+  float specular = pow(max(0.0, dot(normal, normalize(light + vec3(0.0, 0.0, 1.0)))), 10.0);
+  vec3 color = mix(uShade, uBody, .68 + .32 * smoothstep(.10, .95, diffuse));
+  color = mix(color, uPearl, specular * .32 + exp(-depth * 48.0) * .12);
+  color = mix(color, uPeriwinkle, smoothstep(.12, .90, depth) * .85);
+  color = mix(color, uMist, smoothstep(.55, 1.0, depth) * .75);
+  float alpha = .98 * (1.0 - smoothstep(.52, 1.0, depth)) * uOpacity;
   fragColor = vec4(color * alpha, alpha);
 }

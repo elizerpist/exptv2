@@ -1,5 +1,34 @@
 # Balance Month wave recovery: implementation and acceptance record
 
+## Resumed visual completion — 2026-10-05
+
+The user explicitly requests completion, with the desired screenshot as the
+visual source of truth and a substantially similar result as the acceptance
+target. Both original local phone captures and the `material-v3` reference and
+sparse parent renders were reopened. The current render still has abrupt dark
+vertical bands, a block-like foreground and repetitive disconnected background
+hills. Successful pixel coverage tests alone do not satisfy WR-10/11/18.
+
+Continue the existing inline plan in the existing linked `3d-linechart`
+worktree. The rendering/inspection steps share one material and geometry owner
+and are sequential. Preserve the independently owned uncommitted FAB cyan
+changes and all pre-existing failure images; do not stage them in wave commits.
+The bounded-curve extraction belongs to this task and retains Mind output.
+
+Next gates: (1) correct the form-lighting/foreground composition and open the
+reference-shaped and sparse render; (2) strengthen boundary, material, actual
+parent gestures, cache/async/error and financial mapping coverage; (3) measure
+bounded render resources, run targeted/curated regressions and analyzer;
+(4) reconcile each checklist item, commit/journal/push, deliver the normal
+Human APK, and regenerate the final-source graph on its separate tooling line.
+Historical installed identity and physical FrameTiming remain unavailable and
+must not be inferred from software raster evidence.
+
+| ID | Source/reference | Code area | Acceptance condition | Verification | Status |
+|---|---|---|---|---|---|
+| WR-27 | Reopened desired screenshot; latest user instruction | Material and atmospheric composition | Broad rounded lavender bodies, soft upper-left light, recognizable overlapping depth and pale foreground; no slab-like base | Open final reference/sparse/body/ablation renders side-by-side with desired crop | DONE |
+| WR-28 | Ownership/reuse gate | Chart geometry/material and shared bounded curve | One material/palette and interpolation mechanism; UI only owns ephemeral selection/resources; protected Mind output identical | Boundary suite and exact-control regression | DONE |
+
 Execution: inline, explicitly requested by the user. The later instruction
 `3d linechart` means the valid Git branch `3d-linechart`; it supersedes both
 the original no-branch instruction and the pasted handoff's `3d-chart` name.
@@ -57,30 +86,31 @@ Statuses are implementation/evidence status, never physical acceptance.
 | ID | Source instruction/reference | Intended code/evidence area | Acceptance condition | Verification | Status |
 |---|---|---|---|---|---|
 | WR-01 | Latest branch instruction + preflight | Git/worktree | `3d-linechart` from verified base; preserve both untracked failures directories; no reset/rebase | Git ref/status/diff inventory | DONE |
-| WR-02 | Hard preflight, commit/agent audit | Source/tests/history/journal | Audit relevant bodies, actual diffs, complete affected source/tests, prior claims and milestone; disclose absent reports | Source inventory and final report | PARTIAL |
-| WR-03 | Physical source of truth | Reference captures/crops | Open correct desired/rejected scenes, preserve originals, record discovered paths/hashes and missing original-byte identity | Opened images, hash manifest | PARTIAL |
+| WR-02 | Hard preflight, commit/agent audit | Source/tests/history/journal | Audit relevant bodies, actual diffs, complete affected source/tests, prior claims and milestone; disclose absent reports | Source inventory and final report | DONE |
+| WR-03 | Physical source of truth | Reference captures/crops | Open correct desired/rejected scenes, preserve originals, record discovered paths/hashes and missing original-byte identity | Opened images, hash manifest | DONE |
 | WR-04 | Physical build/Drive audit | Audit report | Separate released, installed, source identities; discover current logs, fully audit any found; disclose absences | ADB, Drive search, release/hash, CI | DONE |
 | WR-05 | Matching graph/impact | Tooling graph | Exact investigated-source manifest; definitions, families, direct prod/test refs and impact verified in current source | SCIP generation + queries | DONE |
 | WR-06 | Forensic gate | Actual monthly surface test | Complete-calendar deterministic production-parent reproduction; identify first failing boundary | Baseline render, same-x red test, pixel probes | DONE |
-| WR-07 | Body diagnostics | Chart + existing diagnostic sink | Opt-in bounded bounds/baseline/ridge/foot/fill/style/route/load/identity facts; default UI unchanged | Diagnostic fixture, route evidence | PARTIAL |
-| WR-08 | Geometry contract | Terrain | Separate zero baseline and clip bottom; positive same-x depth on all nonempty samples, calmer broader foot | 28/29/30/31 days, sparse/zero/edge/narrow tests | PARTIAL |
-| WR-09 | Financial truth | Existing adapter/projection + terrain | Linear exact amount/date projection, no invented days/peaks; exact highest/selected datum and tooltip | Producer and projection tests | NOT DONE |
-| WR-10 | Material reference | Shared material + Canvas/shader | Rounded substantially colored body; normals vary in both spatial directions; upper-left light, restrained highlight, lower fade | Opened body/no-glow/no-contour renders and pixels | NOT DONE |
-| WR-11 | Depth composition | Chart decoration | 3–4 recognizable overlapping lower-landscape surfaces, independent peaks; no financial markers | Opened reference-shaped/sparse renders | NOT DONE |
-| WR-12 | Renderer correctness | Canvas/shader | Verify vertex blend, actual shader load AND paint, coordinate/precision/edge alignment; genuine same-data fallback | Minimal pixel probe, route/pixel tests | NOT DONE |
-| WR-13 | Async identity | Chart resource owner | Texture only shades its own geometry; cold/warm A→B→C, stale completion, zero/style/disposal safe | Retained-state delayed-completion tests | NOT DONE |
-| WR-14 | Real cache/performance | Production cache/lifecycle | Selection does not regenerate terrain/lookup; size/data invalidate; resources bounded/disposed | Real instance counters and timings | NOT DONE |
-| WR-15 | Bounds/gestures | Chart + actual parent | Marker/bubble contained at edges, production scale measured, decoration non-intercepting, parent gestures preserved | Same retained instance widget tests + bounds | NOT DONE |
-| WR-16 | False-green removal | Chart/card/boundary tests | Replace 5-point, mismatched-x, fake-cache and callback-only claims; verify Canvas labels through painter evidence | Tests audited and strengthened | NOT DONE |
-| WR-17 | Scope lock/architecture | Chart boundary suite | Original Current/Header/settings/Savings/bar/Mind/Budget/financial owners protected; one geometry/material policy | Source hashes/diff + boundary/regression tests | NOT DONE |
-| WR-18 | Visual loop | Render evidence | Render OPEN compare label dataset/source/route/dimensions; reference-shaped + sparse actual parent + body/no-glow/no-contour + zero/edges/narrow + fallback/shader | Evidence manifest and per-iteration observations | NOT DONE |
-| WR-19 | Performance gate | Production parent/runtime diagnostics | Count generation/publications/paint, resource duration/latency; report FrameTiming availability honestly; no FPS from counters | Measured reports, bounded diagnostics | NOT DONE |
-| WR-20 | Verification | Focused + curated + boundary gates | Exact PASS/FAIL/NOT RUN commands; classify baseline Mind failure; no build substituted for visual requirements | Saved command outcomes | NOT DONE |
+| WR-07 | Body diagnostics | Chart + existing diagnostic sink | Opt-in bounded bounds/baseline/ridge/foot/fill/style/route/load/identity facts; default UI unchanged | Diagnostic fixture, route evidence | DONE |
+| WR-08 | Geometry contract | Terrain | Separate zero baseline and clip bottom; positive same-x depth on all nonempty samples, calmer broader foot | 28/29/30/31 days, sparse/zero/edge/narrow tests | DONE |
+| WR-09 | Financial truth | Existing adapter/projection + terrain | Linear exact amount/date projection, no invented days/peaks; exact highest/selected datum and tooltip | Producer and projection tests | DONE |
+| WR-10 | Material reference | Shared material + Canvas/shader | Rounded substantially colored body; normals vary in both spatial directions; upper-left light, restrained highlight, lower fade | Opened body/no-glow/no-contour renders and pixels | DONE |
+| WR-11 | Depth composition | Chart decoration | 3–4 recognizable overlapping lower-landscape surfaces, independent peaks; no financial markers | Opened reference-shaped/sparse renders | DONE |
+| WR-12 | Renderer correctness | Canvas/shader | Verify vertex blend, actual shader load AND paint, coordinate/precision/edge alignment; genuine same-data fallback | Minimal pixel probe, route/pixel tests | DONE |
+| WR-13 | Async identity | Chart resource owner | Texture only shades its own geometry; cold/warm A→B→C, stale completion, zero/style/disposal safe | Retained-state delayed-completion tests | DONE |
+| WR-14 | Real cache/performance | Production cache/lifecycle | Selection does not regenerate terrain/lookup; size/data invalidate; resources bounded/disposed | Real instance counters and timings | DONE |
+| WR-15 | Bounds/gestures | Chart + actual parent | Marker/bubble contained at edges, production scale measured, decoration non-intercepting, parent gestures preserved | Same retained instance widget tests + bounds | DONE |
+| WR-16 | False-green removal | Chart/card/boundary tests | Replace 5-point, mismatched-x, fake-cache and callback-only claims; verify Canvas labels through painter evidence | Tests audited and strengthened | DONE |
+| WR-17 | Scope lock/architecture | Chart boundary suite | Original Current/Header/settings/Savings/bar/Mind/Budget/financial owners protected; one geometry/material policy | Source hashes/diff + boundary/regression tests | DONE |
+| WR-18 | Visual loop | Render evidence | Render OPEN compare label dataset/source/route/dimensions; reference-shaped + sparse actual parent + body/no-glow/no-contour + zero/edges/narrow + fallback/shader | Evidence manifest and per-iteration observations | DONE |
+| WR-19 | Performance gate | Production parent/runtime diagnostics | Count generation/publications/paint, resource duration/latency; report FrameTiming availability honestly; no FPS from counters | Measured reports, bounded diagnostics | DONE |
+| WR-20 | Verification | Focused + curated + boundary gates | Exact PASS/FAIL/NOT RUN commands; classify baseline Mind failure; no build substituted for visual requirements | Saved command outcomes | DONE |
 | WR-21 | Commit/journal | Git + engineering journal | Atomic application commits with full required body; journal after each app commit in separate skip-ci commit | SHA/parent/diff audit | NOT DONE |
 | WR-22 | Build delivery | GitHub Human APK | Push final source, monitor exact run, download normal main.dart APK; verify size/hash/embedded SHA | Release, ZIP, payload identity | NOT DONE |
 | WR-23 | Graph regeneration | Separate tooling branch | Final application source graph, deterministic manifest/index hash and tooling commit | Final generation/query/hash/remote | NOT DONE |
 | WR-24 | Completion | Report/checklist/final git | Honest full evidence report and all outstanding requirements disclosed | Final checklist reread | NOT DONE |
 | WR-25 | Physical acceptance | User only | Exact APK physically accepted by user | User Android test | BLOCKED |
+| WR-26 | Newer global mandatory reuse rule; WR-08 rounded peaks | Neutral bounded-curve helper + existing Mind adapter + monthly sampler | Reuse existing monotone-control mechanism without duplicating it; preserve Mind constructor/output/behaviour exactly | b0e503ee matching impact graph, frozen Mind control fixture, monthly clipped-peak red test, Mind regressions | DONE |
 
 ## Inline implementation sequence
 
@@ -131,3 +161,19 @@ This isolated geometry repair is NOT a completed visual package: foot silhouette
 lighting, async binding, shader route, final regressions/build remain pending.
 Unrelated concurrent FAB/Header working changes are preserved and excluded from
 chart commits. The historical installed APK/backend remains UNKNOWN.
+
+## Shared mechanism gate for the observed clipped peaks
+
+The new isolated-peak red test fails on day 5: a neighbouring sample equals
+the peak because Catmull-Rom is clamped after evaluation. Existing Mind Sum
+already bounds cubic controls before evaluation. The newer global reuse gate
+requires a neutral extraction instead of a sibling copy. Only that pure
+algorithm moves; the existing Mind segment class/constructor, selection,
+financial projection, gestures, rendering and defaults remain unchanged.
+Use a generic segment factory so Mind gains no intermediate wrapper objects.
+Matching graph: source `b0e503ee8dd5a7606dcd701b8967902950f7f4b0`, raw index
+`331b3660b805cd12a87dcfa53e3cb1bda673cd3cafc71b7be4f3e7d6c3d285c4`.
+Function has one production paint caller and one test caller; segment family
+stays inside the Mind file. Its widget consumer in the Sum viewport and current
+curve/viewport tests were opened. No Mind canonical-range profile repair is
+part of this extraction. Query evidence: `graph-impact-b0e503ee.log`.

@@ -1,0 +1,33 @@
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_visual_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: WR-18 actual Month material reference and ablation scenes
+WR-18 reference-mesh-body-412 substantial violet body coverage=0.24376906088968345 {geometryId: 734783336, textureGeometryId: null, size: Size(240.1, 128.3), clip: Rect.fromLTRB(0.0, 0.0, 240.1, 128.3), plot: Rect.fromLTRB(10.0, 36.0, 230.1, 124.3), financialBaseline: 97.79090909090908, styleRoute: mesh, shaderState: not-requested, shaderError: null, geometryBuilds: 1, geometryMicros: 301018, textureRequests: 0, texturePublications: 0, textureDisposals: 0, textureMicros: 0, paints: 2, selectedIndex: null, selectedKey: null, selectedValueMinor: null, tooltipText: null, lookupRequestToPaintMicros: null, markerBounds: null, tooltipBounds: null, disposed: false}
+WR-18 reference-shader-body-412 substantial violet body coverage=0.24446475808343512 {geometryId: 734783336, textureGeometryId: 734783336, size: Size(240.1, 128.3), clip: Rect.fromLTRB(0.0, 0.0, 240.1, 128.3), plot: Rect.fromLTRB(10.0, 36.0, 230.1, 124.3), financialBaseline: 97.79090909090908, styleRoute: shader, shaderState: ready, shaderError: null, geometryBuilds: 1, geometryMicros: 301018, textureRequests: 1, texturePublications: 1, textureDisposals: 0, textureMicros: 117613, paints: 8, selectedIndex: null, selectedKey: null, selectedValueMinor: null, tooltipText: null, lookupRequestToPaintMicros: 151748, markerBounds: null, tooltipBounds: null, disposed: false}
+WR-27 optional animated atmosphere background pixel [235, 235, 236]
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: true
+  Actual: <false>
+The optional animated layer must not wash the reference white background grey.
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_visual_test.dart:231:9)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_visual_test.dart line 231
+The test description was:
+  WR-18 actual Month material reference and ablation scenes
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:05 +0 -1: WR-18 actual Month material reference and ablation scenes [E]
+  Test failed. See exception logs above.
+  The test description was: WR-18 actual Month material reference and ablation scenes
+
+00:05 +0 -1: (tearDownAll)
+00:06 +0 -1: Some tests failed.

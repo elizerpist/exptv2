@@ -1,0 +1,23 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/core/design/fluvi_bounded_curve_test.dart
+00:00 +0: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/core/design/fluvi_bounded_curve_test.dart: WR-26 preserves the existing Mind segment constructor and exact controls
+00:02 +1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: (setUpAll)
+00:02 +1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08 isolated peaks are rounded without clipped flat samples
+00:02 +2: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08/09 positive same-x body depth, 28 calendar days
+00:03 +3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08/09 positive same-x body depth, 29 calendar days
+00:03 +4: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08/09 positive same-x body depth, 30 calendar days
+00:03 +5: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08/09 positive same-x body depth, 30 calendar days
+00:03 +6: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-08/09 positive same-x body depth, 31 calendar days
+00:03 +7: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-12 isolated vertex-colour pixel probe
+WR-12 vertex pixels {srcOver: [150, 130, 242, 255], dst: [150, 130, 242, 255]}
+00:04 +8: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-12 lookup decodes the ridge at the same physical x
+WR-12 max same-x lookup error 0.0006705989936079959 px
+00:04 +9: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-15 exact edge selection and painted marker/tooltip containment
+00:07 +10: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-13 production async owner never paints another terrain lookup
+00:08 +11: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: WR-06 production-parent baseline, complete sparse month
+WR-06 {dataset: sparse-31-synthetic-268k, selectedStyle: terrain, route: mesh, chartLocalSize: Size(240.1, 128.3), chartGlobalBounds: Rect.fromLTRB(27.8, 308.7, 267.8, 437.0), transformToRoot: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 27.774410774410775, 308.7485970819304, 0.0, 1.0], financialPlot: Rect.fromLTRB(10.0, 36.0, 230.1, 124.3), minSameXDepth: 25.15812053526163, highestDay: 2}
+00:08 +12: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart: (tearDownAll)
+00:08 +12: All tests passed!

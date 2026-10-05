@@ -67,6 +67,11 @@ final class FluviWaveRenderMetrics {
   Rect? markerBounds;
   Rect? tooltipBounds;
   int? selectedIndex;
+  int? selectedKey;
+  int? selectedValueMinor;
+  String? tooltipText;
+  Stopwatch? lookupRequested;
+  int? lookupRequestToPaintMicros;
   bool disposed = false;
   String? _lastPublication;
 
@@ -90,6 +95,10 @@ final class FluviWaveRenderMetrics {
     'textureMicros': textureMicros,
     'paints': paints,
     'selectedIndex': selectedIndex,
+    'selectedKey': selectedKey,
+    'selectedValueMinor': selectedValueMinor,
+    'tooltipText': tooltipText,
+    'lookupRequestToPaintMicros': lookupRequestToPaintMicros,
     'markerBounds': '$markerBounds',
     'tooltipBounds': '$tooltipBounds',
     'disposed': disposed,
@@ -99,6 +108,10 @@ final class FluviWaveRenderMetrics {
     terrain = current;
     route = path;
     paints++;
+    if (path == 'shader' && lookupRequested != null) {
+      lookupRequestToPaintMicros = lookupRequested!.elapsedMicroseconds;
+      lookupRequested = null;
+    }
     if (!kFluviOnscreenDiagnosticsEnabled) return;
     final identity =
         '${identityHashCode(current)}:$path:${identityHashCode(textureTerrain)}:$shaderState';

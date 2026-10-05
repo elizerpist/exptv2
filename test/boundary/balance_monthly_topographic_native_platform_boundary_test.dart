@@ -45,7 +45,17 @@ void main() {
       expect(source, contains('MaskFilter.blur'));
       expect(source, isNot(contains('BackdropFilter')));
       expect(source, isNot(contains('Repository')));
-      expect(source, isNot(contains('Query')));
+      // MediaQuery is a presentation dependency (reduced motion), not the
+      // financial query domain. Match domain identifiers/imports, not a suffix.
+      final domainQuery = RegExp(r'\b(?:Query\w*|DashboardQuery\w*)\b');
+      expect(
+        domainQuery.hasMatch('MediaQuery.disableAnimationsOf(context)'),
+        isFalse,
+      );
+      expect(domainQuery.hasMatch('QueryComposerController'), isTrue);
+      expect(domainQuery.hasMatch('DashboardQueryState'), isTrue);
+      expect(domainQuery.hasMatch(source), isFalse);
+      expect(source, isNot(contains('/query/')));
       expect(source, isNot(contains('DashboardLedgerEntry')));
     },
   );

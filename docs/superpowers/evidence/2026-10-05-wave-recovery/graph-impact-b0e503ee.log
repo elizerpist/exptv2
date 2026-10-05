@@ -1,0 +1,106 @@
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/mindDetailedSumCurveSegments().
+DEFINITION
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:951
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/mindDetailedSumCurveSegments().
+REFERENCES
+total=2 production=1 tests=1
+CONSUMER FILES
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart
+test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:866:26 reference
+TEST REFERENCES
+test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart:1634:25 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/MindDetailedSumCurveSegment#
+DEFINITION
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:931
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/MindDetailedSumCurveSegment#
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/MindDetailedSumCurveSegment#`<constructor>`().
+REFERENCES
+total=11 production=11 tests=0
+CONSUMER FILES
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:951:5 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:956:39 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:959:11 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:961:19 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:980:5 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:996:14 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:1001:13 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:1017:11 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:1027:5 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:1032:14 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:1051:11 reference
+TEST REFERENCES
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/MindDetailedSumChart#
+DEFINITION
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:24
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/MindDetailedSumChart#
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/MindDetailedSumChart#`<constructor>`().
+REFERENCES
+total=8 production=4 tests=4
+CONSUMER FILES
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart
+lib/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports.dart
+test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:51:8 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:54:53 reference
+lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart:72:33 reference
+lib/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports.dart:721:11 reference
+TEST REFERENCES
+test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart:336:21 reference
+test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart:2060:21 reference
+test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart:2131:23 reference
+test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart:2193:21 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`fluvi_topographic_wave_chart.dart`/FluviTopographicWaveTerrain#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:390
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`fluvi_topographic_wave_chart.dart`/FluviTopographicWaveTerrain#
+REFERENCES
+total=28 production=19 tests=9
+CONSUMER FILES
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart
+lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart
+lib/features/dashboard/presentation/core_modes/fluvi_wave_surface_lookup.dart
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart
+test/features/dashboard/presentation/fluvi_wave_recovery_test.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:92:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:93:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:156:32 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:445:9 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:456:13 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:480:13 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:546:11 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:789:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:791:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:798:22 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:838:8 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:913:8 reference
+lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart:26:34 reference
+lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart:33:40 reference
+lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart:64:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart:65:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart:97:19 reference
+lib/features/dashboard/presentation/core_modes/fluvi_wave_surface_lookup.dart:11:4 reference
+lib/features/dashboard/presentation/core_modes/fluvi_wave_surface_lookup.dart:27:18 reference
+TEST REFERENCES
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:33:22 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:75:22 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:151:22 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:168:22 reference
+test/features/dashboard/presentation/fluvi_wave_recovery_test.dart:53:24 reference
+test/features/dashboard/presentation/fluvi_wave_recovery_test.dart:107:20 reference
+test/features/dashboard/presentation/fluvi_wave_recovery_test.dart:198:24 reference
+test/features/dashboard/presentation/fluvi_wave_recovery_test.dart:199:28 reference
+test/features/dashboard/presentation/fluvi_wave_recovery_test.dart:340:39 reference

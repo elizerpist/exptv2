@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_bounded_curve.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
@@ -978,53 +979,11 @@ List<MindDetailedSumCurveSegment> mindDetailedSumCurveSegments({
   };
 }
 
-List<MindDetailedSumCurveSegment> _monotoneCubicSegments(List<Offset> points) {
-  final slopes = List<double>.filled(points.length, 0);
-  final segments = List<double>.filled(points.length - 1, 0);
-  for (var index = 0; index < segments.length; index += 1) {
-    final dx = points[index + 1].dx - points[index].dx;
-    segments[index] = dx <= 0
-        ? 0
-        : (points[index + 1].dy - points[index].dy) / dx;
-  }
-  slopes[0] = segments.first;
-  slopes[slopes.length - 1] = segments.last;
-  for (var index = 1; index < slopes.length - 1; index += 1) {
-    final previous = segments[index - 1];
-    final next = segments[index];
-    slopes[index] = previous * next <= 0 ? 0 : (previous + next) / 2;
-  }
-  return List<MindDetailedSumCurveSegment>.generate(points.length - 1, (index) {
-    final start = points[index];
-    final end = points[index + 1];
-    final dx = end.dx - start.dx;
-    if (dx <= 0) {
-      return MindDetailedSumCurveSegment(
-        start: start,
-        controlOne: start,
-        controlTwo: end,
-        end: end,
-        isLinear: true,
-      );
-    }
-    final lower = math.min(start.dy, end.dy);
-    final upper = math.max(start.dy, end.dy);
-    final controlOneY = (start.dy + slopes[index] * dx / 3)
-        .clamp(lower, upper)
-        .toDouble();
-    final controlTwoY = (end.dy - slopes[index + 1] * dx / 3)
-        .clamp(lower, upper)
-        .toDouble();
-    return MindDetailedSumCurveSegment(
-      start: start,
-      controlOne: Offset(start.dx + dx / 3, controlOneY),
-      controlTwo: Offset(end.dx - dx / 3, controlTwoY),
-      end: end,
-      isLinear: false,
+List<MindDetailedSumCurveSegment> _monotoneCubicSegments(List<Offset> points) =>
+    fluviBoundedMonotoneSegments(
+      points,
+      create: MindDetailedSumCurveSegment.new,
     );
-  }, growable: false);
-}
-
 List<MindDetailedSumCurveSegment> _catmullRomSegments(
   List<Offset> points,
   double tension,

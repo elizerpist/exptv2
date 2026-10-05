@@ -1,0 +1,7 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/core/design/fluvi_bounded_curve_test.dart
+00:00 +0: WR-26 preserves the existing Mind segment constructor and exact controls
+00:00 +1: All tests passed!
