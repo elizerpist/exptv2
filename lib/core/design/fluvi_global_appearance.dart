@@ -61,6 +61,18 @@ enum FluviFabIconPresentation {
   fullBabyBlueVector,
 }
 
+/// Fixed vector material sampled from the approved baby-blue FAB reference.
+///
+/// This is intentionally independent of the active income/expense palette:
+/// the full-vector presentation is a supplied artwork treatment, while the
+/// direction palette remains the authority for direction controls and the
+/// normal FAB variants. Keeping the two values here gives every renderer one
+/// semantic source without inventing a second direction colour profile.
+abstract final class FluviFabReferenceMaterial {
+  static const Color fullBabyBluePrimary = Color(0xFF06B6D4);
+  static const Color fullBabyBlueHighlight = Color(0xFFDDF9FC);
+}
+
 extension FluviFabIconPresentationPresentation on FluviFabIconPresentation {
   String get label => switch (this) {
     FluviFabIconPresentation.legacyWhiteStore => 'Fehér bolt ikon',

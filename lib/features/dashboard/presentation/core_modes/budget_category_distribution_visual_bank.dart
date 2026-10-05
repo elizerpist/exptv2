@@ -9,12 +9,14 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_category_distribution_controller.dart';
 import '../../application/dashboard_budget_partner_distribution_controller.dart';
+import '../../application/dashboard_budget_secondary_analysis.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../../runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import '../../runtime/application/dashboard_data_runtime.dart';
 import '../../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
+import '../../time_navigation/domain/local_date.dart';
 import '../../time_navigation/domain/year_month.dart';
 import 'budget_clay_donut_scene.dart';
 import 'budget_partner_distribution_visual_bank.dart';
@@ -101,6 +103,65 @@ final class DashboardBudgetCategoryDistributionVisualBank {
   }
 }
 
+/// One complete, target-indexed Budget secondary-analysis bank for an exact
+/// prepared time scope. Avatar selection is an O(1) list lookup into this
+/// immutable bank; it never starts a financial calculation in a renderer.
+@immutable
+final class DashboardBudgetSecondaryAnalysisBank {
+  DashboardBudgetSecondaryAnalysisBank({
+    required List<DashboardBudgetSecondaryAnalysisFrame> income,
+    required List<DashboardBudgetSecondaryAnalysisFrame> expense,
+  }) : income = List<DashboardBudgetSecondaryAnalysisFrame>.unmodifiable(
+         income,
+       ),
+       expense = List<DashboardBudgetSecondaryAnalysisFrame>.unmodifiable(
+         expense,
+       );
+
+  final List<DashboardBudgetSecondaryAnalysisFrame> income;
+  final List<DashboardBudgetSecondaryAnalysisFrame> expense;
+
+  int get frameCount => income.length + expense.length;
+  int get estimatedRetainedBytes => frameCount * 224;
+
+  DashboardBudgetSecondaryAnalysisFrame? frameFor({
+    required LedgerDirection direction,
+    required int targetHandle,
+  }) {
+    final values = switch (direction) {
+      LedgerDirection.income => income,
+      LedgerDirection.expense => expense,
+    };
+    return targetHandle < 0 || targetHandle >= values.length
+        ? null
+        : values[targetHandle];
+  }
+
+  factory DashboardBudgetSecondaryAnalysisBank.prepare({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required LedgerTimeScope scope,
+    required LocalDate logicalAsOfDate,
+  }) {
+    List<DashboardBudgetSecondaryAnalysisFrame> build(
+      LedgerDirection direction,
+    ) => List<DashboardBudgetSecondaryAnalysisFrame>.generate(
+      snapshot.targetCountFor(direction),
+      (handle) => DashboardBudgetSecondaryAnalysisProjector.project(
+        snapshot: snapshot,
+        direction: direction,
+        targetHandle: handle,
+        scope: scope,
+        logicalAsOfDate: logicalAsOfDate,
+      ),
+      growable: false,
+    );
+    return DashboardBudgetSecondaryAnalysisBank(
+      income: build(LedgerDirection.income),
+      expense: build(LedgerDirection.expense),
+    );
+  }
+}
+
 /// One coherent immutable Card2 analysis identity. It has no SVG or decoded
 /// picture ownership: retained Canvas paths are synchronous paint resources.
 @immutable
@@ -108,6 +169,7 @@ final class DashboardBudgetDistributionDrawableFrame {
   DashboardBudgetDistributionDrawableFrame({
     required this.semanticBundle,
     required this.visualBank,
+    this.analysisBank,
     this.partnerSemanticBundle,
     this.partnerVisualBank,
   }) : assert(identical(semanticBundle, visualBank.semanticBundle)),
@@ -125,6 +187,7 @@ final class DashboardBudgetDistributionDrawableFrame {
 
   final DashboardBudgetCategoryDistributionBundle semanticBundle;
   final DashboardBudgetCategoryDistributionVisualBank visualBank;
+  final DashboardBudgetSecondaryAnalysisBank? analysisBank;
   final DashboardBudgetPartnerDistributionBundle? partnerSemanticBundle;
   final DashboardBudgetPartnerDistributionVisualBank? partnerVisualBank;
 
@@ -137,7 +200,8 @@ final class DashboardBudgetDistributionDrawableFrame {
       visualBank.totalSliceCount + (partnerVisualBank?.totalSliceCount ?? 0);
   int get estimatedRetainedBytes =>
       visualBank.estimatedRetainedBytes +
-      (partnerVisualBank?.estimatedRetainedBytes ?? 0);
+      (partnerVisualBank?.estimatedRetainedBytes ?? 0) +
+      (analysisBank?.estimatedRetainedBytes ?? 0);
 }
 
 /// Result of the one exact-scope foreground Card2 publication. A cache hit is
@@ -170,6 +234,7 @@ final class DashboardBudgetDistributionDrawableController
     Iterable<LedgerTimeScope> Function(DashboardNavigationState state)?
     directChildScopesFor,
     bool Function()? isForegroundInputActive,
+    LocalDate? logicalAsOfDate,
     DashboardSpeculativeWorkScheduler? speculativeWorkScheduler,
     this.maximumFrames = 40,
   }) : assert(snapshot != null || snapshotForCurrentFrame != null),
@@ -179,6 +244,8 @@ final class DashboardBudgetDistributionDrawableController
        _partnerSnapshotForCurrentFrame = partnerSnapshotForCurrentFrame,
        _directChildScopesFor = directChildScopesFor,
        _isForegroundInputActive = isForegroundInputActive,
+       _logicalAsOfDate =
+           logicalAsOfDate ?? const LocalDate(year: 2026, month: 1, day: 1),
        _speculativeWorkScheduler =
            speculativeWorkScheduler ??
            const FlutterDashboardSpeculativeWorkScheduler(),
@@ -193,6 +260,7 @@ final class DashboardBudgetDistributionDrawableController
   final Iterable<LedgerTimeScope> Function(DashboardNavigationState state)?
   _directChildScopesFor;
   final bool Function()? _isForegroundInputActive;
+  final LocalDate _logicalAsOfDate;
   final DashboardSpeculativeWorkScheduler _speculativeWorkScheduler;
   final int maximumFrames;
   final DashboardBudgetCategoryDistributionBundleCache _categoryCache =
@@ -213,6 +281,8 @@ final class DashboardBudgetDistributionDrawableController
   int sourceGenerationCount = 0;
   int rendererPrewarmCount = 0;
   int pictureDecodeCount = 0;
+  int analysisFrameBuildCount = 0;
+  int analysisFrameCacheHitCount = 0;
   int evictionCount = 0;
   int _maintenanceEpoch = 0;
   DashboardSpeculativeWorkSlot? _pendingMaintenanceSlot;
@@ -282,6 +352,7 @@ final class DashboardBudgetDistributionDrawableController
     final cached = _frames.remove(key);
     if (cached != null) {
       _frames[key] = cached;
+      analysisFrameCacheHitCount += 1;
       return cached;
     }
     final generation = ++_prepareGeneration;
@@ -300,6 +371,11 @@ final class DashboardBudgetDistributionDrawableController
     );
     final categoryBank = DashboardBudgetCategoryDistributionVisualBank.prepare(
       semanticBundle: categoryBundle,
+    );
+    final analysisBank = DashboardBudgetSecondaryAnalysisBank.prepare(
+      snapshot: snapshot,
+      scope: scope,
+      logicalAsOfDate: _logicalAsOfDate,
     );
     final partnerSnapshot = _partnerSnapshotForCurrentFrame?.call();
     if (partnerSnapshot != null &&
@@ -343,12 +419,14 @@ final class DashboardBudgetDistributionDrawableController
     final frame = DashboardBudgetDistributionDrawableFrame(
       semanticBundle: categoryBundle,
       visualBank: categoryBank,
+      analysisBank: analysisBank,
       partnerSemanticBundle: partnerBundle,
       partnerVisualBank: partnerBank,
     );
     _frames[key] = frame;
     _trimCache(pinned: key);
     sceneBuildCount += frame.sceneCount;
+    analysisFrameBuildCount += analysisBank.frameCount;
     watch.stop();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -358,6 +436,7 @@ final class DashboardBudgetDistributionDrawableController
         scope:
             'analysisScope=${key.diagnosticLabel} categorySceneCount=${categoryBank.sceneCount} '
             'partnerSceneCount=${partnerBank?.sceneCount ?? 0} '
+            'analysisFrameCount=${analysisBank.frameCount} '
             'totalSliceCount=${frame.totalSliceCount} '
             'estimatedBytes=${frame.estimatedRetainedBytes} '
             'retainedBytes=$estimatedRetainedBytes '

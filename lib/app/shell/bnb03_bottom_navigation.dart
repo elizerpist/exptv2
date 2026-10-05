@@ -104,8 +104,10 @@ abstract final class Bnb03FabVectorArtworkGeometry {
   static const String assetPath =
       'assets/fluvi/actions/fluvi_add_expense_vector.svg';
   static const double compactCoreFraction = .62;
-  static const Color babyBluePrimary = Color(0xFF78C7F4);
-  static const Color babyBlueHighlight = Color(0xFFE4F7FF);
+  static const Color babyBluePrimary =
+      FluviFabReferenceMaterial.fullBabyBluePrimary;
+  static const Color babyBlueHighlight =
+      FluviFabReferenceMaterial.fullBabyBlueHighlight;
 }
 
 /// Paint-only vector treatment. It receives the existing appearance state;

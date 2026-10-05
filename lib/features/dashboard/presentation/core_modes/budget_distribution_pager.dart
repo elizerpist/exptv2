@@ -9,15 +9,16 @@ import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import 'budget_category_distribution_card.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_partner_distribution_card.dart';
+import 'budget_secondary_analysis_card.dart';
 import 'budget_distribution_page_surface.dart';
 import 'budget_distribution_ranking.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
-enum BudgetDistributionPage { category, partner }
+enum BudgetDistributionPage { category, partner, analysis }
 
 /// Local Card2 page owner. It owns one stable Flutter [PageController] and a
-/// parity-only semantic page; it deliberately knows nothing about dashboard
+/// modulo-three semantic page; it deliberately knows nothing about dashboard
 /// mode, time, Query, LogBox or avatar selection.
 final class BudgetDistributionPageController
     extends ValueNotifier<BudgetDistributionPage> {
@@ -33,13 +34,14 @@ final class BudgetDistributionPageController
   int _virtualIndex;
 
   static const _lowerRebaseWatermark = 1024;
-  static const _rebaseAnchor = 1000000;
+  static const _rebaseAnchor = 999999;
 
   int get virtualIndex => _virtualIndex;
 
-  static BudgetDistributionPage _pageFor(int index) => index.isEven
-      ? BudgetDistributionPage.category
-      : BudgetDistributionPage.partner;
+  /// Keep the historic initial virtual index on Category while extending the
+  /// domain in forward order: Category → Partner → Analysis.
+  static BudgetDistributionPage _pageFor(int index) =>
+      BudgetDistributionPage.values[(index.remainder(3) + 2).remainder(3)];
 
   void bindVirtualIndex(int virtualIndex) {
     if (virtualIndex == _virtualIndex) return;
@@ -52,13 +54,13 @@ final class BudgetDistributionPageController
         stage: 'BUDGET_DISTRIBUTION_PAGE_CHANGED',
         scope:
             'from=${from.name} to=${next.name} '
-            'virtualIndex=$virtualIndex semanticIndex=${virtualIndex % 2}',
+            'virtualIndex=$virtualIndex semanticIndex=${(virtualIndex + 2) % 3}',
       ),
     );
   }
 
   /// PageView has a natural zero lower bound. Rebase only after its Scrollable
-  /// reports idle, preserving parity while keeping lazy children and the one
+  /// reports idle, preserving the semantic modulo while keeping lazy children and the one
   /// PageController/ScrollPosition alive indefinitely in both directions.
   bool rebaseAtIdleIfNeeded() {
     if (_virtualIndex >= _lowerRebaseWatermark ||
@@ -66,7 +68,7 @@ final class BudgetDistributionPageController
         pageController.position.isScrollingNotifier.value) {
       return false;
     }
-    final target = _rebaseAnchor + _virtualIndex.remainder(2);
+    final target = _rebaseAnchor + _virtualIndex.remainder(3);
     _virtualIndex = target;
     pageController.jumpToPage(target);
     return true;
@@ -80,7 +82,7 @@ final class BudgetDistributionPageController
   }
 }
 
-/// Lazily built infinite two-page Card2 domain. Flutter owns normal page drag
+/// Lazily built infinite three-page Card2 domain. Flutter owns normal page drag
 /// and ballistics; no raw-pointer pager or extra ScrollController is created.
 class BudgetDistributionPager extends StatefulWidget {
   const BudgetDistributionPager({
@@ -283,6 +285,11 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
                 drilldown: widget.drilldown,
                 upperVerticalGestures: widget.upperVerticalGestures,
               ),
+              BudgetDistributionPage.analysis => BudgetSecondaryAnalysisCard(
+                key: const ValueKey('budget-secondary-analysis-card'),
+                presentation: widget.presentation,
+                drawableFrames: widget.drawableFrames,
+              ),
             },
           ),
         );
@@ -320,6 +327,10 @@ class BudgetDistributionPageDots extends StatelessWidget {
             _BudgetDistributionPageDot(
               key: const ValueKey('budget-distribution-dot-partner'),
               active: page == BudgetDistributionPage.partner,
+            ),
+            _BudgetDistributionPageDot(
+              key: const ValueKey('budget-distribution-dot-analysis'),
+              active: page == BudgetDistributionPage.analysis,
             ),
           ],
         ),

@@ -331,6 +331,7 @@ class _CoreDashboardState extends State<CoreDashboard>
               ?.partnerDistributionSnapshot,
           directChildScopesFor: _budgetDirectChildScopesFor,
           isForegroundInputActive: () => controller.foregroundInputMotion.value,
+          logicalAsOfDate: controller.logicalAsOfDate,
         );
     modeController.addListener(_syncBudgetDistributionTimePublicationPreparer);
     modeController.addListener(_onCoreModeChanged);

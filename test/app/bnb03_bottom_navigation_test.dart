@@ -800,6 +800,20 @@ void main() {
     },
   );
 
+  test(
+    'full baby-blue vector uses the photographed reference FAB cyan',
+    () {
+      expect(
+        Bnb03FabVectorArtworkGeometry.babyBluePrimary,
+        FluviFabReferenceMaterial.fullBabyBluePrimary,
+      );
+      expect(
+        Bnb03FabVectorArtworkGeometry.babyBlueHighlight,
+        FluviFabReferenceMaterial.fullBabyBlueHighlight,
+      );
+    },
+  );
+
   testWidgets(
     'vector FAB treatments retain their distinct material hierarchy',
     (tester) async {

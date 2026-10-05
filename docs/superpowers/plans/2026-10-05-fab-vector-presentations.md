@@ -15,6 +15,7 @@ it must not create another FAB, direction, or action owner.
 | FVP-05 | Add a fourth full-size baby-blue vector choice: same optical FAB artwork footprint, no white shell, no coloured ring/core or backing button. | `Bnb03BottomNavigation` | Focused widget test proves full footprint and absence of shell/ring/core; inspected golden proves the baby-blue output. | DONE |
 | FVP-06 | Keep one Shop hit target, direction semantics and routing unchanged. | existing `Bnb03BottomNavigation` | Existing FAB hit-target/tap coverage remains and both new renderers stay below the one existing semantic target. | DONE |
 | FVP-07 | Verify visual and static quality before final app build. | tests / CI | Focused RED/GREEN tests, inspected goldens, formatter/focused-analyzer/diff checks, successful online normal correctness gates, and exact Human APK delivery for `f5d6876fa8099779dbcc9aadb6f98a94a18ea164`. | DONE |
+| FVP-08 | Correct the fourth vector treatment to the photographed cyan of the reference FAB; retain its no-shell/full-artwork contract. | `FluviFabReferenceMaterial` + existing full-vector presentation in `Bnb03BottomNavigation` | The full-vector semantic palette resolves the sampled `#06B6D4`/`#DDF9FC` material from one global visual token; focused color contract and the regenerated golden retain the no-shell/full-artwork contract. | DONE |
 
 Architecture decision: the supplied SVG stays source artwork.  A single
 `Bnb03FabVectorArtwork` rendering primitive applies the user-selected compact

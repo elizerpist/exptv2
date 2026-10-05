@@ -439,7 +439,7 @@ void main() {
   );
 
   testWidgets(
-    'owns one stable infinite two-page domain while partner list keeps vertical scrolling local',
+    'owns one stable infinite three-page domain while partner list keeps vertical scrolling local',
     (tester) async {
       final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
         _category('food', 'Food', 'color_01'),
@@ -475,6 +475,11 @@ void main() {
               semanticBundle: categoryBundle,
               visualBank: DashboardBudgetCategoryDistributionVisualBank.prepare(
                 semanticBundle: categoryBundle,
+              ),
+              analysisBank: DashboardBudgetSecondaryAnalysisBank.prepare(
+                snapshot: budgetSnapshot,
+                scope: const MonthScope(YearMonth(year: 2026, month: 1)),
+                logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
               ),
               partnerSemanticBundle: partnerBundle,
               partnerVisualBank:
@@ -589,7 +594,10 @@ void main() {
       expect(categorySurface.color, FluviVisualTokens.surface);
       expect(
         categorySurface.border,
-        Border.all(color: FluviVisualTokens.border),
+        isNull,
+        reason:
+            'The unified Budget Card2 profile owns the existing border '
+            'decision; page children do not add a second physical border.',
       );
       expect(categorySurface.boxShadow, FluviVisualTokens.cardSurfaceShadows);
       expect(
@@ -786,14 +794,33 @@ void main() {
       await tester.pumpAndSettle();
       expect(pages.value, BudgetDistributionPage.category);
 
+      pages.pageController.jumpToPage(pages.virtualIndex + 2);
+      await tester.pumpAndSettle();
+      expect(pages.value, BudgetDistributionPage.analysis);
+      expect(
+        find.byKey(const ValueKey('budget-secondary-analysis-card')),
+        findsOneWidget,
+      );
+      expect(
+        identical(stablePageController.position, stablePagePosition),
+        isTrue,
+        reason:
+            'Analysis is a semantic child of the original PageView; it may '
+            'not introduce a nested pager or new ScrollPosition.',
+      );
+
+      pages.pageController.jumpToPage(pages.virtualIndex + 1);
+      await tester.pumpAndSettle();
+      expect(pages.value, BudgetDistributionPage.category);
+
       final categoryVirtualIndex = pages.virtualIndex;
-      for (var index = 0; index < 100; index += 1) {
+      for (var index = 0; index < 99; index += 1) {
         pages.pageController.jumpToPage(pages.virtualIndex + 1);
       }
       await tester.pump();
       expect(pages.value, BudgetDistributionPage.category);
-      expect(pages.virtualIndex, categoryVirtualIndex + 100);
-      for (var index = 0; index < 100; index += 1) {
+      expect(pages.virtualIndex, categoryVirtualIndex + 99);
+      for (var index = 0; index < 99; index += 1) {
         pages.pageController.jumpToPage(pages.virtualIndex - 1);
       }
       await tester.pump();
@@ -811,7 +838,7 @@ void main() {
   );
 
   testWidgets(
-    'rebases an idle lower-bound virtual page without changing parity or controller identity',
+    'rebases an idle lower-bound virtual page without changing semantic modulo or controller identity',
     (tester) async {
       final pages = BudgetDistributionPageController(initialVirtualIndex: 2);
       addTearDown(pages.dispose);
@@ -832,8 +859,8 @@ void main() {
       await tester.pumpAndSettle();
       final stableController = pages.pageController;
 
-      pages.bindVirtualIndex(1);
-      pages.pageController.jumpToPage(1);
+      pages.bindVirtualIndex(2);
+      pages.pageController.jumpToPage(2);
       await tester.pumpAndSettle();
 
       expect(pages.value, BudgetDistributionPage.partner);
@@ -844,6 +871,25 @@ void main() {
       expect(pages.virtualIndex, greaterThan(100000));
       expect(pages.pageController, same(stableController));
       expect(pages.pageController.page!.round().isOdd, isTrue);
+    },
+  );
+
+  test(
+    'Category Partner Analysis cycle retains the one virtual pager owner',
+    () {
+      final pages = BudgetDistributionPageController();
+      addTearDown(pages.dispose);
+
+      expect(pages.value, BudgetDistributionPage.category);
+      pages.bindVirtualIndex(pages.virtualIndex + 1);
+      expect(pages.value, BudgetDistributionPage.partner);
+      pages.bindVirtualIndex(pages.virtualIndex + 1);
+      expect(pages.value, BudgetDistributionPage.analysis);
+      pages.bindVirtualIndex(pages.virtualIndex + 1);
+      expect(pages.value, BudgetDistributionPage.category);
+      pages.bindVirtualIndex(pages.virtualIndex - 1);
+      expect(pages.value, BudgetDistributionPage.analysis);
+      expect(pages.pageController.initialPage, 1000000);
     },
   );
 }
