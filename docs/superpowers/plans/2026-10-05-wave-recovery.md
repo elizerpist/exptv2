@@ -105,7 +105,7 @@ Statuses are implementation/evidence status, never physical acceptance.
 | WR-18 | Visual loop | Render evidence | Render OPEN compare label dataset/source/route/dimensions; reference-shaped + sparse actual parent + body/no-glow/no-contour + zero/edges/narrow + fallback/shader | Evidence manifest and per-iteration observations | DONE |
 | WR-19 | Performance gate | Production parent/runtime diagnostics | Count generation/publications/paint, resource duration/latency; report FrameTiming availability honestly; no FPS from counters | Measured reports, bounded diagnostics | DONE |
 | WR-20 | Verification | Focused + curated + boundary gates | Exact PASS/FAIL/NOT RUN commands; classify baseline Mind failure; no build substituted for visual requirements | Saved command outcomes | DONE |
-| WR-21 | Commit/journal | Git + engineering journal | Atomic application commits with full required body; journal after each app commit in separate skip-ci commit | SHA/parent/diff audit | NOT DONE |
+| WR-21 | Commit/journal | Git + engineering journal | Atomic application commits with full required body; journal after each app commit in separate skip-ci commit | SHA/parent/diff audit | DONE |
 | WR-22 | Build delivery | GitHub Human APK | Push final source, monitor exact run, download normal main.dart APK; verify size/hash/embedded SHA | Release, ZIP, payload identity | NOT DONE |
 | WR-23 | Graph regeneration | Separate tooling branch | Final application source graph, deterministic manifest/index hash and tooling commit | Final generation/query/hash/remote | NOT DONE |
 | WR-24 | Completion | Report/checklist/final git | Honest full evidence report and all outstanding requirements disclosed | Final checklist reread | NOT DONE |
