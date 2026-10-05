@@ -1,0 +1,11 @@
+922244fd1808bee7698efde1eab43ddbc5c264d17c16a76fe2c8127850747f4a  docs/superpowers/evidence/2026-10-05-wave-recovery/baseline/production-sparse.png
+2ec8fe76f8fbcd0787318c3f16738042c792df197165c693fc1e2b47880c9309  docs/superpowers/evidence/2026-10-05-wave-recovery/baseline/vertex-dst.png
+2ec8fe76f8fbcd0787318c3f16738042c792df197165c693fc1e2b47880c9309  docs/superpowers/evidence/2026-10-05-wave-recovery/baseline/vertex-srcOver.png
+5721c044c7bd0fa8593d99d87308ddcc80b7840c1bba3887f882fcd0e71f0a62  docs/superpowers/evidence/2026-10-05-wave-recovery/diagnostic-before/production-opaque-bounds.png
+922244fd1808bee7698efde1eab43ddbc5c264d17c16a76fe2c8127850747f4a  docs/superpowers/evidence/2026-10-05-wave-recovery/diagnostic-before/production-sparse.png
+64fc42b625097f6d76fa482ecc89ce687ed5596b72eba94495d8fc4e727caec7  docs/superpowers/evidence/2026-10-05-wave-recovery/geometry-fixed/production-opaque-bounds.png
+d98c3635d807d05e4493e3d80bd4bcab1e15ee0b1d4e5d2b5747d74dae383802  docs/superpowers/evidence/2026-10-05-wave-recovery/geometry-fixed/production-sparse.png
+2ec8fe76f8fbcd0787318c3f16738042c792df197165c693fc1e2b47880c9309  docs/superpowers/evidence/2026-10-05-wave-recovery/geometry-fixed/vertex-dst.png
+2ec8fe76f8fbcd0787318c3f16738042c792df197165c693fc1e2b47880c9309  docs/superpowers/evidence/2026-10-05-wave-recovery/geometry-fixed/vertex-srcOver.png
+aace25d2ef491504e0238adeb11ec2c595d026f505e1005747db9b3da31460a5  docs/superpowers/evidence/2026-10-05-wave-recovery/reference-crop.png
+e887ad13ab7acb21fc854c7f8bdb58c66bb83be38fa75f6a490fead1c418d704  docs/superpowers/evidence/2026-10-05-wave-recovery/rejected-crop.png

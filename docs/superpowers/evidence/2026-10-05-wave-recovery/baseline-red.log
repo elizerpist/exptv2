@@ -1,0 +1,54 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-balance-wave-defaults/test/features/dashboard/presentation/fluvi_wave_recovery_test.dart
+00:00 +0: WR-08/09 positive same-x body depth, 28 calendar days
+00:00 +0 -1: WR-08/09 positive same-x body depth, 28 calendar days [E]
+  Expected: a value greater than <0>
+    Actual: <-0.8238805970149343>
+     Which: is not a value greater than <0>
+  size=Size(240.0, 128.0) sample=0 x=2.0; zero/small days must have positive visible depth
+  
+  package:matcher                                                           expect
+  package:flutter_test/src/widget_tester.dart 473:18                        expect
+  test/features/dashboard/presentation/fluvi_wave_recovery_test.dart 55:11  main.<fn>
+  
+00:00 +0 -1: WR-08/09 positive same-x body depth, 29 calendar days
+00:00 +0 -2: WR-08/09 positive same-x body depth, 29 calendar days [E]
+  Expected: a value greater than <0>
+    Actual: <-0.8238805970149343>
+     Which: is not a value greater than <0>
+  size=Size(240.0, 128.0) sample=0 x=2.0; zero/small days must have positive visible depth
+  
+  package:matcher                                                           expect
+  package:flutter_test/src/widget_tester.dart 473:18                        expect
+  test/features/dashboard/presentation/fluvi_wave_recovery_test.dart 55:11  main.<fn>
+  
+00:00 +0 -2: WR-08/09 positive same-x body depth, 30 calendar days
+00:00 +0 -3: WR-08/09 positive same-x body depth, 30 calendar days [E]
+  Expected: a value greater than <0>
+    Actual: <-0.8238805970149343>
+     Which: is not a value greater than <0>
+  size=Size(240.0, 128.0) sample=0 x=2.0; zero/small days must have positive visible depth
+  
+  package:matcher                                                           expect
+  package:flutter_test/src/widget_tester.dart 473:18                        expect
+  test/features/dashboard/presentation/fluvi_wave_recovery_test.dart 55:11  main.<fn>
+  
+00:00 +0 -3: WR-08/09 positive same-x body depth, 31 calendar days
+00:00 +0 -4: WR-08/09 positive same-x body depth, 31 calendar days [E]
+  Expected: a value greater than <0>
+    Actual: <-0.8238805970149343>
+     Which: is not a value greater than <0>
+  size=Size(240.0, 128.0) sample=0 x=2.0; zero/small days must have positive visible depth
+  
+  package:matcher                                                           expect
+  package:flutter_test/src/widget_tester.dart 473:18                        expect
+  test/features/dashboard/presentation/fluvi_wave_recovery_test.dart 55:11  main.<fn>
+  
+00:00 +0 -4: WR-12 isolated vertex-colour pixel probe
+WR-12 vertex pixels {srcOver: [150, 130, 242, 255], dst: [150, 130, 242, 255]}
+00:10 +1 -4: WR-06 production-parent baseline, complete sparse month
+WR-06 {dataset: sparse-31-synthetic-268k, selectedStyle: terrain, route: mesh, chartLocalSize: Size(240.1, 128.3), chartGlobalBounds: Rect.fromLTRB(27.8, 308.7, 267.8, 437.0), transformToRoot: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 27.774410774410775, 308.7485970819304, 0.0, 1.0], financialPlot: Rect.fromLTRB(2.0, 4.0, 238.1, 124.3), minSameXDepth: -1.2000000000000028, highestDay: 2}
+00:12 +2 -4: Some tests failed.

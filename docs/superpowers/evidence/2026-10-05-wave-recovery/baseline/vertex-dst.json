@@ -1,0 +1,15 @@
+{
+  "head": "75e4e158f340ae1d2da9493fb5c53b4361f80057",
+  "trackedProductionDiffEmpty": false,
+  "backend": "flutter_test software rasterizer; not physical Android",
+  "width": 32,
+  "height": 32,
+  "pixelRatio": 2,
+  "blend": "dst",
+  "pixel": [
+    150,
+    130,
+    242,
+    255
+  ]
+}

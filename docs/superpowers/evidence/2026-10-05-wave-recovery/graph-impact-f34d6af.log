@@ -1,0 +1,191 @@
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`fluvi_topographic_wave_chart.dart`/FluviTopographicWaveChart#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:55
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`fluvi_topographic_wave_chart.dart`/FluviTopographicWaveChart#
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`fluvi_topographic_wave_chart.dart`/FluviTopographicWaveChart#`<constructor>`().
+REFERENCES
+total=9 production=4 tests=5
+CONSUMER FILES
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:256:6 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:72:8 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:77:18 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:151:33 reference
+TEST REFERENCES
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:179:23 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:219:21 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:254:27 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:296:25 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:342:25 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`fluvi_topographic_wave_chart.dart`/FluviTopographicWaveTerrain#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:308
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`fluvi_topographic_wave_chart.dart`/FluviTopographicWaveTerrain#
+REFERENCES
+total=22 production=15 tests=7
+CONSUMER FILES
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:83:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:84:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:120:32 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:360:9 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:371:13 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:395:13 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:459:11 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:757:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:759:2 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:766:22 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:794:37 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:802:4 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:813:21 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:818:20 reference
+lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart:863:8 reference
+TEST REFERENCES
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:26:22 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:68:22 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:116:22 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:133:22 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:370:2 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:372:2 reference
+test/features/dashboard/presentation/fluvi_topographic_wave_chart_test.dart:381:22 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_alternative_extended_sheet_cards.dart`/BalanceAlternativeDailySpendCard#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:100
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_alternative_extended_sheet_cards.dart`/BalanceAlternativeDailySpendCard#
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_alternative_extended_sheet_cards.dart`/BalanceAlternativeDailySpendCard#`<constructor>`().
+REFERENCES
+total=8 production=1 tests=7
+CONSUMER FILES
+lib/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart:1195:19 reference
+TEST REFERENCES
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:72:23 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:128:27 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:244:27 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:285:27 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:483:22 reference
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart:773:22 reference
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart:774:28 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_presentation_settings.dart`/BalanceMonthlySpendingChartPresentation#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:146
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_presentation_settings.dart`/BalanceMonthlySpendingChartPresentation#
+REFERENCES
+total=55 production=27 tests=28
+CONSUMER FILES
+lib/core/preferences/data/method_channel_dashboard_presentation_preferences_store.dart
+lib/features/dashboard/application/dashboard_presentation_preferences.dart
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart
+lib/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart
+lib/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart
+test/features/dashboard/application/dashboard_presentation_preferences_test.dart
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart
+test/features/dashboard/presentation/balance_presentation_settings_test.dart
+test/features/dashboard/presentation/dashboard_header_visual_tuner_test.dart
+test/features/dashboard/presentation/dashboard_presentation_preferences_store_test.dart
+PRODUCTION REFERENCES
+lib/core/preferences/data/method_channel_dashboard_presentation_preferences_store.dart:64:10 reference
+lib/core/preferences/data/method_channel_dashboard_presentation_preferences_store.dart:66:10 reference
+lib/features/dashboard/application/dashboard_presentation_preferences.dart:19:8 reference
+lib/features/dashboard/application/dashboard_presentation_preferences.dart:32:8 reference
+lib/features/dashboard/application/dashboard_presentation_preferences.dart:48:8 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:105:29 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:110:8 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:240:8 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:244:4 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:253:4 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:254:4 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:255:4 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:266:10 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:268:10 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:270:10 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:272:10 reference
+lib/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart:1170:8 reference
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:153:4 reference
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:154:4 reference
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:155:4 reference
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:156:4 reference
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:196:8 reference
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:254:10 reference
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:280:8 reference
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:325:4 reference
+lib/features/dashboard/presentation/core_modes/balance_presentation_settings.dart:593:4 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart:1055:21 reference
+TEST REFERENCES
+test/features/dashboard/application/dashboard_presentation_preferences_test.dart:28:14 reference
+test/features/dashboard/application/dashboard_presentation_preferences_test.dart:55:8 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:61:39 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:62:8 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:63:8 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:64:8 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:103:16 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:104:16 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:105:16 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:106:16 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:133:26 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:230:13 reference
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart:767:26 reference
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart:783:10 reference
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart:784:10 reference
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart:785:10 reference
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart:786:10 reference
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart:793:19 reference
+test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart:806:19 reference
+test/features/dashboard/presentation/balance_presentation_settings_test.dart:223:8 reference
+test/features/dashboard/presentation/balance_presentation_settings_test.dart:231:8 reference
+test/features/dashboard/presentation/balance_presentation_settings_test.dart:236:8 reference
+test/features/dashboard/presentation/dashboard_header_visual_tuner_test.dart:287:13 reference
+test/features/dashboard/presentation/dashboard_header_visual_tuner_test.dart:305:8 reference
+test/features/dashboard/presentation/dashboard_presentation_preferences_store_test.dart:32:14 reference
+test/features/dashboard/presentation/dashboard_presentation_preferences_store_test.dart:58:8 reference
+test/features/dashboard/presentation/dashboard_presentation_preferences_store_test.dart:90:12 reference
+test/features/dashboard/presentation/dashboard_presentation_preferences_store_test.dart:110:10 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_alternative_scope_presentation.dart`/BalanceAlternativeMonthlySpendPresentation#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart:319
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_alternative_scope_presentation.dart`/BalanceAlternativeMonthlySpendPresentation#
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_alternative_scope_presentation.dart`/BalanceAlternativeMonthlySpendPresentation#`<constructor>`().
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_alternative_scope_presentation.dart`/BalanceAlternativeMonthlySpendPresentation#fromPrimary().
+REFERENCES
+total=14 production=8 tests=6
+CONSUMER FILES
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart
+lib/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart
+test/features/dashboard/presentation/balance_alternative_sum_cards_test.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:108:8 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart:312:8 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart:64:18 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart:64:61 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart:129:20 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart:129:63 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart:203:8 reference
+lib/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart:345:11 reference
+TEST REFERENCES
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:75:32 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:289:36 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:488:28 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:668:0 reference
+test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart:669:4 reference
+test/features/dashboard/presentation/balance_alternative_sum_cards_test.dart:145:30 reference

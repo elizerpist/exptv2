@@ -7,6 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_shaders_ui/flutter_shaders_ui.dart';
 
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
+import '../../../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
+
+part 'fluvi_wave_render_probe.dart';
+
 /// A render-ready daily value from the established Balance Month projection.
 ///
 /// This type is deliberately presentation-only: the component receives
@@ -84,23 +90,43 @@ final class _FluviTopographicWaveChartState
   FluviTopographicWaveTerrain? _curveTextureTerrain;
   FluviTopographicWaveTerrain? _pendingCurveTextureTerrain;
   int _shaderGeneration = 0;
+  final FluviWaveRenderMetrics _metrics = FluviWaveRenderMetrics();
+  FluviWaveDebugScope? _debug;
+  late final String _diagnosticOwner = 'month-wave-${identityHashCode(this)}';
+  late final Map<String, Object?> Function() _diagnosticSnapshot =
+      _metrics.snapshot;
 
   static Future<ui.FragmentProgram>? _surfaceProgram;
 
   @override
   void initState() {
     super.initState();
+    if (kFluviOnscreenDiagnosticsEnabled) {
+      FluviDiagnosticLogger.registerUserMarkerContext(
+        _diagnosticOwner,
+        _diagnosticSnapshot,
+      );
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _debug = FluviWaveDebugScope.maybeOf(context);
     if (widget.style == FluviTopographicWaveStyle.shaderAtmosphere) {
-      _loadSurfaceShader();
+      if (_metrics.shaderState == 'not-requested') _loadSurfaceShader();
     }
   }
 
   Future<void> _loadSurfaceShader() async {
     final generation = ++_shaderGeneration;
+    _metrics.shaderState = 'loading';
     try {
-      final program = _surfaceProgram ??= ui.FragmentProgram.fromAsset(
-        'shaders/fluvi_wave_surface.frag',
-      );
+      final program =
+          _debug?.programLoader?.call() ??
+          (_surfaceProgram ??= ui.FragmentProgram.fromAsset(
+            'shaders/fluvi_wave_surface.frag',
+          ));
       final shader = (await program).fragmentShader();
       if (!mounted ||
           generation != _shaderGeneration ||
@@ -109,9 +135,12 @@ final class _FluviTopographicWaveChartState
         return;
       }
       final previous = _surfaceShader;
+      _metrics.shaderState = 'ready';
       setState(() => _surfaceShader = shader);
       previous?.dispose();
-    } catch (_) {
+    } catch (error) {
+      _metrics.shaderState = 'failed';
+      _metrics.shaderError = error.toString();
       // The shader is a material enhancement only. The cached vertex-lit
       // surface below is deliberately equivalent financial geometry and is
       // retained for test software rendering and unsupported GPU backends.
@@ -125,19 +154,28 @@ final class _FluviTopographicWaveChartState
       return;
     }
     _pendingCurveTextureTerrain = terrain;
-    _FluviWaveSurfaceTexture.fromTerrain(terrain)
-        .then((texture) {
+    _metrics.textureRequests++;
+    final clock = Stopwatch()..start();
+    (_debug?.textureLoader?.call(terrain) ??
+            _FluviWaveSurfaceTexture.fromTerrain(
+              terrain,
+            ).then((texture) => texture.image))
+        .then((image) {
+          _metrics.textureMicros += clock.elapsedMicroseconds;
           if (!mounted || !identical(_pendingCurveTextureTerrain, terrain)) {
-            texture.image.dispose();
+            image.dispose();
+            _metrics.textureDisposals++;
             return;
           }
           final previous = _curveTexture;
           setState(() {
-            _curveTexture = texture.image;
+            _curveTexture = image;
             _curveTextureTerrain = terrain;
+            _metrics.texturePublications++;
             _pendingCurveTextureTerrain = null;
           });
           previous?.dispose();
+          if (previous != null) _metrics.textureDisposals++;
         })
         .catchError((Object _) {
           if (identical(_pendingCurveTextureTerrain, terrain)) {
@@ -168,13 +206,22 @@ final class _FluviTopographicWaveChartState
     _surfaceShader?.dispose();
     _surfaceShader = null;
     _curveTexture?.dispose();
+    if (_curveTexture != null) _metrics.textureDisposals++;
     _curveTexture = null;
     _curveTextureTerrain = null;
+    _metrics.shaderState = 'not-requested';
   }
 
   @override
   void dispose() {
     _releaseShaderResources();
+    _metrics.disposed = true;
+    if (kFluviOnscreenDiagnosticsEnabled) {
+      FluviDiagnosticLogger.unregisterUserMarkerContext(
+        _diagnosticOwner,
+        _diagnosticSnapshot,
+      );
+    }
     super.dispose();
   }
 
@@ -182,7 +229,14 @@ final class _FluviTopographicWaveChartState
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final size = constraints.biggest;
+      final before = _geometryCache._terrain;
+      final clock = Stopwatch()..start();
       final terrain = _geometryCache.resolve(values: widget.values, size: size);
+      if (!identical(before, terrain)) {
+        _metrics.geometryBuilds++;
+        _metrics.geometryMicros += clock.elapsedMicroseconds;
+      }
+      _metrics.textureTerrain = _curveTextureTerrain;
       if (widget.style == FluviTopographicWaveStyle.shaderAtmosphere) {
         _synchronizeCurveTexture(terrain);
       }
@@ -207,7 +261,10 @@ final class _FluviTopographicWaveChartState
             child: Stack(
               fit: StackFit.expand,
               children: <Widget>[
-                if (widget.style == FluviTopographicWaveStyle.shaderAtmosphere)
+                if (widget.style ==
+                        FluviTopographicWaveStyle.shaderAtmosphere &&
+                    !(_debug?.opaqueBody ?? false) &&
+                    (_debug?.atmosphere ?? true))
                   const _ShaderAtmosphereLayer(),
                 RepaintBoundary(
                   key: ValueKey<String>(
@@ -216,6 +273,8 @@ final class _FluviTopographicWaveChartState
                   child: CustomPaint(
                     painter: _FluviTopographicWavePainter(
                       terrain: terrain,
+                      metrics: _metrics,
+                      debug: _debug,
                       style: widget.style,
                       surfaceShader:
                           widget.style ==
@@ -325,6 +384,9 @@ final class FluviTopographicWaveTerrain {
 
   final Size size;
   final Rect plot;
+  double get financialBaseline => _baselineFor(plot);
+
+  static double _baselineFor(Rect plot) => plot.bottom - plot.height * .25;
   final List<Offset> ridgeSamples;
   final Path ridgePath;
 
@@ -411,8 +473,10 @@ final class FluviTopographicWaveTerrain {
         values: List<FluviTopographicWaveDatum>.unmodifiable(values),
       );
     }
-    final drawableHeight = plot.height * .84;
-    final baseline = plot.bottom;
+    // The financial zero is not the clipping boundary. Keep a real foreground
+    // below zero, so small and zero days in a nonempty month retain a body.
+    final drawableHeight = plot.height * .62;
+    final baseline = _baselineFor(plot);
     final offsets = <Offset>[];
     var highestIndex = 0;
     for (var index = 0; index < values.length; index += 1) {
@@ -859,6 +923,8 @@ final class _FluviTopographicWavePainter extends CustomPainter {
     required this.curveTexture,
     required this.selectedIndex,
     required this.tooltipForValue,
+    required this.metrics,
+    required this.debug,
   });
 
   final FluviTopographicWaveTerrain terrain;
@@ -867,6 +933,8 @@ final class _FluviTopographicWavePainter extends CustomPainter {
   final ui.Image? curveTexture;
   final int? selectedIndex;
   final String Function(int value) tooltipForValue;
+  final FluviWaveRenderMetrics metrics;
+  final FluviWaveDebugScope? debug;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -875,16 +943,67 @@ final class _FluviTopographicWavePainter extends CustomPainter {
     canvas.clipRRect(
       RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(14)),
     );
-    _drawAtmospheres(canvas);
+    metrics.markerBounds = null;
+    metrics.tooltipBounds = null;
+    metrics.selectedIndex = null;
+    if (!(debug?.opaqueBody ?? false) && (debug?.atmosphere ?? true)) {
+      _drawAtmospheres(canvas);
+    }
     if (terrain.ridgeSamples.isEmpty) {
+      metrics.recordPaint(terrain, 'empty');
+      debug?.onPaint?.call(metrics);
       canvas.restore();
       return;
     }
-    _drawGuides(canvas);
-    _drawSurface(canvas);
-    _drawContours(canvas);
-    _drawRidge(canvas);
-    _drawMarkerAndTooltip(canvas, size);
+    if (debug?.opaqueBody ?? false) {
+      canvas.drawPath(
+        terrain.surfacePath,
+        Paint()..color = const Color(0xff9682f2),
+      );
+      metrics.recordPaint(terrain, 'opaque-diagnostic');
+    } else {
+      _drawGuides(canvas);
+      _drawSurface(canvas);
+      if (debug?.contours ?? true) _drawContours(canvas);
+      _drawRidge(canvas);
+      _drawMarkerAndTooltip(canvas, size);
+      metrics.recordPaint(
+        terrain,
+        surfaceShader != null && curveTexture != null ? 'shader' : 'mesh',
+      );
+    }
+    if (debug?.bounds ?? false) {
+      canvas.drawRect(
+        (Offset.zero & size).deflate(.5),
+        Paint()
+          ..color = Colors.red
+          ..style = PaintingStyle.stroke,
+      );
+      canvas.drawRect(
+        terrain.plot,
+        Paint()
+          ..color = Colors.blue
+          ..style = PaintingStyle.stroke,
+      );
+      canvas.drawLine(
+        Offset(terrain.plot.left, terrain.financialBaseline),
+        Offset(terrain.plot.right, terrain.financialBaseline),
+        Paint()..color = Colors.orange,
+      );
+      canvas.drawPath(
+        terrain.ridgePath,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke,
+      );
+      canvas.drawPath(
+        FluviTopographicWaveTerrain._pathFor(terrain.surfaceFootSamples),
+        Paint()
+          ..color = Colors.green
+          ..style = PaintingStyle.stroke,
+      );
+    }
+    debug?.onPaint?.call(metrics);
     canvas.restore();
   }
 
@@ -1003,19 +1122,21 @@ final class _FluviTopographicWavePainter extends CustomPainter {
     final glowOpacity = style == FluviTopographicWaveStyle.svgReference
         ? .25
         : .18;
-    canvas.drawPath(
-      terrain.ridgePath,
-      Paint()
-        ..color = FluviTopographicWavePalette.violet.withValues(
-          alpha: glowOpacity,
-        )
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4.6
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.4)
-        ..isAntiAlias = true,
-    );
+    if (debug?.glow ?? true) {
+      canvas.drawPath(
+        terrain.ridgePath,
+        Paint()
+          ..color = FluviTopographicWavePalette.violet.withValues(
+            alpha: glowOpacity,
+          )
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4.6
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.4)
+          ..isAntiAlias = true,
+      );
+    }
     canvas.drawPath(
       terrain.ridgePath,
       Paint()
@@ -1054,13 +1175,17 @@ final class _FluviTopographicWavePainter extends CustomPainter {
         : terrain.highestIndex;
     if (index == null) return;
     final point = terrain.dataOffsets[index];
-    canvas.drawCircle(
-      point,
-      10,
-      Paint()
-        ..color = FluviTopographicWavePalette.violet.withValues(alpha: .22)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-    );
+    metrics.selectedIndex = index;
+    metrics.markerBounds = Rect.fromCircle(center: point, radius: 6.25);
+    if (debug?.glow ?? true) {
+      canvas.drawCircle(
+        point,
+        10,
+        Paint()
+          ..color = FluviTopographicWavePalette.violet.withValues(alpha: .22)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
+    }
     canvas.drawCircle(
       point,
       5.1,
@@ -1102,6 +1227,7 @@ final class _FluviTopographicWavePainter extends CustomPainter {
       Rect.fromLTWH(left, top, bubbleWidth, bubbleHeight),
       const Radius.circular(9),
     );
+    metrics.tooltipBounds = bubble.outerRect;
     canvas.drawRRect(
       bubble,
       Paint()
@@ -1120,6 +1246,7 @@ final class _FluviTopographicWavePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _FluviTopographicWavePainter oldDelegate) =>
       oldDelegate.terrain != terrain ||
+      oldDelegate.debug != debug ||
       oldDelegate.style != style ||
       oldDelegate.surfaceShader != surfaceShader ||
       oldDelegate.curveTexture != curveTexture ||
