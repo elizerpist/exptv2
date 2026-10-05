@@ -5,7 +5,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_shaders_ui/flutter_shaders_ui.dart';
 
 import '../../../../core/design/fluvi_bounded_curve.dart';
 
@@ -281,12 +280,6 @@ final class _FluviTopographicWaveChartState
             child: Stack(
               fit: StackFit.expand,
               children: <Widget>[
-                if (widget.style ==
-                        FluviTopographicWaveStyle.shaderAtmosphere &&
-                    !MediaQuery.disableAnimationsOf(context) &&
-                    !(_debug?.opaqueBody ?? false) &&
-                    (_debug?.atmosphere ?? true))
-                  const _ShaderAtmosphereLayer(),
                 RepaintBoundary(
                   key: ValueKey<String>(
                     'balance-monthly-spending-wave-repaint-${widget.style.name}',
@@ -325,36 +318,6 @@ final class _FluviTopographicWaveChartState
   );
 }
 
-/// This runs only in the shader-specific monthly preset. The terrain itself
-/// stays in the static Canvas painter, so the animated atmospheric repaint
-/// never recomputes financial geometry. The package freezes automatically for
-/// the platform reduced-motion setting.
-final class _ShaderAtmosphereLayer extends StatelessWidget {
-  const _ShaderAtmosphereLayer();
-
-  @override
-  Widget build(BuildContext context) => IgnorePointer(
-    key: const ValueKey<String>(
-      'balance-monthly-spending-wave-shader-atmosphere',
-    ),
-    child: ShaderPerformance(
-      settings: const ShaderPerformanceSettings(
-        maxFramesPerSecond: 12,
-        respectReducedMotion: true,
-      ),
-      child: AuroraEffect(
-        color1: FluviTopographicWavePalette.mint,
-        color2: FluviTopographicWavePalette.lavender,
-        // The package's dark premultiplied overlay otherwise greys the white
-        // reference background. Keep motion subordinate to the shaded body.
-        intensity: .006,
-        speed: .12,
-        child: const SizedBox.expand(),
-      ),
-    ),
-  );
-}
-
 @immutable
 final class FluviTopographicWaveDepthLayer {
   const FluviTopographicWaveDepthLayer({
@@ -366,29 +329,6 @@ final class FluviTopographicWaveDepthLayer {
   final double depth;
   final Path path;
   final double opacity;
-}
-
-@immutable
-final class FluviTopographicWaveAtmosphericLayer {
-  const FluviTopographicWaveAtmosphericLayer({
-    required this.path,
-    required this.fillPath,
-    required this.surfaceBounds,
-    required this.color,
-    required this.opacity,
-    required this.blurSigma,
-    required this.mesh,
-    required this.foreground,
-  });
-
-  final Path path;
-  final Path fillPath;
-  final Rect surfaceBounds;
-  final Color color;
-  final double opacity;
-  final double blurSigma;
-  final ui.Vertices? mesh;
-  final bool foreground;
 }
 
 /// Size- and data-specific cached drawing geometry. It is immutable after
@@ -406,7 +346,6 @@ final class FluviTopographicWaveTerrain {
     required this.surfaceMesh,
     required this.areaPath,
     required this.depthLayers,
-    required this.atmospheres,
     required this.dataOffsets,
     required this.highestIndex,
     required this.values,
@@ -431,7 +370,6 @@ final class FluviTopographicWaveTerrain {
   /// baseline fill.
   final Path areaPath;
   final List<FluviTopographicWaveDepthLayer> depthLayers;
-  final List<FluviTopographicWaveAtmosphericLayer> atmospheres;
   final List<Offset> dataOffsets;
   final int? highestIndex;
   final List<FluviTopographicWaveDatum> values;
@@ -471,7 +409,6 @@ final class FluviTopographicWaveTerrain {
         surfaceMesh: null,
         areaPath: Path(),
         depthLayers: const <FluviTopographicWaveDepthLayer>[],
-        atmospheres: const <FluviTopographicWaveAtmosphericLayer>[],
         dataOffsets: const <Offset>[],
         highestIndex: null,
         values: List<FluviTopographicWaveDatum>.unmodifiable(values),
@@ -483,7 +420,7 @@ final class FluviTopographicWaveTerrain {
     );
     // A zero-only month has no financial ridge. Rendering a nominal ridge at
     // an arbitrary normalized height would manufacture activity that did not
-    // occur, so retain only the deliberately non-data atmospheric empty state.
+    // occur. A zero month has no invented surface or decorative landscape.
     if (maximum == 0) {
       return FluviTopographicWaveTerrain._(
         size: size,
@@ -495,9 +432,6 @@ final class FluviTopographicWaveTerrain {
         surfaceMesh: null,
         areaPath: Path(),
         depthLayers: const <FluviTopographicWaveDepthLayer>[],
-        atmospheres: List<FluviTopographicWaveAtmosphericLayer>.unmodifiable(
-          _atmospheres(plot: plot, normalizedMean: 0, volatility: 0),
-        ),
         dataOffsets: const <Offset>[],
         highestIndex: null,
         values: List<FluviTopographicWaveDatum>.unmodifiable(values),
@@ -547,10 +481,6 @@ final class FluviTopographicWaveTerrain {
         opacity: .11 * math.pow(1 - depth, 1.3).toDouble(),
       );
     }, growable: false);
-    final normalizedMean =
-        values.fold<double>(0, (sum, datum) => sum + datum.value / maximum) /
-        values.length;
-    final volatility = _volatility(values, maximum);
     return FluviTopographicWaveTerrain._(
       size: size,
       plot: plot,
@@ -561,13 +491,6 @@ final class FluviTopographicWaveTerrain {
       surfaceMesh: _surfaceMesh(samples, feet, plot),
       areaPath: surfacePath,
       depthLayers: List<FluviTopographicWaveDepthLayer>.unmodifiable(depths),
-      atmospheres: List<FluviTopographicWaveAtmosphericLayer>.unmodifiable(
-        _atmospheres(
-          plot: plot,
-          normalizedMean: normalizedMean,
-          volatility: volatility,
-        ),
-      ),
       dataOffsets: List<Offset>.unmodifiable(offsets),
       highestIndex: highestIndex,
       values: List<FluviTopographicWaveDatum>.unmodifiable(values),
@@ -659,71 +582,6 @@ final class FluviTopographicWaveTerrain {
       positions,
       colors: colors,
       indices: indices,
-    );
-  }
-
-  static double _volatility(
-    List<FluviTopographicWaveDatum> values,
-    int maximum,
-  ) {
-    if (maximum <= 0 || values.length < 2) return 0;
-    var movement = 0.0;
-    for (var index = 1; index < values.length; index += 1) {
-      movement +=
-          (values[index].value - values[index - 1].value).abs() / maximum;
-    }
-    return (movement / (values.length - 1)).clamp(0.0, 1.0).toDouble();
-  }
-
-  static List<FluviTopographicWaveAtmosphericLayer> _atmospheres({
-    required Rect plot,
-    required double normalizedMean,
-    required double volatility,
-  }) {
-    const profiles = <List<double>>[
-      [.90, .78, .47, .66, .70, .28, .62, .72, .44, .68, .92],
-      [.94, .82, .62, .74, .39, .72, .77, .55, .67, .43, .94],
-      [.92, .88, .80, .86, .90, .83, .89, .91, .82, .87, .92],
-    ];
-    final empty = normalizedMean == 0 && volatility == 0;
-    return List<FluviTopographicWaveAtmosphericLayer>.generate(
-      profiles.length,
-      (index) {
-        final controls = <Offset>[
-          for (var point = 0; point < profiles[index].length; point += 1)
-            Offset(
-              plot.left + plot.width * point / (profiles[index].length - 1),
-              plot.top +
-                  plot.height *
-                      (empty
-                          ? .82 + profiles[index][point] * .12
-                          : profiles[index][point]),
-            ),
-        ];
-        final sampled = _boundedSamples(controls, samplesPerSegment: 18);
-        final path = _pathFor(sampled);
-        final feet = _surfaceFeet(sampled, plot);
-        final fillPath = _closedPath(sampled, feet);
-        final foreground = index == profiles.length - 1;
-        final opacity = empty ? .13 : (foreground ? .65 : .50 + index * .12);
-        return FluviTopographicWaveAtmosphericLayer(
-          path: path,
-          fillPath: fillPath,
-          surfaceBounds: fillPath.getBounds(),
-          color: FluviTopographicWavePalette.periwinkle,
-          opacity: opacity,
-          blurSigma: 0,
-          foreground: foreground,
-          mesh: _surfaceMesh(
-            sampled,
-            feet,
-            plot,
-            opacity: opacity,
-            distance: foreground ? .88 : .25 - index * .12,
-          ),
-        );
-      },
-      growable: false,
     );
   }
 
@@ -856,13 +714,7 @@ final class _FluviTopographicWavePainter extends CustomPainter {
     metrics.selectedKey = null;
     metrics.selectedValueMinor = null;
     metrics.tooltipText = null;
-    if (!(debug?.opaqueBody ?? false) &&
-        !(debug?.materialOnly ?? false) &&
-        (debug?.atmosphere ?? true)) {
-      _drawAtmospheres(canvas, foreground: false);
-    }
     if (terrain.ridgeSamples.isEmpty) {
-      if (debug?.atmosphere ?? true) _drawAtmospheres(canvas, foreground: true);
       metrics.recordPaint(terrain, 'empty');
       debug?.onPaint?.call(metrics);
       canvas.restore();
@@ -878,9 +730,6 @@ final class _FluviTopographicWavePainter extends CustomPainter {
       if (!(debug?.materialOnly ?? false)) _drawGuides(canvas);
       _drawSurface(canvas);
       if (!(debug?.materialOnly ?? false)) {
-        if (debug?.atmosphere ?? true) {
-          _drawAtmospheres(canvas, foreground: true);
-        }
         if (debug?.contours ?? true) _drawContours(canvas);
         _drawRidge(canvas);
         _drawMarkerAndTooltip(canvas, size);
@@ -923,30 +772,6 @@ final class _FluviTopographicWavePainter extends CustomPainter {
     }
     debug?.onPaint?.call(metrics);
     canvas.restore();
-  }
-
-  void _drawAtmospheres(Canvas canvas, {required bool foreground}) {
-    for (final wave in terrain.atmospheres) {
-      if (wave.foreground != foreground) continue;
-      if (wave.mesh != null) {
-        canvas.drawVertices(
-          wave.mesh!,
-          BlendMode.srcOver,
-          Paint()..isAntiAlias = true,
-        );
-      }
-      canvas.drawPath(
-        wave.path,
-        Paint()
-          ..color = FluviTopographicWavePalette.pearl.withValues(
-            alpha: wave.opacity * (foreground ? .16 : .45),
-          )
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = .5
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round,
-      );
-    }
   }
 
   void _drawGuides(Canvas canvas) {

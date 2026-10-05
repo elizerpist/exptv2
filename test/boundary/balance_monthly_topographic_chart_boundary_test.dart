@@ -3,6 +3,19 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('HS-05 no chart atmosphere generation, overlay or animation owner', () {
+    final source = File(
+      'lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart',
+    ).readAsStringSync();
+    for (final obsolete in [
+      '_atmospheres(',
+      '_ShaderAtmosphereLayer',
+      'AuroraEffect',
+      'ShaderPerformance(',
+    ]) {
+      expect(source.contains(obsolete), isFalse, reason: obsolete);
+    }
+  });
   test('WR-28 bounded controls have one owner shared by Mind and Month', () {
     final chart = File(
       'lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart',

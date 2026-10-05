@@ -38,7 +38,6 @@ void main() {
 
       expect(terrain.ridgeSamples.length, greaterThan(60));
       expect(terrain.depthLayers.length, inInclusiveRange(8, 24));
-      expect(terrain.atmospheres, hasLength(3));
       expect(terrain.depthLayers.first.depth, 0);
       expect(terrain.depthLayers.last.depth, closeTo(1, .001));
       expect(
@@ -141,7 +140,7 @@ void main() {
   );
 
   test(
-    'MTC-03: an all-zero month keeps a calm atmospheric empty state without inventing a spend ridge or marker',
+    'MTC-03: an all-zero month has an empty surface without inventing a spend ridge or marker',
     () {
       const zeroValues = <FluviTopographicWaveDatum>[
         FluviTopographicWaveDatum(key: 1, value: 0, label: '1'),
@@ -158,7 +157,8 @@ void main() {
       expect(terrain.depthLayers, isEmpty);
       expect(terrain.dataOffsets, isEmpty);
       expect(terrain.highestIndex, isNull);
-      expect(terrain.atmospheres, hasLength(3));
+      expect(terrain.surfaceMesh, isNull);
+      expect(terrain.surfacePath.computeMetrics(), isEmpty);
       expect(terrain.nearestIndexForX(173), isNull);
     },
   );
@@ -206,7 +206,7 @@ void main() {
   );
 
   testWidgets(
-    'MTC-04/05: every terrain option mounts one clipped Canvas terrain while only the shader option mounts the atmospheric shader',
+    'MTC-04/05: every terrain option mounts one clipped Canvas terrain without an atmospheric overlay',
     (tester) async {
       for (final style in FluviTopographicWaveStyle.values) {
         await tester.pumpWidget(
@@ -237,9 +237,7 @@ void main() {
               'balance-monthly-spending-wave-shader-atmosphere',
             ),
           ),
-          style == FluviTopographicWaveStyle.shaderAtmosphere
-              ? findsOneWidget
-              : findsNothing,
+          findsNothing,
         );
       }
     },
@@ -357,7 +355,7 @@ void main() {
   );
 
   testWidgets(
-    'BMR-07 visual: a zero month retains only decorative atmosphere and no financial marker',
+    'BMR-07 visual: a zero month has no decorative landscape or financial marker',
     (tester) async {
       const zeroValues = <FluviTopographicWaveDatum>[
         FluviTopographicWaveDatum(key: 1, value: 0, label: '1'),

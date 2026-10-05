@@ -32,7 +32,7 @@ void main() {
     );
     final settings = BalancePresentationController(
       initial: const BalancePresentationSettings.defaults().copyWith(
-        usesChildCards: false,
+        usesChildCards: true,
       ),
     );
     addTearDown(linked.dispose);
@@ -189,7 +189,6 @@ void main() {
             materialOnly: scene.body,
             glow: scene.glow,
             contours: scene.contours,
-            atmosphere: !scene.body,
             onPaint: (value) => metrics = value,
             child: child,
           ),
@@ -235,17 +234,18 @@ void main() {
           3,
           (channel) => pixels.getUint8(pixel + channel),
         );
-        debugPrint('WR-27 optional animated atmosphere background pixel $rgb');
+        debugPrint('HS-05 static shader preset background pixel $rgb');
         expect(
           rgb.every((channel) => channel >= 247),
           isTrue,
           reason:
-              'The optional animated layer must not wash the reference white background grey.',
+              'The static shader preset must leave the white background unchanged.',
         );
       }
       final label =
           '${scene.name}-${scene.shader ? 'shader' : 'mesh'}-${scene.body ? 'body' : 'full'}-${scene.width.toInt()}';
       final metadata = <String, Object?>{
+        'usesChildCards': true,
         'dataset': '${scene.name}-synthetic-complete-calendar',
         'viewport': '$viewport',
         'chartGlobalBounds': '$chartRect',

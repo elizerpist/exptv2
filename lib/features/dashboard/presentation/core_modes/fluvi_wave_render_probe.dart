@@ -11,7 +11,6 @@ final class FluviWaveDebugScope extends InheritedWidget {
     this.bounds = false,
     this.glow = true,
     this.contours = true,
-    this.atmosphere = true,
     this.onPaint,
     this.textureLoader,
     this.programLoader,
@@ -22,7 +21,6 @@ final class FluviWaveDebugScope extends InheritedWidget {
   final bool bounds;
   final bool glow;
   final bool contours;
-  final bool atmosphere;
   final ValueChanged<FluviWaveRenderMetrics>? onPaint;
   final Future<ui.Image> Function(FluviTopographicWaveTerrain)? textureLoader;
   final Future<ui.FragmentProgram> Function()? programLoader;
@@ -43,7 +41,6 @@ final class FluviWaveDebugScope extends InheritedWidget {
       bounds != oldWidget.bounds ||
       glow != oldWidget.glow ||
       contours != oldWidget.contours ||
-      atmosphere != oldWidget.atmosphere ||
       onPaint != oldWidget.onPaint ||
       textureLoader != oldWidget.textureLoader ||
       programLoader != oldWidget.programLoader;

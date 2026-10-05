@@ -381,7 +381,6 @@ void main() {
             child: FluviWaveDebugScope(
               programLoader: () =>
                   Future.error(StateError('controlled shader load failure')),
-              atmosphere: false,
               onPaint: (value) => metrics = value,
               child: FluviTopographicWaveChart(
                 values: values,
@@ -432,7 +431,6 @@ void main() {
             height: 128,
             child: FluviWaveDebugScope(
               textureLoader: load,
-              atmosphere: false,
               onPaint: (value) => metrics = value,
               child: FluviTopographicWaveChart(
                 values: data,
