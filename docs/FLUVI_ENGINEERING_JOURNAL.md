@@ -3321,3 +3321,11 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **Next hypotheses / limits:** async stale lookup, x parameterization, shader paint and form-varying normals need independent checks; foot calmness, material, edge bounds, complete visual variants, regression/performance gates remain pending. Historical installed identity and Android FrameTiming unavailable.
 - **Build:** NOT STARTED / NOT PUSHED — intermediate local unit; user requested one final all-inclusive Human APK after visual repair. Baseline CI37251032162 remains overall FAIL (Mind profile), Flutter/core/Human jobs PASS. No Mind scope expansion.
 - **Physical validation:** PENDING — USER ONLY.
+
+## 2026-10-05 — Wave recovery unit 2: atomic visible geometry/lookup binding
+
+- **Application:** `ae144abcbbc238ed523ba599a66aa4037867964a`, parent `da3dbec553a9e796d0fa164cea9c73875a8c0d1f`, branch `3d-linechart`. Chart-local resource lifecycle only; unrelated files and failures directories remain excluded.
+- **Proven separate defect:** controlled retained-state A→B case previously painted B with A texture (expected mesh, actual shader). `async-red.log` freezes failure. The corrected owner uses valid same-data mesh until matching lookup readiness, cancels pending publication on zero, discards B when C finishes first, and disposes on style switch/widget disposal. No target skipping or financial delay.
+- **Validation:** PASS — Ubuntu proot `flutter test --no-pub test/features/dashboard/presentation/fluvi_wave_recovery_test.dart --plain-name WR-13 --reporter expanded` (actual shader paint route, A→B→C/out-of-order/zero/style/disposal). All created images accounted for by disposal; marker taps do not regenerate geometry or lookup. PASS — scoped `flutter analyze --no-pub` on chart/probe/recovery test (0 issues); PASS — `git diff --check`. Test output in `async-green.log`.
+- **Graph/limits:** original exact-f34 graph established chart-local cache/resource/consumer inventory; no shared/core changes. Historical APK/backend still UNKNOWN. Lookup x encoding, material, narrow/edge containment, final visual and broad performance checks pending; compilation/route checks are not physical acceptance.
+- **Build:** NOT PUSHED / NOT BUILT — intermediate validated unit, final all-inclusive Human APK still pending. **Physical validation: PENDING — USER ONLY.**
