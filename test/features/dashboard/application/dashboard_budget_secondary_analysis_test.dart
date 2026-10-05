@@ -246,7 +246,6 @@ PreparedBudgetLimitDirectionBank _emptyBank({
 PreparedSpendingRhythmDirectionBank _rhythmBank() {
   final day5 = const LocalDate(year: 2026, month: 3, day: 5).epochDay;
   final day10 = const LocalDate(year: 2026, month: 3, day: 10).epochDay;
-  final day31 = const LocalDate(year: 2026, month: 3, day: 31).epochDay;
   List<int> buckets(int amount) => <int>[amount, 0, 0, 0, 0, 0, 0, 0];
   return PreparedSpendingRhythmDirectionBank(
     targetCount: 3,
