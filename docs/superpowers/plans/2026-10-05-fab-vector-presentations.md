@@ -14,11 +14,11 @@ it must not create another FAB, direction, or action owner.
 | FVP-04 | Compact vector has independently user-editable rendered colour treatment and shadow without editing the source SVG. | existing global appearance controller/tuner | Live primary/highlight controls drive a value-equal SVG color mapper; controller and tuner tests prove updates. | DONE |
 | FVP-05 | Add a fourth full-size baby-blue vector choice: same optical FAB artwork footprint, no white shell, no coloured ring/core or backing button. | `Bnb03BottomNavigation` | Focused widget test proves full footprint and absence of shell/ring/core; inspected golden proves the baby-blue output. | DONE |
 | FVP-06 | Keep one Shop hit target, direction semantics and routing unchanged. | existing `Bnb03BottomNavigation` | Existing FAB hit-target/tap coverage remains and both new renderers stay below the one existing semantic target. | DONE |
-| FVP-07 | Verify visual and static quality before final app build. | tests / CI | Focused RED/GREEN tests, golden inspection, format/analyze/diff check, then online Human APK for the exact app SHA. | PARTIAL |
+| FVP-07 | Verify visual and static quality before final app build. | tests / CI | Focused RED/GREEN tests, inspected goldens, formatter/focused-analyzer/diff checks, successful online normal correctness gates, and exact Human APK delivery for `f5d6876fa8099779dbcc9aadb6f98a94a18ea164`. | DONE |
 
 Architecture decision: the supplied SVG stays source artwork.  A single
 `Bnb03FabVectorArtwork` rendering primitive applies the user-selected compact
-palette/shadow in a transparent `ShaderMask`/shadow stack; it does not mutate
+palette/shadow through a value-equal SVG color mapper; it does not mutate
 the asset, create a second FAB, or own transaction direction.  The large
 baby-blue variant uses the same primitive at the current direction-artwork
 optical footprint while deliberately omitting the button shell/core.
