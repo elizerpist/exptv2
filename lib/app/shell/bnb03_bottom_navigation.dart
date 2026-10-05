@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
 
 import '../../core/design/dashboard_mode_palette.dart';
@@ -20,6 +21,8 @@ final class Bnb03FabDirectionVisual {
     required this.ringColor,
     required this.coreColor,
     required this.showsArtwork,
+    required this.showsCompactVector,
+    required this.showsFullBabyBlueVector,
     required this.artworkAssetPath,
     required this.artworkKey,
   });
@@ -44,12 +47,18 @@ final class Bnb03FabDirectionVisual {
     final income = direction == TransactionDirection.income;
     return Bnb03FabDirectionVisual._(
       gradient: gradient,
-      ringColor: iconPresentation == FluviFabIconPresentation.directionArtwork
+      ringColor:
+          iconPresentation == FluviFabIconPresentation.directionArtwork ||
+              iconPresentation == FluviFabIconPresentation.fullBabyBlueVector
           ? null
           : FluviDirectionColorPaletteCatalog.midpoint(source),
       coreColor: null,
       showsArtwork:
           iconPresentation == FluviFabIconPresentation.directionArtwork,
+      showsCompactVector:
+          iconPresentation == FluviFabIconPresentation.compactEditableVector,
+      showsFullBabyBlueVector:
+          iconPresentation == FluviFabIconPresentation.fullBabyBlueVector,
       artworkAssetPath: income
           ? 'assets/fluvi/actions/addnew_income.png'
           : 'assets/fluvi/actions/addnew_expense.png',
@@ -63,6 +72,8 @@ final class Bnb03FabDirectionVisual {
   final Color? ringColor;
   final Color? coreColor;
   final bool showsArtwork;
+  final bool showsCompactVector;
+  final bool showsFullBabyBlueVector;
   final String artworkAssetPath;
   final ValueKey<String> artworkKey;
 }
@@ -83,6 +94,81 @@ abstract final class Bnb03FabArtworkGeometry {
       visibleFootprintDiameter *
       (opaqueArtworkWidth / sourceImageWidth) *
       scale;
+}
+
+/// The supplied high-detail expense artwork remains a transparent vector. The
+/// compact variant lives inside the existing direction-coloured button; the
+/// full baby-blue treatment deliberately uses the same visual footprint as
+/// PNG artwork without mounting a button underneath it.
+abstract final class Bnb03FabVectorArtworkGeometry {
+  static const String assetPath =
+      'assets/fluvi/actions/fluvi_add_expense_vector.svg';
+  static const double compactCoreFraction = .62;
+  static const Color babyBluePrimary = Color(0xFF78C7F4);
+  static const Color babyBlueHighlight = Color(0xFFE4F7FF);
+}
+
+/// Paint-only vector treatment. It receives the existing appearance state;
+/// it owns neither Shop routing nor the semantic income/expense direction.
+final class Bnb03FabVectorArtwork extends StatelessWidget {
+  const Bnb03FabVectorArtwork({
+    super.key,
+    required this.primary,
+    required this.highlight,
+  });
+
+  final Color primary;
+  final Color highlight;
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: SizedBox.expand(
+      child: SvgPicture.asset(
+        Bnb03FabVectorArtworkGeometry.assetPath,
+        fit: BoxFit.contain,
+        colorMapper: _Bnb03FabVectorColorMapper(
+          primary: primary,
+          highlight: highlight,
+        ),
+      ),
+    ),
+  );
+}
+
+/// Retains the supplied asset's transparent alpha and tonal depth while
+/// mapping its vector material to the user's compact-FAB palette. Equality is
+/// value-based so flutter_svg can reuse the parsed picture on ordinary parent
+/// rebuilds instead of decoding it again.
+@immutable
+final class _Bnb03FabVectorColorMapper extends ColorMapper {
+  const _Bnb03FabVectorColorMapper({
+    required this.primary,
+    required this.highlight,
+  });
+
+  final Color primary;
+  final Color highlight;
+
+  @override
+  Color substitute(
+    String? id,
+    String elementName,
+    String attributeName,
+    Color color,
+  ) {
+    final shadow = Color.lerp(primary, Colors.black, .38)!;
+    final tone = Color.lerp(shadow, highlight, color.computeLuminance())!;
+    return tone.withValues(alpha: color.a);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _Bnb03FabVectorColorMapper &&
+      other.primary == primary &&
+      other.highlight == highlight;
+
+  @override
+  int get hashCode => Object.hash(primary, highlight);
 }
 
 /// The one physical BottomNav path owner. It keeps the centre FAB arc and the
@@ -323,6 +409,8 @@ class Bnb03BottomNavigation extends StatelessWidget {
     this.transactionDirection = TransactionDirection.income,
     this.directionColorProfile = FluviDirectionColorProfile.original,
     this.fabIconPresentation = FluviFabIconPresentation.directionArtwork,
+    this.fabVectorPrimaryArgb = 0xFF715EFB,
+    this.fabVectorHighlightArgb = 0xFFE2D7FF,
   });
 
   final Bnb03Item selected;
@@ -340,6 +428,8 @@ class Bnb03BottomNavigation extends StatelessWidget {
   final TransactionDirection transactionDirection;
   final FluviDirectionColorProfile directionColorProfile;
   final FluviFabIconPresentation fabIconPresentation;
+  final int fabVectorPrimaryArgb;
+  final int fabVectorHighlightArgb;
 
   static const double _figmaWidth =
       DashboardFlatBottomNavStretchLayout.referenceBottomNavWidth;
@@ -507,66 +597,126 @@ class Bnb03BottomNavigation extends StatelessWidget {
                     child: InkWell(
                       customBorder: const CircleBorder(),
                       onTap: () => onChanged(Bnb03Item.shop),
-                      child: Container(
-                        padding: EdgeInsets.all(fabShellInset),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: SizedBox.expand(
-                          key: const ValueKey<String>(
-                            'bnb03-fab-visible-footprint',
-                          ),
-                          child: fabVisual.showsArtwork
-                              ? ClipRect(
-                                  child: Transform.scale(
-                                    key: const ValueKey<String>(
-                                      'bnb03-fab-artwork-optical-scale',
-                                    ),
-                                    scale: Bnb03FabArtworkGeometry.opticalScale,
-                                    child: Image.asset(
-                                      fabVisual.artworkAssetPath,
-                                      key: fabVisual.artworkKey,
-                                      width: fabVisibleDiameter,
-                                      height: fabVisibleDiameter,
-                                      fit: BoxFit.contain,
-                                      filterQuality: FilterQuality.high,
-                                    ),
+                      child: fabVisual.showsFullBabyBlueVector
+                          ? Center(
+                              child: SizedBox(
+                                key: const ValueKey<String>(
+                                  'bnb03-fab-visible-footprint',
+                                ),
+                                width: fabVisibleDiameter,
+                                height: fabVisibleDiameter,
+                                child: const Bnb03FabVectorArtwork(
+                                  key: ValueKey<String>(
+                                    'bnb03-fab-full-baby-blue-vector',
                                   ),
-                                )
-                              : CustomPaint(
-                                  key: const ValueKey(
-                                    'bnb03-fab-outer-purple-ring',
-                                  ),
-                                  painter: _Bnb03FabRingPainter(
-                                    color: fabVisual.ringColor!,
-                                  ),
-                                  child: Padding(
-                                    padding: EdgeInsets.all(s(6)),
-                                    child: SizedBox.expand(
-                                      child: CustomPaint(
-                                        key: const ValueKey('bnb03-fab-core'),
-                                        painter: _Bnb03FabCorePainter(
-                                          gradient: fabVisual.gradient,
+                                  primary: Bnb03FabVectorArtworkGeometry
+                                      .babyBluePrimary,
+                                  highlight: Bnb03FabVectorArtworkGeometry
+                                      .babyBlueHighlight,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              key: const ValueKey<String>(
+                                'bnb03-fab-button-shell',
+                              ),
+                              padding: EdgeInsets.all(fabShellInset),
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              child: SizedBox.expand(
+                                key: const ValueKey<String>(
+                                  'bnb03-fab-visible-footprint',
+                                ),
+                                child: fabVisual.showsArtwork
+                                    ? ClipRect(
+                                        child: Transform.scale(
+                                          key: const ValueKey<String>(
+                                            'bnb03-fab-artwork-optical-scale',
+                                          ),
+                                          scale: Bnb03FabArtworkGeometry
+                                              .opticalScale,
+                                          child: Image.asset(
+                                            fabVisual.artworkAssetPath,
+                                            key: fabVisual.artworkKey,
+                                            width: fabVisibleDiameter,
+                                            height: fabVisibleDiameter,
+                                            fit: BoxFit.contain,
+                                            filterQuality: FilterQuality.high,
+                                          ),
                                         ),
-                                        child: Center(
-                                          child: Icon(
-                                            selected == Bnb03Item.shop
-                                                ? IconsaxPlusBold.shop
-                                                : IconsaxPlusLinear.shop,
-                                            key: const ValueKey<String>(
-                                              'bnb03-fab-legacy-store-icon',
+                                      )
+                                    : CustomPaint(
+                                        key: const ValueKey(
+                                          'bnb03-fab-outer-purple-ring',
+                                        ),
+                                        painter: _Bnb03FabRingPainter(
+                                          color: fabVisual.ringColor!,
+                                        ),
+                                        child: Padding(
+                                          padding: EdgeInsets.all(s(6)),
+                                          child: SizedBox.expand(
+                                            child: CustomPaint(
+                                              key: const ValueKey(
+                                                'bnb03-fab-core',
+                                              ),
+                                              painter: _Bnb03FabCorePainter(
+                                                gradient: fabVisual.gradient,
+                                              ),
+                                              child:
+                                                  fabVisual.showsCompactVector
+                                                  ? LayoutBuilder(
+                                                      builder: (context, constraints) => Center(
+                                                        child: SizedBox(
+                                                          key:
+                                                              const ValueKey<
+                                                                String
+                                                              >(
+                                                                'bnb03-fab-compact-vector',
+                                                              ),
+                                                          width:
+                                                              constraints
+                                                                  .maxWidth *
+                                                              Bnb03FabVectorArtworkGeometry
+                                                                  .compactCoreFraction,
+                                                          height:
+                                                              constraints
+                                                                  .maxHeight *
+                                                              Bnb03FabVectorArtworkGeometry
+                                                                  .compactCoreFraction,
+                                                          child: Bnb03FabVectorArtwork(
+                                                            primary: Color(
+                                                              fabVectorPrimaryArgb,
+                                                            ),
+                                                            highlight: Color(
+                                                              fabVectorHighlightArgb,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    )
+                                                  : Center(
+                                                      child: Icon(
+                                                        selected ==
+                                                                Bnb03Item.shop
+                                                            ? IconsaxPlusBold
+                                                                  .shop
+                                                            : IconsaxPlusLinear
+                                                                  .shop,
+                                                        key: const ValueKey<String>(
+                                                          'bnb03-fab-legacy-store-icon',
+                                                        ),
+                                                        color: Colors.white,
+                                                        size: s(24),
+                                                      ),
+                                                    ),
                                             ),
-                                            color: Colors.white,
-                                            size: s(24),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                        ),
-                      ),
+                              ),
+                            ),
                     ),
                   ),
                 ),

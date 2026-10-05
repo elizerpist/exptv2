@@ -2686,6 +2686,23 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     );
   }
 
+  /// Updates only the compact editable vector's material palette through the
+  /// existing global appearance authority. It never changes the source SVG,
+  /// transaction direction or the one central FAB action route.
+  void setFabVectorPrimaryArgb(int value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(fabVectorPrimaryArgb: value),
+      'FAB_VECTOR_PRIMARY_COLOR_CHANGED',
+    );
+  }
+
+  void setFabVectorHighlightArgb(int value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(fabVectorHighlightArgb: value),
+      'FAB_VECTOR_HIGHLIGHT_COLOR_CHANGED',
+    );
+  }
+
   /// Changes only the renderer of the existing semantic direction selector.
   void setDirectionControlStyle(FluviDirectionControlStyle value) {
     _setGlobalAppearance(
@@ -2758,6 +2775,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       'avatar=${next.avatarColorProfile.name} '
       'artwork=${next.showsDirectionArtwork} '
       'fabIcon=${next.fabIconPresentation.name} '
+      'fabVectorPrimary=${next.fabVectorPrimaryArgb.toRadixString(16)} '
+      'fabVectorHighlight=${next.fabVectorHighlightArgb.toRadixString(16)} '
       'typography=${next.typography.name} '
       'directionStyle=${next.directionControlStyle.name} '
       'handleStyle=${next.collapseHandleStyle.name} '

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart' show vg;
 import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
@@ -703,6 +704,147 @@ void main() {
       matchesGoldenFile('../goldens/bnb03_fab_direction_artwork.png'),
     );
   });
+
+  testWidgets(
+    'compact vector FAB keeps the established direction-gradient button chrome and stays inside it',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: Bnb03BottomNavigation(
+                width: 428,
+                selected: Bnb03Item.home,
+                transactionDirection: TransactionDirection.expense,
+                fabIconPresentation:
+                    FluviFabIconPresentation.compactEditableVector,
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final footprint = find.byKey(
+        const ValueKey<String>('bnb03-fab-visible-footprint'),
+      );
+      final vector = find.byKey(
+        const ValueKey<String>('bnb03-fab-compact-vector'),
+      );
+      expect(vector, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-button-shell')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-outer-purple-ring')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-core')),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSize(vector).width,
+        lessThan(tester.getSize(footprint).width),
+      );
+    },
+  );
+
+  testWidgets(
+    'full baby-blue vector FAB owns the artwork footprint without a button shell, ring, or core',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: Bnb03BottomNavigation(
+                width: 428,
+                selected: Bnb03Item.home,
+                transactionDirection: TransactionDirection.income,
+                fabIconPresentation:
+                    FluviFabIconPresentation.fullBabyBlueVector,
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final footprint = find.byKey(
+        const ValueKey<String>('bnb03-fab-visible-footprint'),
+      );
+      final vector = find.byKey(
+        const ValueKey<String>('bnb03-fab-full-baby-blue-vector'),
+      );
+      expect(vector, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-button-shell')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-outer-purple-ring')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-core')),
+        findsNothing,
+      );
+      expect(tester.getSize(vector).width, tester.getSize(footprint).width);
+      expect(
+        find.byKey(const ValueKey<String>('bnb03-fab-hit-target')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'vector FAB treatments retain their distinct material hierarchy',
+    (tester) async {
+      Future<void> expectVectorGolden({
+        required String boundaryId,
+        required FluviFabIconPresentation presentation,
+        required String golden,
+      }) async {
+        final boundaryKey = ValueKey<String>(boundaryId);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Center(
+              child: RepaintBoundary(
+                key: boundaryKey,
+                child: Bnb03BottomNavigation(
+                  width: 428,
+                  selected: Bnb03Item.home,
+                  transactionDirection: TransactionDirection.expense,
+                  directionColorProfile: FluviDirectionColorProfile.original,
+                  fabIconPresentation: presentation,
+                  fabVectorPrimaryArgb: 0xFF6948DB,
+                  fabVectorHighlightArgb: 0xFFE5DEFF,
+                  onChanged: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.runAsync(vg.waitForPendingDecodes);
+        await tester.pump();
+        await expectLater(find.byKey(boundaryKey), matchesGoldenFile(golden));
+      }
+
+      await expectVectorGolden(
+        boundaryId: 'bnb03-compact-vector-golden-boundary',
+        presentation: FluviFabIconPresentation.compactEditableVector,
+        golden: '../goldens/bnb03_fab_compact_vector.png',
+      );
+      await expectVectorGolden(
+        boundaryId: 'bnb03-full-baby-blue-vector-golden-boundary',
+        presentation: FluviFabIconPresentation.fullBabyBlueVector,
+        golden: '../goldens/bnb03_fab_full_baby_blue_vector.png',
+      );
+    },
+  );
 }
 
 bool _hasBorderPixelNear(

@@ -54,12 +54,19 @@ extension FluviDirectionControlStylePresentation on FluviDirectionControlStyle {
 /// Presentation-only visual treatment of the one central transaction FAB.
 /// It is deliberately independent from [showsDirectionArtwork], which owns
 /// the semantic income/expense control rather than the FAB artwork itself.
-enum FluviFabIconPresentation { legacyWhiteStore, directionArtwork }
+enum FluviFabIconPresentation {
+  legacyWhiteStore,
+  directionArtwork,
+  compactEditableVector,
+  fullBabyBlueVector,
+}
 
 extension FluviFabIconPresentationPresentation on FluviFabIconPresentation {
   String get label => switch (this) {
     FluviFabIconPresentation.legacyWhiteStore => 'Fehér bolt ikon',
     FluviFabIconPresentation.directionArtwork => 'Artwork',
+    FluviFabIconPresentation.compactEditableVector => 'Színezhető vektor',
+    FluviFabIconPresentation.fullBabyBlueVector => 'Babakék vektor',
   };
 }
 
@@ -140,6 +147,8 @@ final class FluviGlobalAppearance {
     required this.typography,
     this.directionControlStyle = FluviDirectionControlStyle.splitButtons,
     this.fabIconPresentation = FluviFabIconPresentation.directionArtwork,
+    this.fabVectorPrimaryArgb = 0xFF715EFB,
+    this.fabVectorHighlightArgb = 0xFFE2D7FF,
     this.collapseHandleStyle = FluviCollapseHandleStyle.standalone,
     this.activeDirectionLabelTone = FluviActiveDirectionLabelTone.softenedWhite,
     this.inactiveDirectionLabelTone =
@@ -156,6 +165,8 @@ final class FluviGlobalAppearance {
       typography = FluviTypographyProfile.app,
       directionControlStyle = FluviDirectionControlStyle.splitButtons,
       fabIconPresentation = FluviFabIconPresentation.directionArtwork,
+      fabVectorPrimaryArgb = 0xFF715EFB,
+      fabVectorHighlightArgb = 0xFFE2D7FF,
       collapseHandleStyle = FluviCollapseHandleStyle.standalone,
       activeDirectionLabelTone = FluviActiveDirectionLabelTone.softenedWhite,
       inactiveDirectionLabelTone = FluviInactiveDirectionLabelTone.softenedGray,
@@ -169,6 +180,11 @@ final class FluviGlobalAppearance {
   final FluviTypographyProfile typography;
   final FluviDirectionControlStyle directionControlStyle;
   final FluviFabIconPresentation fabIconPresentation;
+
+  /// The editable compact-vector material palette. It has no bearing on the
+  /// active income/expense semantic direction or its source palette.
+  final int fabVectorPrimaryArgb;
+  final int fabVectorHighlightArgb;
   final FluviCollapseHandleStyle collapseHandleStyle;
   final FluviActiveDirectionLabelTone activeDirectionLabelTone;
   final FluviInactiveDirectionLabelTone inactiveDirectionLabelTone;
@@ -183,6 +199,8 @@ final class FluviGlobalAppearance {
     FluviTypographyProfile? typography,
     FluviDirectionControlStyle? directionControlStyle,
     FluviFabIconPresentation? fabIconPresentation,
+    int? fabVectorPrimaryArgb,
+    int? fabVectorHighlightArgb,
     FluviCollapseHandleStyle? collapseHandleStyle,
     FluviActiveDirectionLabelTone? activeDirectionLabelTone,
     FluviInactiveDirectionLabelTone? inactiveDirectionLabelTone,
@@ -196,6 +214,9 @@ final class FluviGlobalAppearance {
     typography: typography ?? this.typography,
     directionControlStyle: directionControlStyle ?? this.directionControlStyle,
     fabIconPresentation: fabIconPresentation ?? this.fabIconPresentation,
+    fabVectorPrimaryArgb: fabVectorPrimaryArgb ?? this.fabVectorPrimaryArgb,
+    fabVectorHighlightArgb:
+        fabVectorHighlightArgb ?? this.fabVectorHighlightArgb,
     collapseHandleStyle: collapseHandleStyle ?? this.collapseHandleStyle,
     activeDirectionLabelTone:
         activeDirectionLabelTone ?? this.activeDirectionLabelTone,
@@ -218,6 +239,8 @@ final class FluviGlobalAppearance {
       typography == other.typography &&
       directionControlStyle == other.directionControlStyle &&
       fabIconPresentation == other.fabIconPresentation &&
+      fabVectorPrimaryArgb == other.fabVectorPrimaryArgb &&
+      fabVectorHighlightArgb == other.fabVectorHighlightArgb &&
       collapseHandleStyle == other.collapseHandleStyle &&
       activeDirectionLabelTone == other.activeDirectionLabelTone &&
       inactiveDirectionLabelTone == other.inactiveDirectionLabelTone &&
@@ -233,6 +256,8 @@ final class FluviGlobalAppearance {
     typography,
     directionControlStyle,
     fabIconPresentation,
+    fabVectorPrimaryArgb,
+    fabVectorHighlightArgb,
     collapseHandleStyle,
     activeDirectionLabelTone,
     inactiveDirectionLabelTone,

@@ -478,6 +478,49 @@ void main() {
         controller.tuning.value.globalAppearance.fabIconPresentation,
         FluviFabIconPresentation.legacyWhiteStore,
       );
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'fluvi-fab-icon-presentation-compactEditableVector',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'fluvi-fab-icon-presentation-fullBabyBlueVector',
+          ),
+        ),
+        findsOneWidget,
+      );
+      final compactVectorChoice = find.byKey(
+        const ValueKey<String>(
+          'fluvi-fab-icon-presentation-compactEditableVector',
+        ),
+      );
+      await tester.ensureVisible(compactVectorChoice);
+      await tester.tap(compactVectorChoice);
+      await tester.pump();
+      expect(
+        controller.tuning.value.globalAppearance.fabIconPresentation,
+        FluviFabIconPresentation.compactEditableVector,
+      );
+      final vectorPrimary = find.byKey(
+        const ValueKey<String>('balance-glass-color-fab vector primary'),
+      );
+      final vectorHighlight = find.byKey(
+        const ValueKey<String>('balance-glass-color-fab vector highlight'),
+      );
+      expect(vectorPrimary, findsOneWidget);
+      expect(vectorHighlight, findsOneWidget);
+      await tester.enterText(vectorPrimary, 'FF5633CC');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(
+        controller.tuning.value.globalAppearance.fabVectorPrimaryArgb,
+        0xFF5633CC,
+      );
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
     },

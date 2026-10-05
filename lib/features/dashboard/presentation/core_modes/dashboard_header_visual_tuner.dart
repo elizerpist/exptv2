@@ -609,6 +609,23 @@ final class _GlobalAppearanceControls extends StatelessWidget {
           ],
         ),
       ),
+      if (appearance.fabIconPresentation ==
+          FluviFabIconPresentation.compactEditableVector) ...<Widget>[
+        Text(
+          'Színezhető FAB vektor',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        _BalanceGlassColorField(
+          label: 'FAB vector primary',
+          value: appearance.fabVectorPrimaryArgb,
+          onChanged: controller.setFabVectorPrimaryArgb,
+        ),
+        _BalanceGlassColorField(
+          label: 'FAB vector highlight',
+          value: appearance.fabVectorHighlightArgb,
+          onChanged: controller.setFabVectorHighlightArgb,
+        ),
+      ],
       Text(
         'Direction elrendezés',
         style: Theme.of(context).textTheme.labelMedium,

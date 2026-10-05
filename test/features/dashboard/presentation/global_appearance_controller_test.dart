@@ -26,6 +26,14 @@ void main() {
       controller.tuning.value.globalAppearance.fabIconPresentation,
       FluviFabIconPresentation.directionArtwork,
     );
+    expect(
+      controller.tuning.value.globalAppearance.fabVectorPrimaryArgb,
+      0xFF715EFB,
+    );
+    expect(
+      controller.tuning.value.globalAppearance.fabVectorHighlightArgb,
+      0xFFE2D7FF,
+    );
 
     controller.setDirectionColorProfile(FluviDirectionColorProfile.vivid);
     expect(
@@ -42,6 +50,8 @@ void main() {
     controller.setFabIconPresentation(
       FluviFabIconPresentation.legacyWhiteStore,
     );
+    controller.setFabVectorPrimaryArgb(0xFF5533CC);
+    controller.setFabVectorHighlightArgb(0xFFD8CCFF);
     controller.setGlobalTypography(FluviTypographyProfile.colorLab);
     controller.setDirectionControlStyle(FluviDirectionControlStyle.slidingRail);
     controller.setCollapseHandleStyle(
@@ -68,6 +78,8 @@ void main() {
         avatarColorProfile: CategoryAvatarColorProfile.pastel,
         showsDirectionArtwork: false,
         fabIconPresentation: FluviFabIconPresentation.legacyWhiteStore,
+        fabVectorPrimaryArgb: 0xFF5533CC,
+        fabVectorHighlightArgb: 0xFFD8CCFF,
         typography: FluviTypographyProfile.colorLab,
         directionControlStyle: FluviDirectionControlStyle.slidingRail,
         collapseHandleStyle: FluviCollapseHandleStyle.headerTranslucentPill,
@@ -78,7 +90,7 @@ void main() {
         budgetAvatarContentStyle: BudgetAvatarContentStyle.overlappingGlow,
       ),
     );
-    expect(controller.tuning.value.generation, initialGeneration + 13);
+    expect(controller.tuning.value.generation, initialGeneration + 15);
     expect(controller.tickerIdentity, same(ticker));
   });
 }
