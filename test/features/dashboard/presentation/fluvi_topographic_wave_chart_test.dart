@@ -53,7 +53,7 @@ void main() {
         greaterThan(terrain.depthLayers.last.opacity),
       );
       expect(terrain.ridgeSamples.first.dx, closeTo(10, .01));
-      expect(terrain.ridgeSamples.last.dx, closeTo(336, .01));
+      expect(terrain.ridgeSamples.last.dx, closeTo(terrain.plot.right, .01));
       // 14 dense samples per source segment: the smooth spline never creates
       // a false financial peak outside the two real adjacent values.
       for (var segment = 0; segment < values.length - 1; segment += 1) {
@@ -83,11 +83,7 @@ void main() {
       );
       expect(
         terrain.surfacePath.contains(
-          Offset.lerp(
-            terrain.ridgeSamples[20],
-            terrain.surfaceFootSamples[20],
-            .5,
-          )!,
+          terrain.shell!.sample(20, .3).position,
         ),
         isTrue,
       );
@@ -179,7 +175,10 @@ void main() {
         isTrue,
       );
       for (var i = 0; i < terrain.ridgeSamples.length; i++) {
-        expect(terrain.surfaceFootSamples[i].dx, terrain.ridgeSamples[i].dx);
+        expect(
+          terrain.surfaceFootSamples[i].dx,
+          greaterThan(terrain.ridgeSamples[i].dx),
+        );
         expect(
           terrain.surfaceFootSamples[i].dy,
           greaterThan(terrain.ridgeSamples[i].dy),
@@ -264,13 +263,17 @@ void main() {
       ),
     );
 
-    await tester.tapAt(const Offset(282, 72));
+    final target = FluviTopographicWaveTerrain.resolve(
+      values: values,
+      size: const Size(346, 132),
+    ).dataOffsets[4];
+    await tester.tapAt(target);
     await tester.pump();
     expect(selected, 4);
   });
 
   testWidgets(
-    'MTC-07 visual: SVG-reference terrain is a clipped lavender landscape rather than a conventional line chart',
+    'MTC-07 visual: SVG-reference preset retains the reviewed oblique shell',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(

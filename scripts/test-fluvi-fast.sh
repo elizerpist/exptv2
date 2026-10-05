@@ -9,6 +9,7 @@ flutter test \
   test/boundary/balance_monthly_topographic_native_platform_boundary_test.dart \
   test/core/design/fluvi_bounded_curve_test.dart \
   test/features/dashboard/presentation/fluvi_wave_recovery_test.dart \
+  test/features/dashboard/presentation/fluvi_wave_shell_test.dart \
   test/features/dashboard/presentation/fluvi_wave_visual_test.dart \
   test/boundary/query_menu_boundary_test.dart \
   test/boundary/dashboard_interaction_performance_boundary_test.dart \
@@ -41,4 +42,5 @@ flutter test \
   test/features/dashboard/time_navigation/domain/dashboard_temporal_availability_test.dart \
   test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart \
   test/features/dashboard/motion/dashboard_semantic_catalog_test.dart \
-  test/shared/presentation/fluvi_slide_up_sheet_test.dart
+  test/shared/presentation/fluvi_slide_up_sheet_test.dart \
+  "$@"

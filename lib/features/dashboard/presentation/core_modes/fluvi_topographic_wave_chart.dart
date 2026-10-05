@@ -15,6 +15,7 @@ import '../../../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 part 'fluvi_wave_render_probe.dart';
 part 'fluvi_wave_surface_lookup.dart';
 part 'fluvi_wave_material.dart';
+part 'fluvi_wave_shell.dart';
 
 /// A render-ready daily value from the established Balance Month projection.
 ///
@@ -336,15 +337,13 @@ final class FluviTopographicWaveDepthLayer {
 /// ordinary parent rebuilds.
 @immutable
 final class FluviTopographicWaveTerrain {
-  const FluviTopographicWaveTerrain._({
+  FluviTopographicWaveTerrain._({
     required this.size,
     required this.plot,
     required this.ridgeSamples,
     required this.ridgePath,
     required this.surfaceFootSamples,
-    required this.surfacePath,
-    required this.surfaceMesh,
-    required this.areaPath,
+    required this.shell,
     required this.depthLayers,
     required this.dataOffsets,
     required this.highestIndex,
@@ -355,20 +354,21 @@ final class FluviTopographicWaveTerrain {
   final Rect plot;
   double get financialBaseline => _baselineFor(plot);
 
-  static double _baselineFor(Rect plot) => plot.top + plot.height * .70;
+  static double _baselineFor(Rect plot) => plot.top + plot.height * .62;
   final List<Offset> ridgeSamples;
   final Path ridgePath;
 
   /// Per-sample local material depth. This is visual volume only; the actual
   /// monetary position remains [ridgeSamples] and is never transformed.
   final List<Offset> surfaceFootSamples;
-  final Path surfacePath;
-  final ui.Vertices? surfaceMesh;
+  final FluviWaveShell? shell;
+  late final Path surfacePath = shell?.silhouette() ?? Path();
+  ui.Vertices? get surfaceMesh => shell?.mesh;
 
   /// Retained public compatibility alias for callers that previously inspected
   /// the old gradient body. It now is the local-depth body, not a plot-wide
   /// baseline fill.
-  final Path areaPath;
+  Path get areaPath => surfacePath;
   final List<FluviTopographicWaveDepthLayer> depthLayers;
   final List<Offset> dataOffsets;
   final int? highestIndex;
@@ -392,11 +392,24 @@ final class FluviTopographicWaveTerrain {
     required List<FluviTopographicWaveDatum> values,
     required Size size,
   }) {
-    final plot = Rect.fromLTRB(
+    final available = Rect.fromLTRB(
       math.min(10, size.width / 2),
       math.min(36, size.height * .4),
       math.max(10, size.width - 10),
       math.max(36, size.height - 4),
+    );
+    final plot = Rect.fromLTRB(
+      available.left,
+      available.top,
+      math.max(
+        available.left,
+        available.right -
+            FluviWaveShell.horizontalInsetFor(
+              size,
+              _baselineFor(available) - available.top,
+            ),
+      ),
+      available.bottom,
     );
     if (size.isEmpty || values.isEmpty || plot.width <= 0 || plot.height <= 0) {
       return FluviTopographicWaveTerrain._(
@@ -405,9 +418,7 @@ final class FluviTopographicWaveTerrain {
         ridgeSamples: const <Offset>[],
         ridgePath: Path(),
         surfaceFootSamples: const <Offset>[],
-        surfacePath: Path(),
-        surfaceMesh: null,
-        areaPath: Path(),
+        shell: null,
         depthLayers: const <FluviTopographicWaveDepthLayer>[],
         dataOffsets: const <Offset>[],
         highestIndex: null,
@@ -428,9 +439,7 @@ final class FluviTopographicWaveTerrain {
         ridgeSamples: const <Offset>[],
         ridgePath: Path(),
         surfaceFootSamples: const <Offset>[],
-        surfacePath: Path(),
-        surfaceMesh: null,
-        areaPath: Path(),
+        shell: null,
         depthLayers: const <FluviTopographicWaveDepthLayer>[],
         dataOffsets: const <Offset>[],
         highestIndex: null,
@@ -460,8 +469,16 @@ final class FluviTopographicWaveTerrain {
         : offsets;
     final samples = _boundedSamples(controls);
     final ridgePath = _pathFor(samples);
-    final feet = _surfaceFeet(samples, plot);
-    final surfacePath = _closedPath(samples, feet);
+    final shell = FluviWaveShell(
+      ridge: List<Offset>.unmodifiable(samples),
+      plot: plot,
+      depth: FluviWaveShell.depthFor(size),
+    );
+    final feet = List<Offset>.generate(
+      samples.length,
+      (column) => shell.sample(column, 1).position,
+      growable: false,
+    );
     final layerCount = (plot.height / 4).round().clamp(8, 24);
     final depths = List<FluviTopographicWaveDepthLayer>.generate(layerCount, (
       index,
@@ -469,10 +486,7 @@ final class FluviTopographicWaveTerrain {
       final depth = index / (layerCount - 1);
       final flattened = List<Offset>.generate(
         samples.length,
-        (sampleIndex) => Offset(
-          samples[sampleIndex].dx,
-          _lerp(samples[sampleIndex].dy, feet[sampleIndex].dy, depth * .82),
-        ),
+        (sampleIndex) => shell.sample(sampleIndex, depth * .64).position,
         growable: false,
       );
       return FluviTopographicWaveDepthLayer(
@@ -487,9 +501,7 @@ final class FluviTopographicWaveTerrain {
       ridgeSamples: List<Offset>.unmodifiable(samples),
       ridgePath: ridgePath,
       surfaceFootSamples: List<Offset>.unmodifiable(feet),
-      surfacePath: surfacePath,
-      surfaceMesh: _surfaceMesh(samples, feet, plot),
-      areaPath: surfacePath,
+      shell: shell,
       depthLayers: List<FluviTopographicWaveDepthLayer>.unmodifiable(depths),
       dataOffsets: List<Offset>.unmodifiable(offsets),
       highestIndex: highestIndex,
@@ -497,92 +509,12 @@ final class FluviTopographicWaveTerrain {
     );
   }
 
-  static List<Offset> _surfaceFeet(List<Offset> ridge, Rect plot) =>
-      List<Offset>.generate(ridge.length, (index) {
-        final point = ridge[index];
-        final x = (point.dx - plot.left) / plot.width;
-        // A calm material shore, not a displaced copy of financial peaks.
-        // Its highest point is below the genuine zero baseline at every x.
-        return Offset(
-          point.dx,
-          plot.bottom -
-              plot.height * (.04 + .025 * math.cos(x * math.pi * 2 - .4)),
-        );
-      }, growable: false);
-
   static double _slopeAt(List<Offset> samples, int index) {
     if (samples.length < 2) return 0;
     final previous = samples[math.max(0, index - 1)];
     final next = samples[math.min(samples.length - 1, index + 1)];
     final dx = next.dx - previous.dx;
     return dx.abs() < .001 ? 0 : (next.dy - previous.dy) / dx;
-  }
-
-  static double _lerp(double start, double end, double amount) =>
-      start + (end - start) * amount.clamp(0.0, 1.0);
-
-  static Path _closedPath(List<Offset> ridge, List<Offset> feet) {
-    final path = _pathFor(ridge);
-    for (final point in feet.reversed) {
-      path.lineTo(point.dx, point.dy);
-    }
-    return path..close();
-  }
-
-  static ui.Vertices? _surfaceMesh(
-    List<Offset> ridge,
-    List<Offset> feet,
-    Rect plot, {
-    double opacity = 1,
-    double distance = 0,
-  }) {
-    if (ridge.length < 2 || ridge.length != feet.length) return null;
-    const rows = 24;
-    final columns = ridge.length;
-    final positions = Float32List(columns * rows * 2);
-    final colors = Int32List(columns * rows);
-    for (var column = 0; column < columns; column += 1) {
-      final slope = _slopeAt(ridge, column);
-      final footSlope = _slopeAt(feet, column);
-      for (var row = 0; row < rows; row += 1) {
-        final depth = row / (rows - 1);
-        final vertex = column * rows + row;
-        positions[vertex * 2] = ridge[column].dx;
-        positions[vertex * 2 + 1] = _lerp(
-          ridge[column].dy,
-          feet[column].dy,
-          depth,
-        );
-        final color = _FluviWaveMaterial.color(depth, slope, footSlope);
-        colors[vertex] = Color.lerp(
-          color,
-          FluviTopographicWavePalette.periwinkle.withValues(alpha: color.a),
-          distance,
-        )!.withValues(alpha: color.a * opacity).toARGB32();
-      }
-    }
-    final indices = Uint16List((columns - 1) * (rows - 1) * 6);
-    var write = 0;
-    for (var column = 0; column < columns - 1; column += 1) {
-      for (var row = 0; row < rows - 1; row += 1) {
-        final topLeft = column * rows + row;
-        final topRight = (column + 1) * rows + row;
-        final bottomLeft = topLeft + 1;
-        final bottomRight = topRight + 1;
-        indices[write++] = topLeft;
-        indices[write++] = topRight;
-        indices[write++] = bottomLeft;
-        indices[write++] = topRight;
-        indices[write++] = bottomRight;
-        indices[write++] = bottomLeft;
-      }
-    }
-    return ui.Vertices.raw(
-      ui.VertexMode.triangles,
-      positions,
-      colors: colors,
-      indices: indices,
-    );
   }
 
   static List<Offset> _boundedSamples(
@@ -798,17 +730,12 @@ final class _FluviTopographicWavePainter extends CustomPainter {
     final texture = curveTexture;
     if (shader != null && texture != null) {
       canvas.save();
-      canvas.clipPath(terrain.surfacePath);
       shader.setFloat(0, terrain.size.width);
       shader.setFloat(1, terrain.size.height);
       shader.setFloat(2, 1);
-      shader.setFloat(3, terrain.plot.left);
-      shader.setFloat(4, terrain.plot.top);
-      shader.setFloat(5, terrain.plot.width);
-      shader.setFloat(6, terrain.plot.height);
       _FluviWaveMaterial.bind(shader);
       shader.setImageSampler(0, texture, filterQuality: FilterQuality.medium);
-      canvas.drawRect(terrain.plot, Paint()..shader = shader);
+      canvas.drawRect(Offset.zero & terrain.size, Paint()..shader = shader);
       canvas.restore();
       return;
     }

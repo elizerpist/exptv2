@@ -81,6 +81,8 @@ final class FluviWaveRenderMetrics {
     'clip': '${terrain == null ? null : Offset.zero & terrain!.size}',
     'plot': '${terrain?.plot}',
     'financialBaseline': terrain?.financialBaseline,
+    'shellVertices': terrain?.shell?.vertexCount ?? 0,
+    'projectedDepth': terrain?.shell?.depth,
     'styleRoute': route,
     'shaderState': shaderState,
     'shaderError': shaderError,

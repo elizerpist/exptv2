@@ -77,7 +77,7 @@ void main() {
       );
       final settings = BalancePresentationController(
         initial: const BalancePresentationSettings.defaults().copyWith(
-          usesChildCards: false,
+          usesChildCards: true,
           monthlySpendingChartPresentation:
               BalanceMonthlySpendingChartPresentation.topographic,
         ),
@@ -169,60 +169,64 @@ void main() {
     (2026, 6, 30),
     (2026, 7, 31),
   ]) {
-    test('WR-08/09 positive same-x body depth, $days calendar days', () {
-      final amounts = waveSparseForints(days);
-      final data = waveData(waveLinked(amounts, year: year, month: month));
-      expect(data.map((v) => v.key), List.generate(days, (i) => i + 1));
-      expect(data.map((v) => v.value), amounts.map((v) => v * 100));
-      expect(
-        DashboardPreparedFormatter.compactAmountMinor(data[1].value),
-        '268 k Ft',
-      );
-      for (final size in [
-        const Size(240, 128),
-        const Size(194, 96),
-        const Size(320, 200),
-      ]) {
-        final terrain = FluviTopographicWaveTerrain.resolve(
-          values: data,
-          size: size,
+    test(
+      'WR-08/09 exact calendar and oblique shell depth, $days calendar days',
+      () {
+        final amounts = waveSparseForints(days);
+        final data = waveData(waveLinked(amounts, year: year, month: month));
+        expect(data.map((v) => v.key), List.generate(days, (i) => i + 1));
+        expect(data.map((v) => v.value), amounts.map((v) => v * 100));
+        expect(
+          DashboardPreparedFormatter.compactAmountMinor(data[1].value),
+          '268 k Ft',
         );
-        for (var day = 0; day < days; day++) {
-          final point = terrain.dataOffsets[day];
-          expect(
-            point.dx,
-            closeTo(
-              terrain.plot.left + terrain.plot.width * day / (days - 1),
-              1e-9,
-            ),
+        for (final size in [
+          const Size(240, 128),
+          const Size(194, 96),
+          const Size(320, 200),
+        ]) {
+          final terrain = FluviTopographicWaveTerrain.resolve(
+            values: data,
+            size: size,
           );
-          expect(
-            terrain.financialBaseline - point.dy,
-            closeTo(
-              (terrain.financialBaseline - terrain.plot.top) *
-                  amounts[day] /
-                  268000,
-              1e-9,
-            ),
-            reason:
-                'every exact daily amount uses one linear scale, including genuine zero days',
-          );
-          expect(terrain.ridgeSamples[day * 14], point);
+          for (var day = 0; day < days; day++) {
+            final point = terrain.dataOffsets[day];
+            expect(
+              point.dx,
+              closeTo(
+                terrain.plot.left + terrain.plot.width * day / (days - 1),
+                1e-9,
+              ),
+            );
+            expect(
+              terrain.financialBaseline - point.dy,
+              closeTo(
+                (terrain.financialBaseline - terrain.plot.top) *
+                    amounts[day] /
+                    268000,
+                1e-9,
+              ),
+              reason:
+                  'every exact daily amount uses one linear scale, including genuine zero days',
+            );
+            expect(terrain.ridgeSamples[day * 14], point);
+          }
+          for (var i = 0; i < terrain.ridgeSamples.length; i++) {
+            final ridge = terrain.ridgeSamples[i];
+            final foot = terrain.surfaceFootSamples[i];
+            expect(foot.dx, greaterThan(ridge.dx));
+            expect(foot.dx, lessThan(size.width));
+            expect(
+              foot.dy - ridge.dy,
+              greaterThan(0),
+              reason:
+                  'size=$size sample=$i x=${ridge.dx}; zero/small days must have positive visible depth',
+            );
+            expect(foot.dy, lessThan(size.height));
+          }
         }
-        for (var i = 0; i < terrain.ridgeSamples.length; i++) {
-          final ridge = terrain.ridgeSamples[i];
-          final foot = terrain.surfaceFootSamples[i];
-          expect(foot.dx, ridge.dx);
-          expect(
-            foot.dy - ridge.dy,
-            greaterThan(0),
-            reason:
-                'size=$size sample=$i x=${ridge.dx}; zero/small days must have positive visible depth',
-          );
-          expect(foot.dy, lessThan(size.height));
-        }
-      }
-    });
+      },
+    );
   }
 
   testWidgets('WR-12 isolated vertex-colour pixel probe', (tester) async {
@@ -256,45 +260,98 @@ void main() {
     debugPrint('WR-12 vertex pixels $observed');
   });
 
-  testWidgets('WR-12 lookup decodes the ridge at the same physical x', (
-    tester,
-  ) async {
-    final terrain = FluviTopographicWaveTerrain.resolve(
-      values: waveData(waveLinked(waveSparseForints(31))),
-      size: const Size(240, 128),
-    );
-    final texture = (await tester.runAsync(
-      () => FluviWaveDebugScope.createTexture(terrain),
-    ))!;
-    final bytes = (await tester.runAsync(() => texture.toByteData()))!;
-    var maxError = 0.0;
-    var segment = 0;
-    for (var i = 0; i < texture.width; i++) {
-      final x =
-          terrain.plot.left + terrain.plot.width * i / (texture.width - 1);
-      while (segment < terrain.ridgeSamples.length - 2 &&
-          terrain.ridgeSamples[segment + 1].dx < x) {
-        segment++;
+  testWidgets(
+    'HS-07 lookup carries visible projected normals and section depth',
+    (tester) async {
+      final terrain = FluviTopographicWaveTerrain.resolve(
+        values: const [
+          FluviTopographicWaveDatum(key: 1, value: 100, label: '1'),
+          FluviTopographicWaveDatum(key: 2, value: 100, label: '2'),
+        ],
+        size: const Size(240, 128),
+      );
+      final texture = (await tester.runAsync(
+        () => FluviWaveDebugScope.createTexture(terrain),
+      ))!;
+      final bytes = (await tester.runAsync(() => texture.toByteData()))!;
+      expect(texture.width, 480);
+      expect(texture.height, 256);
+      expect(bytes.getUint8(3), 0, reason: 'No geometry outside the shell');
+      for (final depth in [.1, .25, .4]) {
+        final sample = terrain.shell!.sample(7, depth);
+        final x = (sample.position.dx * 2).floor();
+        final y = (sample.position.dy * 2).floor();
+        final offset = (y * texture.width + x) * 4;
+        expect(bytes.getUint8(offset + 3), 255);
+        final nx = bytes.getUint8(offset) / 255 * 2 - 1;
+        final ny = bytes.getUint8(offset + 1) / 255 * 2 - 1;
+        final encodedDepth = bytes.getUint8(offset + 2) / 255;
+        expect(nx, closeTo(sample.normal.$1, .025));
+        expect(ny, closeTo(sample.normal.$2, .05));
+        expect(encodedDepth, closeTo(depth, .025));
       }
-      final left = terrain.ridgeSamples[segment];
-      final right = terrain.ridgeSamples[segment + 1];
-      final expected =
-          left.dy + (right.dy - left.dy) * (x - left.dx) / (right.dx - left.dx);
-      final normalized = texture.height == 1
-          ? bytes.getUint8(i * 4) / 255
-          : (bytes.getUint8(i * 4) * 256 + bytes.getUint8(i * 4 + 1)) / 65535;
-      final decoded = terrain.plot.top + normalized * terrain.plot.height;
-      maxError = math.max(maxError, (decoded - expected).abs());
-    }
-    texture.dispose();
-    debugPrint('WR-12 max same-x lookup error $maxError px');
-    expect(
-      maxError,
-      lessThan(.015),
-      reason:
-          'one coordinate parameterization and subpixel precision, including edges',
-    );
-  });
+      texture.dispose();
+    },
+  );
+
+  testWidgets(
+    'HS-07 sloped normals and recessed overlap match the visible shell',
+    (tester) async {
+      final terrain = FluviTopographicWaveTerrain.resolve(
+        values: waveData(waveLinked(waveReferenceForints)),
+        size: const Size(240, 128),
+      );
+      final shell = terrain.shell!;
+      final texture = (await tester.runAsync(
+        () => FluviWaveDebugScope.createTexture(terrain),
+      ))!;
+      final bytes = (await tester.runAsync(() => texture.toByteData()))!;
+      final vertices = [
+        for (var column = 0; column < shell.ridge.length; column++)
+          for (var row = 0; row < FluviWaveShell.rows; row++)
+            shell.sample(column, row / (FluviWaveShell.rows - 1)),
+      ];
+      var outer = 0;
+      var inner = 0;
+      var overlap = 0;
+      for (final column in [0, 35, 56, 112, 182, 196, 224, 280, 350, 420]) {
+        for (final depth in [.2, .4, .75, .9]) {
+          final target = shell.sample(column, depth).position;
+          final x = (target.dx * 2).floor();
+          final y = (target.dy * 2).floor();
+          final offset = (y * texture.width + x) * 4;
+          if (bytes.getUint8(offset + 3) != 255) continue;
+          final expected = _visibleShellSample(
+            vertices,
+            Offset((x + .5) / 2, (y + .5) / 2),
+          );
+          if (expected == null || expected.margin < .05) continue;
+          expect(
+            bytes.getUint8(offset) / 255 * 2 - 1,
+            closeTo(expected.nx, .055),
+          );
+          expect(
+            bytes.getUint8(offset + 1) / 255 * 2 - 1,
+            closeTo(expected.ny, .055),
+          );
+          expect(
+            bytes.getUint8(offset + 2) / 255,
+            closeTo(expected.depth, .035),
+          );
+          if (expected.depth < .5 && expected.nx.abs() > .08) outer++;
+          if (expected.depth > .65) inner++;
+          if (expected.farthest - expected.depth > .15) overlap++;
+        }
+      }
+      texture.dispose();
+      debugPrint(
+        'HS-07 atlas sloped outer=$outer inner=$inner overlaps=$overlap',
+      );
+      expect(outer, greaterThan(0));
+      expect(inner, greaterThan(0));
+      expect(overlap, greaterThan(0));
+    },
+  );
 
   testWidgets(
     'WR-15 exact edge selection and painted marker/tooltip containment',
@@ -536,7 +593,7 @@ void main() {
       initial: const BalancePresentationSettings.defaults().copyWith(
         monthlySpendingChartPresentation:
             BalanceMonthlySpendingChartPresentation.topographic,
-        usesChildCards: false,
+        usesChildCards: true,
       ),
     );
     addTearDown(linked.dispose);
@@ -573,7 +630,7 @@ void main() {
       'chartGlobalBounds': '$bounds',
       'transformToRoot': transform,
       'financialPlot': '${terrain.plot}',
-      'minSameXDepth': minDepth,
+      'minCorrespondingDownDepth': minDepth,
       'highestDay': chart.values[terrain.highestIndex!].key,
     };
     final image = await waveCapture(
@@ -609,4 +666,61 @@ void main() {
     expect(metrics!.route, 'opaque-diagnostic');
     expect(tester.takeException(), isNull);
   });
+}
+
+// Independent visibility oracle: find all intersecting projected triangles
+// and choose minimum physical depth, not the renderer's draw ordering.
+({double nx, double ny, double depth, double farthest, double margin})?
+_visibleShellSample(List<FluviWaveShellPoint> vertices, Offset target) {
+  const rows = FluviWaveShell.rows;
+  final columns = vertices.length ~/ rows;
+  ({double nx, double ny, double depth, double farthest, double margin})?
+  winner;
+  var farthest = 0.0;
+  for (var column = 0; column < columns - 1; column++) {
+    for (var row = 0; row < rows - 1; row++) {
+      final left = column * rows + row;
+      final right = (column + 1) * rows + row;
+      for (final triangle in [
+        (left, right, left + 1),
+        (right, right + 1, left + 1),
+      ]) {
+        final a = vertices[triangle.$1];
+        final b = vertices[triangle.$2];
+        final c = vertices[triangle.$3];
+        final p = target - a.position;
+        final ab = b.position - a.position;
+        final ac = c.position - a.position;
+        final determinant = ab.dx * ac.dy - ac.dx * ab.dy;
+        if (determinant.abs() < 1e-10) continue;
+        final wb = (p.dx * ac.dy - ac.dx * p.dy) / determinant;
+        final wc = (ab.dx * p.dy - p.dx * ab.dy) / determinant;
+        final wa = 1 - wb - wc;
+        if (wa < 0 || wb < 0 || wc < 0) continue;
+        final depth =
+            (wa * (triangle.$1 % rows) +
+                wb * (triangle.$2 % rows) +
+                wc * (triangle.$3 % rows)) /
+            (rows - 1);
+        farthest = math.max(farthest, depth);
+        if (winner != null && depth >= winner.depth) continue;
+        winner = (
+          nx: wa * a.normal.$1 + wb * b.normal.$1 + wc * c.normal.$1,
+          ny: wa * a.normal.$2 + wb * b.normal.$2 + wc * c.normal.$2,
+          depth: depth,
+          farthest: 0,
+          margin: math.min(wa, math.min(wb, wc)),
+        );
+      }
+    }
+  }
+  return winner == null
+      ? null
+      : (
+          nx: winner.nx,
+          ny: winner.ny,
+          depth: winner.depth,
+          farthest: farthest,
+          margin: winner.margin,
+        );
 }

@@ -214,6 +214,7 @@ Future<void> waveWriteEvidence(
           'lib/features/dashboard/presentation/core_modes/fluvi_topographic_wave_chart.dart',
           'lib/features/dashboard/presentation/core_modes/fluvi_wave_render_probe.dart',
           'lib/features/dashboard/presentation/core_modes/fluvi_wave_material.dart',
+          'lib/features/dashboard/presentation/core_modes/fluvi_wave_shell.dart',
           'lib/features/dashboard/presentation/core_modes/fluvi_wave_surface_lookup.dart',
           'lib/core/design/fluvi_bounded_curve.dart',
           'shaders/fluvi_wave_surface.frag',

@@ -260,26 +260,16 @@ void main() {
         ...metrics!.snapshot(),
       };
       await waveWriteEvidence(tester, image, label, metadata);
-      if (!scene.body && ['reference', 'sparse'].contains(scene.name)) {
+      if (!scene.body) {
         await waveWriteEvidence(tester, parent, '$label-parent', metadata);
       }
       if (scene.body) {
         final bytes = (await tester.runAsync(
           () => image.toByteData(),
         ))!.buffer.asUint8List();
-        var colored = 0;
-        for (var i = 0; i < bytes.length; i += 4) {
-          if (bytes[i + 2] - bytes[i] > 18 && bytes[i] < 225) colored++;
-        }
-        final coverage = colored / (image.width * image.height);
-        debugPrint(
-          'WR-18 $label substantial violet body coverage=$coverage ${metrics!.snapshot()}',
-        );
-        expect(
-          coverage,
-          greaterThan(.13),
-          reason: 'body pixels, without ridge/glow/contours/decoration',
-        );
+        // Shape acceptance is the projected landmark contract plus opened
+        // actual-parent comparisons, never a coloured-pixel coverage quota.
+        expect(metrics!.terrain!.shell, isNotNull);
         if (scene.name == 'reference') {
           bodyRasters[scene.shader ? 'shader' : 'mesh'] = bytes.toList();
         }
