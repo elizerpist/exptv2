@@ -37,12 +37,14 @@ final class BudgetRingPresentationSettings {
   final BudgetHealthyColorMode healthyColorMode;
   final BudgetProgressColorPresentation progressColorPresentation;
 
-  /// Shared Budget semicircle material preference. It applies to SUM and the
-  /// one MONTH utilization gauge; it has no financial meaning.
+  /// Shared Budget chart neutral-material preference. It decorates the
+  /// SUM/MONTH neutral track and the YEAR zero rail; it has no financial
+  /// meaning.
   final bool showBudgetNeutralDecorativeStrip;
 
-  /// Controls only the embedded light strip on the coloured active material.
-  /// It is independent from [showBudgetNeutralDecorativeStrip].
+  /// Controls only the embedded light strip on coloured active material. It
+  /// applies to SUM/MONTH progress and YEAR reserve/overspend capsules, and
+  /// is independent from [showBudgetNeutralDecorativeStrip].
   final bool showBudgetActiveProgressDecorativeStrip;
 
   /// Global visibility preference for the three scope-specific Budget

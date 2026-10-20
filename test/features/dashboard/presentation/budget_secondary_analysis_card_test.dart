@@ -307,42 +307,84 @@ void main() {
     },
   );
 
+  test('YEAR clay material shares Budget semantic families', () {
+    final withGloss = BudgetYearClayDeltaMaterial.resolve(
+      showNeutralDecorativeStrip: true,
+      showActiveProgressDecorativeStrip: true,
+    );
+    final withoutGloss = BudgetYearClayDeltaMaterial.resolve(
+      showNeutralDecorativeStrip: false,
+      showActiveProgressDecorativeStrip: false,
+    );
+
+    expect(
+      withGloss.overspend.colors[1],
+      FluviVisualTokens.budgetProgressDanger,
+    );
+    expect(
+      withGloss.reserve.colors[1],
+      FluviVisualTokens.budgetProgressHealthy,
+    );
+    expect(withGloss.overspend.depthColors, hasLength(3));
+    expect(withGloss.reserve.depthColors, hasLength(3));
+    expect(withGloss.showNeutralDecorativeStrip, isTrue);
+    expect(withGloss.showActiveProgressDecorativeStrip, isTrue);
+    expect(withoutGloss.showNeutralDecorativeStrip, isFalse);
+    expect(withoutGloss.showActiveProgressDecorativeStrip, isFalse);
+    expect(withGloss.sameVisualAs(withoutGloss), isFalse);
+  });
+
+  test('YEAR preserves red-up, green-down and completed-zero semantics', () {
+    expect(
+      BudgetYearClayDeltaKindResolver.resolve(_yearMonth(month: 1, delta: -1)),
+      BudgetYearClayDeltaKind.overspend,
+    );
+    expect(
+      BudgetYearClayDeltaKindResolver.resolve(_yearMonth(month: 2, delta: 1)),
+      BudgetYearClayDeltaKind.reserve,
+    );
+    expect(
+      BudgetYearClayDeltaKindResolver.resolve(_yearMonth(month: 3, delta: 0)),
+      BudgetYearClayDeltaKind.exactZero,
+    );
+    expect(
+      BudgetYearClayDeltaKindResolver.resolve(_futureYearMonth(4)),
+      BudgetYearClayDeltaKind.future,
+    );
+  });
+
   testWidgets(
-    'YEAR mounts a centered zero-axis chart with prepared signed bars',
+    'YEAR mounts instant red-up green-down clay capsules with independent rail and bar gloss',
     (tester) async {
+      final ringPresentation = BudgetRingPresentationController();
+      addTearDown(ringPresentation.dispose);
+      final payload = DashboardBudgetYearAnalysis(
+        availability: BudgetAnalysisAvailability.available,
+        months: <DashboardBudgetYearMonthAnalysis>[
+          _yearMonth(month: 1, delta: 32000),
+          _yearMonth(month: 2, delta: -18000),
+          _yearMonth(month: 3, delta: -46000),
+          _yearMonth(month: 4, delta: 24000),
+          _yearMonth(month: 5, delta: 12000),
+          _yearMonth(month: 6, delta: -28000),
+          _yearMonth(month: 7, delta: -9000),
+          _yearMonth(month: 8, delta: 39000),
+          _yearMonth(month: 9, delta: 0),
+          _futureYearMonth(10),
+          _futureYearMonth(11),
+          _futureYearMonth(12),
+        ],
+        completedEligibleMonthCount: 9,
+        completedWithinBudgetCount: 5,
+        largestOverspendScaled100: 46000,
+        largestReserveScaled100: 39000,
+      );
       await pump(
         tester,
         scope: const YearScope(2026),
         scopeLabel: '2026',
-        payload: DashboardBudgetYearAnalysis(
-          availability: BudgetAnalysisAvailability.available,
-          months: List<DashboardBudgetYearMonthAnalysis>.generate(
-            12,
-            (index) => DashboardBudgetYearMonthAnalysis(
-              month: index + 1,
-              availability: index < 3
-                  ? BudgetAnalysisAvailability.available
-                  : BudgetAnalysisAvailability.future,
-              actualScaled100: index < 3 ? 100000 : null,
-              limitScaled100: index < 3 ? 90000 : null,
-              budgetDeltaScaled100: index == 1
-                  ? 20000
-                  : index < 3
-                  ? -10000
-                  : null,
-              barDirection: index == 1
-                  ? BudgetAnalysisBarDirection.down
-                  : index < 3
-                  ? BudgetAnalysisBarDirection.up
-                  : BudgetAnalysisBarDirection.unavailable,
-              isCompleted: index < 2,
-            ),
-          ),
-          completedEligibleMonthCount: 2,
-          completedWithinBudgetCount: 1,
-          largestOverspendScaled100: 10000,
-          largestReserveScaled100: 20000,
-        ),
+        payload: payload,
+        ringPresentation: ringPresentation,
       );
 
       expect(
@@ -353,7 +395,22 @@ void main() {
       expect(tester.takeException(), isNull);
       await expectLater(
         find.byKey(const ValueKey('budget-analysis-golden-boundary')),
-        matchesGoldenFile('../../../goldens/budget_analysis_year.png'),
+        matchesGoldenFile(
+          '../../../goldens/budget_analysis_year_clay_strips_on.png',
+        ),
+      );
+
+      ringPresentation
+        ..setBudgetNeutralDecorativeStripVisible(false)
+        ..setBudgetActiveProgressDecorativeStripVisible(false);
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/budget_analysis_year_clay_strips_off.png',
+        ),
       );
     },
   );
@@ -804,3 +861,29 @@ void main() {
     );
   });
 }
+
+DashboardBudgetYearMonthAnalysis _yearMonth({
+  required int month,
+  required int delta,
+}) => DashboardBudgetYearMonthAnalysis(
+  month: month,
+  availability: BudgetAnalysisAvailability.available,
+  actualScaled100: 100000 - delta,
+  limitScaled100: 100000,
+  budgetDeltaScaled100: delta,
+  barDirection: delta < 0
+      ? BudgetAnalysisBarDirection.up
+      : BudgetAnalysisBarDirection.down,
+  isCompleted: true,
+);
+
+DashboardBudgetYearMonthAnalysis _futureYearMonth(int month) =>
+    DashboardBudgetYearMonthAnalysis(
+      month: month,
+      availability: BudgetAnalysisAvailability.future,
+      actualScaled100: null,
+      limitScaled100: null,
+      budgetDeltaScaled100: null,
+      barDirection: BudgetAnalysisBarDirection.unavailable,
+      isCompleted: false,
+    );

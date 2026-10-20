@@ -149,7 +149,7 @@ final class BudgetSemicircleMaterialPresentation {
       stops: progressMaterial.stops,
       position: visualProgress,
     );
-    final segmentedMaterial = BudgetSemicircleActiveMaterial(
+    final segmentedMaterial = BudgetClayActiveMaterial(
       colors: progressMaterial.colors,
       depthColors: _depthStops(progressMaterial.colors),
       stops: progressMaterial.stops,
@@ -222,15 +222,15 @@ final class BudgetSemicircleMaterialPresentation {
   /// This is deliberately the exact selected-avatar sphere material rather
   /// than a SUM-only marker treatment.
   final BudgetProgressRingSphereMaterial markerMaterial;
-  final BudgetSemicircleActiveMaterial segmentedMaterial;
-  final BudgetSemicircleActiveMaterial solidFixedGreenMaterial;
-  final BudgetSemicircleActiveMaterial solidTargetAccentMaterial;
+  final BudgetClayActiveMaterial segmentedMaterial;
+  final BudgetClayActiveMaterial solidFixedGreenMaterial;
+  final BudgetClayActiveMaterial solidTargetAccentMaterial;
   final List<BudgetClayGaugeOvershootZone> overshootZones;
   final bool hasVisualOverflow;
 
   /// Selecting a material is a prepared-object lookup: no semantic health,
   /// category palette, or shader-stop work happens in the painter hot path.
-  BudgetSemicircleActiveMaterial materialFor({
+  BudgetClayActiveMaterial materialFor({
     required BudgetProgressColorPresentation presentation,
     required BudgetHealthyColorMode healthyColorMode,
   }) => switch (presentation) {
@@ -391,38 +391,51 @@ final class BudgetSemicircleMaterialPresentation {
     BudgetClayGaugeHealth.incomeExceededTarget => const Color(0xFF22C55E),
   };
 
-  static BudgetSemicircleActiveMaterial _solidMaterial(Color base) {
-    final colors = List<Color>.unmodifiable(<Color>[
-      Color.lerp(base, Colors.white, .32)!,
-      base,
-      Color.lerp(base, const Color(0xFF172554), .18)!,
-    ]);
-    return BudgetSemicircleActiveMaterial(
-      colors: colors,
-      depthColors: _depthStops(colors),
-      stops: const <double>[0, .5, 1],
-      markerMaterial: BudgetProgressRingSphereMaterial.forHealthColor(base),
-    );
-  }
+  static BudgetClayActiveMaterial _solidMaterial(Color base) =>
+      BudgetClayActiveMaterial.forSemanticBase(base);
 }
 
-/// One already-resolved active material family. A solid semantic state still
-/// has highlight, body, depth and a matching sphere; it is never a flat arc.
+/// One resolved Fluvi Budget clay-material family.
+///
+/// The semantic presentation resolves this before paint. It is intentionally
+/// independent from semicircle geometry: SUM/MONTH use it for an active arc,
+/// while YEAR uses the same light/body/depth family for delta capsules.
+/// A solid semantic state still has highlight, body, depth and a matching
+/// sphere; it is never a flat stroke.
 @immutable
-final class BudgetSemicircleActiveMaterial {
-  const BudgetSemicircleActiveMaterial({
+final class BudgetClayActiveMaterial {
+  const BudgetClayActiveMaterial({
     required this.colors,
     required this.depthColors,
     required this.stops,
     required this.markerMaterial,
   });
 
+  factory BudgetClayActiveMaterial.forSemanticBase(Color base) {
+    final colors = List<Color>.unmodifiable(<Color>[
+      Color.lerp(base, Colors.white, .32)!,
+      base,
+      Color.lerp(base, const Color(0xFF172554), .18)!,
+    ]);
+    final depthColors = List<Color>.unmodifiable(
+      colors
+          .map((color) => Color.lerp(color, const Color(0xFF172554), .36)!)
+          .toList(growable: false),
+    );
+    return BudgetClayActiveMaterial(
+      colors: colors,
+      depthColors: depthColors,
+      stops: const <double>[0, .5, 1],
+      markerMaterial: BudgetProgressRingSphereMaterial.forHealthColor(base),
+    );
+  }
+
   final List<Color> colors;
   final List<Color> depthColors;
   final List<double> stops;
   final BudgetProgressRingSphereMaterial markerMaterial;
 
-  bool sameVisualAs(BudgetSemicircleActiveMaterial other) =>
+  bool sameVisualAs(BudgetClayActiveMaterial other) =>
       listEquals(colors, other.colors) &&
       listEquals(depthColors, other.depthColors) &&
       listEquals(stops, other.stops) &&
@@ -485,7 +498,7 @@ final class BudgetSemicircleMaterial extends StatelessWidget {
   });
 
   final BudgetSemicircleMaterialPresentation presentation;
-  final BudgetSemicircleActiveMaterial activeMaterial;
+  final BudgetClayActiveMaterial activeMaterial;
   final double progress;
   final BudgetSemicircleMaterialLayout layout;
   final bool showNeutralDecorativeStrip;
@@ -798,7 +811,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
   static const _neutralDecorativeStripStart = .5;
 
   final BudgetSemicircleMaterialPresentation presentation;
-  final BudgetSemicircleActiveMaterial activeMaterial;
+  final BudgetClayActiveMaterial activeMaterial;
   final double progress;
   final BudgetSemicircleMaterialLayout layout;
   final bool showNeutralDecorativeStrip;

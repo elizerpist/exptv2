@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
@@ -507,37 +508,52 @@ final class _YearHero extends StatelessWidget {
   final DashboardBudgetYearAnalysis payload;
 
   @override
-  Widget build(BuildContext context) => Stack(
-    children: <Widget>[
-      Positioned.fill(
-        child: CustomPaint(
-          key: const ValueKey<String>('budget-analysis-year-zero-axis-bars'),
-          painter: _YearBarsPainter(payload.months),
+  Widget build(BuildContext context) {
+    final settings = BudgetRingPresentationScope.settingsOf(context);
+    final material = BudgetYearClayDeltaMaterial.resolve(
+      showNeutralDecorativeStrip: settings.showBudgetNeutralDecorativeStrip,
+      showActiveProgressDecorativeStrip:
+          settings.showBudgetActiveProgressDecorativeStrip,
+    );
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: CustomPaint(
+              key: const ValueKey<String>(
+                'budget-analysis-year-zero-axis-bars',
+              ),
+              painter: _YearClayDeltaPainter(
+                months: payload.months,
+                material: material,
+              ),
+            ),
+          ),
         ),
-      ),
-      Positioned(
-        left: 0,
-        right: 0,
-        bottom: 0,
-        child: Row(
-          children: <Widget>[
-            for (final label in _monthLabels)
-              Expanded(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 5.5,
-                    fontWeight: FontWeight.w700,
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Row(
+            children: <Widget>[
+              for (final label in _monthLabels)
+                Expanded(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 5.8,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 final class _MonthHero extends StatelessWidget {
@@ -979,55 +995,335 @@ final class _KpiBlock extends StatelessWidget {
   );
 }
 
-final class _YearBarsPainter extends CustomPainter {
-  const _YearBarsPainter(this.months);
+/// Prepared, chart-geometry-independent materials for the annual delta rail.
+///
+/// Its active families come from [BudgetClayActiveMaterial], the same shared
+/// Fluvi Budget factory consumed by the SUM/MONTH semicircle. YEAR deliberately
+/// does not inherit the semicircle's continuous colour mapping: each month is
+/// already one discrete reserve or overspend semantic outcome.
+@immutable
+final class BudgetYearClayDeltaMaterial {
+  factory BudgetYearClayDeltaMaterial.resolve({
+    required bool showNeutralDecorativeStrip,
+    required bool showActiveProgressDecorativeStrip,
+  }) => BudgetYearClayDeltaMaterial._(
+    showNeutralDecorativeStrip: showNeutralDecorativeStrip,
+    showActiveProgressDecorativeStrip: showActiveProgressDecorativeStrip,
+    overspend: BudgetClayActiveMaterial.forSemanticBase(
+      FluviVisualTokens.budgetProgressDanger,
+    ),
+    reserve: BudgetClayActiveMaterial.forSemanticBase(
+      FluviVisualTokens.budgetProgressHealthy,
+    ),
+    exactZero: BudgetClayActiveMaterial.forSemanticBase(
+      BudgetProgressRingGeometry.source.trackGradientColors[1],
+    ),
+  );
+
+  const BudgetYearClayDeltaMaterial._({
+    required this.showNeutralDecorativeStrip,
+    required this.showActiveProgressDecorativeStrip,
+    required this.overspend,
+    required this.reserve,
+    required this.exactZero,
+  });
+
+  final bool showNeutralDecorativeStrip;
+  final bool showActiveProgressDecorativeStrip;
+  final BudgetClayActiveMaterial overspend;
+  final BudgetClayActiveMaterial reserve;
+  final BudgetClayActiveMaterial exactZero;
+
+  bool sameVisualAs(BudgetYearClayDeltaMaterial other) =>
+      showNeutralDecorativeStrip == other.showNeutralDecorativeStrip &&
+      showActiveProgressDecorativeStrip ==
+          other.showActiveProgressDecorativeStrip &&
+      overspend.sameVisualAs(other.overspend) &&
+      reserve.sameVisualAs(other.reserve) &&
+      exactZero.sameVisualAs(other.exactZero);
+}
+
+/// Paint-only classification of an already-prepared monthly delta. It does
+/// not calculate any financial value: the prepared [budgetDeltaScaled100]
+/// remains the sole semantic authority. Keeping completed zero separate from
+/// a future month prevents an exact close from looking like missing data.
+enum BudgetYearClayDeltaKind {
+  overspend,
+  reserve,
+  exactZero,
+  future,
+  unavailable,
+}
+
+abstract final class BudgetYearClayDeltaKindResolver {
+  static BudgetYearClayDeltaKind resolve(
+    DashboardBudgetYearMonthAnalysis month,
+  ) {
+    final delta = month.budgetDeltaScaled100;
+    if (delta != null) {
+      if (delta < 0) return BudgetYearClayDeltaKind.overspend;
+      if (delta > 0) return BudgetYearClayDeltaKind.reserve;
+      return BudgetYearClayDeltaKind.exactZero;
+    }
+    return month.availability == BudgetAnalysisAvailability.future
+        ? BudgetYearClayDeltaKind.future
+        : BudgetYearClayDeltaKind.unavailable;
+  }
+}
+
+@immutable
+final class _YearClayDeltaGeometry {
+  factory _YearClayDeltaGeometry.resolve(Size size) {
+    final horizontalInset = math.max(3.0, size.width * .025);
+    final slot = (size.width - horizontalInset * 2) / 12;
+    final barWidth = (slot * .42).clamp(4.0, 14.0).toDouble();
+    final railHeight = math.max(1.6, barWidth * .15);
+    final axis = size.height * .51;
+    const labelLane = 10.0;
+    final verticalHeadroom = railHeight + barWidth * .35;
+    final maxBarHeight = math.max(
+      0.0,
+      math.min(
+        size.height * .40,
+        math.min(
+          axis - verticalHeadroom,
+          size.height - labelLane - axis - verticalHeadroom,
+        ),
+      ),
+    );
+    return _YearClayDeltaGeometry._(
+      axis: axis,
+      horizontalInset: horizontalInset,
+      slot: slot,
+      barWidth: barWidth,
+      railRect: Rect.fromCenter(
+        center: Offset(size.width / 2, axis),
+        width: size.width * .95,
+        height: railHeight,
+      ),
+      maxBarHeight: maxBarHeight,
+      futureRadius: math.max(1.0, barWidth * .14),
+      exactZeroHeight: math.max(barWidth * .7, railHeight * 2.7),
+    );
+  }
+
+  const _YearClayDeltaGeometry._({
+    required this.axis,
+    required this.horizontalInset,
+    required this.slot,
+    required this.barWidth,
+    required this.railRect,
+    required this.maxBarHeight,
+    required this.futureRadius,
+    required this.exactZeroHeight,
+  });
+
+  final double axis;
+  final double horizontalInset;
+  final double slot;
+  final double barWidth;
+  final Rect railRect;
+  final double maxBarHeight;
+  final double futureRadius;
+  final double exactZeroHeight;
+
+  double centerForMonth(int index) => horizontalInset + slot * (index + .5);
+
+  Rect rectFor({required double center, required int delta, required int max}) {
+    if (delta == 0) {
+      return Rect.fromCenter(
+        center: Offset(center, axis),
+        width: barWidth,
+        height: exactZeroHeight,
+      );
+    }
+    final height = math.max(barWidth * .5, (delta.abs() / max) * maxBarHeight);
+    return delta < 0
+        ? Rect.fromLTWH(center - barWidth / 2, axis - height, barWidth, height)
+        : Rect.fromLTWH(center - barWidth / 2, axis, barWidth, height);
+  }
+}
+
+/// Multi-pass painter for the fixed, instant yearly delta scene. It owns no
+/// financial calculation and has no animation controller: a new prepared year
+/// paints its final twelve capsules on its first exact frame.
+final class _YearClayDeltaPainter extends CustomPainter {
+  const _YearClayDeltaPainter({required this.months, required this.material});
+
   final List<DashboardBudgetYearMonthAnalysis> months;
+  final BudgetYearClayDeltaMaterial material;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final axis = size.height * .51;
-    final axisPaint = Paint()
-      ..color = FluviVisualTokens.border
-      ..strokeWidth = 1;
-    canvas.drawLine(Offset(2, axis), Offset(size.width - 2, axis), axisPaint);
+    if (size.isEmpty) return;
+    final geometry = _YearClayDeltaGeometry.resolve(size);
     final maxValue = months.fold<int>(
       1,
       (current, month) =>
           math.max(current, month.budgetDeltaScaled100?.abs() ?? 0),
     );
-    final slot = size.width / 12;
-    for (var index = 0; index < months.length; index += 1) {
+    _paintZeroRail(canvas, geometry);
+    final limit = math.min(months.length, 12);
+    for (var index = 0; index < limit; index += 1) {
       final month = months[index];
+      final center = geometry.centerForMonth(index);
       final delta = month.budgetDeltaScaled100;
-      final center = slot * (index + .5);
-      if (delta != null) {
-        final height = (delta.abs() / maxValue) * (size.height * .40);
-        final rect = delta < 0
-            ? Rect.fromLTWH(
-                center - slot * .24,
-                axis - height,
-                slot * .48,
-                height,
-              )
-            : Rect.fromLTWH(center - slot * .24, axis, slot * .48, height);
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(2)),
-          Paint()
-            ..color = delta < 0
-                ? FluviVisualTokens.budgetProgressDanger
-                : FluviVisualTokens.budgetProgressHealthy,
-        );
-      } else if (month.availability == BudgetAnalysisAvailability.future) {
-        canvas.drawCircle(
-          Offset(center, axis),
-          1.4,
-          Paint()..color = FluviVisualTokens.placeholderDotInactive,
-        );
+      final kind = BudgetYearClayDeltaKindResolver.resolve(month);
+      switch (kind) {
+        case BudgetYearClayDeltaKind.overspend ||
+            BudgetYearClayDeltaKind.reserve ||
+            BudgetYearClayDeltaKind.exactZero:
+          final resolvedDelta = delta!;
+          final isExactZero = kind == BudgetYearClayDeltaKind.exactZero;
+          _paintClayCapsule(
+            canvas,
+            rect: geometry.rectFor(
+              center: center,
+              delta: resolvedDelta,
+              max: maxValue,
+            ),
+            clayMaterial: isExactZero
+                ? material.exactZero
+                : resolvedDelta < 0
+                ? material.overspend
+                : material.reserve,
+            showDecorativeStrip:
+                !isExactZero && material.showActiveProgressDecorativeStrip,
+          );
+        case BudgetYearClayDeltaKind.future:
+          _paintFutureMarker(canvas, Offset(center, geometry.axis), geometry);
+        case BudgetYearClayDeltaKind.unavailable:
+          break;
       }
     }
   }
 
+  void _paintZeroRail(Canvas canvas, _YearClayDeltaGeometry geometry) {
+    final source = BudgetProgressRingGeometry.source;
+    final radius = Radius.circular(geometry.railRect.height / 2);
+    final rail = RRect.fromRectAndRadius(geometry.railRect, radius);
+    canvas.drawRRect(
+      rail.shift(Offset(0, geometry.railRect.height * .8)),
+      Paint()
+        ..color = source.trackShadowColor.withValues(alpha: .52)
+        ..maskFilter = MaskFilter.blur(
+          BlurStyle.normal,
+          geometry.railRect.height * .8,
+        ),
+    );
+    canvas.drawRRect(
+      rail.shift(Offset(0, geometry.railRect.height * .36)),
+      Paint()..color = source.trackGradientColors.last,
+    );
+    canvas.drawRRect(
+      rail,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: source.trackGradientColors,
+          stops: source.trackGradientStops,
+        ).createShader(geometry.railRect),
+    );
+    if (!material.showNeutralDecorativeStrip) return;
+    final inset = geometry.railRect.height * .85;
+    final glossRect = Rect.fromLTWH(
+      geometry.railRect.left + inset,
+      geometry.railRect.top + geometry.railRect.height * .18,
+      math.max(0, geometry.railRect.width - inset * 2),
+      math.max(.5, geometry.railRect.height * .27),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(glossRect, Radius.circular(glossRect.height / 2)),
+      Paint()..color = source.trackGlossColor,
+    );
+  }
+
+  void _paintClayCapsule(
+    Canvas canvas, {
+    required Rect rect,
+    required BudgetClayActiveMaterial clayMaterial,
+    required bool showDecorativeStrip,
+  }) {
+    final radius = Radius.circular(rect.width / 2);
+    final capsule = RRect.fromRectAndRadius(rect, radius);
+    final depthOffset = Offset(
+      rect.width * .10,
+      math.max(.8, rect.width * .17),
+    );
+    canvas.drawRRect(
+      capsule.shift(depthOffset),
+      Paint()
+        ..color = clayMaterial.depthColors.last.withValues(alpha: .34)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, rect.width * .14),
+    );
+    canvas.drawRRect(
+      capsule.shift(Offset(0, rect.width * .10)),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: clayMaterial.depthColors,
+          stops: clayMaterial.stops,
+        ).createShader(rect),
+    );
+    canvas.drawRRect(
+      capsule,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: clayMaterial.colors,
+          stops: clayMaterial.stops,
+        ).createShader(rect),
+    );
+    if (!showDecorativeStrip) return;
+    final capInset = math.min(rect.width * .22, rect.height * .22);
+    final stripRect = Rect.fromLTWH(
+      rect.left + rect.width * .18,
+      rect.top + capInset,
+      rect.width * .24,
+      math.max(0, rect.height - capInset * 2),
+    );
+    if (stripRect.height <= 0) return;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(stripRect, Radius.circular(stripRect.width / 2)),
+      Paint()..color = const Color(0x45FFFFFF),
+    );
+  }
+
+  void _paintFutureMarker(
+    Canvas canvas,
+    Offset center,
+    _YearClayDeltaGeometry geometry,
+  ) {
+    final source = BudgetProgressRingGeometry.source;
+    final radius = geometry.futureRadius;
+    canvas.drawCircle(
+      center.translate(radius * .28, radius * .4),
+      radius,
+      Paint()
+        ..color = source.trackShadowColor.withValues(alpha: .45)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * .75),
+    );
+    final dotRect = Rect.fromCircle(center: center, radius: radius);
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-.45, -.5),
+          colors: <Color>[
+            const Color(0xCCFFFFFF),
+            source.trackGradientColors.last.withValues(alpha: .78),
+          ],
+        ).createShader(dotRect),
+    );
+  }
+
   @override
-  bool shouldRepaint(covariant _YearBarsPainter old) => old.months != months;
+  bool shouldRepaint(covariant _YearClayDeltaPainter old) =>
+      old.months != months || !old.material.sameVisualAs(material);
 }
 
 const _monthLabels = <String>[
