@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_secondary_analysis.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
@@ -385,6 +386,9 @@ final class _SumHero extends StatelessWidget {
       ),
       primaryLabel: '${(ratio * 100).round()}%',
       secondaryLabel: 'átlagos keretkihasználás',
+      showNeutralDecorativeStrip: BudgetRingPresentationScope.settingsOf(
+        context,
+      ).showSumAnalysisNeutralDecorativeStrip,
     );
   }
 }

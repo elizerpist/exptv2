@@ -16,29 +16,41 @@ final class BudgetRingPresentationSettings {
   const BudgetRingPresentationSettings({
     this.sumRingStyle = BudgetSumRingStyle.current,
     this.healthyColorMode = BudgetHealthyColorMode.fixedGreen,
+    this.showSumAnalysisNeutralDecorativeStrip = true,
   });
 
   static const defaults = BudgetRingPresentationSettings();
 
   final BudgetSumRingStyle sumRingStyle;
   final BudgetHealthyColorMode healthyColorMode;
+  final bool showSumAnalysisNeutralDecorativeStrip;
 
   BudgetRingPresentationSettings copyWith({
     BudgetSumRingStyle? sumRingStyle,
     BudgetHealthyColorMode? healthyColorMode,
+    bool? showSumAnalysisNeutralDecorativeStrip,
   }) => BudgetRingPresentationSettings(
     sumRingStyle: sumRingStyle ?? this.sumRingStyle,
     healthyColorMode: healthyColorMode ?? this.healthyColorMode,
+    showSumAnalysisNeutralDecorativeStrip:
+        showSumAnalysisNeutralDecorativeStrip ??
+        this.showSumAnalysisNeutralDecorativeStrip,
   );
 
   @override
   bool operator ==(Object other) =>
       other is BudgetRingPresentationSettings &&
       other.sumRingStyle == sumRingStyle &&
-      other.healthyColorMode == healthyColorMode;
+      other.healthyColorMode == healthyColorMode &&
+      other.showSumAnalysisNeutralDecorativeStrip ==
+          showSumAnalysisNeutralDecorativeStrip;
 
   @override
-  int get hashCode => Object.hash(sumRingStyle, healthyColorMode);
+  int get hashCode => Object.hash(
+    sumRingStyle,
+    healthyColorMode,
+    showSumAnalysisNeutralDecorativeStrip,
+  );
 }
 
 final class BudgetRingPresentationController
@@ -53,6 +65,11 @@ final class BudgetRingPresentationController
 
   void selectHealthyColorMode(BudgetHealthyColorMode mode) {
     final next = value.copyWith(healthyColorMode: mode);
+    if (next != value) value = next;
+  }
+
+  void setSumAnalysisNeutralDecorativeStripVisible(bool visible) {
+    final next = value.copyWith(showSumAnalysisNeutralDecorativeStrip: visible);
     if (next != value) value = next;
   }
 

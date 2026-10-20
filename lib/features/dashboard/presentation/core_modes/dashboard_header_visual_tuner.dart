@@ -3903,6 +3903,26 @@ final class _BudgetRingPresentationSection extends StatelessWidget {
                 ],
               ),
             ),
+            const Padding(
+              padding: EdgeInsets.only(top: 12, bottom: 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Custom Budget grafikon',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+            SwitchListTile(
+              key: const ValueKey<String>(
+                'budget-sum-analysis-neutral-decorative-strip',
+              ),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Fehér díszcsík a neutral sávon'),
+              value: settings.showSumAnalysisNeutralDecorativeStrip,
+              onChanged: controller.setSumAnalysisNeutralDecorativeStripVisible,
+            ),
           ],
         ),
       );

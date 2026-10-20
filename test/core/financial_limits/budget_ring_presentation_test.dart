@@ -9,7 +9,7 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
 
 void main() {
-  test('SUM presentation defaults to current ring and fixed healthy green', () {
+  test('BUDGET-GRAPH-SETTING-01: default decorative strip is visible', () {
     final controller = BudgetRingPresentationController();
     addTearDown(controller.dispose);
 
@@ -18,6 +18,46 @@ void main() {
       controller.value.healthyColorMode,
       BudgetHealthyColorMode.fixedGreen,
     );
+    expect(controller.value.showSumAnalysisNeutralDecorativeStrip, isTrue);
+  });
+
+  test('BUDGET-GRAPH-SETTING-02: controller updates decorative strip only', () {
+    final controller = BudgetRingPresentationController();
+    addTearDown(controller.dispose);
+
+    controller.setSumAnalysisNeutralDecorativeStripVisible(false);
+
+    expect(controller.value.showSumAnalysisNeutralDecorativeStrip, isFalse);
+    expect(controller.value.sumRingStyle, BudgetSumRingStyle.current);
+    expect(
+      controller.value.healthyColorMode,
+      BudgetHealthyColorMode.fixedGreen,
+    );
+  });
+
+  test('BUDGET-GRAPH-SETTING-03: reset restores visible decorative strip', () {
+    final controller = BudgetRingPresentationController();
+    addTearDown(controller.dispose);
+
+    controller.setSumAnalysisNeutralDecorativeStripVisible(false);
+    controller.reset();
+
+    expect(controller.value.showSumAnalysisNeutralDecorativeStrip, isTrue);
+  });
+
+  test('BUDGET-GRAPH-SETTING-04: copy equality and hash include strip', () {
+    const visible = BudgetRingPresentationSettings();
+    final hidden = visible.copyWith(
+      showSumAnalysisNeutralDecorativeStrip: false,
+    );
+    const hiddenEquivalent = BudgetRingPresentationSettings(
+      showSumAnalysisNeutralDecorativeStrip: false,
+    );
+
+    expect(hidden, hiddenEquivalent);
+    expect(hidden.hashCode, hiddenEquivalent.hashCode);
+    expect(hidden, isNot(visible));
+    expect(hidden.hashCode, isNot(visible.hashCode));
   });
 
   test('healthy resolver changes only its resolved healthy source', () {

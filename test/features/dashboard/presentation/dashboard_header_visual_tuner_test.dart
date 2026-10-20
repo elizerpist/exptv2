@@ -1569,6 +1569,55 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Budget graph decorative strip control is live and scoped to ring presentation',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 3000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final ring = BudgetRingPresentationController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 2500,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              budgetRingPresentation: ring,
+            ),
+          ),
+        ),
+      );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.budgetRingPresentation,
+      ]);
+
+      expect(find.text('Custom Budget grafikon'), findsOneWidget);
+      final stripSwitch = find.byKey(
+        const ValueKey<String>('budget-sum-analysis-neutral-decorative-strip'),
+      );
+      await tester.ensureVisible(stripSwitch);
+      expect(stripSwitch, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(stripSwitch).value, isTrue);
+
+      await tester.tap(stripSwitch);
+      await tester.pump();
+      expect(ring.value.showSumAnalysisNeutralDecorativeStrip, isFalse);
+      expect(tester.widget<SwitchListTile>(stripSwitch).value, isFalse);
+
+      await tester.tap(stripSwitch);
+      await tester.pump();
+      expect(ring.value.showSumAnalysisNeutralDecorativeStrip, isTrue);
+      expect(tester.widget<SwitchListTile>(stripSwitch).value, isTrue);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      ring.dispose();
+      await tester.pump();
+    },
+  );
+
   test('tuner placement always reserves the live Header plus its gap', () {
     const gap = 12.0;
     for (final headerBottom in <double>[124, 214, 346]) {

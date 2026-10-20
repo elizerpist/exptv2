@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_secondary_analysis.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_content_title_layout.dart';
@@ -17,6 +18,7 @@ void main() {
     required LedgerTimeScope scope,
     required String scopeLabel,
     bool useCard2OuterClip = false,
+    BudgetRingPresentationController? ringPresentation,
   }) {
     final analysis = BudgetSecondaryAnalysisPreparedCard(
       frame: DashboardBudgetSecondaryAnalysisFrame(
@@ -29,6 +31,12 @@ void main() {
       targetTitle: 'Élelmiszer',
       scopeLabel: scopeLabel,
     );
+    final surface = useCard2OuterClip
+        ? BudgetDistributionCardShell(child: analysis)
+        : DecoratedBox(
+            decoration: const BoxDecoration(color: Colors.white),
+            child: analysis,
+          );
     return tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -38,11 +46,11 @@ void main() {
               height: 220,
               child: RepaintBoundary(
                 key: const ValueKey<String>('budget-analysis-golden-boundary'),
-                child: useCard2OuterClip
-                    ? BudgetDistributionCardShell(child: analysis)
-                    : DecoratedBox(
-                        decoration: const BoxDecoration(color: Colors.white),
-                        child: analysis,
+                child: ringPresentation == null
+                    ? surface
+                    : BudgetRingPresentationScope(
+                        controller: ringPresentation,
+                        child: surface,
                       ),
               ),
             ),
@@ -96,7 +104,7 @@ void main() {
   });
 
   testWidgets(
-    'SUM face underlay crosses the former painter clip at 39, 100 and 225 percent',
+    'SUM shared white surface stays continuous at 39, 100 and 225 percent',
     (tester) async {
       for (final sample in <({double ratio, String goldenName})>[
         (ratio: .39, goldenName: '039'),
@@ -118,9 +126,9 @@ void main() {
           ),
         );
 
-        // The golden includes the full Card2-sized RepaintBoundary: the
-        // medallion/shadow underlay must remain continuous through the old
-        // clipBottom lane, while the individual KPI cards stay foreground.
+        // The golden includes the physical Card2 clip. The shared white
+        // interior must remain continuous while the individual KPI cards stay
+        // foreground at the bottom of the same surface.
         expect(tester.takeException(), isNull);
         await expectLater(
           find.byKey(const ValueKey('budget-analysis-golden-boundary')),
@@ -129,6 +137,63 @@ void main() {
           ),
         );
       }
+    },
+  );
+
+  testWidgets(
+    'SUM neutral decorative strip follows the live scoped presentation setting',
+    (tester) async {
+      final ringPresentation = BudgetRingPresentationController();
+      addTearDown(ringPresentation.dispose);
+      const payload = DashboardBudgetSumAnalysis(
+        availability: BudgetAnalysisAvailability.available,
+        averageUtilization: .39,
+        averageBudgetDeltaScaled100: -84000,
+        eligibleMonthCount: 12,
+        monthsWithinBudget: 8,
+        utilizationStandardDeviation: .12,
+      );
+
+      await pump(
+        tester,
+        scope: const AllTimeScope(),
+        scopeLabel: 'Összesen',
+        payload: payload,
+        useCard2OuterClip: true,
+        ringPresentation: ringPresentation,
+      );
+      expect(
+        tester
+            .widget<BudgetClaySemicircleGauge>(
+              find.byType(BudgetClaySemicircleGauge),
+            )
+            .showNeutralDecorativeStrip,
+        isTrue,
+      );
+      await expectLater(
+        find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/budget_analysis_sum_strip_on_039.png',
+        ),
+      );
+
+      ringPresentation.setSumAnalysisNeutralDecorativeStripVisible(false);
+      await tester.pump();
+      expect(
+        tester
+            .widget<BudgetClaySemicircleGauge>(
+              find.byType(BudgetClaySemicircleGauge),
+            )
+            .showNeutralDecorativeStrip,
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/budget_analysis_sum_strip_off_039.png',
+        ),
+      );
     },
   );
 

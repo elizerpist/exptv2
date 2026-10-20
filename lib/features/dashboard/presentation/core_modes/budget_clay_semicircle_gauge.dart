@@ -377,11 +377,13 @@ final class BudgetClaySemicircleGauge extends StatefulWidget {
     required this.presentation,
     required this.primaryLabel,
     required this.secondaryLabel,
+    this.showNeutralDecorativeStrip = true,
   });
 
   final BudgetClayGaugePresentation presentation;
   final String primaryLabel;
   final String secondaryLabel;
+  final bool showNeutralDecorativeStrip;
 
   @override
   State<BudgetClaySemicircleGauge> createState() =>
@@ -442,6 +444,7 @@ final class _BudgetClaySemicircleGaugeState
           painter: _BudgetClaySemicirclePainter(
             presentation: widget.presentation,
             animatedProgress: _visibleProgress,
+            showNeutralDecorativeStrip: widget.showNeutralDecorativeStrip,
           ),
           child: child,
         ),
@@ -464,9 +467,9 @@ final class _GaugeTextLayer extends StatelessWidget {
     fit: StackFit.expand,
     children: <Widget>[
       Align(
-        // The track is the upper half of the avatar ring; its full face keeps
-        // the same optical centre and continues as an underlay below the hero
-        // until Card2's outer clip naturally stops it.
+        // The track preserves the upper-half avatar-ring optical centre; its
+        // interior is intentionally the shared white Card2 surface, not a
+        // separate full-circle medallion.
         alignment: const Alignment(0, 0),
         child: ExcludeSemantics(
           child: Column(
@@ -521,19 +524,14 @@ final class _GaugeGeometry {
     final source = BudgetProgressRingGeometry.source;
     final labelBand = size.height * .105;
     final center = Offset(size.width / 2, size.height - labelBand);
-    // The track is a literal circular upper semicircle. The underlying face
-    // and its ambient shadow are deliberately allowed to continue below this
-    // hero's layout box; Card2's outer ClipRRect is their only physical edge.
+    // Preserve the accepted avatar-ring proportions while the parent Card2
+    // provides the continuous white surface inside and below the track.
     final faceToTrack = source.faceRadius / source.trackRadius;
     final radius = math.min(size.width * .38, center.dy / faceToTrack);
     final scale = radius / source.trackRadius;
     final trackRect = Rect.fromCircle(center: center, radius: radius);
     return _GaugeGeometry._(
       trackRect: trackRect,
-      faceRect: Rect.fromCircle(
-        center: center,
-        radius: source.faceRadius * scale,
-      ),
       scale: scale,
       stroke: source.trackWidth * scale,
       markerRadius: BudgetProgressRingDayPaceMarkers.markerRadius * scale,
@@ -542,14 +540,12 @@ final class _GaugeGeometry {
 
   const _GaugeGeometry._({
     required this.trackRect,
-    required this.faceRect,
     required this.scale,
     required this.stroke,
     required this.markerRadius,
   });
 
   final Rect trackRect;
-  final Rect faceRect;
   final double scale;
   final double stroke;
   final double markerRadius;
@@ -561,85 +557,40 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
   const _BudgetClaySemicirclePainter({
     required this.presentation,
     required this.animatedProgress,
+    required this.showNeutralDecorativeStrip,
   });
 
   static const _startAngle = math.pi;
   static const _sweepAngle = math.pi;
-  static const _gradientStops = <double>[0, .5, 1];
   static const _neutralDecorativeStripStart = .5;
 
   final BudgetClayGaugePresentation presentation;
   final double animatedProgress;
+  final bool showNeutralDecorativeStrip;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     final geometry = _GaugeGeometry.resolve(size);
     // The arcs themselves already have π sweep, so no painter-wide horizontal
-    // clip is needed. Keeping the face/shadow un-clipped lets their underlay
-    // flow behind the KPI region; Card2's outer rounded clip owns the final
-    // physical boundary.
-    _paintCenterMedallion(canvas, geometry);
+    // clip or full-circle interior is needed. Card2's white physical surface
+    // is the gauge interior; its outer rounded clip owns the final boundary.
     _paintCastShadow(canvas, geometry);
     _paintRearDepth(canvas, geometry);
     _paintNeutralTrackBody(canvas, geometry);
-    _paintNeutralDecorativeStrip(canvas, geometry);
+    if (showNeutralDecorativeStrip) {
+      _paintNeutralDecorativeStrip(canvas, geometry);
+    }
     _paintActiveBody(canvas, geometry);
     _paintInnerShadow(canvas, geometry);
     _paintMarkerShadow(canvas, geometry);
     _paintMarker(canvas, geometry);
   }
 
-  void _paintCenterMedallion(Canvas canvas, _GaugeGeometry geometry) {
-    final source = BudgetProgressRingGeometry.source;
-    canvas.drawCircle(
-      geometry.faceRect.center +
-          Offset(
-            source.faceShadowOffset.dx * geometry.scale,
-            source.faceShadowOffset.dy * geometry.scale,
-          ),
-      geometry.faceRect.width / 2,
-      Paint()
-        ..color = source.trackShadowColor.withValues(alpha: .20)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 10 * geometry.scale),
-    );
-    canvas.drawCircle(
-      geometry.faceRect.center,
-      geometry.faceRect.width / 2,
-      Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-.28, -.42),
-          radius: .78,
-          colors: const <Color>[
-            Color(0xFFFFFEFF),
-            Color(0xFFFBF9FF),
-            Color(0xFFEFEAF8),
-          ],
-          stops: _gradientStops,
-        ).createShader(geometry.faceRect),
-    );
-    canvas.drawCircle(
-      geometry.faceRect.center,
-      geometry.faceRect.width / 2,
-      Paint()
-        ..color = const Color(0xB8FFFFFF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4 * geometry.scale,
-    );
-  }
-
   void _paintCastShadow(Canvas canvas, _GaugeGeometry geometry) {
     final source = BudgetProgressRingGeometry.source;
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: geometry.faceRect.center + Offset(0, geometry.stroke * .78),
-        width: geometry.faceRect.width * .86,
-        height: geometry.stroke * 1.1,
-      ),
-      Paint()
-        ..color = source.trackShadowColor.withValues(alpha: .10)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * geometry.scale),
-    );
+    // Only the physical semicircle track casts a shadow. A face-sized oval
+    // would recreate a second full-circle object on the shared white surface.
     canvas.drawArc(
       geometry.trackRect.shift(Offset(0, 5 * geometry.scale)),
       _startAngle,
@@ -858,5 +809,6 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _BudgetClaySemicirclePainter oldDelegate) =>
       animatedProgress != oldDelegate.animatedProgress ||
+      showNeutralDecorativeStrip != oldDelegate.showNeutralDecorativeStrip ||
       !presentation.sameVisualAs(oldDelegate.presentation);
 }
