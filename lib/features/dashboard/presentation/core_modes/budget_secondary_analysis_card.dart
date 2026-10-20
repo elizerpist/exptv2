@@ -596,42 +596,82 @@ final class _DayHero extends StatelessWidget {
         : change < 0
         ? FluviVisualTokens.budgetProgressHealthy
         : FluviVisualTokens.budgetProgressDanger;
-    return Column(
-      children: <Widget>[
-        Expanded(
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _BudgetDayClayComparisonCard(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final comparisonHeight = _BudgetDayComparisonGeometry.cardHeightFor(
+          constraints,
+        );
+        return Column(
+          children: <Widget>[
+            Expanded(
+              child: Center(
+                key: const ValueKey<String>(
+                  'budget-analysis-day-comparison-placement',
+                ),
+                child: SizedBox(
                   key: const ValueKey<String>(
-                    'budget-analysis-day-before-card',
+                    'budget-analysis-day-comparison-row',
                   ),
-                  label: 'Reggel még\nelérhető volt',
-                  amount: payload.dailyRoomBeforeScaled100!,
-                  tint: const Color(0xFF8B9CF5),
+                  height: comparisonHeight,
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: _BudgetDayClayComparisonCard(
+                          key: const ValueKey<String>(
+                            'budget-analysis-day-before-card',
+                          ),
+                          label: 'Reggel még\nelérhető volt',
+                          amount: payload.dailyRoomBeforeScaled100!,
+                          tint: const Color(0xFF8B9CF5),
+                        ),
+                      ),
+                      const SizedBox(
+                        width: 30,
+                        child: Center(child: _BudgetDayClayArrow()),
+                      ),
+                      Expanded(
+                        child: _BudgetDayClayComparisonCard(
+                          key: const ValueKey<String>(
+                            'budget-analysis-day-after-card',
+                          ),
+                          label: 'Mostantól\nelérhető',
+                          amount: payload.dailyRoomAfterScaled100,
+                          unavailable: payload.isTerminalDay,
+                          tint: const Color(0xFFFB7185),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(
-                width: 34,
-                child: Center(child: _BudgetDayClayArrow()),
-              ),
-              Expanded(
-                child: _BudgetDayClayComparisonCard(
-                  key: const ValueKey<String>('budget-analysis-day-after-card'),
-                  label: 'Mostantól\nelérhető',
-                  amount: payload.dailyRoomAfterScaled100,
-                  unavailable: payload.isTerminalDay,
-                  tint: const Color(0xFFFB7185),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 7),
-        _BudgetDayClayImpactBand(change: change, color: color),
-      ],
+            ),
+            const SizedBox(height: 7),
+            _BudgetDayClayImpactBand(change: change, color: color),
+          ],
+        );
+      },
     );
   }
+}
+
+/// Keeps DAY's two comparison slabs proportionate to the canonical hero
+/// viewport. The surrounding [Expanded] is a placement region only: the
+/// cards never stretch merely because the KPI footer is hidden.
+final class _BudgetDayComparisonGeometry {
+  const _BudgetDayComparisonGeometry._();
+
+  static double cardHeightFor(BoxConstraints constraints) {
+    final availableHeight = constraints.hasBoundedHeight
+        ? constraints.maxHeight
+        : 0.0;
+    final comparisonRegion = math.max(
+      0.0,
+      availableHeight - _BudgetDayClayImpactBand.height - _impactGap,
+    );
+    return (comparisonRegion * .76).clamp(52.0, 70.0).toDouble();
+  }
+
+  static const double _impactGap = 7;
 }
 
 /// A simple native-Flutter clay slab for one side of DAY's before → after
@@ -654,6 +694,11 @@ final class _BudgetDayClayComparisonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final amountLabel = unavailable ? '—' : _money(amount);
+    final requestedAmountScale =
+        MediaQuery.textScalerOf(context).scale(18) / 18;
+    final amountTextScaler = TextScaler.linear(
+      math.min(requestedAmountScale, 1.05),
+    );
     return Semantics(
       label: unavailable
           ? '$label, nem elérhető naponta'
@@ -665,8 +710,8 @@ final class _BudgetDayClayComparisonCard extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: <Color>[
-                Colors.white.withValues(alpha: .98),
-                Color.lerp(tint, Colors.white, .82)!,
+                Colors.white.withValues(alpha: .96),
+                Color.lerp(tint, Colors.white, .70)!,
               ],
             ),
             borderRadius: BorderRadius.circular(15),
@@ -674,8 +719,8 @@ final class _BudgetDayClayComparisonCard extends StatelessWidget {
               color: Color.lerp(
                 tint,
                 Colors.white,
-                .66,
-              )!.withValues(alpha: .70),
+                .58,
+              )!.withValues(alpha: .76),
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
@@ -683,65 +728,57 @@ final class _BudgetDayClayComparisonCard extends StatelessWidget {
                   tint,
                   const Color(0xFF667085),
                   .22,
-                )!.withValues(alpha: .17),
-                offset: const Offset(1.5, 2.5),
-                blurRadius: 7,
+                )!.withValues(alpha: .21),
+                offset: const Offset(2.5, 3.5),
+                blurRadius: 9,
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
-            child: LayoutBuilder(
-              builder: (context, constraints) => Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: SizedBox(
-                    width: constraints.maxWidth,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        Center(child: _BudgetDayStateIcon(tint: tint)),
-                        const SizedBox(height: 2),
-                        Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: FluviVisualTokens.textSecondary,
-                            fontSize: 8.2,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            amountLabel,
-                            maxLines: 1,
-                            style: const TextStyle(
-                              color: FluviVisualTokens.textPrimary,
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w900,
-                              height: 1,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 1),
-                        const Text(
-                          '/ nap',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: FluviVisualTokens.textSecondary,
-                            fontSize: 7,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    textScaler: TextScaler.noScaling,
+                    style: const TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 8.5,
+                      height: 1.05,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
+                  const SizedBox(height: 1),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      amountLabel,
+                      maxLines: 1,
+                      textScaler: amountTextScaler,
+                      style: const TextStyle(
+                        color: FluviVisualTokens.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    '/ nap',
+                    textAlign: TextAlign.center,
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 7.5,
+                      height: 1,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -749,23 +786,6 @@ final class _BudgetDayClayComparisonCard extends StatelessWidget {
       ),
     );
   }
-}
-
-final class _BudgetDayStateIcon extends StatelessWidget {
-  const _BudgetDayStateIcon({required this.tint});
-  final Color tint;
-
-  @override
-  Widget build(BuildContext context) => SizedBox.square(
-    dimension: 22,
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: .12),
-        shape: BoxShape.circle,
-      ),
-      child: Icon(Icons.light_mode_outlined, size: 12, color: tint),
-    ),
-  );
 }
 
 /// Decorative only: it is intentionally not an interactive control, so the
@@ -776,7 +796,7 @@ final class _BudgetDayClayArrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox.square(
     key: const ValueKey<String>('budget-analysis-day-arrow'),
-    dimension: 32,
+    dimension: 30,
     child: DecoratedBox(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -797,7 +817,7 @@ final class _BudgetDayClayArrow extends StatelessWidget {
       child: const Icon(
         Icons.arrow_forward_rounded,
         color: FluviVisualTokens.textSecondary,
-        size: 18,
+        size: 17,
       ),
     ),
   );
@@ -805,6 +825,8 @@ final class _BudgetDayClayArrow extends StatelessWidget {
 
 final class _BudgetDayClayImpactBand extends StatelessWidget {
   const _BudgetDayClayImpactBand({required this.change, required this.color});
+
+  static const double height = 42;
 
   final int? change;
   final Color color;
@@ -827,7 +849,7 @@ final class _BudgetDayClayImpactBand extends StatelessWidget {
         : Icons.trending_up_rounded;
     return SizedBox(
       key: const ValueKey<String>('budget-analysis-day-impact-band'),
-      height: 42,
+      height: height,
       width: double.infinity,
       child: DecoratedBox(
         decoration: BoxDecoration(

@@ -633,8 +633,7 @@ void main() {
   testWidgets('DAY clay cards retain parent popup tap when info cards hide', (
     tester,
   ) async {
-    final ringPresentation = BudgetRingPresentationController()
-      ..setBudgetAnalysisInfoCardsVisible(false);
+    final ringPresentation = BudgetRingPresentationController();
     addTearDown(ringPresentation.dispose);
     await pump(
       tester,
@@ -661,8 +660,30 @@ void main() {
     final after = tester.getRect(
       find.byKey(const ValueKey<String>('budget-analysis-day-after-card')),
     );
+    final placement = tester.getRect(
+      find.byKey(
+        const ValueKey<String>('budget-analysis-day-comparison-placement'),
+      ),
+    );
     expect(before.width, closeTo(after.width, .01));
     expect(before.height, closeTo(after.height, .01));
+    expect(before.height, lessThan(placement.height));
+    expect(
+      find.byKey(const ValueKey<String>('budget-analysis-kpi-row')),
+      findsOneWidget,
+    );
+
+    ringPresentation.setBudgetAnalysisInfoCardsVisible(false);
+    await tester.pump();
+
+    final hiddenBefore = tester.getRect(
+      find.byKey(const ValueKey<String>('budget-analysis-day-before-card')),
+    );
+    final hiddenAfter = tester.getRect(
+      find.byKey(const ValueKey<String>('budget-analysis-day-after-card')),
+    );
+    expect(hiddenBefore, before);
+    expect(hiddenAfter, after);
     expect(
       find.byKey(const ValueKey<String>('budget-analysis-kpi-row')),
       findsNothing,
@@ -722,6 +743,24 @@ void main() {
     );
     expect(before.width, closeTo(after.width, .01));
     expect(before.height, closeTo(after.height, .01));
+    final amount = tester.widget<Text>(find.text('23630 Ft'));
+    expect(amount.style?.fontSize, greaterThan(15.5));
+    expect(
+      find.ancestor(
+        of: find.text('23630 Ft'),
+        matching: find.byType(FittedBox),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('budget-analysis-day-before-card'),
+        ),
+        matching: find.byType(GestureDetector),
+      ),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
