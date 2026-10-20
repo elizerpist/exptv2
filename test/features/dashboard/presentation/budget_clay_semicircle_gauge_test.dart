@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 
@@ -100,44 +102,66 @@ void main() {
   });
 
   test(
-    'SUM and MONTH layouts preserve the one shared material cross-section',
+    'solid health paints one 3D material family without changing geometry',
     () {
-      final sum = BudgetSemicircleMaterialGeometry.resolve(
-        const Size(390, 150),
-        layout: BudgetSemicircleMaterialLayout.sumHero,
+      final presentation = BudgetSemicircleMaterialPresentation.resolve(
+        rawRatio: 1.15,
+        direction: LedgerDirection.expense,
+        activeGradient: accent,
       );
-      final month = BudgetSemicircleMaterialGeometry.resolve(
-        const Size(195, 110),
-        layout: BudgetSemicircleMaterialLayout.monthMetric,
+      final segmented = presentation.materialFor(
+        presentation: BudgetProgressColorPresentation.segmentedScale,
+        healthyColorMode: BudgetHealthyColorMode.targetAccent,
+      );
+      final solid = presentation.materialFor(
+        presentation: BudgetProgressColorPresentation.solidHealth,
+        healthyColorMode: BudgetHealthyColorMode.targetAccent,
       );
 
-      expect(
-        sum.stroke / sum.trackRadius,
-        closeTo(month.stroke / month.trackRadius, .000001),
-      );
-      expect(
-        sum.activeStripWidth / sum.stroke,
-        closeTo(month.activeStripWidth / month.stroke, .000001),
-      );
-      expect(
-        sum.decorativeStripWidth / sum.stroke,
-        closeTo(month.decorativeStripWidth / month.stroke, .000001),
-      );
-      expect(sum.trackRadius, greaterThan(month.trackRadius));
+      expect(presentation.visualProgress, closeTo(1.15 / 1.20, .0001));
+      expect(segmented.stops, hasLength(7));
+      expect(solid.stops, const <double>[0, .5, 1]);
+      expect(solid.colors[1], FluviVisualTokens.budgetProgressDanger);
+      expect(solid.colors.first, isNot(solid.colors.last));
     },
   );
 
+  test('solid healthy color reuses the selected healthy-colour authority', () {
+    final presentation = BudgetSemicircleMaterialPresentation.resolve(
+      rawRatio: .74,
+      direction: LedgerDirection.expense,
+      activeGradient: accent,
+    );
+
+    final green = presentation.materialFor(
+      presentation: BudgetProgressColorPresentation.solidHealth,
+      healthyColorMode: BudgetHealthyColorMode.fixedGreen,
+    );
+    final accentMaterial = presentation.materialFor(
+      presentation: BudgetProgressColorPresentation.solidHealth,
+      healthyColorMode: BudgetHealthyColorMode.targetAccent,
+    );
+
+    expect(green.colors[1], FluviVisualTokens.budgetProgressHealthy);
+    expect(accentMaterial.colors[1], accent[1]);
+  });
+
   test(
-    'fixed accent material keeps elapsed time outside financial health logic',
+    'income over target never receives the expense danger solid material',
     () {
-      final presentation = BudgetSemicircleMaterialPresentation.fixedAccent(
-        rawRatio: .61,
+      final presentation = BudgetSemicircleMaterialPresentation.resolve(
+        rawRatio: 1.16,
+        direction: LedgerDirection.income,
         activeGradient: accent,
       );
+      final solid = presentation.materialFor(
+        presentation: BudgetProgressColorPresentation.solidHealth,
+        healthyColorMode: BudgetHealthyColorMode.fixedGreen,
+      );
 
-      expect(presentation.progressGradient, orderedEquals(accent));
-      expect(presentation.progressStops, const <double>[0, .5, 1]);
-      expect(presentation.overshootZones, isEmpty);
+      expect(presentation.health, BudgetClayGaugeHealth.incomeExceededTarget);
+      expect(solid.colors[1], const Color(0xFF22C55E));
+      expect(solid.colors[1], isNot(FluviVisualTokens.budgetProgressDanger));
     },
   );
 }

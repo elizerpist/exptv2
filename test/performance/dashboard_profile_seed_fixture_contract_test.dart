@@ -49,7 +49,7 @@ void main() {
 
 DemoSeedReport _currentSeedReport({List<DemoMonthReport>? months}) =>
     DemoSeedReport(
-      seedVersion: 2,
+      seedVersion: 8,
       prngSeed: 20260107,
       createdCategoryCount: 10,
       createdPartnerCount: 27,
@@ -91,10 +91,10 @@ DemoMonthReport _september2026() => const DemoMonthReport(
   entryCount: 1115,
   incomeCount: 0,
   expenseCount: 1115,
-  incomeTargetMinor: 2560860000,
-  expenseTargetMinor: 2560860000,
+  incomeTargetMinor: 76825800,
+  expenseTargetMinor: 76825800,
   incomeTotalMinor: 0,
-  expenseTotalMinor: 2560860000,
+  expenseTotalMinor: 76825800,
 );
 
 List<DemoMonthReport> _fastfoodMonthsFor2027() =>

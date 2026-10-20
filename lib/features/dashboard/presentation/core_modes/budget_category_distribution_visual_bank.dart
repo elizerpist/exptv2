@@ -654,6 +654,7 @@ final class DashboardBudgetDistributionDrawableController
     LedgerDirection? direction,
     int? targetHandle,
     String? partnerId,
+    bool Function()? isStillCurrent,
   }) async {
     try {
       // Keep cache-miss Canvas projection out of the visible-frame listener
@@ -666,7 +667,8 @@ final class DashboardBudgetDistributionDrawableController
       final frame = await prepareForScope(scope);
       final snapshot = _snapshotForCurrentFrame();
       if (snapshot != null &&
-          snapshot.coreRevision == frame.semanticBundle.key.coreRevision) {
+          snapshot.coreRevision == frame.semanticBundle.key.coreRevision &&
+          (isStillCurrent?.call() ?? true)) {
         publish(
           frame,
           source: 'committed',

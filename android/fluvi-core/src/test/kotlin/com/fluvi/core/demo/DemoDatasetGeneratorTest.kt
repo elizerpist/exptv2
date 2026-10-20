@@ -219,16 +219,17 @@ class DemoDatasetGeneratorTest {
 
         val wideSpreadHours = byHour.values.count { hour ->
             val amounts = hour.map { it.amountScaled100 / 100L }
-            amounts.min() <= 2_000L && amounts.max() >= 50_000L
+            amounts.min() <= 100L && amounts.max() >= 1_500L
         }
         val tightClusterHours = byHour.values.count { hour ->
             val amounts = hour.map { it.amountScaled100 / 100L }
-            amounts.size >= 3 && amounts.min() >= 8_000L && amounts.max() - amounts.min() <= 5_000L
+            amounts.size >= 3 && amounts.min() >= 240L && amounts.max() - amounts.min() <= 150L
         }
         assertTrue(wideSpreadHours >= 24)
         assertTrue(tightClusterHours >= 24)
-        assertTrue(expenses.minOf { it.amountScaled100 } <= 800L * 100L)
-        assertTrue(expenses.maxOf { it.amountScaled100 } >= 120_000L * 100L)
+        assertTrue(expenses.minOf { it.amountScaled100 } <= 24L * 100L)
+        assertEquals(768_258L * 100L, expenses.sumOf { it.amountScaled100 })
+        assertTrue(expenses.maxOf { it.amountScaled100 } >= 3_800L * 100L)
         assertTrue(activeHoursByDay.count { it >= 12 } >= 2)
         assertTrue(byDay.values.count { entries -> longestConsecutiveHourRun(entries) >= 8 } >= 3)
     }

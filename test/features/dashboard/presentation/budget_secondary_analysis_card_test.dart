@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_secondary_analysis.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
@@ -81,7 +82,7 @@ void main() {
       find.byKey(const ValueKey('budget-analysis-sum-semicircle')),
       findsOneWidget,
     );
-    expect(find.byType(BudgetSumSemicircleGauge), findsOneWidget);
+    expect(find.byType(BudgetSemicircleGauge), findsOneWidget);
     final page = tester.getRect(
       find.byKey(const ValueKey<String>('budget-analysis-golden-boundary')),
     );
@@ -162,11 +163,6 @@ void main() {
         useCard2OuterClip: true,
         ringPresentation: ringPresentation,
       );
-      final preparedSumMaterial = tester
-          .widget<BudgetSemicircleMaterial>(
-            find.byType(BudgetSemicircleMaterial),
-          )
-          .presentation;
       for (final setting in <({String name, bool neutral, bool active})>[
         (name: 'neutral_on_active_on', neutral: true, active: true),
         (name: 'neutral_on_active_off', neutral: true, active: false),
@@ -189,7 +185,6 @@ void main() {
         expect(material.showMarker, isTrue);
         expect(material.showNeutralDecorativeStrip, setting.neutral);
         expect(material.showActiveProgressDecorativeStrip, setting.active);
-        expect(identical(material.presentation, preparedSumMaterial), isTrue);
         expect(tester.takeException(), isNull);
         await expectLater(
           find.byKey(const ValueKey('budget-analysis-golden-boundary')),
@@ -253,7 +248,7 @@ void main() {
   );
 
   testWidgets(
-    'MONTH uses two shared material semicircles for every strip combination',
+    'MONTH uses the one SUM-parity shared material hero for every strip combination',
     (tester) async {
       final ringPresentation = BudgetRingPresentationController();
       addTearDown(ringPresentation.dispose);
@@ -281,20 +276,9 @@ void main() {
       );
 
       expect(
-        find.byKey(const ValueKey('budget-analysis-month-elapsed-semicircle')),
+        find.byKey(const ValueKey('budget-analysis-month-semicircle')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey('budget-analysis-month-used-semicircle')),
-        findsOneWidget,
-      );
-      expect(find.textContaining('pp'), findsOneWidget);
-      final preparedMonthMaterials = tester
-          .widgetList<BudgetSemicircleMaterial>(
-            find.byType(BudgetSemicircleMaterial),
-          )
-          .map((material) => material.presentation)
-          .toList(growable: false);
       for (final setting in <({String name, bool neutral, bool active})>[
         (name: 'neutral_on_active_on', neutral: true, active: true),
         (name: 'neutral_on_active_off', neutral: true, active: false),
@@ -313,19 +297,15 @@ void main() {
             .toList(growable: false);
         expect(
           find.byType(BudgetSemicircleMaterialPreferences),
-          findsNWidgets(2),
+          findsOneWidget,
         );
-        expect(materials, hasLength(2));
+        expect(materials, hasLength(1));
         for (var index = 0; index < materials.length; index += 1) {
           final material = materials[index];
-          expect(material.layout, BudgetSemicircleMaterialLayout.monthMetric);
-          expect(material.showMarker, isFalse);
+          expect(material.layout, BudgetSemicircleMaterialLayout.sumHero);
+          expect(material.showMarker, isTrue);
           expect(material.showNeutralDecorativeStrip, setting.neutral);
           expect(material.showActiveProgressDecorativeStrip, setting.active);
-          expect(
-            identical(material.presentation, preparedMonthMaterials[index]),
-            isTrue,
-          );
         }
         expect(tester.takeException(), isNull);
         await expectLater(
@@ -368,9 +348,9 @@ void main() {
           find.byType(BudgetSemicircleMaterial),
         )
         .toList(growable: false);
-    expect(materials, hasLength(2));
-    final used = materials.last;
-    expect(used.showMarker, isFalse);
+    expect(materials, hasLength(1));
+    final used = materials.single;
+    expect(used.showMarker, isTrue);
     expect(used.presentation.health, BudgetClayGaugeHealth.expenseDanger);
     expect(used.presentation.progressStops, hasLength(7));
     expect(tester.takeException(), isNull);
@@ -412,6 +392,185 @@ void main() {
     await expectLater(
       find.byKey(const ValueKey('budget-analysis-golden-boundary')),
       matchesGoldenFile('../../../goldens/budget_analysis_day.png'),
+    );
+  });
+
+  testWidgets('solid colour mode changes material only, not the SUM geometry', (
+    tester,
+  ) async {
+    final ringPresentation = BudgetRingPresentationController();
+    addTearDown(ringPresentation.dispose);
+    const payload = DashboardBudgetSumAnalysis(
+      availability: BudgetAnalysisAvailability.available,
+      averageUtilization: 1.15,
+      averageBudgetDeltaScaled100: 1,
+      eligibleMonthCount: 1,
+      monthsWithinBudget: 0,
+      utilizationStandardDeviation: .1,
+    );
+    await pump(
+      tester,
+      scope: const AllTimeScope(),
+      scopeLabel: 'Összesen',
+      payload: payload,
+      ringPresentation: ringPresentation,
+    );
+    final segmented = tester.widget<BudgetSemicircleMaterial>(
+      find.byType(BudgetSemicircleMaterial),
+    );
+    ringPresentation.selectProgressColorPresentation(
+      BudgetProgressColorPresentation.solidHealth,
+    );
+    await tester.pump();
+    final solid = tester.widget<BudgetSemicircleMaterial>(
+      find.byType(BudgetSemicircleMaterial),
+    );
+
+    expect(segmented.progress, solid.progress);
+    expect(segmented.layout, solid.layout);
+    expect(segmented.showMarker, solid.showMarker);
+    expect(segmented.activeMaterial.stops, hasLength(7));
+    expect(solid.activeMaterial.stops, const <double>[0, .5, 1]);
+    await expectLater(
+      find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+      matchesGoldenFile(
+        '../../../goldens/budget_analysis_sum_solid_danger.png',
+      ),
+    );
+  });
+
+  testWidgets(
+    'solid warning is one amber 3D material across the full active strip',
+    (tester) async {
+      final ringPresentation = BudgetRingPresentationController()
+        ..selectProgressColorPresentation(
+          BudgetProgressColorPresentation.solidHealth,
+        );
+      addTearDown(ringPresentation.dispose);
+      await pump(
+        tester,
+        scope: const AllTimeScope(),
+        scopeLabel: 'Összesen',
+        payload: const DashboardBudgetSumAnalysis(
+          availability: BudgetAnalysisAvailability.available,
+          averageUtilization: 1.05,
+          averageBudgetDeltaScaled100: 1,
+          eligibleMonthCount: 1,
+          monthsWithinBudget: 0,
+          utilizationStandardDeviation: .1,
+        ),
+        ringPresentation: ringPresentation,
+      );
+      final material = tester.widget<BudgetSemicircleMaterial>(
+        find.byType(BudgetSemicircleMaterial),
+      );
+
+      expect(material.activeMaterial.stops, const <double>[0, .5, 1]);
+      expect(
+        material.activeMaterial.colors[1],
+        FluviVisualTokens.budgetProgressWarning,
+      );
+      await expectLater(
+        find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/budget_analysis_sum_solid_warning.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'semantic gauge publication is direct: no fade or progress tween',
+    (tester) async {
+      final presentation = ValueNotifier<BudgetSemicircleMaterialPresentation>(
+        BudgetSemicircleMaterialPresentation.resolve(
+          rawRatio: .39,
+          direction: LedgerDirection.expense,
+          activeGradient: const <Color>[
+            Color(0xFF22D3EE),
+            Color(0xFF2BC4F3),
+            Color(0xFF39B8F4),
+          ],
+        ),
+      );
+      addTearDown(presentation.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 390,
+            height: 150,
+            child: ValueListenableBuilder<BudgetSemicircleMaterialPresentation>(
+              valueListenable: presentation,
+              builder: (context, value, _) => BudgetSemicircleGauge(
+                presentation: value,
+                primaryLabel: '${(value.rawRatio * 100).round()}%',
+                secondaryLabel: 'havi keretkihasználás',
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('39%'), findsOneWidget);
+      presentation.value = BudgetSemicircleMaterialPresentation.resolve(
+        rawRatio: .82,
+        direction: LedgerDirection.expense,
+        activeGradient: const <Color>[
+          Color(0xFF22D3EE),
+          Color(0xFF2BC4F3),
+          Color(0xFF39B8F4),
+        ],
+      );
+      await tester.pump();
+
+      expect(find.text('82%'), findsOneWidget);
+      expect(find.text('39%'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('hidden info cards toggle the same KPI data in a chart popup', (
+    tester,
+  ) async {
+    final ringPresentation = BudgetRingPresentationController()
+      ..setAnalysisInfoCardsVisible(false);
+    addTearDown(ringPresentation.dispose);
+    await pump(
+      tester,
+      scope: const AllTimeScope(),
+      scopeLabel: 'Összesen',
+      payload: const DashboardBudgetSumAnalysis(
+        availability: BudgetAnalysisAvailability.available,
+        averageUtilization: .39,
+        averageBudgetDeltaScaled100: -84000,
+        eligibleMonthCount: 12,
+        monthsWithinBudget: 8,
+        utilizationStandardDeviation: .12,
+      ),
+      ringPresentation: ringPresentation,
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('budget-analysis-kpi-row')),
+      findsNothing,
+    );
+    expect(find.text('Átlagos eltérés'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('budget-analysis-sum-semicircle')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('budget-analysis-kpi-popup')),
+      findsOneWidget,
+    );
+    expect(find.text('Átlagos eltérés'), findsOneWidget);
+    expect(find.text('−840 Ft'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('budget-analysis-sum-semicircle')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('budget-analysis-kpi-popup')),
+      findsNothing,
     );
   });
 }

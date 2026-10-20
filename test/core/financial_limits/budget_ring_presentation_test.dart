@@ -18,8 +18,13 @@ void main() {
       controller.value.healthyColorMode,
       BudgetHealthyColorMode.fixedGreen,
     );
+    expect(
+      controller.value.progressColorPresentation,
+      BudgetProgressColorPresentation.segmentedScale,
+    );
     expect(controller.value.showBudgetNeutralDecorativeStrip, isTrue);
     expect(controller.value.showBudgetActiveProgressDecorativeStrip, isTrue);
+    expect(controller.value.showBudgetAnalysisInfoCards, isTrue);
   });
 
   test('BUDGET-GRAPH-SETTING-02: neutral strip updates independently', () {
@@ -53,30 +58,65 @@ void main() {
 
     controller
       ..setBudgetNeutralDecorativeStripVisible(false)
-      ..setBudgetActiveProgressDecorativeStripVisible(false);
+      ..setBudgetActiveProgressDecorativeStripVisible(false)
+      ..setAnalysisInfoCardsVisible(false)
+      ..selectProgressColorPresentation(
+        BudgetProgressColorPresentation.solidHealth,
+      );
     controller.reset();
 
     expect(controller.value.showBudgetNeutralDecorativeStrip, isTrue);
     expect(controller.value.showBudgetActiveProgressDecorativeStrip, isTrue);
+    expect(controller.value.showBudgetAnalysisInfoCards, isTrue);
+    expect(
+      controller.value.progressColorPresentation,
+      BudgetProgressColorPresentation.segmentedScale,
+    );
   });
 
   test(
-    'BUDGET-GRAPH-SETTING-05: copy equality and hash include both strips',
+    'BUDGET-GRAPH-SETTING-05: copy equality and hash include all chart preferences',
     () {
       const visible = BudgetRingPresentationSettings();
       final hidden = visible.copyWith(
         showBudgetNeutralDecorativeStrip: false,
         showBudgetActiveProgressDecorativeStrip: false,
+        showBudgetAnalysisInfoCards: false,
+        progressColorPresentation: BudgetProgressColorPresentation.solidHealth,
       );
       const hiddenEquivalent = BudgetRingPresentationSettings(
         showBudgetNeutralDecorativeStrip: false,
         showBudgetActiveProgressDecorativeStrip: false,
+        showBudgetAnalysisInfoCards: false,
+        progressColorPresentation: BudgetProgressColorPresentation.solidHealth,
       );
 
       expect(hidden, hiddenEquivalent);
       expect(hidden.hashCode, hiddenEquivalent.hashCode);
       expect(hidden, isNot(visible));
       expect(hidden.hashCode, isNot(visible.hashCode));
+    },
+  );
+
+  test(
+    'BUDGET-GRAPH-SETTING-06: color mode and info cards update independently',
+    () {
+      final controller = BudgetRingPresentationController();
+      addTearDown(controller.dispose);
+
+      controller
+        ..selectProgressColorPresentation(
+          BudgetProgressColorPresentation.solidHealth,
+        )
+        ..setAnalysisInfoCardsVisible(false);
+
+      expect(
+        controller.value.progressColorPresentation,
+        BudgetProgressColorPresentation.solidHealth,
+      );
+      expect(controller.value.showBudgetAnalysisInfoCards, isFalse);
+      expect(controller.value.showBudgetNeutralDecorativeStrip, isTrue);
+      expect(controller.value.showBudgetActiveProgressDecorativeStrip, isTrue);
     },
   );
 

@@ -448,8 +448,9 @@ class DemoDatasetGenerator(
     /**
      * Deterministic September-only expense fixture for the Mind Day hourly
      * bar chart. Each selected hour contains several independently filterable
-     * amounts; wide and tight distributions exercise both large and small
-     * lower-bound slider moves without altering the normal ledger schema.
+     * amounts. The 1,115-entry shape exercises hourly filtering without
+     * making September a 25-million-forint outlier beside the normal
+     * 600–800-thousand-forint demo months.
      */
     private fun generateSeptember2026HourlyStressMonth(
         categories: List<DemoCategoryDraft>,
@@ -694,7 +695,8 @@ class DemoDatasetGenerator(
         require(reports.single { it.year == 2026 && it.month == 9 }.let {
             it.incomeCount == 0 &&
                 it.expenseCount == september2026StressEntryCount &&
-                it.expenseTargetScaled100 == it.expenseTotalScaled100
+                it.expenseTargetScaled100 == it.expenseTotalScaled100 &&
+                it.expenseTotalScaled100 in 700_000L * 100..800_000L * 100
         })
         require(reports.filter { it.year == 2025 }.size == 12)
         require(reports.filter { it.year == 2025 }.all { it.entryCount in 280..320 })
@@ -757,15 +759,18 @@ class DemoDatasetGenerator(
         const val SEPTEMBER_2026_STRESS_SEED = 202_609L
         val september2026WideSpreadDays = setOf(1, 11, 21)
         val september2026TightClusterDays = setOf(5, 15, 25)
-        val septemberWideSpreadAmountsHuf = listOf(800L, 3_500L, 17_000L, 68_000L, 135_000L)
-        val septemberTightClusterAmountsHuf = listOf(11_800L, 12_600L, 14_100L, 15_300L, 16_000L)
+        // Preserve every hourly-count and wide/tight distribution contract,
+        // while scaling the old stress values to three percent. The complete
+        // September fixture now totals 768,258 Ft instead of 25,608,600 Ft.
+        val septemberWideSpreadAmountsHuf = listOf(24L, 105L, 510L, 2_040L, 4_050L)
+        val septemberTightClusterAmountsHuf = listOf(354L, 378L, 423L, 459L, 480L)
         val septemberRegularAmountSetsHuf = listOf(
-            listOf(700L, 4_800L, 18_000L, 72_000L, 128_000L),
-            listOf(1_200L, 6_500L, 22_000L, 48_000L, 94_000L),
-            listOf(1_800L, 8_200L, 15_500L, 36_000L, 81_000L),
-            listOf(2_400L, 9_800L, 44_000L, 96_000L, 122_000L),
-            listOf(900L, 3_200L, 12_400L, 28_000L, 63_000L),
-            listOf(5_200L, 11_000L, 19_500L, 42_000L, 76_000L),
+            listOf(21L, 144L, 540L, 2_160L, 3_840L),
+            listOf(36L, 195L, 660L, 1_440L, 2_820L),
+            listOf(54L, 246L, 465L, 1_080L, 2_430L),
+            listOf(72L, 294L, 1_320L, 2_880L, 3_660L),
+            listOf(27L, 96L, 372L, 840L, 1_890L),
+            listOf(156L, 330L, 585L, 1_260L, 2_280L),
         )
         val septemberMinuteOffsets = intArrayOf(3, 8, 11, 16, 19, 27, 34, 37, 43, 49, 52, 57)
         val septemberExpenseDefinitions = listOf(

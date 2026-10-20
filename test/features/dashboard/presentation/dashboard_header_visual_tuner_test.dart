@@ -1600,12 +1600,18 @@ void main() {
       final activeSwitch = find.byKey(
         const ValueKey<String>('budget-graph-active-decorative-strip'),
       );
+      final infoCardsSwitch = find.byKey(
+        const ValueKey<String>('budget-analysis-info-cards-visible'),
+      );
       await tester.ensureVisible(neutralSwitch);
       await tester.ensureVisible(activeSwitch);
+      await tester.ensureVisible(infoCardsSwitch);
       expect(neutralSwitch, findsOneWidget);
       expect(activeSwitch, findsOneWidget);
+      expect(infoCardsSwitch, findsOneWidget);
       expect(tester.widget<SwitchListTile>(neutralSwitch).value, isTrue);
       expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
+      expect(tester.widget<SwitchListTile>(infoCardsSwitch).value, isTrue);
 
       await tester.tap(neutralSwitch);
       await tester.pump();
@@ -1620,6 +1626,20 @@ void main() {
       expect(ring.value.showBudgetActiveProgressDecorativeStrip, isFalse);
       expect(tester.widget<SwitchListTile>(neutralSwitch).value, isFalse);
       expect(tester.widget<SwitchListTile>(activeSwitch).value, isFalse);
+
+      await tester.tap(infoCardsSwitch);
+      await tester.pump();
+      expect(ring.value.showBudgetAnalysisInfoCards, isFalse);
+      expect(tester.widget<SwitchListTile>(infoCardsSwitch).value, isFalse);
+
+      final solid = find.text('Progress színezése: Egységes állapotszín');
+      await tester.ensureVisible(solid);
+      await tester.tap(solid);
+      await tester.pump();
+      expect(
+        ring.value.progressColorPresentation,
+        BudgetProgressColorPresentation.solidHealth,
+      );
 
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();

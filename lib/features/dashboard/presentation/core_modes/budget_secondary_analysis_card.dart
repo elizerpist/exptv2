@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_secondary_analysis.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
@@ -23,11 +24,13 @@ final class BudgetSecondaryAnalysisCard extends StatefulWidget {
     super.key,
     required this.presentation,
     required this.drawableFrames,
+    this.analysisPageActive,
   });
 
   final DashboardBudgetPresentationController presentation;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>
   drawableFrames;
+  final ValueListenable<bool>? analysisPageActive;
 
   @override
   State<BudgetSecondaryAnalysisCard> createState() =>
@@ -49,18 +52,12 @@ final class _RenderedAnalysisFrame {
 }
 
 class _BudgetSecondaryAnalysisCardState
-    extends State<BudgetSecondaryAnalysisCard>
-    with SingleTickerProviderStateMixin {
+    extends State<BudgetSecondaryAnalysisCard> {
   _RenderedAnalysisFrame? _rendered;
-  late final AnimationController _transition;
 
   @override
   void initState() {
     super.initState();
-    _transition = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 160),
-    )..value = 1;
     widget.presentation.addListener(_onSourceChanged);
     widget.drawableFrames.addListener(_onSourceChanged);
     _resolveAtomicFrame();
@@ -84,14 +81,12 @@ class _BudgetSecondaryAnalysisCardState
   void dispose() {
     widget.presentation.removeListener(_onSourceChanged);
     widget.drawableFrames.removeListener(_onSourceChanged);
-    _transition.dispose();
     super.dispose();
   }
 
   void _onSourceChanged() {
     final changed = _resolveAtomicFrame();
     if (changed && mounted) {
-      _transition.forward(from: 0);
       setState(() {});
     }
   }
@@ -152,14 +147,12 @@ class _BudgetSecondaryAnalysisCardState
         key: ValueKey<String>('budget-secondary-analysis-preparing'),
       );
     }
-    return FadeTransition(
-      opacity: CurvedAnimation(parent: _transition, curve: Curves.easeOut),
-      child: BudgetSecondaryAnalysisPreparedCard(
-        frame: rendered.frame,
-        targetTitle: rendered.targetTitle,
-        scopeLabel: rendered.scopeLabel,
-        targetVisual: rendered.targetVisual,
-      ),
+    return BudgetSecondaryAnalysisPreparedCard(
+      frame: rendered.frame,
+      targetTitle: rendered.targetTitle,
+      scopeLabel: rendered.scopeLabel,
+      targetVisual: rendered.targetVisual,
+      analysisPageActive: widget.analysisPageActive,
     );
   }
 }
@@ -167,26 +160,103 @@ class _BudgetSecondaryAnalysisCardState
 /// Paint-only entry point used by the production pager after its atomic frame
 /// has been selected. It is intentionally useful to widget tests without
 /// exposing any ledger/controller dependency.
-final class BudgetSecondaryAnalysisPreparedCard extends StatelessWidget {
+final class BudgetSecondaryAnalysisPreparedCard extends StatefulWidget {
   const BudgetSecondaryAnalysisPreparedCard({
     super.key,
     required this.frame,
     required this.targetTitle,
     required this.scopeLabel,
     this.targetVisual,
+    this.analysisPageActive,
   });
 
   final DashboardBudgetSecondaryAnalysisFrame frame;
   final String targetTitle;
   final String scopeLabel;
   final DashboardBudgetTargetPresentationItem? targetVisual;
+  final ValueListenable<bool>? analysisPageActive;
+
+  @override
+  State<BudgetSecondaryAnalysisPreparedCard> createState() =>
+      _BudgetSecondaryAnalysisPreparedCardState();
+}
+
+final class _BudgetSecondaryAnalysisPreparedCardState
+    extends State<BudgetSecondaryAnalysisPreparedCard> {
+  bool _detailsOpen = false;
+  BudgetRingPresentationController? _ringPresentation;
+  bool _showInfoCards = true;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.analysisPageActive?.addListener(_closeDetailsWhenPageLeaves);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = BudgetRingPresentationScope.controllerOf(context);
+    if (identical(next, _ringPresentation)) return;
+    _ringPresentation?.removeListener(_onRingPresentationChanged);
+    _ringPresentation = next;
+    _ringPresentation?.addListener(_onRingPresentationChanged);
+    _showInfoCards =
+        _ringPresentation?.value.showBudgetAnalysisInfoCards ?? true;
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant BudgetSecondaryAnalysisPreparedCard oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.analysisPageActive, widget.analysisPageActive)) {
+      oldWidget.analysisPageActive?.removeListener(_closeDetailsWhenPageLeaves);
+      widget.analysisPageActive?.addListener(_closeDetailsWhenPageLeaves);
+    }
+    if (!_sameFrameIdentity(oldWidget.frame, widget.frame)) {
+      _detailsOpen = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.analysisPageActive?.removeListener(_closeDetailsWhenPageLeaves);
+    _ringPresentation?.removeListener(_onRingPresentationChanged);
+    super.dispose();
+  }
+
+  void _onRingPresentationChanged() {
+    final next = _ringPresentation?.value.showBudgetAnalysisInfoCards ?? true;
+    if (next == _showInfoCards) return;
+    setState(() {
+      _showInfoCards = next;
+      if (next) _detailsOpen = false;
+    });
+  }
+
+  void _closeDetailsWhenPageLeaves() {
+    if ((widget.analysisPageActive?.value ?? true) || !_detailsOpen) return;
+    if (mounted) setState(() => _detailsOpen = false);
+  }
+
+  bool _sameFrameIdentity(
+    DashboardBudgetSecondaryAnalysisFrame left,
+    DashboardBudgetSecondaryAnalysisFrame right,
+  ) =>
+      left.coreRevision == right.coreRevision &&
+      left.direction == right.direction &&
+      left.targetHandle == right.targetHandle &&
+      left.scope == right.scope;
 
   @override
   Widget build(BuildContext context) {
-    final payload = frame.payload;
+    final payload = widget.frame.payload;
     final copy = _copyFor(payload);
+    final showInfoCards = _showInfoCards;
+    final kpis = _kpisFor(payload);
     return Semantics(
-      label: '$targetTitle: ${copy.title}, $scopeLabel',
+      label: '${widget.targetTitle}: ${copy.title}, ${widget.scopeLabel}',
       // The parent Card2 owns the one white analysis surface. In particular,
       // the footer has no painted slab: the gauge can visually continue into
       // the shared surface behind its three independent KPI cards.
@@ -204,18 +274,42 @@ final class BudgetSecondaryAnalysisPreparedCard extends StatelessWidget {
                 'budget-secondary-analysis-title-row',
               ),
               copy: copy,
-              scopeLabel: scopeLabel,
+              scopeLabel: widget.scopeLabel,
             ),
             const SizedBox(height: 4),
             Expanded(
-              child: _Hero(
-                payload: payload,
-                direction: frame.direction,
-                targetVisual: targetVisual,
+              child: Semantics(
+                button: !showInfoCards,
+                toggled: !showInfoCards ? _detailsOpen : null,
+                label: !showInfoCards ? 'Koppints a részletekhez' : null,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: showInfoCards
+                      ? null
+                      : () => setState(() => _detailsOpen = !_detailsOpen),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      _Hero(
+                        payload: payload,
+                        direction: widget.frame.direction,
+                        targetVisual: widget.targetVisual,
+                      ),
+                      if (!showInfoCards && _detailsOpen)
+                        _AnalysisKpiPopup(kpis: kpis),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 6),
-            SizedBox(height: 43, child: _KpiRow(payload: payload)),
+            if (showInfoCards) ...<Widget>[
+              const SizedBox(height: 6),
+              SizedBox(
+                key: const ValueKey<String>('budget-analysis-kpi-row'),
+                height: 43,
+                child: _KpiRow(kpis: kpis),
+              ),
+            ],
           ],
         ),
       ),
@@ -248,9 +342,9 @@ _AnalysisCopy _copyFor(DashboardBudgetSecondaryAnalysisPayload payload) =>
         icon: Icons.bar_chart_rounded,
       ),
       DashboardBudgetMonthSecondaryAnalysis() => const _AnalysisCopy(
-        title: 'Időarányos felhasználás',
-        subtitle: 'Hol tartasz ebben a hónapban?',
-        icon: Icons.timelapse_rounded,
+        title: 'Havi keretkihasználás',
+        subtitle: 'Az aktuális hónap állása',
+        icon: Icons.donut_large_outlined,
       ),
       DashboardBudgetDaySecondaryAnalysis() => const _AnalysisCopy(
         title: 'A mai költés hatása',
@@ -340,8 +434,10 @@ final class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => switch (payload) {
-    DashboardBudgetSumAnalysis() => _SumHero(
-      payload: payload as DashboardBudgetSumAnalysis,
+    DashboardBudgetSumAnalysis() => _BudgetUtilizationHero(
+      ratio: (payload as DashboardBudgetSumAnalysis).averageUtilization,
+      secondaryLabel: 'átlagos keretkihasználás',
+      gaugeKey: const ValueKey<String>('budget-analysis-sum-semicircle'),
       direction: direction,
       targetVisual: targetVisual,
     ),
@@ -359,34 +455,41 @@ final class _Hero extends StatelessWidget {
   };
 }
 
-final class _SumHero extends StatelessWidget {
-  const _SumHero({
-    required this.payload,
+/// The SUM and MONTH adapters intentionally share one physical hero. Their
+/// semantics differ, but the bounds, typography, marker, and material scene
+/// are the same object at the same place in Card2.
+final class _BudgetUtilizationHero extends StatelessWidget {
+  const _BudgetUtilizationHero({
+    required this.ratio,
+    required this.secondaryLabel,
+    required this.gaugeKey,
     required this.direction,
     required this.targetVisual,
   });
-  final DashboardBudgetSumAnalysis payload;
+  final double? ratio;
+  final String secondaryLabel;
+  final Key gaugeKey;
   final LedgerDirection direction;
   final DashboardBudgetTargetPresentationItem? targetVisual;
 
   @override
   Widget build(BuildContext context) {
-    final ratio = payload.averageUtilization;
-    if (ratio == null) return const _UnavailableHero();
+    final value = ratio;
+    if (value == null) return const _UnavailableHero();
     final accent = BudgetClayGaugeAccentResolver.resolve(
       context,
       direction: direction,
       targetVisual: targetVisual,
     );
-    return BudgetSumSemicircleGauge(
-      key: const ValueKey<String>('budget-analysis-sum-semicircle'),
+    return BudgetSemicircleGauge(
+      key: gaugeKey,
       presentation: BudgetSemicircleMaterialPresentation.resolve(
-        rawRatio: ratio,
+        rawRatio: value,
         direction: direction,
         activeGradient: accent,
       ),
-      primaryLabel: '${(ratio * 100).round()}%',
-      secondaryLabel: 'átlagos keretkihasználás',
+      primaryLabel: '${(value * 100).round()}%',
+      secondaryLabel: secondaryLabel,
     );
   }
 }
@@ -441,150 +544,17 @@ final class _MonthHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!payload.isAvailable ||
-        payload.elapsedRatio == null ||
-        payload.budgetUsedRatio == null) {
+    if (!payload.isAvailable || payload.budgetUsedRatio == null) {
       return const _UnavailableHero();
     }
-    final pace = payload.paceDifferencePercentagePoints!;
-    final paceColor = pace > .5
-        ? FluviVisualTokens.budgetProgressDanger
-        : pace < -.5
-        ? FluviVisualTokens.budgetProgressHealthy
-        : FluviVisualTokens.textSecondary;
-    final usedAccent = BudgetClayGaugeAccentResolver.resolve(
-      context,
+    return _BudgetUtilizationHero(
+      ratio: payload.budgetUsedRatio,
+      secondaryLabel: 'havi keretkihasználás',
+      gaugeKey: const ValueKey<String>('budget-analysis-month-semicircle'),
       direction: direction,
       targetVisual: targetVisual,
     );
-    return Column(
-      children: <Widget>[
-        Expanded(
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _GaugeMetric(
-                  key: const ValueKey<String>(
-                    'budget-analysis-month-elapsed-semicircle',
-                  ),
-                  label: 'ELTELT IDŐ',
-                  ratio: payload.elapsedRatio!,
-                  detail:
-                      '${payload.elapsedCalendarDays} / ${payload.daysInMonth} nap',
-                  presentation:
-                      BudgetSemicircleMaterialPresentation.fixedAccent(
-                        rawRatio: payload.elapsedRatio!,
-                        activeGradient:
-                            FluviVisualTokens.appHighlightGradient.colors,
-                      ),
-                ),
-              ),
-              Expanded(
-                child: _GaugeMetric(
-                  key: const ValueKey<String>(
-                    'budget-analysis-month-used-semicircle',
-                  ),
-                  label: 'FELHASZNÁLT KERET',
-                  ratio: payload.budgetUsedRatio!,
-                  detail:
-                      '${_money(payload.monthActualScaled100)} / ${_money(payload.monthlyLimitScaled100)}',
-                  presentation: BudgetSemicircleMaterialPresentation.resolve(
-                    rawRatio: payload.budgetUsedRatio!,
-                    direction: direction,
-                    activeGradient: usedAccent,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Text(
-          '${_signedPp(pace)} pp',
-          style: TextStyle(
-            color: paceColor,
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            height: 1,
-          ),
-        ),
-        Text(
-          pace > .5
-              ? 'előrébb jár a költés'
-              : pace < -.5
-              ? 'lassabban fogy a keret'
-              : 'egy ütemben halad',
-          style: const TextStyle(
-            color: FluviVisualTokens.textSecondary,
-            fontSize: 7,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
   }
-}
-
-final class _GaugeMetric extends StatelessWidget {
-  const _GaugeMetric({
-    super.key,
-    required this.label,
-    required this.ratio,
-    required this.detail,
-    required this.presentation,
-  });
-  final String label;
-  final double ratio;
-  final String detail;
-  final BudgetSemicircleMaterialPresentation presentation;
-
-  @override
-  Widget build(BuildContext context) => Stack(
-    alignment: Alignment.center,
-    children: <Widget>[
-      BudgetSemicircleMaterialPreferences(
-        presentation: presentation,
-        progress: presentation.visualProgress,
-        layout: BudgetSemicircleMaterialLayout.monthMetric,
-        showMarker: false,
-        child: const SizedBox.expand(),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(top: 19),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              label,
-              style: const TextStyle(
-                color: FluviVisualTokens.textSecondary,
-                fontSize: 6.2,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            Text(
-              '${(ratio * 100).round()}%',
-              style: const TextStyle(
-                color: FluviVisualTokens.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                height: 1.05,
-              ),
-            ),
-            Text(
-              detail,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: FluviVisualTokens.textSecondary,
-                fontSize: 6.2,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
 }
 
 final class _DayHero extends StatelessWidget {
@@ -734,124 +704,213 @@ final class _UnavailableHero extends StatelessWidget {
 }
 
 final class _KpiRow extends StatelessWidget {
-  const _KpiRow({required this.payload});
-  final DashboardBudgetSecondaryAnalysisPayload payload;
+  const _KpiRow({required this.kpis});
+  final List<_Kpi> kpis;
 
   @override
-  Widget build(BuildContext context) {
-    final kpis = switch (payload) {
-      DashboardBudgetSumAnalysis(
-        :final averageBudgetDeltaScaled100,
-        :final monthsWithinBudget,
-        :final eligibleMonthCount,
-        :final utilizationStandardDeviation,
-      ) =>
-        <_Kpi>[
-          _Kpi(
-            'Átlagos eltérés',
-            _signedMoney(averageBudgetDeltaScaled100),
-            'havonta',
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      for (var index = 0; index < kpis.length; index += 1)
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: index == kpis.length - 1 ? 0 : 5),
+            child: _KpiBlock(kpi: kpis[index]),
           ),
-          _Kpi(
-            'Keretbetartás',
-            '$monthsWithinBudget / $eligibleMonthCount hó',
-            'kereten belül',
-          ),
-          _Kpi(
-            'Havi stabilitás',
-            utilizationStandardDeviation == null
-                ? '—'
-                : '±${(utilizationStandardDeviation * 100).round()}%',
-            'kihasználás',
-          ),
-        ],
-      DashboardBudgetYearAnalysis(
-        :final completedWithinBudgetCount,
-        :final completedEligibleMonthCount,
-        :final largestOverspendScaled100,
-        :final largestReserveScaled100,
-      ) =>
-        <_Kpi>[
-          _Kpi(
-            'Keretbetartás',
-            '$completedWithinBudgetCount / $completedEligibleMonthCount hó',
-            'kereten belül',
-          ),
-          _Kpi('Legnagyobb túllépés', _money(largestOverspendScaled100), ''),
-          _Kpi('Legnagyobb tartalék', _money(largestReserveScaled100), ''),
-        ],
-      DashboardBudgetMonthSecondaryAnalysis(
-        :final usesForecast,
-        :final expectedDeltaScaled100,
-        :final closingBudgetDeltaScaled100,
-        :final remainingDailyRoomScaled100,
-        :final historicalDailyAverageScaled100,
-        :final projectedMonthEndScaled100,
-      ) =>
-        <_Kpi>[
-          _Kpi(
-            usesForecast ? 'Várható eltérés' : 'Záró eltérés',
-            _signedMoney(
-              usesForecast
-                  ? expectedDeltaScaled100
-                  : closingBudgetDeltaScaled100,
-            ),
-            '',
-          ),
-          _Kpi(
-            usesForecast ? 'Napi mozgástér' : 'Napi átlag',
-            _money(
-              usesForecast
-                  ? remainingDailyRoomScaled100
-                  : historicalDailyAverageScaled100,
-            ),
-            usesForecast ? '/ nap' : '',
-          ),
-          _Kpi(
-            usesForecast ? 'Várható zárás' : 'Záró összeg',
-            _money(projectedMonthEndScaled100),
-            '',
-          ),
-        ],
-      DashboardBudgetDaySecondaryAnalysis(
-        :final selectedDayActualScaled100,
-        :final remainingSpendableTodayScaled100,
-        :final monthlyDeltaScaled100,
-        :final usesForecast,
-      ) =>
-        <_Kpi>[
-          _Kpi('Mai költés', _money(selectedDayActualScaled100), ''),
-          _Kpi(
-            'Ma még elkölthető',
-            _money(remainingSpendableTodayScaled100),
-            '',
-          ),
-          _Kpi(
-            usesForecast ? 'Várható havi eltérés' : 'Havi eltérés',
-            _signedMoney(monthlyDeltaScaled100),
-            '',
-          ),
-        ],
-    };
-    return Row(
-      children: <Widget>[
-        for (var index = 0; index < kpis.length; index += 1)
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(right: index == kpis.length - 1 ? 0 : 5),
-              child: _KpiBlock(kpi: kpis[index]),
-            ),
-          ),
-      ],
-    );
-  }
+        ),
+    ],
+  );
 }
+
+List<_Kpi> _kpisFor(
+  DashboardBudgetSecondaryAnalysisPayload payload,
+) => switch (payload) {
+  DashboardBudgetSumAnalysis(
+    :final averageBudgetDeltaScaled100,
+    :final monthsWithinBudget,
+    :final eligibleMonthCount,
+    :final utilizationStandardDeviation,
+  ) =>
+    <_Kpi>[
+      _Kpi(
+        'Átlagos eltérés',
+        _signedMoney(averageBudgetDeltaScaled100),
+        'havonta',
+      ),
+      _Kpi(
+        'Keretbetartás',
+        '$monthsWithinBudget / $eligibleMonthCount hó',
+        'kereten belül',
+      ),
+      _Kpi(
+        'Havi stabilitás',
+        utilizationStandardDeviation == null
+            ? '—'
+            : '±${(utilizationStandardDeviation * 100).round()}%',
+        'kihasználás',
+      ),
+    ],
+  DashboardBudgetYearAnalysis(
+    :final completedWithinBudgetCount,
+    :final completedEligibleMonthCount,
+    :final largestOverspendScaled100,
+    :final largestReserveScaled100,
+  ) =>
+    <_Kpi>[
+      _Kpi(
+        'Keretbetartás',
+        '$completedWithinBudgetCount / $completedEligibleMonthCount hó',
+        'kereten belül',
+      ),
+      _Kpi('Legnagyobb túllépés', _money(largestOverspendScaled100), ''),
+      _Kpi('Legnagyobb tartalék', _money(largestReserveScaled100), ''),
+    ],
+  DashboardBudgetMonthSecondaryAnalysis(
+    :final usesForecast,
+    :final expectedDeltaScaled100,
+    :final closingBudgetDeltaScaled100,
+    :final remainingDailyRoomScaled100,
+    :final historicalDailyAverageScaled100,
+    :final projectedMonthEndScaled100,
+  ) =>
+    <_Kpi>[
+      _Kpi(
+        usesForecast ? 'Várható eltérés' : 'Záró eltérés',
+        _signedMoney(
+          usesForecast ? expectedDeltaScaled100 : closingBudgetDeltaScaled100,
+        ),
+        '',
+      ),
+      _Kpi(
+        usesForecast ? 'Napi mozgástér' : 'Napi átlag',
+        _money(
+          usesForecast
+              ? remainingDailyRoomScaled100
+              : historicalDailyAverageScaled100,
+        ),
+        usesForecast ? '/ nap' : '',
+      ),
+      _Kpi(
+        usesForecast ? 'Várható zárás' : 'Záró összeg',
+        _money(projectedMonthEndScaled100),
+        '',
+      ),
+    ],
+  DashboardBudgetDaySecondaryAnalysis(
+    :final selectedDayActualScaled100,
+    :final remainingSpendableTodayScaled100,
+    :final monthlyDeltaScaled100,
+    :final usesForecast,
+  ) =>
+    <_Kpi>[
+      _Kpi('Mai költés', _money(selectedDayActualScaled100), ''),
+      _Kpi('Ma még elkölthető', _money(remainingSpendableTodayScaled100), ''),
+      _Kpi(
+        usesForecast ? 'Várható havi eltérés' : 'Havi eltérés',
+        _signedMoney(monthlyDeltaScaled100),
+        '',
+      ),
+    ],
+};
 
 final class _Kpi {
   const _Kpi(this.label, this.value, this.detail);
   final String label;
   final String value;
   final String detail;
+}
+
+/// The hidden-footer overlay consumes exactly the same prepared `_Kpi` list as
+/// the visible row. It is presentation-only and never recalculates financial
+/// values or formats a competing data source.
+final class _AnalysisKpiPopup extends StatelessWidget {
+  const _AnalysisKpiPopup({required this.kpis});
+
+  final List<_Kpi> kpis;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Align(
+      alignment: const Alignment(0, .30),
+      child: FractionallySizedBox(
+        widthFactor: .58,
+        child: DecoratedBox(
+          key: const ValueKey<String>('budget-analysis-kpi-popup'),
+          decoration: BoxDecoration(
+            color: const Color(0xF20B1020),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 12,
+                offset: Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                for (
+                  var index = 0;
+                  index < kpis.length;
+                  index += 1
+                ) ...<Widget>[
+                  _AnalysisKpiPopupSection(kpi: kpis[index]),
+                  if (index != kpis.length - 1) const SizedBox(height: 8),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+final class _AnalysisKpiPopupSection extends StatelessWidget {
+  const _AnalysisKpiPopupSection({required this.kpi});
+
+  final _Kpi kpi;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Text(
+        kpi.label,
+        style: const TextStyle(
+          color: Color(0xCCFFFFFF),
+          fontSize: 7,
+          height: 1,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        kpi.value,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          height: 1,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      if (kpi.detail.isNotEmpty) ...<Widget>[
+        const SizedBox(height: 1),
+        Text(
+          kpi.detail,
+          style: const TextStyle(
+            color: Color(0xB3FFFFFF),
+            fontSize: 6.5,
+            height: 1,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ],
+  );
 }
 
 final class _KpiBlock extends StatelessWidget {

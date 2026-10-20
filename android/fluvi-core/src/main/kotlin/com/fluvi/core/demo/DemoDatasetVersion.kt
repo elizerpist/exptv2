@@ -6,10 +6,11 @@ import java.time.ZoneOffset
 import java.util.Random
 
 object DemoDatasetVersion {
-    // Version 7 adds the append-only September 2026 hourly expense fixture.
+    // Version 8 corrects the September 2026 hourly fixture's formerly
+    // outlying amounts while retaining its deterministic dense-hour shape.
     // The manifest version deliberately forces a complete deterministic reset
     // instead of mixing a prior fixture with new category, partner and rows.
-    const val current = 7
+    const val current = 8
     const val prngSeed = 2_026_010_7L
     const val localZoneId = "Europe/Budapest"
     val startInclusive: LocalDate = LocalDate.of(2025, 1, 1)

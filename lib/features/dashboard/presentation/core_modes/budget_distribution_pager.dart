@@ -123,10 +123,15 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
   bool? _lastScrolling;
   bool _viewportSnapshotScheduled = false;
   String _lastViewportBounds = 'unlaidOut';
+  late final ValueNotifier<bool> _analysisPageActive;
 
   @override
   void initState() {
     super.initState();
+    _analysisPageActive = ValueNotifier<bool>(
+      widget.controller.value == BudgetDistributionPage.analysis,
+    );
+    widget.controller.addListener(_syncAnalysisPageActive);
     WidgetsBinding.instance.addPostFrameCallback((_) => _attachPosition());
   }
 
@@ -134,6 +139,9 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
   void didUpdateWidget(covariant BudgetDistributionPager oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.controller, widget.controller)) {
+      oldWidget.controller.removeListener(_syncAnalysisPageActive);
+      widget.controller.addListener(_syncAnalysisPageActive);
+      _syncAnalysisPageActive();
       _detachPosition();
       WidgetsBinding.instance.addPostFrameCallback((_) => _attachPosition());
     }
@@ -141,8 +149,15 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
 
   @override
   void dispose() {
+    widget.controller.removeListener(_syncAnalysisPageActive);
+    _analysisPageActive.dispose();
     _detachPosition();
     super.dispose();
+  }
+
+  void _syncAnalysisPageActive() {
+    final active = widget.controller.value == BudgetDistributionPage.analysis;
+    if (_analysisPageActive.value != active) _analysisPageActive.value = active;
   }
 
   void _attachPosition() {
@@ -289,6 +304,7 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
                 key: const ValueKey('budget-secondary-analysis-card'),
                 presentation: widget.presentation,
                 drawableFrames: widget.drawableFrames,
+                analysisPageActive: _analysisPageActive,
               ),
             },
           ),

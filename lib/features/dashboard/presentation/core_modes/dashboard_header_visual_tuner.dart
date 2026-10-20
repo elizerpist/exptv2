@@ -2994,7 +2994,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                   ),
                   controller: controller,
                   section: DashboardHeaderTunerSection.budgetRingPresentation,
-                  title: 'SUM Budget',
+                  title: 'Budget grafikon',
                   children: <Widget>[
                     _BudgetRingPresentationSection(controller: ring),
                   ],
@@ -3858,7 +3858,7 @@ final class _BudgetRingPresentationSection extends StatelessWidget {
   ) => ValueListenableBuilder<BudgetRingPresentationSettings>(
     valueListenable: controller,
     builder: (context, settings, _) => _TunerSection(
-      title: 'SUM Budget',
+      title: 'Budget grafikon',
       children: <Widget>[
         RadioGroup<BudgetSumRingStyle>(
           groupValue: settings.sumRingStyle,
@@ -3904,6 +3904,30 @@ final class _BudgetRingPresentationSection extends StatelessWidget {
             ],
           ),
         ),
+        RadioGroup<BudgetProgressColorPresentation>(
+          groupValue: settings.progressColorPresentation,
+          onChanged: (presentation) {
+            if (presentation != null) {
+              controller.selectProgressColorPresentation(presentation);
+            }
+          },
+          child: Column(
+            children: <Widget>[
+              for (final presentation in BudgetProgressColorPresentation.values)
+                RadioListTile<BudgetProgressColorPresentation>(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(switch (presentation) {
+                    BudgetProgressColorPresentation.segmentedScale =>
+                      'Progress színezése: Színskála',
+                    BudgetProgressColorPresentation.solidHealth =>
+                      'Progress színezése: Egységes állapotszín',
+                  }),
+                  value: presentation,
+                ),
+            ],
+          ),
+        ),
         const Padding(
           padding: EdgeInsets.only(top: 12, bottom: 2),
           child: Align(
@@ -3929,6 +3953,17 @@ final class _BudgetRingPresentationSection extends StatelessWidget {
           title: const Text('Világos díszcsík a színes progressen'),
           value: settings.showBudgetActiveProgressDecorativeStrip,
           onChanged: controller.setBudgetActiveProgressDecorativeStripVisible,
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('budget-analysis-info-cards-visible'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Alsó információs kártyák'),
+          subtitle: const Text(
+            'Kikapcsolva a grafikonra koppintva jelennek meg.',
+          ),
+          value: settings.showBudgetAnalysisInfoCards,
+          onChanged: controller.setBudgetAnalysisInfoCardsVisible,
         ),
       ],
     ),

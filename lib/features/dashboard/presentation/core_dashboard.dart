@@ -704,13 +704,54 @@ class _CoreDashboardState extends State<CoreDashboard>
       );
     }
     final partnerId = controller.focus.state?.partner?.id;
-    final publication = _budgetDistributionDrawables
-        .publishCurrentScopeForeground(
+    // A temporal commit first consumes an already prepared exact RAM frame.
+    // This is the normal hotset path: Card2 can replace title, chart and KPI
+    // content atomically on the accepted semantic tick. A rare miss retains
+    // the prior complete frame until idle preparation proves that this exact
+    // scope/target/direction is still authoritative.
+    final cacheHit = _budgetDistributionDrawables.publishIfReadyForTimeScope(
+      scope,
+      direction: budget.liveSelection.direction,
+      targetHandle: budget.selectedHandle,
+      partnerId: partnerId,
+    );
+    final publication = cacheHit
+        ? const DashboardBudgetDistributionForegroundPublication(
+            published: true,
+            cacheHit: true,
+          )
+        : _budgetDistributionDrawables.value == null
+        ? _budgetDistributionDrawables.publishCurrentScopeForeground(
+            scope,
+            direction: budget.liveSelection.direction,
+            targetHandle: budget.selectedHandle,
+            partnerId: partnerId,
+          )
+        : const DashboardBudgetDistributionForegroundPublication(
+            published: false,
+            cacheHit: false,
+          );
+    if (!publication.published) {
+      final expectedRevision = liveAnalysis.coreRevision;
+      final expectedDirection = budget.liveSelection.direction;
+      final expectedTargetHandle = budget.selectedHandle;
+      unawaited(
+        _budgetDistributionDrawables.publishWhenPreparedForTimeScope(
           scope,
-          direction: budget.liveSelection.direction,
-          targetHandle: budget.selectedHandle,
+          direction: expectedDirection,
+          targetHandle: expectedTargetHandle,
           partnerId: partnerId,
-        );
+          isStillCurrent: () {
+            final current = _budgetPresentation.value;
+            final currentAnalysis = current.liveAnalysis;
+            return currentAnalysis.coreRevision == expectedRevision &&
+                currentAnalysis.scope == scope &&
+                current.liveSelection.direction == expectedDirection &&
+                current.selectedHandle == expectedTargetHandle;
+          },
+        ),
+      );
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'BUDGET_DISTRIBUTION_BOUND',

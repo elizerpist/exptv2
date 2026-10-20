@@ -70,7 +70,7 @@ final class BudgetClayGaugeOvershootZone {
       highlight == other.highlight;
 }
 
-/// Paint-ready data for [BudgetSumSemicircleGauge].
+/// Paint-ready data for the shared SUM/MONTH semicircle hero.
 ///
 /// `rawRatio` is intentionally preserved for the KPI label while
 /// `visualProgress` follows the explicit 0–120% scale. Nothing inside the
@@ -148,55 +148,42 @@ final class BudgetSemicircleMaterialPresentation {
       stops: progressMaterial.stops,
       position: visualProgress,
     );
+    final segmentedMaterial = BudgetSemicircleActiveMaterial(
+      colors: progressMaterial.colors,
+      depthColors: _depthStops(progressMaterial.colors),
+      stops: progressMaterial.stops,
+      markerMaterial: BudgetProgressRingSphereMaterial.forHealthColor(
+        markerColor,
+      ),
+    );
+    final fixedHealthy = BudgetHealthyVisualColorResolver.resolve(
+      mode: BudgetHealthyColorMode.fixedGreen,
+      targetAccent: active[1],
+      fixedGreen: FluviVisualTokens.budgetProgressHealthy,
+    );
+    final accentHealthy = BudgetHealthyVisualColorResolver.resolve(
+      mode: BudgetHealthyColorMode.targetAccent,
+      targetAccent: active[1],
+      fixedGreen: FluviVisualTokens.budgetProgressHealthy,
+    );
     return BudgetSemicircleMaterialPresentation._(
       rawRatio: safeRaw,
       visualProgress: visualProgress,
       targetProgress: targetProgress,
       health: health,
       activeGradient: active,
-      progressGradient: progressMaterial.colors,
-      progressDepthGradient: _depthStops(progressMaterial.colors),
-      progressStops: progressMaterial.stops,
-      markerMaterial: BudgetProgressRingSphereMaterial.forHealthColor(
-        markerColor,
+      progressGradient: segmentedMaterial.colors,
+      progressDepthGradient: segmentedMaterial.depthColors,
+      progressStops: segmentedMaterial.stops,
+      markerMaterial: segmentedMaterial.markerMaterial,
+      segmentedMaterial: segmentedMaterial,
+      solidFixedGreenMaterial: _solidMaterial(
+        _solidHealthColor(health: health, healthy: fixedHealthy),
+      ),
+      solidTargetAccentMaterial: _solidMaterial(
+        _solidHealthColor(health: health, healthy: accentHealthy),
       ),
       overshootZones: List<BudgetClayGaugeOvershootZone>.unmodifiable(zones),
-      hasVisualOverflow: safeRaw > visualMaximum,
-    );
-  }
-
-  /// A non-financial material ramp for a shared semicircle such as the
-  /// MONTH elapsed-time gauge. It keeps the same 0–120% visual scale and
-  /// clay construction without introducing SUM health colours.
-  factory BudgetSemicircleMaterialPresentation.fixedAccent({
-    required double rawRatio,
-    required List<Color> activeGradient,
-    double visualMaximum = 1.20,
-  }) {
-    assert(visualMaximum > 0);
-    final safeRaw = rawRatio.isFinite
-        ? math.max(0.0, rawRatio).toDouble()
-        : 0.0;
-    final visualProgress = (safeRaw / visualMaximum).clamp(0.0, 1.0).toDouble();
-    final active = _threeStops(activeGradient);
-    final markerColor = _colorAt(
-      colors: active,
-      stops: const <double>[0, .5, 1],
-      position: visualProgress,
-    );
-    return BudgetSemicircleMaterialPresentation._(
-      rawRatio: safeRaw,
-      visualProgress: visualProgress,
-      targetProgress: 1 / visualMaximum,
-      health: BudgetClayGaugeHealth.expenseHealthy,
-      activeGradient: active,
-      progressGradient: active,
-      progressDepthGradient: _depthStops(active),
-      progressStops: const <double>[0, .5, 1],
-      markerMaterial: BudgetProgressRingSphereMaterial.forHealthColor(
-        markerColor,
-      ),
-      overshootZones: const <BudgetClayGaugeOvershootZone>[],
       hasVisualOverflow: safeRaw > visualMaximum,
     );
   }
@@ -211,6 +198,9 @@ final class BudgetSemicircleMaterialPresentation {
     required this.progressDepthGradient,
     required this.progressStops,
     required this.markerMaterial,
+    required this.segmentedMaterial,
+    required this.solidFixedGreenMaterial,
+    required this.solidTargetAccentMaterial,
     required this.overshootZones,
     required this.hasVisualOverflow,
   });
@@ -231,8 +221,24 @@ final class BudgetSemicircleMaterialPresentation {
   /// This is deliberately the exact selected-avatar sphere material rather
   /// than a SUM-only marker treatment.
   final BudgetProgressRingSphereMaterial markerMaterial;
+  final BudgetSemicircleActiveMaterial segmentedMaterial;
+  final BudgetSemicircleActiveMaterial solidFixedGreenMaterial;
+  final BudgetSemicircleActiveMaterial solidTargetAccentMaterial;
   final List<BudgetClayGaugeOvershootZone> overshootZones;
   final bool hasVisualOverflow;
+
+  /// Selecting a material is a prepared-object lookup: no semantic health,
+  /// category palette, or shader-stop work happens in the painter hot path.
+  BudgetSemicircleActiveMaterial materialFor({
+    required BudgetProgressColorPresentation presentation,
+    required BudgetHealthyColorMode healthyColorMode,
+  }) => switch (presentation) {
+    BudgetProgressColorPresentation.segmentedScale => segmentedMaterial,
+    BudgetProgressColorPresentation.solidHealth => switch (healthyColorMode) {
+      BudgetHealthyColorMode.fixedGreen => solidFixedGreenMaterial,
+      BudgetHealthyColorMode.targetAccent => solidTargetAccentMaterial,
+    },
+  };
 
   bool sameVisualAs(BudgetSemicircleMaterialPresentation other) =>
       rawRatio == other.rawRatio &&
@@ -247,6 +253,9 @@ final class BudgetSemicircleMaterialPresentation {
       markerMaterial.highlight == other.markerMaterial.highlight &&
       markerMaterial.body == other.markerMaterial.body &&
       markerMaterial.depth == other.markerMaterial.depth &&
+      segmentedMaterial.sameVisualAs(other.segmentedMaterial) &&
+      solidFixedGreenMaterial.sameVisualAs(other.solidFixedGreenMaterial) &&
+      solidTargetAccentMaterial.sameVisualAs(other.solidTargetAccentMaterial) &&
       hasVisualOverflow == other.hasVisualOverflow &&
       overshootZones.length == other.overshootZones.length &&
       _sameZones(overshootZones, other.overshootZones);
@@ -366,6 +375,60 @@ final class BudgetSemicircleMaterialPresentation {
 
   static Color _highlightFor(Color color) =>
       Color.lerp(color, Colors.white, .72)!.withValues(alpha: .72);
+
+  static Color _solidHealthColor({
+    required BudgetClayGaugeHealth health,
+    required Color healthy,
+  }) => switch (health) {
+    BudgetClayGaugeHealth.expenseHealthy ||
+    BudgetClayGaugeHealth.incomeBelowTarget => healthy,
+    BudgetClayGaugeHealth.expenseWarning =>
+      FluviVisualTokens.budgetProgressWarning,
+    BudgetClayGaugeHealth.expenseDanger =>
+      FluviVisualTokens.budgetProgressDanger,
+    BudgetClayGaugeHealth.incomeTargetReached => const Color(0xFF14B8A6),
+    BudgetClayGaugeHealth.incomeExceededTarget => const Color(0xFF22C55E),
+  };
+
+  static BudgetSemicircleActiveMaterial _solidMaterial(Color base) {
+    final colors = List<Color>.unmodifiable(<Color>[
+      Color.lerp(base, Colors.white, .32)!,
+      base,
+      Color.lerp(base, const Color(0xFF172554), .18)!,
+    ]);
+    return BudgetSemicircleActiveMaterial(
+      colors: colors,
+      depthColors: _depthStops(colors),
+      stops: const <double>[0, .5, 1],
+      markerMaterial: BudgetProgressRingSphereMaterial.forHealthColor(base),
+    );
+  }
+}
+
+/// One already-resolved active material family. A solid semantic state still
+/// has highlight, body, depth and a matching sphere; it is never a flat arc.
+@immutable
+final class BudgetSemicircleActiveMaterial {
+  const BudgetSemicircleActiveMaterial({
+    required this.colors,
+    required this.depthColors,
+    required this.stops,
+    required this.markerMaterial,
+  });
+
+  final List<Color> colors;
+  final List<Color> depthColors;
+  final List<double> stops;
+  final BudgetProgressRingSphereMaterial markerMaterial;
+
+  bool sameVisualAs(BudgetSemicircleActiveMaterial other) =>
+      listEquals(colors, other.colors) &&
+      listEquals(depthColors, other.depthColors) &&
+      listEquals(stops, other.stops) &&
+      markerMaterial.base == other.markerMaterial.base &&
+      markerMaterial.highlight == other.markerMaterial.highlight &&
+      markerMaterial.body == other.markerMaterial.body &&
+      markerMaterial.depth == other.markerMaterial.depth;
 }
 
 @immutable
@@ -404,16 +467,14 @@ abstract final class BudgetClayGaugeAccentResolver {
 }
 
 /// The one shared material primitive for every Budget analysis semicircle.
-///
-/// SUM supplies an animated progress value and a 3D marker through its
-/// wrapper. MONTH supplies its smaller layout and no marker. The painter and
-/// every physical layer stay identical.
-enum BudgetSemicircleMaterialLayout { sumHero, monthMetric }
+/// Its upper-half hero geometry and marker are shared by SUM and MONTH.
+enum BudgetSemicircleMaterialLayout { sumHero }
 
 final class BudgetSemicircleMaterial extends StatelessWidget {
   const BudgetSemicircleMaterial({
     super.key,
     required this.presentation,
+    required this.activeMaterial,
     required this.progress,
     required this.layout,
     required this.showNeutralDecorativeStrip,
@@ -423,6 +484,7 @@ final class BudgetSemicircleMaterial extends StatelessWidget {
   });
 
   final BudgetSemicircleMaterialPresentation presentation;
+  final BudgetSemicircleActiveMaterial activeMaterial;
   final double progress;
   final BudgetSemicircleMaterialLayout layout;
   final bool showNeutralDecorativeStrip;
@@ -435,7 +497,8 @@ final class BudgetSemicircleMaterial extends StatelessWidget {
     child: CustomPaint(
       painter: _BudgetSemicircleMaterialPainter(
         presentation: presentation,
-        animatedProgress: progress,
+        activeMaterial: activeMaterial,
+        progress: progress,
         layout: layout,
         showNeutralDecorativeStrip: showNeutralDecorativeStrip,
         showActiveProgressDecorativeStrip: showActiveProgressDecorativeStrip,
@@ -470,6 +533,10 @@ final class BudgetSemicircleMaterialPreferences extends StatelessWidget {
     final settings = BudgetRingPresentationScope.settingsOf(context);
     return BudgetSemicircleMaterial(
       presentation: presentation,
+      activeMaterial: presentation.materialFor(
+        presentation: settings.progressColorPresentation,
+        healthyColorMode: settings.healthyColorMode,
+      ),
       progress: progress,
       layout: layout,
       showNeutralDecorativeStrip: settings.showBudgetNeutralDecorativeStrip,
@@ -481,13 +548,11 @@ final class BudgetSemicircleMaterialPreferences extends StatelessWidget {
   }
 }
 
-/// Isolated animated Canvas scene for the SUM Budget card.
-///
-/// One controller owns the active body, overshoot, and marker position. Its
-/// repaint is contained by the boundary so changing a target cannot repaint
-/// the surrounding dashboard card or pager.
-final class BudgetSumSemicircleGauge extends StatefulWidget {
-  const BudgetSumSemicircleGauge({
+/// One direct-paint hero for both SUM and MONTH. Semantic frame publication is
+/// intentionally immediate: navigation provides the motion, while the gauge
+/// paints the accepted exact value on its first frame.
+final class BudgetSemicircleGauge extends StatelessWidget {
+  const BudgetSemicircleGauge({
     super.key,
     required this.presentation,
     required this.primaryLabel,
@@ -499,67 +564,16 @@ final class BudgetSumSemicircleGauge extends StatefulWidget {
   final String secondaryLabel;
 
   @override
-  State<BudgetSumSemicircleGauge> createState() =>
-      _BudgetSumSemicircleGaugeState();
-}
-
-final class _BudgetSumSemicircleGaugeState
-    extends State<BudgetSumSemicircleGauge>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _progressController;
-  late double _fromProgress;
-  late double _toProgress;
-
-  @override
-  void initState() {
-    super.initState();
-    _fromProgress = widget.presentation.visualProgress;
-    _toProgress = widget.presentation.visualProgress;
-    _progressController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-      value: 1,
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant BudgetSumSemicircleGauge oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!oldWidget.presentation.sameVisualAs(widget.presentation)) {
-      _fromProgress = _visibleProgress;
-      _toProgress = widget.presentation.visualProgress;
-      _progressController.forward(from: 0);
-    }
-  }
-
-  double get _visibleProgress =>
-      Curves.easeOutCubic.transform(_progressController.value) *
-          (_toProgress - _fromProgress) +
-      _fromProgress;
-
-  @override
-  void dispose() {
-    _progressController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => RepaintBoundary(
-    child: Semantics(
-      label: '${widget.primaryLabel}, ${widget.secondaryLabel}',
-      child: AnimatedBuilder(
-        animation: _progressController,
-        child: _GaugeTextLayer(
-          primaryLabel: widget.primaryLabel,
-          secondaryLabel: widget.secondaryLabel,
-        ),
-        builder: (context, child) => BudgetSemicircleMaterialPreferences(
-          presentation: widget.presentation,
-          progress: _visibleProgress,
-          layout: BudgetSemicircleMaterialLayout.sumHero,
-          showMarker: true,
-          child: child!,
-        ),
+  Widget build(BuildContext context) => Semantics(
+    label: '$primaryLabel, $secondaryLabel',
+    child: BudgetSemicircleMaterialPreferences(
+      presentation: presentation,
+      progress: presentation.visualProgress,
+      layout: BudgetSemicircleMaterialLayout.sumHero,
+      showMarker: true,
+      child: _GaugeTextLayer(
+        primaryLabel: primaryLabel,
+        secondaryLabel: secondaryLabel,
       ),
     ),
   );
@@ -637,23 +651,13 @@ final class BudgetSemicircleMaterialGeometry {
     required BudgetSemicircleMaterialLayout layout,
   }) {
     final source = BudgetProgressRingGeometry.source;
-    final center = Offset(size.width / 2, switch (layout) {
-      BudgetSemicircleMaterialLayout.sumHero =>
-        size.height - size.height * .105,
-      BudgetSemicircleMaterialLayout.monthMetric => size.height - 3,
-    });
-    // The source avatar ring owns all material proportions. The two layouts
-    // only choose how that same physical object fits in their available box.
-    final radius = switch (layout) {
-      BudgetSemicircleMaterialLayout.sumHero => math.min(
-        size.width * .38,
-        center.dy / (source.faceRadius / source.trackRadius),
-      ),
-      BudgetSemicircleMaterialLayout.monthMetric => math.min(
-        size.width * .45,
-        center.dy,
-      ),
-    };
+    // SUM and MONTH resolve this exact same hero geometry. The source avatar
+    // ring owns every material proportion; scope adapters only supply data.
+    final center = Offset(size.width / 2, size.height - size.height * .105);
+    final radius = math.min(
+      size.width * .38,
+      center.dy / (source.faceRadius / source.trackRadius),
+    );
     final scale = radius / source.trackRadius;
     final trackRect = Rect.fromCircle(center: center, radius: radius);
     return BudgetSemicircleMaterialGeometry._(
@@ -686,7 +690,8 @@ final class BudgetSemicircleMaterialGeometry {
 final class _BudgetSemicircleMaterialPainter extends CustomPainter {
   const _BudgetSemicircleMaterialPainter({
     required this.presentation,
-    required this.animatedProgress,
+    required this.activeMaterial,
+    required this.progress,
     required this.layout,
     required this.showNeutralDecorativeStrip,
     required this.showActiveProgressDecorativeStrip,
@@ -698,7 +703,8 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
   static const _neutralDecorativeStripStart = .5;
 
   final BudgetSemicircleMaterialPresentation presentation;
-  final double animatedProgress;
+  final BudgetSemicircleActiveMaterial activeMaterial;
+  final double progress;
   final BudgetSemicircleMaterialLayout layout;
   final bool showNeutralDecorativeStrip;
   final bool showActiveProgressDecorativeStrip;
@@ -811,7 +817,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
     Canvas canvas,
     BudgetSemicircleMaterialGeometry geometry,
   ) {
-    if (animatedProgress <= 0) return;
+    if (progress <= 0) return;
     _paintContinuousMaterial(canvas, geometry);
   }
 
@@ -840,7 +846,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
     Canvas canvas,
     BudgetSemicircleMaterialGeometry geometry,
   ) {
-    final sweep = _sweepAngle * animatedProgress;
+    final sweep = _sweepAngle * progress;
     // The active colour is a strip nested in the neutral avatar-ring body,
     // rather than a second full-width tube that replaces that body. One
     // global SweepGradient keeps the category, warning, and danger material
@@ -853,7 +859,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
       false,
       _progressPaint(
         geometry: geometry,
-        colors: presentation.progressDepthGradient,
+        colors: activeMaterial.depthColors,
         stroke: stripWidth,
       )..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.5 * geometry.scale),
     );
@@ -864,7 +870,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
       false,
       _progressPaint(
         geometry: geometry,
-        colors: presentation.progressGradient,
+        colors: activeMaterial.colors,
         stroke: stripWidth,
       ),
     );
@@ -908,14 +914,14 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
       startAngle: _startAngle,
       endAngle: _startAngle + _sweepAngle,
       colors: colors,
-      stops: presentation.progressStops,
+      stops: activeMaterial.stops,
     ).createShader(geometry.trackRect)
     ..style = PaintingStyle.stroke
     ..strokeWidth = stroke
     ..strokeCap = StrokeCap.round;
 
   Offset _markerCenter(BudgetSemicircleMaterialGeometry geometry) {
-    final angle = _startAngle + _sweepAngle * animatedProgress;
+    final angle = _startAngle + _sweepAngle * progress;
     return Offset(
       geometry.trackRect.center.dx +
           math.cos(angle) * geometry.trackRect.width / 2,
@@ -934,7 +940,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
       center + Offset(0, 2 * geometry.scale),
       radius,
       Paint()
-        ..color = presentation.markerMaterial.depth.withValues(alpha: .28)
+        ..color = activeMaterial.markerMaterial.depth.withValues(alpha: .28)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2.5 * geometry.scale),
     );
     if (presentation.hasVisualOverflow) {
@@ -942,7 +948,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
         center,
         radius * 1.32,
         Paint()
-          ..color = presentation.markerMaterial.body.withValues(alpha: .20)
+          ..color = activeMaterial.markerMaterial.body.withValues(alpha: .20)
           ..maskFilter = MaskFilter.blur(
             BlurStyle.normal,
             3.5 * geometry.scale,
@@ -963,9 +969,9 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
           center: const Alignment(-.35, -.4),
           radius: .9,
           colors: <Color>[
-            presentation.markerMaterial.highlight,
-            presentation.markerMaterial.body,
-            presentation.markerMaterial.depth,
+            activeMaterial.markerMaterial.highlight,
+            activeMaterial.markerMaterial.body,
+            activeMaterial.markerMaterial.depth,
           ],
           stops: const <double>[0, .42, 1],
         ).createShader(body),
@@ -973,17 +979,18 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
     canvas.drawCircle(
       center + Offset(-2.5 * geometry.scale, -3 * geometry.scale),
       2.2 * geometry.scale,
-      Paint()..color = presentation.markerMaterial.highlight,
+      Paint()..color = activeMaterial.markerMaterial.highlight,
     );
   }
 
   @override
   bool shouldRepaint(covariant _BudgetSemicircleMaterialPainter oldDelegate) =>
-      animatedProgress != oldDelegate.animatedProgress ||
+      progress != oldDelegate.progress ||
       layout != oldDelegate.layout ||
       showNeutralDecorativeStrip != oldDelegate.showNeutralDecorativeStrip ||
       showActiveProgressDecorativeStrip !=
           oldDelegate.showActiveProgressDecorativeStrip ||
       showMarker != oldDelegate.showMarker ||
-      !presentation.sameVisualAs(oldDelegate.presentation);
+      !presentation.sameVisualAs(oldDelegate.presentation) ||
+      !activeMaterial.sameVisualAs(oldDelegate.activeMaterial);
 }
