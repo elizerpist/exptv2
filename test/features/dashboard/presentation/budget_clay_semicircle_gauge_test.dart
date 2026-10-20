@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 
@@ -53,5 +54,19 @@ void main() {
     expect(presentation.rawRatio, 1.53);
     expect(presentation.visualProgress, 1);
     expect(presentation.hasVisualOverflow, isTrue);
+  });
+
+  test('uses the selected-avatar sphere material for the endpoint marker', () {
+    final presentation = BudgetClayGaugePresentation.resolve(
+      rawRatio: .75,
+      direction: LedgerDirection.expense,
+      activeGradient: accent,
+    );
+
+    expect(
+      presentation.markerMaterial.sourceGeometryId,
+      BudgetProgressRingSphereMaterial.sourceId,
+    );
+    expect(presentation.markerMaterial.body, accent[accent.length ~/ 2]);
   });
 }

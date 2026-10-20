@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
 import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -145,7 +146,9 @@ final class BudgetClayGaugePresentation {
       activeGradient: active,
       activeDepthGradient: _depthStops(active),
       activeHighlight: _highlightFor(active.first),
-      markerGradient: _markerStops(markerColors),
+      markerMaterial: BudgetProgressRingSphereMaterial.forHealthColor(
+        markerColors[markerColors.length ~/ 2],
+      ),
       overshootZones: List<BudgetClayGaugeOvershootZone>.unmodifiable(zones),
       hasVisualOverflow: safeRaw > visualMaximum,
     );
@@ -159,7 +162,7 @@ final class BudgetClayGaugePresentation {
     required this.activeGradient,
     required this.activeDepthGradient,
     required this.activeHighlight,
-    required this.markerGradient,
+    required this.markerMaterial,
     required this.overshootZones,
     required this.hasVisualOverflow,
   });
@@ -171,7 +174,10 @@ final class BudgetClayGaugePresentation {
   final List<Color> activeGradient;
   final List<Color> activeDepthGradient;
   final Color activeHighlight;
-  final List<Color> markerGradient;
+
+  /// This is deliberately the exact selected-avatar sphere material rather
+  /// than a SUM-only marker treatment.
+  final BudgetProgressRingSphereMaterial markerMaterial;
   final List<BudgetClayGaugeOvershootZone> overshootZones;
   final bool hasVisualOverflow;
 
@@ -183,7 +189,10 @@ final class BudgetClayGaugePresentation {
       listEquals(activeGradient, other.activeGradient) &&
       listEquals(activeDepthGradient, other.activeDepthGradient) &&
       activeHighlight == other.activeHighlight &&
-      listEquals(markerGradient, other.markerGradient) &&
+      markerMaterial.base == other.markerMaterial.base &&
+      markerMaterial.highlight == other.markerMaterial.highlight &&
+      markerMaterial.body == other.markerMaterial.body &&
+      markerMaterial.depth == other.markerMaterial.depth &&
       hasVisualOverflow == other.hasVisualOverflow &&
       overshootZones.length == other.overshootZones.length &&
       _sameZones(overshootZones, other.overshootZones);
@@ -228,13 +237,6 @@ final class BudgetClayGaugePresentation {
             .map((color) => Color.lerp(color, const Color(0xFF172554), .36)!)
             .toList(growable: false),
       );
-
-  static List<Color> _markerStops(List<Color> source) =>
-      List<Color>.unmodifiable(<Color>[
-        Color.lerp(source.first, Colors.white, .68)!,
-        source[source.length ~/ 2],
-        Color.lerp(source.last, const Color(0xFF172554), .40)!,
-      ]);
 
   static Color _highlightFor(Color color) =>
       Color.lerp(color, Colors.white, .72)!.withValues(alpha: .72);
@@ -362,7 +364,10 @@ final class _GaugeTextLayer extends StatelessWidget {
     fit: StackFit.expand,
     children: <Widget>[
       Align(
-        alignment: const Alignment(0, .16),
+        // The face is the clipped upper half of the avatar's white disc, so
+        // its optical centre sits above the arc baseline rather than in the
+        // geometric centre of this rectangular hero slot.
+        alignment: const Alignment(0, 0),
         child: ExcludeSemantics(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -392,11 +397,11 @@ final class _GaugeTextLayer extends StatelessWidget {
         ),
       ),
       const Align(
-        alignment: Alignment(-.92, .96),
+        alignment: Alignment(-.56, .96),
         child: ExcludeSemantics(child: Text('0%', style: _endpointStyle)),
       ),
       const Align(
-        alignment: Alignment(.92, .96),
+        alignment: Alignment(.56, .96),
         child: ExcludeSemantics(child: Text('100%+', style: _endpointStyle)),
       ),
     ],
@@ -413,39 +418,43 @@ const _endpointStyle = TextStyle(
 @immutable
 final class _GaugeGeometry {
   factory _GaugeGeometry.resolve(Size size) {
+    final source = BudgetProgressRingGeometry.source;
     final labelBand = size.height * .105;
-    final width = size.width * .86;
-    final height = math.min(width * .48, (size.height - labelBand) * 1.36);
-    final trackRect = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height - labelBand),
-      width: width,
-      height: height,
-    );
-    final minimumRadius = math.min(trackRect.width, trackRect.height) / 2;
-    final stroke = minimumRadius * .155;
+    final center = Offset(size.width / 2, size.height - labelBand);
+    // The ring is never fitted into an oval: it is literally a circle whose
+    // lower half is clipped. The white face must reach the top of the slot.
+    final faceToTrack = source.faceRadius / source.trackRadius;
+    final radius = math.min(size.width * .38, center.dy / faceToTrack);
+    final scale = radius / source.trackRadius;
+    final trackRect = Rect.fromCircle(center: center, radius: radius);
     return _GaugeGeometry._(
       trackRect: trackRect,
-      stroke: stroke,
-      medallionRect: Rect.fromCenter(
-        center: Offset(
-          trackRect.center.dx,
-          trackRect.center.dy - trackRect.height * .26,
-        ),
-        width: trackRect.width * .38,
-        height: trackRect.height * .38,
+      faceRect: Rect.fromCircle(
+        center: center,
+        radius: source.faceRadius * scale,
       ),
+      scale: scale,
+      stroke: source.trackWidth * scale,
+      markerRadius: BudgetProgressRingDayPaceMarkers.markerRadius * scale,
+      clipBottom: center.dy + source.trackWidth * scale * .58,
     );
   }
 
   const _GaugeGeometry._({
     required this.trackRect,
+    required this.faceRect,
+    required this.scale,
     required this.stroke,
-    required this.medallionRect,
+    required this.markerRadius,
+    required this.clipBottom,
   });
 
   final Rect trackRect;
+  final Rect faceRect;
+  final double scale;
   final double stroke;
-  final Rect medallionRect;
+  final double markerRadius;
+  final double clipBottom;
 }
 
 /// Multi-pass clay material renderer. Paint receives only prepared immutable
@@ -459,12 +468,6 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
   static const _startAngle = math.pi;
   static const _sweepAngle = math.pi;
   static const _gradientStops = <double>[0, .5, 1];
-  static const _neutralSurface = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: <Color>[Color(0xFFFFFEFF), Color(0xFFF3F0FA), Color(0xFFE2DDED)],
-    stops: _gradientStops,
-  );
 
   final BudgetClayGaugePresentation presentation;
   final double animatedProgress;
@@ -473,6 +476,11 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     final geometry = _GaugeGeometry.resolve(size);
+    // The lower circle never becomes a second visual component. Clipping here
+    // makes this precisely the upper half of the selected avatar ring.
+    canvas
+      ..save()
+      ..clipRect(Rect.fromLTRB(0, 0, size.width, geometry.clipBottom));
     _paintCenterMedallion(canvas, geometry);
     _paintCastShadow(canvas, geometry);
     _paintRearDepth(canvas, geometry);
@@ -484,85 +492,104 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     _paintBreakpoint(canvas, geometry);
     _paintMarkerShadow(canvas, geometry);
     _paintMarker(canvas, geometry);
+    canvas.restore();
   }
 
   void _paintCenterMedallion(Canvas canvas, _GaugeGeometry geometry) {
-    canvas.drawOval(
-      geometry.medallionRect.shift(Offset(0, geometry.stroke * .22)),
+    final source = BudgetProgressRingGeometry.source;
+    canvas.drawCircle(
+      geometry.faceRect.center +
+          Offset(
+            source.faceShadowOffset.dx * geometry.scale,
+            source.faceShadowOffset.dy * geometry.scale,
+          ),
+      geometry.faceRect.width / 2,
       Paint()
-        ..color = const Color(0x24443B73)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, geometry.stroke * .45),
+        ..color = source.trackShadowColor.withValues(alpha: .20)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 10 * geometry.scale),
     );
-    canvas.drawOval(
-      geometry.medallionRect,
+    canvas.drawCircle(
+      geometry.faceRect.center,
+      geometry.faceRect.width / 2,
       Paint()
         ..shader = RadialGradient(
           center: const Alignment(-.28, -.42),
-          radius: .86,
+          radius: .78,
           colors: const <Color>[
-            Color(0xFFFDFBFF),
-            Color(0xFFF8F6FC),
-            Color(0xFFECE8F4),
+            Color(0xFFFFFEFF),
+            Color(0xFFFBF9FF),
+            Color(0xFFEFEAF8),
           ],
           stops: _gradientStops,
-        ).createShader(geometry.medallionRect),
+        ).createShader(geometry.faceRect),
+    );
+    canvas.drawCircle(
+      geometry.faceRect.center,
+      geometry.faceRect.width / 2,
+      Paint()
+        ..color = const Color(0xB8FFFFFF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4 * geometry.scale,
     );
   }
 
   void _paintCastShadow(Canvas canvas, _GaugeGeometry geometry) {
-    canvas.drawArc(
-      geometry.trackRect.shift(
-        Offset(geometry.stroke * .18, geometry.stroke * .52),
+    final source = BudgetProgressRingGeometry.source;
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: geometry.faceRect.center + Offset(0, geometry.stroke * .78),
+        width: geometry.faceRect.width * .86,
+        height: geometry.stroke * 1.1,
       ),
+      Paint()
+        ..color = source.trackShadowColor.withValues(alpha: .10)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * geometry.scale),
+    );
+    canvas.drawArc(
+      geometry.trackRect.shift(Offset(0, 5 * geometry.scale)),
       _startAngle,
       _sweepAngle,
       false,
       Paint()
-        ..color = const Color(0x304D527E)
+        ..color = source.trackShadowColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = geometry.stroke * 1.28
+        ..strokeWidth = geometry.stroke + 4 * geometry.scale
         ..strokeCap = StrokeCap.round
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, geometry.stroke * .72),
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.5 * geometry.scale),
     );
   }
 
   void _paintRearDepth(Canvas canvas, _GaugeGeometry geometry) {
-    canvas.drawArc(
-      geometry.trackRect.shift(
-        Offset(geometry.stroke * .12, geometry.stroke * .26),
-      ),
-      _startAngle,
-      _sweepAngle,
-      false,
-      Paint()
-        ..color = const Color(0x735F5781)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = geometry.stroke * 1.12
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  void _paintNeutralTrackBody(Canvas canvas, _GaugeGeometry geometry) {
+    final source = BudgetProgressRingGeometry.source;
     canvas.drawArc(
       geometry.trackRect,
       _startAngle,
       _sweepAngle,
       false,
       Paint()
-        ..shader = _neutralSurface.createShader(geometry.trackRect)
+        ..color = source.trackShadowColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = geometry.stroke
+        ..strokeWidth = geometry.stroke + 4 * geometry.scale
         ..strokeCap = StrokeCap.round,
     );
+  }
+
+  void _paintNeutralTrackBody(Canvas canvas, _GaugeGeometry geometry) {
+    final source = BudgetProgressRingGeometry.source;
     canvas.drawArc(
-      geometry.trackRect.shift(Offset(0, geometry.stroke * .13)),
+      geometry.trackRect,
       _startAngle,
       _sweepAngle,
       false,
       Paint()
-        ..color = const Color(0x2C77718F)
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: source.trackGradientColors,
+          stops: source.trackGradientStops,
+        ).createShader(geometry.trackRect)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = geometry.stroke * .68
+        ..strokeWidth = geometry.stroke
         ..strokeCap = StrokeCap.round,
     );
   }
@@ -589,7 +616,9 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
       _sweepAngle,
       false,
       Paint()
-        ..color = const Color(0x3E4D466C)
+        ..color = BudgetProgressRingGeometry.source.trackShadowColor.withValues(
+          alpha: .24,
+        )
         ..style = PaintingStyle.stroke
         ..strokeWidth = geometry.stroke * .17
         ..strokeCap = StrokeCap.round
@@ -598,28 +627,17 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
   }
 
   void _paintTopRimHighlight(Canvas canvas, _GaugeGeometry geometry) {
-    final rimPaint = Paint()
-      ..color = const Color(0x9EFFFFFF)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = geometry.stroke * .17
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, geometry.stroke * .055);
-    final lifted = geometry.trackRect.shift(Offset(0, -geometry.stroke * .13));
-    canvas.drawArc(lifted, _startAngle, _sweepAngle, false, rimPaint);
+    final source = BudgetProgressRingGeometry.source;
     canvas.drawArc(
-      lifted,
-      _startAngle,
-      _sweepAngle * .46,
+      geometry.trackRect,
+      _startAngle + _sweepAngle * .50,
+      _sweepAngle * (source.trackGlossFraction * 2),
       false,
       Paint()
-        ..color = const Color(0xBFFFFFFF)
+        ..color = source.trackGlossColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = geometry.stroke * .21
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = MaskFilter.blur(
-          BlurStyle.normal,
-          geometry.stroke * .045,
-        ),
+        ..strokeWidth = 5 * geometry.scale
+        ..strokeCap = StrokeCap.round,
     );
   }
 
@@ -652,41 +670,37 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     final startAngle = _startAngle + _sweepAngle * start;
     final sweep = _sweepAngle * (end - start);
     if (sweep <= 0) return;
+    // The active colour is a strip nested in the neutral avatar-ring body,
+    // rather than a second full-width tube that replaces that body.
+    final stripWidth = geometry.stroke * .46;
     canvas.drawArc(
-      geometry.trackRect.shift(
-        Offset(geometry.stroke * .10, geometry.stroke * .25),
-      ),
+      geometry.trackRect.shift(Offset(0, 5 * geometry.scale)),
       startAngle,
       sweep,
       false,
       _arcPaint(
         rect: geometry.trackRect,
         colors: depthColors,
-        stroke: geometry.stroke * .92,
-      )..maskFilter = MaskFilter.blur(BlurStyle.normal, geometry.stroke * .08),
+        stroke: stripWidth,
+      )..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.5 * geometry.scale),
     );
     canvas.drawArc(
       geometry.trackRect,
       startAngle,
       sweep,
       false,
-      _arcPaint(
-        rect: geometry.trackRect,
-        colors: colors,
-        stroke: geometry.stroke * .90,
-      ),
+      _arcPaint(rect: geometry.trackRect, colors: colors, stroke: stripWidth),
     );
     canvas.drawArc(
-      geometry.trackRect.shift(Offset(0, -geometry.stroke * .14)),
+      geometry.trackRect,
       startAngle,
       sweep,
       false,
       Paint()
         ..color = highlight
         ..style = PaintingStyle.stroke
-        ..strokeWidth = geometry.stroke * .16
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, geometry.stroke * .05),
+        ..strokeWidth = 3 * geometry.scale
+        ..strokeCap = StrokeCap.round,
     );
   }
 
@@ -695,18 +709,18 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     required List<Color> colors,
     required double stroke,
   }) => Paint()
-    ..shader = SweepGradient(
-      startAngle: _startAngle,
-      endAngle: _startAngle + _sweepAngle,
+    ..shader = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
       colors: colors,
-      stops: _gradientStops,
+      stops: const <double>[0, .45, 1],
     ).createShader(rect)
     ..style = PaintingStyle.stroke
     ..strokeWidth = stroke
     ..strokeCap = StrokeCap.round;
 
   void _paintBreakpoint(Canvas canvas, _GaugeGeometry geometry) {
-    final seam = geometry.stroke / geometry.trackRect.width;
+    final seam = geometry.stroke / geometry.trackRect.width * .72;
     final seamStart = math.max(0.0, presentation.targetProgress - seam * .55);
     final seamEnd = math.min(1.0, presentation.targetProgress + seam * .55);
     final angle = _startAngle + seamStart * _sweepAngle;
@@ -717,9 +731,11 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
       sweep,
       false,
       Paint()
-        ..color = const Color(0x42534B75)
+        ..color = BudgetProgressRingGeometry.source.trackShadowColor.withValues(
+          alpha: .40,
+        )
         ..style = PaintingStyle.stroke
-        ..strokeWidth = geometry.stroke * .34
+        ..strokeWidth = geometry.stroke * .26
         ..strokeCap = StrokeCap.round
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, geometry.stroke * .07),
     );
@@ -731,7 +747,7 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
       Paint()
         ..color = const Color(0xA6FFFFFF)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = geometry.stroke * .12
+        ..strokeWidth = 3 * geometry.scale
         ..strokeCap = StrokeCap.round,
     );
   }
@@ -748,52 +764,51 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
 
   void _paintMarkerShadow(Canvas canvas, _GaugeGeometry geometry) {
     final center = _markerCenter(geometry);
-    final radius = geometry.stroke * .52;
+    final radius = geometry.markerRadius;
     canvas.drawCircle(
-      center + Offset(radius * .27, radius * .42),
-      radius * 1.10,
+      center + Offset(0, 2 * geometry.scale),
+      radius,
       Paint()
-        ..color = const Color(0x4A342D5A)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * .65),
+        ..color = presentation.markerMaterial.depth.withValues(alpha: .28)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2.5 * geometry.scale),
     );
     if (presentation.hasVisualOverflow) {
       canvas.drawCircle(
         center,
-        radius * 1.45,
+        radius * 1.32,
         Paint()
-          ..color = presentation.markerGradient[1].withValues(alpha: .24)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * .9),
+          ..color = presentation.markerMaterial.body.withValues(alpha: .20)
+          ..maskFilter = MaskFilter.blur(
+            BlurStyle.normal,
+            3.5 * geometry.scale,
+          ),
       );
     }
   }
 
   void _paintMarker(Canvas canvas, _GaugeGeometry geometry) {
     final center = _markerCenter(geometry);
-    final radius = geometry.stroke * .52;
+    final radius = geometry.markerRadius;
     final body = Rect.fromCircle(center: center, radius: radius);
     canvas.drawCircle(
       center,
       radius,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(-.38, -.44),
-          radius: .92,
-          colors: presentation.markerGradient,
-          stops: _gradientStops,
+          center: const Alignment(-.35, -.4),
+          radius: .9,
+          colors: <Color>[
+            presentation.markerMaterial.highlight,
+            presentation.markerMaterial.body,
+            presentation.markerMaterial.depth,
+          ],
+          stops: const <double>[0, .42, 1],
         ).createShader(body),
     );
     canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = const Color(0x7DFFFFFF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = radius * .14,
-    );
-    canvas.drawCircle(
-      center + Offset(-radius * .32, -radius * .38),
-      radius * .22,
-      Paint()..color = const Color(0xD9FFFFFF),
+      center + Offset(-2.5 * geometry.scale, -3 * geometry.scale),
+      2.2 * geometry.scale,
+      Paint()..color = presentation.markerMaterial.highlight,
     );
   }
 
