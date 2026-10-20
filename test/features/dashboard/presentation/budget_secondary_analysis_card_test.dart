@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_secondary_analysis.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_secondary_analysis_card.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -43,7 +44,7 @@ void main() {
     ),
   );
 
-  testWidgets('SUM mounts exactly one overspend-capable semicircle', (
+  testWidgets('SUM mounts exactly one direction-aware clay semicircle', (
     tester,
   ) async {
     await pump(
@@ -64,6 +65,7 @@ void main() {
       find.byKey(const ValueKey('budget-analysis-sum-semicircle')),
       findsOneWidget,
     );
+    expect(find.byType(BudgetClaySemicircleGauge), findsOneWidget);
     expect(
       find.byKey(const ValueKey('budget-analysis-year-zero-axis-bars')),
       findsNothing,

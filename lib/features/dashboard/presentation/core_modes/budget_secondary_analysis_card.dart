@@ -7,7 +7,9 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_secondary_analysis.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
+import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_visual_bank.dart';
+import 'budget_clay_semicircle_gauge.dart';
 
 /// Third semantic page of the existing Budget distribution pager.
 ///
@@ -36,11 +38,13 @@ final class _RenderedAnalysisFrame {
     required this.frame,
     required this.targetTitle,
     required this.scopeLabel,
+    required this.targetVisual,
   });
 
   final DashboardBudgetSecondaryAnalysisFrame frame;
   final String targetTitle;
   final String scopeLabel;
+  final DashboardBudgetTargetPresentationItem? targetVisual;
 }
 
 class _BudgetSecondaryAnalysisCardState
@@ -115,16 +119,27 @@ class _BudgetSecondaryAnalysisCardState
       frame: candidate,
       targetTitle: selection.title,
       scopeLabel: selection.analysisScopeLabel,
+      targetVisual: _targetVisualFor(state),
     );
     final old = _rendered;
     if (old != null &&
         identical(old.frame, next.frame) &&
         old.targetTitle == next.targetTitle &&
-        old.scopeLabel == next.scopeLabel) {
+        old.scopeLabel == next.scopeLabel &&
+        identical(old.targetVisual, next.targetVisual)) {
       return false;
     }
     _rendered = next;
     return true;
+  }
+
+  DashboardBudgetTargetPresentationItem? _targetVisualFor(
+    DashboardBudgetPresentationState state,
+  ) {
+    for (final item in state.items) {
+      if (item.target.handle == state.selectedHandle) return item;
+    }
+    return null;
   }
 
   @override
@@ -142,6 +157,7 @@ class _BudgetSecondaryAnalysisCardState
         frame: rendered.frame,
         targetTitle: rendered.targetTitle,
         scopeLabel: rendered.scopeLabel,
+        targetVisual: rendered.targetVisual,
       ),
     );
   }
@@ -156,11 +172,13 @@ final class BudgetSecondaryAnalysisPreparedCard extends StatelessWidget {
     required this.frame,
     required this.targetTitle,
     required this.scopeLabel,
+    this.targetVisual,
   });
 
   final DashboardBudgetSecondaryAnalysisFrame frame;
   final String targetTitle;
   final String scopeLabel;
+  final DashboardBudgetTargetPresentationItem? targetVisual;
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +192,13 @@ final class BudgetSecondaryAnalysisPreparedCard extends StatelessWidget {
           children: <Widget>[
             _AnalysisHeader(copy: copy, scopeLabel: scopeLabel),
             const SizedBox(height: 4),
-            Expanded(child: _Hero(payload: payload)),
+            Expanded(
+              child: _Hero(
+                payload: payload,
+                direction: frame.direction,
+                targetVisual: targetVisual,
+              ),
+            ),
             const SizedBox(height: 6),
             SizedBox(height: 43, child: _KpiRow(payload: payload)),
           ],
@@ -285,14 +309,22 @@ final class _AnalysisHeader extends StatelessWidget {
 }
 
 final class _Hero extends StatelessWidget {
-  const _Hero({required this.payload});
+  const _Hero({
+    required this.payload,
+    required this.direction,
+    required this.targetVisual,
+  });
 
   final DashboardBudgetSecondaryAnalysisPayload payload;
+  final LedgerDirection direction;
+  final DashboardBudgetTargetPresentationItem? targetVisual;
 
   @override
   Widget build(BuildContext context) => switch (payload) {
     DashboardBudgetSumAnalysis() => _SumHero(
       payload: payload as DashboardBudgetSumAnalysis,
+      direction: direction,
+      targetVisual: targetVisual,
     ),
     DashboardBudgetYearAnalysis() => _YearHero(
       payload: payload as DashboardBudgetYearAnalysis,
@@ -307,70 +339,36 @@ final class _Hero extends StatelessWidget {
 }
 
 final class _SumHero extends StatelessWidget {
-  const _SumHero({required this.payload});
+  const _SumHero({
+    required this.payload,
+    required this.direction,
+    required this.targetVisual,
+  });
   final DashboardBudgetSumAnalysis payload;
+  final LedgerDirection direction;
+  final DashboardBudgetTargetPresentationItem? targetVisual;
 
   @override
   Widget build(BuildContext context) {
     final ratio = payload.averageUtilization;
     if (ratio == null) return const _UnavailableHero();
-    return Stack(
-      alignment: Alignment.center,
-      children: <Widget>[
-        _SemiGauge(
-          key: const ValueKey<String>('budget-analysis-sum-semicircle'),
-          ratio: ratio,
-          primary: FluviVisualTokens.appHighlightGradient.colors.first,
-          overflow: FluviVisualTokens.budgetProgressDanger,
-          healthScale: true,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                '${(ratio * 100).round()}%',
-                style: const TextStyle(
-                  color: FluviVisualTokens.textPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                ),
-              ),
-              const Text(
-                'átlagos\nkeretkihasználás',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: FluviVisualTokens.textSecondary,
-                  fontSize: 7.2,
-                  height: 1.1,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Positioned(
-          left: 10,
-          bottom: 0,
-          child: Text('0%', style: _endpointStyle),
-        ),
-        const Positioned(
-          right: 5,
-          bottom: 0,
-          child: Text('100%+', style: _endpointStyle),
-        ),
-      ],
+    final accent = BudgetClayGaugeAccentResolver.resolve(
+      context,
+      direction: direction,
+      targetVisual: targetVisual,
+    );
+    return BudgetClaySemicircleGauge(
+      key: const ValueKey<String>('budget-analysis-sum-semicircle'),
+      presentation: BudgetClayGaugePresentation.resolve(
+        rawRatio: ratio,
+        direction: direction,
+        activeGradient: accent,
+      ),
+      primaryLabel: '${(ratio * 100).round()}%',
+      secondaryLabel: 'átlagos keretkihasználás',
     );
   }
 }
-
-const _endpointStyle = TextStyle(
-  color: FluviVisualTokens.textSecondary,
-  fontSize: 6.5,
-  fontWeight: FontWeight.w700,
-);
 
 final class _YearHero extends StatelessWidget {
   const _YearHero({required this.payload});
@@ -873,23 +871,19 @@ final class _KpiBlock extends StatelessWidget {
 
 final class _SemiGauge extends StatelessWidget {
   const _SemiGauge({
-    super.key,
     required this.ratio,
     required this.primary,
     required this.overflow,
-    this.healthScale = false,
   });
   final double ratio;
   final Color primary;
   final Color overflow;
-  final bool healthScale;
   @override
   Widget build(BuildContext context) => CustomPaint(
     painter: _SemiGaugePainter(
       ratio: ratio,
       primary: primary,
       overflow: overflow,
-      healthScale: healthScale,
     ),
     child: const SizedBox.expand(),
   );
@@ -900,12 +894,10 @@ final class _SemiGaugePainter extends CustomPainter {
     required this.ratio,
     required this.primary,
     required this.overflow,
-    required this.healthScale,
   });
   final double ratio;
   final Color primary;
   final Color overflow;
-  final bool healthScale;
   @override
   void paint(Canvas canvas, Size size) {
     final diameter = math.min(size.width * .90, size.height * 1.62);
@@ -926,36 +918,13 @@ final class _SemiGaugePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = track.strokeWidth
       ..strokeCap = StrokeCap.round;
-    if (healthScale) {
-      const bands = <(double, Color)>[
-        (.75, FluviVisualTokens.budgetProgressHealthy),
-        (.15, FluviVisualTokens.budgetProgressWarning),
-        (.30, FluviVisualTokens.budgetProgressDanger),
-      ];
-      var start = 0.0;
-      for (final band in bands) {
-        final end = math.min(start + band.$1, normalized);
-        if (end > start) {
-          progress.color = band.$2;
-          canvas.drawArc(
-            rect,
-            math.pi + math.pi * (start / 1.20),
-            math.pi * ((end - start) / 1.20),
-            false,
-            progress,
-          );
-        }
-        start += band.$1;
-      }
-    } else {
-      canvas.drawArc(
-        rect,
-        math.pi,
-        math.pi * (normalized / 1.20),
-        false,
-        progress,
-      );
-    }
+    canvas.drawArc(
+      rect,
+      math.pi,
+      math.pi * (normalized / 1.20),
+      false,
+      progress,
+    );
     final angle = math.pi + math.pi * (normalized / 1.20);
     final radius = diameter / 2;
     final marker = Offset(
@@ -970,23 +939,13 @@ final class _SemiGaugePainter extends CustomPainter {
     canvas.drawCircle(
       marker,
       track.strokeWidth * .20,
-      Paint()
-        ..color = healthScale && ratio <= 1
-            ? (ratio < .75
-                  ? FluviVisualTokens.budgetProgressHealthy
-                  : ratio <= .90
-                  ? FluviVisualTokens.budgetProgressWarning
-                  : overflow)
-            : progress.color,
+      Paint()..color = progress.color,
     );
   }
 
   @override
   bool shouldRepaint(covariant _SemiGaugePainter old) =>
-      old.ratio != ratio ||
-      old.primary != primary ||
-      old.overflow != overflow ||
-      old.healthScale != healthScale;
+      old.ratio != ratio || old.primary != primary || old.overflow != overflow;
 }
 
 final class _YearBarsPainter extends CustomPainter {
