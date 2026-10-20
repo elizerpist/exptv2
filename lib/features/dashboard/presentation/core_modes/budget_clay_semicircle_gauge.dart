@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -548,10 +549,10 @@ final class BudgetSemicircleMaterialPreferences extends StatelessWidget {
   }
 }
 
-/// One direct-paint hero for both SUM and MONTH. Semantic frame publication is
-/// intentionally immediate: navigation provides the motion, while the gauge
-/// paints the accepted exact value on its first frame.
-final class BudgetSemicircleGauge extends StatelessWidget {
+/// One shared SUM/MONTH hero. Semantic frame publication remains immediate,
+/// while only the painted active extent and marker make a short visual sweep
+/// between already-accepted values. No card opacity or data value animates.
+final class BudgetSemicircleGauge extends StatefulWidget {
   const BudgetSemicircleGauge({
     super.key,
     required this.presentation,
@@ -564,16 +565,67 @@ final class BudgetSemicircleGauge extends StatelessWidget {
   final String secondaryLabel;
 
   @override
+  State<BudgetSemicircleGauge> createState() => _BudgetSemicircleGaugeState();
+}
+
+final class _BudgetSemicircleGaugeState extends State<BudgetSemicircleGauge>
+    with SingleTickerProviderStateMixin {
+  static const _motionDuration = Duration(milliseconds: 320);
+
+  late final AnimationController _motion;
+  late final Animation<double> _curve;
+  late double _fromProgress;
+  late double _toProgress;
+
+  @override
+  void initState() {
+    super.initState();
+    // The first exact frame paints at its target immediately. Motion belongs
+    // only to a subsequent semantic replacement of something already visible.
+    _fromProgress = widget.presentation.visualProgress;
+    _toProgress = widget.presentation.visualProgress;
+    _motion = AnimationController(vsync: this, duration: _motionDuration)
+      ..value = 1;
+    _curve = CurvedAnimation(parent: _motion, curve: Curves.easeOutCubic);
+  }
+
+  @override
+  void didUpdateWidget(covariant BudgetSemicircleGauge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.presentation.visualProgress;
+    if (next == _toProgress) return;
+
+    // Retarget from the scalar actually on screen, not the last semantic
+    // value. Rapid period/avatar navigation therefore has no visual snap.
+    _fromProgress = _visibleProgress;
+    _toProgress = next;
+    _motion.forward(from: 0);
+  }
+
+  double get _visibleProgress =>
+      lerpDouble(_fromProgress, _toProgress, _curve.value)!;
+
+  @override
+  void dispose() {
+    _motion.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => Semantics(
-    label: '$primaryLabel, $secondaryLabel',
-    child: BudgetSemicircleMaterialPreferences(
-      presentation: presentation,
-      progress: presentation.visualProgress,
-      layout: BudgetSemicircleMaterialLayout.sumHero,
-      showMarker: true,
+    label: '${widget.primaryLabel}, ${widget.secondaryLabel}',
+    child: AnimatedBuilder(
+      animation: _motion,
       child: _GaugeTextLayer(
-        primaryLabel: primaryLabel,
-        secondaryLabel: secondaryLabel,
+        primaryLabel: widget.primaryLabel,
+        secondaryLabel: widget.secondaryLabel,
+      ),
+      builder: (context, textLayer) => BudgetSemicircleMaterialPreferences(
+        presentation: widget.presentation,
+        progress: _visibleProgress,
+        layout: BudgetSemicircleMaterialLayout.sumHero,
+        showMarker: true,
+        child: textLayer!,
       ),
     ),
   );
@@ -589,57 +641,91 @@ final class _GaugeTextLayer extends StatelessWidget {
   final String secondaryLabel;
 
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
-    children: <Widget>[
-      Align(
-        // The track preserves the upper-half avatar-ring optical centre; its
-        // interior is intentionally the shared white Card2 surface, not a
-        // separate full-circle medallion.
-        alignment: const Alignment(0, 0),
-        child: ExcludeSemantics(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                primaryLabel,
-                style: const TextStyle(
-                  color: FluviVisualTokens.textPrimary,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final geometry = BudgetSemicircleMaterialGeometry.resolve(
+        constraints.biggest,
+        layout: BudgetSemicircleMaterialLayout.sumHero,
+      );
+      return Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Align(
+            // The track preserves the upper-half avatar-ring optical centre;
+            // its interior is intentionally the shared white Card2 surface.
+            alignment: const Alignment(0, 0),
+            child: ExcludeSemantics(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    primaryLabel,
+                    style: const TextStyle(
+                      color: FluviVisualTokens.textPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    secondaryLabel,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 7.2,
+                      height: 1.05,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 3),
-              Text(
-                secondaryLabel,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: FluviVisualTokens.textSecondary,
-                  fontSize: 7.2,
-                  height: 1.05,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-      const Align(
-        alignment: Alignment(-.56, .96),
-        child: ExcludeSemantics(child: Text('0%', style: _endpointStyle)),
-      ),
-      const Align(
-        alignment: Alignment(.56, .96),
-        child: ExcludeSemantics(child: Text('100%+', style: _endpointStyle)),
-      ),
-    ],
+          _EndpointLabel(
+            key: const ValueKey<String>('budget-semicircle-left-endpoint'),
+            label: '0%',
+            center: geometry.leftEndpoint,
+            top: geometry.endpointLabelTop,
+          ),
+          _EndpointLabel(
+            key: const ValueKey<String>('budget-semicircle-right-endpoint'),
+            label: '100%+',
+            center: geometry.rightEndpoint,
+            top: geometry.endpointLabelTop,
+          ),
+        ],
+      );
+    },
+  );
+}
+
+final class _EndpointLabel extends StatelessWidget {
+  const _EndpointLabel({
+    super.key,
+    required this.label,
+    required this.center,
+    required this.top,
+  });
+
+  final String label;
+  final Offset center;
+  final double top;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    left: center.dx,
+    top: top,
+    child: FractionalTranslation(
+      translation: const Offset(-.5, 0),
+      child: ExcludeSemantics(child: Text(label, style: _endpointStyle)),
+    ),
   );
 }
 
 const _endpointStyle = TextStyle(
   color: FluviVisualTokens.textSecondary,
-  fontSize: 6.5,
+  fontSize: 8.2,
   fontWeight: FontWeight.w700,
   height: 1,
 );
@@ -653,10 +739,15 @@ final class BudgetSemicircleMaterialGeometry {
     final source = BudgetProgressRingGeometry.source;
     // SUM and MONTH resolve this exact same hero geometry. The source avatar
     // ring owns every material proportion; scope adapters only supply data.
-    final center = Offset(size.width / 2, size.height - size.height * .105);
+    // This is the canonical viewport used by SUM and MONTH. The Card2 layout
+    // always reserves its footer lane, so this geometry never receives extra
+    // height merely because the optional KPI cards are hidden.
+    final center = Offset(size.width / 2, size.height * .78);
+    final topInset = math.max(5 * (size.width / source.viewport.width), 4.0);
+    final outerTrackRatio = 1 + source.trackWidth / (2 * source.trackRadius);
     final radius = math.min(
       size.width * .38,
-      center.dy / (source.faceRadius / source.trackRadius),
+      math.max(0.0, (center.dy - topInset) / outerTrackRatio),
     );
     final scale = radius / source.trackRadius;
     final trackRect = Rect.fromCircle(center: center, radius: radius);
@@ -683,6 +774,10 @@ final class BudgetSemicircleMaterialGeometry {
   double get trackRadius => trackRect.width / 2;
   double get activeStripWidth => stroke * .46;
   double get decorativeStripWidth => 5 * scale;
+  Offset get leftEndpoint => Offset(trackRect.left, trackRect.center.dy);
+  Offset get rightEndpoint => Offset(trackRect.right, trackRect.center.dy);
+  double get endpointLabelTop =>
+      trackRect.center.dy + math.max(stroke * .5, markerRadius) + 3 * scale;
 }
 
 /// Multi-pass clay material renderer. Paint receives only prepared immutable

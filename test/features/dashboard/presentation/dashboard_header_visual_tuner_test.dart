@@ -1569,84 +1569,108 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Budget graph decorative strip controls are live and independent',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(800, 3000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      final controller = DashboardHeaderVisualController(vsync: tester);
-      final ring = BudgetRingPresentationController();
+  testWidgets('Budget graph decorative strip controls are live and independent', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 3000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    final ring = BudgetRingPresentationController();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SizedBox(
-            width: 360,
-            height: 2500,
-            child: DashboardHeaderVisualTuner(
-              controller: controller,
-              budgetRingPresentation: ring,
-            ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BudgetRingPresentationScope(
+          controller: ring,
+          child: Builder(
+            builder: (context) {
+              expect(
+                identical(
+                  BudgetRingPresentationScope.controllerOf(context),
+                  ring,
+                ),
+                isTrue,
+                reason:
+                    'The tuner and production analysis scope must share one authority.',
+              );
+              return SizedBox(
+                width: 360,
+                height: 2500,
+                child: DashboardHeaderVisualTuner(
+                  controller: controller,
+                  budgetRingPresentation: ring,
+                ),
+              );
+            },
           ),
         ),
-      );
-      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
-        DashboardHeaderTunerSection.budgetRingPresentation,
-      ]);
+      ),
+    );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.budgetRingPresentation,
+    ]);
 
-      expect(find.text('Custom Budget grafikon'), findsOneWidget);
-      final neutralSwitch = find.byKey(
-        const ValueKey<String>('budget-graph-neutral-decorative-strip'),
-      );
-      final activeSwitch = find.byKey(
-        const ValueKey<String>('budget-graph-active-decorative-strip'),
-      );
-      final infoCardsSwitch = find.byKey(
-        const ValueKey<String>('budget-analysis-info-cards-visible'),
-      );
-      await tester.ensureVisible(neutralSwitch);
-      await tester.ensureVisible(activeSwitch);
-      await tester.ensureVisible(infoCardsSwitch);
-      expect(neutralSwitch, findsOneWidget);
-      expect(activeSwitch, findsOneWidget);
-      expect(infoCardsSwitch, findsOneWidget);
-      expect(tester.widget<SwitchListTile>(neutralSwitch).value, isTrue);
-      expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
-      expect(tester.widget<SwitchListTile>(infoCardsSwitch).value, isTrue);
+    expect(find.text('Custom Budget grafikon'), findsOneWidget);
+    final neutralSwitch = find.byKey(
+      const ValueKey<String>('budget-graph-neutral-decorative-strip'),
+    );
+    final activeSwitch = find.byKey(
+      const ValueKey<String>('budget-graph-active-decorative-strip'),
+    );
+    final infoCardsSwitch = find.byKey(
+      const ValueKey<String>('budget-analysis-info-cards-visible'),
+    );
+    await tester.ensureVisible(neutralSwitch);
+    await tester.ensureVisible(activeSwitch);
+    await tester.ensureVisible(infoCardsSwitch);
+    expect(neutralSwitch, findsOneWidget);
+    expect(activeSwitch, findsOneWidget);
+    expect(infoCardsSwitch, findsOneWidget);
+    expect(tester.widget<SwitchListTile>(neutralSwitch).value, isTrue);
+    expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
+    expect(tester.widget<SwitchListTile>(infoCardsSwitch).value, isTrue);
 
-      await tester.tap(neutralSwitch);
-      await tester.pump();
-      expect(ring.value.showBudgetNeutralDecorativeStrip, isFalse);
-      expect(ring.value.showBudgetActiveProgressDecorativeStrip, isTrue);
-      expect(tester.widget<SwitchListTile>(neutralSwitch).value, isFalse);
-      expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
+    await tester.tap(neutralSwitch);
+    await tester.pump();
+    expect(ring.value.showBudgetNeutralDecorativeStrip, isFalse);
+    expect(ring.value.showBudgetActiveProgressDecorativeStrip, isTrue);
+    expect(tester.widget<SwitchListTile>(neutralSwitch).value, isFalse);
+    expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
 
-      await tester.tap(activeSwitch);
-      await tester.pump();
-      expect(ring.value.showBudgetNeutralDecorativeStrip, isFalse);
-      expect(ring.value.showBudgetActiveProgressDecorativeStrip, isFalse);
-      expect(tester.widget<SwitchListTile>(neutralSwitch).value, isFalse);
-      expect(tester.widget<SwitchListTile>(activeSwitch).value, isFalse);
+    await tester.tap(activeSwitch);
+    await tester.pump();
+    expect(ring.value.showBudgetNeutralDecorativeStrip, isFalse);
+    expect(ring.value.showBudgetActiveProgressDecorativeStrip, isFalse);
+    expect(tester.widget<SwitchListTile>(neutralSwitch).value, isFalse);
+    expect(tester.widget<SwitchListTile>(activeSwitch).value, isFalse);
 
-      await tester.tap(infoCardsSwitch);
-      await tester.pump();
-      expect(ring.value.showBudgetAnalysisInfoCards, isFalse);
-      expect(tester.widget<SwitchListTile>(infoCardsSwitch).value, isFalse);
+    await tester.tap(infoCardsSwitch);
+    await tester.pump();
+    expect(ring.value.showBudgetAnalysisInfoCards, isFalse);
+    expect(tester.widget<SwitchListTile>(infoCardsSwitch).value, isFalse);
 
-      final solid = find.text('Progress színezése: Egységes állapotszín');
-      await tester.ensureVisible(solid);
-      await tester.tap(solid);
-      await tester.pump();
-      expect(
-        ring.value.progressColorPresentation,
-        BudgetProgressColorPresentation.solidHealth,
-      );
+    final solid = find.byKey(
+      const ValueKey<String>('budget-graph-solid-health-color'),
+    );
+    await tester.ensureVisible(solid);
+    expect(tester.widget<SwitchListTile>(solid).value, isFalse);
+    await tester.tap(solid);
+    await tester.pump();
+    expect(
+      ring.value.progressColorPresentation,
+      BudgetProgressColorPresentation.solidHealth,
+    );
+    expect(tester.widget<SwitchListTile>(solid).value, isTrue);
+    expect(
+      find.text('Progress színezése: Egységes állapotszín'),
+      findsNothing,
+      reason: 'The old competing RadioGroup must not remain in the tuner.',
+    );
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      controller.dispose();
-      ring.dispose();
-      await tester.pump();
-    },
-  );
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    ring.dispose();
+    await tester.pump();
+  });
 
   test('tuner placement always reserves the live Header plus its gap', () {
     const gap = 12.0;

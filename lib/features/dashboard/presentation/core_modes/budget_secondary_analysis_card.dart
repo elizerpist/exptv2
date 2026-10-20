@@ -302,14 +302,22 @@ final class _BudgetSecondaryAnalysisPreparedCardState
                 ),
               ),
             ),
-            if (showInfoCards) ...<Widget>[
-              const SizedBox(height: 6),
+            // The hero owns one canonical viewport irrespective of the
+            // optional KPI cards below it. Keeping this endpoint/footer lane
+            // in both modes prevents the expanded hero from growing by 49 px
+            // and pulling the shared SUM/MONTH gauge down with it.
+            const SizedBox(height: 6),
+            if (showInfoCards)
               SizedBox(
                 key: const ValueKey<String>('budget-analysis-kpi-row'),
                 height: 43,
                 child: _KpiRow(kpis: kpis),
+              )
+            else
+              const SizedBox(
+                key: ValueKey<String>('budget-analysis-endpoint-lane'),
+                height: 43,
               ),
-            ],
           ],
         ),
       ),
@@ -847,7 +855,7 @@ final class _AnalysisKpiPopup extends StatelessWidget {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -858,7 +866,7 @@ final class _AnalysisKpiPopup extends StatelessWidget {
                   index += 1
                 ) ...<Widget>[
                   _AnalysisKpiPopupSection(kpi: kpis[index]),
-                  if (index != kpis.length - 1) const SizedBox(height: 8),
+                  if (index != kpis.length - 1) const SizedBox(height: 4),
                 ],
               ],
             ),
@@ -882,28 +890,27 @@ final class _AnalysisKpiPopupSection extends StatelessWidget {
         kpi.label,
         style: const TextStyle(
           color: Color(0xCCFFFFFF),
-          fontSize: 7,
+          fontSize: 6.6,
           height: 1,
           fontWeight: FontWeight.w700,
         ),
       ),
-      const SizedBox(height: 2),
+      const SizedBox(height: 1),
       Text(
         kpi.value,
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 13,
+          fontSize: 11.5,
           height: 1,
           fontWeight: FontWeight.w900,
         ),
       ),
       if (kpi.detail.isNotEmpty) ...<Widget>[
-        const SizedBox(height: 1),
         Text(
           kpi.detail,
           style: const TextStyle(
             color: Color(0xB3FFFFFF),
-            fontSize: 6.5,
+            fontSize: 6,
             height: 1,
             fontWeight: FontWeight.w600,
           ),

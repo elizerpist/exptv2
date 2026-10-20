@@ -61,6 +61,17 @@ void main() {
     );
   }
 
+  Rect trackBounds(WidgetTester tester) {
+    final materialBounds = tester.getRect(
+      find.byType(BudgetSemicircleMaterial),
+    );
+    final geometry = BudgetSemicircleMaterialGeometry.resolve(
+      materialBounds.size,
+      layout: BudgetSemicircleMaterialLayout.sumHero,
+    );
+    return geometry.trackRect.shift(materialBounds.topLeft);
+  }
+
   testWidgets('SUM mounts exactly one direction-aware clay semicircle', (
     tester,
   ) async {
@@ -103,6 +114,106 @@ void main() {
       matchesGoldenFile('../../../goldens/budget_analysis_sum.png'),
     );
   });
+
+  testWidgets(
+    'SUM and MONTH retain canonical track and endpoint geometry when KPI cards hide',
+    (tester) async {
+      final ringPresentation = BudgetRingPresentationController();
+      addTearDown(ringPresentation.dispose);
+
+      Future<void> expectStableViewport({
+        required DashboardBudgetSecondaryAnalysisPayload payload,
+        required LedgerTimeScope scope,
+        required String scopeLabel,
+      }) async {
+        ringPresentation.setBudgetAnalysisInfoCardsVisible(true);
+        await pump(
+          tester,
+          scope: scope,
+          scopeLabel: scopeLabel,
+          payload: payload,
+          ringPresentation: ringPresentation,
+        );
+        final on = trackBounds(tester);
+        final leftOn = tester.getRect(
+          find.byKey(const ValueKey<String>('budget-semicircle-left-endpoint')),
+        );
+        final rightOn = tester.getRect(
+          find.byKey(
+            const ValueKey<String>('budget-semicircle-right-endpoint'),
+          ),
+        );
+
+        ringPresentation.setBudgetAnalysisInfoCardsVisible(false);
+        await tester.pump();
+        final off = trackBounds(tester);
+        final leftOff = tester.getRect(
+          find.byKey(const ValueKey<String>('budget-semicircle-left-endpoint')),
+        );
+        final rightOff = tester.getRect(
+          find.byKey(
+            const ValueKey<String>('budget-semicircle-right-endpoint'),
+          ),
+        );
+
+        expect(off.left, closeTo(on.left, .01));
+        expect(off.top, closeTo(on.top, .01));
+        expect(off.right, closeTo(on.right, .01));
+        expect(off.bottom, closeTo(on.bottom, .01));
+        // The keyed Positioned origins are the real arc endpoints; the
+        // child is paint-translated by half its own width around that origin.
+        expect(leftOff.left, closeTo(off.left, .5));
+        expect(rightOff.left, closeTo(off.right, .5));
+        expect(leftOff.top, greaterThan(off.center.dy));
+        expect(rightOff.top, greaterThan(off.center.dy));
+        expect(leftOff.left, closeTo(leftOn.left, .01));
+        expect(rightOff.left, closeTo(rightOn.left, .01));
+        expect(
+          tester.widget<Text>(find.text('0%')).style!.fontSize,
+          greaterThan(6.5),
+        );
+        expect(
+          find.byKey(const ValueKey<String>('budget-analysis-endpoint-lane')),
+          findsOneWidget,
+          reason:
+              'Hidden cards leave a structural breathing lane, not extra hero height.',
+        );
+      }
+
+      await expectStableViewport(
+        scope: const AllTimeScope(),
+        scopeLabel: 'Összesen',
+        payload: const DashboardBudgetSumAnalysis(
+          availability: BudgetAnalysisAvailability.available,
+          averageUtilization: .39,
+          averageBudgetDeltaScaled100: -84000,
+          eligibleMonthCount: 12,
+          monthsWithinBudget: 8,
+          utilizationStandardDeviation: .12,
+        ),
+      );
+      await expectStableViewport(
+        scope: const MonthScope(YearMonth(year: 2026, month: 3)),
+        scopeLabel: '2026. március',
+        payload: const DashboardBudgetMonthSecondaryAnalysis(
+          availability: BudgetAnalysisAvailability.available,
+          daysInMonth: 31,
+          elapsedCalendarDays: 18,
+          monthActualScaled100: 29000000,
+          monthlyLimitScaled100: 39000000,
+          elapsedRatio: 18 / 31,
+          budgetUsedRatio: 290 / 390,
+          paceDifferencePercentagePoints: 16.3,
+          projectedMonthEndScaled100: 49944444,
+          expectedDeltaScaled100: 10944444,
+          closingBudgetDeltaScaled100: null,
+          remainingDailyRoomScaled100: 769231,
+          historicalDailyAverageScaled100: null,
+          usesForecast: true,
+        ),
+      );
+    },
+  );
 
   testWidgets(
     'SUM shared white surface stays continuous at 39, 100 and 225 percent',
@@ -480,7 +591,7 @@ void main() {
   );
 
   testWidgets(
-    'semantic gauge publication is direct: no fade or progress tween',
+    'semantic publication is instant while only the sweep and marker move',
     (tester) async {
       final presentation = ValueNotifier<BudgetSemicircleMaterialPresentation>(
         BudgetSemicircleMaterialPresentation.resolve(
@@ -524,9 +635,122 @@ void main() {
 
       expect(find.text('82%'), findsOneWidget);
       expect(find.text('39%'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(BudgetSemicircleGauge),
+          matching: find.byType(FadeTransition),
+        ),
+        findsNothing,
+        reason:
+            'Route transitions are unrelated; the gauge subtree has no fade.',
+      );
+      expect(
+        tester
+            .widget<BudgetSemicircleMaterial>(
+              find.byType(BudgetSemicircleMaterial),
+            )
+            .progress,
+        closeTo(.39 / 1.2, .0001),
+        reason: 'The first motion frame starts at the previously painted arc.',
+      );
+      await tester.pump(const Duration(milliseconds: 160));
+      final midway = tester
+          .widget<BudgetSemicircleMaterial>(
+            find.byType(BudgetSemicircleMaterial),
+          )
+          .progress;
+      expect(midway, greaterThan(.39 / 1.2));
+      expect(midway, lessThan(.82 / 1.2));
+      await tester.pump(const Duration(milliseconds: 160));
+      expect(
+        tester
+            .widget<BudgetSemicircleMaterial>(
+              find.byType(BudgetSemicircleMaterial),
+            )
+            .progress,
+        closeTo(.82 / 1.2, .0001),
+      );
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('rapid semantic retarget starts from the visible sweep', (
+    tester,
+  ) async {
+    final presentation = ValueNotifier<BudgetSemicircleMaterialPresentation>(
+      BudgetSemicircleMaterialPresentation.resolve(
+        rawRatio: .27,
+        direction: LedgerDirection.expense,
+        activeGradient: const <Color>[
+          Color(0xFF22D3EE),
+          Color(0xFF2BC4F3),
+          Color(0xFF39B8F4),
+        ],
+      ),
+    );
+    addTearDown(presentation.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 390,
+          height: 150,
+          child: ValueListenableBuilder<BudgetSemicircleMaterialPresentation>(
+            valueListenable: presentation,
+            builder: (context, value, _) => BudgetSemicircleGauge(
+              presentation: value,
+              primaryLabel: '${(value.rawRatio * 100).round()}%',
+              secondaryLabel: 'havi keretkihasználás',
+            ),
+          ),
+        ),
+      ),
+    );
+    presentation.value = BudgetSemicircleMaterialPresentation.resolve(
+      rawRatio: .91,
+      direction: LedgerDirection.expense,
+      activeGradient: const <Color>[
+        Color(0xFF22D3EE),
+        Color(0xFF2BC4F3),
+        Color(0xFF39B8F4),
+      ],
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 160));
+    final visibleMidway = tester
+        .widget<BudgetSemicircleMaterial>(find.byType(BudgetSemicircleMaterial))
+        .progress;
+
+    presentation.value = BudgetSemicircleMaterialPresentation.resolve(
+      rawRatio: .43,
+      direction: LedgerDirection.expense,
+      activeGradient: const <Color>[
+        Color(0xFF22D3EE),
+        Color(0xFF2BC4F3),
+        Color(0xFF39B8F4),
+      ],
+    );
+    await tester.pump();
+
+    expect(find.text('43%'), findsOneWidget);
+    expect(
+      tester
+          .widget<BudgetSemicircleMaterial>(
+            find.byType(BudgetSemicircleMaterial),
+          )
+          .progress,
+      closeTo(visibleMidway, .0001),
+      reason: 'Latest-wins retargeting must not snap back to 27% or 91%.',
+    );
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(
+      tester
+          .widget<BudgetSemicircleMaterial>(
+            find.byType(BudgetSemicircleMaterial),
+          )
+          .progress,
+      closeTo(.43 / 1.2, .0001),
+    );
+  });
 
   testWidgets('hidden info cards toggle the same KPI data in a chart popup', (
     tester,
@@ -554,6 +778,12 @@ void main() {
       findsNothing,
     );
     expect(find.text('Átlagos eltérés'), findsNothing);
+    await expectLater(
+      find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+      matchesGoldenFile(
+        '../../../goldens/budget_analysis_sum_info_cards_hidden.png',
+      ),
+    );
     await tester.tap(
       find.byKey(const ValueKey<String>('budget-analysis-sum-semicircle')),
     );

@@ -3904,30 +3904,6 @@ final class _BudgetRingPresentationSection extends StatelessWidget {
             ],
           ),
         ),
-        RadioGroup<BudgetProgressColorPresentation>(
-          groupValue: settings.progressColorPresentation,
-          onChanged: (presentation) {
-            if (presentation != null) {
-              controller.selectProgressColorPresentation(presentation);
-            }
-          },
-          child: Column(
-            children: <Widget>[
-              for (final presentation in BudgetProgressColorPresentation.values)
-                RadioListTile<BudgetProgressColorPresentation>(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(switch (presentation) {
-                    BudgetProgressColorPresentation.segmentedScale =>
-                      'Progress színezése: Színskála',
-                    BudgetProgressColorPresentation.solidHealth =>
-                      'Progress színezése: Egységes állapotszín',
-                  }),
-                  value: presentation,
-                ),
-            ],
-          ),
-        ),
         const Padding(
           padding: EdgeInsets.only(top: 12, bottom: 2),
           child: Align(
@@ -3937,6 +3913,24 @@ final class _BudgetRingPresentationSection extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('budget-graph-solid-health-color'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Egységes állapotszín'),
+          subtitle: const Text(
+            'Ki: színskála · Be: a teljes progress az aktuális állapot színe',
+          ),
+          value:
+              settings.progressColorPresentation ==
+              BudgetProgressColorPresentation.solidHealth,
+          onChanged: (solidHealth) =>
+              controller.selectProgressColorPresentation(
+                solidHealth
+                    ? BudgetProgressColorPresentation.solidHealth
+                    : BudgetProgressColorPresentation.segmentedScale,
+              ),
         ),
         SwitchListTile(
           key: const ValueKey<String>('budget-graph-neutral-decorative-strip'),
