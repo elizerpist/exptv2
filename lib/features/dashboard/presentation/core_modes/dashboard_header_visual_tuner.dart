@@ -3853,79 +3853,86 @@ final class _BudgetRingPresentationSection extends StatelessWidget {
   final BudgetRingPresentationController controller;
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<BudgetRingPresentationSettings>(
-        valueListenable: controller,
-        builder: (context, settings, _) => _TunerSection(
-          title: 'SUM Budget',
-          children: <Widget>[
-            RadioGroup<BudgetSumRingStyle>(
-              groupValue: settings.sumRingStyle,
-              onChanged: (style) {
-                if (style != null) controller.selectSumRingStyle(style);
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final style in BudgetSumRingStyle.values)
-                    RadioListTile<BudgetSumRingStyle>(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(switch (style) {
-                        BudgetSumRingStyle.current => 'Jelenlegi',
-                        BudgetSumRingStyle.coloredScaleWhiteArc =>
-                          'Színes skála + fehér szegmens',
-                        BudgetSumRingStyle.coloredScaleMovingSphere =>
-                          'Színes skála + gömb',
-                      }),
-                      value: style,
-                    ),
-                ],
-              ),
-            ),
-            RadioGroup<BudgetHealthyColorMode>(
-              groupValue: settings.healthyColorMode,
-              onChanged: (mode) {
-                if (mode != null) controller.selectHealthyColorMode(mode);
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final mode in BudgetHealthyColorMode.values)
-                    RadioListTile<BudgetHealthyColorMode>(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        mode == BudgetHealthyColorMode.fixedGreen
-                            ? 'Egészséges szín: Zöld'
-                            : 'Egészséges szín: Kategóriaszín',
-                      ),
-                      value: mode,
-                    ),
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 12, bottom: 2),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Custom Budget grafikon',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<BudgetRingPresentationSettings>(
+    valueListenable: controller,
+    builder: (context, settings, _) => _TunerSection(
+      title: 'SUM Budget',
+      children: <Widget>[
+        RadioGroup<BudgetSumRingStyle>(
+          groupValue: settings.sumRingStyle,
+          onChanged: (style) {
+            if (style != null) controller.selectSumRingStyle(style);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final style in BudgetSumRingStyle.values)
+                RadioListTile<BudgetSumRingStyle>(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(switch (style) {
+                    BudgetSumRingStyle.current => 'Jelenlegi',
+                    BudgetSumRingStyle.coloredScaleWhiteArc =>
+                      'Színes skála + fehér szegmens',
+                    BudgetSumRingStyle.coloredScaleMovingSphere =>
+                      'Színes skála + gömb',
+                  }),
+                  value: style,
                 ),
-              ),
-            ),
-            SwitchListTile(
-              key: const ValueKey<String>(
-                'budget-sum-analysis-neutral-decorative-strip',
-              ),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Fehér díszcsík a neutral sávon'),
-              value: settings.showSumAnalysisNeutralDecorativeStrip,
-              onChanged: controller.setSumAnalysisNeutralDecorativeStripVisible,
-            ),
-          ],
+            ],
+          ),
         ),
-      );
+        RadioGroup<BudgetHealthyColorMode>(
+          groupValue: settings.healthyColorMode,
+          onChanged: (mode) {
+            if (mode != null) controller.selectHealthyColorMode(mode);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final mode in BudgetHealthyColorMode.values)
+                RadioListTile<BudgetHealthyColorMode>(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    mode == BudgetHealthyColorMode.fixedGreen
+                        ? 'Egészséges szín: Zöld'
+                        : 'Egészséges szín: Kategóriaszín',
+                  ),
+                  value: mode,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 12, bottom: 2),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Custom Budget grafikon',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('budget-graph-neutral-decorative-strip'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Fehér díszcsík a szürke sávon'),
+          value: settings.showBudgetNeutralDecorativeStrip,
+          onChanged: controller.setBudgetNeutralDecorativeStripVisible,
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('budget-graph-active-decorative-strip'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Világos díszcsík a színes progressen'),
+          value: settings.showBudgetActiveProgressDecorativeStrip,
+          onChanged: controller.setBudgetActiveProgressDecorativeStripVisible,
+        ),
+      ],
+    ),
+  );
 }
 
 final class _DashboardSummaryPresentationSection extends StatelessWidget {

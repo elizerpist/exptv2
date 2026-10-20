@@ -8,6 +8,7 @@ import '../../../../core/categories/presentation/budget_category_avatar_artwork.
 import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
 import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_target.dart';
 import '../../query/domain/ledger_direction.dart';
@@ -69,14 +70,14 @@ final class BudgetClayGaugeOvershootZone {
       highlight == other.highlight;
 }
 
-/// Paint-ready data for [BudgetClaySemicircleGauge].
+/// Paint-ready data for [BudgetSumSemicircleGauge].
 ///
 /// `rawRatio` is intentionally preserved for the KPI label while
 /// `visualProgress` follows the explicit 0–120% scale. Nothing inside the
 /// painter performs category lookup, repository reads, or health resolution.
 @immutable
-final class BudgetClayGaugePresentation {
-  factory BudgetClayGaugePresentation.resolve({
+final class BudgetSemicircleMaterialPresentation {
+  factory BudgetSemicircleMaterialPresentation.resolve({
     required double rawRatio,
     required LedgerDirection direction,
     required List<Color> activeGradient,
@@ -147,7 +148,7 @@ final class BudgetClayGaugePresentation {
       stops: progressMaterial.stops,
       position: visualProgress,
     );
-    return BudgetClayGaugePresentation._(
+    return BudgetSemicircleMaterialPresentation._(
       rawRatio: safeRaw,
       visualProgress: visualProgress,
       targetProgress: targetProgress,
@@ -164,7 +165,43 @@ final class BudgetClayGaugePresentation {
     );
   }
 
-  const BudgetClayGaugePresentation._({
+  /// A non-financial material ramp for a shared semicircle such as the
+  /// MONTH elapsed-time gauge. It keeps the same 0–120% visual scale and
+  /// clay construction without introducing SUM health colours.
+  factory BudgetSemicircleMaterialPresentation.fixedAccent({
+    required double rawRatio,
+    required List<Color> activeGradient,
+    double visualMaximum = 1.20,
+  }) {
+    assert(visualMaximum > 0);
+    final safeRaw = rawRatio.isFinite
+        ? math.max(0.0, rawRatio).toDouble()
+        : 0.0;
+    final visualProgress = (safeRaw / visualMaximum).clamp(0.0, 1.0).toDouble();
+    final active = _threeStops(activeGradient);
+    final markerColor = _colorAt(
+      colors: active,
+      stops: const <double>[0, .5, 1],
+      position: visualProgress,
+    );
+    return BudgetSemicircleMaterialPresentation._(
+      rawRatio: safeRaw,
+      visualProgress: visualProgress,
+      targetProgress: 1 / visualMaximum,
+      health: BudgetClayGaugeHealth.expenseHealthy,
+      activeGradient: active,
+      progressGradient: active,
+      progressDepthGradient: _depthStops(active),
+      progressStops: const <double>[0, .5, 1],
+      markerMaterial: BudgetProgressRingSphereMaterial.forHealthColor(
+        markerColor,
+      ),
+      overshootZones: const <BudgetClayGaugeOvershootZone>[],
+      hasVisualOverflow: safeRaw > visualMaximum,
+    );
+  }
+
+  const BudgetSemicircleMaterialPresentation._({
     required this.rawRatio,
     required this.visualProgress,
     required this.targetProgress,
@@ -197,7 +234,7 @@ final class BudgetClayGaugePresentation {
   final List<BudgetClayGaugeOvershootZone> overshootZones;
   final bool hasVisualOverflow;
 
-  bool sameVisualAs(BudgetClayGaugePresentation other) =>
+  bool sameVisualAs(BudgetSemicircleMaterialPresentation other) =>
       rawRatio == other.rawRatio &&
       visualProgress == other.visualProgress &&
       targetProgress == other.targetProgress &&
@@ -366,32 +403,108 @@ abstract final class BudgetClayGaugeAccentResolver {
   }
 }
 
+/// The one shared material primitive for every Budget analysis semicircle.
+///
+/// SUM supplies an animated progress value and a 3D marker through its
+/// wrapper. MONTH supplies its smaller layout and no marker. The painter and
+/// every physical layer stay identical.
+enum BudgetSemicircleMaterialLayout { sumHero, monthMetric }
+
+final class BudgetSemicircleMaterial extends StatelessWidget {
+  const BudgetSemicircleMaterial({
+    super.key,
+    required this.presentation,
+    required this.progress,
+    required this.layout,
+    required this.showNeutralDecorativeStrip,
+    required this.showActiveProgressDecorativeStrip,
+    required this.showMarker,
+    required this.child,
+  });
+
+  final BudgetSemicircleMaterialPresentation presentation;
+  final double progress;
+  final BudgetSemicircleMaterialLayout layout;
+  final bool showNeutralDecorativeStrip;
+  final bool showActiveProgressDecorativeStrip;
+  final bool showMarker;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: CustomPaint(
+      painter: _BudgetSemicircleMaterialPainter(
+        presentation: presentation,
+        animatedProgress: progress,
+        layout: layout,
+        showNeutralDecorativeStrip: showNeutralDecorativeStrip,
+        showActiveProgressDecorativeStrip: showActiveProgressDecorativeStrip,
+        showMarker: showMarker,
+      ),
+      child: child,
+    ),
+  );
+}
+
+/// Binds the two session presentation preferences immediately above the one
+/// repaintable material scene. Semantic colour resolution and financial
+/// presentation stay outside this subtree, so a switch tap is paint-only.
+final class BudgetSemicircleMaterialPreferences extends StatelessWidget {
+  const BudgetSemicircleMaterialPreferences({
+    super.key,
+    required this.presentation,
+    required this.progress,
+    required this.layout,
+    required this.showMarker,
+    required this.child,
+  });
+
+  final BudgetSemicircleMaterialPresentation presentation;
+  final double progress;
+  final BudgetSemicircleMaterialLayout layout;
+  final bool showMarker;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = BudgetRingPresentationScope.settingsOf(context);
+    return BudgetSemicircleMaterial(
+      presentation: presentation,
+      progress: progress,
+      layout: layout,
+      showNeutralDecorativeStrip: settings.showBudgetNeutralDecorativeStrip,
+      showActiveProgressDecorativeStrip:
+          settings.showBudgetActiveProgressDecorativeStrip,
+      showMarker: showMarker,
+      child: child,
+    );
+  }
+}
+
 /// Isolated animated Canvas scene for the SUM Budget card.
 ///
 /// One controller owns the active body, overshoot, and marker position. Its
 /// repaint is contained by the boundary so changing a target cannot repaint
 /// the surrounding dashboard card or pager.
-final class BudgetClaySemicircleGauge extends StatefulWidget {
-  const BudgetClaySemicircleGauge({
+final class BudgetSumSemicircleGauge extends StatefulWidget {
+  const BudgetSumSemicircleGauge({
     super.key,
     required this.presentation,
     required this.primaryLabel,
     required this.secondaryLabel,
-    this.showNeutralDecorativeStrip = true,
   });
 
-  final BudgetClayGaugePresentation presentation;
+  final BudgetSemicircleMaterialPresentation presentation;
   final String primaryLabel;
   final String secondaryLabel;
-  final bool showNeutralDecorativeStrip;
 
   @override
-  State<BudgetClaySemicircleGauge> createState() =>
-      _BudgetClaySemicircleGaugeState();
+  State<BudgetSumSemicircleGauge> createState() =>
+      _BudgetSumSemicircleGaugeState();
 }
 
-final class _BudgetClaySemicircleGaugeState
-    extends State<BudgetClaySemicircleGauge>
+final class _BudgetSumSemicircleGaugeState
+    extends State<BudgetSumSemicircleGauge>
     with SingleTickerProviderStateMixin {
   late final AnimationController _progressController;
   late double _fromProgress;
@@ -410,7 +523,7 @@ final class _BudgetClaySemicircleGaugeState
   }
 
   @override
-  void didUpdateWidget(covariant BudgetClaySemicircleGauge oldWidget) {
+  void didUpdateWidget(covariant BudgetSumSemicircleGauge oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.presentation.sameVisualAs(widget.presentation)) {
       _fromProgress = _visibleProgress;
@@ -440,13 +553,12 @@ final class _BudgetClaySemicircleGaugeState
           primaryLabel: widget.primaryLabel,
           secondaryLabel: widget.secondaryLabel,
         ),
-        builder: (context, child) => CustomPaint(
-          painter: _BudgetClaySemicirclePainter(
-            presentation: widget.presentation,
-            animatedProgress: _visibleProgress,
-            showNeutralDecorativeStrip: widget.showNeutralDecorativeStrip,
-          ),
-          child: child,
+        builder: (context, child) => BudgetSemicircleMaterialPreferences(
+          presentation: widget.presentation,
+          progress: _visibleProgress,
+          layout: BudgetSemicircleMaterialLayout.sumHero,
+          showMarker: true,
+          child: child!,
         ),
       ),
     ),
@@ -519,18 +631,32 @@ const _endpointStyle = TextStyle(
 );
 
 @immutable
-final class _GaugeGeometry {
-  factory _GaugeGeometry.resolve(Size size) {
+final class BudgetSemicircleMaterialGeometry {
+  factory BudgetSemicircleMaterialGeometry.resolve(
+    Size size, {
+    required BudgetSemicircleMaterialLayout layout,
+  }) {
     final source = BudgetProgressRingGeometry.source;
-    final labelBand = size.height * .105;
-    final center = Offset(size.width / 2, size.height - labelBand);
-    // Preserve the accepted avatar-ring proportions while the parent Card2
-    // provides the continuous white surface inside and below the track.
-    final faceToTrack = source.faceRadius / source.trackRadius;
-    final radius = math.min(size.width * .38, center.dy / faceToTrack);
+    final center = Offset(size.width / 2, switch (layout) {
+      BudgetSemicircleMaterialLayout.sumHero =>
+        size.height - size.height * .105,
+      BudgetSemicircleMaterialLayout.monthMetric => size.height - 3,
+    });
+    // The source avatar ring owns all material proportions. The two layouts
+    // only choose how that same physical object fits in their available box.
+    final radius = switch (layout) {
+      BudgetSemicircleMaterialLayout.sumHero => math.min(
+        size.width * .38,
+        center.dy / (source.faceRadius / source.trackRadius),
+      ),
+      BudgetSemicircleMaterialLayout.monthMetric => math.min(
+        size.width * .45,
+        center.dy,
+      ),
+    };
     final scale = radius / source.trackRadius;
     final trackRect = Rect.fromCircle(center: center, radius: radius);
-    return _GaugeGeometry._(
+    return BudgetSemicircleMaterialGeometry._(
       trackRect: trackRect,
       scale: scale,
       stroke: source.trackWidth * scale,
@@ -538,7 +664,7 @@ final class _GaugeGeometry {
     );
   }
 
-  const _GaugeGeometry._({
+  const BudgetSemicircleMaterialGeometry._({
     required this.trackRect,
     required this.scale,
     required this.stroke,
@@ -549,29 +675,42 @@ final class _GaugeGeometry {
   final double scale;
   final double stroke;
   final double markerRadius;
+
+  double get trackRadius => trackRect.width / 2;
+  double get activeStripWidth => stroke * .46;
+  double get decorativeStripWidth => 5 * scale;
 }
 
 /// Multi-pass clay material renderer. Paint receives only prepared immutable
 /// values and contains no semantic lookup or gradient-list construction.
-final class _BudgetClaySemicirclePainter extends CustomPainter {
-  const _BudgetClaySemicirclePainter({
+final class _BudgetSemicircleMaterialPainter extends CustomPainter {
+  const _BudgetSemicircleMaterialPainter({
     required this.presentation,
     required this.animatedProgress,
+    required this.layout,
     required this.showNeutralDecorativeStrip,
+    required this.showActiveProgressDecorativeStrip,
+    required this.showMarker,
   });
 
   static const _startAngle = math.pi;
   static const _sweepAngle = math.pi;
   static const _neutralDecorativeStripStart = .5;
 
-  final BudgetClayGaugePresentation presentation;
+  final BudgetSemicircleMaterialPresentation presentation;
   final double animatedProgress;
+  final BudgetSemicircleMaterialLayout layout;
   final bool showNeutralDecorativeStrip;
+  final bool showActiveProgressDecorativeStrip;
+  final bool showMarker;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    final geometry = _GaugeGeometry.resolve(size);
+    final geometry = BudgetSemicircleMaterialGeometry.resolve(
+      size,
+      layout: layout,
+    );
     // The arcs themselves already have π sweep, so no painter-wide horizontal
     // clip or full-circle interior is needed. Card2's white physical surface
     // is the gauge interior; its outer rounded clip owns the final boundary.
@@ -583,11 +722,16 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     }
     _paintActiveBody(canvas, geometry);
     _paintInnerShadow(canvas, geometry);
-    _paintMarkerShadow(canvas, geometry);
-    _paintMarker(canvas, geometry);
+    if (showMarker) {
+      _paintMarkerShadow(canvas, geometry);
+      _paintMarker(canvas, geometry);
+    }
   }
 
-  void _paintCastShadow(Canvas canvas, _GaugeGeometry geometry) {
+  void _paintCastShadow(
+    Canvas canvas,
+    BudgetSemicircleMaterialGeometry geometry,
+  ) {
     final source = BudgetProgressRingGeometry.source;
     // Only the physical semicircle track casts a shadow. A face-sized oval
     // would recreate a second full-circle object on the shared white surface.
@@ -605,7 +749,10 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     );
   }
 
-  void _paintRearDepth(Canvas canvas, _GaugeGeometry geometry) {
+  void _paintRearDepth(
+    Canvas canvas,
+    BudgetSemicircleMaterialGeometry geometry,
+  ) {
     final source = BudgetProgressRingGeometry.source;
     canvas.drawArc(
       geometry.trackRect,
@@ -620,7 +767,10 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     );
   }
 
-  void _paintNeutralTrackBody(Canvas canvas, _GaugeGeometry geometry) {
+  void _paintNeutralTrackBody(
+    Canvas canvas,
+    BudgetSemicircleMaterialGeometry geometry,
+  ) {
     final source = BudgetProgressRingGeometry.source;
     canvas.drawArc(
       geometry.trackRect,
@@ -640,7 +790,10 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     );
   }
 
-  void _paintNeutralDecorativeStrip(Canvas canvas, _GaugeGeometry geometry) {
+  void _paintNeutralDecorativeStrip(
+    Canvas canvas,
+    BudgetSemicircleMaterialGeometry geometry,
+  ) {
     // This is the selected-avatar ring's embedded neutral decoration, not a
     // free-floating hero-only gloss. It lives across the authored right half
     // of the neutral body; the active material is painted afterwards and
@@ -654,12 +807,18 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     );
   }
 
-  void _paintActiveBody(Canvas canvas, _GaugeGeometry geometry) {
+  void _paintActiveBody(
+    Canvas canvas,
+    BudgetSemicircleMaterialGeometry geometry,
+  ) {
     if (animatedProgress <= 0) return;
     _paintContinuousMaterial(canvas, geometry);
   }
 
-  void _paintInnerShadow(Canvas canvas, _GaugeGeometry geometry) {
+  void _paintInnerShadow(
+    Canvas canvas,
+    BudgetSemicircleMaterialGeometry geometry,
+  ) {
     final inner = geometry.trackRect.deflate(geometry.stroke * .29);
     canvas.drawArc(
       inner,
@@ -677,13 +836,16 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     );
   }
 
-  void _paintContinuousMaterial(Canvas canvas, _GaugeGeometry geometry) {
+  void _paintContinuousMaterial(
+    Canvas canvas,
+    BudgetSemicircleMaterialGeometry geometry,
+  ) {
     final sweep = _sweepAngle * animatedProgress;
     // The active colour is a strip nested in the neutral avatar-ring body,
     // rather than a second full-width tube that replaces that body. One
     // global SweepGradient keeps the category, warning, and danger material
     // continuous even when the semantic state crosses a threshold.
-    final stripWidth = geometry.stroke * .46;
+    final stripWidth = geometry.activeStripWidth;
     canvas.drawArc(
       geometry.trackRect.shift(Offset(0, 5 * geometry.scale)),
       _startAngle,
@@ -706,33 +868,39 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
         stroke: stripWidth,
       ),
     );
-    canvas.drawArc(
-      geometry.trackRect,
-      _startAngle,
-      sweep,
-      false,
-      _decorativeStripPaint(geometry),
-    );
+    if (showActiveProgressDecorativeStrip) {
+      canvas.drawArc(
+        geometry.trackRect,
+        _startAngle,
+        sweep,
+        false,
+        _decorativeStripPaint(geometry),
+      );
+    }
   }
 
-  Paint _decorativeStripPaint(_GaugeGeometry geometry) => Paint()
+  Paint _decorativeStripPaint(
+    BudgetSemicircleMaterialGeometry geometry,
+  ) => Paint()
     // Same embedded progress-gloss cross-section as the selected avatar ring.
     ..color = const Color(0x3DFFFFFF)
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 5 * geometry.scale
+    ..strokeWidth = geometry.decorativeStripWidth
     ..strokeCap = StrokeCap.round;
 
-  Paint _neutralDecorativeStripPaint(_GaugeGeometry geometry) {
+  Paint _neutralDecorativeStripPaint(
+    BudgetSemicircleMaterialGeometry geometry,
+  ) {
     final source = BudgetProgressRingGeometry.source;
     return Paint()
       ..color = source.trackGlossColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5 * geometry.scale
+      ..strokeWidth = geometry.decorativeStripWidth
       ..strokeCap = StrokeCap.round;
   }
 
   Paint _progressPaint({
-    required _GaugeGeometry geometry,
+    required BudgetSemicircleMaterialGeometry geometry,
     required List<Color> colors,
     required double stroke,
   }) => Paint()
@@ -746,7 +914,7 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     ..strokeWidth = stroke
     ..strokeCap = StrokeCap.round;
 
-  Offset _markerCenter(_GaugeGeometry geometry) {
+  Offset _markerCenter(BudgetSemicircleMaterialGeometry geometry) {
     final angle = _startAngle + _sweepAngle * animatedProgress;
     return Offset(
       geometry.trackRect.center.dx +
@@ -756,7 +924,10 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     );
   }
 
-  void _paintMarkerShadow(Canvas canvas, _GaugeGeometry geometry) {
+  void _paintMarkerShadow(
+    Canvas canvas,
+    BudgetSemicircleMaterialGeometry geometry,
+  ) {
     final center = _markerCenter(geometry);
     final radius = geometry.markerRadius;
     canvas.drawCircle(
@@ -780,7 +951,7 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     }
   }
 
-  void _paintMarker(Canvas canvas, _GaugeGeometry geometry) {
+  void _paintMarker(Canvas canvas, BudgetSemicircleMaterialGeometry geometry) {
     final center = _markerCenter(geometry);
     final radius = geometry.markerRadius;
     final body = Rect.fromCircle(center: center, radius: radius);
@@ -807,8 +978,12 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _BudgetClaySemicirclePainter oldDelegate) =>
+  bool shouldRepaint(covariant _BudgetSemicircleMaterialPainter oldDelegate) =>
       animatedProgress != oldDelegate.animatedProgress ||
+      layout != oldDelegate.layout ||
       showNeutralDecorativeStrip != oldDelegate.showNeutralDecorativeStrip ||
+      showActiveProgressDecorativeStrip !=
+          oldDelegate.showActiveProgressDecorativeStrip ||
+      showMarker != oldDelegate.showMarker ||
       !presentation.sameVisualAs(oldDelegate.presentation);
 }

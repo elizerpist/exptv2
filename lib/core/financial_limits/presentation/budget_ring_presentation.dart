@@ -16,25 +16,37 @@ final class BudgetRingPresentationSettings {
   const BudgetRingPresentationSettings({
     this.sumRingStyle = BudgetSumRingStyle.current,
     this.healthyColorMode = BudgetHealthyColorMode.fixedGreen,
-    this.showSumAnalysisNeutralDecorativeStrip = true,
+    this.showBudgetNeutralDecorativeStrip = true,
+    this.showBudgetActiveProgressDecorativeStrip = true,
   });
 
   static const defaults = BudgetRingPresentationSettings();
 
   final BudgetSumRingStyle sumRingStyle;
   final BudgetHealthyColorMode healthyColorMode;
-  final bool showSumAnalysisNeutralDecorativeStrip;
+
+  /// Shared Budget semicircle material preference. It applies to SUM and both
+  /// MONTH gauges; it has no financial meaning.
+  final bool showBudgetNeutralDecorativeStrip;
+
+  /// Controls only the embedded light strip on the coloured active material.
+  /// It is independent from [showBudgetNeutralDecorativeStrip].
+  final bool showBudgetActiveProgressDecorativeStrip;
 
   BudgetRingPresentationSettings copyWith({
     BudgetSumRingStyle? sumRingStyle,
     BudgetHealthyColorMode? healthyColorMode,
-    bool? showSumAnalysisNeutralDecorativeStrip,
+    bool? showBudgetNeutralDecorativeStrip,
+    bool? showBudgetActiveProgressDecorativeStrip,
   }) => BudgetRingPresentationSettings(
     sumRingStyle: sumRingStyle ?? this.sumRingStyle,
     healthyColorMode: healthyColorMode ?? this.healthyColorMode,
-    showSumAnalysisNeutralDecorativeStrip:
-        showSumAnalysisNeutralDecorativeStrip ??
-        this.showSumAnalysisNeutralDecorativeStrip,
+    showBudgetNeutralDecorativeStrip:
+        showBudgetNeutralDecorativeStrip ??
+        this.showBudgetNeutralDecorativeStrip,
+    showBudgetActiveProgressDecorativeStrip:
+        showBudgetActiveProgressDecorativeStrip ??
+        this.showBudgetActiveProgressDecorativeStrip,
   );
 
   @override
@@ -42,14 +54,17 @@ final class BudgetRingPresentationSettings {
       other is BudgetRingPresentationSettings &&
       other.sumRingStyle == sumRingStyle &&
       other.healthyColorMode == healthyColorMode &&
-      other.showSumAnalysisNeutralDecorativeStrip ==
-          showSumAnalysisNeutralDecorativeStrip;
+      other.showBudgetNeutralDecorativeStrip ==
+          showBudgetNeutralDecorativeStrip &&
+      other.showBudgetActiveProgressDecorativeStrip ==
+          showBudgetActiveProgressDecorativeStrip;
 
   @override
   int get hashCode => Object.hash(
     sumRingStyle,
     healthyColorMode,
-    showSumAnalysisNeutralDecorativeStrip,
+    showBudgetNeutralDecorativeStrip,
+    showBudgetActiveProgressDecorativeStrip,
   );
 }
 
@@ -68,8 +83,15 @@ final class BudgetRingPresentationController
     if (next != value) value = next;
   }
 
-  void setSumAnalysisNeutralDecorativeStripVisible(bool visible) {
-    final next = value.copyWith(showSumAnalysisNeutralDecorativeStrip: visible);
+  void setBudgetNeutralDecorativeStripVisible(bool visible) {
+    final next = value.copyWith(showBudgetNeutralDecorativeStrip: visible);
+    if (next != value) value = next;
+  }
+
+  void setBudgetActiveProgressDecorativeStripVisible(bool visible) {
+    final next = value.copyWith(
+      showBudgetActiveProgressDecorativeStrip: visible,
+    );
     if (next != value) value = next;
   }
 

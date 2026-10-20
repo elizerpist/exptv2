@@ -1570,7 +1570,7 @@ void main() {
   );
 
   testWidgets(
-    'Budget graph decorative strip control is live and scoped to ring presentation',
+    'Budget graph decorative strip controls are live and independent',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 3000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -1594,22 +1594,32 @@ void main() {
       ]);
 
       expect(find.text('Custom Budget grafikon'), findsOneWidget);
-      final stripSwitch = find.byKey(
-        const ValueKey<String>('budget-sum-analysis-neutral-decorative-strip'),
+      final neutralSwitch = find.byKey(
+        const ValueKey<String>('budget-graph-neutral-decorative-strip'),
       );
-      await tester.ensureVisible(stripSwitch);
-      expect(stripSwitch, findsOneWidget);
-      expect(tester.widget<SwitchListTile>(stripSwitch).value, isTrue);
+      final activeSwitch = find.byKey(
+        const ValueKey<String>('budget-graph-active-decorative-strip'),
+      );
+      await tester.ensureVisible(neutralSwitch);
+      await tester.ensureVisible(activeSwitch);
+      expect(neutralSwitch, findsOneWidget);
+      expect(activeSwitch, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(neutralSwitch).value, isTrue);
+      expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
 
-      await tester.tap(stripSwitch);
+      await tester.tap(neutralSwitch);
       await tester.pump();
-      expect(ring.value.showSumAnalysisNeutralDecorativeStrip, isFalse);
-      expect(tester.widget<SwitchListTile>(stripSwitch).value, isFalse);
+      expect(ring.value.showBudgetNeutralDecorativeStrip, isFalse);
+      expect(ring.value.showBudgetActiveProgressDecorativeStrip, isTrue);
+      expect(tester.widget<SwitchListTile>(neutralSwitch).value, isFalse);
+      expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
 
-      await tester.tap(stripSwitch);
+      await tester.tap(activeSwitch);
       await tester.pump();
-      expect(ring.value.showSumAnalysisNeutralDecorativeStrip, isTrue);
-      expect(tester.widget<SwitchListTile>(stripSwitch).value, isTrue);
+      expect(ring.value.showBudgetNeutralDecorativeStrip, isFalse);
+      expect(ring.value.showBudgetActiveProgressDecorativeStrip, isFalse);
+      expect(tester.widget<SwitchListTile>(neutralSwitch).value, isFalse);
+      expect(tester.widget<SwitchListTile>(activeSwitch).value, isFalse);
 
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();

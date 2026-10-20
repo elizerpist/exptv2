@@ -12,7 +12,7 @@ void main() {
   ];
 
   test('expense overshoot keeps warning and danger zones distinct', () {
-    final presentation = BudgetClayGaugePresentation.resolve(
+    final presentation = BudgetSemicircleMaterialPresentation.resolve(
       rawRatio: 1.15,
       direction: LedgerDirection.expense,
       activeGradient: accent,
@@ -29,7 +29,7 @@ void main() {
   });
 
   test('income over target is a positive zone, never expense danger', () {
-    final presentation = BudgetClayGaugePresentation.resolve(
+    final presentation = BudgetSemicircleMaterialPresentation.resolve(
       rawRatio: 1.16,
       direction: LedgerDirection.income,
       activeGradient: accent,
@@ -45,7 +45,7 @@ void main() {
   });
 
   test('visual progress clamps at 120 percent without losing raw value', () {
-    final presentation = BudgetClayGaugePresentation.resolve(
+    final presentation = BudgetSemicircleMaterialPresentation.resolve(
       rawRatio: 1.53,
       direction: LedgerDirection.expense,
       activeGradient: accent,
@@ -57,7 +57,7 @@ void main() {
   });
 
   test('uses the selected-avatar sphere material for the endpoint marker', () {
-    final presentation = BudgetClayGaugePresentation.resolve(
+    final presentation = BudgetSemicircleMaterialPresentation.resolve(
       rawRatio: .75,
       direction: LedgerDirection.expense,
       activeGradient: accent,
@@ -75,7 +75,7 @@ void main() {
   });
 
   test('expense colours use one blended material ramp across thresholds', () {
-    final presentation = BudgetClayGaugePresentation.resolve(
+    final presentation = BudgetSemicircleMaterialPresentation.resolve(
       rawRatio: 1.15,
       direction: LedgerDirection.expense,
       activeGradient: accent,
@@ -98,4 +98,46 @@ void main() {
       reason: 'the warning-to-danger boundary is also a blend, not a new arc',
     );
   });
+
+  test(
+    'SUM and MONTH layouts preserve the one shared material cross-section',
+    () {
+      final sum = BudgetSemicircleMaterialGeometry.resolve(
+        const Size(390, 150),
+        layout: BudgetSemicircleMaterialLayout.sumHero,
+      );
+      final month = BudgetSemicircleMaterialGeometry.resolve(
+        const Size(195, 110),
+        layout: BudgetSemicircleMaterialLayout.monthMetric,
+      );
+
+      expect(
+        sum.stroke / sum.trackRadius,
+        closeTo(month.stroke / month.trackRadius, .000001),
+      );
+      expect(
+        sum.activeStripWidth / sum.stroke,
+        closeTo(month.activeStripWidth / month.stroke, .000001),
+      );
+      expect(
+        sum.decorativeStripWidth / sum.stroke,
+        closeTo(month.decorativeStripWidth / month.stroke, .000001),
+      );
+      expect(sum.trackRadius, greaterThan(month.trackRadius));
+    },
+  );
+
+  test(
+    'fixed accent material keeps elapsed time outside financial health logic',
+    () {
+      final presentation = BudgetSemicircleMaterialPresentation.fixedAccent(
+        rawRatio: .61,
+        activeGradient: accent,
+      );
+
+      expect(presentation.progressGradient, orderedEquals(accent));
+      expect(presentation.progressStops, const <double>[0, .5, 1]);
+      expect(presentation.overshootZones, isEmpty);
+    },
+  );
 }

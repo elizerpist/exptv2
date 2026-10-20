@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
-import '../../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_secondary_analysis.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
@@ -351,6 +350,8 @@ final class _Hero extends StatelessWidget {
     ),
     DashboardBudgetMonthSecondaryAnalysis() => _MonthHero(
       payload: payload as DashboardBudgetMonthSecondaryAnalysis,
+      direction: direction,
+      targetVisual: targetVisual,
     ),
     DashboardBudgetDaySecondaryAnalysis() => _DayHero(
       payload: payload as DashboardBudgetDaySecondaryAnalysis,
@@ -377,18 +378,15 @@ final class _SumHero extends StatelessWidget {
       direction: direction,
       targetVisual: targetVisual,
     );
-    return BudgetClaySemicircleGauge(
+    return BudgetSumSemicircleGauge(
       key: const ValueKey<String>('budget-analysis-sum-semicircle'),
-      presentation: BudgetClayGaugePresentation.resolve(
+      presentation: BudgetSemicircleMaterialPresentation.resolve(
         rawRatio: ratio,
         direction: direction,
         activeGradient: accent,
       ),
       primaryLabel: '${(ratio * 100).round()}%',
       secondaryLabel: 'átlagos keretkihasználás',
-      showNeutralDecorativeStrip: BudgetRingPresentationScope.settingsOf(
-        context,
-      ).showSumAnalysisNeutralDecorativeStrip,
     );
   }
 }
@@ -432,8 +430,14 @@ final class _YearHero extends StatelessWidget {
 }
 
 final class _MonthHero extends StatelessWidget {
-  const _MonthHero({required this.payload});
+  const _MonthHero({
+    required this.payload,
+    required this.direction,
+    required this.targetVisual,
+  });
   final DashboardBudgetMonthSecondaryAnalysis payload;
+  final LedgerDirection direction;
+  final DashboardBudgetTargetPresentationItem? targetVisual;
 
   @override
   Widget build(BuildContext context) {
@@ -448,6 +452,11 @@ final class _MonthHero extends StatelessWidget {
         : pace < -.5
         ? FluviVisualTokens.budgetProgressHealthy
         : FluviVisualTokens.textSecondary;
+    final usedAccent = BudgetClayGaugeAccentResolver.resolve(
+      context,
+      direction: direction,
+      targetVisual: targetVisual,
+    );
     return Column(
       children: <Widget>[
         Expanded(
@@ -462,7 +471,12 @@ final class _MonthHero extends StatelessWidget {
                   ratio: payload.elapsedRatio!,
                   detail:
                       '${payload.elapsedCalendarDays} / ${payload.daysInMonth} nap',
-                  primary: FluviVisualTokens.appHighlightGradient.colors.first,
+                  presentation:
+                      BudgetSemicircleMaterialPresentation.fixedAccent(
+                        rawRatio: payload.elapsedRatio!,
+                        activeGradient:
+                            FluviVisualTokens.appHighlightGradient.colors,
+                      ),
                 ),
               ),
               Expanded(
@@ -474,7 +488,11 @@ final class _MonthHero extends StatelessWidget {
                   ratio: payload.budgetUsedRatio!,
                   detail:
                       '${_money(payload.monthActualScaled100)} / ${_money(payload.monthlyLimitScaled100)}',
-                  primary: FluviVisualTokens.budgetProgressDanger,
+                  presentation: BudgetSemicircleMaterialPresentation.resolve(
+                    rawRatio: payload.budgetUsedRatio!,
+                    direction: direction,
+                    activeGradient: usedAccent,
+                  ),
                 ),
               ),
             ],
@@ -512,21 +530,23 @@ final class _GaugeMetric extends StatelessWidget {
     required this.label,
     required this.ratio,
     required this.detail,
-    required this.primary,
+    required this.presentation,
   });
   final String label;
   final double ratio;
   final String detail;
-  final Color primary;
+  final BudgetSemicircleMaterialPresentation presentation;
 
   @override
   Widget build(BuildContext context) => Stack(
     alignment: Alignment.center,
     children: <Widget>[
-      _SemiGauge(
-        ratio: ratio,
-        primary: primary,
-        overflow: FluviVisualTokens.budgetProgressDanger,
+      BudgetSemicircleMaterialPreferences(
+        presentation: presentation,
+        progress: presentation.visualProgress,
+        layout: BudgetSemicircleMaterialLayout.monthMetric,
+        showMarker: false,
+        child: const SizedBox.expand(),
       ),
       Padding(
         padding: const EdgeInsets.only(top: 19),
@@ -891,85 +911,6 @@ final class _KpiBlock extends StatelessWidget {
       ),
     ),
   );
-}
-
-final class _SemiGauge extends StatelessWidget {
-  const _SemiGauge({
-    required this.ratio,
-    required this.primary,
-    required this.overflow,
-  });
-  final double ratio;
-  final Color primary;
-  final Color overflow;
-  @override
-  Widget build(BuildContext context) => CustomPaint(
-    painter: _SemiGaugePainter(
-      ratio: ratio,
-      primary: primary,
-      overflow: overflow,
-    ),
-    child: const SizedBox.expand(),
-  );
-}
-
-final class _SemiGaugePainter extends CustomPainter {
-  const _SemiGaugePainter({
-    required this.ratio,
-    required this.primary,
-    required this.overflow,
-  });
-  final double ratio;
-  final Color primary;
-  final Color overflow;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final diameter = math.min(size.width * .90, size.height * 1.62);
-    final rect = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height - 3),
-      width: diameter,
-      height: diameter,
-    );
-    final track = Paint()
-      ..color = FluviVisualTokens.border
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(6, diameter * .10)
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, math.pi, math.pi, false, track);
-    final normalized = ratio.isFinite ? ratio.clamp(0.0, 1.20).toDouble() : 0.0;
-    final progress = Paint()
-      ..color = ratio > 1 ? overflow : primary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = track.strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      rect,
-      math.pi,
-      math.pi * (normalized / 1.20),
-      false,
-      progress,
-    );
-    final angle = math.pi + math.pi * (normalized / 1.20);
-    final radius = diameter / 2;
-    final marker = Offset(
-      rect.center.dx + math.cos(angle) * radius,
-      rect.center.dy + math.sin(angle) * radius,
-    );
-    canvas.drawCircle(
-      marker,
-      track.strokeWidth * .33,
-      Paint()..color = FluviVisualTokens.surface,
-    );
-    canvas.drawCircle(
-      marker,
-      track.strokeWidth * .20,
-      Paint()..color = progress.color,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _SemiGaugePainter old) =>
-      old.ratio != ratio || old.primary != primary || old.overflow != overflow;
 }
 
 final class _YearBarsPainter extends CustomPainter {

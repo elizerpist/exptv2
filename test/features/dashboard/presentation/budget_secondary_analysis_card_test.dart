@@ -81,7 +81,7 @@ void main() {
       find.byKey(const ValueKey('budget-analysis-sum-semicircle')),
       findsOneWidget,
     );
-    expect(find.byType(BudgetClaySemicircleGauge), findsOneWidget);
+    expect(find.byType(BudgetSumSemicircleGauge), findsOneWidget);
     final page = tester.getRect(
       find.byKey(const ValueKey<String>('budget-analysis-golden-boundary')),
     );
@@ -141,7 +141,7 @@ void main() {
   );
 
   testWidgets(
-    'SUM neutral decorative strip follows the live scoped presentation setting',
+    'SUM uses the shared material and supports every decorative-strip combination',
     (tester) async {
       final ringPresentation = BudgetRingPresentationController();
       addTearDown(ringPresentation.dispose);
@@ -162,38 +162,42 @@ void main() {
         useCard2OuterClip: true,
         ringPresentation: ringPresentation,
       );
-      expect(
-        tester
-            .widget<BudgetClaySemicircleGauge>(
-              find.byType(BudgetClaySemicircleGauge),
-            )
-            .showNeutralDecorativeStrip,
-        isTrue,
-      );
-      await expectLater(
-        find.byKey(const ValueKey('budget-analysis-golden-boundary')),
-        matchesGoldenFile(
-          '../../../goldens/budget_analysis_sum_strip_on_039.png',
-        ),
-      );
+      final preparedSumMaterial = tester
+          .widget<BudgetSemicircleMaterial>(
+            find.byType(BudgetSemicircleMaterial),
+          )
+          .presentation;
+      for (final setting in <({String name, bool neutral, bool active})>[
+        (name: 'neutral_on_active_on', neutral: true, active: true),
+        (name: 'neutral_on_active_off', neutral: true, active: false),
+        (name: 'neutral_off_active_on', neutral: false, active: true),
+        (name: 'neutral_off_active_off', neutral: false, active: false),
+      ]) {
+        ringPresentation
+          ..setBudgetNeutralDecorativeStripVisible(setting.neutral)
+          ..setBudgetActiveProgressDecorativeStripVisible(setting.active);
+        await tester.pump();
 
-      ringPresentation.setSumAnalysisNeutralDecorativeStripVisible(false);
-      await tester.pump();
-      expect(
-        tester
-            .widget<BudgetClaySemicircleGauge>(
-              find.byType(BudgetClaySemicircleGauge),
-            )
-            .showNeutralDecorativeStrip,
-        isFalse,
-      );
-      expect(tester.takeException(), isNull);
-      await expectLater(
-        find.byKey(const ValueKey('budget-analysis-golden-boundary')),
-        matchesGoldenFile(
-          '../../../goldens/budget_analysis_sum_strip_off_039.png',
-        ),
-      );
+        final material = tester.widget<BudgetSemicircleMaterial>(
+          find.byType(BudgetSemicircleMaterial),
+        );
+        expect(
+          find.byType(BudgetSemicircleMaterialPreferences),
+          findsOneWidget,
+        );
+        expect(material.layout, BudgetSemicircleMaterialLayout.sumHero);
+        expect(material.showMarker, isTrue);
+        expect(material.showNeutralDecorativeStrip, setting.neutral);
+        expect(material.showActiveProgressDecorativeStrip, setting.active);
+        expect(identical(material.presentation, preparedSumMaterial), isTrue);
+        expect(tester.takeException(), isNull);
+        await expectLater(
+          find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+          matchesGoldenFile(
+            '../../../goldens/budget_analysis_sum_strips_${setting.name}_039.png',
+          ),
+        );
+      }
     },
   );
 
@@ -249,8 +253,10 @@ void main() {
   );
 
   testWidgets(
-    'MONTH mounts exactly two side-by-side semicircles and pp insight',
+    'MONTH uses two shared material semicircles for every strip combination',
     (tester) async {
+      final ringPresentation = BudgetRingPresentationController();
+      addTearDown(ringPresentation.dispose);
       await pump(
         tester,
         scope: const MonthScope(YearMonth(year: 2026, month: 3)),
@@ -271,6 +277,7 @@ void main() {
           historicalDailyAverageScaled100: null,
           usesForecast: true,
         ),
+        ringPresentation: ringPresentation,
       );
 
       expect(
@@ -282,13 +289,96 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('pp'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await expectLater(
-        find.byKey(const ValueKey('budget-analysis-golden-boundary')),
-        matchesGoldenFile('../../../goldens/budget_analysis_month.png'),
-      );
+      final preparedMonthMaterials = tester
+          .widgetList<BudgetSemicircleMaterial>(
+            find.byType(BudgetSemicircleMaterial),
+          )
+          .map((material) => material.presentation)
+          .toList(growable: false);
+      for (final setting in <({String name, bool neutral, bool active})>[
+        (name: 'neutral_on_active_on', neutral: true, active: true),
+        (name: 'neutral_on_active_off', neutral: true, active: false),
+        (name: 'neutral_off_active_on', neutral: false, active: true),
+        (name: 'neutral_off_active_off', neutral: false, active: false),
+      ]) {
+        ringPresentation
+          ..setBudgetNeutralDecorativeStripVisible(setting.neutral)
+          ..setBudgetActiveProgressDecorativeStripVisible(setting.active);
+        await tester.pump();
+
+        final materials = tester
+            .widgetList<BudgetSemicircleMaterial>(
+              find.byType(BudgetSemicircleMaterial),
+            )
+            .toList(growable: false);
+        expect(
+          find.byType(BudgetSemicircleMaterialPreferences),
+          findsNWidgets(2),
+        );
+        expect(materials, hasLength(2));
+        for (var index = 0; index < materials.length; index += 1) {
+          final material = materials[index];
+          expect(material.layout, BudgetSemicircleMaterialLayout.monthMetric);
+          expect(material.showMarker, isFalse);
+          expect(material.showNeutralDecorativeStrip, setting.neutral);
+          expect(material.showActiveProgressDecorativeStrip, setting.active);
+          expect(
+            identical(material.presentation, preparedMonthMaterials[index]),
+            isTrue,
+          );
+        }
+        expect(tester.takeException(), isNull);
+        await expectLater(
+          find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+          matchesGoldenFile(
+            '../../../goldens/budget_analysis_month_strips_${setting.name}.png',
+          ),
+        );
+      }
     },
   );
+
+  testWidgets('MONTH budget over target keeps the shared continuous material', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      scope: const MonthScope(YearMonth(year: 2026, month: 3)),
+      scopeLabel: '2026. március',
+      payload: const DashboardBudgetMonthSecondaryAnalysis(
+        availability: BudgetAnalysisAvailability.available,
+        daysInMonth: 31,
+        elapsedCalendarDays: 18,
+        monthActualScaled100: 44850000,
+        monthlyLimitScaled100: 39000000,
+        elapsedRatio: 18 / 31,
+        budgetUsedRatio: 1.15,
+        paceDifferencePercentagePoints: 57.0,
+        projectedMonthEndScaled100: 65000000,
+        expectedDeltaScaled100: 26000000,
+        closingBudgetDeltaScaled100: null,
+        remainingDailyRoomScaled100: -1200000,
+        historicalDailyAverageScaled100: null,
+        usesForecast: true,
+      ),
+    );
+
+    final materials = tester
+        .widgetList<BudgetSemicircleMaterial>(
+          find.byType(BudgetSemicircleMaterial),
+        )
+        .toList(growable: false);
+    expect(materials, hasLength(2));
+    final used = materials.last;
+    expect(used.showMarker, isFalse);
+    expect(used.presentation.health, BudgetClayGaugeHealth.expenseDanger);
+    expect(used.presentation.progressStops, hasLength(7));
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+      matchesGoldenFile('../../../goldens/budget_analysis_month_over_115.png'),
+    );
+  });
 
   testWidgets('DAY mounts Before After blocks, one arrow and one impact band', (
     tester,

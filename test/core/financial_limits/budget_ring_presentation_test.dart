@@ -9,7 +9,7 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
 
 void main() {
-  test('BUDGET-GRAPH-SETTING-01: default decorative strip is visible', () {
+  test('BUDGET-GRAPH-SETTING-01: decorative strips default to visible', () {
     final controller = BudgetRingPresentationController();
     addTearDown(controller.dispose);
 
@@ -18,16 +18,18 @@ void main() {
       controller.value.healthyColorMode,
       BudgetHealthyColorMode.fixedGreen,
     );
-    expect(controller.value.showSumAnalysisNeutralDecorativeStrip, isTrue);
+    expect(controller.value.showBudgetNeutralDecorativeStrip, isTrue);
+    expect(controller.value.showBudgetActiveProgressDecorativeStrip, isTrue);
   });
 
-  test('BUDGET-GRAPH-SETTING-02: controller updates decorative strip only', () {
+  test('BUDGET-GRAPH-SETTING-02: neutral strip updates independently', () {
     final controller = BudgetRingPresentationController();
     addTearDown(controller.dispose);
 
-    controller.setSumAnalysisNeutralDecorativeStripVisible(false);
+    controller.setBudgetNeutralDecorativeStripVisible(false);
 
-    expect(controller.value.showSumAnalysisNeutralDecorativeStrip, isFalse);
+    expect(controller.value.showBudgetNeutralDecorativeStrip, isFalse);
+    expect(controller.value.showBudgetActiveProgressDecorativeStrip, isTrue);
     expect(controller.value.sumRingStyle, BudgetSumRingStyle.current);
     expect(
       controller.value.healthyColorMode,
@@ -35,30 +37,48 @@ void main() {
     );
   });
 
-  test('BUDGET-GRAPH-SETTING-03: reset restores visible decorative strip', () {
+  test('BUDGET-GRAPH-SETTING-03: active strip updates independently', () {
     final controller = BudgetRingPresentationController();
     addTearDown(controller.dispose);
 
-    controller.setSumAnalysisNeutralDecorativeStripVisible(false);
+    controller.setBudgetActiveProgressDecorativeStripVisible(false);
+
+    expect(controller.value.showBudgetNeutralDecorativeStrip, isTrue);
+    expect(controller.value.showBudgetActiveProgressDecorativeStrip, isFalse);
+  });
+
+  test('BUDGET-GRAPH-SETTING-04: reset restores both strips', () {
+    final controller = BudgetRingPresentationController();
+    addTearDown(controller.dispose);
+
+    controller
+      ..setBudgetNeutralDecorativeStripVisible(false)
+      ..setBudgetActiveProgressDecorativeStripVisible(false);
     controller.reset();
 
-    expect(controller.value.showSumAnalysisNeutralDecorativeStrip, isTrue);
+    expect(controller.value.showBudgetNeutralDecorativeStrip, isTrue);
+    expect(controller.value.showBudgetActiveProgressDecorativeStrip, isTrue);
   });
 
-  test('BUDGET-GRAPH-SETTING-04: copy equality and hash include strip', () {
-    const visible = BudgetRingPresentationSettings();
-    final hidden = visible.copyWith(
-      showSumAnalysisNeutralDecorativeStrip: false,
-    );
-    const hiddenEquivalent = BudgetRingPresentationSettings(
-      showSumAnalysisNeutralDecorativeStrip: false,
-    );
+  test(
+    'BUDGET-GRAPH-SETTING-05: copy equality and hash include both strips',
+    () {
+      const visible = BudgetRingPresentationSettings();
+      final hidden = visible.copyWith(
+        showBudgetNeutralDecorativeStrip: false,
+        showBudgetActiveProgressDecorativeStrip: false,
+      );
+      const hiddenEquivalent = BudgetRingPresentationSettings(
+        showBudgetNeutralDecorativeStrip: false,
+        showBudgetActiveProgressDecorativeStrip: false,
+      );
 
-    expect(hidden, hiddenEquivalent);
-    expect(hidden.hashCode, hiddenEquivalent.hashCode);
-    expect(hidden, isNot(visible));
-    expect(hidden.hashCode, isNot(visible.hashCode));
-  });
+      expect(hidden, hiddenEquivalent);
+      expect(hidden.hashCode, hiddenEquivalent.hashCode);
+      expect(hidden, isNot(visible));
+      expect(hidden.hashCode, isNot(visible.hashCode));
+    },
+  );
 
   test('healthy resolver changes only its resolved healthy source', () {
     const accent = Color(0xff8055d4);
