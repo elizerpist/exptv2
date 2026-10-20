@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_secondary_analysis.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_content_title_layout.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_secondary_analysis_card.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -66,6 +67,16 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(BudgetClaySemicircleGauge), findsOneWidget);
+    final page = tester.getRect(
+      find.byKey(const ValueKey<String>('budget-analysis-golden-boundary')),
+    );
+    final title = tester.getRect(
+      find.byKey(const ValueKey<String>('budget-secondary-analysis-title-row')),
+    );
+    expect(
+      title.top,
+      closeTo(page.top + BudgetContentTitleLayout.topInset, .01),
+    );
     expect(
       find.byKey(const ValueKey('budget-analysis-year-zero-axis-bars')),
       findsNothing,

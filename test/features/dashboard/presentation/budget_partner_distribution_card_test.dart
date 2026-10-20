@@ -10,6 +10,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_c
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_content_title_layout.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -37,6 +38,25 @@ void main() {
           calls.add('$source:${partner.id}:$targetHandle');
           return pending.future;
         },
+      );
+
+      final boundary = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('budget-partner-distribution-golden-boundary'),
+        ),
+      );
+      final title = tester.getRect(
+        find.byKey(const ValueKey<String>('budget-distribution-title-row')),
+      );
+      expect(
+        title.top,
+        closeTo(boundary.top + BudgetContentTitleLayout.topInset, .01),
+      );
+      await expectLater(
+        find.byKey(
+          const ValueKey<String>('budget-partner-distribution-golden-boundary'),
+        ),
+        matchesGoldenFile('../../../goldens/budget_distribution_partner.png'),
       );
 
       await tester.tap(
@@ -257,14 +277,22 @@ final class _PartnerCardHarness {
     MaterialApp(
       home: Scaffold(
         body: Center(
-          child: SizedBox(
-            width: 378,
-            height: height,
-            child: BudgetPartnerDistributionCard(
-              presentation: presentation,
-              drawableFrames: drawables,
-              partnerFocusCommit: onCommit,
-              focusController: focus,
+          child: RepaintBoundary(
+            key: const ValueKey<String>(
+              'budget-partner-distribution-golden-boundary',
+            ),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(color: Colors.white),
+              child: SizedBox(
+                width: 378,
+                height: height,
+                child: BudgetPartnerDistributionCard(
+                  presentation: presentation,
+                  drawableFrames: drawables,
+                  partnerFocusCommit: onCommit,
+                  focusController: focus,
+                ),
+              ),
             ),
           ),
         ),

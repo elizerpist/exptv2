@@ -8,6 +8,7 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewpo
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_donut_scene.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_content_title_layout.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_ranking.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -68,15 +69,23 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: Center(
-              child: SizedBox(
-                width: 378,
-                height: 208,
-                child: BudgetCategoryDistributionCard(
-                  presentation: presentation,
-                  drawableFrames: drawableFrames,
-                  avatarRailController: rail,
-                  ranking: ranking,
-                  onRankingChanged: (next) => ranking.value = next,
+              child: RepaintBoundary(
+                key: const ValueKey<String>(
+                  'budget-category-distribution-golden-boundary',
+                ),
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(color: Colors.white),
+                  child: SizedBox(
+                    width: 378,
+                    height: 208,
+                    child: BudgetCategoryDistributionCard(
+                      presentation: presentation,
+                      drawableFrames: drawableFrames,
+                      avatarRailController: rail,
+                      ranking: ranking,
+                      onRankingChanged: (next) => ranking.value = next,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -87,6 +96,20 @@ void main() {
 
       expect(find.text('Kategóriák eloszlása'), findsOneWidget);
       expect(find.text('Kategóriák'), findsOneWidget);
+      final boundary = tester.getRect(
+        find.byKey(
+          const ValueKey<String>(
+            'budget-category-distribution-golden-boundary',
+          ),
+        ),
+      );
+      final title = tester.getRect(
+        find.byKey(const ValueKey<String>('budget-distribution-title-row')),
+      );
+      expect(
+        title.top,
+        closeTo(boundary.top + BudgetContentTitleLayout.topInset, .01),
+      );
       expect(
         find.text('Költési ritmus'),
         findsNothing,
@@ -115,6 +138,14 @@ void main() {
           const ValueKey('budget-category-distribution-row-selected-a'),
         ),
         findsNothing,
+      );
+      await expectLater(
+        find.byKey(
+          const ValueKey<String>(
+            'budget-category-distribution-golden-boundary',
+          ),
+        ),
+        matchesGoldenFile('../../../goldens/budget_distribution_category.png'),
       );
 
       final interaction = find.byKey(

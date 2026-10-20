@@ -88,6 +88,11 @@ final class BudgetClayGaugePresentation {
     final visualProgress = (safeRaw / visualMaximum).clamp(0.0, 1.0).toDouble();
     const targetProgress = 1 / visualMaximum;
     final active = _threeStops(activeGradient);
+    final progressMaterial = _progressMaterial(
+      direction: direction,
+      active: active,
+      targetProgress: targetProgress,
+    );
     final health = BudgetClayGaugeHealthResolver.resolve(
       direction: direction,
       rawRatio: safeRaw,
@@ -137,17 +142,22 @@ final class BudgetClayGaugePresentation {
         );
       }
     }
-    final markerColors = zones.isEmpty ? active : zones.last.colors;
+    final markerColor = _colorAt(
+      colors: progressMaterial.colors,
+      stops: progressMaterial.stops,
+      position: visualProgress,
+    );
     return BudgetClayGaugePresentation._(
       rawRatio: safeRaw,
       visualProgress: visualProgress,
       targetProgress: targetProgress,
       health: health,
       activeGradient: active,
-      activeDepthGradient: _depthStops(active),
-      activeHighlight: _highlightFor(active.first),
+      progressGradient: progressMaterial.colors,
+      progressDepthGradient: _depthStops(progressMaterial.colors),
+      progressStops: progressMaterial.stops,
       markerMaterial: BudgetProgressRingSphereMaterial.forHealthColor(
-        markerColors[markerColors.length ~/ 2],
+        markerColor,
       ),
       overshootZones: List<BudgetClayGaugeOvershootZone>.unmodifiable(zones),
       hasVisualOverflow: safeRaw > visualMaximum,
@@ -160,8 +170,9 @@ final class BudgetClayGaugePresentation {
     required this.targetProgress,
     required this.health,
     required this.activeGradient,
-    required this.activeDepthGradient,
-    required this.activeHighlight,
+    required this.progressGradient,
+    required this.progressDepthGradient,
+    required this.progressStops,
     required this.markerMaterial,
     required this.overshootZones,
     required this.hasVisualOverflow,
@@ -172,8 +183,13 @@ final class BudgetClayGaugePresentation {
   final double targetProgress;
   final BudgetClayGaugeHealth health;
   final List<Color> activeGradient;
-  final List<Color> activeDepthGradient;
-  final Color activeHighlight;
+
+  /// One global material ramp spans the entire semicircle. The normal target,
+  /// warning, and danger semantics still exist, but no longer paint as
+  /// separately glued-on arc segments.
+  final List<Color> progressGradient;
+  final List<Color> progressDepthGradient;
+  final List<double> progressStops;
 
   /// This is deliberately the exact selected-avatar sphere material rather
   /// than a SUM-only marker treatment.
@@ -187,8 +203,9 @@ final class BudgetClayGaugePresentation {
       targetProgress == other.targetProgress &&
       health == other.health &&
       listEquals(activeGradient, other.activeGradient) &&
-      listEquals(activeDepthGradient, other.activeDepthGradient) &&
-      activeHighlight == other.activeHighlight &&
+      listEquals(progressGradient, other.progressGradient) &&
+      listEquals(progressDepthGradient, other.progressDepthGradient) &&
+      listEquals(progressStops, other.progressStops) &&
       markerMaterial.base == other.markerMaterial.base &&
       markerMaterial.highlight == other.markerMaterial.highlight &&
       markerMaterial.body == other.markerMaterial.body &&
@@ -238,8 +255,91 @@ final class BudgetClayGaugePresentation {
             .toList(growable: false),
       );
 
+  static _BudgetClayGaugeProgressMaterial _progressMaterial({
+    required LedgerDirection direction,
+    required List<Color> active,
+    required double targetProgress,
+  }) {
+    // This is the same continuous-health-scale idea used by the selected
+    // avatar SUM ring, projected onto the explicit 0–120% hero scale. The
+    // half-window makes each semantic boundary blend through its midpoint
+    // instead of exposing a hard orange/red seam.
+    const transitionHalfWidth =
+        BudgetProgressRingSumHealthScale.transitionHalfWidth * (2 / 3);
+    const warningProgress = 1.10 / 1.20;
+    final normalBlendStart = targetProgress - transitionHalfWidth;
+    final normalBlendEnd = targetProgress + transitionHalfWidth;
+    if (direction == LedgerDirection.income) {
+      const reached = Color(0xFF14B8A6);
+      const exceeded = Color(0xFF22C55E);
+      return _BudgetClayGaugeProgressMaterial(
+        colors: List<Color>.unmodifiable(<Color>[
+          active.first,
+          active[1],
+          active.last,
+          reached,
+          exceeded,
+        ]),
+        stops: List<double>.unmodifiable(<double>[
+          0,
+          targetProgress * .48,
+          normalBlendStart,
+          normalBlendEnd,
+          1,
+        ]),
+      );
+    }
+    return _BudgetClayGaugeProgressMaterial(
+      colors: List<Color>.unmodifiable(<Color>[
+        active.first,
+        active[1],
+        active.last,
+        FluviVisualTokens.budgetProgressWarning,
+        FluviVisualTokens.budgetProgressWarning,
+        FluviVisualTokens.budgetProgressDanger,
+        FluviVisualTokens.budgetProgressDanger,
+      ]),
+      stops: List<double>.unmodifiable(<double>[
+        0,
+        targetProgress * .48,
+        normalBlendStart,
+        normalBlendEnd,
+        warningProgress - transitionHalfWidth,
+        warningProgress + transitionHalfWidth,
+        1,
+      ]),
+    );
+  }
+
+  static Color _colorAt({
+    required List<Color> colors,
+    required List<double> stops,
+    required double position,
+  }) {
+    final value = position.clamp(0.0, 1.0).toDouble();
+    for (var index = 1; index < stops.length; index += 1) {
+      final end = stops[index];
+      if (value > end) continue;
+      final start = stops[index - 1];
+      final local = (value - start) / (end - start);
+      return Color.lerp(colors[index - 1], colors[index], local)!;
+    }
+    return colors.last;
+  }
+
   static Color _highlightFor(Color color) =>
       Color.lerp(color, Colors.white, .72)!.withValues(alpha: .72);
+}
+
+@immutable
+final class _BudgetClayGaugeProgressMaterial {
+  const _BudgetClayGaugeProgressMaterial({
+    required this.colors,
+    required this.stops,
+  });
+
+  final List<Color> colors;
+  final List<double> stops;
 }
 
 /// Uses the same category avatar palette source as the selected rail item.
@@ -376,7 +476,7 @@ final class _GaugeTextLayer extends StatelessWidget {
                 primaryLabel,
                 style: const TextStyle(
                   color: FluviVisualTokens.textPrimary,
-                  fontSize: 22,
+                  fontSize: 24,
                   fontWeight: FontWeight.w900,
                   height: 1,
                 ),
@@ -487,9 +587,6 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     _paintNeutralTrackBody(canvas, geometry);
     _paintActiveBody(canvas, geometry);
     _paintInnerShadow(canvas, geometry);
-    _paintTopRimHighlight(canvas, geometry);
-    _paintOvershoot(canvas, geometry);
-    _paintBreakpoint(canvas, geometry);
     _paintMarkerShadow(canvas, geometry);
     _paintMarker(canvas, geometry);
     canvas.restore();
@@ -595,17 +692,8 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
   }
 
   void _paintActiveBody(Canvas canvas, _GaugeGeometry geometry) {
-    final normalEnd = math.min(animatedProgress, presentation.targetProgress);
-    if (normalEnd <= 0) return;
-    _paintMaterialArc(
-      canvas,
-      geometry: geometry,
-      start: 0,
-      end: normalEnd,
-      colors: presentation.activeGradient,
-      depthColors: presentation.activeDepthGradient,
-      highlight: presentation.activeHighlight,
-    );
+    if (animatedProgress <= 0) return;
+    _paintContinuousMaterial(canvas, geometry);
   }
 
   void _paintInnerShadow(Canvas canvas, _GaugeGeometry geometry) {
@@ -626,131 +714,62 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     );
   }
 
-  void _paintTopRimHighlight(Canvas canvas, _GaugeGeometry geometry) {
-    final source = BudgetProgressRingGeometry.source;
-    canvas.drawArc(
-      geometry.trackRect,
-      _startAngle + _sweepAngle * .50,
-      _sweepAngle * (source.trackGlossFraction * 2),
-      false,
-      Paint()
-        ..color = source.trackGlossColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 5 * geometry.scale
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  void _paintOvershoot(Canvas canvas, _GaugeGeometry geometry) {
-    if (animatedProgress <= presentation.targetProgress) return;
-    for (final zone in presentation.overshootZones) {
-      final end = math.min(animatedProgress, zone.end);
-      if (end <= zone.start) continue;
-      _paintMaterialArc(
-        canvas,
-        geometry: geometry,
-        start: zone.start,
-        end: end,
-        colors: zone.colors,
-        depthColors: zone.depthColors,
-        highlight: zone.highlight,
-      );
-    }
-  }
-
-  void _paintMaterialArc(
-    Canvas canvas, {
-    required _GaugeGeometry geometry,
-    required double start,
-    required double end,
-    required List<Color> colors,
-    required List<Color> depthColors,
-    required Color highlight,
-  }) {
-    final startAngle = _startAngle + _sweepAngle * start;
-    final sweep = _sweepAngle * (end - start);
-    if (sweep <= 0) return;
+  void _paintContinuousMaterial(Canvas canvas, _GaugeGeometry geometry) {
+    final sweep = _sweepAngle * animatedProgress;
     // The active colour is a strip nested in the neutral avatar-ring body,
-    // rather than a second full-width tube that replaces that body.
+    // rather than a second full-width tube that replaces that body. One
+    // global SweepGradient keeps the category, warning, and danger material
+    // continuous even when the semantic state crosses a threshold.
     final stripWidth = geometry.stroke * .46;
     canvas.drawArc(
       geometry.trackRect.shift(Offset(0, 5 * geometry.scale)),
-      startAngle,
+      _startAngle,
       sweep,
       false,
-      _arcPaint(
-        rect: geometry.trackRect,
-        colors: depthColors,
+      _progressPaint(
+        geometry: geometry,
+        colors: presentation.progressDepthGradient,
         stroke: stripWidth,
       )..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.5 * geometry.scale),
     );
     canvas.drawArc(
       geometry.trackRect,
-      startAngle,
+      _startAngle,
       sweep,
       false,
-      _arcPaint(rect: geometry.trackRect, colors: colors, stroke: stripWidth),
+      _progressPaint(
+        geometry: geometry,
+        colors: presentation.progressGradient,
+        stroke: stripWidth,
+      ),
     );
     canvas.drawArc(
       geometry.trackRect,
-      startAngle,
+      _startAngle,
       sweep,
       false,
       Paint()
-        ..color = highlight
+        ..color = const Color(0x4DFFFFFF)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3 * geometry.scale
         ..strokeCap = StrokeCap.round,
     );
   }
 
-  Paint _arcPaint({
-    required Rect rect,
+  Paint _progressPaint({
+    required _GaugeGeometry geometry,
     required List<Color> colors,
     required double stroke,
   }) => Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
+    ..shader = SweepGradient(
+      startAngle: _startAngle,
+      endAngle: _startAngle + _sweepAngle,
       colors: colors,
-      stops: const <double>[0, .45, 1],
-    ).createShader(rect)
+      stops: presentation.progressStops,
+    ).createShader(geometry.trackRect)
     ..style = PaintingStyle.stroke
     ..strokeWidth = stroke
     ..strokeCap = StrokeCap.round;
-
-  void _paintBreakpoint(Canvas canvas, _GaugeGeometry geometry) {
-    final seam = geometry.stroke / geometry.trackRect.width * .72;
-    final seamStart = math.max(0.0, presentation.targetProgress - seam * .55);
-    final seamEnd = math.min(1.0, presentation.targetProgress + seam * .55);
-    final angle = _startAngle + seamStart * _sweepAngle;
-    final sweep = (seamEnd - seamStart) * _sweepAngle;
-    canvas.drawArc(
-      geometry.trackRect.shift(Offset(0, geometry.stroke * .06)),
-      angle,
-      sweep,
-      false,
-      Paint()
-        ..color = BudgetProgressRingGeometry.source.trackShadowColor.withValues(
-          alpha: .40,
-        )
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = geometry.stroke * .26
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, geometry.stroke * .07),
-    );
-    canvas.drawArc(
-      geometry.trackRect.shift(Offset(0, -geometry.stroke * .08)),
-      angle,
-      sweep,
-      false,
-      Paint()
-        ..color = const Color(0xA6FFFFFF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3 * geometry.scale
-        ..strokeCap = StrokeCap.round,
-    );
-  }
 
   Offset _markerCenter(_GaugeGeometry geometry) {
     final angle = _startAngle + _sweepAngle * animatedProgress;

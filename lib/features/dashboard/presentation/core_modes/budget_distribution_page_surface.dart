@@ -11,6 +11,7 @@ import '../dashboard_upper_vertical_gesture_coordinator.dart';
 import '../dashboard_vertical_scroll_boundary_handoff.dart';
 import '../widgets/dashboard_render_diagnostic_probe.dart';
 import 'budget_distribution_ranking.dart';
+import 'budget_content_title_layout.dart';
 
 /// Explicitly separates physical material from PageView clipping ownership.
 enum BudgetDistributionSurfaceOwner { splitCard2, unifiedParent }
@@ -141,9 +142,10 @@ class BudgetDistributionPageSurface extends StatefulWidget {
   /// The first donut/list visual region begins only after this authored
   /// padding-and-heading lane. Budget's selected avatar shell may occupy the
   /// preceding shared-card overlap without colliding with the actual chart.
-  static const double outerPadding = 10;
+  static const double outerHorizontalInset = 10;
   static const double headingHeight = 23;
-  static const double firstChartVisualOffset = outerPadding + headingHeight;
+  static const double firstChartVisualOffset =
+      BudgetContentTitleLayout.topInset + headingHeight;
 
   @override
   State<BudgetDistributionPageSurface> createState() =>
@@ -167,10 +169,16 @@ final class _BudgetDistributionPageSurfaceState
     clip: 'inherited BudgetDistributionCardShell.ClipRRect',
     zOrder: 'viewportClip<PageView>pageContent',
     child: Padding(
-      padding: const EdgeInsets.all(BudgetDistributionPageSurface.outerPadding),
+      padding: const EdgeInsets.fromLTRB(
+        BudgetDistributionPageSurface.outerHorizontalInset,
+        BudgetContentTitleLayout.topInset,
+        BudgetDistributionPageSurface.outerHorizontalInset,
+        BudgetContentTitleLayout.bottomInset,
+      ),
       child: Column(
         children: <Widget>[
           SizedBox(
+            key: const ValueKey<String>('budget-distribution-title-row'),
             height: BudgetDistributionPageSurface.headingHeight,
             child: _buildTitleRow(),
           ),

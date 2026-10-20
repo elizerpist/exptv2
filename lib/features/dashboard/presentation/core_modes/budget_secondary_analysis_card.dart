@@ -10,6 +10,7 @@ import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_clay_semicircle_gauge.dart';
+import 'budget_content_title_layout.dart';
 
 /// Third semantic page of the existing Budget distribution pager.
 ///
@@ -186,22 +187,45 @@ final class BudgetSecondaryAnalysisPreparedCard extends StatelessWidget {
     final copy = _copyFor(payload);
     return Semantics(
       label: '$targetTitle: ${copy.title}, $scopeLabel',
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        child: Column(
-          children: <Widget>[
-            _AnalysisHeader(copy: copy, scopeLabel: scopeLabel),
-            const SizedBox(height: 4),
-            Expanded(
-              child: _Hero(
-                payload: payload,
-                direction: frame.direction,
-                targetVisual: targetVisual,
+      child: DecoratedBox(
+        // This page-level material intentionally continues behind the footer.
+        // The KPI cards remain distinct, but no longer read as a second white
+        // card pasted below the analysis hero.
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[Color(0xFFF9F8FC), Color(0xFFF3F1F9)],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            12,
+            BudgetContentTitleLayout.topInset,
+            12,
+            BudgetContentTitleLayout.bottomInset,
+          ),
+          child: Column(
+            children: <Widget>[
+              _AnalysisHeader(
+                key: const ValueKey<String>(
+                  'budget-secondary-analysis-title-row',
+                ),
+                copy: copy,
+                scopeLabel: scopeLabel,
               ),
-            ),
-            const SizedBox(height: 6),
-            SizedBox(height: 43, child: _KpiRow(payload: payload)),
-          ],
+              const SizedBox(height: 4),
+              Expanded(
+                child: _Hero(
+                  payload: payload,
+                  direction: frame.direction,
+                  targetVisual: targetVisual,
+                ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(height: 43, child: _KpiRow(payload: payload)),
+            ],
+          ),
         ),
       ),
     );
@@ -245,7 +269,11 @@ _AnalysisCopy _copyFor(DashboardBudgetSecondaryAnalysisPayload payload) =>
     };
 
 final class _AnalysisHeader extends StatelessWidget {
-  const _AnalysisHeader({required this.copy, required this.scopeLabel});
+  const _AnalysisHeader({
+    super.key,
+    required this.copy,
+    required this.scopeLabel,
+  });
 
   final _AnalysisCopy copy;
   final String scopeLabel;
@@ -817,8 +845,9 @@ final class _KpiBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
-      color: FluviVisualTokens.surfaceMuted,
+      color: const Color(0x80FFFFFF),
       borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: const Color(0x80FFFFFF)),
     ),
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),

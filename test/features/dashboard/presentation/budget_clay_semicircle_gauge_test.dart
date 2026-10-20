@@ -67,6 +67,35 @@ void main() {
       presentation.markerMaterial.sourceGeometryId,
       BudgetProgressRingSphereMaterial.sourceId,
     );
-    expect(presentation.markerMaterial.body, accent[accent.length ~/ 2]);
+    expect(
+      presentation.markerMaterial.body,
+      isNot(accent.first),
+      reason: 'the shared sphere material receives the resolved progress hue',
+    );
+  });
+
+  test('expense colours use one blended material ramp across thresholds', () {
+    final presentation = BudgetClayGaugePresentation.resolve(
+      rawRatio: 1.15,
+      direction: LedgerDirection.expense,
+      activeGradient: accent,
+    );
+
+    expect(presentation.progressStops, hasLength(7));
+    expect(
+      presentation.progressStops,
+      orderedEquals(presentation.progressStops.toList()..sort()),
+    );
+    expect(presentation.progressGradient[2], accent.last);
+    expect(
+      presentation.progressGradient[3],
+      isNot(presentation.progressGradient[2]),
+      reason: 'the shader blends these adjacent stops around the 100% boundary',
+    );
+    expect(
+      presentation.progressGradient[5],
+      isNot(presentation.progressGradient[4]),
+      reason: 'the warning-to-danger boundary is also a blend, not a new arc',
+    );
   });
 }
