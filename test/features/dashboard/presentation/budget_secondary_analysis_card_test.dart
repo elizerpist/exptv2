@@ -18,6 +18,8 @@ void main() {
     required DashboardBudgetSecondaryAnalysisPayload payload,
     required LedgerTimeScope scope,
     required String scopeLabel,
+    double width = 390,
+    double textScale = 1,
     bool useCard2OuterClip = false,
     BudgetRingPresentationController? ringPresentation,
   }) {
@@ -40,19 +42,24 @@ void main() {
           );
     return tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: SizedBox(
-              width: 390,
-              height: 220,
-              child: RepaintBoundary(
-                key: const ValueKey<String>('budget-analysis-golden-boundary'),
-                child: ringPresentation == null
-                    ? surface
-                    : BudgetRingPresentationScope(
-                        controller: ringPresentation,
-                        child: surface,
-                      ),
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+          child: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: width,
+                height: 220,
+                child: RepaintBoundary(
+                  key: const ValueKey<String>(
+                    'budget-analysis-golden-boundary',
+                  ),
+                  child: ringPresentation == null
+                      ? surface
+                      : BudgetRingPresentationScope(
+                          controller: ringPresentation,
+                          child: surface,
+                        ),
+                ),
               ),
             ),
           ),
@@ -528,20 +535,119 @@ void main() {
     );
   });
 
-  testWidgets('DAY mounts Before After blocks, one arrow and one impact band', (
+  testWidgets(
+    'DAY mounts two native clay comparison cards, one arrow and one impact band',
+    (tester) async {
+      await pump(
+        tester,
+        scope: const DayScope(LocalDate(year: 2026, month: 3, day: 18)),
+        scopeLabel: '2026. március 18.',
+        payload: const DashboardBudgetDaySecondaryAnalysis(
+          availability: BudgetAnalysisAvailability.available,
+          selectedDayActualScaled100: 620000,
+          spentBeforeSelectedDayScaled100: 18800000,
+          dailyRoomBeforeScaled100: 2363000,
+          dailyRoomAfterScaled100: 2499500,
+          dailyRoomChangeScaled100: 136500,
+          remainingSpendableTodayScaled100: 505000,
+          monthlyDeltaScaled100: 2840000,
+          usesForecast: true,
+          isTerminalDay: false,
+        ),
+      );
+
+      expect(find.text('Reggel még\nelérhető volt'), findsOneWidget);
+      expect(find.text('Mostantól\nelérhető'), findsOneWidget);
+      expect(find.text('23630 Ft'), findsOneWidget);
+      expect(find.text('24995 Ft'), findsOneWidget);
+      expect(find.text('+1365 Ft / nap'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('budget-analysis-day-before-card')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('budget-analysis-day-after-card')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('budget-analysis-day-arrow')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.arrow_forward_rounded), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('budget-analysis-day-impact-band')),
+        findsOneWidget,
+      );
+      expect(find.byType(BudgetSemicircleGauge), findsNothing);
+      expect(find.byType(Image), findsNothing);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/budget_analysis_day_clay_positive.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets('DAY terminal state keeps the after clay card mounted', (
     tester,
   ) async {
     await pump(
       tester,
-      scope: const DayScope(LocalDate(year: 2026, month: 3, day: 18)),
-      scopeLabel: '2026. március 18.',
+      scope: const DayScope(LocalDate(year: 2026, month: 3, day: 31)),
+      scopeLabel: '2026. március 31.',
       payload: const DashboardBudgetDaySecondaryAnalysis(
         availability: BudgetAnalysisAvailability.available,
         selectedDayActualScaled100: 620000,
         spentBeforeSelectedDayScaled100: 18800000,
-        dailyRoomBeforeScaled100: 1125000,
-        dailyRoomAfterScaled100: 830000,
-        dailyRoomChangeScaled100: -295000,
+        dailyRoomBeforeScaled100: 2363000,
+        dailyRoomAfterScaled100: null,
+        dailyRoomChangeScaled100: null,
+        remainingSpendableTodayScaled100: 0,
+        monthlyDeltaScaled100: 2840000,
+        usesForecast: false,
+        isTerminalDay: true,
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('budget-analysis-day-before-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('budget-analysis-day-after-card')),
+      findsOneWidget,
+    );
+    expect(find.text('—'), findsOneWidget);
+    expect(find.text('Ma zárul a hónap'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+      matchesGoldenFile(
+        '../../../goldens/budget_analysis_day_clay_terminal.png',
+      ),
+    );
+  });
+
+  testWidgets('DAY clay cards retain parent popup tap when info cards hide', (
+    tester,
+  ) async {
+    final ringPresentation = BudgetRingPresentationController()
+      ..setBudgetAnalysisInfoCardsVisible(false);
+    addTearDown(ringPresentation.dispose);
+    await pump(
+      tester,
+      scope: const DayScope(LocalDate(year: 2026, month: 3, day: 18)),
+      scopeLabel: '2026. március 18.',
+      ringPresentation: ringPresentation,
+      payload: const DashboardBudgetDaySecondaryAnalysis(
+        availability: BudgetAnalysisAvailability.available,
+        selectedDayActualScaled100: 620000,
+        spentBeforeSelectedDayScaled100: 18800000,
+        dailyRoomBeforeScaled100: 2363000,
+        dailyRoomAfterScaled100: 2499500,
+        dailyRoomChangeScaled100: 136500,
         remainingSpendableTodayScaled100: 505000,
         monthlyDeltaScaled100: 2840000,
         usesForecast: true,
@@ -549,18 +655,134 @@ void main() {
       ),
     );
 
-    expect(find.text('Reggel még\nelérhető volt'), findsOneWidget);
-    expect(find.text('Mostantól\nelérhető'), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_forward_rounded), findsOneWidget);
+    final before = tester.getRect(
+      find.byKey(const ValueKey<String>('budget-analysis-day-before-card')),
+    );
+    final after = tester.getRect(
+      find.byKey(const ValueKey<String>('budget-analysis-day-after-card')),
+    );
+    expect(before.width, closeTo(after.width, .01));
+    expect(before.height, closeTo(after.height, .01));
     expect(
-      find.byKey(const ValueKey('budget-analysis-day-impact-band')),
-      findsOneWidget,
+      find.byKey(const ValueKey<String>('budget-analysis-kpi-row')),
+      findsNothing,
     );
     expect(tester.takeException(), isNull);
     await expectLater(
       find.byKey(const ValueKey('budget-analysis-golden-boundary')),
-      matchesGoldenFile('../../../goldens/budget_analysis_day.png'),
+      matchesGoldenFile('../../../goldens/budget_analysis_day_clay_hidden.png'),
     );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('budget-analysis-day-before-card')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('budget-analysis-kpi-popup')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('budget-analysis-day-before-card')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('budget-analysis-kpi-popup')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('DAY clay cards fit a compact width and elevated text scale', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      width: 300,
+      textScale: 1.25,
+      scope: const DayScope(LocalDate(year: 2026, month: 3, day: 18)),
+      scopeLabel: '2026. március 18.',
+      payload: const DashboardBudgetDaySecondaryAnalysis(
+        availability: BudgetAnalysisAvailability.available,
+        selectedDayActualScaled100: 620000,
+        spentBeforeSelectedDayScaled100: 18800000,
+        dailyRoomBeforeScaled100: 2363000,
+        dailyRoomAfterScaled100: 2499500,
+        dailyRoomChangeScaled100: 136500,
+        remainingSpendableTodayScaled100: 505000,
+        monthlyDeltaScaled100: 2840000,
+        usesForecast: true,
+        isTerminalDay: false,
+      ),
+    );
+
+    final before = tester.getRect(
+      find.byKey(const ValueKey<String>('budget-analysis-day-before-card')),
+    );
+    final after = tester.getRect(
+      find.byKey(const ValueKey<String>('budget-analysis-day-after-card')),
+    );
+    expect(before.width, closeTo(after.width, .01));
+    expect(before.height, closeTo(after.height, .01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('DAY period publication is direct with no card fade', (
+    tester,
+  ) async {
+    final selectedDay = ValueNotifier(20);
+    addTearDown(selectedDay.dispose);
+    DashboardBudgetDaySecondaryAnalysis payloadFor(int day) =>
+        DashboardBudgetDaySecondaryAnalysis(
+          availability: BudgetAnalysisAvailability.available,
+          selectedDayActualScaled100: 620000,
+          spentBeforeSelectedDayScaled100: 18800000,
+          dailyRoomBeforeScaled100: day == 20 ? 2363000 : 2100000,
+          dailyRoomAfterScaled100: day == 20 ? 2499500 : 2200000,
+          dailyRoomChangeScaled100: day == 20 ? 136500 : 100000,
+          remainingSpendableTodayScaled100: 505000,
+          monthlyDeltaScaled100: 2840000,
+          usesForecast: true,
+          isTerminalDay: false,
+        );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 390,
+          height: 220,
+          child: ValueListenableBuilder<int>(
+            valueListenable: selectedDay,
+            builder: (context, day, _) => BudgetSecondaryAnalysisPreparedCard(
+              frame: DashboardBudgetSecondaryAnalysisFrame(
+                coreRevision: 17,
+                direction: LedgerDirection.expense,
+                targetHandle: 1,
+                scope: DayScope(LocalDate(year: 2026, month: 3, day: day)),
+                payload: payloadFor(day),
+              ),
+              targetTitle: 'Élelmiszer',
+              scopeLabel: '2026. március $day.',
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('23630 Ft'), findsOneWidget);
+
+    selectedDay.value = 21;
+    await tester.pump();
+
+    expect(find.text('2026. március 21.'), findsOneWidget);
+    expect(find.text('21000 Ft'), findsOneWidget);
+    expect(find.text('22000 Ft'), findsOneWidget);
+    expect(find.text('23630 Ft'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(BudgetSecondaryAnalysisPreparedCard),
+        matching: find.byType(FadeTransition),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('solid colour mode changes material only, not the SUM geometry', (

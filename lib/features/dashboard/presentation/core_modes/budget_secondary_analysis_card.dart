@@ -602,60 +602,45 @@ final class _DayHero extends StatelessWidget {
           child: Row(
             children: <Widget>[
               Expanded(
-                child: _DayRoomBlock(
+                child: _BudgetDayClayComparisonCard(
+                  key: const ValueKey<String>(
+                    'budget-analysis-day-before-card',
+                  ),
                   label: 'Reggel még\nelérhető volt',
                   amount: payload.dailyRoomBeforeScaled100!,
-                  tint: FluviVisualTokens.appHighlightGradient.colors.first,
+                  tint: const Color(0xFF8B9CF5),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 5),
-                child: Icon(
-                  Icons.arrow_forward_rounded,
-                  color: FluviVisualTokens.textSecondary,
-                  size: 18,
-                ),
+              const SizedBox(
+                width: 34,
+                child: Center(child: _BudgetDayClayArrow()),
               ),
               Expanded(
-                child: _DayRoomBlock(
+                child: _BudgetDayClayComparisonCard(
+                  key: const ValueKey<String>('budget-analysis-day-after-card'),
                   label: 'Mostantól\nelérhető',
                   amount: payload.dailyRoomAfterScaled100,
                   unavailable: payload.isTerminalDay,
-                  tint: FluviVisualTokens.budgetProgressDanger,
+                  tint: const Color(0xFFFB7185),
                 ),
               ),
             ],
           ),
         ),
-        Container(
-          key: const ValueKey<String>('budget-analysis-day-impact-band'),
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 7),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: .10),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            change == null
-                ? 'Ma zárul a hónap'
-                : '${_signedMoney(change)} / nap · ennyivel ${change < 0 ? 'csökkent' : 'nőtt'} a hátralévő napi mozgástér',
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: color,
-              fontSize: 6.8,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
+        const SizedBox(height: 7),
+        _BudgetDayClayImpactBand(change: change, color: color),
       ],
     );
   }
 }
 
-final class _DayRoomBlock extends StatelessWidget {
-  const _DayRoomBlock({
+/// A simple native-Flutter clay slab for one side of DAY's before → after
+/// comparison. It deliberately owns neither gesture nor financial logic: the
+/// parent hero retains the shared popup tap semantics and supplies prepared
+/// amounts only.
+final class _BudgetDayClayComparisonCard extends StatelessWidget {
+  const _BudgetDayClayComparisonCard({
+    super.key,
     required this.label,
     required this.amount,
     required this.tint,
@@ -667,48 +652,255 @@ final class _DayRoomBlock extends StatelessWidget {
   final bool unavailable;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: tint.withValues(alpha: .10),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: FluviVisualTokens.border),
+  Widget build(BuildContext context) {
+    final amountLabel = unavailable ? '—' : _money(amount);
+    return Semantics(
+      label: unavailable
+          ? '$label, nem elérhető naponta'
+          : '$label, $amountLabel naponta',
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                Colors.white.withValues(alpha: .98),
+                Color.lerp(tint, Colors.white, .82)!,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: Color.lerp(
+                tint,
+                Colors.white,
+                .66,
+              )!.withValues(alpha: .70),
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Color.lerp(
+                  tint,
+                  const Color(0xFF667085),
+                  .22,
+                )!.withValues(alpha: .17),
+                offset: const Offset(1.5, 2.5),
+                blurRadius: 7,
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+            child: LayoutBuilder(
+              builder: (context, constraints) => Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Center(child: _BudgetDayStateIcon(tint: tint)),
+                        const SizedBox(height: 2),
+                        Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: FluviVisualTokens.textSecondary,
+                            fontSize: 8.2,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            amountLabel,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: FluviVisualTokens.textPrimary,
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        const Text(
+                          '/ nap',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: FluviVisualTokens.textSecondary,
+                            fontSize: 7,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _BudgetDayStateIcon extends StatelessWidget {
+  const _BudgetDayStateIcon({required this.tint});
+  final Color tint;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: 22,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: .12),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(Icons.light_mode_outlined, size: 12, color: tint),
     ),
-    child: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: FluviVisualTokens.textSecondary,
-              fontSize: 6.8,
-              height: 1.1,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            unavailable ? '—' : _money(amount),
-            style: const TextStyle(
-              color: FluviVisualTokens.textPrimary,
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
-          ),
-          const Text(
-            '/ nap',
-            style: TextStyle(
-              color: FluviVisualTokens.textSecondary,
-              fontSize: 6,
-              fontWeight: FontWeight.w700,
-            ),
+  );
+}
+
+/// Decorative only: it is intentionally not an interactive control, so the
+/// ancestor can continue to distinguish a clean popup tap from pager swipes.
+final class _BudgetDayClayArrow extends StatelessWidget {
+  const _BudgetDayClayArrow();
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    key: const ValueKey<String>('budget-analysis-day-arrow'),
+    dimension: 32,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFFFFFFFF), Color(0xFFF0EDF8)],
+        ),
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xCCFFFFFF)),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x294B556D),
+            offset: Offset(1, 2),
+            blurRadius: 5,
           ),
         ],
       ),
+      child: const Icon(
+        Icons.arrow_forward_rounded,
+        color: FluviVisualTokens.textSecondary,
+        size: 18,
+      ),
     ),
   );
+}
+
+final class _BudgetDayClayImpactBand extends StatelessWidget {
+  const _BudgetDayClayImpactBand({required this.change, required this.color});
+
+  final int? change;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedChange = change;
+    final terminal = resolvedChange == null;
+    final changeValue = resolvedChange ?? 0;
+    final primary = terminal
+        ? 'Ma zárul a hónap'
+        : '${_signedMoney(changeValue)} / nap';
+    final secondary = terminal
+        ? 'A hátralévő napi mozgástér már nem változik'
+        : 'ennyivel ${changeValue < 0 ? 'csökkent' : 'nőtt'} a hátralévő napi mozgástér';
+    final icon = terminal
+        ? Icons.flag_outlined
+        : changeValue < 0
+        ? Icons.trending_down_rounded
+        : Icons.trending_up_rounded;
+    return SizedBox(
+      key: const ValueKey<String>('budget-analysis-day-impact-band'),
+      height: 42,
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[
+              Colors.white.withValues(alpha: .98),
+              color.withValues(alpha: .13),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: color.withValues(alpha: .22)),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: color.withValues(alpha: .10),
+              offset: const Offset(1, 2),
+              blurRadius: 5,
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: <Widget>[
+              SizedBox.square(
+                dimension: 22,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: .13),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 13),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      primary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 9.2,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      secondary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: FluviVisualTokens.textSecondary,
+                        fontSize: 6.4,
+                        height: 1,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 final class _UnavailableHero extends StatelessWidget {
