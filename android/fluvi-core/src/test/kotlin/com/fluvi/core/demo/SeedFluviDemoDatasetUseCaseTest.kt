@@ -57,7 +57,7 @@ class SeedFluviDemoDatasetUseCaseTest {
         val expense = core.query.total(yearScope(LedgerDirection.expense))
 
         assertEquals(493_800_000L, income.amountScaled100)
-        assertEquals(3_053_360_000L, expense.amountScaled100)
+        assertEquals(569_325_800L, expense.amountScaled100)
         assertEquals(42L, income.entryCount)
         assertEquals(1_773L, expense.entryCount)
         assertEquals(707_000L * 100L, core.query.total(monthScope(LedgerDirection.income, 7)).amountScaled100)

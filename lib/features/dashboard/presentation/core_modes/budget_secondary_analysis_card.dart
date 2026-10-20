@@ -1043,5 +1043,3 @@ String _money(int? value) =>
 String _signedMoney(int? value) => value == null
     ? '—'
     : '${value < 0 ? '−' : '+'}${DashboardPreparedFormatter.amountMinor(value.abs())}';
-String _signedPp(double value) =>
-    '${value < 0 ? '−' : '+'}${value.abs().round()}';
