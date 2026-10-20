@@ -187,45 +187,36 @@ final class BudgetSecondaryAnalysisPreparedCard extends StatelessWidget {
     final copy = _copyFor(payload);
     return Semantics(
       label: '$targetTitle: ${copy.title}, $scopeLabel',
-      child: DecoratedBox(
-        // This page-level material intentionally continues behind the footer.
-        // The KPI cards remain distinct, but no longer read as a second white
-        // card pasted below the analysis hero.
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[Color(0xFFF9F8FC), Color(0xFFF3F1F9)],
-          ),
+      // The parent Card2 owns the one white analysis surface. In particular,
+      // the footer has no painted slab: the gauge can visually continue into
+      // the shared surface behind its three independent KPI cards.
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          12,
+          BudgetContentTitleLayout.topInset,
+          12,
+          BudgetContentTitleLayout.bottomInset,
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            12,
-            BudgetContentTitleLayout.topInset,
-            12,
-            BudgetContentTitleLayout.bottomInset,
-          ),
-          child: Column(
-            children: <Widget>[
-              _AnalysisHeader(
-                key: const ValueKey<String>(
-                  'budget-secondary-analysis-title-row',
-                ),
-                copy: copy,
-                scopeLabel: scopeLabel,
+        child: Column(
+          children: <Widget>[
+            _AnalysisHeader(
+              key: const ValueKey<String>(
+                'budget-secondary-analysis-title-row',
               ),
-              const SizedBox(height: 4),
-              Expanded(
-                child: _Hero(
-                  payload: payload,
-                  direction: frame.direction,
-                  targetVisual: targetVisual,
-                ),
+              copy: copy,
+              scopeLabel: scopeLabel,
+            ),
+            const SizedBox(height: 4),
+            Expanded(
+              child: _Hero(
+                payload: payload,
+                direction: frame.direction,
+                targetVisual: targetVisual,
               ),
-              const SizedBox(height: 6),
-              SizedBox(height: 43, child: _KpiRow(payload: payload)),
-            ],
-          ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(height: 43, child: _KpiRow(payload: payload)),
+          ],
         ),
       ),
     );
@@ -845,9 +836,9 @@ final class _KpiBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
-      color: const Color(0x80FFFFFF),
+      color: const Color(0xFFF8F7FC),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: const Color(0x80FFFFFF)),
+      border: Border.all(color: const Color(0xFFEDEAF5)),
     ),
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -861,8 +852,8 @@ final class _KpiBlock extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: FluviVisualTokens.textSecondary,
-              fontSize: 6.2,
-              fontWeight: FontWeight.w700,
+              fontSize: 6.6,
+              fontWeight: FontWeight.w800,
               height: 1,
             ),
           ),
@@ -874,7 +865,7 @@ final class _KpiBlock extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: FluviVisualTokens.textPrimary,
-              fontSize: 8.4,
+              fontSize: 9.8,
               fontWeight: FontWeight.w900,
               height: 1,
             ),

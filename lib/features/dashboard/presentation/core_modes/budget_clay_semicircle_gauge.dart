@@ -568,6 +568,7 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
   static const _startAngle = math.pi;
   static const _sweepAngle = math.pi;
   static const _gradientStops = <double>[0, .5, 1];
+  static const _neutralDecorativeStripStart = .5;
 
   final BudgetClayGaugePresentation presentation;
   final double animatedProgress;
@@ -585,6 +586,7 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     _paintCastShadow(canvas, geometry);
     _paintRearDepth(canvas, geometry);
     _paintNeutralTrackBody(canvas, geometry);
+    _paintNeutralDecorativeStrip(canvas, geometry);
     _paintActiveBody(canvas, geometry);
     _paintInnerShadow(canvas, geometry);
     _paintMarkerShadow(canvas, geometry);
@@ -691,6 +693,20 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     );
   }
 
+  void _paintNeutralDecorativeStrip(Canvas canvas, _GaugeGeometry geometry) {
+    // This is the selected-avatar ring's embedded neutral decoration, not a
+    // free-floating hero-only gloss. It lives across the authored right half
+    // of the neutral body; the active material is painted afterwards and
+    // therefore physically covers the same lane as progress advances.
+    canvas.drawArc(
+      geometry.trackRect,
+      _startAngle + _sweepAngle * _neutralDecorativeStripStart,
+      _sweepAngle * (1 - _neutralDecorativeStripStart),
+      false,
+      _neutralDecorativeStripPaint(geometry),
+    );
+  }
+
   void _paintActiveBody(Canvas canvas, _GaugeGeometry geometry) {
     if (animatedProgress <= 0) return;
     _paintContinuousMaterial(canvas, geometry);
@@ -748,12 +764,24 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
       _startAngle,
       sweep,
       false,
-      Paint()
-        ..color = const Color(0x4DFFFFFF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3 * geometry.scale
-        ..strokeCap = StrokeCap.round,
+      _decorativeStripPaint(geometry),
     );
+  }
+
+  Paint _decorativeStripPaint(_GaugeGeometry geometry) => Paint()
+    // Same embedded progress-gloss cross-section as the selected avatar ring.
+    ..color = const Color(0x3DFFFFFF)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 5 * geometry.scale
+    ..strokeCap = StrokeCap.round;
+
+  Paint _neutralDecorativeStripPaint(_GaugeGeometry geometry) {
+    final source = BudgetProgressRingGeometry.source;
+    return Paint()
+      ..color = source.trackGlossColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5 * geometry.scale
+      ..strokeCap = StrokeCap.round;
   }
 
   Paint _progressPaint({
