@@ -464,9 +464,9 @@ final class _GaugeTextLayer extends StatelessWidget {
     fit: StackFit.expand,
     children: <Widget>[
       Align(
-        // The face is the clipped upper half of the avatar's white disc, so
-        // its optical centre sits above the arc baseline rather than in the
-        // geometric centre of this rectangular hero slot.
+        // The track is the upper half of the avatar ring; its full face keeps
+        // the same optical centre and continues as an underlay below the hero
+        // until Card2's outer clip naturally stops it.
         alignment: const Alignment(0, 0),
         child: ExcludeSemantics(
           child: Column(
@@ -521,8 +521,9 @@ final class _GaugeGeometry {
     final source = BudgetProgressRingGeometry.source;
     final labelBand = size.height * .105;
     final center = Offset(size.width / 2, size.height - labelBand);
-    // The ring is never fitted into an oval: it is literally a circle whose
-    // lower half is clipped. The white face must reach the top of the slot.
+    // The track is a literal circular upper semicircle. The underlying face
+    // and its ambient shadow are deliberately allowed to continue below this
+    // hero's layout box; Card2's outer ClipRRect is their only physical edge.
     final faceToTrack = source.faceRadius / source.trackRadius;
     final radius = math.min(size.width * .38, center.dy / faceToTrack);
     final scale = radius / source.trackRadius;
@@ -536,7 +537,6 @@ final class _GaugeGeometry {
       scale: scale,
       stroke: source.trackWidth * scale,
       markerRadius: BudgetProgressRingDayPaceMarkers.markerRadius * scale,
-      clipBottom: center.dy + source.trackWidth * scale * .58,
     );
   }
 
@@ -546,7 +546,6 @@ final class _GaugeGeometry {
     required this.scale,
     required this.stroke,
     required this.markerRadius,
-    required this.clipBottom,
   });
 
   final Rect trackRect;
@@ -554,7 +553,6 @@ final class _GaugeGeometry {
   final double scale;
   final double stroke;
   final double markerRadius;
-  final double clipBottom;
 }
 
 /// Multi-pass clay material renderer. Paint receives only prepared immutable
@@ -577,11 +575,10 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     final geometry = _GaugeGeometry.resolve(size);
-    // The lower circle never becomes a second visual component. Clipping here
-    // makes this precisely the upper half of the selected avatar ring.
-    canvas
-      ..save()
-      ..clipRect(Rect.fromLTRB(0, 0, size.width, geometry.clipBottom));
+    // The arcs themselves already have π sweep, so no painter-wide horizontal
+    // clip is needed. Keeping the face/shadow un-clipped lets their underlay
+    // flow behind the KPI region; Card2's outer rounded clip owns the final
+    // physical boundary.
     _paintCenterMedallion(canvas, geometry);
     _paintCastShadow(canvas, geometry);
     _paintRearDepth(canvas, geometry);
@@ -591,7 +588,6 @@ final class _BudgetClaySemicirclePainter extends CustomPainter {
     _paintInnerShadow(canvas, geometry);
     _paintMarkerShadow(canvas, geometry);
     _paintMarker(canvas, geometry);
-    canvas.restore();
   }
 
   void _paintCenterMedallion(Canvas canvas, _GaugeGeometry geometry) {

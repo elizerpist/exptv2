@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_secondary_analysis.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_content_title_layout.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_secondary_analysis_card.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -15,35 +16,41 @@ void main() {
     required DashboardBudgetSecondaryAnalysisPayload payload,
     required LedgerTimeScope scope,
     required String scopeLabel,
-  }) => tester.pumpWidget(
-    MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: SizedBox(
-            width: 390,
-            height: 220,
-            child: RepaintBoundary(
-              key: const ValueKey<String>('budget-analysis-golden-boundary'),
-              child: DecoratedBox(
-                decoration: const BoxDecoration(color: Colors.white),
-                child: BudgetSecondaryAnalysisPreparedCard(
-                  frame: DashboardBudgetSecondaryAnalysisFrame(
-                    coreRevision: 17,
-                    direction: LedgerDirection.expense,
-                    targetHandle: 1,
-                    scope: scope,
-                    payload: payload,
-                  ),
-                  targetTitle: 'Élelmiszer',
-                  scopeLabel: scopeLabel,
-                ),
+    bool useCard2OuterClip = false,
+  }) {
+    final analysis = BudgetSecondaryAnalysisPreparedCard(
+      frame: DashboardBudgetSecondaryAnalysisFrame(
+        coreRevision: 17,
+        direction: LedgerDirection.expense,
+        targetHandle: 1,
+        scope: scope,
+        payload: payload,
+      ),
+      targetTitle: 'Élelmiszer',
+      scopeLabel: scopeLabel,
+    );
+    return tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 390,
+              height: 220,
+              child: RepaintBoundary(
+                key: const ValueKey<String>('budget-analysis-golden-boundary'),
+                child: useCard2OuterClip
+                    ? BudgetDistributionCardShell(child: analysis)
+                    : DecoratedBox(
+                        decoration: const BoxDecoration(color: Colors.white),
+                        child: analysis,
+                      ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   testWidgets('SUM mounts exactly one direction-aware clay semicircle', (
     tester,
@@ -87,6 +94,43 @@ void main() {
       matchesGoldenFile('../../../goldens/budget_analysis_sum.png'),
     );
   });
+
+  testWidgets(
+    'SUM face underlay crosses the former painter clip at 39, 100 and 225 percent',
+    (tester) async {
+      for (final sample in <({double ratio, String goldenName})>[
+        (ratio: .39, goldenName: '039'),
+        (ratio: 1, goldenName: '100'),
+        (ratio: 2.25, goldenName: '225'),
+      ]) {
+        await pump(
+          tester,
+          scope: const AllTimeScope(),
+          scopeLabel: 'Összesen',
+          useCard2OuterClip: true,
+          payload: DashboardBudgetSumAnalysis(
+            availability: BudgetAnalysisAvailability.available,
+            averageUtilization: sample.ratio,
+            averageBudgetDeltaScaled100: -84000,
+            eligibleMonthCount: 12,
+            monthsWithinBudget: 8,
+            utilizationStandardDeviation: .12,
+          ),
+        );
+
+        // The golden includes the full Card2-sized RepaintBoundary: the
+        // medallion/shadow underlay must remain continuous through the old
+        // clipBottom lane, while the individual KPI cards stay foreground.
+        expect(tester.takeException(), isNull);
+        await expectLater(
+          find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+          matchesGoldenFile(
+            '../../../goldens/budget_analysis_sum_underlay_${sample.goldenName}.png',
+          ),
+        );
+      }
+    },
+  );
 
   testWidgets(
     'YEAR mounts a centered zero-axis chart with prepared signed bars',
