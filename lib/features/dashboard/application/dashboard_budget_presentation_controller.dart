@@ -561,6 +561,35 @@ final class DashboardBudgetPartitionPresentation {
       categoryOverlay: categoryOverlay,
     );
   }
+
+  /// Applies an exact-month aggregate draft while preserving the same
+  /// category allocation map.  Segment ratios derive their denominator from
+  /// [effectiveAggregateLimitScaled100], so manager total edits and SPEC can
+  /// redraw the partition atomically before persistence/re-preparation.
+  DashboardBudgetPartitionPresentation withAggregateLimitDraft({
+    required int? limitScaled100,
+  }) {
+    if (limitScaled100 != null && limitScaled100 < 0) {
+      throw ArgumentError.value(limitScaled100, 'limitScaled100');
+    }
+    if (!isAvailable || effectiveAggregateLimitScaled100 == limitScaled100) {
+      return this;
+    }
+    return DashboardBudgetPartitionPresentation._(
+      direction: direction,
+      period: period,
+      periodSliceIndex: periodSliceIndex,
+      coreRevision: coreRevision,
+      bank: bank,
+      catalog: catalog,
+      aggregateActualScaled100: aggregateActualScaled100,
+      effectiveAggregateLimitScaled100: limitScaled100,
+      preparedAllocatedTotalScaled100: preparedAllocatedTotalScaled100,
+      optimisticAllocationDeltaScaled100: optimisticAllocationDeltaScaled100,
+      effectiveLimitByTargetHandle: effectiveLimitByTargetHandle,
+      categoryOverlay: categoryOverlay,
+    );
+  }
 }
 
 @immutable

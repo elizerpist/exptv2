@@ -580,6 +580,12 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     required int month,
   }) {
     var result = partition;
+    final aggregateHandle = _aggregateHandle();
+    if (aggregateHandle != null) {
+      result = result.withAggregateLimitDraft(
+        limitScaled100: _resolvedLimitForHandle(aggregateHandle, year, month),
+      );
+    }
     for (final item in widget.presentation.value.items) {
       if (item.target.isAggregate) continue;
       final draft =
@@ -1242,8 +1248,12 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   Future<void> _showMonthSheet(_BudgetLimitMonthInfo info) async {
     final activeTargetHandle = _activeTargetHandle;
     final activeTarget = _activeTarget;
-    final partition = widget.presentation.partitionForManagerMonth(
-      direction: widget.request.direction,
+    final partition = _partitionWithAllocationDrafts(
+      partition: widget.presentation.partitionForManagerMonth(
+        direction: widget.request.direction,
+        year: info.year,
+        month: info.month,
+      ),
       year: info.year,
       month: info.month,
     );

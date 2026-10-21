@@ -190,6 +190,38 @@ void main() {
       },
     );
 
+    test(
+      'manager aggregate draft redraws the same partition with its new denominator',
+      () {
+        final harness = _Harness(
+          snapshot: _snapshot(
+            budgetLimitScaled100: 10000000,
+            foodLimitScaled100: 2500000,
+            foodActualScaled100: 1000000,
+          ),
+        );
+        addTearDown(harness.dispose);
+
+        final partition = harness.presentation.partitionForManagerMonth(
+          direction: LedgerDirection.expense,
+          year: 2026,
+          month: 1,
+        );
+        final draft = partition.withAggregateLimitDraft(
+          limitScaled100: 20000000,
+        );
+
+        expect(partition.effectiveAggregateLimitScaled100, 10000000);
+        expect(partition.segmentForCategoryHandle(1).totalRatio, .25);
+        expect(draft.effectiveAggregateLimitScaled100, 20000000);
+        expect(draft.liveAllocatedTotalScaled100, 2500000);
+        expect(draft.segmentForCategoryHandle(1).opaqueRatio, .05);
+        expect(draft.segmentForCategoryHandle(1).translucentRatio, .075);
+        expect(harness.repository.upsertCalls, 0);
+        expect(harness.repository.deleteCalls, 0);
+      },
+    );
+
     test('keeps a missing aggregate denominator finite and disabled', () {
       final harness = _Harness(
         snapshot: _snapshot(
