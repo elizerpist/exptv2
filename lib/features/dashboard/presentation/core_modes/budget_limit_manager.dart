@@ -15,6 +15,7 @@ import '../../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/local_date.dart';
 import 'budget_allocation_partition_lane.dart';
+import 'budget_allocation_partition_slider.dart';
 import 'budget_target_avatar_carousel.dart';
 
 /// Frozen intent emitted by the selected avatar.  The rail only emits this
@@ -64,6 +65,10 @@ final class BudgetLimitManager extends StatefulWidget {
   State<BudgetLimitManager> createState() => _BudgetLimitManagerState();
 }
 
+/// A manager-local information architecture choice.  It has no persistence
+/// meaning and always starts in the target/category view on a fresh open.
+enum BudgetLimitManagerPerspective { category, allocation }
+
 final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   late int _year;
   late final CenteredCarouselController _avatarCarouselController;
@@ -75,6 +80,8 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   bool _carouselInMotion = false;
   bool _monthSheetOpen = false;
   bool _loadingTimeline = true;
+  var _perspective = BudgetLimitManagerPerspective.category;
+  int? _allocationActiveCategoryHandle;
 
   FinancialLimitDirection get _direction => switch (widget.request.direction) {
     LedgerDirection.income => FinancialLimitDirection.income,
@@ -205,6 +212,44 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   int? get _currentBase =>
       _resolvedLimit(_logicalDate.year, _logicalDate.month);
 
+  DashboardBudgetTarget? _targetForHandle(int handle) =>
+      widget.presentation.targetForManagerHandle(handle);
+
+  int? _aggregateHandle() {
+    for (final item in widget.presentation.value.items) {
+      if (item.target.isAggregate) return item.target.handle;
+    }
+    return null;
+  }
+
+  int? _allocationCategoryHandle() {
+    final existing = _allocationActiveCategoryHandle;
+    if (existing != null && _targetForHandle(existing)?.isAggregate == false) {
+      return existing;
+    }
+    for (final item in widget.presentation.value.items) {
+      if (!item.target.isAggregate) return item.target.handle;
+    }
+    return null;
+  }
+
+  FinancialLimitTarget? _financialTargetForHandle(int handle) {
+    final target = _targetForHandle(handle);
+    return target == null ? null : _financialTargetFor(target);
+  }
+
+  int? _resolvedLimitForHandle(int handle, int year, int month) {
+    final target = _financialTargetForHandle(handle);
+    if (target == null) return null;
+    return FinancialLimitResolution.resolve(
+      limits: _timelineByTargetHandle[handle] ?? const <FinancialLimit>[],
+      direction: _direction,
+      target: target,
+      year: year,
+      month: month,
+    )?.amountScaled100;
+  }
+
   void _replaceLocal(FinancialLimit limit, {required int targetHandle}) {
     setState(() {
       _timelineByTargetHandle = <int, List<FinancialLimit>>{
@@ -234,13 +279,21 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     });
   }
 
-  Future<void> _setBase(int amount) async {
+  Future<void> _setBase(int amount) =>
+      _setBaseForTarget(_activeTargetHandle, amount);
+
+  Future<void> _setBaseForTarget(int targetHandle, int amount) async {
     // Capture the prepared/current value before the manager's optimistic
     // timeline replaces it.  The shared write coordinator needs that value
     // for a correct later reconciliation of this exact revision key.
-    final targetHandle = _activeTargetHandle;
-    final target = _target;
-    final confirmedBase = _currentBase;
+    final activeTarget = _targetForHandle(targetHandle);
+    if (activeTarget == null) return;
+    final target = _financialTargetFor(activeTarget);
+    final confirmedBase = _resolvedLimitForHandle(
+      targetHandle,
+      _logicalDate.year,
+      _logicalDate.month,
+    );
     final period = FinancialLimitBaseMonthlyRevisionPeriod(
       _logicalDate.year,
       _logicalDate.month,
@@ -273,9 +326,18 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     );
   }
 
-  Future<void> _setOverride(int year, int month, int amount) async {
-    final targetHandle = _activeTargetHandle;
-    final target = _target;
+  Future<void> _setOverride(int year, int month, int amount) =>
+      _setOverrideForTarget(_activeTargetHandle, year, month, amount);
+
+  Future<void> _setOverrideForTarget(
+    int targetHandle,
+    int year,
+    int month,
+    int amount,
+  ) async {
+    final activeTarget = _targetForHandle(targetHandle);
+    if (activeTarget == null) return;
+    final target = _financialTargetFor(activeTarget);
     final key = FinancialLimitKey(
       direction: _direction,
       target: target,
@@ -309,9 +371,17 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     );
   }
 
-  Future<void> _deleteOverride(int year, int month) async {
-    final targetHandle = _activeTargetHandle;
-    final target = _target;
+  Future<void> _deleteOverride(int year, int month) =>
+      _deleteOverrideForTarget(_activeTargetHandle, year, month);
+
+  Future<void> _deleteOverrideForTarget(
+    int targetHandle,
+    int year,
+    int month,
+  ) async {
+    final activeTarget = _targetForHandle(targetHandle);
+    if (activeTarget == null) return;
+    final target = _financialTargetFor(activeTarget);
     final key = FinancialLimitKey(
       direction: _direction,
       target: target,
@@ -356,7 +426,12 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
           title: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_title, style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text(
+                _perspective == BudgetLimitManagerPerspective.category
+                    ? _title
+                    : 'Keretkiosztás',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
               Text(
                 widget.request.direction == LedgerDirection.expense
                     ? 'Kiadási keret'
@@ -365,6 +440,27 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
               ),
             ],
           ),
+          actions: [
+            IconButton(
+              key: const ValueKey<String>('budget-limit-manager-perspective'),
+              tooltip: _perspective == BudgetLimitManagerPerspective.category
+                  ? 'Kiosztási nézet'
+                  : 'Kategória nézet',
+              onPressed: _monthSheetOpen
+                  ? null
+                  : () => setState(() {
+                      _perspective =
+                          _perspective == BudgetLimitManagerPerspective.category
+                          ? BudgetLimitManagerPerspective.allocation
+                          : BudgetLimitManagerPerspective.category;
+                    }),
+              icon: Icon(
+                _perspective == BudgetLimitManagerPerspective.category
+                    ? Icons.account_tree_outlined
+                    : Icons.grid_view_rounded,
+              ),
+            ),
+          ],
         ),
         body: SafeArea(
           top: false,
@@ -379,17 +475,21 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _avatarCarousel(),
-                          const SizedBox(height: 14),
-                          _baseEditorCard(),
-                          const SizedBox(height: 10),
-                          _metricsCard(metrics),
-                          const SizedBox(height: 18),
-                          _yearSelector(),
-                          const SizedBox(height: 10),
-                          _monthGrid(snapshot),
-                        ],
+                        children:
+                            _perspective ==
+                                BudgetLimitManagerPerspective.category
+                            ? <Widget>[
+                                _avatarCarousel(),
+                                const SizedBox(height: 14),
+                                _baseEditorCard(),
+                                const SizedBox(height: 10),
+                                _metricsCard(metrics),
+                                const SizedBox(height: 18),
+                                _yearSelector(),
+                                const SizedBox(height: 10),
+                                _monthGrid(snapshot),
+                              ]
+                            : _allocationPerspective(snapshot),
                       ),
                     ),
                   ),
@@ -434,6 +534,437 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
             },
           ),
   );
+
+  String _allocationDraftKey({
+    required int year,
+    required int month,
+    required int handle,
+  }) => '$year-$month-$handle';
+
+  final Map<String, int> _allocationDraftByMonthAndHandle = <String, int>{};
+
+  int _allocationValueFor({
+    required int year,
+    required int month,
+    required int handle,
+  }) =>
+      _allocationDraftByMonthAndHandle[_allocationDraftKey(
+        year: year,
+        month: month,
+        handle: handle,
+      )] ??
+      _resolvedLimitForHandle(handle, year, month) ??
+      0;
+
+  void _setAllocationDraft({
+    required int year,
+    required int month,
+    required int handle,
+    required int amount,
+  }) => setState(() {
+    _allocationDraftByMonthAndHandle[_allocationDraftKey(
+          year: year,
+          month: month,
+          handle: handle,
+        )] =
+        amount;
+  });
+
+  /// Folds only manager-local, already-entered allocation drafts over the
+  /// canonical exact-month partition.  The partition itself remains the one
+  /// source of allocation semantics; this merely lets more than one category
+  /// retain its local value while the user switches rows before committing.
+  DashboardBudgetPartitionPresentation _partitionWithAllocationDrafts({
+    required DashboardBudgetPartitionPresentation partition,
+    required int year,
+    required int month,
+  }) {
+    var result = partition;
+    for (final item in widget.presentation.value.items) {
+      if (item.target.isAggregate) continue;
+      final draft =
+          _allocationDraftByMonthAndHandle[_allocationDraftKey(
+            year: year,
+            month: month,
+            handle: item.target.handle,
+          )];
+      if (draft != null) {
+        result = result.withCategoryLimitDraft(
+          categoryHandle: item.target.handle,
+          limitScaled100: draft,
+        );
+      }
+    }
+    return result;
+  }
+
+  int _categorySliderMax({
+    required DashboardBudgetPartitionPresentation partition,
+    required int handle,
+  }) => BudgetAllocationPartitionSlider.maxForActiveCategory(
+    partition: partition,
+    activeCategoryHandle: handle,
+  );
+
+  int? _monthlyIncome(
+    PreparedBudgetLimitSnapshot? snapshot,
+    int year,
+    int month,
+  ) {
+    final aggregateHandle = _aggregateHandle();
+    if (snapshot == null ||
+        aggregateHandle == null ||
+        year < snapshot.yearWindowStart ||
+        year > snapshot.yearWindowEndInclusive) {
+      return null;
+    }
+    return snapshot
+        .cellAt(
+          direction: LedgerDirection.income,
+          period: BudgetLimitPeriod.month(year, month),
+          targetHandle: aggregateHandle,
+        )
+        .actualScaled100;
+  }
+
+  List<Widget> _allocationPerspective(PreparedBudgetLimitSnapshot? snapshot) {
+    final categoryHandle = _allocationCategoryHandle();
+    final aggregateHandle = _aggregateHandle();
+    final year = _logicalDate.year;
+    final month = _logicalDate.month;
+    final preparedPartition = widget.presentation.partitionForManagerMonth(
+      direction: widget.request.direction,
+      year: year,
+      month: month,
+    );
+    final effectivePartition = _partitionWithAllocationDrafts(
+      partition: preparedPartition,
+      year: year,
+      month: month,
+    );
+    final monthlyIncome = _monthlyIncome(snapshot, year, month);
+    return <Widget>[
+      _allocationHero(
+        partition: effectivePartition,
+        categoryHandle: categoryHandle,
+        aggregateHandle: aggregateHandle,
+        monthlyIncome: monthlyIncome,
+      ),
+      const SizedBox(height: 18),
+      const Text(
+        'Alap kategórialimitek',
+        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+      ),
+      const SizedBox(height: 8),
+      _allocationCategoryList(
+        partition: effectivePartition,
+        activeHandle: categoryHandle,
+        year: year,
+        month: month,
+      ),
+      const SizedBox(height: 18),
+      _yearSelector(),
+      const SizedBox(height: 8),
+      _allocationMonthRows(snapshot),
+    ];
+  }
+
+  Widget _allocationHero({
+    required DashboardBudgetPartitionPresentation partition,
+    required int? categoryHandle,
+    required int? aggregateHandle,
+    required int? monthlyIncome,
+  }) {
+    final base = aggregateHandle == null
+        ? null
+        : _resolvedLimitForHandle(
+            aggregateHandle,
+            _logicalDate.year,
+            _logicalDate.month,
+          );
+    return Container(
+      key: const ValueKey<String>('budget-limit-manager-allocation-hero'),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xfff8f9fc),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xffe3e7ef)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'ALAP HAVI KIOSZTÁS',
+            style: TextStyle(
+              fontSize: 11,
+              letterSpacing: .6,
+              fontWeight: FontWeight.w900,
+              color: Color(0xff68758e),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _formatAmount(base),
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (aggregateHandle != null)
+                IconButton(
+                  key: const ValueKey<String>(
+                    'budget-limit-manager-allocation-total-edit',
+                  ),
+                  tooltip: 'Teljes havi keret szerkesztése',
+                  onPressed: () => _showAmountEditor(
+                    title: 'Alap havi keret',
+                    initial: base ?? 0,
+                    onSave: (amount) =>
+                        _setBaseForTarget(aggregateHandle, amount),
+                  ),
+                  icon: Icon(Icons.edit_rounded, color: _accent),
+                ),
+            ],
+          ),
+          const Text(
+            'Alap havi keret',
+            style: TextStyle(fontSize: 12, color: Color(0xff68758e)),
+          ),
+          const SizedBox(height: 14),
+          if (categoryHandle != null && partition.hasPositiveAggregateLimit)
+            BudgetAllocationPartitionSlider(
+              partition: partition,
+              activeCategoryHandle: categoryHandle,
+              valueScaled100: _allocationValueFor(
+                year: _logicalDate.year,
+                month: _logicalDate.month,
+                handle: categoryHandle,
+              ),
+              maxScaled100: _categorySliderMax(
+                partition: partition,
+                handle: categoryHandle,
+              ),
+              enabled:
+                  _categorySliderMax(
+                        partition: partition,
+                        handle: categoryHandle,
+                      ) >
+                      0 ||
+                  _allocationValueFor(
+                        year: _logicalDate.year,
+                        month: _logicalDate.month,
+                        handle: categoryHandle,
+                      ) >
+                      0,
+              onChanged: (amount) => _setAllocationDraft(
+                year: _logicalDate.year,
+                month: _logicalDate.month,
+                handle: categoryHandle,
+                amount: amount,
+              ),
+              onChangeEnd: (amount) =>
+                  _setBaseForTarget(categoryHandle, amount),
+            )
+          else
+            SizedBox(
+              height: 18,
+              child: BudgetAllocationPartitionLane(partition: partition),
+            ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _allocationMetric(
+                  'Kiosztva',
+                  _formatAmount(partition.liveAllocatedTotalScaled100),
+                ),
+              ),
+              Expanded(
+                child: _allocationMetric(
+                  'Nincs kiosztva',
+                  _formatAmount(partition.unallocatedLimitScaled100),
+                ),
+              ),
+              if (widget.request.direction == LedgerDirection.expense &&
+                  aggregateHandle != null &&
+                  monthlyIncome != null &&
+                  monthlyIncome > 0)
+                TextButton.icon(
+                  key: const ValueKey<String>(
+                    'budget-limit-manager-spec-income',
+                  ),
+                  onPressed: () =>
+                      _setBaseForTarget(aggregateHandle, monthlyIncome),
+                  icon: const Icon(Icons.compare_arrows_rounded, size: 16),
+                  label: const Text('Bevételhez'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _allocationMetric(String label, String amount) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(fontSize: 11, color: Color(0xff68758e)),
+      ),
+      const SizedBox(height: 2),
+      Text(amount, style: const TextStyle(fontWeight: FontWeight.w900)),
+    ],
+  );
+
+  Widget _allocationCategoryList({
+    required DashboardBudgetPartitionPresentation partition,
+    required int? activeHandle,
+    required int year,
+    required int month,
+  }) => Column(
+    children: [
+      for (final item in widget.presentation.value.items)
+        if (!item.target.isAggregate)
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey<String>(
+                'budget-limit-manager-allocation-category-${item.target.handle}',
+              ),
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => setState(
+                () => _allocationActiveCategoryHandle = item.target.handle,
+              ),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: item.target.handle == activeHandle
+                      ? _accent.withValues(alpha: .10)
+                      : const Color(0xfffbfcff),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: item.target.handle == activeHandle
+                        ? _accent.withValues(alpha: .55)
+                        : const Color(0xffe6e9f0),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.target.category!.displayName,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    Text(
+                      _formatAmount(
+                        _allocationValueFor(
+                          year: year,
+                          month: month,
+                          handle: item.target.handle,
+                        ),
+                      ),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${(partition.segmentForCategoryHandle(item.target.handle).totalRatio * 100).round()}%',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xff68758e),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+    ],
+  );
+
+  Widget _allocationMonthRows(PreparedBudgetLimitSnapshot? snapshot) => Column(
+    key: const ValueKey<String>('budget-limit-manager-allocation-month-rows'),
+    children: [
+      for (var month = 1; month <= 12; month += 1)
+        _allocationMonthRow(snapshot, _year, month),
+    ],
+  );
+
+  Widget _allocationMonthRow(
+    PreparedBudgetLimitSnapshot? snapshot,
+    int year,
+    int month,
+  ) {
+    final partition = _partitionWithAllocationDrafts(
+      partition: widget.presentation.partitionForManagerMonth(
+        direction: widget.request.direction,
+        year: year,
+        month: month,
+      ),
+      year: year,
+      month: month,
+    );
+    final aggregateHandle = _aggregateHandle();
+    final total = aggregateHandle == null
+        ? null
+        : _resolvedLimitForHandle(aggregateHandle, year, month);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey<String>(
+          'budget-limit-manager-allocation-month-$year-$month',
+        ),
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showAllocationMonthSheet(year, month, partition),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xffe5e8f0)),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 34,
+                child: Text(
+                  _monthName(month),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SizedBox(
+                  height: 12,
+                  child: BudgetAllocationPartitionLane(partition: partition),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _formatAmount(total),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _baseEditorCard() => Material(
     color: Colors.transparent,
@@ -732,12 +1263,75 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
           partition: partition,
           onSetOverride: (amount) async {
             await _setOverride(info.year, info.month, amount);
-            if (sheetContext.mounted) Navigator.of(sheetContext).pop();
           },
           onDeleteOverride: () async {
             await _deleteOverride(info.year, info.month);
             if (sheetContext.mounted) Navigator.of(sheetContext).pop();
           },
+        ),
+      );
+    } finally {
+      _monthSheetOpen = false;
+    }
+  }
+
+  Future<void> _showAllocationMonthSheet(
+    int year,
+    int month,
+    DashboardBudgetPartitionPresentation partition,
+  ) async {
+    final initialHandle = _allocationCategoryHandle();
+    if (initialHandle == null) return;
+    final aggregateHandle = _aggregateHandle();
+    _monthSheetOpen = true;
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (_) => _BudgetLimitAllocationMonthSheet(
+          year: year,
+          month: month,
+          partition: partition,
+          accent: _accent,
+          aggregateAmountScaled100: aggregateHandle == null
+              ? null
+              : _resolvedLimitForHandle(aggregateHandle, year, month),
+          monthlyIncomeScaled100: _monthlyIncome(
+            widget.presentation.preparedSnapshotForManager,
+            year,
+            month,
+          ),
+          canUseIncomeSpec:
+              widget.request.direction == LedgerDirection.expense &&
+              aggregateHandle != null,
+          entries: <_BudgetLimitAllocationEntry>[
+            for (final item in widget.presentation.value.items)
+              if (!item.target.isAggregate)
+                _BudgetLimitAllocationEntry(
+                  handle: item.target.handle,
+                  title: item.target.category!.displayName,
+                  amountScaled100: _allocationValueFor(
+                    year: year,
+                    month: month,
+                    handle: item.target.handle,
+                  ),
+                ),
+          ],
+          initialHandle: initialHandle,
+          onDraftChanged: (handle, amount) => _setAllocationDraft(
+            year: year,
+            month: month,
+            handle: handle,
+            amount: amount,
+          ),
+          onCommit: (handle, amount) =>
+              _setOverrideForTarget(handle, year, month, amount),
+          onSetAggregateToIncome: aggregateHandle == null
+              ? null
+              : (amount) =>
+                    _setOverrideForTarget(aggregateHandle, year, month, amount),
         ),
       );
     } finally {
@@ -1094,6 +1688,7 @@ final class _BudgetLimitMonthSheet extends StatefulWidget {
 final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
   late final TextEditingController _controller;
   var _isEditing = false;
+  late int _sliderDraftScaled100;
 
   @override
   void initState() {
@@ -1101,6 +1696,7 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
     _controller = TextEditingController(
       text: ((widget.info.resolvedLimitScaled100 ?? 0) ~/ 100).toString(),
     )..addListener(_onDraftChanged);
+    _sliderDraftScaled100 = widget.info.resolvedLimitScaled100 ?? 0;
   }
 
   @override
@@ -1111,7 +1707,9 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
   }
 
   void _onDraftChanged() {
-    if (_isEditing && mounted) setState(() {});
+    if (!_isEditing) return;
+    _sliderDraftScaled100 = _overrideDraftScaled100;
+    if (mounted) setState(() {});
   }
 
   void _adjustOverride(int deltaForints) {
@@ -1132,6 +1730,38 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
           limitScaled100: _overrideDraftScaled100,
         )
       : widget.partition;
+
+  int get _categorySliderMaxScaled100 {
+    if (widget.targetIsAggregate ||
+        !widget.partition.hasPositiveAggregateLimit) {
+      return 0;
+    }
+    final active =
+        widget.partition.effectiveLimitForCategoryHandle(widget.targetHandle) ??
+        0;
+    final otherAllocated =
+        (widget.partition.liveAllocatedTotalScaled100 -
+                (active > 0 ? active : 0))
+            .clamp(0, 0x7fffffffffffffff)
+            .toInt();
+    return ((widget.partition.effectiveAggregateLimitScaled100 ?? 0) -
+            otherAllocated)
+        .clamp(0, 0x7fffffffffffffff)
+        .toInt();
+  }
+
+  void _setSliderDraft(int value) {
+    setState(() {
+      _isEditing = true;
+      _sliderDraftScaled100 = value;
+      _controller.value = TextEditingValue(
+        text: (value ~/ 100).toString(),
+        selection: TextSelection.collapsed(
+          offset: (value ~/ 100).toString().length,
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1313,6 +1943,19 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
             targetIsAggregate: widget.targetIsAggregate,
             year: info.year,
             month: info.month,
+            slider: widget.targetIsAggregate
+                ? null
+                : BudgetAllocationPartitionSlider(
+                    partition: _displayedPartition,
+                    activeCategoryHandle: widget.targetHandle,
+                    valueScaled100: _sliderDraftScaled100,
+                    maxScaled100: _categorySliderMaxScaled100,
+                    enabled:
+                        _categorySliderMaxScaled100 > 0 ||
+                        _sliderDraftScaled100 > 0,
+                    onChanged: _setSliderDraft,
+                    onChangeEnd: widget.onSetOverride,
+                  ),
           ),
           if (_isEditing) ...[
             const SizedBox(height: 20),
@@ -1398,6 +2041,7 @@ final class _BudgetLimitMonthPartitionContext extends StatelessWidget {
     required this.targetIsAggregate,
     required this.year,
     required this.month,
+    this.slider,
   });
 
   final DashboardBudgetPartitionPresentation partition;
@@ -1407,6 +2051,7 @@ final class _BudgetLimitMonthPartitionContext extends StatelessWidget {
   final bool targetIsAggregate;
   final int year;
   final int month;
+  final Widget? slider;
 
   @override
   Widget build(BuildContext context) {
@@ -1442,15 +2087,16 @@ final class _BudgetLimitMonthPartitionContext extends StatelessWidget {
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 11),
-          SizedBox(
-            height: 18,
-            child: BudgetAllocationPartitionLane(
-              partition: partition,
-              highlightedCategoryHandle: targetIsAggregate
-                  ? null
-                  : targetHandle,
-            ),
-          ),
+          slider ??
+              SizedBox(
+                height: 18,
+                child: BudgetAllocationPartitionLane(
+                  partition: partition,
+                  highlightedCategoryHandle: targetIsAggregate
+                      ? null
+                      : targetHandle,
+                ),
+              ),
           const SizedBox(height: 11),
           Row(
             children: [
@@ -1523,6 +2169,212 @@ final class _BudgetLimitMonthPartitionContext extends StatelessWidget {
         ratio,
         style: const TextStyle(fontSize: 10, color: Color(0xff68758e)),
       ),
+    ],
+  );
+}
+
+@immutable
+final class _BudgetLimitAllocationEntry {
+  const _BudgetLimitAllocationEntry({
+    required this.handle,
+    required this.title,
+    required this.amountScaled100,
+  });
+
+  final int handle;
+  final String title;
+  final int amountScaled100;
+}
+
+/// Time-centric sibling of the category month sheet.  It deliberately takes
+/// an immutable prepared partition and only publishes a local draft while the
+/// handle moves; the manager performs the single exact-month write on release.
+final class _BudgetLimitAllocationMonthSheet extends StatefulWidget {
+  const _BudgetLimitAllocationMonthSheet({
+    required this.year,
+    required this.month,
+    required this.partition,
+    required this.accent,
+    required this.aggregateAmountScaled100,
+    required this.monthlyIncomeScaled100,
+    required this.canUseIncomeSpec,
+    required this.entries,
+    required this.initialHandle,
+    required this.onDraftChanged,
+    required this.onCommit,
+    required this.onSetAggregateToIncome,
+  });
+
+  final int year;
+  final int month;
+  final DashboardBudgetPartitionPresentation partition;
+  final Color accent;
+  final int? aggregateAmountScaled100;
+  final int? monthlyIncomeScaled100;
+  final bool canUseIncomeSpec;
+  final List<_BudgetLimitAllocationEntry> entries;
+  final int initialHandle;
+  final void Function(int handle, int amount) onDraftChanged;
+  final Future<void> Function(int handle, int amount) onCommit;
+  final Future<void> Function(int amount)? onSetAggregateToIncome;
+
+  @override
+  State<_BudgetLimitAllocationMonthSheet> createState() =>
+      _BudgetLimitAllocationMonthSheetState();
+}
+
+final class _BudgetLimitAllocationMonthSheetState
+    extends State<_BudgetLimitAllocationMonthSheet> {
+  late int _activeHandle;
+  late final Map<int, int> _draftByHandle;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeHandle = widget.initialHandle;
+    _draftByHandle = <int, int>{
+      for (final entry in widget.entries) entry.handle: entry.amountScaled100,
+    };
+  }
+
+  int get _activeAmount => _draftByHandle[_activeHandle] ?? 0;
+
+  int get _maxAmount {
+    return BudgetAllocationPartitionSlider.maxForActiveCategory(
+      partition: _partition,
+      activeCategoryHandle: _activeHandle,
+    );
+  }
+
+  DashboardBudgetPartitionPresentation get _partition {
+    var result = widget.partition;
+    for (final entry in _draftByHandle.entries) {
+      result = result.withCategoryLimitDraft(
+        categoryHandle: entry.key,
+        limitScaled100: entry.value,
+      );
+    }
+    return result;
+  }
+
+  void _setDraft(int amount) {
+    setState(() => _draftByHandle[_activeHandle] = amount);
+    widget.onDraftChanged(_activeHandle, amount);
+  }
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    padding: EdgeInsets.fromLTRB(
+      20,
+      8,
+      20,
+      24 + MediaQuery.viewInsetsOf(context).bottom,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '${_monthLongName(widget.month)} ${widget.year}',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        ),
+        const Text(
+          'Keretkiosztás',
+          style: TextStyle(fontSize: 12, color: Color(0xff68758e)),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${_formatAmount(widget.aggregateAmountScaled100 ?? widget.partition.effectiveAggregateLimitScaled100)} teljes havi keret',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            if (widget.canUseIncomeSpec &&
+                widget.monthlyIncomeScaled100 != null &&
+                widget.monthlyIncomeScaled100! > 0)
+              Tooltip(
+                message: 'Budget beállítása a havi bevételre',
+                child: TextButton.icon(
+                  key: const ValueKey<String>(
+                    'budget-limit-allocation-sheet-spec-income',
+                  ),
+                  onPressed: () => widget.onSetAggregateToIncome!(
+                    widget.monthlyIncomeScaled100!,
+                  ),
+                  icon: const Icon(Icons.compare_arrows_rounded, size: 16),
+                  label: const Text('Bevételhez'),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        BudgetAllocationPartitionSlider(
+          partition: _partition,
+          activeCategoryHandle: _activeHandle,
+          valueScaled100: _activeAmount,
+          maxScaled100: _maxAmount,
+          enabled: _maxAmount > 0 || _activeAmount > 0,
+          onChanged: _setDraft,
+          onChangeEnd: (amount) => widget.onCommit(_activeHandle, amount),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _allocationMetric(
+                'Kiosztva',
+                _formatAmount(_partition.liveAllocatedTotalScaled100),
+              ),
+            ),
+            Expanded(
+              child: _allocationMetric(
+                'Szabad',
+                _formatAmount(_partition.unallocatedLimitScaled100),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const Text('Kategóriák', style: TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 6),
+        for (final entry in widget.entries)
+          ListTile(
+            key: ValueKey<String>(
+              'budget-limit-allocation-sheet-category-${entry.handle}',
+            ),
+            contentPadding: EdgeInsets.zero,
+            selected: entry.handle == _activeHandle,
+            selectedTileColor: widget.accent.withValues(alpha: .10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            title: Text(
+              entry.title,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            subtitle: Text(
+              '${(widget.partition.segmentForCategoryHandle(entry.handle).totalRatio * 100).round()}% a teljes keretből',
+            ),
+            trailing: Text(
+              _formatAmount(_draftByHandle[entry.handle]),
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            onTap: () => setState(() => _activeHandle = entry.handle),
+          ),
+      ],
+    ),
+  );
+
+  Widget _allocationMetric(String label, String amount) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(fontSize: 11, color: Color(0xff68758e)),
+      ),
+      Text(amount, style: const TextStyle(fontWeight: FontWeight.w900)),
     ],
   );
 }

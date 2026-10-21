@@ -79,7 +79,7 @@ void main() {
     );
 
     test(
-      'stationary hold remains non-destructive beyond the old clear delay',
+      'very-long hold clears the scalar draft after activation without I/O',
       () {
         final harness = _Harness();
         addTearDown(harness.dispose);
@@ -97,16 +97,18 @@ void main() {
         scheduler.elapse(const Duration(milliseconds: 720));
 
         expect(gesture.isEditing, isTrue);
-        expect(harness.edits.effectiveLimitFor(harness.key, 200000), 200000);
+        expect(harness.edits.effectiveLimitFor(harness.key, 200000), isNull);
         expect(harness.repository.deleteCalls, 0);
         expect(harness.repository.upsertCalls, 0);
-        expect(haptics, <BudgetLimitEditHaptic>[BudgetLimitEditHaptic.medium]);
-        expect(scheduler.hasActive(const Duration(milliseconds: 720)), isFalse);
+        expect(haptics, <BudgetLimitEditHaptic>[
+          BudgetLimitEditHaptic.medium,
+          BudgetLimitEditHaptic.heavy,
+        ]);
       },
     );
 
     test(
-      'first movement after a stationary hold starts from the configured limit',
+      'same pointer can recreate a positive amount after very-long clear',
       () {
         final harness = _Harness();
         addTearDown(harness.dispose);
@@ -123,7 +125,10 @@ void main() {
         scheduler.elapse(const Duration(milliseconds: 720));
         gesture.longPressMoved(globalY: 88);
 
-        expect(harness.edits.effectiveLimitFor(harness.key, 200000), 300000);
+        expect(
+          harness.edits.effectiveLimitFor(harness.key, 200000),
+          BudgetLimitQuickEditRules.smallStepScaled100,
+        );
         expect(harness.repository.deleteCalls, 0);
         expect(harness.repository.upsertCalls, 0);
       },
@@ -157,8 +162,28 @@ void main() {
       },
     );
 
+    test('stationary very-long hold deletes exactly once on release', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      final scheduler = _ManualTimerScheduler();
+      final gesture = BudgetLimitQuickEditGestureController(
+        edits: harness.edits,
+        contextForCurrentSelection: () => harness.context,
+        scheduler: scheduler,
+        haptic: (_) {},
+      );
+      addTearDown(gesture.dispose);
+
+      gesture.longPressStarted(globalY: 100);
+      scheduler.elapse(const Duration(milliseconds: 720));
+      await gesture.longPressEnded();
+
+      expect(harness.repository.deleteCalls, 1);
+      expect(harness.repository.upsertCalls, 0);
+    });
+
     test(
-      'stationary hold followed by release is a persistence no-op',
+      'a cleared session can be recreated immediately with a new pointer',
       () async {
         final harness = _Harness();
         addTearDown(harness.dispose);
@@ -175,35 +200,18 @@ void main() {
         scheduler.elapse(const Duration(milliseconds: 720));
         await gesture.longPressEnded();
 
-        expect(harness.repository.deleteCalls, 0);
+        gesture.longPressStarted(globalY: 100);
+        gesture.longPressMoved(globalY: 88);
+
+        expect(gesture.isEditing, isTrue);
+        expect(
+          harness.edits.effectiveLimitFor(harness.key, 200000),
+          BudgetLimitQuickEditRules.smallStepScaled100,
+        );
+        expect(harness.repository.deleteCalls, 1);
         expect(harness.repository.upsertCalls, 0);
       },
     );
-
-    test('a stationary no-op session can be retried immediately', () async {
-      final harness = _Harness();
-      addTearDown(harness.dispose);
-      final scheduler = _ManualTimerScheduler();
-      final gesture = BudgetLimitQuickEditGestureController(
-        edits: harness.edits,
-        contextForCurrentSelection: () => harness.context,
-        scheduler: scheduler,
-        haptic: (_) {},
-      );
-      addTearDown(gesture.dispose);
-
-      gesture.longPressStarted(globalY: 100);
-      scheduler.elapse(const Duration(milliseconds: 720));
-      await gesture.longPressEnded();
-
-      gesture.longPressStarted(globalY: 100);
-      gesture.longPressMoved(globalY: 88);
-
-      expect(gesture.isEditing, isTrue);
-      expect(harness.edits.effectiveLimitFor(harness.key, 200000), 300000);
-      expect(harness.repository.deleteCalls, 0);
-      expect(harness.repository.upsertCalls, 0);
-    });
 
     test(
       'relative reversal below activation cancels stale auto and follows the new semantic direction',

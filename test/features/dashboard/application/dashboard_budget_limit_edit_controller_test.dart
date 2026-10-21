@@ -190,6 +190,65 @@ void main() {
     });
 
     test(
+      'a current YEAR edit freezes completed months and writes only its editable tail',
+      () async {
+        final repository = _CountingFinancialLimitRepository();
+        final context = DashboardBudgetYearLimitEditContext(
+          direction: FinancialLimitDirection.expense,
+          target: const FinancialLimitAggregateTarget(),
+          coreRevision: 7,
+          targetHandle: 0,
+          year: 2026,
+          monthOverrideKeys: <FinancialLimitKey>[
+            for (var month = 1; month <= 12; month += 1)
+              FinancialLimitKey(
+                direction: FinancialLimitDirection.expense,
+                target: const FinancialLimitAggregateTarget(),
+                period: FinancialLimitMonthOverridePeriod(2026, month),
+              ),
+          ],
+          confirmedMonthlyLimitsScaled100: List<int>.filled(12, 100),
+          editableMonthIndexes: const <int>[9, 10, 11],
+          canonicalAnnualActualScaled100: 0,
+        );
+        final controller = DashboardBudgetLimitEditController(
+          repository: repository,
+          isKeyCurrent: (_) => false,
+          isYearContextCurrent: (_) => true,
+        );
+        addTearDown(controller.dispose);
+
+        final session =
+            controller.startContext(context)!
+                as DashboardBudgetYearLimitEditSession;
+        controller.applyContextSemanticTick(
+          session,
+          direction: 1,
+          amountStepScaled100: 120,
+          tickCount: 1,
+          source: DashboardBudgetLimitEditSource.drag,
+        );
+
+        final effective = controller.effectiveYearLimitsFor(context);
+        expect(effective.take(9), everyElement(100));
+        expect(effective.skip(9), everyElement(140));
+
+        await controller.finishContext(session);
+        expect(repository.lastBatch, hasLength(3));
+        expect(
+          repository.lastBatch.map((mutation) => mutation.key.period),
+          everyElement(
+            isA<FinancialLimitMonthOverridePeriod>().having(
+              (period) => period.month,
+              'month',
+              greaterThanOrEqualTo(10),
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
       'YEAR batches serialize so an older release cannot win last',
       () async {
         final repository = _CountingFinancialLimitRepository(

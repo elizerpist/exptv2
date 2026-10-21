@@ -936,10 +936,14 @@ void main() {
       selection.visual.annualSegments[1].health,
       BudgetProgressRingAnnualSegmentHealth.neutral,
     );
-    // A current-year quick edit would own all twelve overrides, including
-    // completed history.  The new effective-dated policy deliberately
-    // fail-closes it; exact historical corrections belong in the manager.
-    expect(presentation.value.header.editContext, isNull);
+    // A current-year direct edit now carries an explicit editable subset.
+    // This January fixture has no completed months, so all twelve are safe.
+    final context = presentation.value.header.editContext;
+    expect(context, isA<DashboardBudgetYearLimitEditContext>());
+    expect(
+      (context! as DashboardBudgetYearLimitEditContext).editableMonthIndexes,
+      List<int>.generate(12, (index) => index),
+    );
   });
 
   test(

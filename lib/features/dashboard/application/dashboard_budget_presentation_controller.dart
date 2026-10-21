@@ -535,12 +535,15 @@ final class DashboardBudgetPartitionPresentation {
     required int limitScaled100,
   }) {
     final current = effectiveLimitForCategoryHandle(categoryHandle);
-    if (!isAvailable || current == null || current == limitScaled100) {
+    // A previously unallocated category is a first-class slider target too:
+    // its local draft must materialize a segment before Save, rather than
+    // waiting for a repository round trip.
+    if (!isAvailable || current == limitScaled100) {
       return this;
     }
     final next = Map<int, int>.of(effectiveLimitByTargetHandle)
       ..[categoryHandle] = limitScaled100;
-    final currentPositive = current > 0 ? current : 0;
+    final currentPositive = current != null && current > 0 ? current : 0;
     final nextPositive = limitScaled100 > 0 ? limitScaled100 : 0;
     return DashboardBudgetPartitionPresentation._(
       direction: direction,
@@ -1667,6 +1670,7 @@ final class DashboardBudgetPresentationController
           for (final limit in scopeAnalysis.monthlyResolvedLimitsScaled100)
             limit ?? 0,
         ],
+        editableMonthIndexes: _editableMonthIndexesForYear(visibleScope.year),
         canonicalAnnualActualScaled100:
             scopeAnalysis.canonicalActualScaled100ForLimitEdit ?? 0,
       );
@@ -1684,11 +1688,12 @@ final class DashboardBudgetPresentationController
   /// The dashboard drag stays a current/future shortcut.  It must never make
   /// a historical mutation implicit: past months are corrected only through
   /// the manager's explicit exact-month override sheet.  A current YEAR is
-  /// fail-closed because its legacy batch editor owns all twelve months and
-  /// would otherwise overwrite completed history.
+  /// fail-closed before the derived vector editor learned to preserve the
+  /// completed-month subset.  Current YEAR now edits only current/future
+  /// months; the typed context carries that subset through persistence.
   bool _quickEditScopeIsWritable(LedgerTimeScope scope) => switch (scope) {
     AllTimeScope() => true,
-    YearScope(:final year) => year > _logicalAsOfDate.year,
+    YearScope(:final year) => year >= _logicalAsOfDate.year,
     MonthScope(:final value) =>
       value.year * 12 + value.month >=
           _logicalAsOfDate.year * 12 + _logicalAsOfDate.month,
@@ -1696,6 +1701,13 @@ final class DashboardBudgetPresentationController
       date.year * 12 + date.month >=
           _logicalAsOfDate.year * 12 + _logicalAsOfDate.month,
   };
+
+  List<int> _editableMonthIndexesForYear(int year) => <int>[
+    for (var month = 1; month <= 12; month += 1)
+      if (year > _logicalAsOfDate.year ||
+          (year == _logicalAsOfDate.year && month >= _logicalAsOfDate.month))
+        month - 1,
+  ];
 
   /// Resolves an optimistic edit without allowing a pending base mutation to
   /// overwrite an explicit month override. Provenance arrives with the dense
@@ -1783,6 +1795,7 @@ final class DashboardBudgetPresentationController
       confirmedMonthlyLimitsScaled100: <int>[
         for (final limit in limits) limit ?? 0,
       ],
+      editableMonthIndexes: _editableMonthIndexesForYear(year),
       canonicalAnnualActualScaled100: annualActualScaled100,
     );
     final edits = _limitEditController;

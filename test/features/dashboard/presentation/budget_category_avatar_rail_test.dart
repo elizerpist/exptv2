@@ -2207,23 +2207,16 @@ void main() {
             .scale,
         .8,
       );
+      // Very-long is an optimistic no-limit draft while the pointer remains
+      // pressed, so the selected chrome intentionally disappears.
       expect(
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(
-        tester
-            .widget<SvgPicture>(
-              find.descendant(of: avatar, matching: find.byType(SvgPicture)),
-            )
-            .bytesLoader,
-        SvgStringLoader(_centeredCoreArtworkSource()),
-      );
-
       await pointer.moveBy(const Offset(0, -13));
       await tester.pump();
 
-      expect(edits.value!.effectiveLimitScaled100, 200000);
+      expect(edits.value!.effectiveLimitScaled100, 100000);
       expect(quickEdit.isEditing, isTrue);
       expect(
         tester
@@ -2274,10 +2267,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 720));
       await tester.pump();
 
-      expect(harness.presentation.value.header.hasLimit, isTrue);
+      expect(harness.presentation.value.header.hasLimit, isFalse);
       expect(
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         tester
@@ -2299,7 +2292,7 @@ void main() {
       await tester.pump();
 
       expect(harness.presentation.value.header.hasLimit, isTrue);
-      expect(harness.presentation.value.header.limitScaled100, 200000);
+      expect(harness.presentation.value.header.limitScaled100, 100000);
       expect(
         find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
         findsOneWidget,

@@ -54,6 +54,7 @@ final class DashboardBudgetLimitEditSession
     required this.context,
     required this.baseLimitScaled100,
     required this.effectiveLimitScaled100,
+    required this.clearTriggeredInGesture,
   });
 
   final int generation;
@@ -61,13 +62,23 @@ final class DashboardBudgetLimitEditSession
   final int? baseLimitScaled100;
   final int? effectiveLimitScaled100;
 
+  /// A very-long clear is gesture history, not necessarily the final intent:
+  /// the same pointer may recreate a positive value before release.
+  final bool clearTriggeredInGesture;
+
   DashboardBudgetLimitEditSession copyWith({
-    required int effectiveLimitScaled100,
+    int? effectiveLimitScaled100,
+    bool clearEffectiveLimit = false,
+    bool? clearTriggeredInGesture,
   }) => DashboardBudgetLimitEditSession._(
     generation: generation,
     context: context,
     baseLimitScaled100: baseLimitScaled100,
-    effectiveLimitScaled100: effectiveLimitScaled100,
+    effectiveLimitScaled100: clearEffectiveLimit
+        ? null
+        : effectiveLimitScaled100 ?? this.effectiveLimitScaled100,
+    clearTriggeredInGesture:
+        clearTriggeredInGesture ?? this.clearTriggeredInGesture,
   );
 }
 
@@ -85,12 +96,16 @@ final class DashboardBudgetYearLimitEditContext
     required this.year,
     required List<FinancialLimitKey> monthOverrideKeys,
     required List<int> confirmedMonthlyLimitsScaled100,
+    List<int>? editableMonthIndexes,
     required this.canonicalAnnualActualScaled100,
   }) : monthOverrideKeys = List<FinancialLimitKey>.unmodifiable(
          monthOverrideKeys,
        ),
        confirmedMonthlyLimitsScaled100 = List<int>.unmodifiable(
          confirmedMonthlyLimitsScaled100,
+       ),
+       editableMonthIndexes = List<int>.unmodifiable(
+         editableMonthIndexes ?? List<int>.generate(12, (index) => index),
        ),
        super() {
     if (this.monthOverrideKeys.length != 12 ||
@@ -105,6 +120,12 @@ final class DashboardBudgetYearLimitEditContext
         throw ArgumentError('YEAR edits must own Jan–Dec month overrides.');
       }
     }
+    if (this.editableMonthIndexes.isEmpty ||
+        this.editableMonthIndexes.any((index) => index < 0 || index >= 12) ||
+        this.editableMonthIndexes.toSet().length !=
+            this.editableMonthIndexes.length) {
+      throw ArgumentError('YEAR edits need a nonempty unique editable subset.');
+    }
   }
 
   final FinancialLimitDirection direction;
@@ -114,6 +135,10 @@ final class DashboardBudgetYearLimitEditContext
   final int year;
   final List<FinancialLimitKey> monthOverrideKeys;
   final List<int> confirmedMonthlyLimitsScaled100;
+
+  /// Jan–Dec zero-based indexes that this direct interaction can modify.
+  /// Completed months in the logical current year stay frozen.
+  final List<int> editableMonthIndexes;
   final int canonicalAnnualActualScaled100;
 
   int get confirmedAnnualLimitScaled100 =>
@@ -205,7 +230,7 @@ final class _PendingBudgetLimitMutation {
 
   final int generation;
   final int baseCoreRevision;
-  final int intendedLimitScaled100;
+  final int? intendedLimitScaled100;
   final int? confirmedLimitScaled100;
 }
 
@@ -393,13 +418,18 @@ final class DashboardBudgetLimitEditController
     _active = null;
     _activeYear = null;
     final pending = _pendingByKey[context.key];
-    final base =
-        pending?.intendedLimitScaled100 ?? context.confirmedLimitScaled100;
+    // A pending delete is a real local `null`, not an absent pending record.
+    // Do not revive the stale prepared value when a second pointer begins
+    // before the repository projection has reconciled.
+    final base = pending == null
+        ? context.confirmedLimitScaled100
+        : pending.intendedLimitScaled100;
     final session = DashboardBudgetLimitEditSession._(
       generation: ++_nextGeneration,
       context: context,
       baseLimitScaled100: base,
       effectiveLimitScaled100: base,
+      clearTriggeredInGesture: false,
     );
     _active = session;
     _publishActive(session);
@@ -485,6 +515,32 @@ final class DashboardBudgetLimitEditController
     return true;
   }
 
+  /// Clears only the active scalar RAM draft.  It deliberately performs no
+  /// repository operation: release later decides delete, upsert or noop.
+  /// YEAR is a derived vector and intentionally has no destructive clear.
+  bool clearContextDraft(DashboardBudgetEditableSession session) =>
+      switch (session) {
+        DashboardBudgetLimitEditSession() => clearDraft(session),
+        DashboardBudgetYearLimitEditSession() => false,
+        _ => throw ArgumentError.value(session, 'session'),
+      };
+
+  bool clearDraft(DashboardBudgetLimitEditSession session) {
+    if (!_owns(session)) return false;
+    final updated = _active!.copyWith(
+      clearEffectiveLimit: true,
+      clearTriggeredInGesture: true,
+    );
+    _active = updated;
+    _replaceCategoryAllocationOverlay(
+      context: updated.context,
+      effectiveLimitScaled100: 0,
+    );
+    _publishActive(updated);
+    _diagnose('BUDGET_LIMIT_EDIT_DRAFT_CLEARED', updated);
+    return true;
+  }
+
   bool applyContextSemanticTick(
     DashboardBudgetEditableSession session, {
     required int direction,
@@ -527,12 +583,29 @@ final class DashboardBudgetLimitEditController
             .clamp(0, 0x7fffffffffffffff)
             .toInt();
     if (nextAnnual == currentAnnual) return false;
-    final allocated = DashboardBudgetYearLimitAllocator.allocate(
-      currentMonthlyLimitsScaled100: session.baseMonthlyLimitsScaled100,
-      requestedAnnualLimitScaled100: nextAnnual,
+    final editableIndexes = session.context.editableMonthIndexes;
+    final frozenTotal = <int>[
+      for (var index = 0; index < 12; index += 1)
+        if (!editableIndexes.contains(index))
+          session.baseMonthlyLimitsScaled100[index],
+    ].fold<int>(0, (sum, value) => sum + value);
+    final requestedEditableTotal = (nextAnnual - frozenTotal)
+        .clamp(0, 0x7fffffffffffffff)
+        .toInt();
+    final editableAllocation = DashboardBudgetYearLimitAllocator.allocate(
+      currentMonthlyLimitsScaled100: <int>[
+        for (final index in editableIndexes)
+          session.baseMonthlyLimitsScaled100[index],
+      ],
+      requestedAnnualLimitScaled100: requestedEditableTotal,
     );
+    final nextMonthly = List<int>.from(session.baseMonthlyLimitsScaled100);
+    for (var position = 0; position < editableIndexes.length; position += 1) {
+      nextMonthly[editableIndexes[position]] =
+          editableAllocation.monthlyLimitsScaled100[position];
+    }
     _activeYear = session.copyWith(
-      effectiveMonthlyLimitsScaled100: allocated.monthlyLimitsScaled100,
+      effectiveMonthlyLimitsScaled100: nextMonthly,
     );
     notifyListeners();
     return true;
@@ -553,7 +626,16 @@ final class DashboardBudgetLimitEditController
     final current = _active!;
     _active = null;
     final finalLimit = current.effectiveLimitScaled100;
-    if (finalLimit == null || finalLimit == current.baseLimitScaled100) {
+    final finalIntent = switch (finalLimit) {
+      null when current.baseLimitScaled100 == null => 'noop',
+      null => 'delete',
+      _
+          when !current.clearTriggeredInGesture &&
+              finalLimit == current.baseLimitScaled100 =>
+        'noop',
+      _ => 'upsert',
+    };
+    if (finalIntent == 'noop') {
       _diagnose(
         'BUDGET_LIMIT_EDIT_FINALIZED',
         current,
@@ -565,7 +647,7 @@ final class DashboardBudgetLimitEditController
     _diagnose(
       'BUDGET_LIMIT_EDIT_FINALIZED',
       current,
-      scope: 'finalIntent=upsert',
+      scope: 'finalIntent=$finalIntent',
     );
     final mutation = _PendingBudgetLimitMutation(
       generation: current.generation,
@@ -578,8 +660,10 @@ final class DashboardBudgetLimitEditController
     return _enqueue(
       current.context.key,
       current.generation,
-      () => _repository.upsert(current.context.key, finalLimit),
-      operationName: 'upsert',
+      finalIntent == 'delete'
+          ? () => _repository.delete(current.context.key)
+          : () => _repository.upsert(current.context.key, finalLimit!),
+      operationName: finalIntent,
     );
   }
 
@@ -751,7 +835,7 @@ final class DashboardBudgetLimitEditController
       session: current,
       pending: pending,
       mutations: <FinancialLimitMutation>[
-        for (var index = 0; index < 12; index += 1)
+        for (final index in current.context.editableMonthIndexes)
           FinancialLimitMutation(
             key: current.context.monthOverrideKeys[index],
             amountScaled100: current.effectiveMonthlyLimitsScaled100[index],
@@ -1194,7 +1278,7 @@ final class DashboardBudgetLimitEditController
     }
     _replaceCategoryAllocationOverlay(
       context: session.context,
-      effectiveLimitScaled100: pending.intendedLimitScaled100,
+      effectiveLimitScaled100: pending.intendedLimitScaled100 ?? 0,
     );
   }
 

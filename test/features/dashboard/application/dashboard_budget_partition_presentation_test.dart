@@ -159,6 +159,37 @@ void main() {
       },
     );
 
+    test(
+      'manager slider draft materializes a previously unallocated category',
+      () {
+        final harness = _Harness(
+          snapshot: _snapshot(
+            budgetLimitScaled100: 10000000,
+            foodLimitScaled100: null,
+            foodActualScaled100: 0,
+          ),
+        );
+        addTearDown(harness.dispose);
+
+        final partition = harness.presentation.partitionForManagerMonth(
+          direction: LedgerDirection.expense,
+          year: 2026,
+          month: 1,
+        );
+        final draft = partition.withCategoryLimitDraft(
+          categoryHandle: 1,
+          limitScaled100: 1000000,
+        );
+
+        expect(partition.effectiveLimitForCategoryHandle(1), isNull);
+        expect(draft.effectiveLimitForCategoryHandle(1), 1000000);
+        expect(draft.liveAllocatedTotalScaled100, 1000000);
+        expect(draft.segmentForCategoryHandle(1).totalRatio, .10);
+        expect(harness.repository.upsertCalls, 0);
+        expect(harness.repository.deleteCalls, 0);
+      },
+    );
+
     test('keeps a missing aggregate denominator finite and disabled', () {
       final harness = _Harness(
         snapshot: _snapshot(

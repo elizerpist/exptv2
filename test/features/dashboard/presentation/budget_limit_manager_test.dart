@@ -10,6 +10,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dar
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_manager.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_allocation_partition_lane.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_allocation_partition_slider.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_carousel.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -104,10 +105,82 @@ void main() {
       expect(find.text('Folyamatban'), findsOneWidget);
       expect(find.text('Nincs keret'), findsNothing);
 
+      // The perspective is a manager-local layout switch: it does not open a
+      // route, reread limits, or lose the selected manager year.
+      repository.listCalls = 0;
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>('budget-limit-manager-allocation-hero'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(BudgetTargetAvatarCarousel), findsNothing);
+      expect(
+        find.byKey(
+          const ValueKey<String>('budget-limit-manager-allocation-month-rows'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-manager-spec-income')),
+        findsOneWidget,
+      );
+      expect(repository.listCalls, 0);
+      await expectLater(
+        find.byType(BudgetLimitManager),
+        matchesGoldenFile(
+          '../../../goldens/budget_limit_manager_allocation.png',
+        ),
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>(
+            'budget-limit-manager-allocation-month-2026-3',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Keretkiosztás'), findsWidgets);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(BudgetTargetAvatarCarousel), findsOneWidget);
+      expect(find.text('2026'), findsOneWidget);
+
       await expectLater(
         find.byType(BudgetLimitManager),
         matchesGoldenFile('../../../goldens/budget_limit_manager.png'),
       );
+
+      // SPEC reads the exact selected month's prepared aggregate income. It
+      // does not acquire a separate query or synthesize a forecast.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
+      );
+      await tester.pumpAndSettle();
+      repository.upsertCalls = 0;
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-spec-income')),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.upsertCalls, 1);
+      expect(
+        repository.amountFor(
+          const FinancialLimitBaseMonthlyRevisionPeriod(2026, 10),
+        ),
+        42000000,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
+      );
+      await tester.pumpAndSettle();
 
       // A base edit writes the revision anchored at logical-current October;
       // it does not mutate the March historical base used by the sheet below.
@@ -122,7 +195,7 @@ void main() {
         repository.amountFor(
           const FinancialLimitBaseMonthlyRevisionPeriod(2026, 10),
         ),
-        21000000,
+        43000000,
       );
       expect(
         repository.revisionCount(
@@ -192,6 +265,16 @@ void main() {
         ),
       );
       expect(laneBefore.highlightedCategoryHandle, 1);
+      expect(find.byType(BudgetAllocationPartitionSlider), findsOneWidget);
+      repository.listCalls = 0;
+      repository.upsertCalls = 0;
+      await tester.drag(
+        find.byType(BudgetAllocationPartitionSlider),
+        const Offset(36, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.listCalls, 0);
+      expect(repository.upsertCalls, 1);
       await tester.tap(
         find.byKey(const ValueKey<String>('budget-limit-month-sheet-edit')),
       );
@@ -324,11 +407,20 @@ PreparedBudgetLimitSnapshot _snapshot(List<FluviCategory> categories) {
     orderedCategoryIds: categories.map((category) => category.id).toList(),
     cells: cells,
   );
+  final incomeCells = List<PreparedBudgetLimitCell>.of(cells);
+  incomeCells[11 * targetCount] = const PreparedBudgetLimitCell(
+    actualScaled100: 42000000,
+    limitScaled100: null,
+  );
+  final income = PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: categories.map((category) => category.id).toList(),
+    cells: incomeCells,
+  );
   return PreparedBudgetLimitSnapshot(
     coreRevision: 41,
     yearWindowStart: 2026,
     yearWindowEndInclusive: 2026,
-    incomeBank: populated,
+    incomeBank: income,
     expenseBank: populated,
   );
 }
@@ -338,6 +430,7 @@ final class _TimelineRepository implements FinancialLimitRepository {
 
   final List<FinancialLimit> _values;
   int listCalls = 0;
+  int upsertCalls = 0;
 
   int? amountFor(FinancialLimitPeriod period) {
     for (final value in _values) {
@@ -375,6 +468,7 @@ final class _TimelineRepository implements FinancialLimitRepository {
     FinancialLimitKey key,
     int amountScaled100,
   ) async {
+    upsertCalls += 1;
     final value = FinancialLimit(
       key: key,
       amountScaled100: amountScaled100,
