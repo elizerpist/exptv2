@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
+import '../../../../core/design/fluvi_clay_active_material.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
@@ -1311,10 +1312,12 @@ final class BalanceAlternativeAnnualIncomeExpenseCard extends StatefulWidget {
     super.key,
     required this.presentation,
     required this.timeScope,
+    this.yearBarPresentation = BalanceYearBarPresentation.current,
   });
 
   final BalanceAlternativeIncomeExpenseBarPresentation presentation;
   final LedgerTimeScope timeScope;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   @override
   State<BalanceAlternativeAnnualIncomeExpenseCard> createState() =>
@@ -1330,6 +1333,9 @@ final class _BalanceAlternativeAnnualIncomeExpenseCardState
     final year = widget.timeScope is YearScope
         ? (widget.timeScope as YearScope).year
         : null;
+    final usesClayMaterial =
+        widget.presentation.domain == BalanceAlternativeBarDomain.months &&
+        widget.yearBarPresentation == BalanceYearBarPresentation.clay3d;
     return BalanceAlternativeHtmlCardSurface(
       minimumContentSize:
           BalanceAlternativeHtmlTokens.extendedSheetCombinedCardMinimumSize,
@@ -1391,7 +1397,7 @@ final class _BalanceAlternativeAnnualIncomeExpenseCardState
                 SizedBox(
                   height: BalanceAlternativeHtmlTokens.annualIncomeExpenseGap,
                 ),
-                _AnnualIncomeExpenseLegend(),
+                _AnnualIncomeExpenseLegend(usesClayMaterial: usesClayMaterial),
                 SizedBox(
                   height: BalanceAlternativeHtmlTokens.annualIncomeExpenseGap,
                 ),
@@ -1406,6 +1412,9 @@ final class _BalanceAlternativeAnnualIncomeExpenseCardState
                       painter: _AnnualIncomeExpensePainter(
                         groups: widget.presentation.groups,
                         lineMode: _showsLine,
+                        yearBarPresentation: usesClayMaterial
+                            ? BalanceYearBarPresentation.clay3d
+                            : BalanceYearBarPresentation.current,
                       ),
                       child: const SizedBox.expand(),
                     ),
@@ -1465,20 +1474,32 @@ final class _BalanceAlternativeAnnualIncomeExpenseCardState
 }
 
 final class _AnnualIncomeExpenseLegend extends StatelessWidget {
+  const _AnnualIncomeExpenseLegend({required this.usesClayMaterial});
+
+  final bool usesClayMaterial;
+
   @override
   Widget build(BuildContext context) => Row(
     children: <Widget>[
       _legendDot(
-        const LinearGradient(
-          colors: <Color>[Color(0xFF7C3AED), Color(0xFFA879FF)],
-        ),
+        usesClayMaterial
+            ? const LinearGradient(
+                colors: <Color>[Color(0xFF78E2C3), Color(0xFF20CA97)],
+              )
+            : const LinearGradient(
+                colors: <Color>[Color(0xFF7C3AED), Color(0xFFA879FF)],
+              ),
         'Bevétel',
       ),
       SizedBox(width: BalanceAlternativeHtmlTokens.logical(27)),
       _legendDot(
-        const LinearGradient(
-          colors: <Color>[Color(0xFFFF8638), Color(0xFFF431A0)],
-        ),
+        usesClayMaterial
+            ? const LinearGradient(
+                colors: <Color>[Color(0xFFF37092), Color(0xFFED5377)],
+              )
+            : const LinearGradient(
+                colors: <Color>[Color(0xFFFF8638), Color(0xFFF431A0)],
+              ),
         'Kiadás',
       ),
     ],
@@ -1691,10 +1712,19 @@ final class _AnnualIncomeExpensePainter extends CustomPainter {
   const _AnnualIncomeExpensePainter({
     required this.groups,
     required this.lineMode,
+    required this.yearBarPresentation,
   });
 
   final List<BalanceAlternativeIncomeExpenseBarGroup> groups;
   final bool lineMode;
+  final BalanceYearBarPresentation yearBarPresentation;
+
+  static final _incomeClayMaterial = FluviClayActiveMaterial.forBase(
+    const Color(0xFF20CA97),
+  );
+  static final _expenseClayMaterial = FluviClayActiveMaterial.forBase(
+    const Color(0xFFED5377),
+  );
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1742,28 +1772,33 @@ final class _AnnualIncomeExpensePainter extends CustomPainter {
               plotWidth: size.width,
               bucketCount: groups.length,
             );
-        _drawGradientBar(
-          canvas,
-          Rect.fromLTWH(
-            xCenter -
-                width -
-                BalanceAlternativeHtmlTokens.annualIncomeExpenseBarGap,
-            baseline - incomeHeight,
-            width,
-            math.max(1, incomeHeight),
-          ),
-          const <Color>[Color(0xFF7C3AED), Color(0xFFA879FF)],
+        final incomeRect = Rect.fromLTWH(
+          xCenter -
+              width -
+              BalanceAlternativeHtmlTokens.annualIncomeExpenseBarGap,
+          baseline - incomeHeight,
+          width,
+          math.max(1, incomeHeight),
         );
-        _drawGradientBar(
-          canvas,
-          Rect.fromLTWH(
-            xCenter + BalanceAlternativeHtmlTokens.annualIncomeExpenseBarGap,
-            baseline - expenseHeight,
-            width,
-            math.max(1, expenseHeight),
-          ),
-          const <Color>[Color(0xFFFF8638), Color(0xFFF431A0)],
+        final expenseRect = Rect.fromLTWH(
+          xCenter + BalanceAlternativeHtmlTokens.annualIncomeExpenseBarGap,
+          baseline - expenseHeight,
+          width,
+          math.max(1, expenseHeight),
         );
+        if (yearBarPresentation == BalanceYearBarPresentation.clay3d) {
+          _drawClayBar(canvas, incomeRect, _incomeClayMaterial);
+          _drawClayBar(canvas, expenseRect, _expenseClayMaterial);
+        } else {
+          _drawGradientBar(canvas, incomeRect, const <Color>[
+            Color(0xFF7C3AED),
+            Color(0xFFA879FF),
+          ]);
+          _drawGradientBar(canvas, expenseRect, const <Color>[
+            Color(0xFFFF8638),
+            Color(0xFFF431A0),
+          ]);
+        }
       }
       labelPaint.text = TextSpan(
         text: group.label,
@@ -1816,7 +1851,77 @@ final class _AnnualIncomeExpensePainter extends CustomPainter {
     );
   }
 
+  void _drawClayBar(
+    Canvas canvas,
+    Rect rect,
+    FluviClayActiveMaterial material,
+  ) {
+    final depthOffset = math.min(
+      BalanceAlternativeHtmlTokens.logical(2),
+      rect.width * .22,
+    );
+    final body = Rect.fromLTWH(
+      rect.left,
+      rect.top,
+      rect.width,
+      math.max(1, rect.height - depthOffset),
+    );
+    final radius = Radius.circular(math.min(body.width / 2, body.height / 2));
+    final clay = RRect.fromRectAndCorners(
+      body,
+      topLeft: radius,
+      topRight: radius,
+      bottomLeft: Radius.circular(math.min(radius.x, 2)),
+      bottomRight: Radius.circular(math.min(radius.x, 2)),
+    );
+    canvas.drawRRect(
+      clay.shift(Offset(0, depthOffset)),
+      Paint()
+        ..color = material.shadow
+        ..maskFilter = MaskFilter.blur(
+          BlurStyle.normal,
+          BalanceAlternativeHtmlTokens.logical(1.4),
+        ),
+    );
+    canvas.drawRRect(
+      clay.shift(Offset(0, depthOffset * .72)),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: material.depthColors,
+          stops: material.stops,
+        ).createShader(body),
+    );
+    canvas.drawRRect(
+      clay,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: material.colors,
+          stops: material.stops,
+        ).createShader(body),
+    );
+    final glossHeight = math.min(
+      math.max(BalanceAlternativeHtmlTokens.logical(1), body.height * .10),
+      BalanceAlternativeHtmlTokens.logical(2),
+    );
+    final gloss = Rect.fromLTWH(
+      body.left + body.width * .22,
+      body.top + math.min(body.height * .16, glossHeight),
+      body.width * .52,
+      glossHeight,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(gloss, Radius.circular(glossHeight)),
+      Paint()..color = material.highlight.withValues(alpha: .62),
+    );
+  }
+
   @override
   bool shouldRepaint(covariant _AnnualIncomeExpensePainter oldDelegate) =>
-      oldDelegate.groups != groups || oldDelegate.lineMode != lineMode;
+      oldDelegate.groups != groups ||
+      oldDelegate.lineMode != lineMode ||
+      oldDelegate.yearBarPresentation != yearBarPresentation;
 }

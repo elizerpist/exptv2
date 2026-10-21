@@ -214,6 +214,40 @@ void main() {
   );
 
   test(
+    'BALANCE-YEAR-BAR-STYLE: default, revision, equality and reset stay presentation-only',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(
+        controller.value.yearBarPresentation,
+        BalanceYearBarPresentation.current,
+      );
+      final revision = controller.value.revision;
+      controller.setYearBarPresentation(BalanceYearBarPresentation.clay3d);
+      expect(
+        controller.value.yearBarPresentation,
+        BalanceYearBarPresentation.clay3d,
+      );
+      expect(controller.value.revision, revision + 1);
+      controller.setYearBarPresentation(BalanceYearBarPresentation.clay3d);
+      expect(controller.value.revision, revision + 1);
+
+      final current = controller.value.copyWith(
+        yearBarPresentation: BalanceYearBarPresentation.current,
+      );
+      expect(current, isNot(controller.value));
+      expect(current.hashCode, isNot(controller.value.hashCode));
+
+      controller.reset();
+      expect(
+        controller.value.yearBarPresentation,
+        BalanceYearBarPresentation.current,
+      );
+    },
+  );
+
+  test(
     'MTC-02: the four-way monthly spending renderer is a persisted presentation choice independent from the Header graph kind',
     () {
       final controller = BalancePresentationController();

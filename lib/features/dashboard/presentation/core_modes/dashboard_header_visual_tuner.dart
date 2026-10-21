@@ -1276,6 +1276,36 @@ final class _BalancePresentationSection extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.only(top: 12),
+          child: Text('ÉVES BAR CHART'),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Oszlopok megjelenése'),
+        ),
+        RadioGroup<BalanceYearBarPresentation>(
+          groupValue: settings.yearBarPresentation,
+          onChanged: (presentation) {
+            if (presentation != null) {
+              controller.setYearBarPresentation(presentation);
+            }
+          },
+          child: Column(
+            children: <Widget>[
+              for (final presentation in BalanceYearBarPresentation.values)
+                RadioListTile<BalanceYearBarPresentation>(
+                  key: ValueKey<String>(
+                    'balance-year-bar-style-${presentation.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(presentation.tunerLabel),
+                  value: presentation,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 12),
           child: Text('BALANCE ELRENDEZÉS'),
         ),
         RadioGroup<BalanceContentSurfaceStyle>(
@@ -3931,6 +3961,17 @@ final class _BudgetRingPresentationSection extends StatelessWidget {
                     ? BudgetProgressColorPresentation.solidHealth
                     : BudgetProgressColorPresentation.segmentedScale,
               ),
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('budget-graph-neutral-track-visible'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Szürke háttérsáv'),
+          subtitle: const Text(
+            'A SUM és havi félkör neutral sávjának megjelenítése',
+          ),
+          value: settings.showBudgetNeutralTrack,
+          onChanged: controller.setBudgetNeutralTrackVisible,
         ),
         SwitchListTile(
           key: const ValueKey<String>('budget-graph-neutral-decorative-strip'),

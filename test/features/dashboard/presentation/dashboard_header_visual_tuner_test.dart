@@ -798,6 +798,22 @@ void main() {
         BalanceMonthCombinedCardPresentation.spendingRhythm,
       );
 
+      final clayBars = find.byKey(
+        const ValueKey<String>('balance-year-bar-style-clay3d'),
+      );
+      final currentBars = find.byKey(
+        const ValueKey<String>('balance-year-bar-style-current'),
+      );
+      await tester.ensureVisible(clayBars);
+      expect(currentBars, findsOneWidget);
+      expect(clayBars, findsOneWidget);
+      await tester.tap(clayBars);
+      await tester.pump();
+      expect(
+        balance.value.yearBarPresentation,
+        BalanceYearBarPresentation.clay3d,
+      );
+
       final labels = find.byKey(
         const ValueKey<String>(
           'balance-header-history-chart-time-labels-hidden',
@@ -1613,6 +1629,9 @@ void main() {
     final neutralSwitch = find.byKey(
       const ValueKey<String>('budget-graph-neutral-decorative-strip'),
     );
+    final neutralTrackSwitch = find.byKey(
+      const ValueKey<String>('budget-graph-neutral-track-visible'),
+    );
     final activeSwitch = find.byKey(
       const ValueKey<String>('budget-graph-active-decorative-strip'),
     );
@@ -1620,12 +1639,15 @@ void main() {
       const ValueKey<String>('budget-analysis-info-cards-visible'),
     );
     await tester.ensureVisible(neutralSwitch);
+    await tester.ensureVisible(neutralTrackSwitch);
     await tester.ensureVisible(activeSwitch);
     await tester.ensureVisible(infoCardsSwitch);
     expect(neutralSwitch, findsOneWidget);
+    expect(neutralTrackSwitch, findsOneWidget);
     expect(activeSwitch, findsOneWidget);
     expect(infoCardsSwitch, findsOneWidget);
     expect(tester.widget<SwitchListTile>(neutralSwitch).value, isTrue);
+    expect(tester.widget<SwitchListTile>(neutralTrackSwitch).value, isTrue);
     expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
     expect(tester.widget<SwitchListTile>(infoCardsSwitch).value, isTrue);
 
@@ -1635,6 +1657,12 @@ void main() {
     expect(ring.value.showBudgetActiveProgressDecorativeStrip, isTrue);
     expect(tester.widget<SwitchListTile>(neutralSwitch).value, isFalse);
     expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
+
+    await tester.tap(neutralTrackSwitch);
+    await tester.pump();
+    expect(ring.value.showBudgetNeutralTrack, isFalse);
+    expect(ring.value.showBudgetNeutralDecorativeStrip, isFalse);
+    expect(tester.widget<SwitchListTile>(neutralTrackSwitch).value, isFalse);
 
     await tester.tap(activeSwitch);
     await tester.pump();

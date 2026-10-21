@@ -172,6 +172,21 @@ enum BalanceMonthCombinedCardPresentation {
   };
 }
 
+/// Material-only choice for the 12-month Balance income/expense columns.
+///
+/// The current treatment is retained as the default. Clay is intentionally
+/// restricted by the renderer to the Year monthly domain, not the all-time
+/// historical-years plot.
+enum BalanceYearBarPresentation {
+  current,
+  clay3d;
+
+  String get tunerLabel => switch (this) {
+    BalanceYearBarPresentation.current => 'Jelenlegi',
+    BalanceYearBarPresentation.clay3d => '3D clay',
+  };
+}
+
 /// Session-only alternatives over the immutable all-time Balance history.
 /// Financial totals and the latest transaction are never settings-dependent.
 @immutable
@@ -199,6 +214,7 @@ final class BalancePresentationSettings {
     this.headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
     this.monthCombinedCardPresentation =
         BalanceMonthCombinedCardPresentation.incomeExpense,
+    this.yearBarPresentation = BalanceYearBarPresentation.current,
     this.alternativeMotherCardVisible = true,
     this.usesChildCards = true,
     Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds =
@@ -257,6 +273,7 @@ final class BalancePresentationSettings {
       headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
       monthCombinedCardPresentation =
           BalanceMonthCombinedCardPresentation.incomeExpense,
+      yearBarPresentation = BalanceYearBarPresentation.current,
       alternativeMotherCardVisible = true,
       usesChildCards = true,
       hiddenBalanceCarouselCardKinds = const <BalanceCarouselCardKind>{},
@@ -283,6 +300,7 @@ final class BalancePresentationSettings {
   final double headerPartitionHeightPercent;
   final BalanceHeaderGlassConfiguration headerGlassConfiguration;
   final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   /// Controls only the physical unified parent/backplate. The alternative
   /// content composition and dashboard geometry retain their existing owners.
@@ -327,6 +345,7 @@ final class BalancePresentationSettings {
     double? headerPartitionHeightPercent,
     BalanceHeaderGlassConfiguration? headerGlassConfiguration,
     BalanceMonthCombinedCardPresentation? monthCombinedCardPresentation,
+    BalanceYearBarPresentation? yearBarPresentation,
     bool? alternativeMotherCardVisible,
     bool? usesChildCards,
     Set<BalanceCarouselCardKind>? hiddenBalanceCarouselCardKinds,
@@ -373,6 +392,7 @@ final class BalancePresentationSettings {
         headerGlassConfiguration ?? this.headerGlassConfiguration,
     monthCombinedCardPresentation:
         monthCombinedCardPresentation ?? this.monthCombinedCardPresentation,
+    yearBarPresentation: yearBarPresentation ?? this.yearBarPresentation,
     alternativeMotherCardVisible:
         alternativeMotherCardVisible ?? this.alternativeMotherCardVisible,
     usesChildCards: usesChildCards ?? this.usesChildCards,
@@ -411,6 +431,7 @@ final class BalancePresentationSettings {
       other.headerPartitionHeightPercent == headerPartitionHeightPercent &&
       other.headerGlassConfiguration == headerGlassConfiguration &&
       other.monthCombinedCardPresentation == monthCombinedCardPresentation &&
+      other.yearBarPresentation == yearBarPresentation &&
       other.alternativeMotherCardVisible == alternativeMotherCardVisible &&
       other.usesChildCards == usesChildCards &&
       setEquals(
@@ -440,6 +461,7 @@ final class BalancePresentationSettings {
     headerPartitionHeightPercent,
     headerGlassConfiguration,
     monthCombinedCardPresentation,
+    yearBarPresentation,
     alternativeMotherCardVisible,
     usesChildCards,
     Object.hashAllUnordered(hiddenBalanceCarouselCardKinds),
@@ -627,6 +649,15 @@ final class BalancePresentationController
     if (current.monthCombinedCardPresentation == next) return;
     value = current.copyWith(
       monthCombinedCardPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setYearBarPresentation(BalanceYearBarPresentation next) {
+    final current = value;
+    if (current.yearBarPresentation == next) return;
+    value = current.copyWith(
+      yearBarPresentation: next,
       revision: current.revision + 1,
     );
   }

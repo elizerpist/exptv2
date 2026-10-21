@@ -3,8 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_clay_active_material.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import 'balance_alternative_scope_presentation.dart';
+import 'balance_presentation_settings.dart';
 
 /// Source-locked Card 3 renderer shared by alternative Balance SUM and YEAR.
 /// It owns only the optional historical plot scroll; all financial values have
@@ -13,9 +15,11 @@ final class BalanceAlternativeIncomeExpenseBarCard extends StatefulWidget {
   const BalanceAlternativeIncomeExpenseBarCard({
     super.key,
     required this.presentation,
+    this.yearBarPresentation = BalanceYearBarPresentation.current,
   });
 
   final BalanceAlternativeIncomeExpenseBarPresentation presentation;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   @override
   State<BalanceAlternativeIncomeExpenseBarCard> createState() =>
@@ -94,6 +98,7 @@ final class _BalanceAlternativeIncomeExpenseBarCardState
             Expanded(
               child: _BalanceAlternativeBarPlot(
                 presentation: presentation,
+                yearBarPresentation: widget.yearBarPresentation,
                 sumScrollController: _sumScrollController,
                 minimumYearGroupWidth: _minimumYearGroupWidth,
               ),
@@ -251,11 +256,13 @@ final class _BalanceAlternativeDirectionMetric extends StatelessWidget {
 final class _BalanceAlternativeBarPlot extends StatelessWidget {
   const _BalanceAlternativeBarPlot({
     required this.presentation,
+    required this.yearBarPresentation,
     required this.sumScrollController,
     required this.minimumYearGroupWidth,
   });
 
   final BalanceAlternativeIncomeExpenseBarPresentation presentation;
+  final BalanceYearBarPresentation yearBarPresentation;
   final ScrollController sumScrollController;
   final double minimumYearGroupWidth;
 
@@ -282,7 +289,10 @@ final class _BalanceAlternativeBarPlot extends StatelessWidget {
         final lane = SizedBox(
           width: intrinsicWidth,
           height: constraints.maxHeight,
-          child: _BalanceAlternativeBarGroupsLane(presentation: presentation),
+          child: _BalanceAlternativeBarGroupsLane(
+            presentation: presentation,
+            yearBarPresentation: yearBarPresentation,
+          ),
         );
         final scrolls =
             presentation.domain == BalanceAlternativeBarDomain.years &&
@@ -348,9 +358,13 @@ final class _BalanceAlternativeYAxis extends StatelessWidget {
 }
 
 final class _BalanceAlternativeBarGroupsLane extends StatelessWidget {
-  const _BalanceAlternativeBarGroupsLane({required this.presentation});
+  const _BalanceAlternativeBarGroupsLane({
+    required this.presentation,
+    required this.yearBarPresentation,
+  });
 
   final BalanceAlternativeIncomeExpenseBarPresentation presentation;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   @override
   Widget build(BuildContext context) => CustomPaint(
@@ -363,6 +377,9 @@ final class _BalanceAlternativeBarGroupsLane extends StatelessWidget {
             child: _BalanceAlternativeBarGroup(
               group: group,
               maximum: math.max(1, presentation.maximumMinor),
+              usesClayMaterial:
+                  presentation.domain == BalanceAlternativeBarDomain.months &&
+                  yearBarPresentation == BalanceYearBarPresentation.clay3d,
             ),
           ),
       ],
@@ -374,10 +391,12 @@ final class _BalanceAlternativeBarGroup extends StatelessWidget {
   const _BalanceAlternativeBarGroup({
     required this.group,
     required this.maximum,
+    required this.usesClayMaterial,
   });
 
   final BalanceAlternativeIncomeExpenseBarGroup group;
   final int maximum;
+  final bool usesClayMaterial;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -401,12 +420,20 @@ final class _BalanceAlternativeBarGroup extends StatelessWidget {
                     heightFactor: group.incomeMinor / maximum,
                     width: barWidth,
                     gradient: _BalanceAlternativeChartTokens.incomeGradient,
+                    clayMaterial: usesClayMaterial
+                        ? _BalanceAlternativeChartTokens.incomeClayMaterial
+                        : null,
+                    semanticKey: 'income-${group.key}',
                   ),
                   const SizedBox(width: 3),
                   _BalanceAlternativeBar(
                     heightFactor: group.expenseMinor / maximum,
                     width: barWidth,
                     gradient: _BalanceAlternativeChartTokens.expenseGradient,
+                    clayMaterial: usesClayMaterial
+                        ? _BalanceAlternativeChartTokens.expenseClayMaterial
+                        : null,
+                    semanticKey: 'expense-${group.key}',
                   ),
                 ],
               ),
@@ -439,11 +466,15 @@ final class _BalanceAlternativeBar extends StatelessWidget {
     required this.heightFactor,
     required this.width,
     required this.gradient,
+    required this.clayMaterial,
+    required this.semanticKey,
   });
 
   final double heightFactor;
   final double width;
   final Gradient gradient;
+  final FluviClayActiveMaterial? clayMaterial;
+  final String semanticKey;
 
   @override
   Widget build(BuildContext context) => FractionallySizedBox(
@@ -451,14 +482,92 @@ final class _BalanceAlternativeBar extends StatelessWidget {
     alignment: Alignment.bottomCenter,
     child: SizedBox(
       width: width,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
-        ),
-      ),
+      child: clayMaterial == null
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(3),
+                ),
+              ),
+            )
+          : RepaintBoundary(
+              key: ValueKey<String>(
+                'balance-alternative-clay-bar-$semanticKey',
+              ),
+              child: CustomPaint(
+                painter: _BalanceAlternativeClayBarPainter(
+                  material: clayMaterial!,
+                ),
+              ),
+            ),
     ),
   );
+}
+
+/// Material-only alternative for the monthly Balance pair. Its parent still
+/// owns the exact data height, grouping, baseline and labels.
+final class _BalanceAlternativeClayBarPainter extends CustomPainter {
+  const _BalanceAlternativeClayBarPainter({required this.material});
+
+  final FluviClayActiveMaterial material;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final depthOffset = math.min(1.6, size.width * .22);
+    final bodyHeight = math.max(1.0, size.height - depthOffset);
+    final body = Rect.fromLTWH(0, 0, size.width, bodyHeight);
+    final radius = Radius.circular(math.min(size.width / 2, body.height / 2));
+    final clay = RRect.fromRectAndCorners(
+      body,
+      topLeft: radius,
+      topRight: radius,
+      bottomLeft: Radius.circular(math.min(2, radius.x)),
+      bottomRight: Radius.circular(math.min(2, radius.x)),
+    );
+    canvas.drawRRect(
+      clay.shift(Offset(0, depthOffset)),
+      Paint()
+        ..color = material.shadow
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.4),
+    );
+    canvas.drawRRect(
+      clay.shift(Offset(0, depthOffset * .72)),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: material.depthColors,
+          stops: material.stops,
+        ).createShader(body),
+    );
+    canvas.drawRRect(
+      clay,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: material.colors,
+          stops: material.stops,
+        ).createShader(body),
+    );
+    final glossHeight = math.min(math.max(1.1, size.height * .10), 2.2);
+    final gloss = Rect.fromLTWH(
+      size.width * .22,
+      math.min(size.height * .16, 1.2),
+      size.width * .52,
+      glossHeight,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(gloss, Radius.circular(glossHeight)),
+      Paint()..color = material.highlight.withValues(alpha: .62),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BalanceAlternativeClayBarPainter oldDelegate) =>
+      !material.sameVisualAs(oldDelegate.material);
 }
 
 final class _BalanceAlternativeGridPainter extends CustomPainter {
@@ -484,6 +593,12 @@ abstract final class _BalanceAlternativeChartTokens {
   // Directly sampled from the reference Card 3's mint/coral bar ramps.
   static const incomeBottom = Color(0xFF20CA97);
   static const expenseBottom = Color(0xFFED5377);
+  static final incomeClayMaterial = FluviClayActiveMaterial.forBase(
+    incomeBottom,
+  );
+  static final expenseClayMaterial = FluviClayActiveMaterial.forBase(
+    expenseBottom,
+  );
   static const incomeGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,

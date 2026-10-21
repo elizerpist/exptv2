@@ -22,6 +22,7 @@ void main() {
       controller.value.progressColorPresentation,
       BudgetProgressColorPresentation.segmentedScale,
     );
+    expect(controller.value.showBudgetNeutralTrack, isTrue);
     expect(controller.value.showBudgetNeutralDecorativeStrip, isTrue);
     expect(controller.value.showBudgetActiveProgressDecorativeStrip, isTrue);
     expect(controller.value.showBudgetAnalysisInfoCards, isTrue);
@@ -42,6 +43,29 @@ void main() {
     );
   });
 
+  test('BUDGET-GRAPH-SETTING-02B: neutral track does not rewrite strips', () {
+    final controller = BudgetRingPresentationController();
+    addTearDown(controller.dispose);
+
+    controller
+      ..setBudgetNeutralDecorativeStripVisible(false)
+      ..setBudgetActiveProgressDecorativeStripVisible(false)
+      ..setBudgetNeutralTrackVisible(false);
+
+    expect(controller.value.showBudgetNeutralTrack, isFalse);
+    expect(controller.value.showBudgetNeutralDecorativeStrip, isFalse);
+    expect(controller.value.showBudgetActiveProgressDecorativeStrip, isFalse);
+
+    controller.setBudgetNeutralTrackVisible(true);
+    expect(controller.value.showBudgetNeutralTrack, isTrue);
+    expect(
+      controller.value.showBudgetNeutralDecorativeStrip,
+      isFalse,
+      reason:
+          'Track visibility must retain the independent neutral gloss choice.',
+    );
+  });
+
   test('BUDGET-GRAPH-SETTING-03: active strip updates independently', () {
     final controller = BudgetRingPresentationController();
     addTearDown(controller.dispose);
@@ -59,6 +83,7 @@ void main() {
     controller
       ..setBudgetNeutralDecorativeStripVisible(false)
       ..setBudgetActiveProgressDecorativeStripVisible(false)
+      ..setBudgetNeutralTrackVisible(false)
       ..setAnalysisInfoCardsVisible(false)
       ..selectProgressColorPresentation(
         BudgetProgressColorPresentation.solidHealth,
@@ -67,6 +92,7 @@ void main() {
 
     expect(controller.value.showBudgetNeutralDecorativeStrip, isTrue);
     expect(controller.value.showBudgetActiveProgressDecorativeStrip, isTrue);
+    expect(controller.value.showBudgetNeutralTrack, isTrue);
     expect(controller.value.showBudgetAnalysisInfoCards, isTrue);
     expect(
       controller.value.progressColorPresentation,
@@ -79,12 +105,14 @@ void main() {
     () {
       const visible = BudgetRingPresentationSettings();
       final hidden = visible.copyWith(
+        showBudgetNeutralTrack: false,
         showBudgetNeutralDecorativeStrip: false,
         showBudgetActiveProgressDecorativeStrip: false,
         showBudgetAnalysisInfoCards: false,
         progressColorPresentation: BudgetProgressColorPresentation.solidHealth,
       );
       const hiddenEquivalent = BudgetRingPresentationSettings(
+        showBudgetNeutralTrack: false,
         showBudgetNeutralDecorativeStrip: false,
         showBudgetActiveProgressDecorativeStrip: false,
         showBudgetAnalysisInfoCards: false,
@@ -115,6 +143,7 @@ void main() {
         BudgetProgressColorPresentation.solidHealth,
       );
       expect(controller.value.showBudgetAnalysisInfoCards, isFalse);
+      expect(controller.value.showBudgetNeutralTrack, isTrue);
       expect(controller.value.showBudgetNeutralDecorativeStrip, isTrue);
       expect(controller.value.showBudgetActiveProgressDecorativeStrip, isTrue);
     },

@@ -26,6 +26,7 @@ final class BudgetRingPresentationSettings {
     this.healthyColorMode = BudgetHealthyColorMode.fixedGreen,
     this.progressColorPresentation =
         BudgetProgressColorPresentation.segmentedScale,
+    this.showBudgetNeutralTrack = true,
     this.showBudgetNeutralDecorativeStrip = true,
     this.showBudgetActiveProgressDecorativeStrip = true,
     this.showBudgetAnalysisInfoCards = true,
@@ -36,6 +37,11 @@ final class BudgetRingPresentationSettings {
   final BudgetSumRingStyle sumRingStyle;
   final BudgetHealthyColorMode healthyColorMode;
   final BudgetProgressColorPresentation progressColorPresentation;
+
+  /// Shows the physical grey/lilac track beneath the shared SUM/MONTH active
+  /// progress. This is intentionally distinct from the neutral gloss toggle:
+  /// hiding a track does not overwrite the user's gloss preference.
+  final bool showBudgetNeutralTrack;
 
   /// Shared Budget chart neutral-material preference. It decorates the
   /// SUM/MONTH neutral track and the YEAR zero rail; it has no financial
@@ -56,6 +62,7 @@ final class BudgetRingPresentationSettings {
     BudgetSumRingStyle? sumRingStyle,
     BudgetHealthyColorMode? healthyColorMode,
     BudgetProgressColorPresentation? progressColorPresentation,
+    bool? showBudgetNeutralTrack,
     bool? showBudgetNeutralDecorativeStrip,
     bool? showBudgetActiveProgressDecorativeStrip,
     bool? showBudgetAnalysisInfoCards,
@@ -64,6 +71,8 @@ final class BudgetRingPresentationSettings {
     healthyColorMode: healthyColorMode ?? this.healthyColorMode,
     progressColorPresentation:
         progressColorPresentation ?? this.progressColorPresentation,
+    showBudgetNeutralTrack:
+        showBudgetNeutralTrack ?? this.showBudgetNeutralTrack,
     showBudgetNeutralDecorativeStrip:
         showBudgetNeutralDecorativeStrip ??
         this.showBudgetNeutralDecorativeStrip,
@@ -80,6 +89,7 @@ final class BudgetRingPresentationSettings {
       other.sumRingStyle == sumRingStyle &&
       other.healthyColorMode == healthyColorMode &&
       other.progressColorPresentation == progressColorPresentation &&
+      other.showBudgetNeutralTrack == showBudgetNeutralTrack &&
       other.showBudgetNeutralDecorativeStrip ==
           showBudgetNeutralDecorativeStrip &&
       other.showBudgetActiveProgressDecorativeStrip ==
@@ -91,6 +101,7 @@ final class BudgetRingPresentationSettings {
     sumRingStyle,
     healthyColorMode,
     progressColorPresentation,
+    showBudgetNeutralTrack,
     showBudgetNeutralDecorativeStrip,
     showBudgetActiveProgressDecorativeStrip,
     showBudgetAnalysisInfoCards,
@@ -121,6 +132,11 @@ final class BudgetRingPresentationController
 
   void setBudgetNeutralDecorativeStripVisible(bool visible) {
     final next = value.copyWith(showBudgetNeutralDecorativeStrip: visible);
+    if (next != value) value = next;
+  }
+
+  void setBudgetNeutralTrackVisible(bool visible) {
+    final next = value.copyWith(showBudgetNeutralTrack: visible);
     if (next != value) value = next;
   }
 

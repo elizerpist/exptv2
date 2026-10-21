@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_income_expense_bar_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 
 void main() {
   BalanceAlternativeIncomeExpenseBarPresentation chart({
@@ -43,8 +44,10 @@ void main() {
 
   Future<void> pumpCard(
     WidgetTester tester,
-    BalanceAlternativeIncomeExpenseBarPresentation presentation,
-  ) => tester.pumpWidget(
+    BalanceAlternativeIncomeExpenseBarPresentation presentation, {
+    BalanceYearBarPresentation yearBarPresentation =
+        BalanceYearBarPresentation.current,
+  }) => tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: Center(
@@ -53,6 +56,7 @@ void main() {
             height: 250,
             child: BalanceAlternativeIncomeExpenseBarCard(
               presentation: presentation,
+              yearBarPresentation: yearBarPresentation,
             ),
           ),
         ),
@@ -165,6 +169,80 @@ void main() {
           const ValueKey<String>('balance-alternative-income-expense-bar-card'),
         ),
         matchesGoldenFile('../../../goldens/balance_alternative_card3_sum.png'),
+      );
+    },
+  );
+
+  testWidgets(
+    'Balance YEAR clay changes only monthly bar material and preserves group geometry',
+    (tester) async {
+      final presentation = chart(
+        domain: BalanceAlternativeBarDomain.months,
+        count: 12,
+      );
+      await pumpCard(tester, presentation);
+      final currentFirst = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-alternative-bar-group-1')),
+      );
+      final currentLast = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-alternative-bar-group-12')),
+      );
+
+      await pumpCard(
+        tester,
+        presentation,
+        yearBarPresentation: BalanceYearBarPresentation.clay3d,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-clay-bar-income-1'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-clay-bar-expense-12'),
+        ),
+        findsOneWidget,
+      );
+      final clayFirst = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-alternative-bar-group-1')),
+      );
+      final clayLast = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-alternative-bar-group-12')),
+      );
+      expect(clayFirst, currentFirst);
+      expect(clayLast, currentLast);
+      await expectLater(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-income-expense-bar-card'),
+        ),
+        matchesGoldenFile(
+          '../../../goldens/balance_alternative_card3_year_clay3d.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'Balance SUM historical plot stays current when clay is selected',
+    (tester) async {
+      await pumpCard(
+        tester,
+        chart(domain: BalanceAlternativeBarDomain.years, count: 12),
+        yearBarPresentation: BalanceYearBarPresentation.clay3d,
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('balance-alternative-clay-bar-income-2014')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-sum-plot-scroll'),
+        ),
+        findsOneWidget,
       );
     },
   );

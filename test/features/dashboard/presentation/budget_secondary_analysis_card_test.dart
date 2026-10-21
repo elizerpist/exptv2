@@ -314,6 +314,97 @@ void main() {
     },
   );
 
+  testWidgets(
+    'SUM and MONTH hide only the neutral track while retaining active geometry',
+    (tester) async {
+      final ringPresentation = BudgetRingPresentationController();
+      addTearDown(ringPresentation.dispose);
+      final samples =
+          <
+            ({
+              DashboardBudgetSecondaryAnalysisPayload payload,
+              LedgerTimeScope scope,
+              String scopeLabel,
+              String goldenName,
+            })
+          >[
+            (
+              payload: const DashboardBudgetSumAnalysis(
+                availability: BudgetAnalysisAvailability.available,
+                averageUtilization: .39,
+                averageBudgetDeltaScaled100: -84000,
+                eligibleMonthCount: 12,
+                monthsWithinBudget: 8,
+                utilizationStandardDeviation: .12,
+              ),
+              scope: const AllTimeScope(),
+              scopeLabel: 'Összesen',
+              goldenName: 'sum',
+            ),
+            (
+              payload: const DashboardBudgetMonthSecondaryAnalysis(
+                availability: BudgetAnalysisAvailability.available,
+                daysInMonth: 31,
+                elapsedCalendarDays: 18,
+                monthActualScaled100: 29000000,
+                monthlyLimitScaled100: 39000000,
+                elapsedRatio: 18 / 31,
+                budgetUsedRatio: 290 / 390,
+                paceDifferencePercentagePoints: 16.3,
+                projectedMonthEndScaled100: 49944444,
+                expectedDeltaScaled100: 10944444,
+                closingBudgetDeltaScaled100: null,
+                remainingDailyRoomScaled100: 769231,
+                historicalDailyAverageScaled100: null,
+                usesForecast: true,
+              ),
+              scope: const MonthScope(YearMonth(year: 2026, month: 3)),
+              scopeLabel: '2026. március',
+              goldenName: 'month',
+            ),
+          ];
+
+      for (final sample in samples) {
+        ringPresentation.setBudgetNeutralTrackVisible(true);
+        await pump(
+          tester,
+          payload: sample.payload,
+          scope: sample.scope,
+          scopeLabel: sample.scopeLabel,
+          useCard2OuterClip: true,
+          ringPresentation: ringPresentation,
+        );
+        final on = tester.widget<BudgetSemicircleMaterial>(
+          find.byType(BudgetSemicircleMaterial),
+        );
+        final onBounds = trackBounds(tester);
+
+        ringPresentation.setBudgetNeutralTrackVisible(false);
+        await tester.pump();
+        final off = tester.widget<BudgetSemicircleMaterial>(
+          find.byType(BudgetSemicircleMaterial),
+        );
+        final offBounds = trackBounds(tester);
+        expect(on.showNeutralTrack, isTrue);
+        expect(off.showNeutralTrack, isFalse);
+        expect(off.showNeutralDecorativeStrip, on.showNeutralDecorativeStrip);
+        expect(
+          off.showActiveProgressDecorativeStrip,
+          on.showActiveProgressDecorativeStrip,
+        );
+        expect(off.progress, on.progress);
+        expect(offBounds, onBounds);
+        expect(tester.takeException(), isNull);
+        await expectLater(
+          find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+          matchesGoldenFile(
+            '../../../goldens/budget_analysis_neutral_track_off_${sample.goldenName}.png',
+          ),
+        );
+      }
+    },
+  );
+
   test('YEAR clay material shares Budget semantic families', () {
     final withGloss = BudgetYearClayDeltaMaterial.resolve(
       showNeutralDecorativeStrip: true,
@@ -405,6 +496,17 @@ void main() {
         matchesGoldenFile(
           '../../../goldens/budget_analysis_year_clay_strips_on.png',
         ),
+      );
+
+      ringPresentation.setBudgetNeutralTrackVisible(false);
+      await tester.pump();
+      await expectLater(
+        find.byKey(const ValueKey('budget-analysis-golden-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/budget_analysis_year_clay_strips_on.png',
+        ),
+        reason:
+            'The SUM/MONTH-only neutral-track control cannot hide YEAR rail.',
       );
 
       ringPresentation

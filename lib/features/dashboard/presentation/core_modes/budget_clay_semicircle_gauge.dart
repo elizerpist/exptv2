@@ -491,6 +491,7 @@ final class BudgetSemicircleMaterial extends StatelessWidget {
     required this.activeMaterial,
     required this.progress,
     required this.layout,
+    required this.showNeutralTrack,
     required this.showNeutralDecorativeStrip,
     required this.showActiveProgressDecorativeStrip,
     required this.showMarker,
@@ -501,6 +502,7 @@ final class BudgetSemicircleMaterial extends StatelessWidget {
   final BudgetClayActiveMaterial activeMaterial;
   final double progress;
   final BudgetSemicircleMaterialLayout layout;
+  final bool showNeutralTrack;
   final bool showNeutralDecorativeStrip;
   final bool showActiveProgressDecorativeStrip;
   final bool showMarker;
@@ -514,6 +516,7 @@ final class BudgetSemicircleMaterial extends StatelessWidget {
         activeMaterial: activeMaterial,
         progress: progress,
         layout: layout,
+        showNeutralTrack: showNeutralTrack,
         showNeutralDecorativeStrip: showNeutralDecorativeStrip,
         showActiveProgressDecorativeStrip: showActiveProgressDecorativeStrip,
         showMarker: showMarker,
@@ -553,6 +556,7 @@ final class BudgetSemicircleMaterialPreferences extends StatelessWidget {
       ),
       progress: progress,
       layout: layout,
+      showNeutralTrack: settings.showBudgetNeutralTrack,
       showNeutralDecorativeStrip: settings.showBudgetNeutralDecorativeStrip,
       showActiveProgressDecorativeStrip:
           settings.showBudgetActiveProgressDecorativeStrip,
@@ -801,6 +805,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
     required this.activeMaterial,
     required this.progress,
     required this.layout,
+    required this.showNeutralTrack,
     required this.showNeutralDecorativeStrip,
     required this.showActiveProgressDecorativeStrip,
     required this.showMarker,
@@ -814,6 +819,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
   final BudgetClayActiveMaterial activeMaterial;
   final double progress;
   final BudgetSemicircleMaterialLayout layout;
+  final bool showNeutralTrack;
   final bool showNeutralDecorativeStrip;
   final bool showActiveProgressDecorativeStrip;
   final bool showMarker;
@@ -828,14 +834,18 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
     // The arcs themselves already have π sweep, so no painter-wide horizontal
     // clip or full-circle interior is needed. Card2's white physical surface
     // is the gauge interior; its outer rounded clip owns the final boundary.
-    _paintCastShadow(canvas, geometry);
-    _paintRearDepth(canvas, geometry);
-    _paintNeutralTrackBody(canvas, geometry);
-    if (showNeutralDecorativeStrip) {
-      _paintNeutralDecorativeStrip(canvas, geometry);
+    if (showNeutralTrack) {
+      _paintCastShadow(canvas, geometry);
+      _paintRearDepth(canvas, geometry);
+      _paintNeutralTrackBody(canvas, geometry);
+      if (showNeutralDecorativeStrip) {
+        _paintNeutralDecorativeStrip(canvas, geometry);
+      }
     }
     _paintActiveBody(canvas, geometry);
-    _paintInnerShadow(canvas, geometry);
+    if (showNeutralTrack) {
+      _paintInnerShadow(canvas, geometry);
+    }
     if (showMarker) {
       _paintMarkerShadow(canvas, geometry);
       _paintMarker(canvas, geometry);
@@ -1095,6 +1105,7 @@ final class _BudgetSemicircleMaterialPainter extends CustomPainter {
   bool shouldRepaint(covariant _BudgetSemicircleMaterialPainter oldDelegate) =>
       progress != oldDelegate.progress ||
       layout != oldDelegate.layout ||
+      showNeutralTrack != oldDelegate.showNeutralTrack ||
       showNeutralDecorativeStrip != oldDelegate.showNeutralDecorativeStrip ||
       showActiveProgressDecorativeStrip !=
           oldDelegate.showActiveProgressDecorativeStrip ||

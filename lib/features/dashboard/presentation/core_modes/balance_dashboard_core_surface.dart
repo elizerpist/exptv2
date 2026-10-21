@@ -980,6 +980,7 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
               _BalanceYearExtendedSheetScaffold(
                 geometry: geometry,
                 presentation: alternative,
+                yearBarPresentation: settings.yearBarPresentation,
               ),
             BalanceAlternativeMonthPresentation() =>
               _BalanceMonthExtendedSheetScaffold(
@@ -1247,10 +1248,12 @@ final class _BalanceYearExtendedSheetScaffold extends StatelessWidget {
   const _BalanceYearExtendedSheetScaffold({
     required this.geometry,
     required this.presentation,
+    required this.yearBarPresentation,
   });
 
   final DashboardLayoutFrame geometry;
   final BalanceAlternativeYearPresentation presentation;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   @override
   Widget build(BuildContext context) => _BalanceExtendedSheetFrame(
@@ -1306,6 +1309,7 @@ final class _BalanceYearExtendedSheetScaffold extends StatelessWidget {
             child: BalanceAlternativeAnnualIncomeExpenseCard(
               presentation: incomeExpense,
               timeScope: presentation.timeScope,
+              yearBarPresentation: yearBarPresentation,
             ),
           ),
         ),
