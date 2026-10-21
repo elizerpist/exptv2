@@ -119,7 +119,8 @@ internal interface FluviFinancialLimitDao {
 
     @Query(
         "SELECT * FROM fluvi_financial_limits " +
-            "WHERE year IS NULL OR year BETWEEN :startYear AND :endYear " +
+        "WHERE (period_kind = 'base' AND year <= :endYear) " +
+            "OR (period_kind = 'month' AND year BETWEEN :startYear AND :endYear) " +
             "ORDER BY direction ASC, target_kind ASC, target_key ASC, period_kind ASC, year ASC, month ASC",
     )
     suspend fun forPreparedYearWindow(

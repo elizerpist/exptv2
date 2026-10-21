@@ -22,6 +22,7 @@ import '../../application/dashboard_avatar_target_painted.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import 'budget_limit_quick_edit_gesture.dart';
+import 'budget_limit_manager.dart';
 import 'budget_target_avatar_interaction.dart';
 import 'budget_target_avatar_preview_coalescer.dart';
 import 'budget_target_avatar_rail_controller.dart';
@@ -56,6 +57,7 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     this.liveTargetPainted,
     this.onDirectInputStarted,
     this.onMotionActiveChanged,
+    this.onSelectedBudgetTargetManagerRequested,
   });
 
   final DashboardBudgetPresentationController presentation;
@@ -98,6 +100,12 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// The one Core-owned foreground work gate for physical avatar motion.
   /// The rail remains the only gesture/carousel owner.
   final ValueChanged<bool>? onMotionActiveChanged;
+
+  /// Clean taps on the already-centred target are intentionally distinct from
+  /// carousel centring and long-press quick edit.  The owning Budget surface
+  /// opens the fullscreen manager from this intent.
+  final ValueChanged<BudgetLimitManagerRequest>?
+  onSelectedBudgetTargetManagerRequested;
 
   /// The selected shell is larger than the static avatar canvas. This is the
   /// rail's vertical input/layout surface; horizontal slots remain [_itemExtent].
@@ -1319,6 +1327,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                     ),
                   );
                   final interaction = BudgetTargetAvatarInteraction(
+                    onTap: metrics.isSelected
+                        ? () => _requestLimitManager(item)
+                        : null,
                     onPointerDown: metrics.isSelected && _quickEdit != null
                         ? () => _recordQuickEditPointerDown(item.targetHandle)
                         : null,
@@ -1358,6 +1369,31 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                 },
               ),
             ),
+    );
+  }
+
+  void _requestLimitManager(_PreparedBudgetTargetAvatar item) {
+    final callback = widget.onSelectedBudgetTargetManagerRequested;
+    final selection = widget.presentation.value.liveSelection;
+    final revision = selection.coreRevision;
+    if (callback == null ||
+        revision == null ||
+        selection.target.handle != item.targetHandle) {
+      return;
+    }
+    callback(
+      BudgetLimitManagerRequest(
+        direction: selection.direction,
+        target: selection.target,
+        targetHandle: item.targetHandle,
+        title: item.title,
+        accent: item.color,
+        avatar: SizedBox.square(
+          dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+          child: item.avatarFor(selected: false),
+        ),
+        coreRevision: revision,
+      ),
     );
   }
 

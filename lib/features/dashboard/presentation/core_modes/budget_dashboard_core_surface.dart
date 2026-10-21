@@ -30,6 +30,7 @@ import '../dashboard_corner_roundness.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 import '../dashboard_budget_header_presentation.dart';
 import 'budget_category_avatar_rail.dart';
+import 'budget_limit_manager.dart';
 import 'budget_allocation_partition_lane.dart';
 import 'dashboard_header_contrast_text.dart';
 import 'budget_category_distribution_visual_bank.dart';
@@ -197,7 +198,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                           order == BudgetSectionOrder.chartThenAvatars
                       ? BudgetTargetAvatarRail.selectedInputVerticalOverflow
                       : 0,
-                  content: _avatarContent(),
+                  content: _avatarContent(context),
                 ),
               ),
               ValueListenableBuilder<BudgetContentLayout>(
@@ -545,7 +546,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     );
   }
 
-  Widget _avatarContent() => presentationController == null
+  Widget _avatarContent(BuildContext context) => presentationController == null
       ? const SizedBox(key: ValueKey<String>('budget-target-avatar-rail'))
       : BudgetTargetAvatarRail(
           presentation: presentationController!,
@@ -568,7 +569,30 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
           liveTargetPainted: drilldown?.liveTargetPainted,
           onMotionActiveChanged: onAvatarMotionActiveChanged,
           onDirectInputStarted: onAvatarDirectInputStarted,
+          onSelectedBudgetTargetManagerRequested: limitEditController == null
+              ? null
+              : (request) => _openLimitManager(context, request),
         );
+
+  void _openLimitManager(
+    BuildContext context,
+    BudgetLimitManagerRequest request,
+  ) {
+    final controller = presentationController;
+    final edits = limitEditController;
+    if (controller == null || edits == null) return;
+    showDialog<void>(
+      context: context,
+      useSafeArea: false,
+      builder: (context) => Dialog.fullscreen(
+        child: BudgetLimitManager(
+          request: request,
+          presentation: controller,
+          limitEdits: edits,
+        ),
+      ),
+    );
+  }
 
   /// Resolves the selected avatar's existing presentation colour, never a new
   /// category mapping. This lets the overlap cue follow the current global

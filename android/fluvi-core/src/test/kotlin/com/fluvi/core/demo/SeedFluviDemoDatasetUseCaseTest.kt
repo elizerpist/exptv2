@@ -194,12 +194,12 @@ class SeedFluviDemoDatasetUseCaseTest {
         // One base plus four sparse explicit month overrides per target keeps
         // inheritance exercised without recreating annual/SUM rows.
         val baseCount = limits.count {
-            it.key.period == FluviFinancialLimitPeriod.BaseMonthly
+            it.key.period is FluviFinancialLimitPeriod.BaseMonthlyRevision
         }
         assertEquals(baseCount * 5, limits.size)
         assertTrue(limits.all { limit ->
             when (val period = limit.key.period) {
-                FluviFinancialLimitPeriod.BaseMonthly -> true
+                is FluviFinancialLimitPeriod.BaseMonthlyRevision -> true
                 is FluviFinancialLimitPeriod.MonthOverride -> period.year == 2024
             }
         })

@@ -8,6 +8,7 @@ final class BudgetTargetAvatarInteraction extends StatefulWidget {
   const BudgetTargetAvatarInteraction({
     required this.child,
     this.onPointerDown,
+    this.onTap,
     this.onLongPressStart,
     this.onLongPressMoveUpdate,
     this.onLongPressEnd,
@@ -17,6 +18,7 @@ final class BudgetTargetAvatarInteraction extends StatefulWidget {
 
   final Widget child;
   final VoidCallback? onPointerDown;
+  final VoidCallback? onTap;
   final GestureLongPressStartCallback? onLongPressStart;
   final GestureLongPressMoveUpdateCallback? onLongPressMoveUpdate;
   final GestureLongPressEndCallback? onLongPressEnd;
@@ -46,6 +48,7 @@ final class _BudgetTargetAvatarInteractionState
     onPointerCancel: (_) => _setPointerPressed(false),
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
       onLongPressStart: widget.onLongPressStart,
       onLongPressMoveUpdate: widget.onLongPressMoveUpdate,
       onLongPressEnd: (details) {

@@ -59,7 +59,10 @@ internal class FluviFinancialLimitRepository(
                 FluviFinancialLimitTarget.Category(requireNotNull(categoryId))
         }
         val period = when (periodKind) {
-            FluviFinancialLimitPeriodKind.base -> FluviFinancialLimitPeriod.BaseMonthly
+            FluviFinancialLimitPeriodKind.base -> FluviFinancialLimitPeriod.BaseMonthlyRevision(
+                requireNotNull(year),
+                requireNotNull(month),
+            )
             FluviFinancialLimitPeriodKind.month -> FluviFinancialLimitPeriod.MonthOverride(
                 requireNotNull(year),
                 requireNotNull(month),

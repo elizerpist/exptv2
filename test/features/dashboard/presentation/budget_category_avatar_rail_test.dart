@@ -26,6 +26,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_live_interaction_
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_quick_edit_gesture.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_manager.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_interaction.dart';
@@ -103,6 +104,30 @@ void main() {
       reason: 'a visual profile must not recreate the carousel owner',
     );
   });
+
+  testWidgets(
+    'only a clean tap on the already centred Avatar requests the limit manager',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      var requests = 0;
+      addTearDown(harness.dispose);
+
+      await tester.pumpWidget(
+        _host(
+          harness.presentation,
+          onSelectedBudgetTargetManagerRequested: (_) => requests += 1,
+        ),
+      );
+      await tester.pump();
+
+      final selected = find.byKey(const ValueKey('budget-target-avatar-center'));
+      await tester.tap(selected);
+      expect(requests, 1);
+
+      await tester.longPress(selected);
+      expect(requests, 1);
+    },
+  );
 
   test('all scope strategies retain the one Fluvi ring geometry authority', () {
     final states = <BudgetCategoryAvatarSelectedLimitVisualState>[
@@ -3131,6 +3156,8 @@ String _centeredShadowedArtworkSource() =>
 Widget _host(
   DashboardBudgetPresentationController presentation, {
   DashboardBudgetLimitEditController? limitEditController,
+  ValueChanged<BudgetLimitManagerRequest>?
+  onSelectedBudgetTargetManagerRequested,
   double height = 72,
 }) => MaterialApp(
   home: Scaffold(
@@ -3141,6 +3168,8 @@ Widget _host(
         child: BudgetTargetAvatarRail(
           presentation: presentation,
           limitEditController: limitEditController,
+          onSelectedBudgetTargetManagerRequested:
+              onSelectedBudgetTargetManagerRequested,
         ),
       ),
     ),

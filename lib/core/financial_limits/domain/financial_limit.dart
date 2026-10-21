@@ -36,14 +36,34 @@ sealed class FinancialLimitPeriod {
   const FinancialLimitPeriod();
 }
 
-final class FinancialLimitBaseMonthlyPeriod extends FinancialLimitPeriod {
-  const FinancialLimitBaseMonthlyPeriod();
+/// A base monthly limit is effective-dated rather than timeless.  A revision
+/// applies from its calendar month through the next revision (or indefinitely
+/// when it is the latest one).  This is deliberately persisted truth: using a
+/// single mutable base record would retroactively rewrite historical Budget
+/// denominators when a user changes today's limit.
+final class FinancialLimitBaseMonthlyRevisionPeriod
+    extends FinancialLimitPeriod {
+  const FinancialLimitBaseMonthlyRevisionPeriod(
+    this.effectiveFromYear,
+    this.effectiveFromMonth,
+  ) : assert(effectiveFromYear > 0),
+      assert(effectiveFromMonth >= 1 && effectiveFromMonth <= 12);
+
+  final int effectiveFromYear;
+  final int effectiveFromMonth;
 
   @override
-  bool operator ==(Object other) => other is FinancialLimitBaseMonthlyPeriod;
+  bool operator ==(Object other) =>
+      other is FinancialLimitBaseMonthlyRevisionPeriod &&
+      other.effectiveFromYear == effectiveFromYear &&
+      other.effectiveFromMonth == effectiveFromMonth;
 
   @override
-  int get hashCode => Object.hash(FinancialLimitBaseMonthlyPeriod, 0);
+  int get hashCode => Object.hash(
+    FinancialLimitBaseMonthlyRevisionPeriod,
+    effectiveFromYear,
+    effectiveFromMonth,
+  );
 }
 
 final class FinancialLimitMonthOverridePeriod extends FinancialLimitPeriod {

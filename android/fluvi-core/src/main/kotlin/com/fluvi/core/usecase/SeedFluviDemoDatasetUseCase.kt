@@ -259,10 +259,13 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                             key = FluviFinancialLimitKey(
                                 direction,
                                 target,
-                                FluviFinancialLimitPeriod.BaseMonthly,
+                                // The demo baseline intentionally covers the
+                                // whole generated history. Later user edits
+                                // create a newer effective-dated revision.
+                                FluviFinancialLimitPeriod.BaseMonthlyRevision(1, 1),
                             ),
                             amountScaled100 = demoLimitFor(
-                                // BaseMonthly is the typical inherited month,
+                                // BaseMonthlyRevision is the typical inherited month,
                                 // never a hidden annual/SUM denominator.
                                 totalActual / (years.count().coerceAtLeast(1) * 12L),
                                 relation,
@@ -300,7 +303,7 @@ class SeedFluviDemoDatasetUseCase internal constructor(
     private fun matchesOverride(epochDay: Long, period: FluviFinancialLimitPeriod): Boolean {
         val date = LocalDate.ofEpochDay(epochDay)
         return when (period) {
-            FluviFinancialLimitPeriod.BaseMonthly -> false
+            is FluviFinancialLimitPeriod.BaseMonthlyRevision -> false
             is FluviFinancialLimitPeriod.MonthOverride ->
                 date.year == period.year && date.monthValue == period.month
         }

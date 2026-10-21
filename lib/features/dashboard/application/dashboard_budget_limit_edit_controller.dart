@@ -590,6 +590,124 @@ final class DashboardBudgetLimitEditController
         _ => Future<void>.error(ArgumentError.value(session, 'session')),
       };
 
+  /// The fullscreen Limit Manager uses this same owner rather than opening a
+  /// second repository queue.  The manager already owns an explicit target
+  /// identity, so this operation intentionally does not require that target
+  /// to remain selected on the dashboard underneath the modal.
+  Future<void> setManualLimit({
+    required FinancialLimitKey key,
+    required int coreRevision,
+    required int targetHandle,
+    required int? confirmedLimitScaled100,
+    required int amountScaled100,
+  }) {
+    if (_disposed) return Future<void>.value();
+    if (amountScaled100 < 0) throw ArgumentError.value(amountScaled100);
+    final generation = ++_nextGeneration;
+    _pendingByKey[key] = _PendingBudgetLimitMutation(
+      generation: generation,
+      baseCoreRevision: coreRevision,
+      intendedLimitScaled100: amountScaled100,
+      confirmedLimitScaled100: confirmedLimitScaled100,
+    );
+    // A matching live dashboard target adopts the draft immediately; an
+    // unrelated target is unaffected because overlays remain keyed.
+    _publishForCurrentOverlay();
+    return _enqueue(
+      key,
+      generation,
+      () => _repository.upsert(key, amountScaled100),
+      operationName: 'managerUpsert',
+    );
+  }
+
+  Future<void> setBaseLimitEffectiveFromCurrentMonth({
+    required FinancialLimitDirection direction,
+    required FinancialLimitTarget target,
+    required int effectiveFromYear,
+    required int effectiveFromMonth,
+    required int coreRevision,
+    required int targetHandle,
+    required int? confirmedLimitScaled100,
+    required int amountScaled100,
+  }) => setManualLimit(
+    key: FinancialLimitKey(
+      direction: direction,
+      target: target,
+      period: FinancialLimitBaseMonthlyRevisionPeriod(
+        effectiveFromYear,
+        effectiveFromMonth,
+      ),
+    ),
+    coreRevision: coreRevision,
+    targetHandle: targetHandle,
+    confirmedLimitScaled100: confirmedLimitScaled100,
+    amountScaled100: amountScaled100,
+  );
+
+  Future<void> setMonthOverride({
+    required FinancialLimitDirection direction,
+    required FinancialLimitTarget target,
+    required int year,
+    required int month,
+    required int coreRevision,
+    required int targetHandle,
+    required int? confirmedLimitScaled100,
+    required int amountScaled100,
+  }) => setManualLimit(
+    key: FinancialLimitKey(
+      direction: direction,
+      target: target,
+      period: FinancialLimitMonthOverridePeriod(year, month),
+    ),
+    coreRevision: coreRevision,
+    targetHandle: targetHandle,
+    confirmedLimitScaled100: confirmedLimitScaled100,
+    amountScaled100: amountScaled100,
+  );
+
+  /// Deletion is used only for a concrete monthly override.  It reuses the
+  /// same per-key tail as quick edits, so an earlier upsert cannot finish
+  /// after a later "return to base" request.
+  Future<void> deleteMonthOverride({
+    required FinancialLimitDirection direction,
+    required FinancialLimitTarget target,
+    required int year,
+    required int month,
+  }) {
+    if (_disposed) return Future<void>.value();
+    final key = FinancialLimitKey(
+      direction: direction,
+      target: target,
+      period: FinancialLimitMonthOverridePeriod(year, month),
+    );
+    final generation = ++_nextGeneration;
+    _pendingByKey.remove(key);
+    _removeCategoryAllocationOverlay(key);
+    _publishForCurrentOverlay();
+    return _enqueue(
+      key,
+      generation,
+      () => _repository.delete(key),
+      operationName: 'managerDeleteOverride',
+    );
+  }
+
+  /// One deliberate manager-open read; normal rail, pager and Summary paths
+  /// never call this API.  Writes still remain in this controller.
+  Future<List<FinancialLimit>> loadLimitTimeline({
+    required FinancialLimitDirection direction,
+    required FinancialLimitTarget target,
+  }) async {
+    final all = await _repository.list();
+    return List<FinancialLimit>.unmodifiable(
+      all.where(
+        (limit) =>
+            limit.key.direction == direction && limit.key.target == target,
+      ),
+    );
+  }
+
   Future<void> _finishYearEdit(DashboardBudgetYearLimitEditSession session) {
     if (_activeYear?.generation != session.generation) {
       return Future<void>.value();
@@ -1125,7 +1243,11 @@ final class DashboardBudgetLimitEditController
       FinancialLimitCategoryTarget(:final categoryId) => 'category:$categoryId',
     };
     final period = switch (key.period) {
-      FinancialLimitBaseMonthlyPeriod() => 'base',
+      FinancialLimitBaseMonthlyRevisionPeriod(
+        :final effectiveFromYear,
+        :final effectiveFromMonth,
+      ) =>
+        'base:$effectiveFromYear-$effectiveFromMonth',
       FinancialLimitMonthOverridePeriod(:final year, :final month) =>
         'month:$year-$month',
     };

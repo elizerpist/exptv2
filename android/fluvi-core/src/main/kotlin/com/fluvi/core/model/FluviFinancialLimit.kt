@@ -16,7 +16,20 @@ sealed interface FluviFinancialLimitTarget {
  * projections over these rows; they can never become competing stored truth.
  */
 sealed interface FluviFinancialLimitPeriod {
-    data object BaseMonthly : FluviFinancialLimitPeriod
+    /**
+     * A base denominator is a timeline revision, not one mutable timeless
+     * scalar.  The resolver selects the newest revision effective on or
+     * before the requested calendar month.
+     */
+    data class BaseMonthlyRevision(
+        val effectiveFromYear: Int,
+        val effectiveFromMonth: Int,
+    ) : FluviFinancialLimitPeriod {
+        init {
+            require(effectiveFromYear in 1..9999)
+            require(effectiveFromMonth in 1..12)
+        }
+    }
 
     data class MonthOverride(val year: Int, val month: Int) : FluviFinancialLimitPeriod {
         init {
@@ -48,24 +61,28 @@ data class FluviFinancialLimitKey(
 
     val periodKind: FluviFinancialLimitPeriodKind
         get() = when (period) {
-            FluviFinancialLimitPeriod.BaseMonthly -> FluviFinancialLimitPeriodKind.base
+            is FluviFinancialLimitPeriod.BaseMonthlyRevision -> FluviFinancialLimitPeriodKind.base
             is FluviFinancialLimitPeriod.MonthOverride -> FluviFinancialLimitPeriodKind.month
         }
 
     val canonicalPeriodKey: String
         get() = when (period) {
-            FluviFinancialLimitPeriod.BaseMonthly -> "base"
+            is FluviFinancialLimitPeriod.BaseMonthlyRevision ->
+                "base:${period.effectiveFromYear}-${period.effectiveFromMonth}"
             is FluviFinancialLimitPeriod.MonthOverride -> "month:${period.year}-${period.month}"
         }
 
     val year: Int?
         get() = when (period) {
-            FluviFinancialLimitPeriod.BaseMonthly -> null
+            is FluviFinancialLimitPeriod.BaseMonthlyRevision -> period.effectiveFromYear
             is FluviFinancialLimitPeriod.MonthOverride -> period.year
         }
 
     val month: Int?
-        get() = (period as? FluviFinancialLimitPeriod.MonthOverride)?.month
+        get() = when (period) {
+            is FluviFinancialLimitPeriod.BaseMonthlyRevision -> period.effectiveFromMonth
+            is FluviFinancialLimitPeriod.MonthOverride -> period.month
+        }
 }
 
 enum class FluviFinancialLimitTargetKind { aggregate, category }

@@ -258,6 +258,35 @@ class FluviDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationSixToSevenTurnsLegacyBaseIntoAnEarliestEffectiveRevision() {
+        val name = "$DATABASE_NAME-effective-base"
+        helper.createDatabase(name, 6).use { database ->
+            database.execSQL(
+                "INSERT INTO fluvi_financial_limits " +
+                    "(direction,target_kind,target_key,category_id,period_kind,period_key," +
+                    "year,month,limit_amount_scaled_100,created_at_utc_ms,updated_at_utc_ms) " +
+                    "VALUES ('expense','aggregate','aggregate',NULL,'base','base',NULL,NULL,18000,1,1)",
+            )
+            database.execSQL(
+                "INSERT INTO fluvi_financial_limits " +
+                    "(direction,target_kind,target_key,category_id,period_kind,period_key," +
+                    "year,month,limit_amount_scaled_100,created_at_utc_ms,updated_at_utc_ms) " +
+                    "VALUES ('expense','aggregate','aggregate',NULL,'month','month:2026-3',2026,3,22000,1,1)",
+            )
+        }
+        helper.runMigrationsAndValidate(
+            name,
+            7,
+            true,
+            FluviDatabase.MIGRATION_6_7,
+        ).use { database ->
+            assertEquals(18000L, amount(database, "base:1-1"))
+            assertEquals(22000L, amount(database, "month:2026-3"))
+            assertEquals(0, count(database, "period_key='base'"))
+        }
+    }
+
     private fun migrateLegacyFinancialLimits(
         name: String,
         rows: List<LegacyLimit>,

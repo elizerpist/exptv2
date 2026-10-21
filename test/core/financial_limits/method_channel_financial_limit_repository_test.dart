@@ -58,6 +58,8 @@ void main() {
                 'targetKind': 'category',
                 'categoryId': 'salary',
                 'periodKind': 'base',
+                'year': 2026,
+                'month': 10,
                 'amountScaled100': 0,
               });
             }
@@ -68,7 +70,7 @@ void main() {
         const FinancialLimitKey(
           direction: FinancialLimitDirection.income,
           target: FinancialLimitCategoryTarget('salary'),
-          period: FinancialLimitBaseMonthlyPeriod(),
+          period: FinancialLimitBaseMonthlyRevisionPeriod(2026, 10),
         ),
       );
 

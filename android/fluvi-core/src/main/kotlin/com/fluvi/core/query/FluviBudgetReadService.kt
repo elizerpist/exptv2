@@ -235,11 +235,14 @@ class FluviBudgetReadService internal constructor(
             }
         }
 
-        // Persisted truth is base-month plus concrete override only. The
-        // prepared YEAR/SUM cells below are derived cache values, never rows
-        // that can be independently read or edited.
-        val baseByDirectionHandle = LedgerDirection.entries.associateWith {
-            hashMapOf<Int, Long>()
+        // Persisted truth is effective-dated base history plus concrete month
+        // overrides.  The prepared YEAR/SUM cells below are derived cache
+        // values, never rows that can be independently read or edited.
+        val baseRevisionsByDirectionHandle = LedgerDirection.entries.associateWith {
+            hashMapOf<Int, MutableList<FluviFinancialLimitPeriod.BaseMonthlyRevision>>()
+        }
+        val baseAmountByDirectionHandleMonth = LedgerDirection.entries.associateWith {
+            hashMapOf<Pair<Int, Int>, Long>()
         }
         val overridesByDirectionHandleMonth = LedgerDirection.entries.associateWith {
             hashMapOf<Triple<Int, Int, Int>, Long>()
@@ -254,9 +257,16 @@ class FluviBudgetReadService internal constructor(
                         bank.handleByCategoryId[target.categoryId] ?: return@forEach
                 }
                 when (val period = limit.key.period) {
-                    FluviFinancialLimitPeriod.BaseMonthly ->
-                        baseByDirectionHandle.getValue(limit.key.direction)[handle] =
-                            limit.amountScaled100
+                    is FluviFinancialLimitPeriod.BaseMonthlyRevision -> {
+                        baseRevisionsByDirectionHandle
+                            .getValue(limit.key.direction)
+                            .getOrPut(handle) { mutableListOf() }
+                            .add(period)
+                        baseAmountByDirectionHandleMonth
+                            .getValue(limit.key.direction)[
+                                handle to (period.effectiveFromYear * 12 + period.effectiveFromMonth - 1)
+                            ] = limit.amountScaled100
+                    }
                     is FluviFinancialLimitPeriod.MonthOverride ->
                         overridesByDirectionHandleMonth.getValue(limit.key.direction)[
                             Triple(handle, period.year, period.month)
@@ -265,13 +275,20 @@ class FluviBudgetReadService internal constructor(
             }
         LedgerDirection.entries.forEach { direction ->
             val bank = banks.getValue(direction)
-            val bases = baseByDirectionHandle.getValue(direction)
+            val baseRevisions = baseRevisionsByDirectionHandle.getValue(direction)
+            val baseAmounts = baseAmountByDirectionHandleMonth.getValue(direction)
             val overrides = overridesByDirectionHandleMonth.getValue(direction)
             (0 until bank.targetCount).forEach { handle ->
-                val base = bases[handle]
-                bank.limitScaled100[cellIndex(bank.targetCount, 0, handle)] = base ?: -1L
+                val revisions = baseRevisions[handle].orEmpty()
+                    .sortedWith(compareBy<FluviFinancialLimitPeriod.BaseMonthlyRevision> {
+                        it.effectiveFromYear
+                    }.thenBy { it.effectiveFromMonth })
+                val latestBase = revisions.lastOrNull()?.let {
+                    baseAmounts[handle to (it.effectiveFromYear * 12 + it.effectiveFromMonth - 1)]
+                }
+                bank.limitScaled100[cellIndex(bank.targetCount, 0, handle)] = latestBase ?: -1L
                 bank.limitSource[cellIndex(bank.targetCount, 0, handle)] =
-                    if (base == null) 0 else 1
+                    if (latestBase == null) 0 else 1
                 (0 until yearCount).forEach { yearOffset ->
                     val year = yearWindow.startYear + yearOffset
                     var annual = 0L
@@ -279,13 +296,22 @@ class FluviBudgetReadService internal constructor(
                     (1..12).forEach { month ->
                         val overrideKey = Triple(handle, year, month)
                         val override = overrides[overrideKey]
-                        val resolved = override ?: base
+                        val linearMonth = year * 12 + month - 1
+                        val inheritedRevision = revisions.lastOrNull { revision ->
+                            revision.effectiveFromYear * 12 + revision.effectiveFromMonth - 1 <= linearMonth
+                        }
+                        val inherited = inheritedRevision?.let { revision ->
+                            baseAmounts[handle to (
+                                revision.effectiveFromYear * 12 + revision.effectiveFromMonth - 1
+                            )]
+                        }
+                        val resolved = override ?: inherited
                         val monthSlice = 1 + yearCount + yearOffset * 12 + month - 1
                         val resolvedCellIndex = cellIndex(bank.targetCount, monthSlice, handle)
                         bank.limitScaled100[resolvedCellIndex] = resolved ?: -1L
                         bank.limitSource[resolvedCellIndex] = when {
                             override != null -> 2
-                            base != null -> 1
+                            inherited != null -> 1
                             else -> 0
                         }
                         if (resolved != null) {

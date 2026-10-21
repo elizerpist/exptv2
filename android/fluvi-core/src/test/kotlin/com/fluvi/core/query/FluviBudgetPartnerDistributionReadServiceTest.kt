@@ -9,12 +9,16 @@ import com.fluvi.core.database.entity.FluviLedgerEntryEntity
 import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.FluviClock
+import com.fluvi.core.model.FluviFinancialLimitKey
+import com.fluvi.core.model.FluviFinancialLimitPeriod
+import com.fluvi.core.model.FluviFinancialLimitTarget
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviCoreRevisionRepository
 import com.fluvi.core.repository.FluviFinancialLimitRepository
 import com.fluvi.core.repository.FluviPartnerRepository
+import com.fluvi.core.usecase.FluviFinancialLimitUseCase
 import java.time.LocalDate
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -171,6 +175,34 @@ class FluviBudgetPartnerDistributionReadServiceTest {
             1L,
             aggregatePoints.single { it.epochDay == january10 }.transactionCount,
         )
+    }
+
+    @Test
+    fun resolvesEffectiveDatedBaseHistoryBeforeConcreteMonthOverrides() = runBlocking {
+        val limits = FluviFinancialLimitUseCase(database, FluviClock { NOW })
+        fun key(period: FluviFinancialLimitPeriod) = FluviFinancialLimitKey(
+            direction = LedgerDirection.expense,
+            target = FluviFinancialLimitTarget.Aggregate,
+            period = period,
+        )
+        limits.upsert(key(FluviFinancialLimitPeriod.BaseMonthlyRevision(2026, 1)), 18_000L)
+        limits.upsert(key(FluviFinancialLimitPeriod.BaseMonthlyRevision(2026, 10)), 20_000L)
+        limits.upsert(key(FluviFinancialLimitPeriod.MonthOverride(2026, 3)), 22_000L)
+        limits.upsert(key(FluviFinancialLimitPeriod.MonthOverride(2026, 12)), 25_000L)
+
+        val snapshot = budget.preparedLimitSnapshot(
+            expectedRevision = revisions.current(),
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+        )
+        val targetCount = snapshot.expenseBank.targetCount
+        fun resolved(month: Int): Long = snapshot.expenseBank.limitScaled100[
+            (1 + snapshot.yearCount + month - 1) * targetCount
+        ]
+        assertEquals(18_000L, resolved(2))
+        assertEquals(22_000L, resolved(3))
+        assertEquals(18_000L, resolved(9))
+        assertEquals(20_000L, resolved(10))
+        assertEquals(25_000L, resolved(12))
     }
 
     private fun category(id: String, name: String) = FluviCategoryEntity(

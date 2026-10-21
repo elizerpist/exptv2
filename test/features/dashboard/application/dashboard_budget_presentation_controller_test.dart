@@ -936,10 +936,10 @@ void main() {
       selection.visual.annualSegments[1].health,
       BudgetProgressRingAnnualSegmentHealth.neutral,
     );
-    expect(
-      presentation.value.header.editContext,
-      isA<DashboardBudgetYearLimitEditContext>(),
-    );
+    // A current-year quick edit would own all twelve overrides, including
+    // completed history.  The new effective-dated policy deliberately
+    // fail-closes it; exact historical corrections belong in the manager.
+    expect(presentation.value.header.editContext, isNull);
   });
 
   test(
@@ -976,7 +976,10 @@ void main() {
       expect(analysis.canonicalActualScaled100ForLimitEdit, isNull);
       expect(
         selection.limitKey!.period,
-        const FinancialLimitBaseMonthlyPeriod(),
+        FinancialLimitBaseMonthlyRevisionPeriod(
+          _defaultAsOfDate.year,
+          _defaultAsOfDate.month,
+        ),
       );
       expect(
         selection.visual.chromeGeometry,
@@ -1551,6 +1554,13 @@ PreparedBudgetLimitSnapshot _typicalMonthSnapshot() {
   );
   cells[5 * 2 + 1] = const PreparedBudgetLimitCell(
     actualScaled100: 200,
+    limitScaled100: 200,
+    limitSource: PreparedBudgetLimitSource.base,
+  );
+  // SUM's editable base resolves from the core logical current month, never
+  // from the timeless SUM slice.  Keep this dense fixture explicit.
+  cells[15 * 2 + 1] = const PreparedBudgetLimitCell(
+    actualScaled100: 0,
     limitScaled100: 200,
     limitSource: PreparedBudgetLimitSource.base,
   );

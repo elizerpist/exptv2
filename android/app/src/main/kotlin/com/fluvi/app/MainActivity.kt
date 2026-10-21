@@ -455,7 +455,10 @@ class MainActivity : FlutterActivity() {
             else -> throw IllegalArgumentException("Unknown financial-limit target kind.")
         }
         val period = when (requireMapArgument<String>(arguments, "periodKind")) {
-            "base" -> FluviFinancialLimitPeriod.BaseMonthly
+            "base" -> FluviFinancialLimitPeriod.BaseMonthlyRevision(
+                requireMapArgument(arguments, "year"),
+                requireMapArgument(arguments, "month"),
+            )
             "month" -> FluviFinancialLimitPeriod.MonthOverride(
                 requireMapArgument(arguments, "year"),
                 requireMapArgument(arguments, "month"),

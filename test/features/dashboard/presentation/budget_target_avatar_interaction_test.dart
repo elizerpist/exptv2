@@ -38,4 +38,30 @@ void main() {
     await tester.pump();
     expect(scale().scale, 1);
   });
+
+  testWidgets('clean tap is distinct from a long press', (tester) async {
+    var taps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 80,
+              height: 80,
+              child: BudgetTargetAvatarInteraction(
+                onTap: () => taps += 1,
+                child: const ColoredBox(color: Colors.blue),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final target = find.byType(BudgetTargetAvatarInteraction);
+    await tester.tap(target);
+    expect(taps, 1);
+    await tester.longPress(target);
+    expect(taps, 1);
+  });
 }

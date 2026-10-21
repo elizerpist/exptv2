@@ -82,8 +82,13 @@ final class MethodChannelFinancialLimitRepository
         result['categoryId'] = categoryId;
     }
     switch (key.period) {
-      case FinancialLimitBaseMonthlyPeriod():
+      case FinancialLimitBaseMonthlyRevisionPeriod(
+        :final effectiveFromYear,
+        :final effectiveFromMonth,
+      ):
         result['periodKind'] = 'base';
+        result['year'] = effectiveFromYear;
+        result['month'] = effectiveFromMonth;
       case FinancialLimitMonthOverridePeriod(:final year, :final month):
         result['periodKind'] = 'month';
         result['year'] = year;
@@ -102,7 +107,10 @@ final class MethodChannelFinancialLimitRepository
       _ => throw const FormatException('Invalid financial limit target.'),
     };
     final period = switch (_string(raw, 'periodKind')) {
-      'base' => const FinancialLimitBaseMonthlyPeriod(),
+      'base' => FinancialLimitBaseMonthlyRevisionPeriod(
+        _int(raw, 'year'),
+        _int(raw, 'month'),
+      ),
       'month' => FinancialLimitMonthOverridePeriod(
         _int(raw, 'year'),
         _int(raw, 'month'),

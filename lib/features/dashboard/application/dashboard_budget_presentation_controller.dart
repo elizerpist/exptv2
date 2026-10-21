@@ -627,6 +627,22 @@ final class DashboardBudgetPresentationController
   final LocalDate _logicalAsOfDate;
   final DashboardBudgetLimitEditController? _limitEditController;
   final ValueChanged<int>? _onInputUpdated;
+
+  /// Read-only manager inputs.  They expose the already prepared exact frame
+  /// to the fullscreen editor without adding any dashboard hot-path I/O.
+  PreparedBudgetLimitSnapshot? get preparedSnapshotForManager =>
+      _snapshotForCurrentFrame();
+
+  LocalDate get logicalAsOfDateForManager => _logicalAsOfDate;
+
+  DashboardBudgetTarget? targetForManagerHandle(int handle) {
+    final catalog = _catalog;
+    if (catalog == null || handle < 0 || handle >= catalog.targetCount) {
+      return null;
+    }
+    return catalog.targetAtHandle(handle);
+  }
+
   DashboardBudgetEditContext? _lastDirectInputEditContext;
 
   /// Read-only correlation metadata for a renderer acknowledgement. The
@@ -877,6 +893,7 @@ final class DashboardBudgetPresentationController
   DashboardBudgetEditContext? directInputEditContext() {
     final authority = _currentVisibleEditAuthority();
     if (authority == null) return null;
+    if (!_quickEditScopeIsWritable(authority.scope)) return null;
     final retained = _lastDirectInputEditContext;
     if (retained != null && _matchesDirectInputAuthority(retained, authority)) {
       return retained;
@@ -1354,13 +1371,20 @@ final class DashboardBudgetPresentationController
     final preparedBudgetPeriod = DashboardBudgetPeriodResolver.fromTimeScope(
       visibleScope,
     );
+    // SUM is a historical analysis, but its editable base value is the
+    // revision effective in the core logical current month.  The native SUM
+    // cell deliberately has no logical-date input, so never use its newest
+    // (possibly future-dated) revision as this editor's denominator.
+    final cellPeriod = visibleScope is AllTimeScope
+        ? BudgetLimitPeriod.month(_logicalAsOfDate.year, _logicalAsOfDate.month)
+        : preparedBudgetPeriod;
     final key = _financialLimitKeyFor(target, period: preparedBudgetPeriod);
     _limitEditController?.invalidateIfContextChanged(key);
     late final PreparedBudgetLimitCell cell;
     try {
       cell = preparedSnapshot.cellAt(
         direction: _direction,
-        period: preparedBudgetPeriod,
+        period: cellPeriod,
         targetHandle: target.handle,
       );
     } on RangeError {
@@ -1542,6 +1566,7 @@ final class DashboardBudgetPresentationController
     required FinancialLimitKey? scalarKey,
     required int coreRevision,
   }) {
+    if (!_quickEditScopeIsWritable(visibleScope)) return null;
     if (visibleScope is YearScope &&
         scopeAnalysis is DashboardBudgetYearAnalysis) {
       return DashboardBudgetYearLimitEditContext(
@@ -1575,6 +1600,22 @@ final class DashboardBudgetPresentationController
     );
   }
 
+  /// The dashboard drag stays a current/future shortcut.  It must never make
+  /// a historical mutation implicit: past months are corrected only through
+  /// the manager's explicit exact-month override sheet.  A current YEAR is
+  /// fail-closed because its legacy batch editor owns all twelve months and
+  /// would otherwise overwrite completed history.
+  bool _quickEditScopeIsWritable(LedgerTimeScope scope) => switch (scope) {
+    AllTimeScope() => true,
+    YearScope(:final year) => year > _logicalAsOfDate.year,
+    MonthScope(:final value) =>
+      value.year * 12 + value.month >=
+          _logicalAsOfDate.year * 12 + _logicalAsOfDate.month,
+    DayScope(:final date) =>
+      date.year * 12 + date.month >=
+          _logicalAsOfDate.year * 12 + _logicalAsOfDate.month,
+  };
+
   /// Resolves an optimistic edit without allowing a pending base mutation to
   /// overwrite an explicit month override. Provenance arrives with the dense
   /// prepared bank, so this is O(1) and never falls back to a repository read.
@@ -1598,13 +1639,18 @@ final class DashboardBudgetPresentationController
       }
     }
     if (period is! BudgetLimitMonthPeriod ||
-        cell.limitSource != PreparedBudgetLimitSource.base) {
+        cell.limitSource != PreparedBudgetLimitSource.base ||
+        period.year * 12 + period.month <
+            _logicalAsOfDate.year * 12 + _logicalAsOfDate.month) {
       return cell.limitScaled100;
     }
     final baseKey = _baseMonthlyLimitKeyFor(target);
     final baseCell = snapshot.cellAt(
       direction: _direction,
-      period: const BudgetLimitPeriod.sum(),
+      period: BudgetLimitPeriod.month(
+        _logicalAsOfDate.year,
+        _logicalAsOfDate.month,
+      ),
       targetHandle: target.handle,
     );
     edits.observePreparedLimit(
@@ -2005,7 +2051,10 @@ final class DashboardBudgetPresentationController
     required BudgetLimitPeriod period,
   }) {
     final storedPeriod = switch (period) {
-      BudgetLimitSumPeriod() => const FinancialLimitBaseMonthlyPeriod(),
+      BudgetLimitSumPeriod() => FinancialLimitBaseMonthlyRevisionPeriod(
+        _logicalAsOfDate.year,
+        _logicalAsOfDate.month,
+      ),
       // A YEAR limit is a derived twelve-month vector, not one stored key.
       BudgetLimitYearPeriod() => null,
       BudgetLimitMonthPeriod(:final year, :final month) =>
@@ -2023,20 +2072,28 @@ final class DashboardBudgetPresentationController
       FinancialLimitKey(
         direction: _financialLimitDirection,
         target: _financialLimitTargetFor(target),
-        period: const FinancialLimitBaseMonthlyPeriod(),
+        period: FinancialLimitBaseMonthlyRevisionPeriod(
+          _logicalAsOfDate.year,
+          _logicalAsOfDate.month,
+        ),
       );
 
   /// One diagnostic representation for the scalar financial-limit identity
   /// carried by the selected progress visual. Renderer acknowledgements use
   /// this existing presentation owner instead of reproducing period parsing
   /// in their widgets.
-  static String financialLimitPeriodDiagnosticName(FinancialLimitKey? key) =>
-      switch (key?.period) {
-        FinancialLimitBaseMonthlyPeriod() => 'base-monthly',
-        FinancialLimitMonthOverridePeriod(:final year, :final month) =>
-          'month:$year-${month.toString().padLeft(2, '0')}',
-        null => 'unavailable',
-      };
+  static String financialLimitPeriodDiagnosticName(
+    FinancialLimitKey? key,
+  ) => switch (key?.period) {
+    FinancialLimitBaseMonthlyRevisionPeriod(
+      :final effectiveFromYear,
+      :final effectiveFromMonth,
+    ) =>
+      'base:$effectiveFromYear-${effectiveFromMonth.toString().padLeft(2, '0')}',
+    FinancialLimitMonthOverridePeriod(:final year, :final month) =>
+      'month:$year-${month.toString().padLeft(2, '0')}',
+    null => 'unavailable',
+  };
 
   FinancialLimitDirection get _financialLimitDirection => switch (_direction) {
     LedgerDirection.income => FinancialLimitDirection.income,

@@ -63,7 +63,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -373,6 +373,62 @@ internal abstract class FluviDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Replaces the v6 timeless `base` row with an effective-dated base
+         * revision.  Every old base starts at the first representable month,
+         * preserving all already-stored historical denominators.  The
+         * migration is atomic and naturally idempotent: Room runs it exactly
+         * once while moving a v6 database to v7, and the destination contains
+         * no legacy `period_key = 'base'` row afterwards.
+         */
+        val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE fluvi_financial_limits_v7 (" +
+                        "direction TEXT NOT NULL, target_kind TEXT NOT NULL, target_key TEXT NOT NULL, " +
+                        "category_id TEXT, period_kind TEXT NOT NULL, period_key TEXT NOT NULL, " +
+                        "year INTEGER, month INTEGER, limit_amount_scaled_100 INTEGER NOT NULL, " +
+                        "created_at_utc_ms INTEGER NOT NULL, updated_at_utc_ms INTEGER NOT NULL, " +
+                        "PRIMARY KEY(direction, target_key, period_key), " +
+                        "FOREIGN KEY(category_id) REFERENCES fluvi_categories(id) ON DELETE CASCADE, " +
+                        "CHECK(limit_amount_scaled_100 >= 0), " +
+                        "CHECK((target_kind = 'aggregate' AND target_key = 'aggregate' AND category_id IS NULL) " +
+                        "OR (target_kind = 'category' AND category_id IS NOT NULL AND target_key = category_id)), " +
+                        "CHECK((period_kind = 'base' AND year IS NOT NULL AND month BETWEEN 1 AND 12 " +
+                        "AND period_key = ('base:' || year || '-' || month)) " +
+                        "OR (period_kind = 'month' AND year IS NOT NULL AND month BETWEEN 1 AND 12 " +
+                        "AND period_key = ('month:' || year || '-' || month))))",
+                )
+                // Explicit overrides retain their exact identity and values.
+                db.execSQL(
+                    "INSERT INTO fluvi_financial_limits_v7 " +
+                        "SELECT direction, target_kind, target_key, category_id, period_kind, period_key, " +
+                        "year, month, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms " +
+                        "FROM fluvi_financial_limits WHERE period_kind = 'month'",
+                )
+                // A v6 base was timeless.  0001-01 is deliberately earlier
+                // than any supported ledger month, so the upgrade preserves
+                // historic resolution exactly while enabling later revisions.
+                db.execSQL(
+                    "INSERT INTO fluvi_financial_limits_v7 " +
+                        "SELECT direction, target_kind, target_key, category_id, 'base', 'base:1-1', " +
+                        "1, 1, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms " +
+                        "FROM fluvi_financial_limits WHERE period_kind = 'base' AND period_key = 'base'",
+                )
+                db.execSQL("DROP TABLE fluvi_financial_limits")
+                db.execSQL("ALTER TABLE fluvi_financial_limits_v7 RENAME TO fluvi_financial_limits")
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_financial_limits_category_id " +
+                        "ON fluvi_financial_limits(category_id)",
+                )
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_financial_limits_direction_period_kind_year_month " +
+                        "ON fluvi_financial_limits(direction, period_kind, year, month)",
+                )
+                createFinancialLimitIntegrityTriggers(db)
+            }
+        }
+
         fun seedCallback(clock: FluviClock): Callback = object : Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 val now = clock.nowUtcMs()
@@ -474,7 +530,8 @@ internal abstract class FluviDatabase : RoomDatabase() {
                         OR (NEW.target_kind = 'category' AND
                             (NEW.category_id IS NULL OR NEW.target_key != NEW.category_id))
                         OR (NEW.period_kind = 'base' AND
-                            (NEW.period_key != 'base' OR NEW.year IS NOT NULL OR NEW.month IS NOT NULL))
+                            (NEW.year IS NULL OR NEW.month NOT BETWEEN 1 AND 12 OR
+                             NEW.period_key != ('base:' || NEW.year || '-' || NEW.month)))
                         OR (NEW.period_kind = 'month' AND
                             (NEW.year IS NULL OR NEW.month NOT BETWEEN 1 AND 12 OR
                              NEW.period_key != ('month:' || NEW.year || '-' || NEW.month)))

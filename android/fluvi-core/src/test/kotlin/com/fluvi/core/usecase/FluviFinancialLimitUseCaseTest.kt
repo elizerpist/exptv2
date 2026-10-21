@@ -53,7 +53,7 @@ class FluviFinancialLimitUseCaseTest {
         val key = FluviFinancialLimitKey(
             direction = LedgerDirection.expense,
             target = FluviFinancialLimitTarget.Aggregate,
-            period = FluviFinancialLimitPeriod.BaseMonthly,
+            period = FluviFinancialLimitPeriod.BaseMonthlyRevision(2026, 10),
         )
         val initialRevision = revisions.current()
 
