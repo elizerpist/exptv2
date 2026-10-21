@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/assets/prepared_vector_asset_atlas.dart';
+import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../../../core/financial_limits/domain/financial_limit.dart';
 import '../../../../core/financial_limits/domain/financial_limit_resolution.dart';
+import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../../dashboard/application/dashboard_budget_limit_edit_controller.dart';
 import '../../../dashboard/application/dashboard_budget_presentation_controller.dart';
 import '../../../dashboard/application/dashboard_budget_secondary_analysis.dart';
@@ -10,6 +14,7 @@ import '../../query/domain/ledger_direction.dart';
 import '../../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/local_date.dart';
+import 'budget_target_avatar_carousel.dart';
 
 /// Frozen intent emitted by the selected avatar.  The rail only emits this
 /// presentation request; this fullscreen editor remains owned by the Budget
@@ -39,8 +44,9 @@ final class BudgetLimitManagerRequest {
 }
 
 /// Fullscreen, manual Budget-limit editor.  It intentionally consumes the
-/// dashboard's immutable prepared bank for visuals; the one timeline read on
-/// open exists only to distinguish historical base revisions from overrides.
+/// dashboard's immutable prepared bank for visuals; the one direction-wide
+/// timeline read on open is indexed locally so target browsing never reads
+/// persistence while still distinguishing historical revisions from overrides.
 final class BudgetLimitManager extends StatefulWidget {
   const BudgetLimitManager({
     required this.request,
@@ -59,7 +65,14 @@ final class BudgetLimitManager extends StatefulWidget {
 
 final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   late int _year;
-  List<FinancialLimit> _timeline = const <FinancialLimit>[];
+  late final CenteredCarouselController _avatarCarouselController;
+  List<BudgetTargetAvatarCarouselItem> _avatarItems =
+      const <BudgetTargetAvatarCarouselItem>[];
+  Map<int, List<FinancialLimit>> _timelineByTargetHandle =
+      const <int, List<FinancialLimit>>{};
+  late int _activeTargetHandle;
+  bool _carouselInMotion = false;
+  bool _monthSheetOpen = false;
   bool _loadingTimeline = true;
 
   FinancialLimitDirection get _direction => switch (widget.request.direction) {
@@ -67,9 +80,23 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     LedgerDirection.expense => FinancialLimitDirection.expense,
   };
 
-  FinancialLimitTarget get _target => widget.request.target.isAggregate
-      ? const FinancialLimitAggregateTarget()
-      : FinancialLimitCategoryTarget(widget.request.target.category!.id);
+  DashboardBudgetTarget get _activeTarget =>
+      widget.presentation.targetForManagerHandle(_activeTargetHandle) ??
+      widget.request.target;
+
+  FinancialLimitTarget get _target => _financialTargetFor(_activeTarget);
+
+  String get _title => _activeAvatar?.title ?? widget.request.title;
+  Color get _accent => _activeAvatar?.color ?? widget.request.accent;
+  BudgetTargetAvatarCarouselItem? get _activeAvatar {
+    for (final item in _avatarItems) {
+      if (item.targetHandle == _activeTargetHandle) return item;
+    }
+    return null;
+  }
+
+  List<FinancialLimit> get _timeline =>
+      _timelineByTargetHandle[_activeTargetHandle] ?? const <FinancialLimit>[];
 
   LocalDate get _logicalDate => widget.presentation.logicalAsOfDateForManager;
 
@@ -77,20 +104,72 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   void initState() {
     super.initState();
     _year = _logicalDate.year;
+    _activeTargetHandle = widget.request.targetHandle;
+    _avatarCarouselController = CenteredCarouselController(initialIndex: 0);
+    widget.presentation.addListener(_onPresentationChanged);
     _loadTimeline();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _refreshAvatarItems();
+  }
+
+  void _onPresentationChanged() {
+    if (!mounted) return;
+    _refreshAvatarItems();
+  }
+
+  void _refreshAvatarItems() {
+    final atlas = PreparedVectorAssetAtlas.instance;
+    if (!atlas.isReady) return;
+    final profile = CategoryAvatarColorProfileScope.profileOf(context);
+    final next = BudgetTargetAvatarCarouselItem.prepareAll(
+      widget.presentation.value.items,
+      atlas,
+      avatarColorProfile: profile,
+    );
+    if (_sameAvatarItems(_avatarItems, next)) return;
+    _avatarItems = next;
+    final index = next.indexWhere(
+      (item) => item.targetHandle == _activeTargetHandle,
+    );
+    _avatarCarouselController.installSemanticDomain(
+      dataMode: CenteredCarouselDataMode.cyclic,
+      finiteLength: next.length,
+      selectedLogicalIndex: index < 0 ? 0 : index,
+    );
+  }
+
+  @override
+  void dispose() {
+    widget.presentation.removeListener(_onPresentationChanged);
+    _avatarCarouselController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadTimeline() async {
-    final values = await widget.limitEdits.loadLimitTimeline(
+    final values = await widget.limitEdits.loadLimitTimelinesForDirection(
       direction: _direction,
-      target: _target,
     );
     if (!mounted) return;
     setState(() {
-      _timeline = values;
+      _timelineByTargetHandle = _indexTimelineByTarget(values);
       _loadingTimeline = false;
     });
   }
+
+  Map<int, List<FinancialLimit>> _indexTimelineByTarget(
+    List<FinancialLimit> values,
+  ) => Map<int, List<FinancialLimit>>.unmodifiable({
+    for (final item in widget.presentation.value.items)
+      item.target.handle: List<FinancialLimit>.unmodifiable(
+        values.where(
+          (limit) => limit.key.target == _financialTargetFor(item.target),
+        ),
+      ),
+  });
 
   int? _resolvedLimit(int year, int month) {
     return FinancialLimitResolution.resolve(
@@ -125,22 +204,32 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   int? get _currentBase =>
       _resolvedLimit(_logicalDate.year, _logicalDate.month);
 
-  void _replaceLocal(FinancialLimit limit) {
+  void _replaceLocal(FinancialLimit limit, {required int targetHandle}) {
     setState(() {
-      _timeline = <FinancialLimit>[
-        for (final current in _timeline)
-          if (current.key != limit.key) current,
-        limit,
-      ];
+      _timelineByTargetHandle = <int, List<FinancialLimit>>{
+        ..._timelineByTargetHandle,
+        targetHandle: <FinancialLimit>[
+          for (final current
+              in _timelineByTargetHandle[targetHandle] ??
+                  const <FinancialLimit>[])
+            if (current.key != limit.key) current,
+          limit,
+        ],
+      };
     });
   }
 
-  void _removeLocal(FinancialLimitKey key) {
+  void _removeLocal(FinancialLimitKey key, {required int targetHandle}) {
     setState(() {
-      _timeline = <FinancialLimit>[
-        for (final current in _timeline)
-          if (current.key != key) current,
-      ];
+      _timelineByTargetHandle = <int, List<FinancialLimit>>{
+        ..._timelineByTargetHandle,
+        targetHandle: <FinancialLimit>[
+          for (final current
+              in _timelineByTargetHandle[targetHandle] ??
+                  const <FinancialLimit>[])
+            if (current.key != key) current,
+        ],
+      };
     });
   }
 
@@ -148,6 +237,8 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     // Capture the prepared/current value before the manager's optimistic
     // timeline replaces it.  The shared write coordinator needs that value
     // for a correct later reconciliation of this exact revision key.
+    final targetHandle = _activeTargetHandle;
+    final target = _target;
     final confirmedBase = _currentBase;
     final period = FinancialLimitBaseMonthlyRevisionPeriod(
       _logicalDate.year,
@@ -155,7 +246,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     );
     final key = FinancialLimitKey(
       direction: _direction,
-      target: _target,
+      target: target,
       period: period,
     );
     _replaceLocal(
@@ -165,25 +256,28 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         createdAtUtcMs: 0,
         updatedAtUtcMs: 0,
       ),
+      targetHandle: targetHandle,
     );
     await widget.limitEdits.setBaseLimitEffectiveFromCurrentMonth(
       direction: _direction,
-      target: _target,
+      target: target,
       effectiveFromYear: _logicalDate.year,
       effectiveFromMonth: _logicalDate.month,
       coreRevision:
           widget.presentation.preparedSnapshotForManager?.coreRevision ??
           widget.request.coreRevision,
-      targetHandle: widget.request.targetHandle,
+      targetHandle: targetHandle,
       confirmedLimitScaled100: confirmedBase,
       amountScaled100: amount,
     );
   }
 
   Future<void> _setOverride(int year, int month, int amount) async {
+    final targetHandle = _activeTargetHandle;
+    final target = _target;
     final key = FinancialLimitKey(
       direction: _direction,
-      target: _target,
+      target: target,
       period: FinancialLimitMonthOverridePeriod(year, month),
     );
     _replaceLocal(
@@ -193,20 +287,21 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         createdAtUtcMs: 0,
         updatedAtUtcMs: 0,
       ),
+      targetHandle: targetHandle,
     );
     final snapshot = widget.presentation.preparedSnapshotForManager;
     await widget.limitEdits.setMonthOverride(
       direction: _direction,
-      target: _target,
+      target: target,
       year: year,
       month: month,
       coreRevision: snapshot?.coreRevision ?? widget.request.coreRevision,
-      targetHandle: widget.request.targetHandle,
+      targetHandle: targetHandle,
       confirmedLimitScaled100: snapshot
           ?.cellAt(
             direction: widget.request.direction,
             period: BudgetLimitPeriod.month(year, month),
-            targetHandle: widget.request.targetHandle,
+            targetHandle: targetHandle,
           )
           .limitScaled100,
       amountScaled100: amount,
@@ -214,15 +309,17 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   }
 
   Future<void> _deleteOverride(int year, int month) async {
+    final targetHandle = _activeTargetHandle;
+    final target = _target;
     final key = FinancialLimitKey(
       direction: _direction,
-      target: _target,
+      target: target,
       period: FinancialLimitMonthOverridePeriod(year, month),
     );
-    _removeLocal(key);
+    _removeLocal(key, targetHandle: targetHandle);
     await widget.limitEdits.deleteMonthOverride(
       direction: _direction,
-      target: _target,
+      target: target,
       year: year,
       month: month,
     );
@@ -238,7 +335,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
           : DashboardBudgetSecondaryAnalysisProjector.project(
               snapshot: snapshot,
               direction: widget.request.direction,
-              targetHandle: widget.request.targetHandle,
+              targetHandle: _activeTargetHandle,
               scope: const AllTimeScope(),
               logicalAsOfDate: _logicalDate,
             ).payload;
@@ -258,10 +355,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
           title: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                widget.request.title,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
+              Text(_title, style: const TextStyle(fontWeight: FontWeight.w800)),
               Text(
                 widget.request.direction == LedgerDirection.expense
                     ? 'Kiadási keret'
@@ -285,7 +379,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Center(child: _avatar()),
+                          _avatarCarousel(),
                           const SizedBox(height: 14),
                           _baseEditorCard(),
                           const SizedBox(height: 10),
@@ -304,10 +398,40 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     },
   );
 
-  Widget _avatar() => SizedBox.square(
-    key: const ValueKey<String>('budget-limit-manager-avatar'),
-    dimension: 72,
-    child: widget.request.avatar,
+  Widget _avatarCarousel() => SizedBox(
+    key: const ValueKey<String>('budget-limit-manager-avatar-carousel'),
+    height: BudgetTargetAvatarCarouselGeometry.managerViewportHeight,
+    child: _avatarItems.length < 2
+        ? Center(
+            child: SizedBox.square(
+              key: const ValueKey<String>('budget-limit-manager-avatar'),
+              dimension: 72,
+              child: widget.request.avatar,
+            ),
+          )
+        : BudgetTargetAvatarCarousel(
+            items: _avatarItems,
+            controller: _avatarCarouselController,
+            height: BudgetTargetAvatarCarouselGeometry.managerViewportHeight,
+            onPreviewChanged: _onAvatarPreview,
+            onSelectionSettled: _onAvatarSettled,
+            onMotionStarted: (_) => setState(() => _carouselInMotion = true),
+            onMotionInterrupted: () =>
+                setState(() => _carouselInMotion = false),
+            itemBuilder: (context, item, metrics) {
+              final avatar = SizedBox.square(
+                dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+                child: item.avatarFor(selected: metrics.isSelected),
+              );
+              return metrics.isSelected
+                  ? SizedBox(
+                      height: BudgetTargetAvatarCarouselGeometry
+                          .selectedInputSurfaceHeight,
+                      child: Center(child: avatar),
+                    )
+                  : avatar;
+            },
+          ),
   );
 
   Widget _baseEditorCard() => Material(
@@ -315,11 +439,13 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     child: InkWell(
       key: const ValueKey<String>('budget-limit-manager-base-editor'),
       borderRadius: BorderRadius.circular(20),
-      onTap: () => _showAmountEditor(
-        title: 'Alap havi keret',
-        initial: _currentBase ?? 0,
-        onSave: _setBase,
-      ),
+      onTap: _carouselInMotion
+          ? null
+          : () => _showAmountEditor(
+              title: 'Alap havi keret',
+              initial: _currentBase ?? 0,
+              onSave: _setBase,
+            ),
       child: Ink(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
@@ -327,17 +453,12 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: <Color>[
-              Colors.white,
-              widget.request.accent.withValues(alpha: .13),
-            ],
+            colors: <Color>[Colors.white, _accent.withValues(alpha: .13)],
           ),
-          border: Border.all(
-            color: widget.request.accent.withValues(alpha: .22),
-          ),
+          border: Border.all(color: _accent.withValues(alpha: .22)),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: widget.request.accent.withValues(alpha: .12),
+              color: _accent.withValues(alpha: .12),
               offset: const Offset(1, 3),
               blurRadius: 10,
             ),
@@ -368,7 +489,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                     ),
                   ),
                 ),
-                Icon(Icons.edit_rounded, color: widget.request.accent),
+                Icon(Icons.edit_rounded, color: _accent),
               ],
             ),
             const SizedBox(height: 5),
@@ -422,9 +543,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                     value: average?.clamp(0.0, 1.0).toDouble(),
                     minHeight: 5,
                     backgroundColor: const Color(0xffe3e7ef),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      widget.request.accent,
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(_accent),
                   ),
                 ),
               ],
@@ -502,8 +621,8 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       final info = _monthInfo(snapshot, _year, month);
       return _BudgetLimitMonthCard(
         info: info,
-        accent: widget.request.accent,
-        onTap: () => _showMonthSheet(info),
+        accent: _accent,
+        onTap: _carouselInMotion ? null : () => _showMonthSheet(info),
       );
     },
   );
@@ -524,7 +643,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       cell = snapshot.cellAt(
         direction: widget.request.direction,
         period: BudgetLimitPeriod.month(year, month),
-        targetHandle: widget.request.targetHandle,
+        targetHandle: _activeTargetHandle,
       );
     }
     final override = _overrideFor(year, month);
@@ -540,6 +659,36 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       isFuture: isFuture,
       hasOverride: override != null,
     );
+  }
+
+  void _onAvatarPreview(int logicalIndex) {
+    if (_avatarItems.isEmpty) return;
+    final targetHandle =
+        _avatarItems[budgetTargetAvatarCarouselModulo(
+              logicalIndex,
+              _avatarItems.length,
+            )]
+            .targetHandle;
+    if (targetHandle == _activeTargetHandle) return;
+    if (_monthSheetOpen) {
+      _monthSheetOpen = false;
+      Navigator.of(context).maybePop();
+    }
+    setState(() => _activeTargetHandle = targetHandle);
+  }
+
+  void _onAvatarSettled(int logicalIndex) {
+    if (_avatarItems.isEmpty) return;
+    final targetHandle =
+        _avatarItems[budgetTargetAvatarCarouselModulo(
+              logicalIndex,
+              _avatarItems.length,
+            )]
+            .targetHandle;
+    setState(() {
+      _activeTargetHandle = targetHandle;
+      _carouselInMotion = false;
+    });
   }
 
   Future<void> _showAmountEditor({
@@ -559,25 +708,52 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   );
 
   Future<void> _showMonthSheet(_BudgetLimitMonthInfo info) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (sheetContext) => _BudgetLimitMonthSheet(
-        info: info,
-        accent: widget.request.accent,
-        onSetOverride: (amount) async {
-          await _setOverride(info.year, info.month, amount);
-          if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-        },
-        onDeleteOverride: () async {
-          await _deleteOverride(info.year, info.month);
-          if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-        },
-      ),
-    );
+    _monthSheetOpen = true;
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (sheetContext) => _BudgetLimitMonthSheet(
+          info: info,
+          accent: _accent,
+          onSetOverride: (amount) async {
+            await _setOverride(info.year, info.month, amount);
+            if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+          },
+          onDeleteOverride: () async {
+            await _deleteOverride(info.year, info.month);
+            if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+          },
+        ),
+      );
+    } finally {
+      _monthSheetOpen = false;
+    }
   }
+}
+
+FinancialLimitTarget _financialTargetFor(DashboardBudgetTarget target) =>
+    target.isAggregate
+    ? const FinancialLimitAggregateTarget()
+    : FinancialLimitCategoryTarget(target.category!.id);
+
+bool _sameAvatarItems(
+  List<BudgetTargetAvatarCarouselItem> current,
+  List<BudgetTargetAvatarCarouselItem> next,
+) {
+  if (current.length != next.length) return false;
+  for (var index = 0; index < current.length; index += 1) {
+    final existing = current[index];
+    final candidate = next[index];
+    if (existing.targetHandle != candidate.targetHandle ||
+        existing.stableId != candidate.stableId ||
+        existing.artworkIdentity != candidate.artworkIdentity) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /// Owns its [TextEditingController] for the full route lifetime.  The manager
@@ -723,7 +899,7 @@ final class _BudgetLimitMonthCard extends StatelessWidget {
 
   final _BudgetLimitMonthInfo info;
   final Color accent;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

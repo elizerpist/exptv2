@@ -8,10 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
-import '../../../../core/categories/catalog/category_color_catalog.dart';
-import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
-import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
 import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
@@ -23,6 +20,7 @@ import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import 'budget_limit_quick_edit_gesture.dart';
 import 'budget_limit_manager.dart';
+import 'budget_target_avatar_carousel.dart';
 import 'budget_target_avatar_interaction.dart';
 import 'budget_target_avatar_preview_coalescer.dart';
 import 'budget_target_avatar_rail_controller.dart';
@@ -110,11 +108,9 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// The selected shell is larger than the static avatar canvas. This is the
   /// rail's vertical input/layout surface; horizontal slots remain [_itemExtent].
   static const selectedInputSurfaceHeight =
-      BudgetCategoryAvatarGeometry.selectionShellVisualDiameter;
+      BudgetTargetAvatarCarouselGeometry.selectedInputSurfaceHeight;
   static const selectedInputVerticalOverflow =
-      (selectedInputSurfaceHeight -
-          BudgetCategoryAvatarGeometry.avatarCanvasSize) /
-      2;
+      BudgetTargetAvatarCarouselGeometry.selectedInputVerticalOverflow;
 
   @override
   State<BudgetTargetAvatarRail> createState() => _BudgetTargetAvatarRailState();
@@ -122,7 +118,7 @@ class BudgetTargetAvatarRail extends StatefulWidget {
 
 class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     implements BudgetTargetAvatarRailCommandDelegate {
-  static const _itemExtent = 58.0;
+  static const _itemExtent = BudgetTargetAvatarCarouselGeometry.itemExtent;
   // The human-diagnostic profile opts in with the dart define below; debug
   // tests also exercise the bounded evidence path. A normal release carries
   // neither a FrameTiming callback nor diagnostic buffers/timestamps on the
@@ -132,9 +128,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   static const _targetTimingStampCapacity = 16;
 
   late final CenteredCarouselController _controller;
-  late final CenteredCarouselSpec _spec;
-  List<_PreparedBudgetTargetAvatar> _items =
-      const <_PreparedBudgetTargetAvatar>[];
+  List<BudgetTargetAvatarCarouselItem> _items =
+      const <BudgetTargetAvatarCarouselItem>[];
   String? _installedCatalogDirection;
   int? _lastProgressIdentityMismatchSignature;
   BudgetLimitQuickEditGestureController? _quickEdit;
@@ -218,9 +213,6 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     super.initState();
     _controller = CenteredCarouselController(initialIndex: 0);
     _controller.scrollController.addListener(_onRawScrollUpdate);
-    _spec = CenteredCarouselPresets.budgetCategoryAvatarRail(
-      itemExtent: _itemExtent,
-    );
     _previewPublisher = BudgetTargetAvatarPreviewPublisher(
       onPublish: _publishPreviewTargetHandle,
     );
@@ -331,7 +323,10 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     if (_sameItems(_items, next) && !directionDomainChanged) return false;
     final previousCenterId = _items.isEmpty
         ? null
-        : _items[_modulo(_controller.selectedLogicalIndex, _items.length)]
+        : _items[budgetTargetAvatarCarouselModulo(
+                _controller.selectedLogicalIndex,
+                _items.length,
+              )]
               .stableId;
     final prepared = _prepareItems(next);
     // The presentation controller owns a separate remembered selection for
@@ -354,38 +349,28 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     return true;
   }
 
-  List<_PreparedBudgetTargetAvatar> _prepareItems(
+  List<BudgetTargetAvatarCarouselItem> _prepareItems(
     List<DashboardBudgetTargetPresentationItem> source,
   ) {
-    if (source.isEmpty) return const <_PreparedBudgetTargetAvatar>[];
+    if (source.isEmpty) return const <BudgetTargetAvatarCarouselItem>[];
     final atlas = PreparedVectorAssetAtlas.instance;
-    if (!atlas.isReady) return const <_PreparedBudgetTargetAvatar>[];
-    return List<_PreparedBudgetTargetAvatar>.unmodifiable([
-      for (final item in source)
-        _PreparedBudgetTargetAvatar.prepare(
-          item,
-          atlas,
-          avatarColorProfile: _avatarColorProfile,
-        ),
-    ]);
+    if (!atlas.isReady) return const <BudgetTargetAvatarCarouselItem>[];
+    return BudgetTargetAvatarCarouselItem.prepareAll(
+      source,
+      atlas,
+      avatarColorProfile: _avatarColorProfile,
+    );
   }
 
   bool _sameItems(
-    List<_PreparedBudgetTargetAvatar> current,
+    List<BudgetTargetAvatarCarouselItem> current,
     List<DashboardBudgetTargetPresentationItem> next,
   ) {
     if (current.length != next.length) return false;
     for (var index = 0; index < current.length; index += 1) {
       final existing = current[index];
       final candidate = next[index];
-      if (existing.stableId != candidate.stableId ||
-          existing.title != candidate.title ||
-          existing.baseColorArgb != candidate.baseColorArgb ||
-          existing.iconAssetKey != candidate.iconAssetKey ||
-          existing.colorId != candidate.colorId ||
-          existing.iconId != candidate.iconId ||
-          existing.gradientStartArgb != candidate.gradientStartArgb ||
-          existing.gradientEndArgb != candidate.gradientEndArgb ||
+      if (!existing.matches(candidate) ||
           existing.avatarColorProfile != _avatarColorProfile) {
         return false;
       }
@@ -396,7 +381,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   void _onPreviewChanged(int logicalIndex) {
     if (_items.isEmpty) return;
     final targetHandle =
-        _items[_modulo(logicalIndex, _items.length)].targetHandle;
+        _items[budgetTargetAvatarCarouselModulo(logicalIndex, _items.length)]
+            .targetHandle;
     _recordFirstAvatarSemanticCrossing(targetHandle);
     if (_activeMotionOrigin != null) {
       if (_collectFrameTimingDiagnostics) {
@@ -889,7 +875,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     if (origin != null) widget.onMotionActiveChanged?.call(false);
     final settledTargetHandle = _items.isEmpty
         ? null
-        : _items[_modulo(logicalIndex, _items.length)].targetHandle;
+        : _items[budgetTargetAvatarCarouselModulo(logicalIndex, _items.length)]
+              .targetHandle;
     final explicitTargetIntent =
         widget.navigationController?.isExplicitTargetIntentInFlight ?? false;
     _pendingSettleTargetHandle = origin == null || explicitTargetIntent
@@ -915,7 +902,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
           scope:
               'origin=${origin.name} settledLogicalIndex=$logicalIndex '
               'generation=$_motionGeneration phase=${_activeMotionPhase!.name} '
-              'settledTargetHandle=${_items[_modulo(logicalIndex, _items.length)].targetHandle} '
+              'settledTargetHandle=${_items[budgetTargetAvatarCarouselModulo(logicalIndex, _items.length)].targetHandle} '
               'crossingCount=$_motionSemanticCrossings '
               'previewCount=$_motionPreviewPublications',
         ),
@@ -1259,7 +1246,11 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       for (final offset
           in distance == 0 ? const <int>[0] : <int>[-distance, distance]) {
         final handle =
-            _items[_modulo(center + offset, _items.length)].targetHandle;
+            _items[budgetTargetAvatarCarouselModulo(
+                  center + offset,
+                  _items.length,
+                )]
+                .targetHandle;
         if (seen.add(handle)) handles.add(handle);
       }
     }
@@ -1285,94 +1276,85 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       key: const ValueKey('budget-target-avatar-rail'),
       child: _items.isEmpty
           ? const SizedBox.shrink()
-          : RepaintBoundary(
-              child: CenteredCarousel<_PreparedBudgetTargetAvatar>(
-                key: const ValueKey('budget-target-avatar-carousel'),
-                dataSource:
-                    CyclicCarouselDataSource<_PreparedBudgetTargetAvatar>(
-                      _items,
-                    ),
-                controller: _controller,
-                spec: _spec,
-                height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
-                semanticsLabelBuilder: (item) => item.title,
-                onPreviewChanged: _onPreviewChanged,
-                onDirectPointerDown: _onDirectPointerDown,
-                onPointerDownDecision: _recordAvatarPointerDecision,
-                onSelectionSettled: _onSelectionSettled,
-                onMotionStarted: _onMotionStarted,
-                onBallisticStarted: _onBallisticStarted,
-                onMotionInterrupted: _onMotionInterrupted,
-                itemBuilder: (context, item, metrics) {
-                  final avatar = SizedBox.square(
-                    dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
-                    child: item.avatarFor(
-                      selected: metrics.isSelected,
-                      selectedLiveSelectionListenable: metrics.isSelected
-                          ? widget.presentation
-                          : null,
-                      selectedLimitVisualForLiveSelection: metrics.isSelected
-                          ? () => widget.presentation.value.selectedLimitVisual
-                          : null,
-                      onSelectionVisualIdentityMismatch: () =>
-                          _recordProgressIdentityMismatch(item.targetHandle),
-                      onSelectionProgressBuilt:
-                          _collectFrameTimingDiagnostics && metrics.isSelected
-                          ? _recordBudgetProgressWidgetBuilt
-                          : null,
-                      onSelectionProgressPainted:
-                          _collectFrameTimingDiagnostics && metrics.isSelected
-                          ? _recordBudgetProgressPainted
-                          : null,
-                    ),
-                  );
-                  final interaction = BudgetTargetAvatarInteraction(
-                    onTap: metrics.isSelected
-                        ? () => _requestLimitManager(item)
+          : BudgetTargetAvatarCarousel(
+              items: _items,
+              controller: _controller,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              semanticsLabelBuilder: (item) => item.title,
+              onPreviewChanged: _onPreviewChanged,
+              onDirectPointerDown: _onDirectPointerDown,
+              onPointerDownDecision: _recordAvatarPointerDecision,
+              onSelectionSettled: _onSelectionSettled,
+              onMotionStarted: _onMotionStarted,
+              onBallisticStarted: _onBallisticStarted,
+              onMotionInterrupted: _onMotionInterrupted,
+              itemBuilder: (context, item, metrics) {
+                final avatar = SizedBox.square(
+                  dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+                  child: item.avatarFor(
+                    selected: metrics.isSelected,
+                    selectedLiveSelectionListenable: metrics.isSelected
+                        ? widget.presentation
                         : null,
-                    onPointerDown: metrics.isSelected && _quickEdit != null
-                        ? () => _recordQuickEditPointerDown(item.targetHandle)
+                    selectedLimitVisualForLiveSelection: metrics.isSelected
+                        ? () => widget.presentation.value.selectedLimitVisual
                         : null,
-                    onLongPressStart: metrics.isSelected && _quickEdit != null
-                        ? (details) => _startQuickEditForTarget(
-                            targetHandle: item.targetHandle,
-                            globalY: details.globalPosition.dy,
-                          )
+                    onSelectionVisualIdentityMismatch: () =>
+                        _recordProgressIdentityMismatch(item.targetHandle),
+                    onSelectionProgressBuilt:
+                        _collectFrameTimingDiagnostics && metrics.isSelected
+                        ? _recordBudgetProgressWidgetBuilt
                         : null,
-                    onLongPressMoveUpdate:
-                        metrics.isSelected && _quickEdit != null
-                        ? (details) => _quickEdit?.longPressMoved(
-                            globalY: details.globalPosition.dy,
-                          )
+                    onSelectionProgressPainted:
+                        _collectFrameTimingDiagnostics && metrics.isSelected
+                        ? _recordBudgetProgressPainted
                         : null,
-                    onLongPressEnd: metrics.isSelected && _quickEdit != null
-                        ? (_) => unawaited(
-                            _quickEdit?.longPressEnded() ??
-                                Future<void>.value(),
-                          )
-                        : null,
-                    onLongPressCancel: metrics.isSelected && _quickEdit != null
-                        ? () => unawaited(
-                            _quickEdit?.longPressEnded() ??
-                                Future<void>.value(),
-                          )
-                        : null,
-                    child: metrics.isSelected ? Center(child: avatar) : avatar,
-                  );
-                  return metrics.isSelected
-                      ? SizedBox(
-                          height:
-                              BudgetTargetAvatarRail.selectedInputSurfaceHeight,
-                          child: interaction,
+                  ),
+                );
+                final interaction = BudgetTargetAvatarInteraction(
+                  onTap: metrics.isSelected
+                      ? () => _requestLimitManager(item)
+                      : null,
+                  onPointerDown: metrics.isSelected && _quickEdit != null
+                      ? () => _recordQuickEditPointerDown(item.targetHandle)
+                      : null,
+                  onLongPressStart: metrics.isSelected && _quickEdit != null
+                      ? (details) => _startQuickEditForTarget(
+                          targetHandle: item.targetHandle,
+                          globalY: details.globalPosition.dy,
                         )
-                      : interaction;
-                },
-              ),
+                      : null,
+                  onLongPressMoveUpdate:
+                      metrics.isSelected && _quickEdit != null
+                      ? (details) => _quickEdit?.longPressMoved(
+                          globalY: details.globalPosition.dy,
+                        )
+                      : null,
+                  onLongPressEnd: metrics.isSelected && _quickEdit != null
+                      ? (_) => unawaited(
+                          _quickEdit?.longPressEnded() ?? Future<void>.value(),
+                        )
+                      : null,
+                  onLongPressCancel: metrics.isSelected && _quickEdit != null
+                      ? () => unawaited(
+                          _quickEdit?.longPressEnded() ?? Future<void>.value(),
+                        )
+                      : null,
+                  child: metrics.isSelected ? Center(child: avatar) : avatar,
+                );
+                return metrics.isSelected
+                    ? SizedBox(
+                        height:
+                            BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+                        child: interaction,
+                      )
+                    : interaction;
+              },
             ),
     );
   }
 
-  void _requestLimitManager(_PreparedBudgetTargetAvatar item) {
+  void _requestLimitManager(BudgetTargetAvatarCarouselItem item) {
     final callback = widget.onSelectedBudgetTargetManagerRequested;
     final selection = widget.presentation.value.liveSelection;
     final revision = selection.coreRevision;
@@ -1763,154 +1745,3 @@ final class _BudgetProgressPaintExpectation {
         paintVsyncMicros: value,
       );
 }
-
-final class _PreparedBudgetTargetAvatar {
-  _PreparedBudgetTargetAvatar._({
-    required this.targetHandle,
-    required this.stableId,
-    required this.title,
-    required this.baseColorArgb,
-    required this.iconAssetKey,
-    required this.colorId,
-    required this.iconId,
-    required this.gradientStartArgb,
-    required this.gradientEndArgb,
-    required this.avatarColorProfile,
-    required this.color,
-    required this.icon,
-    required this.artworkIdentity,
-    required this.faceGradient,
-  }) : _normalArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
-         BudgetCategoryAvatarSvg.avatarDisc(
-           color,
-           artworkIdentity,
-           variant: BudgetCategoryAvatarVariant.normalRail,
-           faceGradient: faceGradient,
-         ),
-       ),
-       _centeredCoreArtworkSource = BudgetCategoryAvatarSvg.flutterRenderable(
-         BudgetCategoryAvatarSvg.avatarDisc(
-           color,
-           artworkIdentity,
-           variant: BudgetCategoryAvatarVariant.centeredCore,
-           faceGradient: faceGradient,
-         ),
-       ),
-       _centeredShadowedArtworkSource =
-           BudgetCategoryAvatarSvg.flutterRenderable(
-             BudgetCategoryAvatarSvg.avatarDisc(
-               color,
-               artworkIdentity,
-               variant: BudgetCategoryAvatarVariant.centeredShadowed,
-               faceGradient: faceGradient,
-             ),
-           );
-
-  factory _PreparedBudgetTargetAvatar.prepare(
-    DashboardBudgetTargetPresentationItem item,
-    PreparedVectorAssetAtlas atlas, {
-    required CategoryAvatarColorProfile avatarColorProfile,
-  }) {
-    final categoryPalette =
-        item.colorId == null ||
-            avatarColorProfile == CategoryAvatarColorProfile.original
-        ? null
-        : CategoryAvatarPaletteCatalog.tokenFor(
-            avatarColorProfile,
-            CategoryColorCatalog.handleOf(item.colorId!),
-          );
-    final categoryColor =
-        categoryPalette?.middleColor ??
-        (item.colorId == null
-            ? Color(item.baseColorArgb)
-            : CategoryColorCatalog.resolve(item.colorId!).middleColor);
-    final icon = switch (item.iconAssetKey) {
-      'dollar-sign' => atlas.categoryIcon(
-        CategoryIconCatalog.handleOf('icon_17'),
-      ),
-      'banknote' => atlas.picture(
-        PreparedVectorAssetAtlas.budgetIncomeGoalBanknoteHandle,
-      ),
-      _ => atlas.categoryIcon(CategoryIconCatalog.handleOf(item.iconId!)),
-    };
-    final start = categoryPalette?.colorA.toARGB32() ?? item.gradientStartArgb;
-    final end = categoryPalette?.colorB.toARGB32() ?? item.gradientEndArgb;
-    return _PreparedBudgetTargetAvatar._(
-      targetHandle: item.target.handle,
-      stableId: item.stableId,
-      title: item.title,
-      baseColorArgb: item.baseColorArgb,
-      iconAssetKey: item.iconAssetKey,
-      colorId: item.colorId,
-      iconId: item.iconId,
-      gradientStartArgb: start,
-      gradientEndArgb: end,
-      avatarColorProfile: avatarColorProfile,
-      color: categoryColor,
-      icon: icon,
-      artworkIdentity: Object.hash(
-        item.stableId,
-        avatarColorProfile,
-        categoryColor.toARGB32(),
-        start,
-        end,
-      ),
-      faceGradient: start == null || end == null
-          ? null
-          : BudgetCategoryAvatarFaceGradient(
-              start: Color(start),
-              middle: categoryColor,
-              end: Color(end),
-            ),
-    );
-  }
-
-  final int targetHandle;
-  final String stableId;
-  final String title;
-  final int baseColorArgb;
-  final String iconAssetKey;
-  final String? colorId;
-  final String? iconId;
-  final int? gradientStartArgb;
-  final int? gradientEndArgb;
-  final CategoryAvatarColorProfile avatarColorProfile;
-  final Color color;
-  final PreparedVectorPicture icon;
-  final int artworkIdentity;
-  final BudgetCategoryAvatarFaceGradient? faceGradient;
-  final String _normalArtworkSource;
-  final String _centeredCoreArtworkSource;
-  final String _centeredShadowedArtworkSource;
-
-  Widget avatarFor({
-    required bool selected,
-    ValueListenable<BudgetCategoryAvatarSelectedLimitVisualState>?
-    selectedLimitVisualListenable,
-    Listenable? selectedLiveSelectionListenable,
-    BudgetCategoryAvatarSelectedLimitVisualState Function()?
-    selectedLimitVisualForLiveSelection,
-    VoidCallback? onSelectionVisualIdentityMismatch,
-    ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
-    onSelectionProgressBuilt,
-    BudgetCategoryAvatarProgressPainted? onSelectionProgressPainted,
-  }) => BudgetCategoryAvatarArtwork(
-    key: selected ? const ValueKey('budget-target-avatar-center') : null,
-    color: color,
-    icon: icon,
-    semanticsLabel: title,
-    svgSource: _normalArtworkSource,
-    centeredCoreSvgSource: _centeredCoreArtworkSource,
-    centeredShadowedSvgSource: _centeredShadowedArtworkSource,
-    selected: selected,
-    selectedTargetHandle: selected ? targetHandle : null,
-    selectedLimitVisualListenable: selectedLimitVisualListenable,
-    selectedLiveSelectionListenable: selectedLiveSelectionListenable,
-    selectedLimitVisualForLiveSelection: selectedLimitVisualForLiveSelection,
-    onSelectionVisualIdentityMismatch: onSelectionVisualIdentityMismatch,
-    onSelectionProgressBuilt: onSelectionProgressBuilt,
-    onSelectionProgressPainted: onSelectionProgressPainted,
-  );
-}
-
-int _modulo(int value, int divisor) => ((value % divisor) + divisor) % divisor;

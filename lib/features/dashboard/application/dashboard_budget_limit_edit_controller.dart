@@ -708,6 +708,18 @@ final class DashboardBudgetLimitEditController
     );
   }
 
+  /// One bounded manager-open acquisition for a direction's complete target
+  /// catalog. The fullscreen manager indexes this RAM snapshot by target, so
+  /// an avatar fling never makes a repository or MethodChannel call.
+  Future<List<FinancialLimit>> loadLimitTimelinesForDirection({
+    required FinancialLimitDirection direction,
+  }) async {
+    final all = await _repository.list();
+    return List<FinancialLimit>.unmodifiable(
+      all.where((limit) => limit.key.direction == direction),
+    );
+  }
+
   Future<void> _finishYearEdit(DashboardBudgetYearLimitEditSession session) {
     if (_activeYear?.generation != session.generation) {
       return Future<void>.value();
