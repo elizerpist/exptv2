@@ -8,6 +8,7 @@ import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/categories/domain/category_repository.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -87,6 +88,7 @@ class CoreDashboard extends StatefulWidget {
     required this.controller,
     required this.modeController,
     required this.categoryCollection,
+    this.categoryRepository,
     this.financialLimitRepository,
     this.onBudgetCategoryInputUpdated,
     this.preparedLogBoxRasters,
@@ -105,6 +107,10 @@ class CoreDashboard extends StatefulWidget {
   final DashboardCoreController controller;
   final DashboardCoreModeController modeController;
   final ValueListenable<List<FluviCategory>> categoryCollection;
+
+  /// The app-shell-owned category mutation authority.  It stays optional for
+  /// isolated dashboard hosts, where the Budget manager remains limit-only.
+  final CategoryRepository? categoryRepository;
   final FinancialLimitRepository? financialLimitRepository;
   final ValueChanged<int>? onBudgetCategoryInputUpdated;
 
@@ -1171,6 +1177,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                                         onMindTemporalEntryFrameStage: controller
                                             .recordMindTemporalEntrySurfaceStage,
                                         budgetPresentation: _budgetPresentation,
+                                        categoryCollection:
+                                            widget.categoryCollection,
+                                        categoryRepository:
+                                            widget.categoryRepository,
                                         budgetLimitEditController:
                                             _budgetLimitEdit,
                                         budgetDistributionDrawables:

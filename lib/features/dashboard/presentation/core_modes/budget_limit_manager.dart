@@ -1,8 +1,13 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
+import '../../../../core/categories/catalog/category_catalog.dart';
+import '../../../../core/categories/domain/category_repository.dart';
+import '../../../../core/categories/domain/fluvi_category.dart';
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
+import '../../../../core/categories/presentation/category_icon_view.dart';
 import '../../../../core/financial_limits/domain/financial_limit.dart';
 import '../../../../core/financial_limits/domain/financial_limit_resolution.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
@@ -54,12 +59,24 @@ final class BudgetLimitManager extends StatefulWidget {
     required this.request,
     required this.presentation,
     required this.limitEdits,
+    this.categoryCollection,
+    this.categoryRepository,
     super.key,
   });
 
   final BudgetLimitManagerRequest request;
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetLimitEditController limitEdits;
+
+  /// The root-owned live category inventory.  The manager observes it but
+  /// never keeps a second category catalog or performs category reads while
+  /// rendering.
+  final ValueListenable<List<FluviCategory>>? categoryCollection;
+
+  /// The one native category write authority.  It is deliberately explicit so
+  /// embedded/test hosts can remain limit-only without inventing another CRUD
+  /// queue.
+  final CategoryRepository? categoryRepository;
 
   @override
   State<BudgetLimitManager> createState() => _BudgetLimitManagerState();
@@ -74,14 +91,18 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   late final CenteredCarouselController _avatarCarouselController;
   List<BudgetTargetAvatarCarouselItem> _avatarItems =
       const <BudgetTargetAvatarCarouselItem>[];
+  List<FinancialLimit> _timelineValues = const <FinancialLimit>[];
   Map<int, List<FinancialLimit>> _timelineByTargetHandle =
       const <int, List<FinancialLimit>>{};
   late int _activeTargetHandle;
+  late String _activeTargetStableId;
+  String? _categoryIdToSelectAfterCollectionUpdate;
   bool _carouselInMotion = false;
   bool _monthSheetOpen = false;
   bool _loadingTimeline = true;
   var _perspective = BudgetLimitManagerPerspective.category;
   int? _allocationActiveCategoryHandle;
+  String? _allocationActiveCategoryStableId;
 
   FinancialLimitDirection get _direction => switch (widget.request.direction) {
     LedgerDirection.income => FinancialLimitDirection.income,
@@ -113,6 +134,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     super.initState();
     _year = _logicalDate.year;
     _activeTargetHandle = widget.request.targetHandle;
+    _activeTargetStableId = _stableIdForTarget(widget.request.target);
     _avatarCarouselController = CenteredCarouselController(initialIndex: 0);
     widget.presentation.addListener(_onPresentationChanged);
     _loadTimeline();
@@ -138,6 +160,48 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       atlas,
       avatarColorProfile: profile,
     );
+    if (next.isEmpty) {
+      _avatarItems = next;
+      return;
+    }
+    final matchingIndex = next.indexWhere(
+      (item) => item.stableId == _activeTargetStableId,
+    );
+    final pendingCategoryId = _categoryIdToSelectAfterCollectionUpdate;
+    final pendingIndex = pendingCategoryId == null
+        ? -1
+        : next.indexWhere(
+            (item) => item.stableId == 'category:$pendingCategoryId',
+          );
+    if (pendingIndex >= 0) {
+      _activeTargetStableId = next[pendingIndex].stableId;
+      _activeTargetHandle = next[pendingIndex].targetHandle;
+      _categoryIdToSelectAfterCollectionUpdate = null;
+    } else if (matchingIndex >= 0) {
+      _activeTargetHandle = next[matchingIndex].targetHandle;
+    } else {
+      // A deleted category cannot leave the manager pointing at a recycled
+      // positional handle.  Aggregate is the only stable safe fallback.
+      final aggregate = next.firstWhere(
+        (item) => item.stableId == 'aggregate',
+        orElse: () => next.first,
+      );
+      _activeTargetStableId = aggregate.stableId;
+      _activeTargetHandle = aggregate.targetHandle;
+    }
+    final allocationStableId = _allocationActiveCategoryStableId;
+    if (allocationStableId != null) {
+      final allocationIndex = next.indexWhere(
+        (item) => item.stableId == allocationStableId,
+      );
+      if (allocationIndex >= 0) {
+        _allocationActiveCategoryHandle = next[allocationIndex].targetHandle;
+      } else {
+        _allocationActiveCategoryStableId = null;
+        _allocationActiveCategoryHandle = null;
+      }
+    }
+    _timelineByTargetHandle = _indexTimelineByTarget(_timelineValues);
     if (_sameAvatarItems(_avatarItems, next)) return;
     _avatarItems = next;
     final index = next.indexWhere(
@@ -163,7 +227,8 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     );
     if (!mounted) return;
     setState(() {
-      _timelineByTargetHandle = _indexTimelineByTarget(values);
+      _timelineValues = List<FinancialLimit>.unmodifiable(values);
+      _timelineByTargetHandle = _indexTimelineByTarget(_timelineValues);
       _loadingTimeline = false;
     });
   }
@@ -223,6 +288,16 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   }
 
   int? _allocationCategoryHandle() {
+    final stableId = _allocationActiveCategoryStableId;
+    if (stableId != null) {
+      for (final item in _avatarItems) {
+        if (item.stableId == stableId &&
+            _targetForHandle(item.targetHandle)?.isAggregate == false) {
+          _allocationActiveCategoryHandle = item.targetHandle;
+          return item.targetHandle;
+        }
+      }
+    }
     final existing = _allocationActiveCategoryHandle;
     if (existing != null && _targetForHandle(existing)?.isAggregate == false) {
       return existing;
@@ -250,32 +325,24 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     )?.amountScaled100;
   }
 
-  void _replaceLocal(FinancialLimit limit, {required int targetHandle}) {
+  void _replaceLocal(FinancialLimit limit) {
     setState(() {
-      _timelineByTargetHandle = <int, List<FinancialLimit>>{
-        ..._timelineByTargetHandle,
-        targetHandle: <FinancialLimit>[
-          for (final current
-              in _timelineByTargetHandle[targetHandle] ??
-                  const <FinancialLimit>[])
-            if (current.key != limit.key) current,
-          limit,
-        ],
-      };
+      _timelineValues = List<FinancialLimit>.unmodifiable(<FinancialLimit>[
+        for (final current in _timelineValues)
+          if (current.key != limit.key) current,
+        limit,
+      ]);
+      _timelineByTargetHandle = _indexTimelineByTarget(_timelineValues);
     });
   }
 
-  void _removeLocal(FinancialLimitKey key, {required int targetHandle}) {
+  void _removeLocal(FinancialLimitKey key) {
     setState(() {
-      _timelineByTargetHandle = <int, List<FinancialLimit>>{
-        ..._timelineByTargetHandle,
-        targetHandle: <FinancialLimit>[
-          for (final current
-              in _timelineByTargetHandle[targetHandle] ??
-                  const <FinancialLimit>[])
-            if (current.key != key) current,
-        ],
-      };
+      _timelineValues = List<FinancialLimit>.unmodifiable(<FinancialLimit>[
+        for (final current in _timelineValues)
+          if (current.key != key) current,
+      ]);
+      _timelineByTargetHandle = _indexTimelineByTarget(_timelineValues);
     });
   }
 
@@ -310,7 +377,6 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         createdAtUtcMs: 0,
         updatedAtUtcMs: 0,
       ),
-      targetHandle: targetHandle,
     );
     await widget.limitEdits.setBaseLimitEffectiveFromCurrentMonth(
       direction: _direction,
@@ -350,7 +416,6 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         createdAtUtcMs: 0,
         updatedAtUtcMs: 0,
       ),
-      targetHandle: targetHandle,
     );
     final snapshot = widget.presentation.preparedSnapshotForManager;
     await widget.limitEdits.setMonthOverride(
@@ -387,7 +452,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       target: target,
       period: FinancialLimitMonthOverridePeriod(year, month),
     );
-    _removeLocal(key, targetHandle: targetHandle);
+    _removeLocal(key);
     await widget.limitEdits.deleteMonthOverride(
       direction: _direction,
       target: target,
@@ -460,6 +525,13 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                     : Icons.grid_view_rounded,
               ),
             ),
+            if (_canManageCategories)
+              IconButton(
+                key: const ValueKey<String>('budget-limit-manager-categories'),
+                tooltip: 'Kategóriák kezelése',
+                onPressed: _monthSheetOpen ? null : _showCategoryManager,
+                icon: const Icon(Icons.category_outlined),
+              ),
           ],
         ),
         body: SafeArea(
@@ -843,9 +915,11 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                 'budget-limit-manager-allocation-category-${item.target.handle}',
               ),
               borderRadius: BorderRadius.circular(12),
-              onTap: () => setState(
-                () => _allocationActiveCategoryHandle = item.target.handle,
-              ),
+              onTap: () => setState(() {
+                _allocationActiveCategoryHandle = item.target.handle;
+                _allocationActiveCategoryStableId =
+                    'category:${item.target.category!.id}';
+              }),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 5),
                 padding: const EdgeInsets.symmetric(
@@ -1201,30 +1275,34 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
 
   void _onAvatarPreview(int logicalIndex) {
     if (_avatarItems.isEmpty) return;
-    final targetHandle =
+    final item =
         _avatarItems[budgetTargetAvatarCarouselModulo(
-              logicalIndex,
-              _avatarItems.length,
-            )]
-            .targetHandle;
+          logicalIndex,
+          _avatarItems.length,
+        )];
+    final targetHandle = item.targetHandle;
     if (targetHandle == _activeTargetHandle) return;
     if (_monthSheetOpen) {
       _monthSheetOpen = false;
       Navigator.of(context).maybePop();
     }
-    setState(() => _activeTargetHandle = targetHandle);
+    setState(() {
+      _activeTargetHandle = targetHandle;
+      _activeTargetStableId = item.stableId;
+    });
   }
 
   void _onAvatarSettled(int logicalIndex) {
     if (_avatarItems.isEmpty) return;
-    final targetHandle =
+    final item =
         _avatarItems[budgetTargetAvatarCarouselModulo(
-              logicalIndex,
-              _avatarItems.length,
-            )]
-            .targetHandle;
+          logicalIndex,
+          _avatarItems.length,
+        )];
+    final targetHandle = item.targetHandle;
     setState(() {
       _activeTargetHandle = targetHandle;
+      _activeTargetStableId = item.stableId;
       _carouselInMotion = false;
     });
   }
@@ -1244,6 +1322,54 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       onSave: onSave,
     ),
   );
+
+  bool get _canManageCategories =>
+      widget.categoryRepository != null && widget.categoryCollection != null;
+
+  Future<void> _showCategoryManager() async {
+    final repository = widget.categoryRepository;
+    final categories = widget.categoryCollection;
+    if (repository == null || categories == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => _BudgetCategoryManagementSheet(
+        categories: categories,
+        repository: repository,
+        onCategoryCreated: (category) {
+          if (!mounted) return;
+          setState(() {
+            _categoryIdToSelectAfterCollectionUpdate = category.id;
+            final index = _avatarItems.indexWhere(
+              (item) => item.stableId == 'category:${category.id}',
+            );
+            if (index >= 0) {
+              _activeTargetStableId = _avatarItems[index].stableId;
+              _activeTargetHandle = _avatarItems[index].targetHandle;
+              _categoryIdToSelectAfterCollectionUpdate = null;
+            }
+            _allocationActiveCategoryStableId = 'category:${category.id}';
+            _allocationActiveCategoryHandle = null;
+          });
+        },
+        onCategoryDeleted: (categoryId) {
+          if (!mounted) return;
+          setState(() {
+            if (_activeTargetStableId == 'category:$categoryId') {
+              _activeTargetStableId = 'aggregate';
+              _activeTargetHandle = 0;
+            }
+            if (_allocationActiveCategoryStableId == 'category:$categoryId') {
+              _allocationActiveCategoryStableId = null;
+              _allocationActiveCategoryHandle = null;
+            }
+          });
+        },
+      ),
+    );
+  }
 
   Future<void> _showMonthSheet(_BudgetLimitMonthInfo info) async {
     final activeTargetHandle = _activeTargetHandle;
@@ -1355,6 +1481,13 @@ FinancialLimitTarget _financialTargetFor(DashboardBudgetTarget target) =>
     ? const FinancialLimitAggregateTarget()
     : FinancialLimitCategoryTarget(target.category!.id);
 
+String _stableIdForTarget(DashboardBudgetTarget target) =>
+    switch (target.identity) {
+      DashboardBudgetAggregateTarget() => 'aggregate',
+      DashboardBudgetCategoryTarget(:final categoryId) =>
+        'category:$categoryId',
+    };
+
 bool _sameAvatarItems(
   List<BudgetTargetAvatarCarouselItem> current,
   List<BudgetTargetAvatarCarouselItem> next,
@@ -1365,6 +1498,7 @@ bool _sameAvatarItems(
     final candidate = next[index];
     if (existing.targetHandle != candidate.targetHandle ||
         existing.stableId != candidate.stableId ||
+        existing.title != candidate.title ||
         existing.artworkIdentity != candidate.artworkIdentity) {
       return false;
     }
@@ -2387,6 +2521,534 @@ final class _BudgetLimitAllocationMonthSheetState
       Text(amount, style: const TextStyle(fontWeight: FontWeight.w900)),
     ],
   );
+}
+
+/// Manager-local CRUD shell over the app's one category collection and one
+/// native [CategoryRepository]. It intentionally contains no copied catalog,
+/// cache, or category persistence state: collection changes flow back through
+/// the root controller and naturally refresh the manager carousel.
+final class _BudgetCategoryManagementSheet extends StatelessWidget {
+  const _BudgetCategoryManagementSheet({
+    required this.categories,
+    required this.repository,
+    required this.onCategoryCreated,
+    required this.onCategoryDeleted,
+  });
+
+  final ValueListenable<List<FluviCategory>> categories;
+  final CategoryRepository repository;
+  final ValueChanged<FluviCategory> onCategoryCreated;
+  final ValueChanged<String> onCategoryDeleted;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * .82,
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Kategóriák kezelése',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Név, szín és ikon',
+                      style: TextStyle(fontSize: 12, color: Color(0xff68758e)),
+                    ),
+                  ],
+                ),
+              ),
+              FilledButton.icon(
+                key: const ValueKey<String>('budget-category-create'),
+                onPressed: () => _showEditor(context),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Új'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ValueListenableBuilder<List<FluviCategory>>(
+              valueListenable: categories,
+              builder: (context, values, _) {
+                if (values.isEmpty) {
+                  return const Center(
+                    child: Text('Még nincs kezelhető kategória.'),
+                  );
+                }
+                return ListView.separated(
+                  key: const ValueKey<String>('budget-category-manager-list'),
+                  itemCount: values.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final category = values[index];
+                    return _BudgetCategoryManagementRow(
+                      category: category,
+                      onEdit: category.isSystemUncategorized
+                          ? null
+                          : () => _showEditor(context, category: category),
+                      onDelete: category.isSystemUncategorized
+                          ? null
+                          : () => _confirmDelete(context, category),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Future<void> _showEditor(
+    BuildContext context, {
+    FluviCategory? category,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => _BudgetCategoryEditorSheet(
+        category: category,
+        repository: repository,
+        onCreated: onCategoryCreated,
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    FluviCategory category,
+  ) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Kategória törlése?'),
+        content: Text(
+          'A „${category.name}” kategória tranzakciói és kapcsolódó '
+          'referenciái az Egyéb kategóriába kerülnek.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            key: ValueKey<String>(
+              'budget-category-delete-confirm-${category.id}',
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xffc9465c),
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Törlés'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true || !context.mounted) return;
+    try {
+      await repository.deleteCategory(category.id);
+      onCategoryDeleted(category.id);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A kategória törlése nem sikerült.')),
+      );
+    }
+  }
+}
+
+final class _BudgetCategoryManagementRow extends StatelessWidget {
+  const _BudgetCategoryManagementRow({
+    required this.category,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final FluviCategory category;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: ValueKey<String>('budget-category-row-${category.id}'),
+    padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+    decoration: BoxDecoration(
+      color: const Color(0xfffbfcff),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: const Color(0xffe3e7ef)),
+    ),
+    child: Row(
+      children: [
+        _BudgetCategoryVisualPreview(
+          colorId: category.colorId,
+          iconId: category.iconId,
+          size: 38,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                category.name,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              Text(
+                category.isSystemUncategorized
+                    ? 'Rendszerkategória'
+                    : 'Kategória',
+                style: const TextStyle(fontSize: 11, color: Color(0xff68758e)),
+              ),
+            ],
+          ),
+        ),
+        if (onEdit != null)
+          IconButton(
+            key: ValueKey<String>('budget-category-edit-${category.id}'),
+            tooltip: 'Kategória szerkesztése',
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 20),
+          ),
+        if (onDelete != null)
+          IconButton(
+            key: ValueKey<String>('budget-category-delete-${category.id}'),
+            tooltip: 'Kategória törlése',
+            onPressed: onDelete,
+            icon: const Icon(
+              Icons.delete_outline_rounded,
+              size: 20,
+              color: Color(0xffc9465c),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+/// One editor implementation for both category creation and visual/name
+/// changes. Its selections are catalog IDs, never a locally invented visual
+/// representation.
+final class _BudgetCategoryEditorSheet extends StatefulWidget {
+  const _BudgetCategoryEditorSheet({
+    required this.category,
+    required this.repository,
+    required this.onCreated,
+  });
+
+  final FluviCategory? category;
+  final CategoryRepository repository;
+  final ValueChanged<FluviCategory> onCreated;
+
+  @override
+  State<_BudgetCategoryEditorSheet> createState() =>
+      _BudgetCategoryEditorSheetState();
+}
+
+final class _BudgetCategoryEditorSheetState
+    extends State<_BudgetCategoryEditorSheet> {
+  late final TextEditingController _name;
+  late String _colorId;
+  late String _iconId;
+  String? _error;
+  bool _saving = false;
+
+  bool get _isCreate => widget.category == null;
+
+  @override
+  void initState() {
+    super.initState();
+    final category = widget.category;
+    _name = TextEditingController(text: category?.name ?? '');
+    _colorId = category?.colorId ?? CategoryCatalogIds.colorIds.first;
+    _iconId = category?.iconId ?? CategoryCatalogIds.iconIds.first;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Adj meg egy kategórianevet.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final category = widget.category;
+      final saved = category == null
+          ? await widget.repository.createCategory(
+              name: name,
+              colorId: _colorId,
+              iconId: _iconId,
+            )
+          : await widget.repository.updateCategory(
+              id: category.id,
+              name: name,
+              colorId: _colorId,
+              iconId: _iconId,
+            );
+      if (!mounted) return;
+      if (_isCreate) widget.onCreated(saved);
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'A kategória mentése nem sikerült. Ellenőrizd a nevet.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    padding: EdgeInsets.fromLTRB(
+      20,
+      0,
+      20,
+      20 + MediaQuery.viewInsetsOf(context).bottom,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          _isCreate ? 'Új kategória' : 'Kategória szerkesztése',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: _BudgetCategoryVisualPreview(
+            colorId: _colorId,
+            iconId: _iconId,
+            size: 76,
+          ),
+        ),
+        const SizedBox(height: 18),
+        TextField(
+          key: const ValueKey<String>('budget-category-name-input'),
+          controller: _name,
+          autofocus: _isCreate,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Kategória neve',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (_) {
+            if (_error != null) setState(() => _error = null);
+          },
+        ),
+        const SizedBox(height: 20),
+        const Text('Szín', style: TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final colorId in CategoryCatalogIds.colorIds)
+              _BudgetCategoryColorChoice(
+                colorId: colorId,
+                selected: colorId == _colorId,
+                onTap: () => setState(() => _colorId = colorId),
+              ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        const Text('Ikon', style: TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 206,
+          child: GridView.builder(
+            key: const ValueKey<String>('budget-category-icon-grid'),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+            ),
+            itemCount: CategoryCatalogIds.iconIds.length,
+            itemBuilder: (context, index) {
+              final iconId = CategoryCatalogIds.iconIds[index];
+              return _BudgetCategoryIconChoice(
+                iconId: iconId,
+                colorId: _colorId,
+                selected: iconId == _iconId,
+                onTap: () => setState(() => _iconId = iconId),
+              );
+            },
+          ),
+        ),
+        if (_error case final error?) ...[
+          const SizedBox(height: 12),
+          Text(error, style: const TextStyle(color: Color(0xffc9465c))),
+        ],
+        const SizedBox(height: 18),
+        FilledButton(
+          key: const ValueKey<String>('budget-category-save'),
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? 'Mentés…' : 'Mentés'),
+        ),
+      ],
+    ),
+  );
+}
+
+final class _BudgetCategoryColorChoice extends StatelessWidget {
+  const _BudgetCategoryColorChoice({
+    required this.colorId,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String colorId;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final token = CategoryColorCatalog.resolve(colorId);
+    return Semantics(
+      selected: selected,
+      label: 'Szín ${token.id}',
+      child: InkWell(
+        key: ValueKey<String>('budget-category-color-$colorId'),
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: token.gradient,
+            border: Border.all(
+              color: selected ? const Color(0xff18233d) : Colors.white,
+              width: selected ? 3 : 1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _BudgetCategoryIconChoice extends StatelessWidget {
+  const _BudgetCategoryIconChoice({
+    required this.iconId,
+    required this.colorId,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String iconId;
+  final String colorId;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final token = CategoryIconCatalog.resolve(iconId);
+    final color = CategoryColorCatalog.resolve(colorId).middleColor;
+    return Semantics(
+      selected: selected,
+      label: '${token.semanticName} ikon',
+      child: InkWell(
+        key: ValueKey<String>('budget-category-icon-$iconId'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: selected ? color.withValues(alpha: .18) : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? color : const Color(0xffe1e6ef),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Center(
+            child: PreparedVectorAssetAtlas.instance.isReady
+                ? CategoryIconView(
+                    picture: PreparedVectorAssetAtlas.instance.categoryIcon(
+                      CategoryIconCatalog.handleOf(iconId),
+                    ),
+                    size: 20,
+                    color: color,
+                  )
+                : Icon(Icons.category_rounded, size: 20, color: color),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _BudgetCategoryVisualPreview extends StatelessWidget {
+  const _BudgetCategoryVisualPreview({
+    required this.colorId,
+    required this.iconId,
+    required this.size,
+  });
+
+  final String colorId;
+  final String iconId;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final token = CategoryColorCatalog.resolve(colorId);
+    return Semantics(
+      label: 'Kategória előnézet',
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: token.gradient,
+          boxShadow: [
+            BoxShadow(
+              color: token.middleColor.withValues(alpha: .22),
+              offset: const Offset(0, 3),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Center(
+          child: PreparedVectorAssetAtlas.instance.isReady
+              ? CategoryIconView(
+                  picture: PreparedVectorAssetAtlas.instance.categoryIcon(
+                    CategoryIconCatalog.handleOf(iconId),
+                  ),
+                  size: size * .45,
+                  color: Colors.white,
+                )
+              : Icon(
+                  Icons.category_rounded,
+                  size: size * .45,
+                  color: Colors.white,
+                ),
+        ),
+      ),
+    );
+  }
 }
 
 String _formatAmount(int? scaled100) {

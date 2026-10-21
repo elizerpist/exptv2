@@ -740,6 +740,7 @@ class _FluviAppShellState extends State<FluviAppShell>
                                     controller: _controller,
                                     modeController: _modeController,
                                     categoryCollection: _categoryCollection,
+                                    categoryRepository: _categoryRepository,
                                     financialLimitRepository:
                                         _financialLimitRepository,
                                     onBudgetCategoryInputUpdated:

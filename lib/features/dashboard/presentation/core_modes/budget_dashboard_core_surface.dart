@@ -13,6 +13,8 @@ import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../../core/categories/domain/category_repository.dart';
+import '../../../../core/categories/domain/fluvi_category.dart';
 import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
 import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
@@ -56,6 +58,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     required this.presentation,
     this.avatarContentStyle = BudgetAvatarContentStyle.separate,
     this.presentationController,
+    this.categoryCollection,
+    this.categoryRepository,
     this.limitEditController,
     this.distributionDrawables,
     this.avatarRailController,
@@ -75,6 +79,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final DashboardCoreModePresentation presentation;
   final BudgetAvatarContentStyle avatarContentStyle;
   final DashboardBudgetPresentationController? presentationController;
+  final ValueListenable<List<FluviCategory>>? categoryCollection;
+  final CategoryRepository? categoryRepository;
   final DashboardBudgetLimitEditController? limitEditController;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>?
   distributionDrawables;
@@ -590,6 +596,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
           request: request,
           presentation: controller,
           limitEdits: edits,
+          categoryCollection: categoryCollection,
+          categoryRepository: categoryRepository,
         ),
       ),
     );

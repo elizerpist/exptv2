@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
+import 'package:fluvi/core/categories/domain/category_repository.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit_repository.dart';
@@ -296,6 +297,145 @@ void main() {
       expect(repository.listCalls, 0);
     },
   );
+
+  testWidgets(
+    'category manager performs create, visual update and delete through the canonical repository',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final categories = ValueNotifier<List<FluviCategory>>(
+        List<FluviCategory>.of(_managerCategories),
+      );
+      final categoryRepository = _MutableCategoryRepository(categories);
+      final limits = _TimelineRepository(_timeline());
+      final edits = DashboardBudgetLimitEditController(
+        repository: limits,
+        isKeyCurrent: (_) => true,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(null);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => _snapshot(categories.value),
+        logicalAsOfDate: const LocalDate(year: 2026, month: 10, day: 21),
+        limitEditController: edits,
+      );
+      addTearDown(edits.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(direction.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BudgetLimitManager(
+            request: const BudgetLimitManagerRequest(
+              direction: LedgerDirection.expense,
+              target: DashboardBudgetTarget.aggregate(),
+              targetHandle: 0,
+              title: 'Budget',
+              accent: Color(0xff7863c9),
+              avatar: Icon(Icons.account_balance_wallet_rounded),
+              coreRevision: 41,
+            ),
+            presentation: presentation,
+            limitEdits: edits,
+            categoryCollection: categories,
+            categoryRepository: categoryRepository,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-categories')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('budget-category-manager-list')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-category-edit-health')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('budget-category-name-input')),
+        'Új egészség',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-category-color-color_02')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-category-icon-icon_02')),
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey<String>('budget-category-save')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-category-save')),
+      );
+      // A visual/catalog update re-installs the independent cyclic carousel.
+      // Its eventual ballistic settle is irrelevant to the completed write.
+      await tester.pump(const Duration(seconds: 1));
+      expect(categoryRepository.updateCalls, 1);
+      expect(categories.value.first.name, 'Új egészség');
+      expect(categories.value.first.colorId, 'color_02');
+      expect(categories.value.first.iconId, 'icon_02');
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-category-create')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('budget-category-name-input')),
+        'Utazás',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey<String>('budget-category-save')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-category-save')),
+      );
+      // The new category re-installs the independent cyclic carousel. Its
+      // eventual ballistic settle is irrelevant to the completed write.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(categoryRepository.createCalls, 1);
+      expect(
+        categories.value.any((category) => category.name == 'Utazás'),
+        isTrue,
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('budget-category-delete-new-category'),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+      expect(find.text('Kategória törlése?'), findsOneWidget);
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('budget-category-delete-confirm-new-category'),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(categoryRepository.deleteCalls, 1);
+      expect(
+        find.byKey(const ValueKey<String>('budget-category-row-new-category')),
+        findsNothing,
+      );
+    },
+  );
 }
 
 List<FinancialLimit> _timeline() => <FinancialLimit>[
@@ -486,4 +626,83 @@ final class _TimelineRepository implements FinancialLimitRepository {
   ) => Future.wait(
     values.map((value) => upsert(value.key, value.amountScaled100)),
   );
+}
+
+final class _MutableCategoryRepository implements CategoryRepository {
+  _MutableCategoryRepository(this.categories);
+
+  final ValueNotifier<List<FluviCategory>> categories;
+  int createCalls = 0;
+  int updateCalls = 0;
+  int deleteCalls = 0;
+
+  @override
+  Future<FluviCategory> createCategory({
+    required String name,
+    required String colorId,
+    required String iconId,
+  }) async {
+    createCalls += 1;
+    final created = FluviCategory(
+      id: 'new-category',
+      name: name,
+      colorId: colorId,
+      iconId: iconId,
+      isSystemUncategorized: false,
+      createdAtUtcMs: 2,
+      updatedAtUtcMs: 2,
+    );
+    categories.value = <FluviCategory>[...categories.value, created];
+    return created;
+  }
+
+  @override
+  Future<void> deleteCategory(String id) async {
+    deleteCalls += 1;
+    categories.value = <FluviCategory>[
+      for (final category in categories.value)
+        if (category.id != id) category,
+    ];
+  }
+
+  @override
+  Future<FluviCategory?> getCategoryById(String id) async {
+    for (final category in categories.value) {
+      if (category.id == id) return category;
+    }
+    return null;
+  }
+
+  @override
+  Future<List<FluviCategory>> getCategories() async => categories.value;
+
+  @override
+  Future<FluviCategory> updateCategory({
+    required String id,
+    required String name,
+    required String colorId,
+    required String iconId,
+  }) async {
+    updateCalls += 1;
+    late final FluviCategory updated;
+    categories.value = <FluviCategory>[
+      for (final category in categories.value)
+        if (category.id == id)
+          updated = FluviCategory(
+            id: category.id,
+            name: name,
+            colorId: colorId,
+            iconId: iconId,
+            isSystemUncategorized: category.isSystemUncategorized,
+            createdAtUtcMs: category.createdAtUtcMs,
+            updatedAtUtcMs: category.updatedAtUtcMs + 1,
+          )
+        else
+          category,
+    ];
+    return updated;
+  }
+
+  @override
+  Stream<List<FluviCategory>> watchCategories() => const Stream.empty();
 }

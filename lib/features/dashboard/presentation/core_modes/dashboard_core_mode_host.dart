@@ -3,6 +3,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/fluvi_global_appearance.dart';
+import '../../../../core/categories/domain/category_repository.dart';
+import '../../../../core/categories/domain/fluvi_category.dart';
 
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_balance_presentation.dart';
@@ -58,6 +60,8 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.balancePresentationSettings,
     this.balanceAdaptiveScope = const AllTimeScope(),
     this.budgetPresentation,
+    this.categoryCollection,
+    this.categoryRepository,
     this.budgetLimitEditController,
     this.budgetDistributionDrawables,
     this.budgetAvatarRailController,
@@ -111,6 +115,8 @@ class DashboardCoreModeHost extends StatefulWidget {
   balancePresentationSettings;
   final LedgerTimeScope balanceAdaptiveScope;
   final DashboardBudgetPresentationController? budgetPresentation;
+  final ValueListenable<List<FluviCategory>>? categoryCollection;
+  final CategoryRepository? categoryRepository;
   final DashboardBudgetLimitEditController? budgetLimitEditController;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>?
   budgetDistributionDrawables;
@@ -369,6 +375,8 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         presentation: presentation,
         avatarContentStyle: widget.budgetAvatarContentStyle,
         presentationController: widget.budgetPresentation,
+        categoryCollection: widget.categoryCollection,
+        categoryRepository: widget.categoryRepository,
         limitEditController: widget.budgetLimitEditController,
         distributionDrawables: widget.budgetDistributionDrawables,
         avatarRailController: widget.budgetAvatarRailController,
