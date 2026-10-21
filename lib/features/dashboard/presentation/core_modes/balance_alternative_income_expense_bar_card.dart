@@ -515,53 +515,11 @@ final class _BalanceAlternativeClayBarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    final depthOffset = math.min(1.6, size.width * .22);
-    final bodyHeight = math.max(1.0, size.height - depthOffset);
-    final body = Rect.fromLTWH(0, 0, size.width, bodyHeight);
-    final radius = Radius.circular(math.min(size.width / 2, body.height / 2));
-    final clay = RRect.fromRectAndCorners(
-      body,
-      topLeft: radius,
-      topRight: radius,
-      bottomLeft: Radius.circular(math.min(2, radius.x)),
-      bottomRight: Radius.circular(math.min(2, radius.x)),
-    );
-    canvas.drawRRect(
-      clay.shift(Offset(0, depthOffset)),
-      Paint()
-        ..color = material.shadow
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.4),
-    );
-    canvas.drawRRect(
-      clay.shift(Offset(0, depthOffset * .72)),
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: material.depthColors,
-          stops: material.stops,
-        ).createShader(body),
-    );
-    canvas.drawRRect(
-      clay,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: material.colors,
-          stops: material.stops,
-        ).createShader(body),
-    );
-    final glossHeight = math.min(math.max(1.1, size.height * .10), 2.2);
-    final gloss = Rect.fromLTWH(
-      size.width * .22,
-      math.min(size.height * .16, 1.2),
-      size.width * .52,
-      glossHeight,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(gloss, Radius.circular(glossHeight)),
-      Paint()..color = material.highlight.withValues(alpha: .62),
+    FluviClayCapsulePainter.paint(
+      canvas,
+      rect: Offset.zero & size,
+      material: material,
+      direction: FluviClayCapsuleDirection.upward,
     );
   }
 
@@ -593,11 +551,13 @@ abstract final class _BalanceAlternativeChartTokens {
   // Directly sampled from the reference Card 3's mint/coral bar ramps.
   static const incomeBottom = Color(0xFF20CA97);
   static const expenseBottom = Color(0xFFED5377);
-  static final incomeClayMaterial = FluviClayActiveMaterial.forBase(
-    incomeBottom,
+  static final incomeClayMaterial = FluviClayActiveMaterial.forGradient(
+    highlight: incomeGradient.colors.first,
+    body: incomeBottom,
   );
-  static final expenseClayMaterial = FluviClayActiveMaterial.forBase(
-    expenseBottom,
+  static final expenseClayMaterial = FluviClayActiveMaterial.forGradient(
+    highlight: expenseGradient.colors.first,
+    body: expenseBottom,
   );
   static const incomeGradient = LinearGradient(
     begin: Alignment.topCenter,

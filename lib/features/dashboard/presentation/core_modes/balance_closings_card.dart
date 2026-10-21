@@ -2,17 +2,25 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/fluvi_clay_active_material.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_balance_closings_momentum_projection.dart';
 import '../../application/dashboard_mode_spec.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
+import '../../time_navigation/domain/ledger_time_scope.dart';
+import 'balance_presentation_settings.dart';
 
 /// The Balance lower-card renderer for discrete, zero-centred period results.
 /// It consumes the immutable Core DTO and owns only the local bucket selection.
 class BalanceClosingsCard extends StatefulWidget {
-  const BalanceClosingsCard({super.key, required this.presentation});
+  const BalanceClosingsCard({
+    super.key,
+    required this.presentation,
+    this.yearBarPresentation = BalanceYearBarPresentation.current,
+  });
 
   final DashboardBalanceClosingsPresentation presentation;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   @override
   State<BalanceClosingsCard> createState() => _BalanceClosingsCardState();
@@ -50,6 +58,9 @@ final class _BalanceClosingsCardState extends State<BalanceClosingsCard> {
         final palette = DashboardModePaletteResolver.resolve(
           DashboardModeSpec.balance,
         );
+        final visualPresentation = widget.presentation.timeScope is YearScope
+            ? widget.yearBarPresentation
+            : BalanceYearBarPresentation.current;
         return KeyedSubtree(
           key: const ValueKey<String>('balance-linked-detail-closings'),
           child: Padding(
@@ -88,10 +99,14 @@ final class _BalanceClosingsCardState extends State<BalanceClosingsCard> {
                           setState(() => _selectedBucketId = buckets[index].id);
                         },
                         child: CustomPaint(
+                          key: ValueKey<String>(
+                            'balance-closings-paint-${visualPresentation.name}',
+                          ),
                           painter: _ClosingsPainter(
                             buckets: buckets,
                             positiveColor: palette.incomeGradient.colors.first,
                             negativeColor: palette.expenseGradient.colors.first,
+                            yearBarPresentation: visualPresentation,
                           ),
                           child: const SizedBox.expand(),
                         ),
@@ -218,11 +233,13 @@ final class _ClosingsPainter extends CustomPainter {
     required this.buckets,
     required this.positiveColor,
     required this.negativeColor,
+    required this.yearBarPresentation,
   });
 
   final List<DashboardBalanceClosingBucket> buckets;
   final Color positiveColor;
   final Color negativeColor;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -236,13 +253,32 @@ final class _ClosingsPainter extends CustomPainter {
       axis,
     );
     final rects = balanceClosingBarRectsFor(size: size, buckets: buckets);
+    final positiveMaterial =
+        yearBarPresentation == BalanceYearBarPresentation.clay3d
+        ? FluviClayActiveMaterial.forBase(positiveColor)
+        : null;
+    final negativeMaterial =
+        yearBarPresentation == BalanceYearBarPresentation.clay3d
+        ? FluviClayActiveMaterial.forBase(negativeColor)
+        : null;
     for (var index = 0; index < buckets.length; index += 1) {
       final net = buckets[index].netMinor;
       final rect = rects[index];
       if (rect == null) continue;
-      canvas.drawRect(
-        rect,
-        Paint()..color = net > 0 ? positiveColor : negativeColor,
+      if (yearBarPresentation == BalanceYearBarPresentation.current) {
+        canvas.drawRect(
+          rect,
+          Paint()..color = net > 0 ? positiveColor : negativeColor,
+        );
+        continue;
+      }
+      FluviClayCapsulePainter.paint(
+        canvas,
+        rect: rect,
+        material: net > 0 ? positiveMaterial! : negativeMaterial!,
+        direction: net > 0
+            ? FluviClayCapsuleDirection.upward
+            : FluviClayCapsuleDirection.downward,
       );
     }
   }
@@ -251,5 +287,6 @@ final class _ClosingsPainter extends CustomPainter {
   bool shouldRepaint(covariant _ClosingsPainter oldDelegate) =>
       oldDelegate.buckets != buckets ||
       oldDelegate.positiveColor != positiveColor ||
-      oldDelegate.negativeColor != negativeColor;
+      oldDelegate.negativeColor != negativeColor ||
+      oldDelegate.yearBarPresentation != yearBarPresentation;
 }

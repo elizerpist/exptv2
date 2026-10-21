@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_cashflo
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_linked_detail_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_closings_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_momentum_card.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_retention_card.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -198,6 +199,59 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('JAN'), findsNWidgets(2));
+    },
+  );
+
+  testWidgets(
+    'PC5: Year closings shares the Balance clay setting while other scopes stay current',
+    (tester) async {
+      final yearClosings = DashboardBalanceClosingsPresentation(
+        identity: _identity,
+        timeScope: const YearScope(2026),
+        buckets: const <DashboardBalanceClosingBucket>[
+          DashboardBalanceClosingBucket(
+            id: 'positive',
+            label: 'P',
+            incomeMinor: 10000,
+            expenseMinor: 0,
+          ),
+          DashboardBalanceClosingBucket(
+            id: 'negative',
+            label: 'N',
+            incomeMinor: 0,
+            expenseMinor: 4000,
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.closings,
+          presentation: _linked(closings: yearClosings),
+          yearBarPresentation: BalanceYearBarPresentation.clay3d,
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-closings-paint-clay3d')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.closings,
+          presentation: _linked(
+            closings: DashboardBalanceClosingsPresentation(
+              identity: _identity,
+              timeScope: const AllTimeScope(),
+              buckets: yearClosings.buckets,
+            ),
+          ),
+          yearBarPresentation: BalanceYearBarPresentation.clay3d,
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-closings-paint-current')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -1884,6 +1938,8 @@ Widget _host({
   double width = 390,
   double height = 320,
   double rankedListExtraHeight = 0,
+  BalanceYearBarPresentation yearBarPresentation =
+      BalanceYearBarPresentation.current,
 }) => MaterialApp(
   home: Scaffold(
     body: SizedBox(
@@ -1893,6 +1949,7 @@ Widget _host({
         presentation: presentation,
         topic: topic,
         rankedListExtraHeight: rankedListExtraHeight,
+        yearBarPresentation: yearBarPresentation,
       ),
     ),
   ),

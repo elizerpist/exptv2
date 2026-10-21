@@ -807,6 +807,10 @@ void main() {
       await tester.ensureVisible(clayBars);
       expect(currentBars, findsOneWidget);
       expect(clayBars, findsOneWidget);
+      expect(
+        find.text('Mindkét éves Balance oszlopdiagramra.'),
+        findsOneWidget,
+      );
       await tester.tap(clayBars);
       await tester.pump();
       expect(

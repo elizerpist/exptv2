@@ -422,6 +422,90 @@ void main() {
   );
 
   testWidgets(
+    'Balance YEAR clay applies one presentation choice to annual closings and income/expense bars',
+    (tester) async {
+      final incomeExpense = BalanceAlternativeIncomeExpenseBarPresentation(
+        domain: BalanceAlternativeBarDomain.months,
+        groups: <BalanceAlternativeIncomeExpenseBarGroup>[
+          for (var month = 1; month <= 12; month += 1)
+            BalanceAlternativeIncomeExpenseBarGroup(
+              key: month,
+              label: 'M$month',
+              incomeMinor: month * 18000,
+              expenseMinor: month * 9000,
+            ),
+        ],
+        incomeTotalMinor: 1404000,
+        expenseTotalMinor: 702000,
+        sourcePresentationId: 77,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RepaintBoundary(
+              key: const ValueKey<String>('balance-year-clay-pair-golden'),
+              child: SizedBox(
+                width: 412,
+                height: 520,
+                child: Column(
+                  children: <Widget>[
+                    Expanded(
+                      child: BalanceAlternativeAnnualClosingsCard(
+                        timeScope: const YearScope(2026),
+                        yearBarPresentation: BalanceYearBarPresentation.clay3d,
+                        presentation:
+                            BalanceAlternativeYearClosingsPresentation(
+                              buckets: <BalanceAlternativeYearClosingBucket>[
+                                for (var month = 1; month <= 12; month += 1)
+                                  BalanceAlternativeYearClosingBucket(
+                                    label: 'M$month',
+                                    incomeMinor: month.isEven ? 50000 : 16000,
+                                    expenseMinor: month.isEven ? 12000 : 36000,
+                                  ),
+                              ],
+                            ),
+                      ),
+                    ),
+                    SizedBox(
+                      height: 210,
+                      child: BalanceAlternativeAnnualIncomeExpenseCard(
+                        presentation: incomeExpense,
+                        timeScope: const YearScope(2026),
+                        yearBarPresentation: BalanceYearBarPresentation.clay3d,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-year-closings-plot'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-alternative-year-income-expense-bars',
+          ),
+        ),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-year-clay-pair-golden')),
+        matchesGoldenFile(
+          '../../../goldens/balance_alternative_year_clay_pair.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
     'ALT-HAVI2-UI-RED: income and expense strip retains the HTML fixed row height',
     (tester) async {
       await tester.pumpWidget(

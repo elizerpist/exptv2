@@ -172,11 +172,12 @@ enum BalanceMonthCombinedCardPresentation {
   };
 }
 
-/// Material-only choice for the 12-month Balance income/expense columns.
+/// Material-only choice for the Balance Year bar-chart family.
 ///
-/// The current treatment is retained as the default. Clay is intentionally
-/// restricted by the renderer to the Year monthly domain, not the all-time
-/// historical-years plot.
+/// The current treatment is retained as the default. In the Year scope the
+/// selection is shared by the income/expense columns and the zero-centred
+/// closings chart. Clay is intentionally restricted to those Year renderers,
+/// not the all-time historical-years plot.
 enum BalanceYearBarPresentation {
   current,
   clay3d;

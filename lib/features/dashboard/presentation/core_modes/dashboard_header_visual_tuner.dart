@@ -1282,6 +1282,13 @@ final class _BalancePresentationSection extends StatelessWidget {
           padding: EdgeInsets.only(top: 4),
           child: Text('Oszlopok megjelenése'),
         ),
+        const Padding(
+          padding: EdgeInsets.only(top: 2),
+          child: Text(
+            'Mindkét éves Balance oszlopdiagramra.',
+            style: TextStyle(fontSize: 11),
+          ),
+        ),
         RadioGroup<BalanceYearBarPresentation>(
           groupValue: settings.yearBarPresentation,
           onChanged: (presentation) {

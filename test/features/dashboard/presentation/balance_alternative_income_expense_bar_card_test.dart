@@ -1,10 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/fluvi_clay_active_material.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_income_expense_bar_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 
 void main() {
+  test('Balance clay light strip is vertical and omits tiny bar nubs', () {
+    final strip = FluviClayCapsulePainter.lightStripRectFor(
+      const Rect.fromLTWH(0, 0, 10, 40),
+    );
+    expect(strip, isNotNull);
+    expect(strip!.height, greaterThan(strip.width));
+    expect(
+      FluviClayCapsulePainter.lightStripRectFor(
+        const Rect.fromLTWH(0, 0, 10, 3),
+      ),
+      isNull,
+    );
+  });
+
+  test('Balance clay materials retain the canonical mint and coral bodies', () {
+    final income = FluviClayActiveMaterial.forGradient(
+      highlight: const Color(0xFF78E2C3),
+      body: const Color(0xFF20CA97),
+    );
+    final expense = FluviClayActiveMaterial.forGradient(
+      highlight: const Color(0xFFF37092),
+      body: const Color(0xFFED5377),
+    );
+    expect(income.body, const Color(0xFF20CA97));
+    expect(expense.body, const Color(0xFFED5377));
+  });
+
   BalanceAlternativeIncomeExpenseBarPresentation chart({
     required BalanceAlternativeBarDomain domain,
     required int count,

@@ -20,6 +20,7 @@ import 'balance_category_movers_card.dart';
 import 'balance_future_placeholder_card.dart';
 import 'balance_momentum_card.dart';
 import 'balance_primary_chart_card.dart';
+import 'balance_presentation_settings.dart';
 import 'balance_retention_card.dart';
 
 /// The single lower Balance card's topic-specific body.
@@ -33,11 +34,13 @@ class BalanceLinkedDetailCard extends StatelessWidget {
     required this.presentation,
     required this.topic,
     this.rankedListExtraHeight = 0,
+    this.yearBarPresentation = BalanceYearBarPresentation.current,
   }) : assert(rankedListExtraHeight >= 0);
 
   final DashboardBalanceLinkedPresentation presentation;
   final BalanceLinkedDetailTopic topic;
   final double rankedListExtraHeight;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   @override
   Widget build(BuildContext context) => switch (topic) {
@@ -47,6 +50,7 @@ class BalanceLinkedDetailCard extends StatelessWidget {
     ),
     BalanceLinkedDetailTopic.closings => BalanceClosingsCard(
       presentation: presentation.closings,
+      yearBarPresentation: yearBarPresentation,
     ),
     BalanceLinkedDetailTopic.momentum => BalanceMomentumCard(
       presentation: presentation.momentum,

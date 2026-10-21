@@ -671,6 +671,7 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
             presentation: value,
             topic: selectedTopic,
             rankedListExtraHeight: rankedListExtraHeight,
+            yearBarPresentation: settings.yearBarPresentation,
           );
         }
         return DashboardPlaceholderCard(
@@ -695,6 +696,7 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
             presentation: value,
             topic: selectedTopic,
             rankedListExtraHeight: rankedListExtraHeight,
+            yearBarPresentation: settings.yearBarPresentation,
           ),
         );
       },
@@ -1280,6 +1282,7 @@ final class _BalanceYearExtendedSheetScaffold extends StatelessWidget {
             child: BalanceAlternativeAnnualClosingsCard(
               presentation: closings,
               timeScope: presentation.timeScope,
+              yearBarPresentation: yearBarPresentation,
             ),
           ),
         ),

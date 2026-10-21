@@ -1059,10 +1059,12 @@ final class BalanceAlternativeAnnualClosingsCard extends StatelessWidget {
     super.key,
     required this.presentation,
     required this.timeScope,
+    this.yearBarPresentation = BalanceYearBarPresentation.current,
   });
 
   final BalanceAlternativeYearClosingsPresentation presentation;
   final LedgerTimeScope timeScope;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   @override
   Widget build(BuildContext context) {
@@ -1121,6 +1123,7 @@ final class BalanceAlternativeAnnualClosingsCard extends StatelessWidget {
                   ),
                   painter: _AnnualClosingsPainter(
                     buckets: presentation.buckets,
+                    yearBarPresentation: yearBarPresentation,
                   ),
                   child: const SizedBox.expand(),
                 ),
@@ -1620,9 +1623,13 @@ final class _DailySpendPainter extends CustomPainter {
 }
 
 final class _AnnualClosingsPainter extends CustomPainter {
-  const _AnnualClosingsPainter({required this.buckets});
+  const _AnnualClosingsPainter({
+    required this.buckets,
+    required this.yearBarPresentation,
+  });
 
   final List<BalanceAlternativeYearClosingBucket> buckets;
+  final BalanceYearBarPresentation yearBarPresentation;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1651,32 +1658,57 @@ final class _AnnualClosingsPainter extends CustomPainter {
       cumulative.fold<int>(0, (max, item) => math.max(max, item.abs())),
     );
     final line = Path();
+    final positiveClayMaterial =
+        yearBarPresentation == BalanceYearBarPresentation.clay3d
+        ? FluviClayActiveMaterial.forGradient(
+            highlight: BalanceAlternativeHtmlTokens.closingPositiveStart,
+            body: BalanceAlternativeHtmlTokens.closingPositiveEnd,
+          )
+        : null;
+    final negativeClayMaterial =
+        yearBarPresentation == BalanceYearBarPresentation.clay3d
+        ? FluviClayActiveMaterial.forGradient(
+            highlight: BalanceAlternativeHtmlTokens.closingNegativeStart,
+            body: BalanceAlternativeHtmlTokens.closingNegativeEnd,
+          )
+        : null;
     for (var index = 0; index < values.length; index += 1) {
       final value = values[index];
       final height = value.abs() / maxAbs * size.height * .43;
       final left = index * step + (step - barWidth) / 2;
       final top = value >= 0 ? baseline - height : baseline;
       final rect = Rect.fromLTWH(left, top, barWidth, math.max(1, height));
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          rect,
-          Radius.circular(BalanceAlternativeHtmlTokens.logical(4)),
-        ),
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: value >= 0
-                ? const <Color>[
-                    BalanceAlternativeHtmlTokens.closingPositiveStart,
-                    BalanceAlternativeHtmlTokens.closingPositiveEnd,
-                  ]
-                : const <Color>[
-                    BalanceAlternativeHtmlTokens.closingNegativeStart,
-                    BalanceAlternativeHtmlTokens.closingNegativeEnd,
-                  ],
-          ).createShader(rect),
-      );
+      if (yearBarPresentation == BalanceYearBarPresentation.current) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            rect,
+            Radius.circular(BalanceAlternativeHtmlTokens.logical(4)),
+          ),
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: value >= 0
+                  ? const <Color>[
+                      BalanceAlternativeHtmlTokens.closingPositiveStart,
+                      BalanceAlternativeHtmlTokens.closingPositiveEnd,
+                    ]
+                  : const <Color>[
+                      BalanceAlternativeHtmlTokens.closingNegativeStart,
+                      BalanceAlternativeHtmlTokens.closingNegativeEnd,
+                    ],
+            ).createShader(rect),
+        );
+      } else {
+        FluviClayCapsulePainter.paint(
+          canvas,
+          rect: rect,
+          material: value >= 0 ? positiveClayMaterial! : negativeClayMaterial!,
+          direction: value >= 0
+              ? FluviClayCapsuleDirection.upward
+              : FluviClayCapsuleDirection.downward,
+        );
+      }
       final x = left + barWidth / 2;
       final y =
           baseline + cumulative[index] / cumulativeAbs * size.height * .38;
@@ -1705,7 +1737,8 @@ final class _AnnualClosingsPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _AnnualClosingsPainter oldDelegate) =>
-      oldDelegate.buckets != buckets;
+      oldDelegate.buckets != buckets ||
+      oldDelegate.yearBarPresentation != yearBarPresentation;
 }
 
 final class _AnnualIncomeExpensePainter extends CustomPainter {
@@ -1719,11 +1752,13 @@ final class _AnnualIncomeExpensePainter extends CustomPainter {
   final bool lineMode;
   final BalanceYearBarPresentation yearBarPresentation;
 
-  static final _incomeClayMaterial = FluviClayActiveMaterial.forBase(
-    const Color(0xFF20CA97),
+  static final _incomeClayMaterial = FluviClayActiveMaterial.forGradient(
+    highlight: const Color(0xFF78E2C3),
+    body: const Color(0xFF20CA97),
   );
-  static final _expenseClayMaterial = FluviClayActiveMaterial.forBase(
-    const Color(0xFFED5377),
+  static final _expenseClayMaterial = FluviClayActiveMaterial.forGradient(
+    highlight: const Color(0xFFF37092),
+    body: const Color(0xFFED5377),
   );
 
   @override
@@ -1855,69 +1890,12 @@ final class _AnnualIncomeExpensePainter extends CustomPainter {
     Canvas canvas,
     Rect rect,
     FluviClayActiveMaterial material,
-  ) {
-    final depthOffset = math.min(
-      BalanceAlternativeHtmlTokens.logical(2),
-      rect.width * .22,
-    );
-    final body = Rect.fromLTWH(
-      rect.left,
-      rect.top,
-      rect.width,
-      math.max(1, rect.height - depthOffset),
-    );
-    final radius = Radius.circular(math.min(body.width / 2, body.height / 2));
-    final clay = RRect.fromRectAndCorners(
-      body,
-      topLeft: radius,
-      topRight: radius,
-      bottomLeft: Radius.circular(math.min(radius.x, 2)),
-      bottomRight: Radius.circular(math.min(radius.x, 2)),
-    );
-    canvas.drawRRect(
-      clay.shift(Offset(0, depthOffset)),
-      Paint()
-        ..color = material.shadow
-        ..maskFilter = MaskFilter.blur(
-          BlurStyle.normal,
-          BalanceAlternativeHtmlTokens.logical(1.4),
-        ),
-    );
-    canvas.drawRRect(
-      clay.shift(Offset(0, depthOffset * .72)),
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: material.depthColors,
-          stops: material.stops,
-        ).createShader(body),
-    );
-    canvas.drawRRect(
-      clay,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: material.colors,
-          stops: material.stops,
-        ).createShader(body),
-    );
-    final glossHeight = math.min(
-      math.max(BalanceAlternativeHtmlTokens.logical(1), body.height * .10),
-      BalanceAlternativeHtmlTokens.logical(2),
-    );
-    final gloss = Rect.fromLTWH(
-      body.left + body.width * .22,
-      body.top + math.min(body.height * .16, glossHeight),
-      body.width * .52,
-      glossHeight,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(gloss, Radius.circular(glossHeight)),
-      Paint()..color = material.highlight.withValues(alpha: .62),
-    );
-  }
+  ) => FluviClayCapsulePainter.paint(
+    canvas,
+    rect: rect,
+    material: material,
+    direction: FluviClayCapsuleDirection.upward,
+  );
 
   @override
   bool shouldRepaint(covariant _AnnualIncomeExpensePainter oldDelegate) =>
