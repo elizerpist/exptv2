@@ -45,6 +45,9 @@ void main() {
     final rail = File(
       'lib/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart',
     ).readAsStringSync();
+    final sharedCarousel = File(
+      'lib/features/dashboard/presentation/core_modes/budget_target_avatar_carousel.dart',
+    ).readAsStringSync();
     for (final forbidden in [
       'prepareLiveInteractionResourceWindow(',
       'prepareIndex(',
@@ -56,7 +59,11 @@ void main() {
     ]) {
       expect(rail, isNot(contains(forbidden)), reason: forbidden);
     }
-    expect(rail, contains('CenteredCarousel<_PreparedBudgetTargetAvatar>'));
-    expect(rail, contains('CyclicCarouselDataSource'));
+    expect(rail, contains('BudgetTargetAvatarCarousel('));
+    expect(
+      sharedCarousel,
+      contains('CenteredCarousel<BudgetTargetAvatarCarouselItem>'),
+    );
+    expect(sharedCarousel, contains('CyclicCarouselDataSource'));
   });
 }

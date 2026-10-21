@@ -54,13 +54,21 @@ void main() {
     final rail = File(
       '${root.path}/lib/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart',
     ).readAsStringSync();
+    final sharedBudgetRail = File(
+      '${root.path}/lib/features/dashboard/presentation/core_modes/budget_target_avatar_carousel.dart',
+    ).readAsStringSync();
     final presentation = File(
       '${root.path}/lib/features/dashboard/application/dashboard_budget_presentation_controller.dart',
     ).readAsStringSync();
 
-    expect(rail, contains('CenteredCarousel<_PreparedBudgetTargetAvatar>'));
-    expect(rail, contains('budgetCategoryAvatarRail'));
-    expect(rail, contains('CyclicCarouselDataSource'));
+    expect(rail, contains('BudgetTargetAvatarCarousel('));
+    expect(rail, contains("import 'budget_target_avatar_carousel.dart'"));
+    expect(sharedBudgetRail, contains('budgetCategoryAvatarRail'));
+    expect(
+      sharedBudgetRail,
+      contains('CenteredCarousel<BudgetTargetAvatarCarouselItem>'),
+    );
+    expect(sharedBudgetRail, contains('CyclicCarouselDataSource'));
     expect(rail, isNot(contains('ScrollController')));
     expect(rail, isNot(contains('PageView')));
     expect(rail, isNot(contains('FrictionSimulation')));
