@@ -463,6 +463,21 @@ final class DashboardBudgetPartitionPresentation {
   double get allocationVisualCoverage =>
       allocationRawRatio.clamp(0.0, 1.0).toDouble();
 
+  /// The remaining part of the aggregate monthly allocation.  Consumers use
+  /// this instead of rebuilding allocation arithmetic from category cells.
+  int get unallocatedLimitScaled100 {
+    final aggregate = effectiveAggregateLimitScaled100;
+    if (aggregate == null || aggregate <= 0) return 0;
+    final remaining = aggregate - liveAllocatedTotalScaled100;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  double get unallocatedRatio {
+    final aggregate = effectiveAggregateLimitScaled100;
+    if (aggregate == null || aggregate <= 0) return 0;
+    return unallocatedLimitScaled100 / aggregate;
+  }
+
   int? effectiveLimitForCategoryHandle(int handle) {
     final directionBank = bank;
     final targetCatalog = catalog;
@@ -506,6 +521,41 @@ final class DashboardBudgetPartitionPresentation {
     return DashboardBudgetPartitionSegmentPresentation._(
       opaqueRatio: opaqueAmount / denominator,
       translucentRatio: (limit - opaqueAmount) / denominator,
+    );
+  }
+
+  /// Creates a local, non-persistent presentation draft for the exact
+  /// selected category.  The manager uses it while its month-sheet amount is
+  /// being edited, so the same lane semantics remain visible before Save.
+  ///
+  /// It is deliberately a presentation adapter over this immutable prepared
+  /// partition, not a second allocation calculator or a write operation.
+  DashboardBudgetPartitionPresentation withCategoryLimitDraft({
+    required int categoryHandle,
+    required int limitScaled100,
+  }) {
+    final current = effectiveLimitForCategoryHandle(categoryHandle);
+    if (!isAvailable || current == null || current == limitScaled100) {
+      return this;
+    }
+    final next = Map<int, int>.of(effectiveLimitByTargetHandle)
+      ..[categoryHandle] = limitScaled100;
+    final currentPositive = current > 0 ? current : 0;
+    final nextPositive = limitScaled100 > 0 ? limitScaled100 : 0;
+    return DashboardBudgetPartitionPresentation._(
+      direction: direction,
+      period: period,
+      periodSliceIndex: periodSliceIndex,
+      coreRevision: coreRevision,
+      bank: bank,
+      catalog: catalog,
+      aggregateActualScaled100: aggregateActualScaled100,
+      effectiveAggregateLimitScaled100: effectiveAggregateLimitScaled100,
+      preparedAllocatedTotalScaled100: preparedAllocatedTotalScaled100,
+      optimisticAllocationDeltaScaled100:
+          optimisticAllocationDeltaScaled100 + nextPositive - currentPositive,
+      effectiveLimitByTargetHandle: Map<int, int>.unmodifiable(next),
+      categoryOverlay: categoryOverlay,
     );
   }
 }
@@ -641,6 +691,37 @@ final class DashboardBudgetPresentationController
       return null;
     }
     return catalog.targetAtHandle(handle);
+  }
+
+  /// Returns the canonical allocation partition for one exact manager month.
+  ///
+  /// The fullscreen manager deliberately owns local year/month browsing, so
+  /// its sheet must not inherit the Dashboard's currently visible Summary
+  /// scope.  This is only an adapter over the prepared bank and the existing
+  /// optimistic edit overlays; it performs no repository read or independent
+  /// allocation projection.
+  DashboardBudgetPartitionPresentation partitionForManagerMonth({
+    required LedgerDirection direction,
+    required int year,
+    required int month,
+  }) {
+    if (direction != _direction) {
+      return DashboardBudgetPartitionPresentation.unavailable(
+        direction: direction,
+      );
+    }
+    final snapshot = _snapshotForCurrentFrame();
+    final catalog = _catalog;
+    if (snapshot == null || catalog == null) {
+      return DashboardBudgetPartitionPresentation.unavailable(
+        direction: direction,
+      );
+    }
+    return _partitionForPreparedPeriod(
+      catalog: catalog,
+      snapshot: snapshot,
+      period: BudgetLimitPeriod.month(year, month),
+    );
   }
 
   DashboardBudgetEditContext? _lastDirectInputEditContext;
@@ -1849,6 +1930,18 @@ final class DashboardBudgetPresentationController
     final period = DashboardBudgetPeriodResolver.fromTimeScope(
       liveAnalysis.scope!,
     );
+    return _partitionForPreparedPeriod(
+      catalog: catalog,
+      snapshot: snapshot,
+      period: period,
+    );
+  }
+
+  DashboardBudgetPartitionPresentation _partitionForPreparedPeriod({
+    required DashboardBudgetTargetCatalog catalog,
+    required PreparedBudgetLimitSnapshot snapshot,
+    required BudgetLimitPeriod period,
+  }) {
     final bank = snapshot.directionBank(_direction);
     final aggregate = catalog.targetAtHandle(0);
     final aggregateKey = _financialLimitKeyFor(aggregate, period: period);

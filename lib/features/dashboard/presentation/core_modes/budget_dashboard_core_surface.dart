@@ -551,6 +551,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
       : BudgetTargetAvatarRail(
           presentation: presentationController!,
           limitEditController: limitEditController,
+          enableQuickLimitEdit: true,
           navigationController: avatarRailController,
           onTargetPreviewAccepted: drilldown == null
               ? null

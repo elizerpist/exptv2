@@ -117,6 +117,48 @@ void main() {
       expect(food.totalRatio, .25);
     });
 
+    test(
+      'manager exact-month partition reuses canonical segments and applies a local draft without persistence',
+      () {
+        final harness = _Harness(
+          snapshot: _snapshot(
+            budgetLimitScaled100: 10000000,
+            foodLimitScaled100: 2500000,
+            foodActualScaled100: 1000000,
+          ),
+        );
+        addTearDown(harness.dispose);
+
+        final partition = harness.presentation.partitionForManagerMonth(
+          direction: LedgerDirection.expense,
+          year: 2026,
+          month: 1,
+        );
+        final originalFood = partition.segmentForCategoryHandle(1);
+        final draft = partition.withCategoryLimitDraft(
+          categoryHandle: 1,
+          limitScaled100: 3000000,
+        );
+        final draftedFood = draft.segmentForCategoryHandle(1);
+
+        expect(partition.period, isA<BudgetLimitMonthPeriod>());
+        final period = partition.period as BudgetLimitMonthPeriod;
+        expect(period.year, 2026);
+        expect(period.month, 1);
+        expect(originalFood.opaqueRatio, .10);
+        expect(originalFood.translucentRatio, .15);
+        expect(partition.liveAllocatedTotalScaled100, 2500000);
+        expect(partition.unallocatedLimitScaled100, 7500000);
+        expect(draft.effectiveLimitForCategoryHandle(1), 3000000);
+        expect(draft.liveAllocatedTotalScaled100, 3000000);
+        expect(draftedFood.opaqueRatio, .10);
+        expect(draftedFood.translucentRatio, .20);
+        expect(partition.effectiveLimitForCategoryHandle(1), 2500000);
+        expect(harness.repository.upsertCalls, 0);
+        expect(harness.repository.deleteCalls, 0);
+      },
+    );
+
     test('keeps a missing aggregate denominator finite and disabled', () {
       final harness = _Harness(
         snapshot: _snapshot(
@@ -217,8 +259,8 @@ void main() {
             budgetActualScaled100: 100,
             inheritedJanuaryLimits: true,
           ),
-          initialScope: const AllTimeScope(),
-          logicalAsOfDate: const LocalDate(year: 2027, month: 1, day: 10),
+          initialScope: const MonthScope(YearMonth(year: 2026, month: 1)),
+          logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
         );
         addTearDown(harness.dispose);
 

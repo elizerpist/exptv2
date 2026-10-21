@@ -120,12 +120,72 @@ void main() {
       );
       await tester.pump();
 
-      final selected = find.byKey(const ValueKey('budget-target-avatar-center'));
+      final selected = find.byKey(
+        const ValueKey('budget-target-avatar-center'),
+      );
       await tester.tap(selected);
       expect(requests, 1);
 
       await tester.longPress(selected);
       expect(requests, 1);
+    },
+  );
+
+  testWidgets(
+    'Dashboard quick-edit capability is explicit: disabled has no long press session and enabled keeps the manager tap separate',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      var managerRequests = 0;
+      addTearDown(harness.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      Future<void> mount(bool enableQuickLimitEdit) => tester.pumpWidget(
+        _host(
+          harness.presentation,
+          limitEditController: harness.edits,
+          enableQuickLimitEdit: enableQuickLimitEdit,
+          onSelectedBudgetTargetManagerRequested: (_) => managerRequests += 1,
+          height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+        ),
+      );
+
+      await mount(false);
+      await tester.pump();
+      final avatar = find.byKey(const ValueKey('budget-target-avatar-center'));
+      var pointer = await tester.startGesture(tester.getCenter(avatar));
+      await tester.pump(kLongPressTimeout);
+      await pointer.moveBy(const Offset(0, -13));
+      await tester.pump();
+      expect(harness.edits.value, isNull);
+      expect(managerRequests, 0);
+      await pointer.up();
+
+      await mount(true);
+      await tester.pump();
+      pointer = await tester.startGesture(tester.getCenter(avatar));
+      await tester.pump(kLongPressTimeout);
+      await pointer.moveBy(const Offset(0, -13));
+      await tester.pump();
+      expect(harness.edits.value?.effectiveLimitScaled100, 200000);
+      expect(managerRequests, 0);
+      final stages = FluviDiagnosticLogger.entries
+          .map((event) => event.stage)
+          .toSet();
+      expect(stages, contains('BUDGET_LIMIT_EDIT_POINTER_DOWN'));
+      expect(stages, contains('BUDGET_LIMIT_TARGET_IDENTITY_CHECK'));
+      expect(stages, contains('BUDGET_LIMIT_EDIT_CONTEXT_ACCEPTED'));
+      expect(stages, contains('BUDGET_LIMIT_EDIT_TICK'));
+      expect(
+        FluviDiagnosticLogger.entries
+            .where(
+              (event) => event.stage == 'BUDGET_LIMIT_TARGET_IDENTITY_CHECK',
+            )
+            .single
+            .scope,
+        contains('coherent=true'),
+      );
+      await pointer.up();
     },
   );
 
@@ -3156,6 +3216,7 @@ String _centeredShadowedArtworkSource() =>
 Widget _host(
   DashboardBudgetPresentationController presentation, {
   DashboardBudgetLimitEditController? limitEditController,
+  bool enableQuickLimitEdit = true,
   ValueChanged<BudgetLimitManagerRequest>?
   onSelectedBudgetTargetManagerRequested,
   double height = 72,
@@ -3168,6 +3229,7 @@ Widget _host(
         child: BudgetTargetAvatarRail(
           presentation: presentation,
           limitEditController: limitEditController,
+          enableQuickLimitEdit: enableQuickLimitEdit,
           onSelectedBudgetTargetManagerRequested:
               onSelectedBudgetTargetManagerRequested,
         ),

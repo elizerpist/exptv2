@@ -14,6 +14,7 @@ import '../../query/domain/ledger_direction.dart';
 import '../../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/local_date.dart';
+import 'budget_allocation_partition_lane.dart';
 import 'budget_target_avatar_carousel.dart';
 
 /// Frozen intent emitted by the selected avatar.  The rail only emits this
@@ -708,6 +709,13 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   );
 
   Future<void> _showMonthSheet(_BudgetLimitMonthInfo info) async {
+    final activeTargetHandle = _activeTargetHandle;
+    final activeTarget = _activeTarget;
+    final partition = widget.presentation.partitionForManagerMonth(
+      direction: widget.request.direction,
+      year: info.year,
+      month: info.month,
+    );
     _monthSheetOpen = true;
     try {
       await showModalBottomSheet<void>(
@@ -718,6 +726,10 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         builder: (sheetContext) => _BudgetLimitMonthSheet(
           info: info,
           accent: _accent,
+          targetHandle: activeTargetHandle,
+          targetTitle: _title,
+          targetIsAggregate: activeTarget.isAggregate,
+          partition: partition,
           onSetOverride: (amount) async {
             await _setOverride(info.year, info.month, amount);
             if (sheetContext.mounted) Navigator.of(sheetContext).pop();
@@ -1058,12 +1070,20 @@ final class _BudgetLimitMonthSheet extends StatefulWidget {
   const _BudgetLimitMonthSheet({
     required this.info,
     required this.accent,
+    required this.targetHandle,
+    required this.targetTitle,
+    required this.targetIsAggregate,
+    required this.partition,
     required this.onSetOverride,
     required this.onDeleteOverride,
   });
 
   final _BudgetLimitMonthInfo info;
   final Color accent;
+  final int targetHandle;
+  final String targetTitle;
+  final bool targetIsAggregate;
+  final DashboardBudgetPartitionPresentation partition;
   final Future<void> Function(int) onSetOverride;
   final Future<void> Function() onDeleteOverride;
 
@@ -1073,34 +1093,45 @@ final class _BudgetLimitMonthSheet extends StatefulWidget {
 
 final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
   late final TextEditingController _controller;
+  var _isEditing = false;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(
       text: ((widget.info.resolvedLimitScaled100 ?? 0) ~/ 100).toString(),
-    );
+    )..addListener(_onDraftChanged);
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onDraftChanged);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onDraftChanged() {
+    if (_isEditing && mounted) setState(() {});
   }
 
   void _adjustOverride(int deltaForints) {
     final current =
         int.tryParse(_controller.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    setState(() {
-      _controller.text = (current + deltaForints)
-          .clamp(0, 0x7fffffffffffffff)
-          .toString();
-    });
+    _controller.text = (current + deltaForints)
+        .clamp(0, 0x7fffffffffffffff)
+        .toString();
   }
 
   int get _overrideDraftScaled100 =>
       (int.tryParse(_controller.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0) *
       100;
+
+  DashboardBudgetPartitionPresentation get _displayedPartition => _isEditing
+      ? widget.partition.withCategoryLimitDraft(
+          categoryHandle: widget.targetHandle,
+          limitScaled100: _overrideDraftScaled100,
+        )
+      : widget.partition;
 
   @override
   Widget build(BuildContext context) {
@@ -1141,9 +1172,26 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
             ),
           ),
           const SizedBox(height: 3),
-          Text(
-            _formatAmount(info.resolvedLimitScaled100),
-            style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _formatAmount(info.resolvedLimitScaled100),
+                  style: const TextStyle(
+                    fontSize: 27,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              IconButton(
+                key: const ValueKey<String>('budget-limit-month-sheet-edit'),
+                tooltip: info.hasOverride
+                    ? 'Egyedi keret szerkesztése'
+                    : 'Egyedi keret beállítása',
+                onPressed: () => setState(() => _isEditing = true),
+                icon: Icon(Icons.edit_rounded, color: widget.accent),
+              ),
+            ],
           ),
           if (info.historicalBaseScaled100 != null && info.hasOverride) ...[
             const SizedBox(height: 4),
@@ -1179,10 +1227,26 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
               info.actualScaled100 != null &&
               info.resolvedLimitScaled100 != null) ...[
             const SizedBox(height: 15),
+            const Text('Költés', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 2),
             Text(
-              'Költés: ${_formatAmount(info.actualScaled100)}',
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              _formatAmount(info.actualScaled100),
+              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
             ),
+            if (ratio != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  _closedMonthDeltaCopy(info),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: ratio > 1
+                        ? const Color(0xffd94f69)
+                        : const Color(0xff288e6e),
+                  ),
+                ),
+              ),
             const SizedBox(height: 6),
             _MiniUtilizationRail(
               ratio: ratio,
@@ -1203,9 +1267,14 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
               info.actualScaled100 != null &&
               info.resolvedLimitScaled100 != null) ...[
             const SizedBox(height: 15),
+            const Text(
+              'Eddigi költés',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 2),
             Text(
-              'Eddigi költés: ${_formatAmount(info.actualScaled100)}',
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              _formatAmount(info.actualScaled100),
+              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 6),
             _MiniUtilizationRail(
@@ -1221,51 +1290,87 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
               style: const TextStyle(fontSize: 12, color: Color(0xff68758e)),
             ),
           ],
-          const SizedBox(height: 18),
-          const Text(
-            'Egyedi keret beállítása',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _controller,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              suffixText: 'Ft',
-              border: OutlineInputBorder(),
+          if (info.isFuture) ...[
+            const SizedBox(height: 15),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xfff6f7fa),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Ehhez a hónaphoz még nincs költési adat.',
+                style: TextStyle(fontSize: 12, color: Color(0xff68758e)),
+              ),
             ),
+          ],
+          const SizedBox(height: 18),
+          _BudgetLimitMonthPartitionContext(
+            partition: _displayedPartition,
+            accent: widget.accent,
+            targetHandle: widget.targetHandle,
+            targetTitle: widget.targetTitle,
+            targetIsAggregate: widget.targetIsAggregate,
+            year: info.year,
+            month: info.month,
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: <int>[-10000, -1000, 1000, 10000]
-                .map(
-                  (delta) => Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: OutlinedButton(
-                        onPressed: () => _adjustOverride(delta),
-                        child: Text(
-                          '${delta > 0 ? '+' : '−'}${delta.abs() ~/ 1000}k',
+          if (_isEditing) ...[
+            const SizedBox(height: 20),
+            const Text(
+              'Egyedi keret beállítása',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              key: const ValueKey<String>('budget-limit-month-sheet-amount'),
+              controller: _controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                suffixText: 'Ft',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: <int>[-10000, -1000, 1000, 10000]
+                  .map(
+                    (delta) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: OutlinedButton(
+                          onPressed: () => _adjustOverride(delta),
+                          child: Text(
+                            '${delta > 0 ? '+' : '−'}${delta.abs() ~/ 1000}k',
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 10),
-          FilledButton(
-            onPressed: () => widget.onSetOverride(_overrideDraftScaled100),
-            child: const Text('Egyedi keret mentése'),
-          ),
-          if (info.hasOverride)
-            TextButton(
-              onPressed: widget.onDeleteOverride,
-              child: const Text('Vissza az alapértékhez'),
+                  )
+                  .toList(growable: false),
             ),
+            const SizedBox(height: 10),
+            FilledButton(
+              onPressed: () => widget.onSetOverride(_overrideDraftScaled100),
+              child: const Text('Egyedi keret mentése'),
+            ),
+            if (info.hasOverride)
+              TextButton(
+                onPressed: widget.onDeleteOverride,
+                child: const Text('Vissza az alapértékhez'),
+              ),
+          ],
         ],
       ),
     );
+  }
+
+  String _closedMonthDeltaCopy(_BudgetLimitMonthInfo info) {
+    final actual = info.actualScaled100 ?? 0;
+    final limit = info.resolvedLimitScaled100 ?? 0;
+    final delta = actual - limit;
+    if (delta > 0) return '+${_formatAmount(delta)} túllépted a keretet';
+    if (delta < 0) return '${_formatAmount(-delta)} a keret alatt maradt';
+    return 'Pontosan elérted a keretet';
   }
 
   Widget _chip(String label, Color color) => Container(
@@ -1278,6 +1383,147 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
       label,
       style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: color),
     ),
+  );
+}
+
+/// Expanded, exact-month counterpart of the Header allocation lane.  It owns
+/// no allocation formula: all segment and total values come from the same
+/// immutable [DashboardBudgetPartitionPresentation] as the Header.
+final class _BudgetLimitMonthPartitionContext extends StatelessWidget {
+  const _BudgetLimitMonthPartitionContext({
+    required this.partition,
+    required this.accent,
+    required this.targetHandle,
+    required this.targetTitle,
+    required this.targetIsAggregate,
+    required this.year,
+    required this.month,
+  });
+
+  final DashboardBudgetPartitionPresentation partition;
+  final Color accent;
+  final int targetHandle;
+  final String targetTitle;
+  final bool targetIsAggregate;
+  final int year;
+  final int month;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!partition.hasPositiveAggregateLimit) return const SizedBox.shrink();
+    final segment = partition.segmentForCategoryHandle(targetHandle);
+    final categoryLimit = targetIsAggregate
+        ? partition.effectiveAggregateLimitScaled100
+        : partition.effectiveLimitForCategoryHandle(targetHandle);
+    final share = targetIsAggregate ? 1.0 : segment.totalRatio;
+    return Container(
+      key: const ValueKey<String>('budget-limit-month-sheet-partition'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xfff8f9fc),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xffe5e8f0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Helye a havi keretben',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${_monthLongName(month)} $year · Teljes havi keret',
+            style: const TextStyle(fontSize: 11, color: Color(0xff68758e)),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _formatAmount(partition.effectiveAggregateLimitScaled100),
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 11),
+          SizedBox(
+            height: 18,
+            child: BudgetAllocationPartitionLane(
+              partition: partition,
+              highlightedCategoryHandle: targetIsAggregate
+                  ? null
+                  : targetHandle,
+            ),
+          ),
+          const SizedBox(height: 11),
+          Row(
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: .18),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.category_rounded, size: 12, color: accent),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  targetTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                '${(share * 100).toStringAsFixed(1)}%',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 27, top: 1),
+            child: Text(
+              '${_formatAmount(categoryLimit)} a teljes keretből',
+              style: const TextStyle(fontSize: 11, color: Color(0xff68758e)),
+            ),
+          ),
+          const SizedBox(height: 11),
+          Row(
+            children: [
+              Expanded(
+                child: _metric(
+                  'Kiosztva összesen',
+                  _formatAmount(partition.liveAllocatedTotalScaled100),
+                  '${(partition.allocationRawRatio * 100).round()}%',
+                ),
+              ),
+              Expanded(
+                child: _metric(
+                  'Nincs kiosztva',
+                  _formatAmount(partition.unallocatedLimitScaled100),
+                  '${(partition.unallocatedRatio * 100).round()}%',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String amount, String ratio) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(fontSize: 10, color: Color(0xff68758e)),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        amount,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+      ),
+      Text(
+        ratio,
+        style: const TextStyle(fontSize: 10, color: Color(0xff68758e)),
+      ),
+    ],
   );
 }
 

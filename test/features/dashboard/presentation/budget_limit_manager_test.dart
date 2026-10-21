@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_presentati
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_manager.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_allocation_partition_lane.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_carousel.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -136,6 +137,25 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.text('Helye a havi keretben'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>('budget-limit-month-sheet-partition'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('Vissza az alapértékhez'), findsNothing);
+      await expectLater(
+        find.byType(BottomSheet),
+        matchesGoldenFile(
+          '../../../goldens/budget_limit_month_sheet_overview.png',
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-month-sheet-edit')),
+      );
+      await tester.pump();
       expect(find.text('Vissza az alapértékhez'), findsOneWidget);
       expect(find.text('Alap havi keret: 160 000 Ft'), findsOneWidget);
       await tester.binding.handlePopRoute();
@@ -151,9 +171,45 @@ void main() {
         const Offset(-64, 0),
       );
       await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
       expect(find.text('Egészség'), findsOneWidget);
       expect(find.text('27 366 Ft'), findsWidgets);
       expect(find.text('2026'), findsOneWidget);
+      expect(repository.listCalls, 0);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('budget-limit-manager-month-card-2026-3'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final laneBefore = tester.widget<BudgetAllocationPartitionLane>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('budget-limit-month-sheet-partition'),
+          ),
+          matching: find.byType(BudgetAllocationPartitionLane),
+        ),
+      );
+      expect(laneBefore.highlightedCategoryHandle, 1);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-month-sheet-edit')),
+      );
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('budget-limit-month-sheet-amount')),
+        '30000',
+      );
+      await tester.pump();
+      final laneDraft = tester.widget<BudgetAllocationPartitionLane>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('budget-limit-month-sheet-partition'),
+          ),
+          matching: find.byType(BudgetAllocationPartitionLane),
+        ),
+      );
+      expect(laneDraft.partition.effectiveLimitForCategoryHandle(1), 3000000);
       expect(repository.listCalls, 0);
     },
   );

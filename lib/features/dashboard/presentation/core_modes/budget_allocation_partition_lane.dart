@@ -13,9 +13,18 @@ import 'dashboard_partition_lane_geometry.dart';
 /// partition. It traverses the retained canonical bank; the allocation total
 /// itself is already a scalar in [DashboardBudgetPartitionPresentation].
 final class BudgetAllocationPartitionLane extends StatelessWidget {
-  const BudgetAllocationPartitionLane({required this.partition, super.key});
+  const BudgetAllocationPartitionLane({
+    required this.partition,
+    this.highlightedCategoryHandle,
+    super.key,
+  });
 
   final DashboardBudgetPartitionPresentation partition;
+
+  /// The compact Header lane leaves this null.  A category month sheet can
+  /// pass its exact target handle to make the already-canonical segment
+  /// legible without introducing a second partition renderer.
+  final int? highlightedCategoryHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +35,7 @@ final class BudgetAllocationPartitionLane extends StatelessWidget {
         painter: BudgetAllocationPartitionPainter(
           partition: partition,
           showOuterContour: profile.settings.showPartitionContour,
+          highlightedCategoryHandle: highlightedCategoryHandle,
         ),
         child: const SizedBox.expand(),
       ),
@@ -39,10 +49,12 @@ final class BudgetAllocationPartitionPainter extends CustomPainter {
   const BudgetAllocationPartitionPainter({
     required this.partition,
     this.showOuterContour = false,
+    this.highlightedCategoryHandle,
   });
 
   final DashboardBudgetPartitionPresentation partition;
   final bool showOuterContour;
+  final int? highlightedCategoryHandle;
 
   static const _allocatedRemainderOpacity = .38;
 
@@ -72,6 +84,7 @@ final class BudgetAllocationPartitionPainter extends CustomPainter {
           final color = CategoryColorCatalog.resolve(
             category.colorId,
           ).middleColor;
+          final segmentStart = covered;
           covered = _paintPortion(
             canvas: canvas,
             track: track,
@@ -86,6 +99,21 @@ final class BudgetAllocationPartitionPainter extends CustomPainter {
             ratio: segment.translucentRatio,
             color: color.withValues(alpha: _allocatedRemainderOpacity),
           );
+          if (handle == highlightedCategoryHandle && covered > segmentStart) {
+            final selectedRect = Rect.fromLTWH(
+              track.left + track.width * segmentStart,
+              track.top + .5,
+              track.width * (covered - segmentStart),
+              (track.height - 1).clamp(0.0, double.infinity),
+            );
+            canvas.drawRRect(
+              RRect.fromRectAndRadius(selectedRect, const Radius.circular(3)),
+              Paint()
+                ..color = Colors.white.withValues(alpha: .92)
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 1,
+            );
+          }
         }
       }
     }
@@ -142,6 +170,7 @@ final class BudgetAllocationPartitionPainter extends CustomPainter {
           partition.effectiveLimitByTargetHandle,
         ) ||
         !identical(old.categoryOverlay, partition.categoryOverlay) ||
-        oldDelegate.showOuterContour != showOuterContour;
+        oldDelegate.showOuterContour != showOuterContour ||
+        oldDelegate.highlightedCategoryHandle != highlightedCategoryHandle;
   }
 }

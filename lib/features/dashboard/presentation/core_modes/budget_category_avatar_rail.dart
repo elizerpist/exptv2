@@ -46,6 +46,7 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     super.key,
     required this.presentation,
     this.limitEditController,
+    this.enableQuickLimitEdit = true,
     this.navigationController,
     this.onTargetPreview,
     this.onTargetPreviewAccepted,
@@ -60,6 +61,12 @@ class BudgetTargetAvatarRail extends StatefulWidget {
 
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetLimitEditController? limitEditController;
+
+  /// Explicit Dashboard-only capability.  The fullscreen manager deliberately
+  /// uses the shared carousel primitive directly and never enables this.
+  /// Keeping the capability on this wrapper prevents a future visual carousel
+  /// refactor from silently dropping the selected-avatar long-press surface.
+  final bool enableQuickLimitEdit;
   final BudgetTargetAvatarRailController? navigationController;
 
   /// One semantic carousel crossing on its direct prepared preview lane.
@@ -251,7 +258,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       widget.presentation.addListener(_onPresentationChanged);
       _onPresentationChanged();
     }
-    if (!identical(oldWidget.limitEditController, widget.limitEditController)) {
+    if (!identical(oldWidget.limitEditController, widget.limitEditController) ||
+        oldWidget.enableQuickLimitEdit != widget.enableQuickLimitEdit) {
       _quickEdit?.dispose();
       _quickEdit = _createQuickEditController();
     }
@@ -294,7 +302,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   BudgetLimitQuickEditGestureController? _createQuickEditController() {
     final edits = widget.limitEditController;
-    if (edits == null) return null;
+    if (!widget.enableQuickLimitEdit || edits == null) return null;
     return BudgetLimitQuickEditGestureController(
       edits: edits,
       contextForCurrentSelection: () {
