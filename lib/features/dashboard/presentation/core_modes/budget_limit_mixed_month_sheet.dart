@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -92,7 +90,7 @@ final class _BudgetLimitMixedMonthEditorState
   late final Map<int, int> _draftByHandle;
   late final Map<int, int> _committedByHandle;
   int? _highlightedHandle;
-  Timer? _highlightClearTimer;
+  int _highlightClearGeneration = 0;
 
   @override
   void initState() {
@@ -129,7 +127,7 @@ final class _BudgetLimitMixedMonthEditorState
 
   @override
   void dispose() {
-    _highlightClearTimer?.cancel();
+    _highlightClearGeneration += 1;
     _aggregateFocusNode
       ..removeListener(_onAggregateFocusChanged)
       ..dispose();
@@ -248,15 +246,16 @@ final class _BudgetLimitMixedMonthEditorState
   }
 
   void _activateCategory(int handle) {
-    _highlightClearTimer?.cancel();
+    _highlightClearGeneration += 1;
     if (_highlightedHandle == handle) return;
     setState(() => _highlightedHandle = handle);
   }
 
   void _scheduleHighlightClear(Duration delay) {
-    _highlightClearTimer?.cancel();
-    _highlightClearTimer = Timer(delay, () {
-      if (mounted) setState(() => _highlightedHandle = null);
+    final generation = ++_highlightClearGeneration;
+    Future<void>.delayed(delay).then((_) {
+      if (!mounted || generation != _highlightClearGeneration) return;
+      setState(() => _highlightedHandle = null);
     });
   }
 
