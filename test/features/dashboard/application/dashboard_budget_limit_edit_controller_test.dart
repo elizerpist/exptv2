@@ -709,6 +709,41 @@ void main() {
         expect(controller.value!.effectiveLimitScaled100, 0);
       },
     );
+
+    test(
+      'typed no-limit operations write zero rather than deleting inherited truth',
+      () async {
+        final repository = _CountingFinancialLimitRepository();
+        final controller = DashboardBudgetLimitEditController(
+          repository: repository,
+          isKeyCurrent: (_) => true,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.setNoBaseLimitEffectiveFromCurrentMonth(
+          direction: FinancialLimitDirection.expense,
+          target: const FinancialLimitCategoryTarget('health'),
+          effectiveFromYear: 2026,
+          effectiveFromMonth: 10,
+          coreRevision: 7,
+          targetHandle: 1,
+          confirmedLimitScaled100: 5000000,
+        );
+        await controller.setNoMonthLimit(
+          direction: FinancialLimitDirection.expense,
+          target: const FinancialLimitCategoryTarget('health'),
+          year: 2026,
+          month: 10,
+          coreRevision: 7,
+          targetHandle: 1,
+          confirmedLimitScaled100: 5000000,
+        );
+
+        expect(repository.upsertCalls, 2);
+        expect(repository.deleteCalls, 0);
+        expect(repository.lastUpsertAmount, 0);
+      },
+    );
   });
 }
 

@@ -121,6 +121,28 @@ final class FinancialLimit {
   final int amountScaled100;
   final int createdAtUtcMs;
   final int updatedAtUtcMs;
+
+  /// A persisted zero is an intentional no-limit marker.  It must not be
+  /// shown as a usable `0 Ft` denominator or allowed to reveal an older base
+  /// revision through accidental deletion.
+  bool get hasPositiveAmount => amountScaled100 > 0;
+
+  int? get positiveAmountScaled100 =>
+      hasPositiveAmount ? amountScaled100 : null;
+}
+
+/// The one UI-facing interpretation of persisted FinancialLimit amounts.
+///
+/// FinancialLimit itself deliberately permits zero: effective-dated base and
+/// exact-month records use it to express an explicit no-limit decision.  All
+/// consumer presentation should use this boundary instead of scattering
+/// `== 0` checks and accidentally treating a no-limit marker as money.
+abstract final class FinancialLimitAvailability {
+  static bool isPositive(int? amountScaled100) =>
+      amountScaled100 != null && amountScaled100 > 0;
+
+  static int? positiveOrNull(int? amountScaled100) =>
+      isPositive(amountScaled100) ? amountScaled100 : null;
 }
 
 /// One member of an atomic semantic mutation. YEAR editing writes the twelve

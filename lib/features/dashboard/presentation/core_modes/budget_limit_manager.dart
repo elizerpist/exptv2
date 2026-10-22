@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
@@ -110,6 +112,19 @@ final class _BudgetLimitManagerMonthPage extends _BudgetLimitManagerPage {
 }
 
 final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
+  static final MenuStyle _contextMenuStyle = MenuStyle(
+    backgroundColor: const WidgetStatePropertyAll<Color>(Colors.white),
+    surfaceTintColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
+    elevation: const WidgetStatePropertyAll<double>(6),
+    padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+      EdgeInsets.symmetric(vertical: 6),
+    ),
+    fixedSize: const WidgetStatePropertyAll<Size>(Size.fromWidth(296)),
+    shape: WidgetStatePropertyAll<OutlinedBorder>(
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
+  );
+
   late int _year;
   late final CenteredCarouselController _avatarCarouselController;
   List<BudgetTargetAvatarCarouselItem> _avatarItems =
@@ -280,13 +295,48 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   });
 
   int? _resolvedLimit(int year, int month) {
-    return FinancialLimitResolution.resolve(
-      limits: _timeline,
-      direction: _direction,
-      target: _target,
+    return FinancialLimitAvailability.positiveOrNull(
+      _resolvedLimitRecord(
+        limits: _timeline,
+        target: _target,
+        year: year,
+        month: month,
+      )?.amountScaled100,
+    );
+  }
+
+  FinancialLimit? _resolvedLimitRecord({
+    required Iterable<FinancialLimit> limits,
+    required FinancialLimitTarget target,
+    required int year,
+    required int month,
+  }) => FinancialLimitResolution.resolve(
+    limits: limits,
+    direction: _direction,
+    target: target,
+    year: year,
+    month: month,
+  );
+
+  FinancialLimit? _resolvedLimitRecordForHandle(
+    int handle,
+    int year,
+    int month,
+  ) {
+    final target = _financialTargetForHandle(handle);
+    if (target == null) return null;
+    return _resolvedLimitRecord(
+      limits: _timelineByTargetHandle[handle] ?? const <FinancialLimit>[],
+      target: target,
       year: year,
       month: month,
-    )?.amountScaled100;
+    );
+  }
+
+  int? _resolvedLimitForHandle(int handle, int year, int month) {
+    return FinancialLimitAvailability.positiveOrNull(
+      _resolvedLimitRecordForHandle(handle, year, month)?.amountScaled100,
+    );
   }
 
   FinancialLimit? _baseForTargetHandle(int handle, int year, int month) {
@@ -350,18 +400,6 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   FinancialLimitTarget? _financialTargetForHandle(int handle) {
     final target = _targetForHandle(handle);
     return target == null ? null : _financialTargetFor(target);
-  }
-
-  int? _resolvedLimitForHandle(int handle, int year, int month) {
-    final target = _financialTargetForHandle(handle);
-    if (target == null) return null;
-    return FinancialLimitResolution.resolve(
-      limits: _timelineByTargetHandle[handle] ?? const <FinancialLimit>[],
-      direction: _direction,
-      target: target,
-      year: year,
-      month: month,
-    )?.amountScaled100;
   }
 
   void _replaceLocal(FinancialLimit limit) {
@@ -431,6 +469,47 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     );
   }
 
+  /// A base "delete" is a future-effective zero revision, never a physical
+  /// deletion. Removing the record would reveal an older base revision and
+  /// silently rewrite the user's intended no-limit state.
+  Future<void> _setNoBaseForTarget(int targetHandle) async {
+    final activeTarget = _targetForHandle(targetHandle);
+    if (activeTarget == null) return;
+    final target = _financialTargetFor(activeTarget);
+    final key = FinancialLimitKey(
+      direction: _direction,
+      target: target,
+      period: FinancialLimitBaseMonthlyRevisionPeriod(
+        _logicalDate.year,
+        _logicalDate.month,
+      ),
+    );
+    final confirmedBase = _resolvedLimitForHandle(
+      targetHandle,
+      _logicalDate.year,
+      _logicalDate.month,
+    );
+    _replaceLocal(
+      FinancialLimit(
+        key: key,
+        amountScaled100: 0,
+        createdAtUtcMs: 0,
+        updatedAtUtcMs: 0,
+      ),
+    );
+    await widget.limitEdits.setNoBaseLimitEffectiveFromCurrentMonth(
+      direction: _direction,
+      target: target,
+      effectiveFromYear: _logicalDate.year,
+      effectiveFromMonth: _logicalDate.month,
+      coreRevision:
+          widget.presentation.preparedSnapshotForManager?.coreRevision ??
+          widget.request.coreRevision,
+      targetHandle: targetHandle,
+      confirmedLimitScaled100: confirmedBase,
+    );
+  }
+
   Future<void> _setOverrideForTarget(
     int targetHandle,
     int year,
@@ -469,6 +548,48 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
           )
           .limitScaled100,
       amountScaled100: amount,
+    );
+  }
+
+  /// An exact monthly "delete" must suppress an inherited base for that
+  /// month. A zero override is therefore a deliberate no-limit marker;
+  /// [_deleteOverrideForTarget] is reserved for "Vissza az alapértékhez".
+  Future<void> _setNoMonthLimitForTarget(
+    int targetHandle,
+    int year,
+    int month,
+  ) async {
+    final activeTarget = _targetForHandle(targetHandle);
+    if (activeTarget == null) return;
+    final target = _financialTargetFor(activeTarget);
+    final key = FinancialLimitKey(
+      direction: _direction,
+      target: target,
+      period: FinancialLimitMonthOverridePeriod(year, month),
+    );
+    _replaceLocal(
+      FinancialLimit(
+        key: key,
+        amountScaled100: 0,
+        createdAtUtcMs: 0,
+        updatedAtUtcMs: 0,
+      ),
+    );
+    final snapshot = widget.presentation.preparedSnapshotForManager;
+    await widget.limitEdits.setNoMonthLimit(
+      direction: _direction,
+      target: target,
+      year: year,
+      month: month,
+      coreRevision: snapshot?.coreRevision ?? widget.request.coreRevision,
+      targetHandle: targetHandle,
+      confirmedLimitScaled100: snapshot
+          ?.cellAt(
+            direction: widget.request.direction,
+            period: BudgetLimitPeriod.month(year, month),
+            targetHandle: targetHandle,
+          )
+          .limitScaled100,
     );
   }
 
@@ -557,15 +678,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
               ],
             ),
             actions: [
-              if (monthPage != null)
-                IconButton(
-                  key: const ValueKey<String>(
-                    'budget-limit-manager-month-more',
-                  ),
-                  tooltip: 'További műveletek',
-                  onPressed: () {},
-                  icon: const Icon(Icons.more_vert_rounded),
-                ),
+              if (monthPage != null) _monthContextMenu(monthPage),
               if (monthPage == null)
                 IconButton(
                   key: const ValueKey<String>(
@@ -600,15 +713,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                       Icons.view_carousel_outlined,
                   }),
                 ),
-              if (monthPage == null && _canManageCategories)
-                IconButton(
-                  key: const ValueKey<String>(
-                    'budget-limit-manager-categories',
-                  ),
-                  tooltip: 'Kategóriák kezelése',
-                  onPressed: _monthSheetOpen ? null : _showCategoryManager,
-                  icon: const Icon(Icons.category_outlined),
-                ),
+              if (monthPage == null) _rootContextMenu(),
             ],
           ),
           body: SafeArea(
@@ -723,6 +828,11 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   Widget _buildMonthEditorBody(_BudgetLimitManagerMonthPage page) {
     final aggregateHandle = _aggregateHandle();
     if (aggregateHandle == null) return const SizedBox.shrink();
+    final aggregateRecord = _resolvedLimitRecordForHandle(
+      aggregateHandle,
+      page.year,
+      page.month,
+    );
     final partition = _partitionWithAllocationDrafts(
       partition: widget.presentation.partitionForManagerMonth(
         direction: widget.request.direction,
@@ -763,9 +873,11 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         year: page.year,
         month: page.month,
         partition: partition,
-        initialAggregateAmountScaled100:
-            _resolvedLimitForHandle(aggregateHandle, page.year, page.month) ??
-            partition.effectiveAggregateLimitScaled100,
+        initialAggregateAmountScaled100: aggregateRecord == null
+            ? FinancialLimitAvailability.positiveOrNull(
+                partition.effectiveAggregateLimitScaled100,
+              )
+            : aggregateRecord.positiveAmountScaled100,
         monthlyIncomeScaled100: _monthlyIncome(
           widget.presentation.preparedSnapshotForManager,
           page.year,
@@ -1045,6 +1157,8 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                     initial: base ?? 0,
                     onSave: (amount) =>
                         _setBaseForTarget(aggregateHandle, amount),
+                    deleteLabel: 'Alap havi Budget törlése',
+                    onDelete: () => _setNoBaseForTarget(aggregateHandle),
                   ),
                   icon: Icon(Icons.edit_rounded, color: _accent),
                 ),
@@ -1299,6 +1413,10 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
               title: 'Alap havi keret',
               initial: _currentBase ?? 0,
               onSave: _setBase,
+              deleteLabel: _activeTarget.isAggregate
+                  ? 'Alap havi Budget törlése'
+                  : 'Alap kategórialimit törlése',
+              onDelete: () => _setNoBaseForTarget(_activeTargetHandle),
             ),
       child: Ink(
         padding: const EdgeInsets.all(18),
@@ -1513,9 +1631,17 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       );
     }
     final override = _overrideForTargetHandle(targetHandle, year, month);
-    final limit =
-        _resolvedLimitForHandle(targetHandle, year, month) ??
-        cell?.limitScaled100;
+    final timelineRecord = _resolvedLimitRecordForHandle(
+      targetHandle,
+      year,
+      month,
+    );
+    // A timeline record with amount zero is a deliberate no-limit override
+    // or revision. Only a missing timeline record may use the still-prepared
+    // snapshot as a loading fallback.
+    final limit = timelineRecord == null
+        ? FinancialLimitAvailability.positiveOrNull(cell?.limitScaled100)
+        : timelineRecord.positiveAmountScaled100;
     final actual = cell?.actualScaled100;
     return _BudgetLimitMonthInfo(
       year: year,
@@ -1525,7 +1651,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         targetHandle,
         year,
         month,
-      )?.amountScaled100,
+      )?.positiveAmountScaled100,
       actualScaled100: actual,
       isCurrent: isCurrent,
       isFuture: isFuture,
@@ -1567,24 +1693,300 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     });
   }
 
+  /// The root overflow belongs to the active avatar first. Global category
+  /// navigation is intentionally one compact submenu below those actions.
+  Widget _rootContextMenu() => MenuAnchor(
+    style: _contextMenuStyle,
+    alignmentOffset: const Offset(-8, 6),
+    menuChildren: <Widget>[
+      if (_activeManagedCategory case final category?) ...[
+        if (!category.isSystemUncategorized)
+          MenuItemButton(
+            key: const ValueKey<String>('budget-limit-menu-category-edit'),
+            onPressed: () => _showCategoryEditor(category: category),
+            child: const Text('Kategória módosítása'),
+          ),
+        if (!category.isSystemUncategorized)
+          MenuItemButton(
+            key: const ValueKey<String>('budget-limit-menu-category-delete'),
+            onPressed: () => _confirmCategoryDelete(category),
+            child: const Text('Kategória törlése'),
+          ),
+      ] else
+        MenuItemButton(
+          key: const ValueKey<String>('budget-limit-menu-base-edit'),
+          onPressed: () => _showAmountEditor(
+            title: 'Alap havi Budget',
+            initial: _currentBase ?? 0,
+            onSave: _setBase,
+            deleteLabel: 'Alap havi Budget törlése',
+            onDelete: () => _setNoBaseForTarget(_activeTargetHandle),
+          ),
+          child: const Text('Alap havi Budget szerkesztése'),
+        ),
+      MenuItemButton(
+        key: const ValueKey<String>('budget-limit-menu-base-delete'),
+        onPressed: () => _setNoBaseForTarget(_activeTargetHandle),
+        child: Text(
+          _activeTarget.isAggregate
+              ? 'Alap havi Budget törlése'
+              : 'Alap kategórialimit törlése',
+        ),
+      ),
+      const Divider(),
+      _categoriesSubmenu(
+        key: const ValueKey<String>('budget-limit-menu-categories'),
+        onCategorySelected: _selectTargetFromMenu,
+      ),
+    ],
+    builder: (context, controller, _) => IconButton(
+      key: const ValueKey<String>('budget-limit-manager-more'),
+      tooltip: 'További műveletek',
+      onPressed: _monthSheetOpen
+          ? null
+          : () => controller.isOpen ? controller.close() : controller.open(),
+      icon: const Icon(Icons.more_vert_rounded),
+    ),
+  );
+
+  Widget _monthContextMenu(_BudgetLimitManagerMonthPage page) {
+    final aggregateHandle = _aggregateHandle();
+    final hasOverride =
+        aggregateHandle != null &&
+        _overrideForTargetHandle(aggregateHandle, page.year, page.month) !=
+            null;
+    return MenuAnchor(
+      style: _contextMenuStyle,
+      alignmentOffset: const Offset(-8, 6),
+      menuChildren: <Widget>[
+        if (aggregateHandle != null)
+          MenuItemButton(
+            key: const ValueKey<String>('budget-limit-month-menu-delete'),
+            onPressed: () => _setNoMonthLimitForTarget(
+              aggregateHandle,
+              page.year,
+              page.month,
+            ),
+            child: const Text('Havi Budget törlése'),
+          ),
+        if (aggregateHandle != null && hasOverride)
+          MenuItemButton(
+            key: const ValueKey<String>('budget-limit-month-menu-reset'),
+            onPressed: () => _deleteOverrideForTarget(
+              aggregateHandle,
+              page.year,
+              page.month,
+            ),
+            child: const Text('Vissza az alap Budgethez'),
+          ),
+        const Divider(),
+        _categoriesSubmenu(
+          key: const ValueKey<String>('budget-limit-month-menu-categories'),
+          onCategorySelected: (handle) => _showCategoryMonthSheetForHandle(
+            year: page.year,
+            month: page.month,
+            targetHandle: handle,
+            managesSheetOpenState: true,
+          ),
+        ),
+      ],
+      builder: (context, controller, _) => IconButton(
+        key: const ValueKey<String>('budget-limit-manager-month-more'),
+        tooltip: 'További műveletek',
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+        icon: const Icon(Icons.more_vert_rounded),
+      ),
+    );
+  }
+
+  SubmenuButton _categoriesSubmenu({
+    required Key key,
+    required ValueChanged<int> onCategorySelected,
+  }) => SubmenuButton(
+    key: key,
+    menuStyle: _contextMenuStyle,
+    menuChildren: <Widget>[
+      if (_canManageCategories)
+        MenuItemButton(
+          key: const ValueKey<String>('budget-limit-menu-category-create'),
+          onPressed: () => _showCategoryEditor(),
+          child: const Text('+ Új kategória'),
+        ),
+      if (_canManageCategories)
+        MenuItemButton(
+          key: const ValueKey<String>('budget-limit-menu-category-manage'),
+          onPressed: _showCategoryManager,
+          child: const Text('Kategóriák kezelése…'),
+        ),
+      if (_canManageCategories) const Divider(),
+      for (final item in _avatarItems)
+        if (!_targetForHandle(item.targetHandle)!.isAggregate)
+          MenuItemButton(
+            key: ValueKey<String>(
+              'budget-limit-menu-category-${item.targetHandle}',
+            ),
+            onPressed: () => onCategorySelected(item.targetHandle),
+            trailingIcon: item.targetHandle == _activeTargetHandle
+                ? const Icon(Icons.check_rounded, size: 18)
+                : null,
+            child: Text(item.title),
+          ),
+    ],
+    child: const Text('Kategóriák'),
+  );
+
+  FluviCategory? get _activeManagedCategory {
+    final categoryId = _activeTarget.category?.id;
+    if (categoryId == null) return null;
+    for (final category
+        in widget.categoryCollection?.value ?? const <FluviCategory>[]) {
+      if (category.id == categoryId) return category;
+    }
+    return null;
+  }
+
+  void _selectTargetFromMenu(int targetHandle) {
+    final index = _avatarItems.indexWhere(
+      (item) => item.targetHandle == targetHandle,
+    );
+    if (index < 0) return;
+    setState(() {
+      _activeTargetHandle = targetHandle;
+      _activeTargetStableId = _avatarItems[index].stableId;
+    });
+    unawaited(_avatarCarouselController.animateToIndex(index));
+  }
+
+  Future<void> _showCategoryEditor({FluviCategory? category}) async {
+    final repository = widget.categoryRepository;
+    if (repository == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 240),
+        reverseDuration: Duration(milliseconds: 200),
+      ),
+      builder: (_) => Material(
+        color: Colors.white,
+        child: _BudgetCategoryEditorSheet(
+          category: category,
+          repository: repository,
+          onCreated: _onManagerCategoryCreated,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmCategoryDelete(FluviCategory category) async {
+    final repository = widget.categoryRepository;
+    if (repository == null || category.isSystemUncategorized) return;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Kategória törlése?'),
+        content: Text(
+          'A „${category.name}” kategória tranzakciói és kapcsolódó '
+          'referenciái az Egyéb kategóriába kerülnek.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xffc9465c),
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Törlés'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
+    try {
+      await repository.deleteCategory(category.id);
+      _onManagerCategoryDeleted(category.id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A kategória törlése nem sikerült.')),
+      );
+    }
+  }
+
   Future<void> _showAmountEditor({
     required String title,
     required int initial,
     required Future<void> Function(int amount) onSave,
+    String? deleteLabel,
+    Future<void> Function()? onDelete,
   }) => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => _BudgetLimitAmountEditorSheet(
-      title: title,
-      initial: initial,
-      onSave: onSave,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+    ),
+    sheetAnimationStyle: const AnimationStyle(
+      duration: Duration(milliseconds: 240),
+      reverseDuration: Duration(milliseconds: 200),
+    ),
+    builder: (_) => Material(
+      color: Colors.white,
+      child: _BudgetLimitAmountEditorSheet(
+        title: title,
+        initial: initial,
+        onSave: onSave,
+        deleteLabel: deleteLabel,
+        onDelete: onDelete,
+      ),
     ),
   );
 
   bool get _canManageCategories =>
       widget.categoryRepository != null && widget.categoryCollection != null;
+
+  void _onManagerCategoryCreated(FluviCategory category) {
+    if (!mounted) return;
+    setState(() {
+      _categoryIdToSelectAfterCollectionUpdate = category.id;
+      final index = _avatarItems.indexWhere(
+        (item) => item.stableId == 'category:${category.id}',
+      );
+      if (index >= 0) {
+        _activeTargetStableId = _avatarItems[index].stableId;
+        _activeTargetHandle = _avatarItems[index].targetHandle;
+        _categoryIdToSelectAfterCollectionUpdate = null;
+      }
+      _allocationActiveCategoryStableId = 'category:${category.id}';
+      _allocationActiveCategoryHandle = null;
+    });
+  }
+
+  void _onManagerCategoryDeleted(String categoryId) {
+    if (!mounted) return;
+    setState(() {
+      if (_activeTargetStableId == 'category:$categoryId') {
+        _activeTargetStableId = 'aggregate';
+        _activeTargetHandle = 0;
+      }
+      if (_allocationActiveCategoryStableId == 'category:$categoryId') {
+        _allocationActiveCategoryStableId = null;
+        _allocationActiveCategoryHandle = null;
+      }
+    });
+  }
 
   Future<void> _showCategoryManager() async {
     final repository = widget.categoryRepository;
@@ -1595,38 +1997,22 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (_) => _BudgetCategoryManagementSheet(
-        categories: categories,
-        repository: repository,
-        onCategoryCreated: (category) {
-          if (!mounted) return;
-          setState(() {
-            _categoryIdToSelectAfterCollectionUpdate = category.id;
-            final index = _avatarItems.indexWhere(
-              (item) => item.stableId == 'category:${category.id}',
-            );
-            if (index >= 0) {
-              _activeTargetStableId = _avatarItems[index].stableId;
-              _activeTargetHandle = _avatarItems[index].targetHandle;
-              _categoryIdToSelectAfterCollectionUpdate = null;
-            }
-            _allocationActiveCategoryStableId = 'category:${category.id}';
-            _allocationActiveCategoryHandle = null;
-          });
-        },
-        onCategoryDeleted: (categoryId) {
-          if (!mounted) return;
-          setState(() {
-            if (_activeTargetStableId == 'category:$categoryId') {
-              _activeTargetStableId = 'aggregate';
-              _activeTargetHandle = 0;
-            }
-            if (_allocationActiveCategoryStableId == 'category:$categoryId') {
-              _allocationActiveCategoryStableId = null;
-              _allocationActiveCategoryHandle = null;
-            }
-          });
-        },
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 240),
+        reverseDuration: Duration(milliseconds: 200),
+      ),
+      builder: (_) => Material(
+        color: Colors.white,
+        child: _BudgetCategoryManagementSheet(
+          categories: categories,
+          repository: repository,
+          onCategoryCreated: _onManagerCategoryCreated,
+          onCategoryDeleted: _onManagerCategoryDeleted,
+        ),
       ),
     );
   }
@@ -1678,30 +2064,65 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         isScrollControlled: true,
         useSafeArea: true,
         showDragHandle: true,
-        builder: (sheetContext) => _BudgetLimitMonthSheet(
-          info: info,
-          accent: item?.color ?? _accent,
-          targetHandle: targetHandle,
-          targetTitle: item?.title ?? _title,
-          targetIsAggregate: target.isAggregate,
-          partition: partition,
-          snapshot: widget.presentation.preparedSnapshotForManager,
-          direction: widget.request.direction,
-          logicalAsOfDate: _logicalDate,
-          targetVisual: _targetVisualForHandle(targetHandle),
-          onSetOverride: (amount) async {
-            await _setOverrideForTarget(
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        sheetAnimationStyle: const AnimationStyle(
+          duration: Duration(milliseconds: 240),
+          reverseDuration: Duration(milliseconds: 200),
+        ),
+        builder: (sheetContext) => Material(
+          color: Colors.white,
+          child: _BudgetLimitMonthSheet(
+            info: info,
+            accent: item?.color ?? _accent,
+            targetHandle: targetHandle,
+            targetTitle: item?.title ?? _title,
+            targetIsAggregate: target.isAggregate,
+            partition: partition,
+            snapshot: widget.presentation.preparedSnapshotForManager,
+            direction: widget.request.direction,
+            logicalAsOfDate: _logicalDate,
+            targetVisual: _targetVisualForHandle(targetHandle),
+            onCommitSliderLimit: (amount) => _setOverrideForTarget(
               targetHandle,
               info.year,
               info.month,
               amount,
-            );
-          },
-          onDeleteOverride: () async {
-            await _deleteOverrideForTarget(targetHandle, info.year, info.month);
-            if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-          },
-          onDraftChanged: onDraftChanged,
+            ),
+            onSaveExplicitLimit: (amount) async {
+              await _setOverrideForTarget(
+                targetHandle,
+                info.year,
+                info.month,
+                amount,
+              );
+              if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+            },
+            onSetNoLimit: () async {
+              onDraftChanged?.call(0);
+              await _setNoMonthLimitForTarget(
+                targetHandle,
+                info.year,
+                info.month,
+              );
+              if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+            },
+            onResetToBase: () async {
+              await _deleteOverrideForTarget(
+                targetHandle,
+                info.year,
+                info.month,
+              );
+              onDraftChanged?.call(
+                _resolvedLimitForHandle(targetHandle, info.year, info.month) ??
+                    0,
+              );
+              if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+            },
+            onDraftChanged: onDraftChanged,
+          ),
         ),
       );
     } finally {
@@ -1724,48 +2145,63 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         isScrollControlled: true,
         useSafeArea: true,
         showDragHandle: true,
-        builder: (_) => _BudgetLimitAllocationMonthSheet(
-          year: year,
-          month: month,
-          partition: partition,
-          accent: _accent,
-          aggregateAmountScaled100: aggregateHandle == null
-              ? null
-              : _resolvedLimitForHandle(aggregateHandle, year, month),
-          monthlyIncomeScaled100: _monthlyIncome(
-            widget.presentation.preparedSnapshotForManager,
-            year,
-            month,
-          ),
-          canUseIncomeSpec:
-              widget.request.direction == LedgerDirection.expense &&
-              aggregateHandle != null,
-          entries: <_BudgetLimitAllocationEntry>[
-            for (final item in widget.presentation.value.items)
-              if (!item.target.isAggregate)
-                _BudgetLimitAllocationEntry(
-                  handle: item.target.handle,
-                  title: item.target.category!.displayName,
-                  amountScaled100: _allocationValueFor(
-                    year: year,
-                    month: month,
-                    handle: item.target.handle,
-                  ),
-                ),
-          ],
-          initialHandle: initialHandle,
-          onDraftChanged: (handle, amount) => _setAllocationDraft(
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        sheetAnimationStyle: const AnimationStyle(
+          duration: Duration(milliseconds: 240),
+          reverseDuration: Duration(milliseconds: 200),
+        ),
+        builder: (_) => Material(
+          color: Colors.white,
+          child: _BudgetLimitAllocationMonthSheet(
             year: year,
             month: month,
-            handle: handle,
-            amount: amount,
+            partition: partition,
+            accent: _accent,
+            aggregateAmountScaled100: aggregateHandle == null
+                ? null
+                : _resolvedLimitForHandle(aggregateHandle, year, month),
+            monthlyIncomeScaled100: _monthlyIncome(
+              widget.presentation.preparedSnapshotForManager,
+              year,
+              month,
+            ),
+            canUseIncomeSpec:
+                widget.request.direction == LedgerDirection.expense &&
+                aggregateHandle != null,
+            entries: <_BudgetLimitAllocationEntry>[
+              for (final item in widget.presentation.value.items)
+                if (!item.target.isAggregate)
+                  _BudgetLimitAllocationEntry(
+                    handle: item.target.handle,
+                    title: item.target.category!.displayName,
+                    amountScaled100: _allocationValueFor(
+                      year: year,
+                      month: month,
+                      handle: item.target.handle,
+                    ),
+                  ),
+            ],
+            initialHandle: initialHandle,
+            onDraftChanged: (handle, amount) => _setAllocationDraft(
+              year: year,
+              month: month,
+              handle: handle,
+              amount: amount,
+            ),
+            onCommit: (handle, amount) =>
+                _setOverrideForTarget(handle, year, month, amount),
+            onSetAggregateToIncome: aggregateHandle == null
+                ? null
+                : (amount) => _setOverrideForTarget(
+                    aggregateHandle,
+                    year,
+                    month,
+                    amount,
+                  ),
           ),
-          onCommit: (handle, amount) =>
-              _setOverrideForTarget(handle, year, month, amount),
-          onSetAggregateToIncome: aggregateHandle == null
-              ? null
-              : (amount) =>
-                    _setOverrideForTarget(aggregateHandle, year, month, amount),
         ),
       );
     } finally {
@@ -1813,11 +2249,15 @@ final class _BudgetLimitAmountEditorSheet extends StatefulWidget {
     required this.title,
     required this.initial,
     required this.onSave,
+    this.deleteLabel,
+    this.onDelete,
   });
 
   final String title;
   final int initial;
   final Future<void> Function(int amount) onSave;
+  final String? deleteLabel;
+  final Future<void> Function()? onDelete;
 
   @override
   State<_BudgetLimitAmountEditorSheet> createState() =>
@@ -1902,6 +2342,22 @@ final class _BudgetLimitAmountEditorSheetState
           },
           child: const Text('Mentés'),
         ),
+        if (widget.onDelete case final onDelete?) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            key: const ValueKey<String>('budget-limit-amount-sheet-delete'),
+            onPressed: () async {
+              final navigator = Navigator.of(context);
+              await onDelete();
+              if (mounted) navigator.pop();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xffc24860),
+            ),
+            icon: const Icon(Icons.delete_outline_rounded),
+            label: Text(widget.deleteLabel ?? 'Alaplimit törlése'),
+          ),
+        ],
       ],
     ),
   );
@@ -2114,8 +2570,10 @@ final class _BudgetLimitMonthSheet extends StatefulWidget {
     required this.direction,
     required this.logicalAsOfDate,
     required this.targetVisual,
-    required this.onSetOverride,
-    required this.onDeleteOverride,
+    required this.onCommitSliderLimit,
+    required this.onSaveExplicitLimit,
+    required this.onSetNoLimit,
+    required this.onResetToBase,
     this.onDraftChanged,
   });
 
@@ -2129,8 +2587,16 @@ final class _BudgetLimitMonthSheet extends StatefulWidget {
   final LedgerDirection direction;
   final LocalDate logicalAsOfDate;
   final DashboardBudgetTargetPresentationItem? targetVisual;
-  final Future<void> Function(int) onSetOverride;
-  final Future<void> Function() onDeleteOverride;
+
+  /// Slider release persists but intentionally keeps this secondary sheet
+  /// open for continued direct manipulation.
+  final Future<void> Function(int) onCommitSliderLimit;
+
+  /// The explicit keyboard/form save is a different interaction: it commits
+  /// then closes the sheet at its owner boundary.
+  final Future<void> Function(int) onSaveExplicitLimit;
+  final Future<void> Function() onSetNoLimit;
+  final Future<void> Function() onResetToBase;
   final ValueChanged<int>? onDraftChanged;
 
   @override
@@ -2325,7 +2791,7 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
               accent: widget.accent,
               enabled: slider.hasCapacity || _sliderDraftScaled100 > 0,
               onChanged: _setSliderDraft,
-              onChangeEnd: widget.onSetOverride,
+              onChangeEnd: widget.onCommitSliderLimit,
             ),
           const SizedBox(height: 4),
           _CategorySliderLabels(presentation: slider, future: info.isFuture),
@@ -2365,14 +2831,12 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
             ),
             const SizedBox(height: 10),
             FilledButton(
-              onPressed: () => widget.onSetOverride(_overrideDraftScaled100),
+              onPressed: () async {
+                FocusScope.of(context).unfocus();
+                await widget.onSaveExplicitLimit(_overrideDraftScaled100);
+              },
               child: const Text('Egyedi keret mentése'),
             ),
-            if (info.hasOverride)
-              TextButton(
-                onPressed: widget.onDeleteOverride,
-                child: const Text('Vissza az alapértékhez'),
-              ),
           ],
           const SizedBox(height: 18),
           _CategoryMonthAnalysisBox(
@@ -2381,6 +2845,26 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
             direction: widget.direction,
             targetVisual: widget.targetVisual,
           ),
+          const SizedBox(height: 16),
+          TextButton.icon(
+            key: const ValueKey<String>('budget-limit-month-sheet-delete'),
+            onPressed: widget.onSetNoLimit,
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xffc24860),
+            ),
+            icon: const Icon(Icons.delete_outline_rounded),
+            label: Text(
+              widget.targetIsAggregate
+                  ? 'Havi Budget törlése'
+                  : 'Kategórialimit törlése',
+            ),
+          ),
+          if (info.hasOverride)
+            TextButton(
+              key: const ValueKey<String>('budget-limit-month-sheet-reset'),
+              onPressed: widget.onResetToBase,
+              child: const Text('Vissza az alapértékhez'),
+            ),
         ],
       ),
     );
@@ -2459,21 +2943,8 @@ final class _CategoryMonthAnalysisBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = analysis;
-    return Container(
+    return KeyedSubtree(
       key: const ValueKey<String>('budget-limit-category-analysis-box'),
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
-      decoration: BoxDecoration(
-        color: const Color(0xfffbfcff),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xffe4e8f0)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .035),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
       child: value == null || info.isFuture
           ? const _CategoryMonthAnalysisUnavailable(
               message: 'a hónap még nem kezdődött el',
@@ -2960,10 +3431,21 @@ final class _BudgetCategoryManagementSheet extends StatelessWidget {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (_) => _BudgetCategoryEditorSheet(
-        category: category,
-        repository: repository,
-        onCreated: onCategoryCreated,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 240),
+        reverseDuration: Duration(milliseconds: 200),
+      ),
+      builder: (_) => Material(
+        color: Colors.white,
+        child: _BudgetCategoryEditorSheet(
+          category: category,
+          repository: repository,
+          onCreated: onCategoryCreated,
+        ),
       ),
     );
   }

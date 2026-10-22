@@ -200,6 +200,22 @@ void main() {
         find.byKey(const ValueKey<String>('budget-limit-manager-base-editor')),
       );
       await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<Material>(
+              find.descendant(
+                of: find.byType(BottomSheet),
+                matching: find.byType(Material),
+              ),
+            )
+            .any((material) => material.color == Colors.white),
+        isTrue,
+        reason: 'The base editor owns an explicit pure-white Material surface.',
+      );
+      await expectLater(
+        find.byType(BottomSheet),
+        matchesGoldenFile('../../../goldens/budget_limit_base_sheet.png'),
+      );
       await tester.tap(find.text('+10000'));
       await tester.tap(find.text('Mentés'));
       await tester.pumpAndSettle();
@@ -214,6 +230,22 @@ void main() {
           const FinancialLimitBaseMonthlyRevisionPeriod(2026, 10),
         ),
         1,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-base-editor')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-amount-sheet-delete')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        repository.amountFor(
+          const FinancialLimitBaseMonthlyRevisionPeriod(2026, 10),
+        ),
+        0,
+        reason:
+            'Base deletion authors a zero revision instead of erasing history.',
       );
 
       await tester.tap(
@@ -297,6 +329,13 @@ void main() {
       );
       expect(sliderDraft.presentation.limitScaled100, 3000000);
       expect(repository.listCalls, 0);
+      await tester.tap(find.text('Egyedi keret mentése'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-month-sheet-edit')),
+        findsNothing,
+        reason: 'An explicit save closes the secondary category sheet.',
+      );
     },
   );
 
@@ -356,7 +395,32 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-more')),
+      );
+      await tester.pumpAndSettle();
+      expect(
         find.byKey(const ValueKey<String>('budget-limit-manager-categories')),
+        findsNothing,
+        reason: 'The old standalone AppBar category button is gone.',
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          '../../../goldens/budget_limit_manager_context_menu.png',
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-menu-categories')),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          '../../../goldens/budget_limit_manager_context_submenu.png',
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-menu-category-manage')),
       );
       await tester.pumpAndSettle();
       expect(

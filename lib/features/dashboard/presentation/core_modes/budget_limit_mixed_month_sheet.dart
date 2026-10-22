@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'budget_allocation_partition_slider.dart';
 
@@ -89,6 +92,7 @@ final class _BudgetLimitMixedMonthEditorState
   late final Map<int, int> _draftByHandle;
   late final Map<int, int> _committedByHandle;
   int? _highlightedHandle;
+  Timer? _highlightClearTimer;
 
   @override
   void initState() {
@@ -106,6 +110,9 @@ final class _BudgetLimitMixedMonthEditorState
     };
     _committedByHandle = Map<int, int>.of(_draftByHandle);
     _highlightedHandle = widget.initialHighlightedHandle;
+    if (_highlightedHandle != null) {
+      _scheduleHighlightClear(const Duration(milliseconds: 760));
+    }
   }
 
   @override
@@ -122,6 +129,7 @@ final class _BudgetLimitMixedMonthEditorState
 
   @override
   void dispose() {
+    _highlightClearTimer?.cancel();
     _aggregateFocusNode
       ..removeListener(_onAggregateFocusChanged)
       ..dispose();
@@ -211,8 +219,8 @@ final class _BudgetLimitMixedMonthEditorState
     );
     if (next == _draftByHandle[handle]) return;
     HapticFeedback.selectionClick();
+    _activateCategory(handle);
     setState(() {
-      _highlightedHandle = handle;
       _draftByHandle[handle] = next;
     });
     widget.onCategoryDraftChanged(handle, next);
@@ -220,9 +228,11 @@ final class _BudgetLimitMixedMonthEditorState
 
   Future<void> _commitCategory(int handle) async {
     final amount = _draftByHandle[handle] ?? 0;
-    if (amount == _committedByHandle[handle]) return;
-    _committedByHandle[handle] = amount;
-    await widget.onCommitCategory(handle, amount);
+    if (amount != _committedByHandle[handle]) {
+      _committedByHandle[handle] = amount;
+      await widget.onCommitCategory(handle, amount);
+    }
+    _scheduleHighlightClear(const Duration(milliseconds: 220));
   }
 
   Future<void> _openCategoryDetail(int handle) async {
@@ -233,6 +243,20 @@ final class _BudgetLimitMixedMonthEditorState
       _draftByHandle[handle] = amount;
       _committedByHandle[handle] = amount;
       _highlightedHandle = handle;
+    });
+    _scheduleHighlightClear(const Duration(milliseconds: 220));
+  }
+
+  void _activateCategory(int handle) {
+    _highlightClearTimer?.cancel();
+    if (_highlightedHandle == handle) return;
+    setState(() => _highlightedHandle = handle);
+  }
+
+  void _scheduleHighlightClear(Duration delay) {
+    _highlightClearTimer?.cancel();
+    _highlightClearTimer = Timer(delay, () {
+      if (mounted) setState(() => _highlightedHandle = null);
     });
   }
 
@@ -375,8 +399,7 @@ final class _BudgetLimitMixedMonthEditorState
                   maxScaled100: max,
                   selected: entry.handle == _highlightedHandle,
                   onTap: () => _openCategoryDetail(entry.handle),
-                  onChangeStart: () =>
-                      setState(() => _highlightedHandle = entry.handle),
+                  onChangeStart: () => _activateCategory(entry.handle),
                   onChanged: (value) =>
                       _setCategoryDraft(entry.handle, value.round()),
                   onChangeEnd: (_) => _commitCategory(entry.handle),
@@ -457,20 +480,20 @@ final class _BudgetLimitMixedCategoryRow extends StatelessWidget {
             .round()
             .clamp(1, 2000)
             .toInt();
-    return Container(
+    return AnimatedContainer(
       key: ValueKey<String>('budget-limit-mixed-category-${entry.handle}'),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
       margin: const EdgeInsets.only(bottom: 7),
-      padding: const EdgeInsets.fromLTRB(10, 7, 10, 3),
+      padding: const EdgeInsets.fromLTRB(8, 7, 8, 3),
       decoration: BoxDecoration(
         color: selected
-            ? entry.accent.withValues(alpha: .09)
-            : const Color(0xfffbfcff),
+            ? entry.accent.withValues(alpha: .10)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: selected
-              ? entry.accent.withValues(alpha: .48)
-              : const Color(0xffe5e8f0),
-        ),
+        border: selected
+            ? Border.all(color: entry.accent.withValues(alpha: .22))
+            : null,
       ),
       child: Column(
         children: [
@@ -484,7 +507,17 @@ final class _BudgetLimitMixedCategoryRow extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 2),
               child: Row(
                 children: [
-                  SizedBox(width: 28, height: 28, child: entry.avatar),
+                  SizedBox.square(
+                    dimension: 36,
+                    child: FittedBox(
+                      fit: BoxFit.contain,
+                      child: SizedBox.square(
+                        dimension:
+                            BudgetCategoryAvatarGeometry.avatarCanvasSize,
+                        child: entry.avatar,
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

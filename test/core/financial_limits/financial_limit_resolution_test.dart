@@ -88,4 +88,54 @@ void main() {
       );
     },
   );
+
+  test(
+    'a zero revision is no limit while reset restores the inherited base',
+    () {
+      final historicalBase = record(
+        const FinancialLimitBaseMonthlyRevisionPeriod(2026, 1),
+        50000,
+      );
+      final noBaseFromOctober = record(
+        const FinancialLimitBaseMonthlyRevisionPeriod(2026, 10),
+        0,
+      );
+      final noLimitOctober = record(
+        const FinancialLimitMonthOverridePeriod(2026, 10),
+        0,
+      );
+
+      int? amount(Iterable<FinancialLimit> limits, int year, int month) =>
+          FinancialLimitResolution.resolve(
+            limits: limits,
+            direction: direction,
+            target: target,
+            year: year,
+            month: month,
+          )?.amountScaled100;
+
+      expect(
+        amount(<FinancialLimit>[historicalBase, noBaseFromOctober], 2026, 9),
+        50000,
+      );
+      expect(
+        amount(<FinancialLimit>[historicalBase, noBaseFromOctober], 2026, 10),
+        0,
+      );
+      expect(
+        FinancialLimitAvailability.positiveOrNull(
+          amount(<FinancialLimit>[historicalBase, noBaseFromOctober], 2026, 10),
+        ),
+        isNull,
+      );
+
+      // A zero month record means no limit for exactly October. Removing that
+      // record is the separate return-to-base operation.
+      expect(
+        amount(<FinancialLimit>[historicalBase, noLimitOctober], 2026, 10),
+        0,
+      );
+      expect(amount(<FinancialLimit>[historicalBase], 2026, 10), 50000);
+    },
+  );
 }

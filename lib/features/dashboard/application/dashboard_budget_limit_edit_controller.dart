@@ -729,6 +729,29 @@ final class DashboardBudgetLimitEditController
     amountScaled100: amountScaled100,
   );
 
+  /// Records an effective-dated no-limit revision.  This intentionally does
+  /// not delete an older base revision: historical months retain their own
+  /// denominator while the logical-current month and later resolve to no
+  /// limit until a later positive revision is authored.
+  Future<void> setNoBaseLimitEffectiveFromCurrentMonth({
+    required FinancialLimitDirection direction,
+    required FinancialLimitTarget target,
+    required int effectiveFromYear,
+    required int effectiveFromMonth,
+    required int coreRevision,
+    required int targetHandle,
+    required int? confirmedLimitScaled100,
+  }) => setBaseLimitEffectiveFromCurrentMonth(
+    direction: direction,
+    target: target,
+    effectiveFromYear: effectiveFromYear,
+    effectiveFromMonth: effectiveFromMonth,
+    coreRevision: coreRevision,
+    targetHandle: targetHandle,
+    confirmedLimitScaled100: confirmedLimitScaled100,
+    amountScaled100: 0,
+  );
+
   Future<void> setMonthOverride({
     required FinancialLimitDirection direction,
     required FinancialLimitTarget target,
@@ -748,6 +771,29 @@ final class DashboardBudgetLimitEditController
     targetHandle: targetHandle,
     confirmedLimitScaled100: confirmedLimitScaled100,
     amountScaled100: amountScaled100,
+  );
+
+  /// Persists an exact-month no-limit override.  This is intentionally
+  /// distinct from [deleteMonthOverride]: deleting an override restores the
+  /// applicable historical base, whereas this zero-valued record suppresses
+  /// that fallback for this exact month only.
+  Future<void> setNoMonthLimit({
+    required FinancialLimitDirection direction,
+    required FinancialLimitTarget target,
+    required int year,
+    required int month,
+    required int coreRevision,
+    required int targetHandle,
+    required int? confirmedLimitScaled100,
+  }) => setMonthOverride(
+    direction: direction,
+    target: target,
+    year: year,
+    month: month,
+    coreRevision: coreRevision,
+    targetHandle: targetHandle,
+    confirmedLimitScaled100: confirmedLimitScaled100,
+    amountScaled100: 0,
   );
 
   /// Deletion is used only for a concrete monthly override.  It reuses the
