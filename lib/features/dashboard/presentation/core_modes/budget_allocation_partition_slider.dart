@@ -63,6 +63,158 @@ final class BudgetAllocationPartitionSlider extends StatefulWidget {
       _BudgetAllocationPartitionSliderState();
 }
 
+/// Aggregate counterpart of [BudgetAllocationPartitionSlider].  The visual
+/// lane remains the canonical allocation partition; only the white handle is
+/// projected against an aggregate-Budget range supplied by the caller.  It is
+/// deliberately persistence-free, so a month editor can keep its exact-month
+/// draft local until the user releases the control.
+final class BudgetAggregatePartitionSlider extends StatefulWidget {
+  const BudgetAggregatePartitionSlider({
+    required this.partition,
+    required this.valueScaled100,
+    required this.maxScaled100,
+    required this.enabled,
+    required this.onChanged,
+    required this.onChangeEnd,
+    this.highlightedCategoryHandle,
+    super.key,
+  });
+
+  final DashboardBudgetPartitionPresentation partition;
+  final int valueScaled100;
+  final int maxScaled100;
+  final bool enabled;
+  final int? highlightedCategoryHandle;
+  final ValueChanged<int> onChanged;
+  final ValueChanged<int> onChangeEnd;
+
+  @override
+  State<BudgetAggregatePartitionSlider> createState() =>
+      _BudgetAggregatePartitionSliderState();
+}
+
+final class _BudgetAggregatePartitionSliderState
+    extends State<BudgetAggregatePartitionSlider> {
+  final GlobalKey _surfaceKey = GlobalKey();
+  int? _lastPublishedValue;
+  bool _didChange = false;
+
+  int get _clampedValue => widget.valueScaled100
+      .clamp(0, widget.maxScaled100 < 0 ? 0 : widget.maxScaled100)
+      .toInt();
+
+  int _valueAtGlobalDx(double globalDx) {
+    final box = _surfaceKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize || box.size.width <= 0) {
+      return _clampedValue;
+    }
+    final localDx = box.globalToLocal(Offset(globalDx, 0)).dx;
+    final ratio = (localDx / box.size.width).clamp(0.0, 1.0).toDouble();
+    return BudgetAllocationPartitionSlider.snapToStep(
+      amountScaled100: (widget.maxScaled100 * ratio).round(),
+      maxScaled100: widget.maxScaled100,
+    );
+  }
+
+  void _publishAt(double globalDx) {
+    if (!widget.enabled) return;
+    final next = _valueAtGlobalDx(globalDx);
+    if (next == _lastPublishedValue || next == _clampedValue) return;
+    _lastPublishedValue = next;
+    _didChange = true;
+    HapticFeedback.selectionClick();
+    widget.onChanged(next);
+  }
+
+  void _finish() {
+    if (!widget.enabled) return;
+    if (_didChange) {
+      widget.onChangeEnd(_lastPublishedValue ?? _clampedValue);
+    }
+    _lastPublishedValue = null;
+    _didChange = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = widget.maxScaled100 <= 0
+        ? 0.0
+        : (_clampedValue / widget.maxScaled100).clamp(0.0, 1.0).toDouble();
+    return Semantics(
+      slider: true,
+      enabled: widget.enabled,
+      label: 'Havi Budget keret',
+      value: '${_clampedValue ~/ 100} Ft',
+      child: GestureDetector(
+        key: _surfaceKey,
+        behavior: HitTestBehavior.translucent,
+        onTapUp: widget.enabled
+            ? (details) {
+                _publishAt(details.globalPosition.dx);
+                _finish();
+              }
+            : null,
+        onHorizontalDragUpdate: widget.enabled
+            ? (details) => _publishAt(details.globalPosition.dx)
+            : null,
+        onHorizontalDragEnd: widget.enabled ? (_) => _finish() : null,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            const handleWidth = 12.0;
+            const handleHeight = 24.0;
+            final maxLeft = (constraints.maxWidth - handleWidth).clamp(
+              0.0,
+              double.infinity,
+            );
+            final left = (constraints.maxWidth * ratio - handleWidth / 2)
+                .clamp(0.0, maxLeft)
+                .toDouble();
+            return SizedBox(
+              height: 26,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    top: 4,
+                    bottom: 4,
+                    child: BudgetAllocationPartitionLane(
+                      partition: widget.partition,
+                      highlightedCategoryHandle:
+                          widget.highlightedCategoryHandle,
+                    ),
+                  ),
+                  Positioned(
+                    key: const ValueKey<String>(
+                      'budget-aggregate-partition-slider-handle',
+                    ),
+                    left: left,
+                    top: 1,
+                    child: Container(
+                      width: handleWidth,
+                      height: handleHeight,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(handleWidth / 2),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: .16),
+                            offset: const Offset(0, 1),
+                            blurRadius: 3,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 final class _BudgetAllocationPartitionSliderState
     extends State<BudgetAllocationPartitionSlider> {
   final GlobalKey _surfaceKey = GlobalKey();

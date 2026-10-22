@@ -152,6 +152,12 @@ void main() {
         find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
       );
       await tester.pumpAndSettle();
+      // allocation -> mixed -> category. The original category renderer is
+      // still the same endpoint; only the shared switch gained a third state.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
+      );
+      await tester.pumpAndSettle();
       expect(find.byType(BudgetTargetAvatarCarousel), findsOneWidget);
       expect(find.text('2026'), findsOneWidget);
 
@@ -178,6 +184,10 @@ void main() {
         ),
         42000000,
       );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
       );
@@ -436,6 +446,245 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'mixed perspective reuses the avatar root and commits exact-month aggregate and category drafts on release',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = _TimelineRepository(_timeline());
+      final edits = DashboardBudgetLimitEditController(
+        repository: repository,
+        isKeyCurrent: (_) => true,
+      );
+      final categories = ValueNotifier<List<FluviCategory>>(_managerCategories);
+      final visible = ValueNotifier<DashboardVisibleFrame?>(null);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => _snapshot(_managerCategories),
+        logicalAsOfDate: const LocalDate(year: 2026, month: 10, day: 21),
+        limitEditController: edits,
+      );
+      addTearDown(edits.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(direction.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BudgetLimitManager(
+            request: const BudgetLimitManagerRequest(
+              direction: LedgerDirection.expense,
+              target: DashboardBudgetTarget.aggregate(),
+              targetHandle: 0,
+              title: 'Budget',
+              accent: Color(0xff7863c9),
+              avatar: Icon(Icons.account_balance_wallet_rounded),
+              coreRevision: 41,
+            ),
+            presentation: presentation,
+            limitEdits: edits,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // category -> allocation -> mixed.  The mixed root is the exact avatar
+      // body, rather than a copied third dashboard composition.
+      final categoryCarouselBounds = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('budget-limit-manager-avatar-carousel'),
+        ),
+      );
+      final categoryBaseBounds = tester.getRect(
+        find.byKey(const ValueKey<String>('budget-limit-manager-base-editor')),
+      );
+      final categoryMetricsBounds = tester.getRect(
+        find.byKey(const ValueKey<String>('budget-limit-manager-metrics')),
+      );
+      final categoryGridBounds = tester.getRect(
+        find.byKey(const ValueKey<String>('budget-limit-manager-month-grid')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>('budget-limit-manager-allocation-hero'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(BudgetTargetAvatarCarousel), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-manager-base-editor')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-manager-month-grid')),
+        findsOneWidget,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(
+            const ValueKey<String>('budget-limit-manager-avatar-carousel'),
+          ),
+        ),
+        categoryCarouselBounds,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(
+            const ValueKey<String>('budget-limit-manager-base-editor'),
+          ),
+        ),
+        categoryBaseBounds,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey<String>('budget-limit-manager-metrics')),
+        ),
+        categoryMetricsBounds,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey<String>('budget-limit-manager-month-grid')),
+        ),
+        categoryGridBounds,
+      );
+      await expectLater(
+        find.byType(BudgetLimitManager),
+        matchesGoldenFile('../../../goldens/budget_limit_manager_mixed.png'),
+      );
+
+      await tester.ensureVisible(
+        find.byKey(
+          const ValueKey<String>('budget-limit-manager-month-card-2026-10'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('budget-limit-manager-month-card-2026-10'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-mixed-partition')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('budget-limit-mixed-partition'),
+          ),
+          matching: find.byType(BudgetAllocationPartitionLane),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-mixed-category-list')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-mixed-category-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-mixed-category-4')),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byType(BottomSheet),
+        matchesGoldenFile(
+          '../../../goldens/budget_limit_manager_mixed_month_sheet.png',
+        ),
+      );
+
+      // Typing previews locally; it does not persist until the explicit IME
+      // completion.  The resulting key is October's aggregate override.
+      repository.upsertCalls = 0;
+      await tester.enterText(
+        find.byKey(
+          const ValueKey<String>('budget-limit-mixed-aggregate-input'),
+        ),
+        '420123',
+      );
+      await tester.pump();
+      expect(repository.upsertCalls, 0);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(repository.upsertCalls, 1);
+      expect(
+        repository.amountFor(const FinancialLimitMonthOverridePeriod(2026, 10)),
+        42012300,
+      );
+      expect(
+        repository.lastUpsertKey?.target,
+        const FinancialLimitAggregateTarget(),
+      );
+
+      // The accepted SPEC source is the already-prepared October income.
+      repository.upsertCalls = 0;
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-mixed-spec-income')),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.upsertCalls, 1);
+      expect(
+        repository.amountFor(const FinancialLimitMonthOverridePeriod(2026, 10)),
+        42000000,
+      );
+
+      // Thirty-ish pointer pixels still only mutate the sheet draft.  Release
+      // produces one category-scoped exact-month override, never a write per
+      // pixel or an aggregate cross-write.
+      repository.listCalls = 0;
+      repository.upsertCalls = 0;
+      await tester.drag(
+        find.byKey(
+          const ValueKey<String>('budget-limit-mixed-category-slider-1'),
+        ),
+        const Offset(36, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.listCalls, 0);
+      expect(repository.upsertCalls, 1);
+      expect(
+        repository.lastUpsertKey?.target,
+        const FinancialLimitCategoryTarget('health'),
+      );
+      expect(find.byType(BudgetAllocationPartitionLane), findsOneWidget);
+
+      // A row tap, unlike its slider drag, reuses the existing category month
+      // editor above the still-mounted mixed sheet.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-mixed-category-tap-3')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-month-sheet-edit')),
+        findsOneWidget,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-mixed-partition')),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 List<FinancialLimit> _timeline() => <FinancialLimit>[
@@ -571,6 +820,7 @@ final class _TimelineRepository implements FinancialLimitRepository {
   final List<FinancialLimit> _values;
   int listCalls = 0;
   int upsertCalls = 0;
+  FinancialLimitKey? lastUpsertKey;
 
   int? amountFor(FinancialLimitPeriod period) {
     for (final value in _values) {
@@ -609,6 +859,7 @@ final class _TimelineRepository implements FinancialLimitRepository {
     int amountScaled100,
   ) async {
     upsertCalls += 1;
+    lastUpsertKey = key;
     final value = FinancialLimit(
       key: key,
       amountScaled100: amountScaled100,

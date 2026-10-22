@@ -21,6 +21,7 @@ import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/local_date.dart';
 import 'budget_allocation_partition_lane.dart';
 import 'budget_allocation_partition_slider.dart';
+import 'budget_limit_mixed_month_sheet.dart';
 import 'budget_target_avatar_carousel.dart';
 
 /// Frozen intent emitted by the selected avatar.  The rail only emits this
@@ -84,7 +85,7 @@ final class BudgetLimitManager extends StatefulWidget {
 
 /// A manager-local information architecture choice.  It has no persistence
 /// meaning and always starts in the target/category view on a fresh open.
-enum BudgetLimitManagerPerspective { category, allocation }
+enum BudgetLimitManagerPerspective { category, allocation, mixed }
 
 final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   late int _year;
@@ -127,7 +128,14 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   List<FinancialLimit> get _timeline =>
       _timelineByTargetHandle[_activeTargetHandle] ?? const <FinancialLimit>[];
 
+  List<FinancialLimit> _timelineForHandle(int handle) =>
+      _timelineByTargetHandle[handle] ?? const <FinancialLimit>[];
+
   LocalDate get _logicalDate => widget.presentation.logicalAsOfDateForManager;
+
+  bool get _usesAvatarCentricRoot =>
+      _perspective == BudgetLimitManagerPerspective.category ||
+      _perspective == BudgetLimitManagerPerspective.mixed;
 
   @override
   void initState() {
@@ -254,21 +262,25 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     )?.amountScaled100;
   }
 
-  FinancialLimit? _baseFor(int year, int month) {
+  FinancialLimit? _baseForTargetHandle(int handle, int year, int month) {
+    final target = _financialTargetForHandle(handle);
+    if (target == null) return null;
     return FinancialLimitResolution.baseRevisionAtOrBefore(
-      limits: _timeline,
+      limits: _timelineForHandle(handle),
       direction: _direction,
-      target: _target,
+      target: target,
       year: year,
       month: month,
     );
   }
 
-  FinancialLimit? _overrideFor(int year, int month) {
+  FinancialLimit? _overrideForTargetHandle(int handle, int year, int month) {
+    final target = _financialTargetForHandle(handle);
+    if (target == null) return null;
     return FinancialLimitResolution.exactMonthOverride(
-      limits: _timeline,
+      limits: _timelineForHandle(handle),
       direction: _direction,
-      target: _target,
+      target: target,
       year: year,
       month: month,
     );
@@ -392,9 +404,6 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     );
   }
 
-  Future<void> _setOverride(int year, int month, int amount) =>
-      _setOverrideForTarget(_activeTargetHandle, year, month, amount);
-
   Future<void> _setOverrideForTarget(
     int targetHandle,
     int year,
@@ -435,9 +444,6 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       amountScaled100: amount,
     );
   }
-
-  Future<void> _deleteOverride(int year, int month) =>
-      _deleteOverrideForTarget(_activeTargetHandle, year, month);
 
   Future<void> _deleteOverrideForTarget(
     int targetHandle,
@@ -492,9 +498,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _perspective == BudgetLimitManagerPerspective.category
-                    ? _title
-                    : 'Keretkiosztás',
+                _usesAvatarCentricRoot ? _title : 'Keretkiosztás',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               Text(
@@ -508,22 +512,34 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
           actions: [
             IconButton(
               key: const ValueKey<String>('budget-limit-manager-perspective'),
-              tooltip: _perspective == BudgetLimitManagerPerspective.category
-                  ? 'Kiosztási nézet'
-                  : 'Kategória nézet',
+              tooltip: switch (_perspective) {
+                BudgetLimitManagerPerspective.category =>
+                  'Keretkezelő nézet: Avatar szerint',
+                BudgetLimitManagerPerspective.allocation =>
+                  'Keretkezelő nézet: Hónap szerint',
+                BudgetLimitManagerPerspective.mixed =>
+                  'Keretkezelő nézet: Kevert',
+              },
               onPressed: _monthSheetOpen
                   ? null
                   : () => setState(() {
-                      _perspective =
-                          _perspective == BudgetLimitManagerPerspective.category
-                          ? BudgetLimitManagerPerspective.allocation
-                          : BudgetLimitManagerPerspective.category;
+                      _perspective = switch (_perspective) {
+                        BudgetLimitManagerPerspective.category =>
+                          BudgetLimitManagerPerspective.allocation,
+                        BudgetLimitManagerPerspective.allocation =>
+                          BudgetLimitManagerPerspective.mixed,
+                        BudgetLimitManagerPerspective.mixed =>
+                          BudgetLimitManagerPerspective.category,
+                      };
                     }),
-              icon: Icon(
-                _perspective == BudgetLimitManagerPerspective.category
-                    ? Icons.account_tree_outlined
-                    : Icons.grid_view_rounded,
-              ),
+              icon: Icon(switch (_perspective) {
+                BudgetLimitManagerPerspective.category =>
+                  Icons.account_tree_outlined,
+                BudgetLimitManagerPerspective.allocation =>
+                  Icons.grid_view_rounded,
+                BudgetLimitManagerPerspective.mixed =>
+                  Icons.view_carousel_outlined,
+              }),
             ),
             if (_canManageCategories)
               IconButton(
@@ -547,9 +563,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children:
-                            _perspective ==
-                                BudgetLimitManagerPerspective.category
+                        children: _usesAvatarCentricRoot
                             ? <Widget>[
                                 _avatarCarousel(),
                                 const SizedBox(height: 14),
@@ -559,7 +573,12 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
                                 const SizedBox(height: 18),
                                 _yearSelector(),
                                 const SizedBox(height: 10),
-                                _monthGrid(snapshot),
+                                _monthGrid(
+                                  snapshot,
+                                  mixed:
+                                      _perspective ==
+                                      BudgetLimitManagerPerspective.mixed,
+                                ),
                               ]
                             : _allocationPerspective(snapshot),
                       ),
@@ -1217,7 +1236,10 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     ],
   );
 
-  Widget _monthGrid(PreparedBudgetLimitSnapshot? snapshot) => GridView.builder(
+  Widget _monthGrid(
+    PreparedBudgetLimitSnapshot? snapshot, {
+    required bool mixed,
+  }) => GridView.builder(
     key: const ValueKey<String>('budget-limit-manager-month-grid'),
     shrinkWrap: true,
     physics: const NeverScrollableScrollPhysics(),
@@ -1234,7 +1256,9 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       return _BudgetLimitMonthCard(
         info: info,
         accent: _accent,
-        onTap: _carouselInMotion ? null : () => _showMonthSheet(info),
+        onTap: _carouselInMotion
+            ? null
+            : () => mixed ? _showMixedMonthSheet(info) : _showMonthSheet(info),
       );
     },
   );
@@ -1243,6 +1267,13 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     PreparedBudgetLimitSnapshot? snapshot,
     int year,
     int month,
+  ) => _monthInfoForTarget(snapshot, year, month, _activeTargetHandle);
+
+  _BudgetLimitMonthInfo _monthInfoForTarget(
+    PreparedBudgetLimitSnapshot? snapshot,
+    int year,
+    int month,
+    int targetHandle,
   ) {
     final linear = year * 12 + month;
     final logical = _logicalDate.year * 12 + _logicalDate.month;
@@ -1255,17 +1286,23 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       cell = snapshot.cellAt(
         direction: widget.request.direction,
         period: BudgetLimitPeriod.month(year, month),
-        targetHandle: _activeTargetHandle,
+        targetHandle: targetHandle,
       );
     }
-    final override = _overrideFor(year, month);
-    final limit = _resolvedLimit(year, month) ?? cell?.limitScaled100;
+    final override = _overrideForTargetHandle(targetHandle, year, month);
+    final limit =
+        _resolvedLimitForHandle(targetHandle, year, month) ??
+        cell?.limitScaled100;
     final actual = cell?.actualScaled100;
     return _BudgetLimitMonthInfo(
       year: year,
       month: month,
       resolvedLimitScaled100: limit,
-      historicalBaseScaled100: _baseFor(year, month)?.amountScaled100,
+      historicalBaseScaled100: _baseForTargetHandle(
+        targetHandle,
+        year,
+        month,
+      )?.amountScaled100,
       actualScaled100: actual,
       isCurrent: isCurrent,
       isFuture: isFuture,
@@ -1372,8 +1409,35 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   }
 
   Future<void> _showMonthSheet(_BudgetLimitMonthInfo info) async {
-    final activeTargetHandle = _activeTargetHandle;
-    final activeTarget = _activeTarget;
+    await _showCategoryMonthSheetForHandle(
+      year: info.year,
+      month: info.month,
+      targetHandle: _activeTargetHandle,
+      managesSheetOpenState: true,
+    );
+  }
+
+  Future<void> _showCategoryMonthSheetForHandle({
+    required int year,
+    required int month,
+    required int targetHandle,
+    required bool managesSheetOpenState,
+  }) async {
+    final target = _targetForHandle(targetHandle);
+    if (target == null) return;
+    final info = _monthInfoForTarget(
+      widget.presentation.preparedSnapshotForManager,
+      year,
+      month,
+      targetHandle,
+    );
+    BudgetTargetAvatarCarouselItem? item;
+    for (final candidate in _avatarItems) {
+      if (candidate.targetHandle == targetHandle) {
+        item = candidate;
+        break;
+      }
+    }
     final partition = _partitionWithAllocationDrafts(
       partition: widget.presentation.partitionForManagerMonth(
         direction: widget.request.direction,
@@ -1383,7 +1447,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
       year: info.year,
       month: info.month,
     );
-    _monthSheetOpen = true;
+    if (managesSheetOpenState) _monthSheetOpen = true;
     try {
       await showModalBottomSheet<void>(
         context: context,
@@ -1392,18 +1456,110 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         showDragHandle: true,
         builder: (sheetContext) => _BudgetLimitMonthSheet(
           info: info,
-          accent: _accent,
-          targetHandle: activeTargetHandle,
-          targetTitle: _title,
-          targetIsAggregate: activeTarget.isAggregate,
+          accent: item?.color ?? _accent,
+          targetHandle: targetHandle,
+          targetTitle: item?.title ?? _title,
+          targetIsAggregate: target.isAggregate,
           partition: partition,
           onSetOverride: (amount) async {
-            await _setOverride(info.year, info.month, amount);
+            await _setOverrideForTarget(
+              targetHandle,
+              info.year,
+              info.month,
+              amount,
+            );
           },
           onDeleteOverride: () async {
-            await _deleteOverride(info.year, info.month);
+            await _deleteOverrideForTarget(targetHandle, info.year, info.month);
             if (sheetContext.mounted) Navigator.of(sheetContext).pop();
           },
+        ),
+      );
+    } finally {
+      if (managesSheetOpenState) _monthSheetOpen = false;
+    }
+  }
+
+  Future<void> _showMixedMonthSheet(_BudgetLimitMonthInfo info) async {
+    final aggregateHandle = _aggregateHandle();
+    if (aggregateHandle == null) return;
+    final partition = _partitionWithAllocationDrafts(
+      partition: widget.presentation.partitionForManagerMonth(
+        direction: widget.request.direction,
+        year: info.year,
+        month: info.month,
+      ),
+      year: info.year,
+      month: info.month,
+    );
+    final entries = <BudgetLimitMixedCategoryEntry>[
+      for (final item in _avatarItems)
+        if (_targetForHandle(item.targetHandle)?.isAggregate == false)
+          BudgetLimitMixedCategoryEntry(
+            handle: item.targetHandle,
+            title: item.title,
+            accent: item.color,
+            avatar: item.avatarFor(selected: false),
+            amountScaled100: _allocationValueFor(
+              year: info.year,
+              month: info.month,
+              handle: item.targetHandle,
+            ),
+            hasLimit:
+                _resolvedLimitForHandle(
+                  item.targetHandle,
+                  info.year,
+                  info.month,
+                ) !=
+                null,
+          ),
+    ];
+    _monthSheetOpen = true;
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (_) => BudgetLimitMixedMonthSheet(
+          year: info.year,
+          month: info.month,
+          partition: partition,
+          initialAggregateAmountScaled100:
+              _resolvedLimitForHandle(aggregateHandle, info.year, info.month) ??
+              partition.effectiveAggregateLimitScaled100,
+          monthlyIncomeScaled100: _monthlyIncome(
+            widget.presentation.preparedSnapshotForManager,
+            info.year,
+            info.month,
+          ),
+          canUseIncomeSpec: widget.request.direction == LedgerDirection.expense,
+          entries: entries,
+          initialHighlightedHandle: _activeTarget.isAggregate
+              ? null
+              : _activeTargetHandle,
+          onCategoryDraftChanged: (handle, amount) => _setAllocationDraft(
+            year: info.year,
+            month: info.month,
+            handle: handle,
+            amount: amount,
+          ),
+          onCommitAggregate: (amount) => _setOverrideForTarget(
+            aggregateHandle,
+            info.year,
+            info.month,
+            amount,
+          ),
+          onCommitCategory: (handle, amount) =>
+              _setOverrideForTarget(handle, info.year, info.month, amount),
+          onOpenCategoryDetail: (handle) => _showCategoryMonthSheetForHandle(
+            year: info.year,
+            month: info.month,
+            targetHandle: handle,
+            managesSheetOpenState: false,
+          ),
+          resolvedCategoryAmount: (handle) =>
+              _resolvedLimitForHandle(handle, info.year, info.month) ?? 0,
         ),
       );
     } finally {
