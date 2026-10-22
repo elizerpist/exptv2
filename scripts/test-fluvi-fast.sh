@@ -7,7 +7,6 @@ set -euo pipefail
 flutter test \
   test/features/dashboard/application/dashboard_balance_header_context_presentation_test.dart \
   test/features/dashboard/presentation/balance_header_income_expense_partition_test.dart \
-  test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart \
   test/features/dashboard/presentation/balance_presentation_settings_test.dart \
   test/features/dashboard/presentation/dashboard_presentation_preferences_store_test.dart \
   test/boundary/balance_monthly_topographic_chart_boundary_test.dart \
@@ -48,4 +47,11 @@ flutter test \
   test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart \
   test/features/dashboard/motion/dashboard_semantic_catalog_test.dart \
   test/shared/presentation/fluvi_slide_up_sheet_test.dart \
+  "$@"
+
+# The header integration owner includes its two new visual endpoints. Other
+# historical surface goldens remain in their existing local/nightly lane.
+flutter test \
+  test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart \
+  --plain-name 'daily calculation changes amount and bar atomically without navigation or lower data changes' \
   "$@"
