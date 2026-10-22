@@ -11,7 +11,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dar
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_manager.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_allocation_partition_lane.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/budget_allocation_partition_slider.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/category_limit_allocation_progress_slider.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_secondary_analysis_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_carousel.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -221,20 +222,20 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Helye a havi keretben'), findsOneWidget);
+      expect(find.text('Helye a havi keretben'), findsNothing);
       expect(
         find.byKey(
           const ValueKey<String>('budget-limit-month-sheet-partition'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(find.byType(TextField), findsNothing);
       expect(find.text('Vissza az alapértékhez'), findsNothing);
-      await expectLater(
-        find.byType(BottomSheet),
-        matchesGoldenFile(
-          '../../../goldens/budget_limit_month_sheet_overview.png',
+      expect(
+        find.byKey(
+          const ValueKey<String>('budget-limit-category-analysis-box'),
         ),
+        findsOneWidget,
       );
       await tester.tap(
         find.byKey(const ValueKey<String>('budget-limit-month-sheet-edit')),
@@ -267,20 +268,16 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final laneBefore = tester.widget<BudgetAllocationPartitionLane>(
-        find.descendant(
-          of: find.byKey(
-            const ValueKey<String>('budget-limit-month-sheet-partition'),
-          ),
-          matching: find.byType(BudgetAllocationPartitionLane),
-        ),
+      expect(
+        find.byType(CategoryLimitAllocationProgressSlider),
+        findsOneWidget,
       );
-      expect(laneBefore.highlightedCategoryHandle, 1);
-      expect(find.byType(BudgetAllocationPartitionSlider), findsOneWidget);
       repository.listCalls = 0;
       repository.upsertCalls = 0;
       await tester.drag(
-        find.byType(BudgetAllocationPartitionSlider),
+        find.byKey(
+          const ValueKey<String>('budget-limit-category-progress-slider'),
+        ),
         const Offset(36, 0),
       );
       await tester.pumpAndSettle();
@@ -295,15 +292,10 @@ void main() {
         '30000',
       );
       await tester.pump();
-      final laneDraft = tester.widget<BudgetAllocationPartitionLane>(
-        find.descendant(
-          of: find.byKey(
-            const ValueKey<String>('budget-limit-month-sheet-partition'),
-          ),
-          matching: find.byType(BudgetAllocationPartitionLane),
-        ),
+      final sliderDraft = tester.widget<CategoryLimitAllocationProgressSlider>(
+        find.byType(CategoryLimitAllocationProgressSlider),
       );
-      expect(laneDraft.partition.effectiveLimitForCategoryHandle(1), 3000000);
+      expect(sliderDraft.presentation.limitScaled100, 3000000);
       expect(repository.listCalls, 0);
     },
   );
@@ -605,11 +597,20 @@ void main() {
         find.byKey(const ValueKey<String>('budget-limit-mixed-category-4')),
         findsOneWidget,
       );
+      // Mixed-month editing is an internal fullscreen manager page, not a
+      // second bottom-sheet layer. The manager route remains the one owner.
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-manager-month-page')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('budget-limit-manager-perspective')),
+        findsNothing,
+      );
       await expectLater(
-        find.byType(BottomSheet),
-        matchesGoldenFile(
-          '../../../goldens/budget_limit_manager_mixed_month_sheet.png',
-        ),
+        find.byType(BudgetLimitManager),
+        matchesGoldenFile('../../../goldens/mixed_month_editor_fullscreen.png'),
       );
 
       // Typing previews locally; it does not persist until the explicit IME
@@ -670,19 +671,111 @@ void main() {
       // A row tap, unlike its slider drag, reuses the existing category month
       // editor above the still-mounted mixed sheet.
       await tester.tap(
-        find.byKey(const ValueKey<String>('budget-limit-mixed-category-tap-3')),
+        find.byKey(const ValueKey<String>('budget-limit-mixed-category-tap-1')),
       );
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey<String>('budget-limit-month-sheet-edit')),
         findsOneWidget,
       );
+      expect(find.text('Helye a havi keretben'), findsNothing);
+      expect(
+        find.byKey(
+          const ValueKey<String>('budget-limit-category-month-semicircle'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(BudgetMonthUtilizationHero), findsOneWidget);
+      await expectLater(
+        find.byType(BottomSheet),
+        matchesGoldenFile('../../../goldens/category_month_sheet_current.png'),
+      );
+      repository.listCalls = 0;
+      repository.upsertCalls = 0;
+      await tester.drag(
+        find.byKey(
+          const ValueKey<String>('budget-limit-category-progress-slider'),
+        ),
+        const Offset(24, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.listCalls, 0);
+      expect(repository.upsertCalls, 1);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey<String>('budget-limit-mixed-partition')),
         findsOneWidget,
       );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      // A second, exact historical month proves the sheet swaps forecast
+      // insights for completed-month truth without creating another route.
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('budget-limit-manager-month-card-2026-3'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-mixed-category-tap-1')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Záró összeg'), findsOneWidget);
+      expect(find.text('Záró eltérés'), findsOneWidget);
+      expect(find.text('Napi átlag'), findsOneWidget);
+      await expectLater(
+        find.byType(BottomSheet),
+        matchesGoldenFile(
+          '../../../goldens/category_month_sheet_historical.png',
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-month-sheet-edit')),
+      );
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('budget-limit-month-sheet-amount')),
+        '1000',
+      );
+      await tester.pump();
+      expect(
+        tester
+            .widget<CategoryLimitAllocationProgressSlider>(
+              find.byType(CategoryLimitAllocationProgressSlider),
+            )
+            .presentation
+            .isOverspent,
+        isTrue,
+      );
+      await expectLater(
+        find.byType(BottomSheet),
+        matchesGoldenFile(
+          '../../../goldens/category_month_sheet_overspent.png',
+        ),
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('budget-limit-mixed-category-tap-3')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('nincs beállított havi keret'), findsOneWidget);
+      await expectLater(
+        find.byType(BottomSheet),
+        matchesGoldenFile('../../../goldens/category_month_sheet_no_limit.png'),
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>('budget-limit-manager-overview-page'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('2026'), findsOneWidget);
     },
   );
 }

@@ -26,14 +26,16 @@ final class BudgetLimitMixedCategoryEntry {
   final bool hasLimit;
 }
 
-/// The month editor used solely by the manager's mixed perspective.
+/// The full-screen internal month editor used solely by the manager's mixed
+/// perspective. The manager route owns the page transition and Back stack;
+/// this widget only owns the editor's short-lived RAM drafts.
 ///
 /// It intentionally has one allocation lane for the whole month and ordinary
 /// scalar sliders for category rows.  All allocation meaning remains in
 /// [DashboardBudgetPartitionPresentation]; the draft only overlays exact
 /// aggregate/category limits while a direct manipulation is in progress.
-final class BudgetLimitMixedMonthSheet extends StatefulWidget {
-  const BudgetLimitMixedMonthSheet({
+final class BudgetLimitMixedMonthEditor extends StatefulWidget {
+  const BudgetLimitMixedMonthEditor({
     required this.year,
     required this.month,
     required this.partition,
@@ -41,6 +43,7 @@ final class BudgetLimitMixedMonthSheet extends StatefulWidget {
     required this.monthlyIncomeScaled100,
     required this.canUseIncomeSpec,
     required this.entries,
+    required this.externalDraftAmounts,
     required this.initialHighlightedHandle,
     required this.onCategoryDraftChanged,
     required this.onCommitAggregate,
@@ -57,6 +60,7 @@ final class BudgetLimitMixedMonthSheet extends StatefulWidget {
   final int? monthlyIncomeScaled100;
   final bool canUseIncomeSpec;
   final List<BudgetLimitMixedCategoryEntry> entries;
+  final Map<int, int> externalDraftAmounts;
   final int? initialHighlightedHandle;
 
   /// Allows the manager to retain this RAM-only value if another manager view
@@ -68,12 +72,12 @@ final class BudgetLimitMixedMonthSheet extends StatefulWidget {
   final int Function(int handle) resolvedCategoryAmount;
 
   @override
-  State<BudgetLimitMixedMonthSheet> createState() =>
-      _BudgetLimitMixedMonthSheetState();
+  State<BudgetLimitMixedMonthEditor> createState() =>
+      _BudgetLimitMixedMonthEditorState();
 }
 
-final class _BudgetLimitMixedMonthSheetState
-    extends State<BudgetLimitMixedMonthSheet> {
+final class _BudgetLimitMixedMonthEditorState
+    extends State<BudgetLimitMixedMonthEditor> {
   static const _sliderStepScaled100 =
       BudgetAllocationPartitionSlider.stepScaled100;
   static const _fallbackAggregateRangeScaled100 = 100000000; // 1 000 000 Ft
@@ -96,10 +100,24 @@ final class _BudgetLimitMixedMonthSheetState
     );
     _aggregateFocusNode = FocusNode()..addListener(_onAggregateFocusChanged);
     _draftByHandle = <int, int>{
-      for (final entry in widget.entries) entry.handle: entry.amountScaled100,
+      for (final entry in widget.entries)
+        entry.handle:
+            widget.externalDraftAmounts[entry.handle] ?? entry.amountScaled100,
     };
     _committedByHandle = Map<int, int>.of(_draftByHandle);
     _highlightedHandle = widget.initialHighlightedHandle;
+  }
+
+  @override
+  void didUpdateWidget(covariant BudgetLimitMixedMonthEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    for (final entry in widget.entries) {
+      final external = widget.externalDraftAmounts[entry.handle];
+      if (external != null && _draftByHandle[entry.handle] != external) {
+        _draftByHandle[entry.handle] = external;
+        _committedByHandle[entry.handle] = external;
+      }
+    }
   }
 
   @override
@@ -230,156 +248,143 @@ final class _BudgetLimitMixedMonthSheetState
     final partition = _partition;
     final allocated = partition.liveAllocatedTotalScaled100;
     final overAllocated = allocated - _aggregateDraftScaled100;
-    final maxHeight = MediaQuery.sizeOf(context).height * .84;
-    return SizedBox(
-      height: maxHeight,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          4,
-          20,
-          12 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '${_mixedMonthLongName(widget.month)} ${widget.year}',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        12 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'HAVI KERET',
+            style: TextStyle(
+              fontSize: 11,
+              letterSpacing: .5,
+              color: Color(0xff68758e),
+              fontWeight: FontWeight.w900,
             ),
-            const Text(
-              'Keretkiosztás',
-              style: TextStyle(fontSize: 12, color: Color(0xff68758e)),
-            ),
-            const SizedBox(height: 13),
-            const Text(
-              'HAVI KERET',
-              style: TextStyle(
-                fontSize: 11,
-                letterSpacing: .5,
-                color: Color(0xff68758e),
-                fontWeight: FontWeight.w900,
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const ValueKey<String>(
+                    'budget-limit-mixed-aggregate-input',
+                  ),
+                  controller: _aggregateController,
+                  focusNode: _aggregateFocusNode,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    suffixText: 'Ft',
+                    border: InputBorder.none,
+                  ),
+                  onChanged: _setAggregateText,
+                  onSubmitted: (_) => _commitAggregate(),
+                  onEditingComplete: _commitAggregate,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
+              if (widget.canUseIncomeSpec &&
+                  widget.monthlyIncomeScaled100 != null &&
+                  widget.monthlyIncomeScaled100! > 0)
+                Tooltip(
+                  message: 'Budget beállítása a havi bevételre',
+                  child: TextButton.icon(
                     key: const ValueKey<String>(
-                      'budget-limit-mixed-aggregate-input',
+                      'budget-limit-mixed-spec-income',
                     ),
-                    controller: _aggregateController,
-                    focusNode: _aggregateFocusNode,
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.done,
-                    style: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                    ),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      suffixText: 'Ft',
-                      border: InputBorder.none,
-                    ),
-                    onChanged: _setAggregateText,
-                    onSubmitted: (_) => _commitAggregate(),
-                    onEditingComplete: _commitAggregate,
+                    onPressed: _useIncomeSpec,
+                    icon: const Icon(Icons.compare_arrows_rounded, size: 16),
+                    label: const Text('Bevételhez'),
                   ),
                 ),
-                if (widget.canUseIncomeSpec &&
-                    widget.monthlyIncomeScaled100 != null &&
-                    widget.monthlyIncomeScaled100! > 0)
-                  Tooltip(
-                    message: 'Budget beállítása a havi bevételre',
-                    child: TextButton.icon(
-                      key: const ValueKey<String>(
-                        'budget-limit-mixed-spec-income',
-                      ),
-                      onPressed: _useIncomeSpec,
-                      icon: const Icon(Icons.compare_arrows_rounded, size: 16),
-                      label: const Text('Bevételhez'),
-                    ),
-                  ),
-              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            key: const ValueKey<String>('budget-limit-mixed-partition'),
+            child: BudgetAggregatePartitionSlider(
+              partition: partition,
+              valueScaled100: _aggregateDraftScaled100,
+              maxScaled100: _aggregateSliderMaxScaled100,
+              enabled: _aggregateSliderMaxScaled100 > 0,
+              highlightedCategoryHandle: _highlightedHandle,
+              onChanged: _setAggregateDraft,
+              onChangeEnd: (amount) {
+                _setAggregateDraft(amount);
+                _commitAggregate();
+              },
             ),
-            const SizedBox(height: 6),
-            SizedBox(
-              key: const ValueKey<String>('budget-limit-mixed-partition'),
-              child: BudgetAggregatePartitionSlider(
-                partition: partition,
-                valueScaled100: _aggregateDraftScaled100,
-                maxScaled100: _aggregateSliderMaxScaled100,
-                enabled: _aggregateSliderMaxScaled100 > 0,
-                highlightedCategoryHandle: _highlightedHandle,
-                onChanged: _setAggregateDraft,
-                onChangeEnd: (amount) {
-                  _setAggregateDraft(amount);
-                  _commitAggregate();
-                },
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _MixedMetric(
+                  label: 'Kiosztva',
+                  amount: _mixedFormatAmount(allocated),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _MixedMetric(
-                    label: 'Kiosztva',
-                    amount: _mixedFormatAmount(allocated),
+              Expanded(
+                child: _MixedMetric(
+                  label: overAllocated > 0 ? 'Túlkiosztás' : 'Szabad',
+                  amount: _mixedFormatAmount(
+                    overAllocated > 0
+                        ? overAllocated
+                        : partition.unallocatedLimitScaled100,
                   ),
+                  danger: overAllocated > 0,
                 ),
-                Expanded(
-                  child: _MixedMetric(
-                    label: overAllocated > 0 ? 'Túlkiosztás' : 'Szabad',
-                    amount: _mixedFormatAmount(
-                      overAllocated > 0
-                          ? overAllocated
-                          : partition.unallocatedLimitScaled100,
-                    ),
-                    danger: overAllocated > 0,
-                  ),
-                ),
-              ],
-            ),
-            if (overAllocated > 0) ...[
-              const SizedBox(height: 5),
-              const Text(
-                'A kategórialimitek nem változtak automatikusan.',
-                style: TextStyle(fontSize: 11, color: Color(0xffb9485e)),
               ),
             ],
-            const SizedBox(height: 14),
-            const Text(
-              'Kategóriák',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-            ),
+          ),
+          if (overAllocated > 0) ...[
             const SizedBox(height: 5),
-            Expanded(
-              child: ListView.builder(
-                key: const ValueKey<String>('budget-limit-mixed-category-list'),
-                itemCount: widget.entries.length,
-                itemBuilder: (context, index) {
-                  final entry = widget.entries[index];
-                  final amount = _draftByHandle[entry.handle] ?? 0;
-                  final max = _categoryMaxScaled100(entry.handle);
-                  return _BudgetLimitMixedCategoryRow(
-                    entry: entry,
-                    amountScaled100: amount,
-                    showNoLimit: !entry.hasLimit && amount == 0,
-                    maxScaled100: max,
-                    selected: entry.handle == _highlightedHandle,
-                    onTap: () => _openCategoryDetail(entry.handle),
-                    onChangeStart: () =>
-                        setState(() => _highlightedHandle = entry.handle),
-                    onChanged: (value) =>
-                        _setCategoryDraft(entry.handle, value.round()),
-                    onChangeEnd: (_) => _commitCategory(entry.handle),
-                  );
-                },
-              ),
+            const Text(
+              'A kategórialimitek nem változtak automatikusan.',
+              style: TextStyle(fontSize: 11, color: Color(0xffb9485e)),
             ),
           ],
-        ),
+          const SizedBox(height: 14),
+          const Text(
+            'Kategóriák',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 5),
+          Expanded(
+            child: ListView.builder(
+              key: const ValueKey<String>('budget-limit-mixed-category-list'),
+              itemCount: widget.entries.length,
+              itemBuilder: (context, index) {
+                final entry = widget.entries[index];
+                final amount = _draftByHandle[entry.handle] ?? 0;
+                final max = _categoryMaxScaled100(entry.handle);
+                return _BudgetLimitMixedCategoryRow(
+                  entry: entry,
+                  amountScaled100: amount,
+                  showNoLimit: !entry.hasLimit && amount == 0,
+                  maxScaled100: max,
+                  selected: entry.handle == _highlightedHandle,
+                  onTap: () => _openCategoryDetail(entry.handle),
+                  onChangeStart: () =>
+                      setState(() => _highlightedHandle = entry.handle),
+                  onChanged: (value) =>
+                      _setCategoryDraft(entry.handle, value.round()),
+                  onChangeEnd: (_) => _commitCategory(entry.handle),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -448,7 +453,7 @@ final class _BudgetLimitMixedCategoryRow extends StatelessWidget {
     final sliderMax = max == 0 ? 1 : max;
     final value = amountScaled100.clamp(0, sliderMax).toDouble();
     final divisions =
-        (sliderMax / _BudgetLimitMixedMonthSheetState._sliderStepScaled100)
+        (sliderMax / _BudgetLimitMixedMonthEditorState._sliderStepScaled100)
             .round()
             .clamp(1, 2000)
             .toInt();
@@ -540,18 +545,3 @@ String _mixedFormatAmount(int? amountScaled100) {
   }
   return '${parts.reversed.join(' ')} Ft';
 }
-
-String _mixedMonthLongName(int month) => const <String>[
-  'Január',
-  'Február',
-  'Március',
-  'Április',
-  'Május',
-  'Június',
-  'Július',
-  'Augusztus',
-  'Szeptember',
-  'Október',
-  'November',
-  'December',
-][month - 1];

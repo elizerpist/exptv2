@@ -232,6 +232,29 @@ abstract final class DashboardBudgetSecondaryAnalysisProjector {
     );
   }
 
+  /// Exact-month variant used by a manual limit editor while its local draft
+  /// has not been persisted yet. Ledger actuals and calendar policy remain
+  /// entirely prepared-snapshot based; only the limit denominator is overlaid.
+  /// This keeps the editor and the MONTH analysis card on one formula without
+  /// mutating a prepared snapshot for every pointer update.
+  static DashboardBudgetMonthSecondaryAnalysis projectMonthWithLimitDraft({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required LedgerDirection direction,
+    required int targetHandle,
+    required int year,
+    required int month,
+    required LocalDate logicalAsOfDate,
+    required int? limitScaled100,
+  }) => _month(
+    snapshot: snapshot,
+    direction: direction,
+    targetHandle: targetHandle,
+    year: year,
+    month: month,
+    logicalAsOfDate: logicalAsOfDate,
+    limitOverrideScaled100: limitScaled100,
+  );
+
   static DashboardBudgetSecondaryAnalysisPayload _unavailableFor(
     LedgerTimeScope scope,
   ) => switch (scope) {
@@ -458,6 +481,7 @@ abstract final class DashboardBudgetSecondaryAnalysisProjector {
     required int year,
     required int month,
     required LocalDate logicalAsOfDate,
+    int? limitOverrideScaled100,
   }) {
     final days = _daysInMonth(year, month);
     if (year < snapshot.yearWindowStart ||
@@ -494,7 +518,7 @@ abstract final class DashboardBudgetSecondaryAnalysisProjector {
       period: BudgetLimitPeriod.month(year, month),
       targetHandle: targetHandle,
     );
-    final limit = _positiveLimit(cell.limitScaled100);
+    final limit = _positiveLimit(limitOverrideScaled100 ?? cell.limitScaled100);
     if (limit == null) {
       return DashboardBudgetMonthSecondaryAnalysis(
         availability: BudgetAnalysisAvailability.unavailable,

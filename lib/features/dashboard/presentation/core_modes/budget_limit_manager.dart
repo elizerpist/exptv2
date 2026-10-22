@@ -21,6 +21,8 @@ import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/local_date.dart';
 import 'budget_allocation_partition_lane.dart';
 import 'budget_allocation_partition_slider.dart';
+import 'budget_secondary_analysis_card.dart';
+import 'category_limit_allocation_progress_slider.dart';
 import 'budget_limit_mixed_month_sheet.dart';
 import 'budget_target_avatar_carousel.dart';
 
@@ -87,6 +89,26 @@ final class BudgetLimitManager extends StatefulWidget {
 /// meaning and always starts in the target/category view on a fresh open.
 enum BudgetLimitManagerPerspective { category, allocation, mixed }
 
+sealed class _BudgetLimitManagerPage {
+  const _BudgetLimitManagerPage();
+}
+
+final class _BudgetLimitManagerOverviewPage extends _BudgetLimitManagerPage {
+  const _BudgetLimitManagerOverviewPage();
+}
+
+final class _BudgetLimitManagerMonthPage extends _BudgetLimitManagerPage {
+  const _BudgetLimitManagerMonthPage({
+    required this.year,
+    required this.month,
+    required this.originatingTargetHandle,
+  });
+
+  final int year;
+  final int month;
+  final int originatingTargetHandle;
+}
+
 final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   late int _year;
   late final CenteredCarouselController _avatarCarouselController;
@@ -102,6 +124,8 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   bool _monthSheetOpen = false;
   bool _loadingTimeline = true;
   var _perspective = BudgetLimitManagerPerspective.category;
+  _BudgetLimitManagerPage _page = const _BudgetLimitManagerOverviewPage();
+  final ScrollController _rootScrollController = ScrollController();
   int? _allocationActiveCategoryHandle;
   String? _allocationActiveCategoryStableId;
 
@@ -136,6 +160,8 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   bool get _usesAvatarCentricRoot =>
       _perspective == BudgetLimitManagerPerspective.category ||
       _perspective == BudgetLimitManagerPerspective.mixed;
+
+  bool get _isMonthEditor => _page is _BudgetLimitManagerMonthPage;
 
   @override
   void initState() {
@@ -226,6 +252,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
   void dispose() {
     widget.presentation.removeListener(_onPresentationChanged);
     _avatarCarouselController.dispose();
+    _rootScrollController.dispose();
     super.dispose();
   }
 
@@ -482,113 +509,309 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
               logicalAsOfDate: _logicalDate,
             ).payload;
       final metrics = sum is DashboardBudgetSumAnalysis ? sum : null;
-      return Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
+      final page = _page;
+      final monthPage = page is _BudgetLimitManagerMonthPage ? page : null;
+      return PopScope(
+        canPop: monthPage == null,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && monthPage != null) _returnToOverview();
+        },
+        child: Scaffold(
           backgroundColor: Colors.white,
-          foregroundColor: const Color(0xff18233d),
-          elevation: 0,
-          leading: IconButton(
-            key: const ValueKey<String>('budget-limit-manager-close'),
-            icon: const Icon(Icons.arrow_back_rounded),
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-          centerTitle: true,
-          title: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _usesAvatarCentricRoot ? _title : 'Keretkiosztás',
-                style: const TextStyle(fontWeight: FontWeight.w800),
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xff18233d),
+            elevation: 0,
+            leading: IconButton(
+              key: ValueKey<String>(
+                monthPage == null
+                    ? 'budget-limit-manager-close'
+                    : 'budget-limit-manager-month-back',
               ),
-              Text(
-                widget.request.direction == LedgerDirection.expense
-                    ? 'Kiadási keret'
-                    : 'Bevételi cél',
-                style: const TextStyle(fontSize: 11, color: Color(0xff73809a)),
-              ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              key: const ValueKey<String>('budget-limit-manager-perspective'),
-              tooltip: switch (_perspective) {
-                BudgetLimitManagerPerspective.category =>
-                  'Keretkezelő nézet: Avatar szerint',
-                BudgetLimitManagerPerspective.allocation =>
-                  'Keretkezelő nézet: Hónap szerint',
-                BudgetLimitManagerPerspective.mixed =>
-                  'Keretkezelő nézet: Kevert',
-              },
-              onPressed: _monthSheetOpen
-                  ? null
-                  : () => setState(() {
-                      _perspective = switch (_perspective) {
-                        BudgetLimitManagerPerspective.category =>
-                          BudgetLimitManagerPerspective.allocation,
-                        BudgetLimitManagerPerspective.allocation =>
-                          BudgetLimitManagerPerspective.mixed,
-                        BudgetLimitManagerPerspective.mixed =>
-                          BudgetLimitManagerPerspective.category,
-                      };
-                    }),
-              icon: Icon(switch (_perspective) {
-                BudgetLimitManagerPerspective.category =>
-                  Icons.account_tree_outlined,
-                BudgetLimitManagerPerspective.allocation =>
-                  Icons.grid_view_rounded,
-                BudgetLimitManagerPerspective.mixed =>
-                  Icons.view_carousel_outlined,
-              }),
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: monthPage == null
+                  ? () => Navigator.of(context).maybePop()
+                  : _returnToOverview,
             ),
-            if (_canManageCategories)
-              IconButton(
-                key: const ValueKey<String>('budget-limit-manager-categories'),
-                tooltip: 'Kategóriák kezelése',
-                onPressed: _monthSheetOpen ? null : _showCategoryManager,
-                icon: const Icon(Icons.category_outlined),
-              ),
-          ],
-        ),
-        body: SafeArea(
-          top: false,
-          child: _loadingTimeline
-              ? const Center(child: CircularProgressIndicator())
-              : LayoutBuilder(
-                  builder: (context, constraints) => SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight - 32,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: _usesAvatarCentricRoot
-                            ? <Widget>[
-                                _avatarCarousel(),
-                                const SizedBox(height: 14),
-                                _baseEditorCard(),
-                                const SizedBox(height: 10),
-                                _metricsCard(metrics),
-                                const SizedBox(height: 18),
-                                _yearSelector(),
-                                const SizedBox(height: 10),
-                                _monthGrid(
-                                  snapshot,
-                                  mixed:
-                                      _perspective ==
-                                      BudgetLimitManagerPerspective.mixed,
-                                ),
-                              ]
-                            : _allocationPerspective(snapshot),
-                      ),
-                    ),
+            centerTitle: true,
+            title: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  monthPage == null
+                      ? (_usesAvatarCentricRoot ? _title : 'Keretkiosztás')
+                      : '${_monthLongName(monthPage.month)} ${monthPage.year}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  monthPage == null
+                      ? (widget.request.direction == LedgerDirection.expense
+                            ? 'Kiadási keret'
+                            : 'Bevételi cél')
+                      : 'Keretkiosztás',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xff73809a),
                   ),
                 ),
+              ],
+            ),
+            actions: [
+              if (monthPage != null)
+                IconButton(
+                  key: const ValueKey<String>(
+                    'budget-limit-manager-month-more',
+                  ),
+                  tooltip: 'További műveletek',
+                  onPressed: () {},
+                  icon: const Icon(Icons.more_vert_rounded),
+                ),
+              if (monthPage == null)
+                IconButton(
+                  key: const ValueKey<String>(
+                    'budget-limit-manager-perspective',
+                  ),
+                  tooltip: switch (_perspective) {
+                    BudgetLimitManagerPerspective.category =>
+                      'Keretkezelő nézet: Avatar szerint',
+                    BudgetLimitManagerPerspective.allocation =>
+                      'Keretkezelő nézet: Hónap szerint',
+                    BudgetLimitManagerPerspective.mixed =>
+                      'Keretkezelő nézet: Kevert',
+                  },
+                  onPressed: _monthSheetOpen
+                      ? null
+                      : () => setState(() {
+                          _perspective = switch (_perspective) {
+                            BudgetLimitManagerPerspective.category =>
+                              BudgetLimitManagerPerspective.allocation,
+                            BudgetLimitManagerPerspective.allocation =>
+                              BudgetLimitManagerPerspective.mixed,
+                            BudgetLimitManagerPerspective.mixed =>
+                              BudgetLimitManagerPerspective.category,
+                          };
+                        }),
+                  icon: Icon(switch (_perspective) {
+                    BudgetLimitManagerPerspective.category =>
+                      Icons.account_tree_outlined,
+                    BudgetLimitManagerPerspective.allocation =>
+                      Icons.grid_view_rounded,
+                    BudgetLimitManagerPerspective.mixed =>
+                      Icons.view_carousel_outlined,
+                  }),
+                ),
+              if (monthPage == null && _canManageCategories)
+                IconButton(
+                  key: const ValueKey<String>(
+                    'budget-limit-manager-categories',
+                  ),
+                  tooltip: 'Kategóriák kezelése',
+                  onPressed: _monthSheetOpen ? null : _showCategoryManager,
+                  icon: const Icon(Icons.category_outlined),
+                ),
+            ],
+          ),
+          body: SafeArea(
+            top: false,
+            child: _loadingTimeline
+                ? const Center(child: CircularProgressIndicator())
+                : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 240),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeOutCubic,
+                    transitionBuilder: (child, animation) {
+                      final enteringMonth =
+                          child.key ==
+                          const ValueKey<String>(
+                            'budget-limit-manager-month-page',
+                          );
+                      return ClipRect(
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: enteringMonth
+                                ? const Offset(1, 0)
+                                : const Offset(-.16, 0),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: monthPage == null
+                        ? _buildOverviewBody(snapshot, metrics)
+                        : _buildMonthEditorBody(monthPage),
+                  ),
+          ),
         ),
       );
     },
   );
+
+  Widget _buildOverviewBody(
+    PreparedBudgetLimitSnapshot? snapshot,
+    DashboardBudgetSumAnalysis? metrics,
+  ) => KeyedSubtree(
+    key: const ValueKey<String>('budget-limit-manager-overview-page'),
+    child: LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        key: const PageStorageKey<String>(
+          'budget-limit-manager-overview-scroll',
+        ),
+        controller: _rootScrollController,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight - 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _usesAvatarCentricRoot
+                ? <Widget>[
+                    _avatarCarousel(),
+                    const SizedBox(height: 14),
+                    _baseEditorCard(),
+                    const SizedBox(height: 10),
+                    _metricsCard(metrics),
+                    const SizedBox(height: 18),
+                    _yearSelector(),
+                    const SizedBox(height: 10),
+                    _monthGrid(
+                      snapshot,
+                      mixed:
+                          _perspective == BudgetLimitManagerPerspective.mixed,
+                    ),
+                  ]
+                : _allocationPerspective(snapshot),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  void _openMixedMonthEditor(_BudgetLimitMonthInfo info) {
+    if (_aggregateHandle() == null) return;
+    setState(() {
+      _page = _BudgetLimitManagerMonthPage(
+        year: info.year,
+        month: info.month,
+        originatingTargetHandle: _activeTargetHandle,
+      );
+    });
+  }
+
+  void _returnToOverview() {
+    if (!_isMonthEditor) return;
+    setState(() => _page = const _BudgetLimitManagerOverviewPage());
+  }
+
+  DashboardBudgetTargetPresentationItem? _targetVisualForHandle(int handle) {
+    for (final item in widget.presentation.value.items) {
+      if (item.target.handle == handle) return item;
+    }
+    return null;
+  }
+
+  Map<int, int> _draftsForMonth(int year, int month) =>
+      Map<int, int>.unmodifiable(<int, int>{
+        for (final item in _avatarItems)
+          if (!_targetForHandle(item.targetHandle)!.isAggregate)
+            item.targetHandle: _allocationValueFor(
+              year: year,
+              month: month,
+              handle: item.targetHandle,
+            ),
+      });
+
+  Widget _buildMonthEditorBody(_BudgetLimitManagerMonthPage page) {
+    final aggregateHandle = _aggregateHandle();
+    if (aggregateHandle == null) return const SizedBox.shrink();
+    final partition = _partitionWithAllocationDrafts(
+      partition: widget.presentation.partitionForManagerMonth(
+        direction: widget.request.direction,
+        year: page.year,
+        month: page.month,
+      ),
+      year: page.year,
+      month: page.month,
+    );
+    final entries = <BudgetLimitMixedCategoryEntry>[
+      for (final item in _avatarItems)
+        if (_targetForHandle(item.targetHandle)?.isAggregate == false)
+          BudgetLimitMixedCategoryEntry(
+            handle: item.targetHandle,
+            title: item.title,
+            accent: item.color,
+            avatar: item.avatarFor(selected: false),
+            amountScaled100: _allocationValueFor(
+              year: page.year,
+              month: page.month,
+              handle: item.targetHandle,
+            ),
+            hasLimit:
+                _resolvedLimitForHandle(
+                  item.targetHandle,
+                  page.year,
+                  page.month,
+                ) !=
+                null,
+          ),
+    ];
+    return KeyedSubtree(
+      key: const ValueKey<String>('budget-limit-manager-month-page'),
+      child: BudgetLimitMixedMonthEditor(
+        key: ValueKey<String>(
+          'budget-limit-mixed-month-editor-${page.year}-${page.month}',
+        ),
+        year: page.year,
+        month: page.month,
+        partition: partition,
+        initialAggregateAmountScaled100:
+            _resolvedLimitForHandle(aggregateHandle, page.year, page.month) ??
+            partition.effectiveAggregateLimitScaled100,
+        monthlyIncomeScaled100: _monthlyIncome(
+          widget.presentation.preparedSnapshotForManager,
+          page.year,
+          page.month,
+        ),
+        canUseIncomeSpec: widget.request.direction == LedgerDirection.expense,
+        entries: entries,
+        externalDraftAmounts: _draftsForMonth(page.year, page.month),
+        initialHighlightedHandle:
+            page.originatingTargetHandle == aggregateHandle
+            ? null
+            : page.originatingTargetHandle,
+        onCategoryDraftChanged: (handle, amount) => _setAllocationDraft(
+          year: page.year,
+          month: page.month,
+          handle: handle,
+          amount: amount,
+        ),
+        onCommitAggregate: (amount) => _setOverrideForTarget(
+          aggregateHandle,
+          page.year,
+          page.month,
+          amount,
+        ),
+        onCommitCategory: (handle, amount) =>
+            _setOverrideForTarget(handle, page.year, page.month, amount),
+        onOpenCategoryDetail: (handle) => _showCategoryMonthSheetForHandle(
+          year: page.year,
+          month: page.month,
+          targetHandle: handle,
+          managesSheetOpenState: true,
+          onDraftChanged: (amount) => _setAllocationDraft(
+            year: page.year,
+            month: page.month,
+            handle: handle,
+            amount: amount,
+          ),
+        ),
+        resolvedCategoryAmount: (handle) => _allocationValueFor(
+          year: page.year,
+          month: page.month,
+          handle: handle,
+        ),
+      ),
+    );
+  }
 
   Widget _avatarCarousel() => SizedBox(
     key: const ValueKey<String>('budget-limit-manager-avatar-carousel'),
@@ -1258,7 +1481,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
         accent: _accent,
         onTap: _carouselInMotion
             ? null
-            : () => mixed ? _showMixedMonthSheet(info) : _showMonthSheet(info),
+            : () => mixed ? _openMixedMonthEditor(info) : _showMonthSheet(info),
       );
     },
   );
@@ -1422,6 +1645,7 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
     required int month,
     required int targetHandle,
     required bool managesSheetOpenState,
+    ValueChanged<int>? onDraftChanged,
   }) async {
     final target = _targetForHandle(targetHandle);
     if (target == null) return;
@@ -1461,6 +1685,10 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
           targetTitle: item?.title ?? _title,
           targetIsAggregate: target.isAggregate,
           partition: partition,
+          snapshot: widget.presentation.preparedSnapshotForManager,
+          direction: widget.request.direction,
+          logicalAsOfDate: _logicalDate,
+          targetVisual: _targetVisualForHandle(targetHandle),
           onSetOverride: (amount) async {
             await _setOverrideForTarget(
               targetHandle,
@@ -1473,97 +1701,11 @@ final class _BudgetLimitManagerState extends State<BudgetLimitManager> {
             await _deleteOverrideForTarget(targetHandle, info.year, info.month);
             if (sheetContext.mounted) Navigator.of(sheetContext).pop();
           },
+          onDraftChanged: onDraftChanged,
         ),
       );
     } finally {
       if (managesSheetOpenState) _monthSheetOpen = false;
-    }
-  }
-
-  Future<void> _showMixedMonthSheet(_BudgetLimitMonthInfo info) async {
-    final aggregateHandle = _aggregateHandle();
-    if (aggregateHandle == null) return;
-    final partition = _partitionWithAllocationDrafts(
-      partition: widget.presentation.partitionForManagerMonth(
-        direction: widget.request.direction,
-        year: info.year,
-        month: info.month,
-      ),
-      year: info.year,
-      month: info.month,
-    );
-    final entries = <BudgetLimitMixedCategoryEntry>[
-      for (final item in _avatarItems)
-        if (_targetForHandle(item.targetHandle)?.isAggregate == false)
-          BudgetLimitMixedCategoryEntry(
-            handle: item.targetHandle,
-            title: item.title,
-            accent: item.color,
-            avatar: item.avatarFor(selected: false),
-            amountScaled100: _allocationValueFor(
-              year: info.year,
-              month: info.month,
-              handle: item.targetHandle,
-            ),
-            hasLimit:
-                _resolvedLimitForHandle(
-                  item.targetHandle,
-                  info.year,
-                  info.month,
-                ) !=
-                null,
-          ),
-    ];
-    _monthSheetOpen = true;
-    try {
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
-        builder: (_) => BudgetLimitMixedMonthSheet(
-          year: info.year,
-          month: info.month,
-          partition: partition,
-          initialAggregateAmountScaled100:
-              _resolvedLimitForHandle(aggregateHandle, info.year, info.month) ??
-              partition.effectiveAggregateLimitScaled100,
-          monthlyIncomeScaled100: _monthlyIncome(
-            widget.presentation.preparedSnapshotForManager,
-            info.year,
-            info.month,
-          ),
-          canUseIncomeSpec: widget.request.direction == LedgerDirection.expense,
-          entries: entries,
-          initialHighlightedHandle: _activeTarget.isAggregate
-              ? null
-              : _activeTargetHandle,
-          onCategoryDraftChanged: (handle, amount) => _setAllocationDraft(
-            year: info.year,
-            month: info.month,
-            handle: handle,
-            amount: amount,
-          ),
-          onCommitAggregate: (amount) => _setOverrideForTarget(
-            aggregateHandle,
-            info.year,
-            info.month,
-            amount,
-          ),
-          onCommitCategory: (handle, amount) =>
-              _setOverrideForTarget(handle, info.year, info.month, amount),
-          onOpenCategoryDetail: (handle) => _showCategoryMonthSheetForHandle(
-            year: info.year,
-            month: info.month,
-            targetHandle: handle,
-            managesSheetOpenState: false,
-          ),
-          resolvedCategoryAmount: (handle) =>
-              _resolvedLimitForHandle(handle, info.year, info.month) ?? 0,
-        ),
-      );
-    } finally {
-      _monthSheetOpen = false;
     }
   }
 
@@ -1968,8 +2110,13 @@ final class _BudgetLimitMonthSheet extends StatefulWidget {
     required this.targetTitle,
     required this.targetIsAggregate,
     required this.partition,
+    required this.snapshot,
+    required this.direction,
+    required this.logicalAsOfDate,
+    required this.targetVisual,
     required this.onSetOverride,
     required this.onDeleteOverride,
+    this.onDraftChanged,
   });
 
   final _BudgetLimitMonthInfo info;
@@ -1978,8 +2125,13 @@ final class _BudgetLimitMonthSheet extends StatefulWidget {
   final String targetTitle;
   final bool targetIsAggregate;
   final DashboardBudgetPartitionPresentation partition;
+  final PreparedBudgetLimitSnapshot? snapshot;
+  final LedgerDirection direction;
+  final LocalDate logicalAsOfDate;
+  final DashboardBudgetTargetPresentationItem? targetVisual;
   final Future<void> Function(int) onSetOverride;
   final Future<void> Function() onDeleteOverride;
+  final ValueChanged<int>? onDraftChanged;
 
   @override
   State<_BudgetLimitMonthSheet> createState() => _BudgetLimitMonthSheetState();
@@ -2009,6 +2161,7 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
   void _onDraftChanged() {
     if (!_isEditing) return;
     _sliderDraftScaled100 = _overrideDraftScaled100;
+    widget.onDraftChanged?.call(_sliderDraftScaled100);
     if (mounted) setState(() {});
   }
 
@@ -2024,13 +2177,6 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
       (int.tryParse(_controller.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0) *
       100;
 
-  DashboardBudgetPartitionPresentation get _displayedPartition => _isEditing
-      ? widget.partition.withCategoryLimitDraft(
-          categoryHandle: widget.targetHandle,
-          limitScaled100: _overrideDraftScaled100,
-        )
-      : widget.partition;
-
   int get _categorySliderMaxScaled100 {
     if (widget.targetIsAggregate ||
         !widget.partition.hasPositiveAggregateLimit) {
@@ -2044,10 +2190,28 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
                 (active > 0 ? active : 0))
             .clamp(0, 0x7fffffffffffffff)
             .toInt();
-    return ((widget.partition.effectiveAggregateLimitScaled100 ?? 0) -
-            otherAllocated)
-        .clamp(0, 0x7fffffffffffffff)
-        .toInt();
+    final available =
+        ((widget.partition.effectiveAggregateLimitScaled100 ?? 0) -
+                otherAllocated)
+            .clamp(0, 0x7fffffffffffffff)
+            .toInt();
+    return _sliderDraftScaled100 > available
+        ? _sliderDraftScaled100
+        : available;
+  }
+
+  DashboardBudgetMonthSecondaryAnalysis? get _analysis {
+    final snapshot = widget.snapshot;
+    if (snapshot == null) return null;
+    return DashboardBudgetSecondaryAnalysisProjector.projectMonthWithLimitDraft(
+      snapshot: snapshot,
+      direction: widget.direction,
+      targetHandle: widget.targetHandle,
+      year: widget.info.year,
+      month: widget.info.month,
+      logicalAsOfDate: widget.logicalAsOfDate,
+      limitScaled100: _sliderDraftScaled100 > 0 ? _sliderDraftScaled100 : null,
+    );
   }
 
   void _setSliderDraft(int value) {
@@ -2061,12 +2225,18 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
         ),
       );
     });
+    widget.onDraftChanged?.call(value);
   }
 
   @override
   Widget build(BuildContext context) {
     final info = widget.info;
-    final ratio = info.utilization;
+    final slider = CategoryLimitSliderPresentation.resolve(
+      actualScaled100: info.actualScaled100 ?? 0,
+      limitScaled100: _sliderDraftScaled100,
+      maxScaled100: _categorySliderMaxScaled100,
+    );
+    final analysis = _analysis;
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -2081,12 +2251,24 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  '${_monthLongName(info.month)} ${info.year}',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.targetTitle,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${_monthLongName(info.month)} ${info.year}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xff6a768c),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               if (info.hasOverride) _chip('Egyedi', widget.accent),
@@ -2106,7 +2288,9 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
             children: [
               Expanded(
                 child: Text(
-                  _formatAmount(info.resolvedLimitScaled100),
+                  _formatAmount(
+                    _sliderDraftScaled100 > 0 ? _sliderDraftScaled100 : null,
+                  ),
                   style: const TextStyle(
                     fontSize: 27,
                     fontWeight: FontWeight.w900,
@@ -2123,142 +2307,30 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
               ),
             ],
           ),
-          if (info.historicalBaseScaled100 != null && info.hasOverride) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Alap havi keret: ${_formatAmount(info.historicalBaseScaled100)}',
-              style: const TextStyle(fontSize: 12, color: Color(0xff6a768c)),
-            ),
-          ] else if (info.isClosed && !info.hasOverride)
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
+          if (info.historicalBaseScaled100 != null && info.hasOverride)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
               child: Text(
-                'Ezt az akkori alap havi keretből örökli.',
-                style: TextStyle(fontSize: 12, color: Color(0xff6a768c)),
+                'Alap havi keret: ${_formatAmount(info.historicalBaseScaled100)}',
+                style: const TextStyle(fontSize: 12, color: Color(0xff6a768c)),
               ),
             ),
-          if (info.resolvedLimitScaled100 == null)
-            const Padding(
-              padding: EdgeInsets.only(top: 6),
-              child: Text(
-                'Ehhez a hónaphoz még nincs beállítva keret.',
-                style: TextStyle(fontSize: 12, color: Color(0xff6a768c)),
+          const SizedBox(height: 10),
+          if (!widget.targetIsAggregate)
+            CategoryLimitAllocationProgressSlider(
+              key: const ValueKey<String>(
+                'budget-limit-category-progress-slider',
               ),
-            )
-          else if (info.isFuture && !info.hasOverride)
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text(
-                'Az alap havi keretből örökli.',
-                style: TextStyle(fontSize: 12, color: Color(0xff6a768c)),
-              ),
+              presentation: slider,
+              accent: widget.accent,
+              enabled: slider.hasCapacity || _sliderDraftScaled100 > 0,
+              onChanged: _setSliderDraft,
+              onChangeEnd: widget.onSetOverride,
             ),
-          if (info.isClosed &&
-              info.actualScaled100 != null &&
-              info.resolvedLimitScaled100 != null) ...[
-            const SizedBox(height: 15),
-            const Text('Költés', style: TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 2),
-            Text(
-              _formatAmount(info.actualScaled100),
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
-            ),
-            if (ratio != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  _closedMonthDeltaCopy(info),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: ratio > 1
-                        ? const Color(0xffd94f69)
-                        : const Color(0xff288e6e),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 6),
-            _MiniUtilizationRail(
-              ratio: ratio,
-              color: ratio != null && ratio > 1
-                  ? const Color(0xffe05b73)
-                  : const Color(0xff26ae83),
-              showOvershoot: ratio != null && ratio > 1.2,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              ratio == null
-                  ? '—'
-                  : '${(ratio * 100).round()}% hónap végi állapot',
-              style: const TextStyle(fontSize: 12, color: Color(0xff68758e)),
-            ),
-          ],
-          if (info.isCurrent &&
-              info.actualScaled100 != null &&
-              info.resolvedLimitScaled100 != null) ...[
-            const SizedBox(height: 15),
-            const Text(
-              'Eddigi költés',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              _formatAmount(info.actualScaled100),
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 6),
-            _MiniUtilizationRail(
-              ratio: ratio,
-              color: ratio != null && ratio > 1
-                  ? const Color(0xffe05b73)
-                  : widget.accent,
-              showOvershoot: ratio != null && ratio > 1.2,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              ratio == null ? '—' : '${(ratio * 100).round()}% felhasználva',
-              style: const TextStyle(fontSize: 12, color: Color(0xff68758e)),
-            ),
-          ],
-          if (info.isFuture) ...[
-            const SizedBox(height: 15),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xfff6f7fa),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                'Ehhez a hónaphoz még nincs költési adat.',
-                style: TextStyle(fontSize: 12, color: Color(0xff68758e)),
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          _BudgetLimitMonthPartitionContext(
-            partition: _displayedPartition,
-            accent: widget.accent,
-            targetHandle: widget.targetHandle,
-            targetTitle: widget.targetTitle,
-            targetIsAggregate: widget.targetIsAggregate,
-            year: info.year,
-            month: info.month,
-            slider: widget.targetIsAggregate
-                ? null
-                : BudgetAllocationPartitionSlider(
-                    partition: _displayedPartition,
-                    activeCategoryHandle: widget.targetHandle,
-                    valueScaled100: _sliderDraftScaled100,
-                    maxScaled100: _categorySliderMaxScaled100,
-                    enabled:
-                        _categorySliderMaxScaled100 > 0 ||
-                        _sliderDraftScaled100 > 0,
-                    onChanged: _setSliderDraft,
-                    onChangeEnd: widget.onSetOverride,
-                  ),
-          ),
+          const SizedBox(height: 4),
+          _CategorySliderLabels(presentation: slider, future: info.isFuture),
           if (_isEditing) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             const Text(
               'Egyedi keret beállítása',
               style: TextStyle(fontWeight: FontWeight.w800),
@@ -2302,18 +2374,16 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
                 child: const Text('Vissza az alapértékhez'),
               ),
           ],
+          const SizedBox(height: 18),
+          _CategoryMonthAnalysisBox(
+            analysis: analysis,
+            info: info,
+            direction: widget.direction,
+            targetVisual: widget.targetVisual,
+          ),
         ],
       ),
     );
-  }
-
-  String _closedMonthDeltaCopy(_BudgetLimitMonthInfo info) {
-    final actual = info.actualScaled100 ?? 0;
-    final limit = info.resolvedLimitScaled100 ?? 0;
-    final delta = actual - limit;
-    if (delta > 0) return '+${_formatAmount(delta)} túllépted a keretet';
-    if (delta < 0) return '${_formatAmount(-delta)} a keret alatt maradt';
-    return 'Pontosan elérted a keretet';
   }
 
   Widget _chip(String label, Color color) => Container(
@@ -2329,147 +2399,258 @@ final class _BudgetLimitMonthSheetState extends State<_BudgetLimitMonthSheet> {
   );
 }
 
-/// Expanded, exact-month counterpart of the Header allocation lane.  It owns
-/// no allocation formula: all segment and total values come from the same
-/// immutable [DashboardBudgetPartitionPresentation] as the Header.
-final class _BudgetLimitMonthPartitionContext extends StatelessWidget {
-  const _BudgetLimitMonthPartitionContext({
-    required this.partition,
-    required this.accent,
-    required this.targetHandle,
-    required this.targetTitle,
-    required this.targetIsAggregate,
-    required this.year,
-    required this.month,
-    this.slider,
+final class _CategorySliderLabels extends StatelessWidget {
+  const _CategorySliderLabels({
+    required this.presentation,
+    required this.future,
   });
 
-  final DashboardBudgetPartitionPresentation partition;
-  final Color accent;
-  final int targetHandle;
-  final String targetTitle;
-  final bool targetIsAggregate;
-  final int year;
-  final int month;
-  final Widget? slider;
+  final CategoryLimitSliderPresentation presentation;
+  final bool future;
 
   @override
   Widget build(BuildContext context) {
-    if (!partition.hasPositiveAggregateLimit) return const SizedBox.shrink();
-    final segment = partition.segmentForCategoryHandle(targetHandle);
-    final categoryLimit = targetIsAggregate
-        ? partition.effectiveAggregateLimitScaled100
-        : partition.effectiveLimitForCategoryHandle(targetHandle);
-    final share = targetIsAggregate ? 1.0 : segment.totalRatio;
+    if (future) {
+      return const Text(
+        'Még nincs költés ebben a hónapban',
+        style: TextStyle(fontSize: 12, color: Color(0xff68758e)),
+      );
+    }
+    final overspent = presentation.isOverspent;
+    final right = overspent
+        ? '${_formatAmount(presentation.overspendScaled100)} túllépés'
+        : '${_formatAmount(presentation.remainingAllocatedScaled100)} maradt';
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            '${_formatAmount(presentation.actualScaled100)} elköltve',
+            style: const TextStyle(fontSize: 12, color: Color(0xff68758e)),
+          ),
+        ),
+        Text(
+          right,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: overspent
+                ? const Color(0xffc24860)
+                : const Color(0xff68758e),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+final class _CategoryMonthAnalysisBox extends StatelessWidget {
+  const _CategoryMonthAnalysisBox({
+    required this.analysis,
+    required this.info,
+    required this.direction,
+    required this.targetVisual,
+  });
+
+  final DashboardBudgetMonthSecondaryAnalysis? analysis;
+  final _BudgetLimitMonthInfo info;
+  final LedgerDirection direction;
+  final DashboardBudgetTargetPresentationItem? targetVisual;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = analysis;
     return Container(
-      key: const ValueKey<String>('budget-limit-month-sheet-partition'),
-      padding: const EdgeInsets.all(14),
+      key: const ValueKey<String>('budget-limit-category-analysis-box'),
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
       decoration: BoxDecoration(
-        color: const Color(0xfff8f9fc),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xffe5e8f0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Helye a havi keretben',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${_monthLongName(month)} $year · Teljes havi keret',
-            style: const TextStyle(fontSize: 11, color: Color(0xff68758e)),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            _formatAmount(partition.effectiveAggregateLimitScaled100),
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 11),
-          slider ??
-              SizedBox(
-                height: 18,
-                child: BudgetAllocationPartitionLane(
-                  partition: partition,
-                  highlightedCategoryHandle: targetIsAggregate
-                      ? null
-                      : targetHandle,
-                ),
-              ),
-          const SizedBox(height: 11),
-          Row(
-            children: [
-              Container(
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: .18),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.category_rounded, size: 12, color: accent),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  targetTitle,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-              ),
-              Text(
-                '${(share * 100).toStringAsFixed(1)}%',
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 27, top: 1),
-            child: Text(
-              '${_formatAmount(categoryLimit)} a teljes keretből',
-              style: const TextStyle(fontSize: 11, color: Color(0xff68758e)),
-            ),
-          ),
-          const SizedBox(height: 11),
-          Row(
-            children: [
-              Expanded(
-                child: _metric(
-                  'Kiosztva összesen',
-                  _formatAmount(partition.liveAllocatedTotalScaled100),
-                  '${(partition.allocationRawRatio * 100).round()}%',
-                ),
-              ),
-              Expanded(
-                child: _metric(
-                  'Nincs kiosztva',
-                  _formatAmount(partition.unallocatedLimitScaled100),
-                  '${(partition.unallocatedRatio * 100).round()}%',
-                ),
-              ),
-            ],
+        color: const Color(0xfffbfcff),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xffe4e8f0)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .035),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
+      child: value == null || info.isFuture
+          ? const _CategoryMonthAnalysisUnavailable(
+              message: 'a hónap még nem kezdődött el',
+            )
+          : !value.isAvailable || value.budgetUsedRatio == null
+          ? const _CategoryMonthAnalysisUnavailable(
+              message: 'nincs beállított havi keret',
+            )
+          : _CategoryMonthAnalysisAvailable(
+              analysis: value,
+              direction: direction,
+              targetVisual: targetVisual,
+              historical: info.isClosed,
+            ),
+    );
+  }
+}
+
+final class _CategoryMonthAnalysisUnavailable extends StatelessWidget {
+  const _CategoryMonthAnalysisUnavailable({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 218,
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text(
+          '—',
+          style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 6),
+        Text(message, style: const TextStyle(color: Color(0xff68758e))),
+      ],
+    ),
+  );
+}
+
+final class _CategoryMonthAnalysisAvailable extends StatelessWidget {
+  const _CategoryMonthAnalysisAvailable({
+    required this.analysis,
+    required this.direction,
+    required this.targetVisual,
+    required this.historical,
+  });
+
+  final DashboardBudgetMonthSecondaryAnalysis analysis;
+  final LedgerDirection direction;
+  final DashboardBudgetTargetPresentationItem? targetVisual;
+  final bool historical;
+
+  @override
+  Widget build(BuildContext context) {
+    final values = historical
+        ? <_CategoryAnalysisKpi>[
+            _CategoryAnalysisKpi(
+              'Záró összeg',
+              _formatAmount(analysis.monthActualScaled100),
+            ),
+            _CategoryAnalysisKpi(
+              'Záró eltérés',
+              _formatSignedAmount(analysis.closingBudgetDeltaScaled100),
+              valueColor: _historicalDeltaColor(
+                direction,
+                analysis.closingBudgetDeltaScaled100,
+              ),
+            ),
+            _CategoryAnalysisKpi(
+              'Napi átlag',
+              _formatAmount(analysis.historicalDailyAverageScaled100),
+            ),
+          ]
+        : <_CategoryAnalysisKpi>[
+            _CategoryAnalysisKpi(
+              'Várható zárás',
+              _formatAmount(analysis.projectedMonthEndScaled100),
+            ),
+            _CategoryAnalysisKpi(
+              'Várható eltérés',
+              _formatSignedAmount(analysis.expectedDeltaScaled100),
+              valueColor: _forecastDeltaColor(
+                direction,
+                analysis.expectedDeltaScaled100,
+              ),
+            ),
+            _CategoryAnalysisKpi(
+              'Napi mozgástér',
+              _formatAmount(analysis.remainingDailyRoomScaled100),
+            ),
+          ];
+    return Column(
+      children: [
+        SizedBox(
+          key: const ValueKey<String>(
+            'budget-limit-category-month-semicircle-viewport',
+          ),
+          height: 190,
+          child: BudgetMonthUtilizationHero(
+            key: const ValueKey<String>(
+              'budget-limit-category-month-semicircle',
+            ),
+            analysis: analysis,
+            direction: direction,
+            targetVisual: targetVisual,
+            gaugeKey: const ValueKey<String>(
+              'budget-limit-category-month-gauge',
+            ),
+          ),
+        ),
+        const Divider(height: 18, color: Color(0xffe4e8f0)),
+        Row(
+          children: [
+            for (var index = 0; index < values.length; index += 1) ...[
+              if (index > 0)
+                const SizedBox(
+                  height: 30,
+                  child: VerticalDivider(color: Color(0xffe4e8f0)),
+                ),
+              Expanded(child: _CategoryAnalysisKpiCell(values[index])),
+            ],
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _metric(String label, String amount, String ratio) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(fontSize: 10, color: Color(0xff68758e)),
-      ),
-      const SizedBox(height: 2),
-      Text(
-        amount,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-      ),
-      Text(
-        ratio,
-        style: const TextStyle(fontSize: 10, color: Color(0xff68758e)),
-      ),
-    ],
+  Color? _historicalDeltaColor(LedgerDirection direction, int? delta) {
+    if (delta == null || delta == 0) return null;
+    final positiveIsHealthy = direction == LedgerDirection.expense;
+    final healthy = (delta > 0) == positiveIsHealthy;
+    return healthy ? const Color(0xff288e6e) : const Color(0xffc24860);
+  }
+
+  Color? _forecastDeltaColor(LedgerDirection direction, int? delta) {
+    if (delta == null || delta == 0) return null;
+    // Forecast delta is projected - limit, whereas the closed value above is
+    // limit - actual. Keep the expense meaning truthful in both displays.
+    final positiveIsHealthy = direction == LedgerDirection.income;
+    final healthy = (delta > 0) == positiveIsHealthy;
+    return healthy ? const Color(0xff288e6e) : const Color(0xffc24860);
+  }
+}
+
+@immutable
+final class _CategoryAnalysisKpi {
+  const _CategoryAnalysisKpi(this.label, this.value, {this.valueColor});
+  final String label;
+  final String value;
+  final Color? valueColor;
+}
+
+final class _CategoryAnalysisKpiCell extends StatelessWidget {
+  const _CategoryAnalysisKpiCell(this.kpi);
+  final _CategoryAnalysisKpi kpi;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 5),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          kpi.label,
+          style: const TextStyle(fontSize: 9, color: Color(0xff68758e)),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          kpi.value,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            color: kpi.valueColor,
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -3217,6 +3398,12 @@ String _formatAmount(int? scaled100) {
     parts.add(digits.substring(start, end));
   }
   return '${parts.reversed.join(' ')} Ft';
+}
+
+String _formatSignedAmount(int? scaled100) {
+  if (scaled100 == null) return '—';
+  if (scaled100 == 0) return _formatAmount(0);
+  return '${scaled100 > 0 ? '+' : '−'}${_formatAmount(scaled100.abs())}';
 }
 
 String _monthName(int month) => const <String>[

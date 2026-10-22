@@ -567,14 +567,42 @@ final class _MonthHero extends StatelessWidget {
   final DashboardBudgetTargetPresentationItem? targetVisual;
 
   @override
+  Widget build(BuildContext context) => BudgetMonthUtilizationHero(
+    analysis: payload,
+    direction: direction,
+    targetVisual: targetVisual,
+  );
+}
+
+/// Public MONTH adapter for any exact-month Budget surface.
+///
+/// This is intentionally the physical object used by the secondary analysis
+/// card, rather than a look-alike chart for an editor. It therefore inherits
+/// the same gauge viewport, 0–120% scale, material settings, marker and
+/// retargeting motion from [BudgetSemicircleGauge].
+final class BudgetMonthUtilizationHero extends StatelessWidget {
+  const BudgetMonthUtilizationHero({
+    required this.analysis,
+    required this.direction,
+    required this.targetVisual,
+    this.gaugeKey = const ValueKey<String>('budget-analysis-month-semicircle'),
+    super.key,
+  });
+
+  final DashboardBudgetMonthSecondaryAnalysis analysis;
+  final LedgerDirection direction;
+  final DashboardBudgetTargetPresentationItem? targetVisual;
+  final Key gaugeKey;
+
+  @override
   Widget build(BuildContext context) {
-    if (!payload.isAvailable || payload.budgetUsedRatio == null) {
+    if (!analysis.isAvailable || analysis.budgetUsedRatio == null) {
       return const _UnavailableHero();
     }
     return _BudgetUtilizationHero(
-      ratio: payload.budgetUsedRatio,
+      ratio: analysis.budgetUsedRatio,
       secondaryLabel: 'havi keretkihasználás',
-      gaugeKey: const ValueKey<String>('budget-analysis-month-semicircle'),
+      gaugeKey: gaugeKey,
       direction: direction,
       targetVisual: targetVisual,
     );
