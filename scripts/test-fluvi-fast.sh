@@ -63,4 +63,4 @@ flutter test \
 
 # Preserve Budget's authored annual clay baselines after sharing its primitive.
 flutter test test/features/dashboard/presentation/budget_secondary_analysis_card_test.dart \
-  --plain-name clay
+  --plain-name YEAR

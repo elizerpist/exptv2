@@ -359,6 +359,9 @@ final class _BalanceDashboardCoreSurfaceState
   BalanceLinkedDetailTopic _selectedTopic = BalanceLinkedDetailTopic.cashflow;
   ValueListenable<BalancePresentationSettings>? _boundSettings;
   BalancePresentationSettings? _lastObservedSettings;
+  // The established collapse path unmounts extended content. Retain only its
+  // local presentation choice here, without retaining an inactive chart tree.
+  BalanceYearPerspective _yearPerspective = BalanceYearPerspective.monthlyNet;
 
   @override
   void initState() {
@@ -559,6 +562,10 @@ final class _BalanceDashboardCoreSurfaceState
             ),
             if (showsTetris)
               _BalanceAlternativeScopeScaffold(
+                yearPerspective: () => _yearPerspective,
+                onYearPerspectiveChanged: (next) {
+                  _yearPerspective = next;
+                },
                 geometry: geometry,
                 presentation: widget.balanceLinkedPresentation,
                 presentationSettings: widget.presentationSettings,
@@ -940,11 +947,15 @@ final class _BalanceUnifiedHeaderContentBridge extends StatelessWidget {
 /// this UI boundary; it never asks for a second projection or query.
 final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
   const _BalanceAlternativeScopeScaffold({
+    required this.yearPerspective,
+    required this.onYearPerspectiveChanged,
     required this.geometry,
     required this.presentation,
     required this.presentationSettings,
   });
 
+  final ValueGetter<BalanceYearPerspective> yearPerspective;
+  final ValueChanged<BalanceYearPerspective> onYearPerspectiveChanged;
   final DashboardLayoutFrame geometry;
   final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
   final ValueListenable<BalancePresentationSettings>? presentationSettings;
@@ -999,6 +1010,8 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
               settings.yearLayoutPresentation ==
                       BalanceYearLayoutPresentation.focused
                   ? _BalanceYearFocusedScaffold(
+                      initialPerspective: yearPerspective(),
+                      onPerspectiveChanged: onYearPerspectiveChanged,
                       geometry: geometry,
                       presentation: alternative,
                     )
@@ -1271,9 +1284,13 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
 /// physical shell/header stay owned by the established Balance surface.
 final class _BalanceYearFocusedScaffold extends StatelessWidget {
   const _BalanceYearFocusedScaffold({
+    required this.initialPerspective,
+    required this.onPerspectiveChanged,
     required this.geometry,
     required this.presentation,
   });
+  final BalanceYearPerspective initialPerspective;
+  final ValueChanged<BalanceYearPerspective> onPerspectiveChanged;
   final DashboardLayoutFrame geometry;
   final BalanceAlternativeYearPresentation presentation;
 
@@ -1288,7 +1305,11 @@ final class _BalanceYearFocusedScaffold extends StatelessWidget {
               constraints,
               geometry.headerBounds.height,
             ),
-            child: BalanceYearFocusedLayout(presentation: presentation),
+            child: BalanceYearFocusedLayout(
+              presentation: presentation,
+              initialPerspective: initialPerspective,
+              onPerspectiveChanged: onPerspectiveChanged,
+            ),
           ),
         ],
       ),

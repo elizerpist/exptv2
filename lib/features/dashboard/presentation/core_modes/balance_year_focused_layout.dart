@@ -41,8 +41,15 @@ enum BalanceYearPerspective {
 /// A local presentation owner: selecting a perspective or month never reaches
 /// Query, navigation, the header, or any repository/controller.
 final class BalanceYearFocusedLayout extends StatefulWidget {
-  const BalanceYearFocusedLayout({super.key, required this.presentation});
+  const BalanceYearFocusedLayout({
+    super.key,
+    required this.presentation,
+    this.initialPerspective = BalanceYearPerspective.monthlyNet,
+    this.onPerspectiveChanged,
+  });
   final BalanceAlternativeYearPresentation presentation;
+  final BalanceYearPerspective initialPerspective;
+  final ValueChanged<BalanceYearPerspective>? onPerspectiveChanged;
 
   @override
   State<BalanceYearFocusedLayout> createState() =>
@@ -51,13 +58,14 @@ final class BalanceYearFocusedLayout extends StatefulWidget {
 
 final class _BalanceYearFocusedLayoutState
     extends State<BalanceYearFocusedLayout> {
-  BalanceYearPerspective _perspective = BalanceYearPerspective.monthlyNet;
+  late BalanceYearPerspective _perspective;
   int? _selectedMonth;
   late BalanceYearFocusedChartPresentation _chart;
 
   @override
   void initState() {
     super.initState();
+    _perspective = widget.initialPerspective;
     _prepare();
   }
 
@@ -327,10 +335,13 @@ final class _BalanceYearFocusedLayoutState
                     key: ValueKey(
                       'balance-year-perspective-${perspective.name}',
                     ),
-                    onTap: () => setState(() {
-                      _perspective = perspective;
-                      _selectedMonth = null;
-                    }),
+                    onTap: () {
+                      setState(() {
+                        _perspective = perspective;
+                        _selectedMonth = null;
+                      });
+                      widget.onPerspectiveChanged?.call(perspective);
+                    },
                     child: Container(
                       width: perspective == _perspective
                           ? diameter

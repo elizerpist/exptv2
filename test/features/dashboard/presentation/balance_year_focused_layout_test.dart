@@ -196,6 +196,9 @@ void main() {
       final body = tester.getRect(
         find.byKey(const ValueKey('balance-alternative-year-layout')),
       );
+      final motherRect = tester.getRect(
+        find.byKey(const ValueKey('balance-unified-header-content-surface')),
+      );
       final beforeLinked = linked.value;
       final beforeHeader = balance.value;
       for (var cycle = 0; cycle < 2; cycle++) {
@@ -204,6 +207,14 @@ void main() {
         );
         await tester.pump();
         expect(find.byType(BalanceYearFocusedLayout), findsOneWidget);
+        expect(
+          tester.getRect(
+            find.byKey(
+              const ValueKey('balance-unified-header-content-surface'),
+            ),
+          ),
+          motherRect,
+        );
         expect(find.byType(BalanceAlternativeAnnualClosingsCard), findsNothing);
         expect(find.byType(BalanceAlternativeSavingsRingCard), findsNothing);
         expect(
@@ -299,6 +310,41 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+
+  testWidgets(
+    'selected perspective survives the existing header collapse lifecycle',
+    (tester) async {
+      const scope = YearScope(2025);
+      final settings = BalancePresentationController()
+        ..setYearLayoutPresentation(BalanceYearLayoutPresentation.focused);
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(scope),
+      );
+      final header = ValueNotifier<DashboardBalancePresentation?>(
+        _header(scope),
+      );
+      addTearDown(settings.dispose);
+      addTearDown(linked.dispose);
+      addTearDown(header.dispose);
+      await tester.pumpWidget(_host(scope, settings, linked, header));
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('balance-year-perspective-cumulativeNet')),
+      );
+      await tester.pump();
+      expect(find.text('Egyenleg alakulása'), findsOneWidget);
+      await tester.pumpWidget(
+        _host(scope, settings, linked, header, collapseFraction: 1),
+      );
+      await tester.pump();
+      expect(find.byType(BalanceYearFocusedLayout), findsNothing);
+      await tester.pumpWidget(_host(scope, settings, linked, header));
+      await tester.pump();
+      expect(find.text('Egyenleg alakulása'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets(
     'current year keeps future closes absent and current month selectable',
@@ -476,8 +522,9 @@ Widget _host(
   LedgerTimeScope scope,
   BalancePresentationController settings,
   ValueNotifier<DashboardBalanceLinkedPresentation?> linked,
-  ValueNotifier<DashboardBalancePresentation?> header,
-) => MaterialApp(
+  ValueNotifier<DashboardBalancePresentation?> header, {
+  double collapseFraction = 0,
+}) => MaterialApp(
   theme: ThemeData(
     fontFamily: scope is YearScope ? 'BalanceYearEvidence' : 'Ahem',
   ),
@@ -498,7 +545,15 @@ Widget _host(
                       : const Size(412, 892),
                 ),
                 mode: DashboardModeSpec.balance,
-                collapseProgress: 0,
+                collapseProgress:
+                    DashboardLayoutMetrics.reference
+                        .fitToViewport(
+                          scope is YearScope
+                              ? const Size(390, 844)
+                              : const Size(412, 892),
+                        )
+                        .collapseTravel *
+                    collapseFraction,
                 isRailExpanded: false,
               ),
               palette: DashboardModePaletteResolver.resolve(
