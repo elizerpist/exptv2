@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../application/balance_daily_calculation_mode.dart';
 import '../../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_global_appearance.dart';
@@ -1006,6 +1007,36 @@ final class _BalancePresentationSection extends StatelessWidget {
       children: <Widget>[
         const Padding(
           padding: EdgeInsets.only(top: 4),
+          child: Text('Napi egyenleg számítása'),
+        ),
+        RadioGroup<BalanceDailyCalculationMode>(
+          groupValue: settings.dailyCalculationMode,
+          onChanged: (mode) {
+            if (mode != null) controller.setDailyCalculationMode(mode);
+          },
+          child: Column(
+            children: <Widget>[
+              RadioListTile<BalanceDailyCalculationMode>(
+                key: const ValueKey<String>('balance-daily-month-to-date'),
+                value: BalanceDailyCalculationMode.monthToDate,
+                title: const Text('Hónap elejétől'),
+                subtitle: const Text(
+                  'A kiválasztott hónap első napjától az adott napig felhalmozott bevétel és kiadás különbsége.',
+                ),
+              ),
+              RadioListTile<BalanceDailyCalculationMode>(
+                key: const ValueKey<String>('balance-daily-all-time-to-date'),
+                value: BalanceDailyCalculationMode.allTimeToDate,
+                title: const Text('Teljes előzményből'),
+                subtitle: const Text(
+                  'Az első rögzített tranzakciótól a kiválasztott nap végéig felhalmozott nettó egyenleg.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
           child: Text('Header chart nézet'),
         ),
         RadioGroup<BalanceHeaderChartMode>(
@@ -1420,26 +1451,6 @@ final class _BalanceHeaderGlassControls extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _TunerSlider(
-          key: const ValueKey<String>('balance-header-partition-height'),
-          label: 'Bar size',
-          valueLabel: '${settings.headerPartitionHeightPercent.round()}%',
-          min: 0,
-          max: 100,
-          divisions: 100,
-          value: settings.headerPartitionHeightPercent,
-          onChanged: controller.setHeaderPartitionHeightPercent,
-        ),
-        _TunerSlider(
-          key: const ValueKey<String>('balance-header-glass-vertical-position'),
-          label: 'Vertical position',
-          valueLabel: '${(glass.verticalPosition * 100).round()}%',
-          min: 0,
-          max: 1,
-          divisions: 100,
-          value: glass.verticalPosition,
-          onChanged: (value) => _set(glass.copyWith(verticalPosition: value)),
-        ),
         if (showsMaterialControls) ...<Widget>[
           _TunerSlider(
             key: const ValueKey<String>(

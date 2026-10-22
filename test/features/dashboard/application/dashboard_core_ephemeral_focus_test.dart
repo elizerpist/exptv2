@@ -760,7 +760,7 @@ void main() {
   );
 
   test(
-    'BALANCE-ALL-TIME RED: Header and latest transaction ignore Summary time while prepared financial data stays current',
+    'Balance publishes accepted header scope while all-time source remains stable',
     () async {
       final repository = _BalancePreparedRepository();
       final core = DashboardCoreController(
@@ -884,10 +884,9 @@ void main() {
         );
         expect(
           core.balancePresentation.value?.presentationId,
-          presentationId,
+          isNot(presentationId),
           reason:
-              'A Summary ${state.scope.runtimeType} frame is not Balance '
-              'data identity and must not republish all-time content.',
+              'The accepted header time scope is part of publication identity.',
         );
         expect(core.balancePresentation.value?.formattedNetTotal, '850 Ft');
         expect(
@@ -895,13 +894,13 @@ void main() {
           'expense-balance-latest',
         );
         expect(core.balancePresentation.value?.history, same(history));
+        expect(core.balancePresentation.value?.headerTimeScope, state.scope);
       }
       expect(
         balancePublications,
-        0,
+        temporalStates.length,
         reason:
-            'Pure Summary scope frames must not notify the immutable '
-            'all-time Balance presentation.',
+            'Each accepted time scope publishes with the same financial source.',
       );
       expect(repository.prepareCalls, repositoryCalls);
     },
@@ -960,7 +959,7 @@ void main() {
   );
 
   testWidgets(
-    'BALANCE-ALL-TIME production Summary navigation leaves the Core presentation untouched',
+    'Balance production navigation publishes scope without rebuilding financial history',
     (tester) async {
       final repository = _BalancePreparedRepository();
       final core = DashboardCoreController(
@@ -1001,7 +1000,11 @@ void main() {
         );
         expect(
           core.balancePresentation.value?.presentationId,
-          initial.presentationId,
+          isNot(initial.presentationId),
+        );
+        expect(
+          core.balancePresentation.value?.headerTimeScope,
+          core.visibleFrames.value?.scope.timeScope,
         );
         expect(core.balancePresentation.value?.formattedNetTotal, '850 Ft');
         expect(
@@ -1014,7 +1017,7 @@ void main() {
       await selectSummary(TimePlane.year, railOpen: false);
       await selectSummary(TimePlane.month, railOpen: false);
       await selectSummary(TimePlane.month, railOpen: true);
-      expect(balancePublications, 0);
+      expect(balancePublications, 3);
       expect(repository.prepareCalls, repositoryCalls);
     },
   );
@@ -3190,11 +3193,11 @@ void main() {
       );
       expect(find.text('Napi aktivitás'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('mind-day-all-slider-full-00')),
+        find.byKey(const ValueKey<String>('mind-day-all-slider-reference-00')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-day-all-slider-full-23')),
+        find.byKey(const ValueKey<String>('mind-day-all-slider-reference-23')),
         findsOneWidget,
       );
       final score = core.mindBehavioralScore.value!;

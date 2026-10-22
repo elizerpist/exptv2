@@ -15,6 +15,7 @@ import '../../../../core/categories/presentation/category_avatar_palette_scope.d
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_balance_presentation.dart';
+import '../../application/dashboard_balance_header_context_presentation.dart';
 import '../../application/dashboard_balance_closings_momentum_projection.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
@@ -353,8 +354,10 @@ class BalanceDashboardCoreSurface extends StatefulWidget {
 
 final class _BalanceDashboardCoreSurfaceState
     extends State<BalanceDashboardCoreSurface> {
+  final _headerContextProjection = DashboardBalanceHeaderContextProjection();
   BalanceLinkedDetailTopic _selectedTopic = BalanceLinkedDetailTopic.cashflow;
   ValueListenable<BalancePresentationSettings>? _boundSettings;
+  BalancePresentationSettings? _lastObservedSettings;
 
   @override
   void initState() {
@@ -387,6 +390,18 @@ final class _BalanceDashboardCoreSurfaceState
   void _reconcileVisibleSelection() {
     final settings =
         _boundSettings?.value ?? const BalancePresentationSettings.defaults();
+    final previous = _lastObservedSettings;
+    _lastObservedSettings = settings;
+    // Daily calculation belongs to the header listener. Its preference alone
+    // must not reconstruct the Balance shell or republish lower-card data.
+    if (previous != null &&
+        settings.copyWith(
+              dailyCalculationMode: previous.dailyCalculationMode,
+              revision: previous.revision,
+            ) ==
+            previous) {
+      return;
+    }
     final resolved = _topicForKind(
       resolveVisibleBalanceCarouselCardKind(
         selected: _kindForTopic(_selectedTopic),
@@ -561,6 +576,7 @@ final class _BalanceDashboardCoreSurfaceState
               showsDepth: !isHeaderLinked,
               showsBorder: !isHeaderLinked,
               detail: _BalanceHeaderDetail(
+                contextProjection: _headerContextProjection,
                 balancePresentation: widget.balancePresentation,
                 headerVisualFrame: widget.headerVisualFrame,
                 expansionProgress: geometry.headerExpansionProgress,
@@ -1516,6 +1532,7 @@ final class _BalanceAlternativeSectionSlot extends StatelessWidget {
 
 final class _BalanceHeaderDetail extends StatelessWidget {
   const _BalanceHeaderDetail({
+    required this.contextProjection,
     required this.balancePresentation,
     required this.headerVisualFrame,
     required this.expansionProgress,
@@ -1525,6 +1542,7 @@ final class _BalanceHeaderDetail extends StatelessWidget {
     required this.pointerObserver,
   });
 
+  final DashboardBalanceHeaderContextProjection contextProjection;
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final double expansionProgress;
@@ -1540,6 +1558,7 @@ final class _BalanceHeaderDetail extends StatelessWidget {
     return ValueListenableBuilder<DashboardBalancePresentation?>(
       valueListenable: listenable,
       builder: (context, balance, _) => _BalanceHeaderDetailContents(
+        contextProjection: contextProjection,
         balance: balance,
         headerVisualFrame: headerVisualFrame,
         expansionProgress: expansionProgress,
@@ -1554,6 +1573,7 @@ final class _BalanceHeaderDetail extends StatelessWidget {
 
 final class _BalanceHeaderDetailContents extends StatelessWidget {
   const _BalanceHeaderDetailContents({
+    required this.contextProjection,
     required this.balance,
     required this.headerVisualFrame,
     required this.expansionProgress,
@@ -1563,6 +1583,7 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
     required this.pointerObserver,
   });
 
+  final DashboardBalanceHeaderContextProjection contextProjection;
   final DashboardBalancePresentation? balance;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final double expansionProgress;
@@ -1608,7 +1629,11 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
     final foreground =
         frame?.foregroundTextColor ?? FluviVisualTokens.textOnAction;
     final history = balance?.history;
-    final balancePresentation = balance;
+    final headerContext = contextProjection.project(
+      source: balance,
+      fallbackScope: adaptiveScope,
+      dailyCalculationMode: settings.dailyCalculationMode,
+    );
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
@@ -1629,18 +1654,19 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
                 DashboardHeaderTrendChartStyle.lineColor,
             showsAreaFade: frame?.showsChartVeil ?? true,
             showTimeLabels: settings.showsTimeLabels,
-            adaptiveScope: adaptiveScope,
+            adaptiveScope: balance?.headerTimeScope ?? adaptiveScope,
             pointerObserver: pointerObserver,
             layout: chartLayout,
           ),
         if (expansionProgress > 0 &&
             settings.headerGraphPresentation ==
                 BalanceHeaderGraphPresentation.incomeExpensePartition &&
-            balancePresentation != null)
+            headerContext != null)
           BalanceHeaderGlassBar(
-            incomeMinor: balancePresentation.incomeTotalMinor,
-            expenseMinor: balancePresentation.expenseTotalMinor,
-            heightPercent: settings.headerPartitionHeightPercent,
+            incomeMinor: headerContext.incomeTotalMinor,
+            expenseMinor: headerContext.expenseTotalMinor,
+            expansionProgress: expansionProgress,
+            foreground: foreground,
             configuration: settings.headerGlassConfiguration,
             plotTop: chartLayout.plotTop,
             plotHeight: chartLayout.plotHeight,
@@ -1649,11 +1675,12 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
         if (expansionProgress > 0 &&
             settings.headerGraphPresentation ==
                 BalanceHeaderGraphPresentation.simpleIncomeExpensePartition &&
-            balancePresentation != null)
+            headerContext != null)
           BalanceHeaderIncomeExpensePartition(
-            incomeMinor: balancePresentation.incomeTotalMinor,
-            expenseMinor: balancePresentation.expenseTotalMinor,
-            heightPercent: settings.headerPartitionHeightPercent,
+            incomeMinor: headerContext.incomeTotalMinor,
+            expenseMinor: headerContext.expenseTotalMinor,
+            expansionProgress: expansionProgress,
+            foreground: foreground,
             plotTop: chartLayout.plotTop,
             plotHeight: chartLayout.plotHeight,
             valueTop: chartLayout.valueTop,
@@ -1664,9 +1691,12 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
           Positioned(
             left: DashboardHeaderTrendChartStyle.detailLeft,
             top: DashboardHeaderTrendChartStyle.detailTop,
+            right: 16,
             child: Text(
-              'Balance',
+              'Balance · ${headerContext?.contextLabel ?? 'Betöltés…'}',
               key: const ValueKey<String>('balance-header-mode-label'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: typography.applyTo(
                 DashboardHeaderTrendChartLayout.modeLabelTextMetrics.copyWith(
                   color: foreground,
@@ -1674,12 +1704,32 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
               ),
             ),
           ),
-        if (balance case final balance?)
+        if (!chartLayout.showsModeLabelAboveValue && headerContext != null)
+          Positioned(
+            left: DashboardHeaderTrendChartStyle.detailLeft,
+            right: 16,
+            top: chartLayout.valueTop + 23,
+            child: Text(
+              headerContext.contextLabel,
+              key: const ValueKey<String>('balance-header-context-label'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: typography.applyTo(
+                DashboardHeaderTrendChartLayout.modeLabelTextMetrics.copyWith(
+                  color: foreground,
+                ),
+              ),
+            ),
+          ),
+        if (headerContext case final headerContext?)
           Positioned(
             left: DashboardHeaderTrendChartStyle.detailLeft,
             top: chartLayout.valueTop,
+            right: 16,
             child: Text(
-              balance.formattedNetTotal,
+              headerContext.formattedNetTotal,
+              semanticsLabel:
+                  '${headerContext.contextLabel}: ${headerContext.formattedNetTotal}',
               key: const ValueKey<String>('balance-header-net-amount'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

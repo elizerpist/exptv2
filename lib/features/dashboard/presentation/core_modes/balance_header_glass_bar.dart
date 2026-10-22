@@ -9,7 +9,9 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as liquid;
 
 import 'balance_header_glass_configuration.dart';
 import 'dashboard_partition_lane_geometry.dart';
-import '../widgets/dashboard_header_trend_visual_kernel.dart';
+import 'dashboard_header_partition_lane_layout.dart';
+import 'balance_header_partition_labels.dart';
+import '../../../../core/design/dashboard_mode_palette.dart';
 
 /// Shared geometry/data host for every Balance Header material adapter.
 ///
@@ -21,13 +23,17 @@ final class BalanceHeaderGlassBar extends StatelessWidget {
     super.key,
     required this.incomeMinor,
     required this.expenseMinor,
-    required this.heightPercent,
+    this.heightPercent = 0,
     required this.configuration,
-    required this.plotTop,
-    required this.plotHeight,
-    required this.valueTop,
+    this.expansionProgress = 1,
+    this.foreground = Colors.white,
+    this.plotTop = 0,
+    this.plotHeight = 0,
+    this.valueTop = 0,
   });
 
+  final double expansionProgress;
+  final Color foreground;
   final int incomeMinor;
   final int expenseMinor;
   final double heightPercent;
@@ -44,7 +50,7 @@ final class BalanceHeaderGlassBar extends StatelessWidget {
     final expense = math.max(0, expenseMinor);
     final denominator = income + expense;
     return denominator == 0
-        ? .5
+        ? 0
         : (income / denominator).clamp(0.0, 1.0).toDouble();
   }
 
@@ -64,89 +70,44 @@ final class BalanceHeaderGlassBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final height = DashboardPartitionLaneGeometry.balanceHeaderThicknessFor(
-      heightPercent,
-    );
     final ratio = incomeRatioFor(
       incomeMinor: incomeMinor,
       expenseMinor: expenseMinor,
     );
-    final top = topFor(
-      plotTop: plotTop,
-      plotHeight: plotHeight,
-      valueTop: valueTop,
-      height: height,
-      verticalPosition: configuration.verticalPosition,
-    );
-    return Positioned(
-      key: const ValueKey<String>('balance-header-income-expense-partition'),
-      left: DashboardHeaderTrendChartStyle.plotLeft,
-      right: DashboardHeaderTrendChartStyle.plotLeft,
-      top: top,
-      height: height,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final radius = height / 2;
-          return RepaintBoundary(
-            key: ValueKey<String>(
-              'balance-header-glass-${configuration.renderer.name}',
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                _BalanceGlassMaterial(
-                  physicalKey: const ValueKey<String>(
-                    'balance-header-glass-physical-body',
-                  ),
-                  trackMaterial: configuration.materialFor(incomeFill: false),
-                  incomeMaterial: configuration.materialFor(incomeFill: true),
-                  incomeRatio: ratio,
-                  renderer: configuration.renderer,
-                  quality: configuration.quality,
-                  borderRadius: radius,
-                ),
-                _BalanceGlassBarLabels(incomeRatio: ratio),
-              ],
-            ),
-          );
-        },
+    final hasActivity =
+        math.max(0, incomeMinor) + math.max(0, expenseMinor) > 0;
+    return DashboardHeaderPartitionLaneLayout(
+      labels: BalanceHeaderPartitionLabels(
+        incomeRatio: ratio,
+        hasActivity: hasActivity,
+        foreground: foreground,
       ),
-    );
-  }
-}
-
-final class _BalanceGlassBarLabels extends StatelessWidget {
-  const _BalanceGlassBarLabels({required this.incomeRatio});
-
-  final double incomeRatio;
-
-  @override
-  Widget build(BuildContext context) {
-    final incomePercent = (incomeRatio * 100).round();
-    final expensePercent = 100 - incomePercent;
-    const style = TextStyle(
-      color: Color(0xe6ffffff),
-      fontSize: 10,
-      height: 1,
-      fontWeight: FontWeight.w900,
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 7),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('$incomePercent%', style: style),
-            ),
-          ),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Text('$expensePercent%', style: style),
-            ),
-          ),
-        ],
+      expansionProgress: expansionProgress,
+      child: RepaintBoundary(
+        key: ValueKey<String>(
+          'balance-header-glass-${configuration.renderer.name}',
+        ),
+        child: hasActivity
+            ? _BalanceGlassMaterial(
+                physicalKey: const ValueKey<String>(
+                  'balance-header-glass-physical-body',
+                ),
+                trackMaterial: configuration.materialFor(incomeFill: false),
+                incomeMaterial: configuration.materialFor(incomeFill: true),
+                incomeRatio: ratio,
+                renderer: configuration.renderer,
+                quality: configuration.quality,
+                borderRadius: DashboardPartitionLaneGeometry.cornerRadius.x,
+              )
+            : const DecoratedBox(
+                key: ValueKey('balance-header-income-expense-empty-track'),
+                decoration: BoxDecoration(
+                  color: FluviVisualTokens.partitionEmptyTrack,
+                  borderRadius: BorderRadius.all(
+                    DashboardPartitionLaneGeometry.cornerRadius,
+                  ),
+                ),
+              ),
       ),
     );
   }

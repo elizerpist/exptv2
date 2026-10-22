@@ -1,3 +1,4 @@
+import 'package:fluvi/features/dashboard/application/balance_daily_calculation_mode.dart';
 import 'package:fluvi/core/preferences/data/method_channel_dashboard_presentation_preferences_store.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
@@ -15,6 +16,50 @@ void main() {
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
   test(
+    'daily calculation survives a native adapter write/read and invalid legacy values default safely',
+    () async {
+      Map<String, Object?> stored = <String, Object?>{};
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      final original = await store.read();
+      expect(
+        original.balanceDailyCalculationMode,
+        BalanceDailyCalculationMode.monthToDate,
+      );
+      final choice = DashboardPresentationPreferences(
+        sumVisualStyle: original.sumVisualStyle,
+        showSumLayoutChooser: original.showSumLayoutChooser,
+        yearGridLayout: original.yearGridLayout,
+        yearMonthlyAmountPresentation: original.yearMonthlyAmountPresentation,
+        showDayContentViewChooser: original.showDayContentViewChooser,
+        balanceUsesChildCards: original.balanceUsesChildCards,
+        balanceHeaderGraphPresentation: original.balanceHeaderGraphPresentation,
+        balanceDailyCalculationMode: BalanceDailyCalculationMode.allTimeToDate,
+        balanceHeaderPartitionHeightPercent:
+            original.balanceHeaderPartitionHeightPercent,
+        balanceMonthCombinedCardPresentation:
+            original.balanceMonthCombinedCardPresentation,
+      );
+      await store.write(choice);
+      expect(
+        await MethodChannelDashboardPresentationPreferencesStore().read(),
+        choice,
+      );
+      stored['balanceDailyCalculationMode'] = 99;
+      expect(
+        (await store.read()).balanceDailyCalculationMode,
+        BalanceDailyCalculationMode.monthToDate,
+      );
+    },
+  );
+
+  test(
     'PRESENTATION-PREFERENCES-02 reads every persisted display choice',
     () async {
       messenger.setMockMethodCallHandler(channel, (call) async {
@@ -26,6 +71,8 @@ void main() {
           'yearMonthlyAmountPresentation':
               MindYearMonthlyAmountPresentation.veil.index,
           'showDayContentViewChooser': true,
+          'balanceDailyCalculationMode':
+              BalanceDailyCalculationMode.allTimeToDate.index,
           'balanceUsesChildCards': false,
           'balanceHeaderGraphPresentation':
               BalanceHeaderGraphPresentation.simpleIncomeExpensePartition.index,
@@ -49,6 +96,10 @@ void main() {
         MindYearMonthlyAmountPresentation.veil,
       );
       expect(preferences.showDayContentViewChooser, isTrue);
+      expect(
+        preferences.balanceDailyCalculationMode,
+        BalanceDailyCalculationMode.allTimeToDate,
+      );
       expect(preferences.balanceUsesChildCards, isFalse);
       expect(
         preferences.balanceHeaderGraphPresentation,
@@ -104,6 +155,8 @@ void main() {
       'yearMonthlyAmountPresentation':
           MindYearMonthlyAmountPresentation.inline.index,
       'showDayContentViewChooser': false,
+      'balanceDailyCalculationMode':
+          BalanceDailyCalculationMode.monthToDate.index,
       'balanceUsesChildCards': false,
       'balanceHeaderGraphPresentation':
           BalanceHeaderGraphPresentation.simpleIncomeExpensePartition.index,

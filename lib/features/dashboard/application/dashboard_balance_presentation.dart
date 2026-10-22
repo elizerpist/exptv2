@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../query/domain/ledger_direction.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
 
 /// One already-prepared latest item for the Balance prototype card.
 ///
@@ -70,8 +71,8 @@ final class DashboardBalanceHistorySeries {
 /// Immutable all-time Balance presentation supplied by Dashboard Core.
 ///
 /// The source partitions retain their canonical non-temporal Query/filter
-/// identity, but Summary time navigation is deliberately absent: the Balance
-/// Header and carousel are not a second Summary view.
+/// identity. The accepted time scope travels with this immutable publication;
+/// the header derives its interval while carousel totals remain all-time.
 @immutable
 final class DashboardBalancePresentation {
   const DashboardBalancePresentation({
@@ -82,9 +83,13 @@ final class DashboardBalancePresentation {
     required this.netTotalMinor,
     required this.formattedNetTotal,
     required this.presentationId,
+    this.headerTimeScope,
     this.latestTransaction,
     this.history,
   });
+
+  /// Renderer-accepted time context, published atomically with this history.
+  final LedgerTimeScope? headerTimeScope;
 
   final String scopeKey;
   final int coreRevision;
@@ -97,6 +102,7 @@ final class DashboardBalancePresentation {
   final DashboardBalanceHistorySeries? history;
 
   DashboardBalancePresentation copyWith({
+    LedgerTimeScope? headerTimeScope,
     String? scopeKey,
     int? coreRevision,
     int? incomeTotalMinor,
@@ -107,6 +113,7 @@ final class DashboardBalancePresentation {
     DashboardBalanceLatestTransactionPresentation? latestTransaction,
     DashboardBalanceHistorySeries? history,
   }) => DashboardBalancePresentation(
+    headerTimeScope: headerTimeScope ?? this.headerTimeScope,
     scopeKey: scopeKey ?? this.scopeKey,
     coreRevision: coreRevision ?? this.coreRevision,
     incomeTotalMinor: incomeTotalMinor ?? this.incomeTotalMinor,

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
 import 'package:fluvi/core/categories/presentation/category_avatar_palette_catalog.dart';
@@ -11,6 +12,8 @@ import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
+import 'package:fluvi/features/dashboard/application/balance_daily_calculation_mode.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_glass_bar.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_category_movers_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
@@ -223,6 +226,117 @@ void main() {
       visual.dispose();
       frame.dispose();
       balance.dispose();
+    },
+  );
+
+  testWidgets(
+    'daily calculation changes amount and bar atomically without navigation or lower data changes',
+    (tester) async {
+      await (FontLoader('BalanceHeaderEvidence')
+            ..addFont(rootBundle.load('assets/fonts/inter/InterVariable.ttf')))
+          .load();
+      final selected = DayScope(const LocalDate(year: 2024, month: 2, day: 15));
+      final earlier = const LocalDate(year: 2024, month: 1, day: 1).epochDay;
+      final current = const LocalDate(year: 2024, month: 2, day: 12).epochDay;
+      final source = DashboardBalancePresentation(
+        scopeKey: 'q',
+        coreRevision: 1,
+        incomeTotalMinor: 50000,
+        expenseTotalMinor: 10000,
+        netTotalMinor: 40000,
+        formattedNetTotal: '400 Ft',
+        presentationId: 1,
+        headerTimeScope: selected,
+        history: DashboardBalanceHistorySeries(
+          startInclusiveEpochMinute: earlier * 1440,
+          endInclusiveEpochMinute: current * 1440,
+          points: [
+            DashboardBalanceHistoryPoint(
+              entryId: 'a',
+              epochDay: earlier,
+              epochMinute: earlier * 1440,
+              incomeTotalMinor: 20000,
+              expenseTotalMinor: 5000,
+              balanceMinor: 15000,
+            ),
+            DashboardBalanceHistoryPoint(
+              entryId: 'b',
+              epochDay: current,
+              epochMinute: current * 1440,
+              incomeTotalMinor: 50000,
+              expenseTotalMinor: 10000,
+              balanceMinor: 40000,
+            ),
+          ],
+        ),
+      );
+      final data = ValueNotifier<DashboardBalancePresentation?>(source);
+      final settings = BalancePresentationController();
+      addTearDown(data.dispose);
+      addTearDown(settings.dispose);
+      final mode = _balanceModePresentation();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(fontFamily: 'BalanceHeaderEvidence'),
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: mode,
+              balancePresentation: data,
+              presentationSettings: settings,
+              adaptiveScope: selected,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      Text amount() => tester.widget<Text>(
+        find.byKey(const ValueKey('balance-header-net-amount')),
+      );
+      BalanceHeaderGlassBar bar() => tester.widget<BalanceHeaderGlassBar>(
+        find.byType(BalanceHeaderGlassBar),
+      );
+      expect(amount().data, '+250 Ft');
+      expect(bar().incomeMinor, 30000);
+      expect(bar().expenseMinor, 5000);
+      await expectLater(
+        find.byKey(const ValueKey('dashboard-core-mode-balance-header')),
+        matchesGoldenFile(
+          '../../../goldens/balance_header_context_month_to_date.png',
+        ),
+      );
+      final rect = tester.getRect(
+        find.byKey(const ValueKey('balance-header-net-amount')),
+      );
+      settings.setDailyCalculationMode(
+        BalanceDailyCalculationMode.allTimeToDate,
+      );
+      await tester.pump();
+      expect(amount().data, '+400 Ft');
+      await expectLater(
+        find.byKey(const ValueKey('dashboard-core-mode-balance-header')),
+        matchesGoldenFile(
+          '../../../goldens/balance_header_context_all_time_to_date.png',
+        ),
+      );
+      expect(bar().incomeMinor, 50000);
+      expect(bar().expenseMinor, 10000);
+      expect(data.value, same(source));
+      expect(data.value!.headerTimeScope, selected);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('balance-header-net-amount'))),
+        rect,
+      );
+      settings.setDailyCalculationMode(BalanceDailyCalculationMode.monthToDate);
+      await tester.pump();
+      expect(amount().data, '+250 Ft');
+      expect(bar().incomeMinor, 30000);
+      settings.setHeaderGraphPresentation(
+        BalanceHeaderGraphPresentation.lineChart,
+      );
+      await tester.pump();
+      expect(amount().data, '+250 Ft');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
     },
   );
 
@@ -3488,6 +3602,12 @@ void main() {
             body: BalanceDashboardCoreSurface(
               presentation: modePresentation,
               balancePresentation: balance,
+              presentationSettings: ValueNotifier(
+                const BalancePresentationSettings.defaults().copyWith(
+                  headerGraphPresentation:
+                      BalanceHeaderGraphPresentation.lineChart,
+                ),
+              ),
             ),
           ),
         ),
@@ -3724,6 +3844,7 @@ void main() {
         _balance().copyWith(history: _history()),
       );
       final settings = BalancePresentationController()
+        ..setHeaderGraphPresentation(BalanceHeaderGraphPresentation.lineChart)
         ..setContentSurfaceStyle(BalanceContentSurfaceStyle.separateCards)
         ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.currentCarouselDetail);
       addTearDown(balance.dispose);

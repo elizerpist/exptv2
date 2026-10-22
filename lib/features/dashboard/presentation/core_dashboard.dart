@@ -546,6 +546,7 @@ class _CoreDashboardState extends State<CoreDashboard>
         restored.balanceUsesChildCards,
       );
       _balancePresentationSettings
+        ..setDailyCalculationMode(restored.balanceDailyCalculationMode)
         ..setHeaderGraphPresentation(restored.balanceHeaderGraphPresentation)
         ..setMonthlySpendingChartPresentation(
           restored.balanceMonthlySpendingChartPresentation,
@@ -578,6 +579,8 @@ class _CoreDashboardState extends State<CoreDashboard>
         showDayContentViewChooser: mind.showDayContentViewChooser,
         balanceUsesChildCards:
             _balancePresentationSettings.value.usesChildCards,
+        balanceDailyCalculationMode:
+            _balancePresentationSettings.value.dailyCalculationMode,
         balanceHeaderGraphPresentation:
             _balancePresentationSettings.value.headerGraphPresentation,
         balanceMonthlySpendingChartPresentation:

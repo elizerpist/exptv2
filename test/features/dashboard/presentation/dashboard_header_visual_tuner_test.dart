@@ -1,3 +1,4 @@
+import 'package:fluvi/features/dashboard/application/balance_daily_calculation_mode.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
@@ -126,7 +127,17 @@ void main() {
       ]);
 
       expect(find.text('Balance header visual'), findsOneWidget);
-      expect(find.text('Glass renderer'), findsNothing);
+      expect(find.text('Napi egyenleg számítása'), findsOneWidget);
+      final daily = find.byKey(
+        const ValueKey<String>('balance-daily-all-time-to-date'),
+      );
+      await tester.ensureVisible(daily);
+      await tester.tap(daily);
+      await tester.pump();
+      expect(
+        balance.value.dailyCalculationMode,
+        BalanceDailyCalculationMode.allTimeToDate,
+      );
 
       final partition = find.byKey(
         const ValueKey<String>(
@@ -141,8 +152,6 @@ void main() {
         BalanceHeaderGraphPresentation.incomeExpensePartition,
       );
       for (final key in <ValueKey<String>>[
-        const ValueKey<String>('balance-header-partition-height'),
-        const ValueKey<String>('balance-header-glass-vertical-position'),
         const ValueKey<String>('balance-header-glass-income-intensity'),
         const ValueKey<String>('balance-header-glass-renderer'),
         const ValueKey<String>('balance-header-glass-independent-income-fill'),
@@ -230,19 +239,13 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey<String>('balance-header-partition-height')),
-        findsOneWidget,
-        reason:
-            'The simple Balance partition must share the existing Bar size '
-            'control rather than gaining a separate size setting.',
+        findsNothing,
       );
       expect(
         find.byKey(
           const ValueKey<String>('balance-header-glass-vertical-position'),
         ),
-        findsOneWidget,
-        reason:
-            'The simple Balance partition must use the same persisted '
-            'vertical-position source as the material bar.',
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey<String>('balance-header-glass-renderer')),
@@ -255,7 +258,7 @@ void main() {
   );
 
   testWidgets(
-    'MTC-01 RED: the Balance Header keeps only its established line renderer and exposes no terrain switch',
+    'MTC-01: monthly renderer selection leaves the default dual bar unchanged',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -307,7 +310,7 @@ void main() {
       );
       expect(
         balance.value.headerGraphPresentation,
-        BalanceHeaderGraphPresentation.lineChart,
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
         reason:
             'Monthly spending renderers must never replace the established Header graph.',
       );
@@ -773,18 +776,6 @@ void main() {
         balance.value.headerGraphPresentation,
         BalanceHeaderGraphPresentation.incomeExpensePartition,
       );
-      final partitionHeight = find.byKey(
-        const ValueKey<String>('balance-header-partition-height'),
-      );
-      expect(partitionHeight, findsOneWidget);
-      tester
-          .widget<Slider>(
-            find.descendant(of: partitionHeight, matching: find.byType(Slider)),
-          )
-          .onChanged!(80);
-      await tester.pump();
-      expect(balance.value.headerPartitionHeightPercent, 80);
-
       final rhythm = find.byKey(
         const ValueKey<String>(
           'balance-month-combined-card-presentation-spendingRhythm',

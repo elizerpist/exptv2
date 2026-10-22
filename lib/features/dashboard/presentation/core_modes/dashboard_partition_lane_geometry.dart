@@ -15,6 +15,19 @@ abstract final class DashboardPartitionLaneGeometry {
   static const budgetHeaderMinimumHeightPercent = -50.0;
   static const budgetHeaderMaximumHeightPercent = 100.0;
 
+  static const headerHorizontalInset = 16.0;
+  static const headerDetailTop = 16.0;
+
+  /// Consumes only the room provided by the shared header expansion.
+  static double headerRevealFor({
+    required double availableHeight,
+    required double thickness,
+    required double expansionProgress,
+  }) => math.min(
+    expansionProgress,
+    ((availableHeight - 36) / (13 + thickness)).clamp(0.0, 1.0),
+  );
+
   /// Budget's previously fixed 7px lane remains the zero reference point;
   /// the tuner can now also contract down to 3.5px for a genuinely lower
   /// minimum thickness without adding a second geometry policy.

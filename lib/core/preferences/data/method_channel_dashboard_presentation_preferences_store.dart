@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 
+import '../../../features/dashboard/application/balance_daily_calculation_mode.dart';
 import '../../../features/dashboard/application/dashboard_presentation_preferences.dart';
 import '../../../features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../../features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
@@ -55,11 +56,16 @@ final class MethodChannelDashboardPresentationPreferencesStore
             : MindYearMonthlyAmountPresentation.hidden,
         showDayContentViewChooser:
             values['showDayContentViewChooser'] as bool? ?? false,
+        balanceDailyCalculationMode: _enumValue(
+          BalanceDailyCalculationMode.values,
+          values['balanceDailyCalculationMode'] as int?,
+          BalanceDailyCalculationMode.monthToDate,
+        ),
         balanceUsesChildCards: values['balanceUsesChildCards'] as bool? ?? true,
         balanceHeaderGraphPresentation: _enumValue(
           BalanceHeaderGraphPresentation.values,
           values['balanceHeaderGraphPresentation'] as int?,
-          BalanceHeaderGraphPresentation.lineChart,
+          BalanceHeaderGraphPresentation.incomeExpensePartition,
         ),
         balanceMonthlySpendingChartPresentation: _enumValue(
           BalanceMonthlySpendingChartPresentation.values,
@@ -98,6 +104,8 @@ final class MethodChannelDashboardPresentationPreferencesStore
           'yearMonthlyAmountPresentation':
               preferences.yearMonthlyAmountPresentation.index,
           'showDayContentViewChooser': preferences.showDayContentViewChooser,
+          'balanceDailyCalculationMode':
+              preferences.balanceDailyCalculationMode.index,
           'balanceUsesChildCards': preferences.balanceUsesChildCards,
           'balanceHeaderGraphPresentation':
               preferences.balanceHeaderGraphPresentation.index,

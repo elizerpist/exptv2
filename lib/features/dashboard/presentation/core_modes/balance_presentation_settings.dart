@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../application/balance_daily_calculation_mode.dart';
 import '../../application/dashboard_balance_history_projection.dart';
 import 'balance_header_glass_configuration.dart';
 
@@ -208,7 +209,9 @@ final class BalancePresentationSettings {
     required this.balanceContentCardBorderOpacity,
     this.contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
     this.unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
-    this.headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
+    this.dailyCalculationMode = BalanceDailyCalculationMode.monthToDate,
+    this.headerGraphPresentation =
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
     this.monthlySpendingChartPresentation =
         BalanceMonthlySpendingChartPresentation.current,
     this.headerPartitionHeightPercent = 50,
@@ -267,7 +270,9 @@ final class BalancePresentationSettings {
       balanceContentCardBorderOpacity = 1,
       contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
       unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
-      headerGraphPresentation = BalanceHeaderGraphPresentation.lineChart,
+      dailyCalculationMode = BalanceDailyCalculationMode.monthToDate,
+      headerGraphPresentation =
+          BalanceHeaderGraphPresentation.incomeExpensePartition,
       monthlySpendingChartPresentation =
           BalanceMonthlySpendingChartPresentation.current,
       headerPartitionHeightPercent = 50,
@@ -295,6 +300,7 @@ final class BalancePresentationSettings {
   final double balanceContentCardBorderOpacity;
   final BalanceContentSurfaceStyle contentSurfaceStyle;
   final BalanceUnifiedBodyLayout unifiedBodyLayout;
+  final BalanceDailyCalculationMode dailyCalculationMode;
   final BalanceHeaderGraphPresentation headerGraphPresentation;
   final BalanceMonthlySpendingChartPresentation
   monthlySpendingChartPresentation;
@@ -341,6 +347,7 @@ final class BalancePresentationSettings {
     double? balanceContentCardBorderOpacity,
     BalanceContentSurfaceStyle? contentSurfaceStyle,
     BalanceUnifiedBodyLayout? unifiedBodyLayout,
+    BalanceDailyCalculationMode? dailyCalculationMode,
     BalanceHeaderGraphPresentation? headerGraphPresentation,
     BalanceMonthlySpendingChartPresentation? monthlySpendingChartPresentation,
     double? headerPartitionHeightPercent,
@@ -352,6 +359,7 @@ final class BalancePresentationSettings {
     Set<BalanceCarouselCardKind>? hiddenBalanceCarouselCardKinds,
     int? revision,
   }) => BalancePresentationSettings(
+    dailyCalculationMode: dailyCalculationMode ?? this.dailyCalculationMode,
     chartMode: chartMode ?? this.chartMode,
     timeLabels: timeLabels ?? this.timeLabels,
     latestTransactionCardPresentation:
@@ -405,6 +413,7 @@ final class BalancePresentationSettings {
   @override
   bool operator ==(Object other) =>
       other is BalancePresentationSettings &&
+      other.dailyCalculationMode == dailyCalculationMode &&
       other.chartMode == chartMode &&
       other.timeLabels == timeLabels &&
       other.latestTransactionCardPresentation ==
@@ -443,6 +452,7 @@ final class BalancePresentationSettings {
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
+    dailyCalculationMode,
     chartMode,
     timeLabels,
     latestTransactionCardPresentation,
@@ -476,6 +486,15 @@ final class BalancePresentationController
     extends ValueNotifier<BalancePresentationSettings> {
   BalancePresentationController({BalancePresentationSettings? initial})
     : super(initial ?? const BalancePresentationSettings.defaults());
+
+  void setDailyCalculationMode(BalanceDailyCalculationMode next) {
+    final current = value;
+    if (current.dailyCalculationMode == next) return;
+    value = current.copyWith(
+      dailyCalculationMode: next,
+      revision: current.revision + 1,
+    );
+  }
 
   void setChartMode(BalanceHeaderChartMode next) {
     final current = value;

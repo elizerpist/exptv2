@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import 'dashboard_partition_lane_geometry.dart';
-import '../widgets/dashboard_header_trend_visual_kernel.dart';
+import 'dashboard_header_partition_lane_layout.dart';
+import 'balance_header_partition_labels.dart';
 
 /// Header-local, two-way Balance comparison. Its inputs are already-published
 /// scope totals; it has no history, query, or transaction dependency.
@@ -13,13 +14,17 @@ final class BalanceHeaderIncomeExpensePartition extends StatelessWidget {
     super.key,
     required this.incomeMinor,
     required this.expenseMinor,
-    required this.heightPercent,
-    required this.plotTop,
-    required this.plotHeight,
-    required this.valueTop,
-    required this.verticalPosition,
+    this.heightPercent = 0,
+    this.expansionProgress = 1,
+    this.foreground = Colors.white,
+    this.plotTop = 0,
+    this.plotHeight = 0,
+    this.valueTop = 0,
+    this.verticalPosition = 0,
   });
 
+  final double expansionProgress;
+  final Color foreground;
   final int incomeMinor;
   final int expenseMinor;
   final double heightPercent;
@@ -47,118 +52,41 @@ final class BalanceHeaderIncomeExpensePartition extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = math.max(0, incomeMinor) + math.max(0, expenseMinor);
-    final incomeBasisPoints = total == 0
-        ? 5000
-        : (math.max(0, incomeMinor) * 10000 / total).round();
-    final expenseBasisPoints = 10000 - incomeBasisPoints;
-    final height = DashboardPartitionLaneGeometry.balanceHeaderThicknessFor(
-      heightPercent,
-    );
-    return Positioned(
-      key: const ValueKey<String>('balance-header-income-expense-partition'),
-      left: DashboardHeaderTrendChartStyle.plotLeft,
-      right: DashboardHeaderTrendChartStyle.plotLeft,
-      top: topFor(
-        plotTop: plotTop,
-        plotHeight: plotHeight,
-        valueTop: valueTop,
-        height: height,
-        verticalPosition: verticalPosition,
+    final incomeRatio = total == 0 ? 0.0 : math.max(0, incomeMinor) / total;
+    return DashboardHeaderPartitionLaneLayout(
+      labels: BalanceHeaderPartitionLabels(
+        incomeRatio: incomeRatio,
+        hasActivity: total > 0,
+        foreground: foreground,
       ),
-      height: height,
+      expansionProgress: expansionProgress,
       child: ClipRRect(
         borderRadius: const BorderRadius.all(
           DashboardPartitionLaneGeometry.cornerRadius,
         ),
         child: Stack(
           fit: StackFit.expand,
-          children: <Widget>[
-            const DecoratedBox(
-              key: ValueKey<String>(
-                'balance-header-income-expense-empty-track',
-              ),
+          children: [
+            DecoratedBox(
+              key: const ValueKey('balance-header-income-expense-empty-track'),
               decoration: BoxDecoration(
-                color: FluviVisualTokens.partitionEmptyTrack,
+                color: total > 0
+                    ? const Color(0xffdc4e75)
+                    : FluviVisualTokens.partitionEmptyTrack,
               ),
             ),
-            FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: incomeBasisPoints / 10000,
-              child: const DecoratedBox(
-                key: ValueKey<String>(
-                  'balance-header-income-expense-softened-fill',
-                ),
-                decoration: BoxDecoration(
-                  color: FluviVisualTokens.balancePartitionSoftenedDark,
+            if (incomeRatio > 0)
+              FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: incomeRatio,
+                child: const DecoratedBox(
+                  key: ValueKey('balance-header-income-expense-income'),
+                  decoration: BoxDecoration(color: Color(0xff1f9f70)),
                 ),
               ),
-            ),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  flex: math.max(1, incomeBasisPoints),
-                  child: const SizedBox.expand(
-                    key: ValueKey<String>(
-                      'balance-header-income-expense-income',
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: math.max(1, expenseBasisPoints),
-                  child: const SizedBox.expand(
-                    key: ValueKey<String>(
-                      'balance-header-income-expense-expense',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _BalanceHeaderPartitionLabel(
-                        label: '${(incomeBasisPoints / 100).round()}%',
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _BalanceHeaderPartitionLabel(
-                        label: '${(expenseBasisPoints / 100).round()}%',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
     );
   }
-}
-
-final class _BalanceHeaderPartitionLabel extends StatelessWidget {
-  const _BalanceHeaderPartitionLabel({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => FittedBox(
-    fit: BoxFit.scaleDown,
-    child: Text(
-      label,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 10,
-        height: 1,
-        fontWeight: FontWeight.w900,
-      ),
-    ),
-  );
 }

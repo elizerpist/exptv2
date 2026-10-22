@@ -33,6 +33,7 @@ import '../dashboard_upper_vertical_gesture_coordinator.dart';
 import '../dashboard_budget_header_presentation.dart';
 import 'budget_category_avatar_rail.dart';
 import 'budget_limit_manager.dart';
+import 'dashboard_partition_lane_geometry.dart';
 import 'budget_allocation_partition_lane.dart';
 import 'dashboard_header_contrast_text.dart';
 import 'budget_category_distribution_visual_bank.dart';
@@ -289,9 +290,11 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     // The source title starts at x=20/y=16. Text keeps the
                     // existing tuner/menu clearance internally; the partition
                     // lane itself now owns equal 16px physical insets.
-                    detailLeft: 16,
-                    detailTop: 16,
-                    detailRight: 16,
+                    detailLeft:
+                        DashboardPartitionLaneGeometry.headerHorizontalInset,
+                    detailTop: DashboardPartitionLaneGeometry.headerDetailTop,
+                    detailRight:
+                        DashboardPartitionLaneGeometry.headerHorizontalInset,
                     detailBottom: headerProfile.partitionBottomInset,
                     detail: presentationController == null
                         ? null
@@ -330,18 +333,13 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                                   // title/value anchor at every intermediate height
                                   // without a feature-local layout threshold or
                                   // animation owner.
-                                  const titleAndValueHeight = 36.0;
-                                  final partitionHeight =
-                                      13.0 + headerProfile.partitionThickness;
-                                  final roomReveal =
-                                      ((constraints.maxHeight -
-                                                  titleAndValueHeight) /
-                                              partitionHeight)
-                                          .clamp(0.0, 1.0)
-                                          .toDouble();
-                                  final partitionReveal = expansion < roomReveal
-                                      ? expansion
-                                      : roomReveal;
+                                  final partitionReveal =
+                                      DashboardPartitionLaneGeometry.headerRevealFor(
+                                        availableHeight: constraints.maxHeight,
+                                        thickness:
+                                            headerProfile.partitionThickness,
+                                        expansionProgress: expansion,
+                                      );
                                   return Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -463,12 +461,11 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                                               'budget-header-partition-reveal',
                                             ),
                                             opacity: partitionReveal,
-                                            child:
-                                                _BudgetHeaderAllocationDetail(
-                                                  partition: partition,
-                                                  thickness: headerProfile
-                                                      .partitionThickness,
-                                                ),
+                                            child: BudgetHeaderAllocationDetail(
+                                              partition: partition,
+                                              thickness: headerProfile
+                                                  .partitionThickness,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -957,8 +954,9 @@ final class _BudgetAvatarRailBackplate extends StatelessWidget {
   );
 }
 
-final class _BudgetHeaderAllocationDetail extends StatelessWidget {
-  const _BudgetHeaderAllocationDetail({
+final class BudgetHeaderAllocationDetail extends StatelessWidget {
+  const BudgetHeaderAllocationDetail({
+    super.key,
     required this.partition,
     required this.thickness,
   });

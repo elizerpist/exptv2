@@ -15804,7 +15804,17 @@ final class DashboardCoreController {
 
   void _publishBalancePresentationForVisibleFrame(DashboardVisibleFrame frame) {
     final index = _balanceSourceIndexFor(coreRevision: frame.coreRevision);
-    if (index == null || index.coreRevision != frame.coreRevision) {
+    // A revision may contain several prepared Query identities. Keep both
+    // directional lanes on the committed filters; transient LogBox focus is
+    // intentionally isolated by _balanceSourceIndexFor.
+    if (index == null ||
+        index.coreRevision != frame.coreRevision ||
+        !index.key.matchesScope(
+          currentQuery.scopeFor(LedgerDirection.income),
+        ) ||
+        !index.key.matchesScope(
+          currentQuery.scopeFor(LedgerDirection.expense),
+        )) {
       _setBalancePresentation(null);
       return;
     }
@@ -15845,12 +15855,16 @@ final class DashboardCoreController {
       DashboardBalancePresentation(
         scopeKey: '${income.scope.key.value}|${expense.scope.key.value}',
         coreRevision: frame.coreRevision,
+        // Publish renderer-accepted navigation with its financial source.
+        // Pending navigation must never reinterpret an older publication.
+        headerTimeScope: frame.scope.timeScope,
         incomeTotalMinor: income.totalMinor,
         expenseTotalMinor: expense.totalMinor,
         netTotalMinor: net,
         formattedNetTotal: DashboardPreparedFormatter.amountMinor(net),
         presentationId: Object.hash(
           frame.coreRevision,
+          frame.scope.timeScope.canonicalKey,
           income.frameId,
           expense.frameId,
           latest?.entryId,

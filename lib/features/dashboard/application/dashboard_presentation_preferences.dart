@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'balance_daily_calculation_mode.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../presentation/core_modes/balance_presentation_settings.dart';
 
@@ -16,6 +17,7 @@ final class DashboardPresentationPreferences {
     required this.showDayContentViewChooser,
     required this.balanceUsesChildCards,
     required this.balanceHeaderGraphPresentation,
+    this.balanceDailyCalculationMode = BalanceDailyCalculationMode.monthToDate,
     this.balanceMonthlySpendingChartPresentation =
         BalanceMonthlySpendingChartPresentation.current,
     required this.balanceHeaderPartitionHeightPercent,
@@ -28,6 +30,7 @@ final class DashboardPresentationPreferences {
   final MindYearHeatmapGridLayout yearGridLayout;
   final MindYearMonthlyAmountPresentation yearMonthlyAmountPresentation;
   final bool showDayContentViewChooser;
+  final BalanceDailyCalculationMode balanceDailyCalculationMode;
   final bool balanceUsesChildCards;
   final BalanceHeaderGraphPresentation balanceHeaderGraphPresentation;
   final BalanceMonthlySpendingChartPresentation
@@ -44,7 +47,8 @@ final class DashboardPresentationPreferences {
     yearMonthlyAmountPresentation: MindYearMonthlyAmountPresentation.inline,
     showDayContentViewChooser: false,
     balanceUsesChildCards: true,
-    balanceHeaderGraphPresentation: BalanceHeaderGraphPresentation.lineChart,
+    balanceHeaderGraphPresentation:
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
     balanceMonthlySpendingChartPresentation:
         BalanceMonthlySpendingChartPresentation.current,
     balanceHeaderPartitionHeightPercent: 50,
@@ -61,6 +65,7 @@ final class DashboardPresentationPreferences {
       other.yearGridLayout == yearGridLayout &&
       other.yearMonthlyAmountPresentation == yearMonthlyAmountPresentation &&
       other.showDayContentViewChooser == showDayContentViewChooser &&
+      other.balanceDailyCalculationMode == balanceDailyCalculationMode &&
       other.balanceUsesChildCards == balanceUsesChildCards &&
       other.balanceHeaderGraphPresentation == balanceHeaderGraphPresentation &&
       other.balanceMonthlySpendingChartPresentation ==
@@ -79,6 +84,7 @@ final class DashboardPresentationPreferences {
     yearGridLayout,
     yearMonthlyAmountPresentation,
     showDayContentViewChooser,
+    balanceDailyCalculationMode,
     balanceUsesChildCards,
     balanceHeaderGraphPresentation,
     balanceMonthlySpendingChartPresentation,

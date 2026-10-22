@@ -1,3 +1,4 @@
+import 'package:fluvi/features/dashboard/application/balance_daily_calculation_mode.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_history_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
@@ -7,6 +8,40 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  test(
+    'daily calculation changes only header preference and notifies once',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+      final original = controller.value;
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      expect(
+        original.dailyCalculationMode,
+        BalanceDailyCalculationMode.monthToDate,
+      );
+      controller.setDailyCalculationMode(
+        BalanceDailyCalculationMode.allTimeToDate,
+      );
+      expect(
+        controller.value,
+        original.copyWith(
+          dailyCalculationMode: BalanceDailyCalculationMode.allTimeToDate,
+          revision: 1,
+        ),
+      );
+      controller.setDailyCalculationMode(
+        BalanceDailyCalculationMode.allTimeToDate,
+      );
+      expect(notifications, 1);
+      controller.setDailyCalculationMode(
+        BalanceDailyCalculationMode.monthToDate,
+      );
+      expect(controller.value, original.copyWith(revision: 2));
+      expect(notifications, 2);
+    },
+  );
+
   test(
     'Balance presentation settings retain chart/time choices and independently own Balance card presentation alternatives',
     () {
@@ -173,7 +208,7 @@ void main() {
 
       expect(
         controller.value.headerGraphPresentation,
-        BalanceHeaderGraphPresentation.lineChart,
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
       );
       expect(controller.value.headerPartitionHeightPercent, 50);
       expect(
@@ -259,7 +294,7 @@ void main() {
       );
       expect(
         controller.value.headerGraphPresentation,
-        BalanceHeaderGraphPresentation.lineChart,
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
       );
 
       controller.setMonthlySpendingChartPresentation(
@@ -272,7 +307,7 @@ void main() {
       );
       expect(
         controller.value.headerGraphPresentation,
-        BalanceHeaderGraphPresentation.lineChart,
+        BalanceHeaderGraphPresentation.incomeExpensePartition,
       );
       expect(controller.value.copyWith(), controller.value);
       expect(controller.value.hashCode, controller.value.copyWith().hashCode);
