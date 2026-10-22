@@ -264,6 +264,7 @@ class MainActivity : FlutterActivity() {
                             "showDayContentViewChooser" to preferences.getBoolean("showDayContentViewChooser", false),
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
                             "balanceHeaderGraphPresentation" to preferences.getInt("balanceHeaderGraphPresentation", 1),
+                            "balanceYearLayoutPresentation" to preferences.getInt("balanceYearLayoutPresentation", 0),
                             "balanceDailyCalculationMode" to preferences.getInt("balanceDailyCalculationMode", 0),
                             "balanceMonthlySpendingChartPresentation" to preferences.getInt("balanceMonthlySpendingChartPresentation", 0),
                             "balanceHeaderPartitionHeightPercent" to preferences.getInt("balanceHeaderPartitionHeightPercent", 50),
@@ -289,6 +290,8 @@ class MainActivity : FlutterActivity() {
                             ?: throw IllegalArgumentException("Missing Day view chooser visibility.")
                         val balanceChildren = values["balanceUsesChildCards"] as? Boolean
                             ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
+                        val balanceYearLayoutPresentation = (values["balanceYearLayoutPresentation"] as? Number)?.toInt() ?: 0
+                        require(balanceYearLayoutPresentation in 0..1) { "Invalid Balance year layout presentation." }
                         val balanceDailyCalculationMode = (values["balanceDailyCalculationMode"] as? Number)?.toInt() ?: 0
                         require(balanceDailyCalculationMode in 0..1) { "Invalid Balance daily calculation mode." }
                         val balanceHeaderGraphPresentation = (values["balanceHeaderGraphPresentation"] as? Number)?.toInt()
@@ -313,6 +316,7 @@ class MainActivity : FlutterActivity() {
                             .putInt("yearMonthlyAmountPresentation", yearMonthlyAmountPresentation)
                             .putBoolean("showDayContentViewChooser", showDayContentViewChooser)
                             .putBoolean("balanceUsesChildCards", balanceChildren)
+                            .putInt("balanceYearLayoutPresentation", balanceYearLayoutPresentation)
                             .putInt("balanceDailyCalculationMode", balanceDailyCalculationMode)
                             .putInt("balanceHeaderGraphPresentation", balanceHeaderGraphPresentation)
                             .putInt("balanceMonthlySpendingChartPresentation", balanceMonthlySpendingChartPresentation)

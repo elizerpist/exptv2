@@ -5,6 +5,11 @@ set -euo pipefail
 # in the nightly/profile lanes; do not grow this list by duplicating an
 # invariant already owned below.
 flutter test \
+  test/features/dashboard/presentation/balance_year_focused_chart_presentation_test.dart \
+  test/features/dashboard/presentation/balance_year_focused_layout_test.dart \
+  test/features/dashboard/presentation/fluvi_year_clay_capsule_painter_test.dart \
+  test/features/dashboard/application/dashboard_balance_primary_projection_test.dart \
+  test/features/dashboard/presentation/dashboard_header_visual_tuner_test.dart \
   test/features/dashboard/application/dashboard_balance_header_context_presentation_test.dart \
   test/features/dashboard/presentation/balance_header_income_expense_partition_test.dart \
   test/features/dashboard/presentation/balance_presentation_settings_test.dart \
@@ -55,3 +60,7 @@ flutter test \
   test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart \
   --plain-name 'daily calculation changes amount and bar atomically without navigation or lower data changes' \
   "$@"
+
+# Preserve Budget's authored annual clay baselines after sharing its primitive.
+flutter test test/features/dashboard/presentation/budget_secondary_analysis_card_test.dart \
+  --plain-name clay

@@ -8,6 +8,7 @@ import '../../application/dashboard_balance_monthly_net_distribution_projection.
 import '../../application/dashboard_balance_primary_projection.dart';
 import '../../application/dashboard_balance_retention_stability_projection.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
+import '../../time_navigation/domain/local_date.dart';
 
 /// Render-only adapter boundary for the scope-specific alternative Balance
 /// dashboard. It intentionally copies only immutable values that established
@@ -46,6 +47,10 @@ sealed class BalanceAlternativeScopePresentation {
     YearScope() => BalanceAlternativeYearPresentation(
       timeScope: primary.timeScope,
       sourcePresentationId: primary.presentationId,
+      transactionCounts: Map.unmodifiable({
+        for (final pair in primary.periodPairs)
+          pair.value: pair.transactionCount,
+      }),
       incomeExpense: BalanceAlternativeIncomeExpenseBarPresentation.fromPrimary(
         primary,
         domain: BalanceAlternativeBarDomain.months,
@@ -104,6 +109,11 @@ sealed class BalanceAlternativeScopePresentation {
     YearScope() => BalanceAlternativeYearPresentation(
       timeScope: linked.timeScope,
       sourcePresentationId: linked.presentationId,
+      logicalAsOfDate: linked.logicalAsOfDate,
+      transactionCounts: Map.unmodifiable({
+        for (final pair in linked.cashflow.periodPairs)
+          pair.value: pair.transactionCount,
+      }),
       incomeExpense: BalanceAlternativeIncomeExpenseBarPresentation.fromPrimary(
         linked.cashflow,
         domain: BalanceAlternativeBarDomain.months,
@@ -184,8 +194,12 @@ final class BalanceAlternativeYearPresentation
     required this.incomeExpense,
     required this.closings,
     required this.savings,
+    this.logicalAsOfDate,
+    this.transactionCounts = const {},
   });
 
+  final LocalDate? logicalAsOfDate;
+  final Map<int, int?> transactionCounts;
   final BalanceAlternativeIncomeExpenseBarPresentation incomeExpense;
   final BalanceAlternativeYearClosingsPresentation closings;
   final BalanceAlternativeSavingsPresentation savings;

@@ -64,6 +64,9 @@ void main() {
       expect(year.periodPairs[1].value, 2);
       expect(year.periodPairs.first.incomeMinor, 300000);
       expect(year.periodPairs[1].expenseMinor, 80000);
+      expect(year.periodPairs.first.transactionCount, 1);
+      expect(year.periodPairs[1].transactionCount, 1);
+      expect(year.periodPairs[2].transactionCount, 0);
       expect(year.incomeTotalMinor, 300000);
       expect(year.expenseTotalMinor, 80000);
     },

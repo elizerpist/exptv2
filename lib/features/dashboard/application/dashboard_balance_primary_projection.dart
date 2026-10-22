@@ -25,10 +25,14 @@ final class DashboardBalancePrimaryPeriodPair {
     required this.value,
     required this.incomeMinor,
     required this.expenseMinor,
+    this.transactionCount,
   });
 
   /// Calendar year for SUM and one-based calendar month for YEAR.
   final int value;
+
+  /// Prepared entry presence; null for payloads without availability metadata.
+  final int? transactionCount;
   final int incomeMinor;
   final int expenseMinor;
 
@@ -154,6 +158,7 @@ final class DashboardBalanceLinkedPresentation {
     required this.timeScope,
     required this.selectedDirection,
     required this.cashflow,
+    this.logicalAsOfDate,
     DashboardBalanceClosingsPresentation? closings,
     DashboardBalanceMomentumPresentation? momentum,
     DashboardBalanceDailyInsightsPresentation? dailyInsights,
@@ -225,6 +230,7 @@ final class DashboardBalanceLinkedPresentation {
   final LedgerTimeScope timeScope;
   final LedgerDirection selectedDirection;
   final DashboardBalancePrimaryPresentation cashflow;
+  final LocalDate? logicalAsOfDate;
   final DashboardBalanceClosingsPresentation closings;
   final DashboardBalanceMomentumPresentation momentum;
   final DashboardBalanceDailyInsightsPresentation dailyInsights;
@@ -240,6 +246,7 @@ final class DashboardBalanceLinkedPresentation {
     identity,
     timeScope.canonicalKey,
     selectedDirection,
+    if (timeScope is YearScope) logicalAsOfDate,
     cashflow.presentationId,
     closings.presentationId,
     momentum.presentationId,
@@ -347,6 +354,9 @@ abstract final class DashboardBalancePrimaryProjection {
           value: month,
           incomeMinor: incomeTotals.byMonth[month] ?? 0,
           expenseMinor: expenseTotals.byMonth[month] ?? 0,
+          transactionCount:
+              (incomeTotals.countByMonth[month] ?? 0) +
+              (expenseTotals.countByMonth[month] ?? 0),
         ),
     ];
     return DashboardBalancePrimaryPresentation(
@@ -440,11 +450,13 @@ abstract final class DashboardBalancePrimaryProjection {
     int year,
   ) {
     final byMonth = <int, int>{};
+    final countByMonth = <int, int>{};
     var totalMinor = 0;
     for (final entry in entries) {
       final date = _date(entry.bookedLocalEpochDay);
       if (date.year != year) continue;
       totalMinor += entry.amountMinor;
+      countByMonth.update(date.month, (count) => count + 1, ifAbsent: () => 1);
       byMonth.update(
         date.month,
         (total) => total + entry.amountMinor,
@@ -453,6 +465,7 @@ abstract final class DashboardBalancePrimaryProjection {
     }
     return _BalanceMonthlyTotals(
       byMonth: Map<int, int>.unmodifiable(byMonth),
+      countByMonth: Map<int, int>.unmodifiable(countByMonth),
       totalMinor: totalMinor,
     );
   }
@@ -541,6 +554,7 @@ abstract final class DashboardBalanceLinkedProjection {
           .toList(growable: false),
     );
     return DashboardBalanceLinkedPresentation(
+      logicalAsOfDate: logicalAsOfDate,
       identity: identity,
       timeScope: timeScope,
       selectedDirection: selectedDirection,
@@ -767,9 +781,11 @@ final class _BalanceAnnualTotals {
 final class _BalanceMonthlyTotals {
   const _BalanceMonthlyTotals({
     required this.byMonth,
+    required this.countByMonth,
     required this.totalMinor,
   });
 
   final Map<int, int> byMonth;
+  final Map<int, int> countByMonth;
   final int totalMinor;
 }

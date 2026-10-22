@@ -17,6 +17,7 @@ final class DashboardPresentationPreferences {
     required this.showDayContentViewChooser,
     required this.balanceUsesChildCards,
     required this.balanceHeaderGraphPresentation,
+    this.balanceYearLayoutPresentation = BalanceYearLayoutPresentation.current,
     this.balanceDailyCalculationMode = BalanceDailyCalculationMode.monthToDate,
     this.balanceMonthlySpendingChartPresentation =
         BalanceMonthlySpendingChartPresentation.current,
@@ -30,6 +31,7 @@ final class DashboardPresentationPreferences {
   final MindYearHeatmapGridLayout yearGridLayout;
   final MindYearMonthlyAmountPresentation yearMonthlyAmountPresentation;
   final bool showDayContentViewChooser;
+  final BalanceYearLayoutPresentation balanceYearLayoutPresentation;
   final BalanceDailyCalculationMode balanceDailyCalculationMode;
   final bool balanceUsesChildCards;
   final BalanceHeaderGraphPresentation balanceHeaderGraphPresentation;
@@ -65,6 +67,7 @@ final class DashboardPresentationPreferences {
       other.yearGridLayout == yearGridLayout &&
       other.yearMonthlyAmountPresentation == yearMonthlyAmountPresentation &&
       other.showDayContentViewChooser == showDayContentViewChooser &&
+      other.balanceYearLayoutPresentation == balanceYearLayoutPresentation &&
       other.balanceDailyCalculationMode == balanceDailyCalculationMode &&
       other.balanceUsesChildCards == balanceUsesChildCards &&
       other.balanceHeaderGraphPresentation == balanceHeaderGraphPresentation &&
@@ -84,6 +87,7 @@ final class DashboardPresentationPreferences {
     yearGridLayout,
     yearMonthlyAmountPresentation,
     showDayContentViewChooser,
+    balanceYearLayoutPresentation,
     balanceDailyCalculationMode,
     balanceUsesChildCards,
     balanceHeaderGraphPresentation,

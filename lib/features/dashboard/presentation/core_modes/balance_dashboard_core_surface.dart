@@ -28,6 +28,7 @@ import 'balance_alternative_scope_presentation.dart';
 import 'balance_alternative_sum_cards.dart';
 import 'balance_alternative_visual_tokens.dart';
 import 'balance_extended_sheet_layout.dart';
+import 'balance_year_focused_layout.dart';
 import 'balance_four_section_layout.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_header_glass_bar.dart';
@@ -995,11 +996,17 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
                 presentation: alternative,
               ),
             BalanceAlternativeYearPresentation() =>
-              _BalanceYearExtendedSheetScaffold(
-                geometry: geometry,
-                presentation: alternative,
-                yearBarPresentation: settings.yearBarPresentation,
-              ),
+              settings.yearLayoutPresentation ==
+                      BalanceYearLayoutPresentation.focused
+                  ? _BalanceYearFocusedScaffold(
+                      geometry: geometry,
+                      presentation: alternative,
+                    )
+                  : _BalanceYearExtendedSheetScaffold(
+                      geometry: geometry,
+                      presentation: alternative,
+                      yearBarPresentation: settings.yearBarPresentation,
+                    ),
             BalanceAlternativeMonthPresentation() =>
               _BalanceMonthExtendedSheetScaffold(
                 geometry: geometry,
@@ -1257,6 +1264,35 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
         ),
       ];
     },
+  );
+}
+
+/// Alternative annual content inside the existing Mother Card bounds. The
+/// physical shell/header stay owned by the established Balance surface.
+final class _BalanceYearFocusedScaffold extends StatelessWidget {
+  const _BalanceYearFocusedScaffold({
+    required this.geometry,
+    required this.presentation,
+  });
+  final DashboardLayoutFrame geometry;
+  final BalanceAlternativeYearPresentation presentation;
+
+  @override
+  Widget build(BuildContext context) => DashboardCoreModeFramePosition(
+    bounds: DashboardHeaderContentMotherCardBounds.resolve(geometry: geometry),
+    child: LayoutBuilder(
+      builder: (context, constraints) => Stack(
+        children: [
+          Positioned.fromRect(
+            rect: _balanceAlternativeBodyRect(
+              constraints,
+              geometry.headerBounds.height,
+            ),
+            child: BalanceYearFocusedLayout(presentation: presentation),
+          ),
+        ],
+      ),
+    ),
   );
 }
 

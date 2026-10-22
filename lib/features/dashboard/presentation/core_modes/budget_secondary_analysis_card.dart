@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_year_clay_capsule_painter.dart';
 import '../../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_secondary_analysis.dart';
@@ -1442,42 +1443,14 @@ final class _YearClayDeltaPainter extends CustomPainter {
 
   void _paintZeroRail(Canvas canvas, _YearClayDeltaGeometry geometry) {
     final source = BudgetProgressRingGeometry.source;
-    final radius = Radius.circular(geometry.railRect.height / 2);
-    final rail = RRect.fromRectAndRadius(geometry.railRect, radius);
-    canvas.drawRRect(
-      rail.shift(Offset(0, geometry.railRect.height * .8)),
-      Paint()
-        ..color = source.trackShadowColor.withValues(alpha: .52)
-        ..maskFilter = MaskFilter.blur(
-          BlurStyle.normal,
-          geometry.railRect.height * .8,
-        ),
-    );
-    canvas.drawRRect(
-      rail.shift(Offset(0, geometry.railRect.height * .36)),
-      Paint()..color = source.trackGradientColors.last,
-    );
-    canvas.drawRRect(
-      rail,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: source.trackGradientColors,
-          stops: source.trackGradientStops,
-        ).createShader(geometry.railRect),
-    );
-    if (!material.showNeutralDecorativeStrip) return;
-    final inset = geometry.railRect.height * .85;
-    final glossRect = Rect.fromLTWH(
-      geometry.railRect.left + inset,
-      geometry.railRect.top + geometry.railRect.height * .18,
-      math.max(0, geometry.railRect.width - inset * 2),
-      math.max(.5, geometry.railRect.height * .27),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(glossRect, Radius.circular(glossRect.height / 2)),
-      Paint()..color = source.trackGlossColor,
+    FluviYearClayCapsulePainter.paintZeroRail(
+      canvas,
+      rect: geometry.railRect,
+      colors: source.trackGradientColors,
+      stops: source.trackGradientStops,
+      shadowColor: source.trackShadowColor,
+      glossColor: source.trackGlossColor,
+      showDecorativeStrip: material.showNeutralDecorativeStrip,
     );
   }
 
@@ -1486,82 +1459,26 @@ final class _YearClayDeltaPainter extends CustomPainter {
     required Rect rect,
     required BudgetClayActiveMaterial clayMaterial,
     required bool showDecorativeStrip,
-  }) {
-    final radius = Radius.circular(rect.width / 2);
-    final capsule = RRect.fromRectAndRadius(rect, radius);
-    final depthOffset = Offset(
-      rect.width * .10,
-      math.max(.8, rect.width * .17),
-    );
-    canvas.drawRRect(
-      capsule.shift(depthOffset),
-      Paint()
-        ..color = clayMaterial.depthColors.last.withValues(alpha: .34)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, rect.width * .14),
-    );
-    canvas.drawRRect(
-      capsule.shift(Offset(0, rect.width * .10)),
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: clayMaterial.depthColors,
-          stops: clayMaterial.stops,
-        ).createShader(rect),
-    );
-    canvas.drawRRect(
-      capsule,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: clayMaterial.colors,
-          stops: clayMaterial.stops,
-        ).createShader(rect),
-    );
-    if (!showDecorativeStrip) return;
-    final capInset = math.min(rect.width * .22, rect.height * .22);
-    final stripRect = Rect.fromLTWH(
-      rect.left + rect.width * .18,
-      rect.top + capInset,
-      rect.width * .24,
-      math.max(0, rect.height - capInset * 2),
-    );
-    if (stripRect.height <= 0) return;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(stripRect, Radius.circular(stripRect.width / 2)),
-      Paint()..color = const Color(0x45FFFFFF),
-    );
-  }
+  }) => FluviYearClayCapsulePainter.paint(
+    canvas,
+    rect: rect,
+    colors: clayMaterial.colors,
+    depthColors: clayMaterial.depthColors,
+    stops: clayMaterial.stops,
+    showDecorativeStrip: showDecorativeStrip,
+  );
 
   void _paintFutureMarker(
     Canvas canvas,
     Offset center,
     _YearClayDeltaGeometry geometry,
-  ) {
-    final source = BudgetProgressRingGeometry.source;
-    final radius = geometry.futureRadius;
-    canvas.drawCircle(
-      center.translate(radius * .28, radius * .4),
-      radius,
-      Paint()
-        ..color = source.trackShadowColor.withValues(alpha: .45)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * .75),
-    );
-    final dotRect = Rect.fromCircle(center: center, radius: radius);
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-.45, -.5),
-          colors: <Color>[
-            const Color(0xCCFFFFFF),
-            source.trackGradientColors.last.withValues(alpha: .78),
-          ],
-        ).createShader(dotRect),
-    );
-  }
+  ) => FluviYearClayCapsulePainter.paintFutureMarker(
+    canvas,
+    center: center,
+    radius: geometry.futureRadius,
+    shadowColor: BudgetProgressRingGeometry.source.trackShadowColor,
+    depthColor: BudgetProgressRingGeometry.source.trackGradientColors.last,
+  );
 
   @override
   bool shouldRepaint(covariant _YearClayDeltaPainter old) =>

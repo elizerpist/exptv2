@@ -173,6 +173,24 @@ enum BalanceMonthCombinedCardPresentation {
   };
 }
 
+/// Presentation-only alternative for the extended annual Balance content.
+enum BalanceYearLayoutPresentation {
+  current,
+  focused;
+
+  String get tunerLabel => switch (this) {
+    BalanceYearLayoutPresentation.current => 'Eddigi',
+    BalanceYearLayoutPresentation.focused => 'Új',
+  };
+
+  String get tunerDescription => switch (this) {
+    BalanceYearLayoutPresentation.current =>
+      'Három különálló pénzügyi grafikon és statisztika.',
+    BalanceYearLayoutPresentation.focused =>
+      'Perspektívaválasztó és egyetlen nagy, interaktív grafikon.',
+  };
+}
+
 /// Material-only choice for the Balance Year bar-chart family.
 ///
 /// The current treatment is retained as the default. In the Year scope the
@@ -218,6 +236,7 @@ final class BalancePresentationSettings {
     this.headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
     this.monthCombinedCardPresentation =
         BalanceMonthCombinedCardPresentation.incomeExpense,
+    this.yearLayoutPresentation = BalanceYearLayoutPresentation.current,
     this.yearBarPresentation = BalanceYearBarPresentation.current,
     this.alternativeMotherCardVisible = true,
     this.usesChildCards = true,
@@ -279,6 +298,7 @@ final class BalancePresentationSettings {
       headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
       monthCombinedCardPresentation =
           BalanceMonthCombinedCardPresentation.incomeExpense,
+      yearLayoutPresentation = BalanceYearLayoutPresentation.current,
       yearBarPresentation = BalanceYearBarPresentation.current,
       alternativeMotherCardVisible = true,
       usesChildCards = true,
@@ -307,6 +327,7 @@ final class BalancePresentationSettings {
   final double headerPartitionHeightPercent;
   final BalanceHeaderGlassConfiguration headerGlassConfiguration;
   final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
+  final BalanceYearLayoutPresentation yearLayoutPresentation;
   final BalanceYearBarPresentation yearBarPresentation;
 
   /// Controls only the physical unified parent/backplate. The alternative
@@ -353,6 +374,7 @@ final class BalancePresentationSettings {
     double? headerPartitionHeightPercent,
     BalanceHeaderGlassConfiguration? headerGlassConfiguration,
     BalanceMonthCombinedCardPresentation? monthCombinedCardPresentation,
+    BalanceYearLayoutPresentation? yearLayoutPresentation,
     BalanceYearBarPresentation? yearBarPresentation,
     bool? alternativeMotherCardVisible,
     bool? usesChildCards,
@@ -401,6 +423,8 @@ final class BalancePresentationSettings {
         headerGlassConfiguration ?? this.headerGlassConfiguration,
     monthCombinedCardPresentation:
         monthCombinedCardPresentation ?? this.monthCombinedCardPresentation,
+    yearLayoutPresentation:
+        yearLayoutPresentation ?? this.yearLayoutPresentation,
     yearBarPresentation: yearBarPresentation ?? this.yearBarPresentation,
     alternativeMotherCardVisible:
         alternativeMotherCardVisible ?? this.alternativeMotherCardVisible,
@@ -441,6 +465,7 @@ final class BalancePresentationSettings {
       other.headerPartitionHeightPercent == headerPartitionHeightPercent &&
       other.headerGlassConfiguration == headerGlassConfiguration &&
       other.monthCombinedCardPresentation == monthCombinedCardPresentation &&
+      other.yearLayoutPresentation == yearLayoutPresentation &&
       other.yearBarPresentation == yearBarPresentation &&
       other.alternativeMotherCardVisible == alternativeMotherCardVisible &&
       other.usesChildCards == usesChildCards &&
@@ -472,6 +497,7 @@ final class BalancePresentationSettings {
     headerPartitionHeightPercent,
     headerGlassConfiguration,
     monthCombinedCardPresentation,
+    yearLayoutPresentation,
     yearBarPresentation,
     alternativeMotherCardVisible,
     usesChildCards,
@@ -669,6 +695,15 @@ final class BalancePresentationController
     if (current.monthCombinedCardPresentation == next) return;
     value = current.copyWith(
       monthCombinedCardPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setYearLayoutPresentation(BalanceYearLayoutPresentation next) {
+    final current = value;
+    if (current.yearLayoutPresentation == next) return;
+    value = current.copyWith(
+      yearLayoutPresentation: next,
       revision: current.revision + 1,
     );
   }

@@ -8,6 +8,30 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  test('annual layout switches independently and advances revision once', () {
+    final controller = BalancePresentationController();
+    addTearDown(controller.dispose);
+    final original = controller.value;
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    expect(
+      original.yearLayoutPresentation,
+      BalanceYearLayoutPresentation.current,
+    );
+    controller.setYearLayoutPresentation(BalanceYearLayoutPresentation.focused);
+    final focused = original.copyWith(
+      yearLayoutPresentation: BalanceYearLayoutPresentation.focused,
+      revision: 1,
+    );
+    expect(controller.value, focused);
+    expect(controller.value.hashCode, focused.hashCode);
+    controller.setYearLayoutPresentation(BalanceYearLayoutPresentation.focused);
+    expect(notifications, 1);
+    controller.setYearLayoutPresentation(BalanceYearLayoutPresentation.current);
+    expect(controller.value, original.copyWith(revision: 2));
+    expect(notifications, 2);
+  });
+
   test(
     'daily calculation changes only header preference and notifies once',
     () {

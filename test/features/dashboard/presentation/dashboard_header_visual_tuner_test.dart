@@ -789,6 +789,22 @@ void main() {
         BalanceMonthCombinedCardPresentation.spendingRhythm,
       );
 
+      final oldStyle = balance.value.yearBarPresentation;
+      for (final layout in <BalanceYearLayoutPresentation>[
+        BalanceYearLayoutPresentation.focused,
+        BalanceYearLayoutPresentation.current,
+        BalanceYearLayoutPresentation.focused,
+      ]) {
+        final option = find.byKey(
+          ValueKey<String>('balance-year-layout-${layout.name}'),
+        );
+        await tester.ensureVisible(option);
+        await tester.tap(option);
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(balance.value.yearLayoutPresentation, layout);
+        expect(balance.value.yearBarPresentation, oldStyle);
+      }
+
       final clayBars = find.byKey(
         const ValueKey<String>('balance-year-bar-style-clay3d'),
       );
@@ -815,6 +831,7 @@ void main() {
         ),
       );
       await tester.ensureVisible(labels);
+      await tester.pump(const Duration(milliseconds: 250));
       await tester.tap(labels);
       await tester.pump();
       expect(balance.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
