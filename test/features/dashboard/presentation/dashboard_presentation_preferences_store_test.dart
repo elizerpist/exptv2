@@ -40,6 +40,7 @@ void main() {
         showDayContentViewChooser: original.showDayContentViewChooser,
         balanceUsesChildCards: original.balanceUsesChildCards,
         balanceHeaderGraphPresentation: original.balanceHeaderGraphPresentation,
+        balanceMonthLayoutPresentation: BalanceMonthLayoutPresentation.focused,
         balanceYearLayoutPresentation: BalanceYearLayoutPresentation.focused,
         balanceDailyCalculationMode: BalanceDailyCalculationMode.allTimeToDate,
         balanceHeaderPartitionHeightPercent:
@@ -51,6 +52,11 @@ void main() {
       expect(
         await MethodChannelDashboardPresentationPreferencesStore().read(),
         choice,
+      );
+      stored['balanceMonthLayoutPresentation'] = 99;
+      expect(
+        (await store.read()).balanceMonthLayoutPresentation,
+        BalanceMonthLayoutPresentation.current,
       );
       stored['balanceYearLayoutPresentation'] = 99;
       expect(
@@ -161,6 +167,8 @@ void main() {
       'yearMonthlyAmountPresentation':
           MindYearMonthlyAmountPresentation.inline.index,
       'showDayContentViewChooser': false,
+      'balanceMonthLayoutPresentation':
+          BalanceMonthLayoutPresentation.current.index,
       'balanceYearLayoutPresentation':
           BalanceYearLayoutPresentation.current.index,
       'balanceDailyCalculationMode':

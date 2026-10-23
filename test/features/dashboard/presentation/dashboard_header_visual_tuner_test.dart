@@ -789,6 +789,24 @@ void main() {
         BalanceMonthCombinedCardPresentation.spendingRhythm,
       );
 
+      final oldMonthlyStyle = balance.value.monthlySpendingChartPresentation;
+      final oldYearLayout = balance.value.yearLayoutPresentation;
+      for (final layout in <BalanceMonthLayoutPresentation>[
+        BalanceMonthLayoutPresentation.focused,
+        BalanceMonthLayoutPresentation.current,
+        BalanceMonthLayoutPresentation.focused,
+      ]) {
+        final option = find.byKey(
+          ValueKey<String>('balance-month-layout-${layout.name}'),
+        );
+        await tester.ensureVisible(option);
+        await tester.tap(option);
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(balance.value.monthLayoutPresentation, layout);
+        expect(balance.value.monthlySpendingChartPresentation, oldMonthlyStyle);
+        expect(balance.value.yearLayoutPresentation, oldYearLayout);
+      }
+
       final oldStyle = balance.value.yearBarPresentation;
       for (final layout in <BalanceYearLayoutPresentation>[
         BalanceYearLayoutPresentation.focused,

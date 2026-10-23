@@ -6,6 +6,7 @@ import '../../application/dashboard_balance_closings_momentum_projection.dart';
 import '../../application/dashboard_balance_daily_insights_projection.dart';
 import '../../application/dashboard_balance_monthly_net_distribution_projection.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
+import '../../application/dashboard_balance_month_spending_level_projection.dart';
 import '../../application/dashboard_balance_retention_stability_projection.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/local_date.dart';
@@ -65,6 +66,7 @@ sealed class BalanceAlternativeScopePresentation {
       ),
     ),
     MonthScope() => BalanceAlternativeMonthPresentation(
+      primary: primary,
       timeScope: primary.timeScope,
       sourcePresentationId: primary.presentationId,
       dailySpend: BalanceAlternativeMonthlySpendPresentation.fromPrimary(
@@ -135,6 +137,9 @@ sealed class BalanceAlternativeScopePresentation {
           ? linked.retention.periods[selectedIndex - 1].expenseMinor
           : null;
       return BalanceAlternativeMonthPresentation(
+        primary: linked.cashflow,
+        spendingLevel: linked.spendingLevel,
+        logicalAsOfDate: linked.logicalAsOfDate,
         timeScope: linked.timeScope,
         sourcePresentationId: linked.presentationId,
         dailySpend: BalanceAlternativeMonthlySpendPresentation.fromPrimary(
@@ -210,11 +215,17 @@ final class BalanceAlternativeMonthPresentation
   const BalanceAlternativeMonthPresentation({
     required super.timeScope,
     required super.sourcePresentationId,
+    this.primary,
+    this.spendingLevel,
+    this.logicalAsOfDate,
     required this.dailySpend,
     required this.savings,
     required this.incomeExpense,
   });
 
+  final DashboardBalancePrimaryPresentation? primary;
+  final DashboardBalanceMonthSpendingLevelPresentation? spendingLevel;
+  final LocalDate? logicalAsOfDate;
   final BalanceAlternativeMonthlySpendPresentation dailySpend;
   final BalanceAlternativeSavingsPresentation savings;
   final BalanceAlternativeIncomeExpenseStripPresentation incomeExpense;

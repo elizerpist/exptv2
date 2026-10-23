@@ -1307,6 +1307,56 @@ final class _BalancePresentationSection extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.only(top: 12, bottom: 6),
+          child: Text('Havi nézet elrendezése'),
+        ),
+        for (final layout in BalanceMonthLayoutPresentation.values)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Semantics(
+              selected: settings.monthLayoutPresentation == layout,
+              button: true,
+              child: InkWell(
+                key: ValueKey<String>('balance-month-layout-${layout.name}'),
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => controller.setMonthLayoutPresentation(layout),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: settings.monthLayoutPresentation == layout
+                        ? FluviVisualTokens.surface
+                        : FluviVisualTokens.surfaceMuted,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: settings.monthLayoutPresentation == layout
+                          ? Theme.of(context).colorScheme.primary
+                          : FluviVisualTokens.border,
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(layout.tunerLabel),
+                            Text(
+                              layout.tunerDescription,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (settings.monthLayoutPresentation == layout)
+                        const Icon(Icons.check_rounded, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        const Padding(
+          padding: EdgeInsets.only(top: 12, bottom: 6),
           child: Text('Éves nézet elrendezése'),
         ),
         for (final layout in BalanceYearLayoutPresentation.values)

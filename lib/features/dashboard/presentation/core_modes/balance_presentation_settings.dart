@@ -173,6 +173,24 @@ enum BalanceMonthCombinedCardPresentation {
   };
 }
 
+/// Presentation-only alternative for the extended monthly Balance content.
+enum BalanceMonthLayoutPresentation {
+  current,
+  focused;
+
+  String get tunerLabel => switch (this) {
+    BalanceMonthLayoutPresentation.current => 'Eddigi',
+    BalanceMonthLayoutPresentation.focused => 'Új',
+  };
+
+  String get tunerDescription => switch (this) {
+    BalanceMonthLayoutPresentation.current =>
+      'Jelenlegi havi Balance nézet a korábbi grafikonokkal és kártyákkal.',
+    BalanceMonthLayoutPresentation.focused =>
+      'Perspektívaválasztó és egyetlen nagy havi elemzőgrafikon.',
+  };
+}
+
 /// Presentation-only alternative for the extended annual Balance content.
 enum BalanceYearLayoutPresentation {
   current,
@@ -236,6 +254,7 @@ final class BalancePresentationSettings {
     this.headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
     this.monthCombinedCardPresentation =
         BalanceMonthCombinedCardPresentation.incomeExpense,
+    this.monthLayoutPresentation = BalanceMonthLayoutPresentation.current,
     this.yearLayoutPresentation = BalanceYearLayoutPresentation.current,
     this.yearBarPresentation = BalanceYearBarPresentation.current,
     this.alternativeMotherCardVisible = true,
@@ -298,6 +317,7 @@ final class BalancePresentationSettings {
       headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
       monthCombinedCardPresentation =
           BalanceMonthCombinedCardPresentation.incomeExpense,
+      monthLayoutPresentation = BalanceMonthLayoutPresentation.current,
       yearLayoutPresentation = BalanceYearLayoutPresentation.current,
       yearBarPresentation = BalanceYearBarPresentation.current,
       alternativeMotherCardVisible = true,
@@ -327,6 +347,7 @@ final class BalancePresentationSettings {
   final double headerPartitionHeightPercent;
   final BalanceHeaderGlassConfiguration headerGlassConfiguration;
   final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
+  final BalanceMonthLayoutPresentation monthLayoutPresentation;
   final BalanceYearLayoutPresentation yearLayoutPresentation;
   final BalanceYearBarPresentation yearBarPresentation;
 
@@ -374,6 +395,7 @@ final class BalancePresentationSettings {
     double? headerPartitionHeightPercent,
     BalanceHeaderGlassConfiguration? headerGlassConfiguration,
     BalanceMonthCombinedCardPresentation? monthCombinedCardPresentation,
+    BalanceMonthLayoutPresentation? monthLayoutPresentation,
     BalanceYearLayoutPresentation? yearLayoutPresentation,
     BalanceYearBarPresentation? yearBarPresentation,
     bool? alternativeMotherCardVisible,
@@ -423,6 +445,8 @@ final class BalancePresentationSettings {
         headerGlassConfiguration ?? this.headerGlassConfiguration,
     monthCombinedCardPresentation:
         monthCombinedCardPresentation ?? this.monthCombinedCardPresentation,
+    monthLayoutPresentation:
+        monthLayoutPresentation ?? this.monthLayoutPresentation,
     yearLayoutPresentation:
         yearLayoutPresentation ?? this.yearLayoutPresentation,
     yearBarPresentation: yearBarPresentation ?? this.yearBarPresentation,
@@ -465,6 +489,7 @@ final class BalancePresentationSettings {
       other.headerPartitionHeightPercent == headerPartitionHeightPercent &&
       other.headerGlassConfiguration == headerGlassConfiguration &&
       other.monthCombinedCardPresentation == monthCombinedCardPresentation &&
+      other.monthLayoutPresentation == monthLayoutPresentation &&
       other.yearLayoutPresentation == yearLayoutPresentation &&
       other.yearBarPresentation == yearBarPresentation &&
       other.alternativeMotherCardVisible == alternativeMotherCardVisible &&
@@ -497,6 +522,7 @@ final class BalancePresentationSettings {
     headerPartitionHeightPercent,
     headerGlassConfiguration,
     monthCombinedCardPresentation,
+    monthLayoutPresentation,
     yearLayoutPresentation,
     yearBarPresentation,
     alternativeMotherCardVisible,
@@ -695,6 +721,15 @@ final class BalancePresentationController
     if (current.monthCombinedCardPresentation == next) return;
     value = current.copyWith(
       monthCombinedCardPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setMonthLayoutPresentation(BalanceMonthLayoutPresentation next) {
+    final current = value;
+    if (current.monthLayoutPresentation == next) return;
+    value = current.copyWith(
+      monthLayoutPresentation: next,
       revision: current.revision + 1,
     );
   }

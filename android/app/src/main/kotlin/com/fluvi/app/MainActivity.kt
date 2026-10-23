@@ -264,6 +264,7 @@ class MainActivity : FlutterActivity() {
                             "showDayContentViewChooser" to preferences.getBoolean("showDayContentViewChooser", false),
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
                             "balanceHeaderGraphPresentation" to preferences.getInt("balanceHeaderGraphPresentation", 1),
+                            "balanceMonthLayoutPresentation" to preferences.getInt("balanceMonthLayoutPresentation", 0),
                             "balanceYearLayoutPresentation" to preferences.getInt("balanceYearLayoutPresentation", 0),
                             "balanceDailyCalculationMode" to preferences.getInt("balanceDailyCalculationMode", 0),
                             "balanceMonthlySpendingChartPresentation" to preferences.getInt("balanceMonthlySpendingChartPresentation", 0),
@@ -290,7 +291,9 @@ class MainActivity : FlutterActivity() {
                             ?: throw IllegalArgumentException("Missing Day view chooser visibility.")
                         val balanceChildren = values["balanceUsesChildCards"] as? Boolean
                             ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
+                        val balanceMonthLayoutPresentation = (values["balanceMonthLayoutPresentation"] as? Number)?.toInt() ?: 0
                         val balanceYearLayoutPresentation = (values["balanceYearLayoutPresentation"] as? Number)?.toInt() ?: 0
+                        require(balanceMonthLayoutPresentation in 0..1) { "Invalid Balance month layout presentation." }
                         require(balanceYearLayoutPresentation in 0..1) { "Invalid Balance year layout presentation." }
                         val balanceDailyCalculationMode = (values["balanceDailyCalculationMode"] as? Number)?.toInt() ?: 0
                         require(balanceDailyCalculationMode in 0..1) { "Invalid Balance daily calculation mode." }
@@ -316,6 +319,7 @@ class MainActivity : FlutterActivity() {
                             .putInt("yearMonthlyAmountPresentation", yearMonthlyAmountPresentation)
                             .putBoolean("showDayContentViewChooser", showDayContentViewChooser)
                             .putBoolean("balanceUsesChildCards", balanceChildren)
+                            .putInt("balanceMonthLayoutPresentation", balanceMonthLayoutPresentation)
                             .putInt("balanceYearLayoutPresentation", balanceYearLayoutPresentation)
                             .putInt("balanceDailyCalculationMode", balanceDailyCalculationMode)
                             .putInt("balanceHeaderGraphPresentation", balanceHeaderGraphPresentation)

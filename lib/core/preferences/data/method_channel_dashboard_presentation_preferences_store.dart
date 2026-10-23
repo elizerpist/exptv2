@@ -56,6 +56,11 @@ final class MethodChannelDashboardPresentationPreferencesStore
             : MindYearMonthlyAmountPresentation.hidden,
         showDayContentViewChooser:
             values['showDayContentViewChooser'] as bool? ?? false,
+        balanceMonthLayoutPresentation: _enumValue(
+          BalanceMonthLayoutPresentation.values,
+          values['balanceMonthLayoutPresentation'] as int?,
+          BalanceMonthLayoutPresentation.current,
+        ),
         balanceYearLayoutPresentation: _enumValue(
           BalanceYearLayoutPresentation.values,
           values['balanceYearLayoutPresentation'] as int?,
@@ -109,6 +114,8 @@ final class MethodChannelDashboardPresentationPreferencesStore
           'yearMonthlyAmountPresentation':
               preferences.yearMonthlyAmountPresentation.index,
           'showDayContentViewChooser': preferences.showDayContentViewChooser,
+          'balanceMonthLayoutPresentation':
+              preferences.balanceMonthLayoutPresentation.index,
           'balanceYearLayoutPresentation':
               preferences.balanceYearLayoutPresentation.index,
           'balanceDailyCalculationMode':

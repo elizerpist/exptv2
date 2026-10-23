@@ -10,6 +10,7 @@ import 'dashboard_balance_daily_insights_projection.dart';
 import 'dashboard_balance_category_movers_projection.dart';
 import 'dashboard_balance_entity_insights_projection.dart';
 import 'dashboard_balance_primary_identity.dart';
+import 'dashboard_balance_month_spending_level_projection.dart';
 import 'dashboard_balance_retention_stability_projection.dart';
 
 export 'dashboard_balance_primary_identity.dart';
@@ -159,6 +160,7 @@ final class DashboardBalanceLinkedPresentation {
     required this.selectedDirection,
     required this.cashflow,
     this.logicalAsOfDate,
+    this.spendingLevel,
     DashboardBalanceClosingsPresentation? closings,
     DashboardBalanceMomentumPresentation? momentum,
     DashboardBalanceDailyInsightsPresentation? dailyInsights,
@@ -231,6 +233,7 @@ final class DashboardBalanceLinkedPresentation {
   final LedgerDirection selectedDirection;
   final DashboardBalancePrimaryPresentation cashflow;
   final LocalDate? logicalAsOfDate;
+  final DashboardBalanceMonthSpendingLevelPresentation? spendingLevel;
   final DashboardBalanceClosingsPresentation closings;
   final DashboardBalanceMomentumPresentation momentum;
   final DashboardBalanceDailyInsightsPresentation dailyInsights;
@@ -246,7 +249,8 @@ final class DashboardBalanceLinkedPresentation {
     identity,
     timeScope.canonicalKey,
     selectedDirection,
-    if (timeScope is YearScope) logicalAsOfDate,
+    if (timeScope is YearScope || timeScope is MonthScope) logicalAsOfDate,
+    if (timeScope is MonthScope) spendingLevel?.presentationId,
     cashflow.presentationId,
     closings.presentationId,
     momentum.presentationId,
@@ -555,6 +559,15 @@ abstract final class DashboardBalanceLinkedProjection {
     );
     return DashboardBalanceLinkedPresentation(
       logicalAsOfDate: logicalAsOfDate,
+      spendingLevel: timeScope is MonthScope
+          ? DashboardBalanceMonthSpendingLevelProjection.build(
+              identity: identity,
+              timeScope: timeScope,
+              incomeEntries: incomeEntries,
+              expenseEntries: expenseEntries,
+              logicalAsOfDate: logicalAsOfDate,
+            )
+          : null,
       identity: identity,
       timeScope: timeScope,
       selectedDirection: selectedDirection,
