@@ -404,12 +404,15 @@ final class _BalanceDashboardCoreSurfaceState
         _boundSettings?.value ?? const BalancePresentationSettings.defaults();
     final previous = _lastObservedSettings;
     _lastObservedSettings = settings;
-    // Header calculation and SUM content choices have dedicated listeners.
+    // Header calculation and focused content choices have dedicated listeners.
     // Their preferences must not reconstruct the Balance shell or republish
     // financial data; only the corresponding presentation subtree changes.
     if (previous != null &&
         settings.copyWith(
               dailyCalculationMode: previous.dailyCalculationMode,
+              dayLayoutPresentation: previous.dayLayoutPresentation,
+              dayFocusedPresentation: previous.dayFocusedPresentation,
+              showFocusedDayImpact: previous.showFocusedDayImpact,
               sumLayoutPresentation: previous.sumLayoutPresentation,
               sumFocusedPresentation: previous.sumFocusedPresentation,
               showSumFocusedSupplementaryStats:
@@ -1115,6 +1118,12 @@ class _BalanceAlternativeScopeScaffoldState
                   ? _BalanceDayFocusedScaffold(
                       geometry: geometry,
                       presentation: alternative,
+                      onFocusedPresentationChanged:
+                          presentationSettings is BalancePresentationController
+                          ? (presentationSettings
+                                    as BalancePresentationController)
+                                .setDayFocusedPresentation
+                          : null,
                       focusedPresentation: settings.dayFocusedPresentation,
                       showFocusedDayImpact: settings.showFocusedDayImpact,
                       navigation: dayRhythmNavigation,
@@ -1447,12 +1456,15 @@ final class _BalanceDayFocusedScaffold extends StatelessWidget {
     required this.focusedPresentation,
     required this.showFocusedDayImpact,
     this.navigation,
+    this.onFocusedPresentationChanged,
   });
   final DashboardLayoutFrame geometry;
   final BalanceAlternativeDayPresentation presentation;
   final BalanceDayFocusedPresentation focusedPresentation;
   final bool showFocusedDayImpact;
   final DashboardDayRhythmNavigation? navigation;
+  final ValueChanged<BalanceDayFocusedPresentation>?
+  onFocusedPresentationChanged;
   @override
   Widget build(BuildContext context) => DashboardCoreModeFramePosition(
     bounds: DashboardHeaderContentMotherCardBounds.resolve(geometry: geometry),
@@ -1466,6 +1478,7 @@ final class _BalanceDayFocusedScaffold extends StatelessWidget {
               focusedPresentation: focusedPresentation,
               showFocusedDayImpact: showFocusedDayImpact,
               navigation: navigation,
+              onFocusedPresentationChanged: onFocusedPresentationChanged,
             ),
           ),
         ],

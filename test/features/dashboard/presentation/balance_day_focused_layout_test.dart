@@ -24,6 +24,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_focused_layout.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_day_cards.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_year_focused_layout.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_sum_focused_layout.dart';
 
 void main() {
   final originalComparator = goldenFileComparator;
@@ -90,9 +91,45 @@ void main() {
       final rail = tester.getRect(
         find.byKey(const ValueKey('balance-day-focused-top-section')),
       );
+      final railState = tester.state(
+        find.byKey(const ValueKey('balance-day-momentum-rail')),
+      );
+      final bottom = tester.getRect(
+        find.byKey(const ValueKey('balance-day-focused-bottom-section')),
+      );
       for (final p in BalanceDayFocusedPresentation.values) {
-        settings.setDayFocusedPresentation(p);
+        await tester.tap(
+          find.byKey(ValueKey('balance-day-perspective-${p.name}')),
+        );
         await tester.pump();
+        expect(settings.value.dayFocusedPresentation, p);
+        expect(
+          tester.state(find.byKey(const ValueKey('balance-day-momentum-rail'))),
+          same(railState),
+        );
+        expect(
+          tester.getRect(
+            find.byKey(const ValueKey('balance-day-focused-bottom-section')),
+          ),
+          bottom,
+        );
+        final selected = tester.getRect(
+          find.byKey(ValueKey('balance-day-perspective-${p.name}')),
+        );
+        expect(selected.center.dx, closeTo(rail.center.dx, .001));
+        final side = BalanceDayFocusedPresentation.values.firstWhere(
+          (item) => item != p,
+        );
+        expect(
+          selected.width,
+          greaterThan(
+            tester
+                .getSize(
+                  find.byKey(ValueKey('balance-day-perspective-${side.name}')),
+                )
+                .width,
+          ),
+        );
         expect(find.byType(BalanceDayFocusedLayout), findsOneWidget);
         expect(
           find.byType(BalanceAlternativeDailyMomentumCoordinateCard),
@@ -170,15 +207,31 @@ void main() {
                 : 'balance-day-comparison-panels',
           ),
         );
-        final on = tester.getSize(target);
+        final on = tester.getRect(target).size;
         final rail = tester.getRect(
           find.byKey(const ValueKey('balance-day-focused-top-section')),
         );
+        final bottom = tester.getRect(
+          find.byKey(const ValueKey('balance-day-focused-bottom-section')),
+        );
+        final railState = tester.state(
+          find.byKey(const ValueKey('balance-day-momentum-rail')),
+        );
         settings.setShowFocusedDayImpact(false);
         await tester.pump();
-        expect(tester.getSize(target).height, greaterThan(on.height));
+        expect(
+          tester.getRect(
+            find.byKey(const ValueKey('balance-day-focused-bottom-section')),
+          ),
+          bottom,
+        );
+        expect(
+          tester.state(find.byKey(const ValueKey('balance-day-momentum-rail'))),
+          same(railState),
+        );
+        expect(tester.getRect(target).height, greaterThan(on.height));
         if (p == BalanceDayFocusedPresentation.financialCompass) {
-          expect(tester.getSize(target).width, greaterThan(on.width));
+          expect(tester.getRect(target).width, greaterThan(on.width));
         }
         expect(
           tester.getRect(
@@ -198,7 +251,7 @@ void main() {
 
   for (final size in [const Size(320, 300), const Size(390, 360)]) {
     testWidgets(
-      'rendered Day rail equals Year and Month selector allocations at $size',
+      'rendered Day selector equals SUM, Year and Month allocations at $size',
       (tester) async {
         Future<void> pump(Widget child) async {
           await tester.pumpWidget(
@@ -233,6 +286,29 @@ void main() {
           find.byKey(const ValueKey('balance-day-focused-top-section')),
         );
         expect(dayRect.height, closeTo(size.height * .21, .001));
+        final bottomRect = tester.getRect(
+          find.byKey(const ValueKey('balance-day-focused-bottom-section')),
+        );
+        expect(bottomRect.height, inInclusiveRange(60.0, 80.0));
+        expect(bottomRect.bottom, closeTo(size.height, .001));
+        final sumSource =
+            BalanceAlternativeScopePresentation.fromLinked(
+                  _linked(const AllTimeScope()),
+                )
+                as BalanceAlternativeSumPresentation;
+        await pump(
+          BalanceSumFocusedLayout(
+            presentation: sumSource,
+            perspective: BalanceSumFocusedPresentation.distribution,
+            showSupplementaryStats: true,
+          ),
+        );
+        final sumRect = tester.getRect(
+          find.byKey(const ValueKey('balance-sum-focused-selector-zone')),
+        );
+        expect(dayRect.top, sumRect.top);
+        expect(dayRect.height, sumRect.height);
+
         final yearSource =
             BalanceAlternativeScopePresentation.fromLinked(
                   _linked(const YearScope(2025)),
@@ -317,6 +393,43 @@ void main() {
       },
     );
   }
+
+  testWidgets('avatar selection is controlled by the supplied settings owner', (
+    tester,
+  ) async {
+    BalanceDayFocusedPresentation? requested;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'Inter'),
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 360,
+            child: BalanceDayFocusedLayout(
+              presentation: _linked(_day).dailyInsights,
+              focusedPresentation:
+                  BalanceDayFocusedPresentation.financialCompass,
+              showFocusedDayImpact: true,
+              onFocusedPresentationChanged: (p) => requested = p,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('balance-day-perspective-financialComparison')),
+    );
+    await tester.pump();
+    expect(requested, BalanceDayFocusedPresentation.financialComparison);
+    expect(
+      tester
+          .widget<BalanceDayFocusedLayout>(find.byType(BalanceDayFocusedLayout))
+          .focusedPresentation,
+      BalanceDayFocusedPresentation.financialCompass,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('all focused variants fit small physical content bounds', (
     tester,

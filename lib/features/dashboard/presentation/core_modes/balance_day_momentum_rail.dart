@@ -4,6 +4,7 @@ import '../../../../core/design/fluvi_year_clay_capsule_painter.dart';
 import '../../application/dashboard_balance_daily_insights_projection.dart';
 import '../../time_navigation/domain/local_date.dart';
 import '../../time_navigation/application/dashboard_time_navigation_controller.dart';
+import '../../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../dashboard_day_rhythm_navigation.dart';
 import '../dashboard_summary_presentation.dart';
 import '../widgets/dashboard_temporal_component_carousel.dart';
@@ -16,56 +17,56 @@ final class BalanceDayMomentumRail extends StatefulWidget {
     super.key,
     required this.presentation,
     this.navigation,
+    this.compact = false,
   });
   final DashboardBalanceDailyInsightsPresentation presentation;
   final DashboardDayRhythmNavigation? navigation;
+  final bool compact;
   @override
   State<BalanceDayMomentumRail> createState() => _BalanceDayMomentumRailState();
 }
 
 class _BalanceDayMomentumRailState extends State<BalanceDayMomentumRail> {
-  final Map<int, DashboardBalanceDailyMomentumPoint> _points = {};
-  List<DashboardBalanceDailyMomentumPoint> _paintPoints = const [];
+  late BalanceDayMomentumRailWindowController _window;
   @override
   void initState() {
     super.initState();
-    _install();
+    _window = BalanceDayMomentumRailWindowController(widget.presentation);
   }
 
   @override
   void didUpdateWidget(covariant BalanceDayMomentumRail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.presentation.identity != widget.presentation.identity) {
-      _points.clear();
+      _window = BalanceDayMomentumRailWindowController(widget.presentation);
     }
-    if (oldWidget.presentation.presentationId !=
-        widget.presentation.presentationId) {
-      _install();
-    }
-  }
-
-  void _install() {
-    for (final point in widget.presentation.momentum.rhythm) {
-      _points[point.epochDay] = point;
-    }
-    final selected = widget.presentation.momentum.selected.epochDay;
-    _points.removeWhere(
-      (day, _) => day < selected - 125 || day > selected + 65,
-    );
-    _paintPoints = List.unmodifiable(_points.values);
   }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, c) {
       final n = widget.navigation;
-      Widget visual(int origin, double offset) => _RailVisual(
-        points: _paintPoints,
-        originEpochDay: origin,
-        rawOffset: offset,
-      );
+      Widget visual(BalanceDayMomentumRailVisualWindow window) =>
+          AnimatedSwitcher(
+            duration: window.wrapReplacement
+                ? const Duration(milliseconds: 120)
+                : Duration.zero,
+            child: _RailVisual(
+              key: ValueKey(window.originEpochDay),
+              points: window.points,
+              compact: widget.compact,
+              originEpochDay: window.originEpochDay,
+              rawOffset: window.rawOffset,
+            ),
+          );
       if (n == null) {
-        return visual(widget.presentation.momentum.selected.epochDay, 0);
+        return visual(
+          BalanceDayMomentumRailVisualWindow(
+            points: widget.presentation.momentum.rhythm,
+            originEpochDay: widget.presentation.momentum.selected.epochDay,
+            rawOffset: 0,
+          ),
+        );
       }
       return DashboardTemporalComponentCarousel(
         key: const ValueKey('balance-day-rhythm-carousel'),
@@ -82,7 +83,8 @@ class _BalanceDayMomentumRailState extends State<BalanceDayMomentumRail> {
         presentation: SummaryTemporalFlingPresentation.dynamicTrio,
         component: DashboardTemporalAnchorComponent.day,
         scrollDirection: Axis.horizontal,
-        itemExtent: c.maxWidth / 60,
+        itemExtent: n.interactionExtent,
+        motionSource: DashboardTemporalMotionSource.balanceRhythm,
         visibleItemCount: 61,
         onMotionActiveChanged: n.onMotionActiveChanged,
         onDirectInputStarted: n.onDirectInputStarted,
@@ -91,18 +93,23 @@ class _BalanceDayMomentumRailState extends State<BalanceDayMomentumRail> {
         coordinator: n.coordinator,
         releaseMotionOnDispose: true,
         visualBuilder: (context, state) {
-          // Use the SAME availability/wrapping rule as Summary. A calendar
-          // epoch plus an unbounded offset would show the wrong month at wrap.
-          final tick = state.rawIndex.round();
-          final target =
-              n.candidateForOffset(state.origin, tick) ?? state.origin;
+          int epoch(DashboardNavigationState state) => LocalDate(
+            year: state.yearCursor,
+            month: state.monthCursor.month,
+            day: state.dayCursor,
+          ).epochDay;
+          final motion = n.coordinator?.dayVisualMotion;
           return visual(
-            LocalDate(
-              year: target.yearCursor,
-              month: target.monthCursor.month,
-              day: target.dayCursor,
-            ).epochDay,
-            state.rawIndex - tick,
+            _window.resolve(
+              presentation: widget.presentation,
+              originEpochDay: epoch(state.origin),
+              rawOffset: state.rawIndex,
+              isMoving: state.isMoving,
+              generation: motion?.generation ?? n.coordinator?.motionEpoch ?? 0,
+              acceptedEpochDay: motion?.acceptedTarget == null
+                  ? null
+                  : epoch(motion!.acceptedTarget!),
+            ),
           );
         },
       );
@@ -110,72 +117,179 @@ class _BalanceDayMomentumRailState extends State<BalanceDayMomentumRail> {
   );
 }
 
-class _RailVisual extends StatelessWidget {
-  const _RailVisual({
+/// One coherent prepared window and its purely physical placement.
+@immutable
+final class BalanceDayMomentumRailVisualWindow {
+  const BalanceDayMomentumRailVisualWindow({
     required this.points,
     required this.originEpochDay,
     required this.rawOffset,
+    this.wrapReplacement = false,
   });
+  final bool wrapReplacement;
+  final List<DashboardBalanceDailyMomentumPoint> points;
+  final int originEpochDay;
+  final double rawOffset;
+}
+
+/// Retains paint continuity without calculating or merging financial values.
+/// A cyclic semantic day jump never becomes an epoch-distance animation.
+final class BalanceDayMomentumRailWindowController {
+  BalanceDayMomentumRailWindowController(
+    DashboardBalanceDailyInsightsPresentation initial,
+  ) : _visual = BalanceDayMomentumRailVisualWindow(
+        points: initial.momentum.rhythm,
+        originEpochDay: initial.momentum.selected.epochDay,
+        rawOffset: 0,
+      );
+  BalanceDayMomentumRailVisualWindow _visual;
+  int _generation = -1;
+  bool _inFlight = false;
+  bool _preempted = false;
+  double _flightBaseOffset = 0;
+  BalanceDayMomentumRailVisualWindow resolve({
+    required DashboardBalanceDailyInsightsPresentation presentation,
+    required int originEpochDay,
+    required double rawOffset,
+    required bool isMoving,
+    required int generation,
+    int? acceptedEpochDay,
+  }) {
+    if (generation < _generation) {
+      return _visual;
+    }
+    if (!isMoving && generation > _generation && _inFlight) {
+      _generation = generation;
+      _preempted = true;
+    }
+    if (_preempted && !isMoving) {
+      // An exact external month/day navigation may replace the scene after
+      // preempting this lane; a cleared old pointer cannot do so by itself.
+      if (presentation.momentum.selected.epochDay != originEpochDay) {
+        return _visual;
+      }
+      _preempted = false;
+      _inFlight = false;
+    }
+    if (isMoving) {
+      final wasPreempted = _preempted;
+      _preempted = false;
+      if (!_inFlight || generation != _generation || wasPreempted) {
+        // Preserve the currently painted exact window on a new pointer too.
+        _generation = generation;
+        _flightBaseOffset = _visual.rawOffset.roundToDouble();
+        _inFlight = true;
+      }
+      final nextRawOffset = _flightBaseOffset + rawOffset;
+      final contiguousTarget = _visual.originEpochDay + nextRawOffset.round();
+      // A ready contiguous target supplies its entire coherent prepared
+      // window, including genuinely entering days. Cyclic/deferred targets
+      // retain the old window until the exact idle handoff.
+      final points = presentation.momentum.selected.epochDay == contiguousTarget
+          ? presentation.momentum.rhythm
+          : _visual.points;
+      _visual = BalanceDayMomentumRailVisualWindow(
+        points: points,
+        originEpochDay: _visual.originEpochDay,
+        rawOffset: nextRawOffset,
+      );
+      return _visual;
+    }
+    _generation = generation;
+    final target = acceptedEpochDay ?? originEpochDay;
+    if (presentation.momentum.selected.epochDay == target) {
+      if (target == _visual.originEpochDay &&
+          _visual.rawOffset == 0 &&
+          identical(presentation.momentum.rhythm, _visual.points)) {
+        return _visual;
+      }
+      _visual = BalanceDayMomentumRailVisualWindow(
+        points: presentation.momentum.rhythm,
+        originEpochDay: target,
+        rawOffset: 0,
+        wrapReplacement:
+            _inFlight &&
+            (target - (_visual.originEpochDay + _visual.rawOffset.round()))
+                    .abs() >
+                1,
+      );
+      _inFlight = false;
+    }
+    // A cold/rejected target leaves the last complete window in place.
+    return _visual;
+  }
+}
+
+class _RailVisual extends StatelessWidget {
+  const _RailVisual({
+    super.key,
+    required this.points,
+    required this.originEpochDay,
+    required this.rawOffset,
+    this.compact = false,
+  });
+  final bool compact;
   final List<DashboardBalanceDailyMomentumPoint> points;
   final int originEpochDay;
   final double rawOffset;
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      Row(
-        children: [
-          Container(
-            width: 21,
-            height: 21,
-            decoration: BoxDecoration(
-              color: const Color(0xfff4f4fc),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.bar_chart_rounded,
-              size: 15,
-              color: Color(0xff9794bb),
-            ),
-          ),
-          const SizedBox(width: 5),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pénzügyi momentum',
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xff111d52),
-                  ),
-                ),
-                Text(
-                  'Az elmúlt 60 nap változásai',
-                  maxLines: 1,
-                  style: TextStyle(fontSize: 7, color: Color(0xff52618c)),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-            decoration: BoxDecoration(
-              color: const Color(0xfff5f5fc),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Text(
-              'Napi nézet',
-              style: TextStyle(
-                fontSize: 8,
-                fontWeight: FontWeight.w700,
-                color: Color(0xff273b69),
+      if (!compact)
+        Row(
+          children: [
+            Container(
+              width: 21,
+              height: 21,
+              decoration: BoxDecoration(
+                color: const Color(0xfff4f4fc),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.bar_chart_rounded,
+                size: 15,
+                color: Color(0xff9794bb),
               ),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(width: 5),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pénzügyi momentum',
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xff111d52),
+                    ),
+                  ),
+                  Text(
+                    'Az elmúlt 60 nap változásai',
+                    maxLines: 1,
+                    style: TextStyle(fontSize: 7, color: Color(0xff52618c)),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xfff5f5fc),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Napi nézet',
+                style: TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xff273b69),
+                ),
+              ),
+            ),
+          ],
+        ),
       Expanded(
         child: RepaintBoundary(
           child: CustomPaint(

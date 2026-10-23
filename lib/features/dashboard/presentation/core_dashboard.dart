@@ -852,6 +852,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryAutoResetMotions.cancelActiveResetMotion();
     _summaryAutoResetController.dispose();
     _upperVerticalGestures.cancel();
+    _temporalCarouselCoordinator.dispose();
     controller.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
     controller.setMotionLaneActive(DashboardMotionLane.summaryText, false);
     controller.visibleFrames.removeListener(_onBudgetDistributionVisibleFrame);
@@ -2134,6 +2135,7 @@ class _CoreDashboardState extends State<CoreDashboard>
       DashboardDayRhythmNavigation(
         navigation: controller.navigation,
         coordinator: _temporalCarouselCoordinator,
+        interactionExtent: controller.metrics.summaryHeight,
         candidateForOffset: (origin, offset) =>
             controller.experimentalTemporalComponentOffsetCandidate(
               plane: origin.plane,

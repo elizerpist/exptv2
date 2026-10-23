@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../../core/design/dashboard_layout_metrics.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/application/dashboard_segmented_target_acceptance.dart';
@@ -21,7 +22,11 @@ final class DashboardDayRhythmNavigation {
     this.onPointerDownDecision,
     this.motionDiagnostics,
     this.coordinator,
-  });
+    double? interactionExtent,
+  }) : _interactionExtent = interactionExtent;
+  final double? _interactionExtent;
+  double get interactionExtent =>
+      _interactionExtent ?? DashboardLayoutMetrics.reference.summaryHeight;
   final DashboardNavigationController navigation;
   final DashboardNavigationState? Function(
     DashboardNavigationState origin,

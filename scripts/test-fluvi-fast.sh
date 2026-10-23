@@ -8,6 +8,8 @@ flutter test \
   test/features/dashboard/presentation/balance_day_focused_layout_test.dart \
   test/features/dashboard/presentation/balance_day_focused_visuals_test.dart \
   test/features/dashboard/presentation/balance_day_momentum_rail_test.dart \
+  test/features/dashboard/presentation/balance_day_momentum_rail_geometry_test.dart \
+  test/features/dashboard/presentation/balance_day_visual_motion_sync_test.dart \
   test/features/dashboard/presentation/dashboard_temporal_component_carousel_test.dart \
   test/features/dashboard/presentation/summary_pill_experiments_widget_test.dart \
   test/features/dashboard/application/dashboard_balance_daily_insights_projection_test.dart \

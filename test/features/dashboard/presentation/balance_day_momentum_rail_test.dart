@@ -143,7 +143,8 @@ void main() {
       final gesture = await tester.startGesture(tester.getCenter(rail));
       await gesture.moveBy(const Offset(-25, 0));
       await frames(tester, 1);
-      final pitch = tester.getSize(rail).width / 60;
+      final carousel = tester.widget<DashboardTemporalComponentCarousel>(rail);
+      final pitch = carousel.itemExtent ?? carousel.height;
       await gesture.moveBy(Offset(-1.25 * pitch, 0));
       await frames(tester, 2);
       expect(painter(tester).rawOffset, isNot(0));
