@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +9,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_present
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
 
 import 'balance_day_ratio_comparison_test.dart' show source;
+import '../../../support/single_pixel_raster_comparator.dart';
 
 const gaugeKey = ValueKey('balance-day-performance-index-gauge');
 const capture = ValueKey('performance-capture');
@@ -46,6 +48,16 @@ Future<void> pumpPerformance(
 );
 
 void main() {
+  final originalComparator = goldenFileComparator;
+  setUpAll(() {
+    goldenFileComparator = SinglePixelRasterComparator(
+      Uri.file(
+        '${Directory.current.path}/test/features/dashboard/presentation/balance_day_performance_index_view_test.dart',
+      ),
+      goldenFilename: 'balance_day_performance_index_above_100.png',
+    );
+  });
+  tearDownAll(() => goldenFileComparator = originalComparator);
   setUpAll(() async {
     await (FontLoader(
       'Inter',
