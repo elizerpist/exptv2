@@ -7,7 +7,8 @@ import '../../prepared/data/dashboard_prepared_formatter.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_focused_layout_geometry.dart';
 import 'balance_month_focused_chart_presentation.dart';
-import 'balance_month_spending_level_gauge.dart';
+import 'balance_month_net_margin_gauge.dart';
+import 'balance_month_net_margin_presentation.dart';
 import 'budget_clay_semicircle_gauge.dart';
 
 enum BalanceMonthPerspective {
@@ -18,12 +19,12 @@ enum BalanceMonthPerspective {
   String get label => switch (this) {
     balanceTrend => 'Egyenleg alakulása',
     swings => 'Kilengések',
-    spendingLevel => 'Kiadási szint',
+    spendingLevel => 'Havi nettóarány',
   };
   String get subtitle => switch (this) {
     balanceTrend => 'A havi nettó eredmény felhalmozódása',
     swings => 'A hónap legnagyobb napi elmozdulásai',
-    spendingLevel => 'Összevetés a korábbi hónapok tipikus kiadásával',
+    spendingLevel => 'A havi bevétel mekkora része maradt meg?',
   };
   IconData get icon => switch (this) {
     balanceTrend => Icons.show_chart_rounded,
@@ -52,6 +53,7 @@ final class BalanceMonthFocusedLayout extends StatefulWidget {
 class _BalanceMonthFocusedLayoutState extends State<BalanceMonthFocusedLayout> {
   late BalanceMonthPerspective _perspective;
   BalanceMonthFocusedChartPresentation? _chart;
+  BalanceMonthNetMarginPresentation? _netMargin;
   @override
   void initState() {
     super.initState();
@@ -76,15 +78,21 @@ class _BalanceMonthFocusedLayoutState extends State<BalanceMonthFocusedLayout> {
         ? null
         : BalanceMonthFocusedChartPresentation.fromPrimary(
             primary,
-            spendingLevel: source.spendingLevel,
             logicalAsOfDate: source.logicalAsOfDate,
           );
+    _netMargin = _chart == null
+        ? null
+        : BalanceMonthNetMarginPresentation.fromChart(_chart!);
   }
 
   @override
   Widget build(BuildContext context) {
     final chart = _chart;
-    if (chart == null) return const SizedBox.shrink();
+    if (chart == null) {
+      return _perspective == BalanceMonthPerspective.spendingLevel
+          ? const Center(child: Text('Nincs hiteles havi adat'))
+          : const SizedBox.shrink();
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final selectorHeight = BalanceFocusedLayoutGeometry.topSectionHeight(
@@ -131,16 +139,7 @@ class _BalanceMonthFocusedLayoutState extends State<BalanceMonthFocusedLayout> {
                 child: RepaintBoundary(
                   key: ValueKey('balance-month-chart-${_perspective.name}'),
                   child: _perspective == BalanceMonthPerspective.spendingLevel
-                      ? chart.spendingLevel == null
-                            ? const Center(
-                                child: Text(
-                                  'Még nincs összehasonlítható előzmény',
-                                  textAlign: TextAlign.center,
-                                ),
-                              )
-                            : BalanceMonthSpendingLevelGauge(
-                                presentation: chart.spendingLevel!,
-                              )
+                      ? BalanceMonthNetMarginGauge(presentation: _netMargin!)
                       : CustomPaint(
                           painter: BalanceMonthFocusedChartPainter(
                             presentation: chart,
@@ -179,10 +178,7 @@ class _BalanceMonthFocusedLayoutState extends State<BalanceMonthFocusedLayout> {
       'Legmélyebb: ${_amount(c.minimumNetMinor)}   ·   Legmagasabb: ${_amount(c.maximumNetMinor)}',
     BalanceMonthPerspective.swings =>
       'Legnagyobb plusz: ${_amount(math.max(0, c.bestDay?.netMinor ?? 0))}   ·   Mínusz: ${_amount(math.min(0, c.worstDay?.netMinor ?? 0))}',
-    BalanceMonthPerspective.spendingLevel =>
-      c.spendingLevel?.referenceExpenseTimesTwo == null
-          ? 'Három összehasonlítható lezárt hónap szükséges'
-          : 'Referencia: ${_amount(c.spendingLevel!.referenceExpenseTimesTwo! / 2)}   ·   Eltérés: ${_amount(c.spendingLevel!.currentExpenseMinor - c.spendingLevel!.referenceExpenseTimesTwo! / 2)}',
+    BalanceMonthPerspective.spendingLevel => _netMargin!.netLabel,
   };
   Widget _selector(double height) {
     final i = _perspective.index;

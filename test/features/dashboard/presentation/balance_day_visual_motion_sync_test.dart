@@ -23,6 +23,8 @@ import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_momentum_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_focused_visuals.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_ratio_comparison.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_month_focused_layout.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_month_net_margin_gauge.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_performance_index_view.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
@@ -203,6 +205,64 @@ void main() {
   });
 
   tearDownAll(() => goldenFileComparator = originalComparator);
+
+  testWidgets('Month net margin follows accepted Summary month changes', (
+    tester,
+  ) async {
+    final core = await _setup(tester, richData: true, bookedMinute: 0);
+    final settings = tester
+        .widget<DashboardHeaderVisualTuner>(
+          find.byType(DashboardHeaderVisualTuner),
+        )
+        .balancePresentationSettings!;
+    settings.setMonthLayoutPresentation(BalanceMonthLayoutPresentation.focused);
+    core.setRailOpen(false);
+    await _settled(tester);
+    expect(find.byType(BalanceMonthFocusedLayout), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('balance-month-perspective-spendingLevel')),
+    );
+    await _frames(tester, 3);
+    const key = ValueKey('balance-month-net-margin-gauge');
+    final state = tester.state(find.byKey(key));
+    final before = core.navigation.state.navigationEpoch;
+    await tester.fling(
+      find.byKey(const ValueKey('summary-pill-segmented-month-selector')),
+      const Offset(0, -75),
+      800,
+    );
+    await _settled(tester);
+    expect(core.navigation.state.navigationEpoch, greaterThan(before));
+    expect(tester.state(find.byKey(key)), same(state));
+    final layout = tester.widget<BalanceMonthFocusedLayout>(
+      find.byType(BalanceMonthFocusedLayout),
+    );
+    final gauge = tester.widget<BalanceMonthNetMarginGauge>(
+      find.byType(BalanceMonthNetMarginGauge),
+    );
+    final monthScope = layout.presentation.timeScope as MonthScope;
+    final anchor = core.navigation.state.temporalAnchor;
+    expect(monthScope.value.month, anchor.visibleMonth);
+    expect(monthScope.value.year, anchor.visibleYear);
+    final asOf = layout.presentation.logicalAsOfDate!;
+    if (monthScope.value.year * 12 + monthScope.value.month <
+        asOf.year * 12 + asOf.month) {
+      expect(
+        gauge.presentation.incomeMinor,
+        layout.presentation.primary!.incomeTotalMinor,
+      );
+      expect(
+        gauge.presentation.expenseMinor,
+        layout.presentation.primary!.expenseTotalMinor,
+      );
+    }
+    expect(
+      gauge.presentation.netMinor,
+      gauge.presentation.incomeMinor - gauge.presentation.expenseMinor,
+    );
+    expect(tester.takeException(), isNull);
+    await _unmount(tester);
+  });
 
   for (final fromRail in [false, true]) {
     testWidgets(

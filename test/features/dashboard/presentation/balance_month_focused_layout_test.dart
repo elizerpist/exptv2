@@ -14,7 +14,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alterna
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_month_focused_layout.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/balance_month_spending_level_gauge.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_month_net_margin_gauge.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -76,10 +76,16 @@ void main() {
         final chart = find.byKey(ValueKey('balance-month-chart-${p.name}'));
         expect(chart, findsOneWidget);
         chartRect ??= tester.getRect(chart);
-        expect(tester.getRect(chart), chartRect);
+        final rendered = tester.getRect(chart);
+        // Text layout can change sub-ulp rounding while the physical frame is
+        // identical; preserve a tolerance far below any display pixel.
+        expect(rendered.left, closeTo(chartRect.left, 1e-9));
+        expect(rendered.top, closeTo(chartRect.top, 1e-9));
+        expect(rendered.right, closeTo(chartRect.right, 1e-9));
+        expect(rendered.bottom, closeTo(chartRect.bottom, 1e-9));
         expect(find.text(p.subtitle), findsOneWidget);
         if (p == BalanceMonthPerspective.spendingLevel) {
-          expect(find.byType(BalanceMonthSpendingLevelGauge), findsOneWidget);
+          expect(find.byType(BalanceMonthNetMarginGauge), findsOneWidget);
         } else {
           final paint = tester.widget<CustomPaint>(
             find

@@ -21,6 +21,7 @@ flutter test \
   test/features/dashboard/presentation/summary_pill_experiments_widget_test.dart \
   test/features/dashboard/application/dashboard_balance_daily_insights_projection_test.dart \
   test/features/dashboard/application/dashboard_balance_month_spending_level_projection_test.dart \
+  test/features/dashboard/presentation/balance_month_net_margin_test.dart \
   test/features/dashboard/presentation/balance_month_focused_chart_presentation_test.dart \
   test/features/dashboard/presentation/balance_month_focused_layout_test.dart \
   test/features/dashboard/presentation/balance_sum_focused_chart_presentation_test.dart \
