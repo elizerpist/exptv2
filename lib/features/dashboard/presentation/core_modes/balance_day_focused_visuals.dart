@@ -796,7 +796,11 @@ final class _PairPainter extends CustomPainter {
         h,
       );
       final material = BudgetClayActiveMaterial.forSemanticBase(
-        i == 0 ? Color.lerp(color, Colors.white, .42)! : color,
+        i == 0
+            ? (color == _green
+                  ? const Color(0xffb17af2)
+                  : Color.lerp(color, Colors.white, .42)!)
+            : color,
       );
       FluviYearClayCapsulePainter.paint(
         canvas,
