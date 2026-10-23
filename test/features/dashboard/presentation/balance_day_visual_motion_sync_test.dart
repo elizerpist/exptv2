@@ -1,3 +1,4 @@
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_daily_month_impact_ribbon.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
@@ -56,6 +57,7 @@ Future<DashboardCoreController> _setup(
   DateTime? date,
   bool richData = false,
   int bookedMinute = 720,
+  int historyDays = 120,
   DashboardPresentationPreferencesController? preferences,
   bool initializeFocused = true,
   SummaryTemporalFlingPresentation presentation =
@@ -64,7 +66,10 @@ Future<DashboardCoreController> _setup(
   final core = DashboardCoreController(
     initialCoreRevision: 1,
     dataRepository: richData
-        ? _PairedMotionRepository(bookedMinute: bookedMinute)
+        ? _PairedMotionRepository(
+            bookedMinute: bookedMinute,
+            historyDays: historyDays,
+          )
         : null,
     yearWindowRadius: richData ? 1 : 12,
     initialDate: date ?? DateTime(2026, 7, 16),
@@ -1199,6 +1204,299 @@ void main() {
     },
   );
 
+  for (final fromRail in [false, true]) {
+    testWidgets(
+      'V8 ${fromRail ? 'rhythm' : 'Summary'} synchronizes accepted monthly impact independently of 119-day momentum',
+      (tester) async {
+        final core = await _setup(
+          tester,
+          richData: true,
+          bookedMinute: 0,
+          historyDays: 16,
+        );
+        final settings = tester
+            .widget<DashboardHeaderVisualTuner>(
+              find.byType(DashboardHeaderVisualTuner),
+            )
+            .balancePresentationSettings!;
+        settings.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+        settings.setDayRatioViewPresentation(
+          BalanceDayRatioViewPresentation.performanceIndex,
+        );
+        settings.setDayPerformanceVisualPresentation(
+          BalanceDayPerformanceVisualPresentation.horizontalMeter,
+        );
+        settings.setDayFocusedPresentation(
+          BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+        );
+        await _frames(tester, 4);
+        BalanceDailyMonthImpactView view() =>
+            tester.widget<BalanceDailyMonthImpactView>(
+              find.byType(BalanceDailyMonthImpactView),
+            );
+        final financialState = tester.state(
+          find.byType(BalanceDailyMonthImpactView),
+        );
+        final railState = _adapterState(tester, _rhythmKey);
+        void coherent(
+          int day,
+          int beforeIncome,
+          int beforeExpense,
+          int afterIncome,
+          int afterExpense,
+        ) {
+          final source = view().presentation.source!;
+          final rail = tester.widget<BalanceDayMomentumRail>(
+            find.byKey(const ValueKey('balance-day-momentum-rail')),
+          );
+          expect(rail.presentation.momentum.available, isFalse);
+          expect(source, same(rail.presentation.monthImpact));
+          expect(
+            source.selectedEpochDay,
+            LocalDate(year: 2026, month: 7, day: day).epochDay,
+          );
+          expect(
+            (core.visibleFrames.value!.scope.timeScope as DayScope).date.day,
+            day,
+          );
+          expect(source.available, isTrue);
+          expect(source.incomeBeforeMinor, beforeIncome);
+          expect(source.expenseBeforeMinor, beforeExpense);
+          expect(source.incomeAfterMinor, afterIncome);
+          expect(source.expenseAfterMinor, afterExpense);
+          expect(
+            source.ratioBeforePercent,
+            closeTo((beforeIncome - beforeExpense) / beforeIncome * 100, 1e-10),
+          );
+          expect(
+            source.ratioAfterPercent,
+            closeTo((afterIncome - afterExpense) / afterIncome * 100, 1e-10),
+          );
+          expect(
+            source.dailyImpactPp,
+            closeTo(
+              source.ratioAfterPercent! - source.ratioBeforePercent!,
+              1e-10,
+            ),
+          );
+          expect(_adapterState(tester, _rhythmKey), same(railState));
+          expect(
+            settings.value.dayRatioPresentation,
+            BalanceDayRatioPresentation.netMargin,
+          );
+          expect(
+            settings.value.dayRatioViewPresentation,
+            BalanceDayRatioViewPresentation.performanceIndex,
+          );
+          expect(
+            settings.value.dayPerformanceVisualPresentation,
+            BalanceDayPerformanceVisualPresentation.horizontalMeter,
+          );
+        }
+
+        coherent(16, 4650000, 3744000, 4850000, 3894000);
+        final epoch = core.navigation.state.navigationEpoch;
+        final query = core.navigation.state.parentQueryScope.key;
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.byKey(fromRail ? _rhythmKey : _summaryKey)),
+        );
+        await gesture.moveBy(
+          fromRail ? const Offset(25, 0) : const Offset(0, 25),
+        );
+        await _frames(tester, 1);
+        final pitch = _pitch(tester);
+        await gesture.moveBy(
+          fromRail ? Offset(1.25 * pitch, 0) : Offset(0, 1.25 * pitch),
+        );
+        await _frames(tester, 1);
+        await gesture.up();
+        await _settled(tester);
+        expect(core.navigation.state.dayCursor, 15);
+        expect(core.navigation.state.navigationEpoch, epoch + 1);
+        expect(core.navigation.state.parentQueryScope.key, query);
+        coherent(15, 4275000, 3504000, 4650000, 3744000);
+        expect(
+          tester.state(find.byType(BalanceDailyMonthImpactView)),
+          same(financialState),
+        );
+        settings.setDayFocusedPresentation(
+          BalanceDayFocusedPresentation.dailyImpactFocus,
+        );
+        await _frames(tester, 3);
+        expect(find.byType(BalanceDailyMonthImpactView), findsNothing);
+        expect(_adapterState(tester, _rhythmKey), same(railState));
+        settings.setDayFocusedPresentation(
+          BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+        );
+        await _frames(tester, 3);
+        coherent(15, 4275000, 3504000, 4650000, 3744000);
+        expect(core.navigation.state.navigationEpoch, epoch + 1);
+        void acceptedSnapshotIsCoherent() {
+          final selected =
+              (core.visibleFrames.value!.scope.timeScope as DayScope).date;
+          final source = view().presentation.source!;
+          final rail = tester.widget<BalanceDayMomentumRail>(
+            find.byKey(const ValueKey('balance-day-momentum-rail')),
+          );
+          expect(source.selectedEpochDay, selected.epochDay);
+          expect(source, same(rail.presentation.monthImpact));
+          expect(_adapterState(tester, _rhythmKey), same(railState));
+        }
+
+        // Exercise both directions at fling speed, checking every observed
+        // accepted publication rather than only the eventual settled day.
+        for (final distance in [-180.0, 180.0]) {
+          final beforeFling = core.navigation.state.navigationEpoch;
+          await tester.fling(
+            find.byKey(fromRail ? _rhythmKey : _summaryKey),
+            fromRail ? Offset(distance, 0) : Offset(0, distance),
+            2400,
+          );
+          for (var frame = 0; frame < 20; frame++) {
+            await _frames(tester, 1);
+            acceptedSnapshotIsCoherent();
+          }
+          await _settled(tester);
+          acceptedSnapshotIsCoherent();
+          expect(
+            core.navigation.state.navigationEpoch,
+            greaterThan(beforeFling),
+          );
+        }
+        expect(tester.takeException(), isNull);
+        await _unmount(tester);
+      },
+    );
+  }
+
+  testWidgets(
+    'V8 monthly impact choice restores in a fresh preferences and dashboard owner with legacy styles intact',
+    (tester) async {
+      final store = InMemoryDashboardPresentationPreferencesStore();
+      final first = DashboardPresentationPreferencesController(store: store);
+      addTearDown(first.dispose);
+      await first.restore();
+      await _setup(tester, richData: true, bookedMinute: 0, preferences: first);
+      final settings = tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .balancePresentationSettings!;
+      settings.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+      settings.setDayRatioViewPresentation(
+        BalanceDayRatioViewPresentation.performanceIndex,
+      );
+      settings.setDayPerformanceVisualPresentation(
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      settings.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+      );
+      await _frames(tester, 4);
+      expect(
+        (await store.read()).balanceDayFocusedPresentation,
+        BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+      );
+      await _unmount(tester);
+      final restarted = DashboardPresentationPreferencesController(
+        store: store,
+      );
+      addTearDown(restarted.dispose);
+      await restarted.restore();
+      await _setup(
+        tester,
+        richData: true,
+        bookedMinute: 0,
+        preferences: restarted,
+        initializeFocused: false,
+      );
+      final restored = tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .balancePresentationSettings!
+          .value;
+      expect(
+        restored.dayFocusedPresentation,
+        BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+      );
+      expect(
+        restored.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      expect(
+        restored.dayRatioViewPresentation,
+        BalanceDayRatioViewPresentation.performanceIndex,
+      );
+      expect(
+        restored.dayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      final view = tester.widget<BalanceDailyMonthImpactView>(
+        find.byType(BalanceDailyMonthImpactView),
+      );
+      expect(
+        view.presentation.source!.selectedEpochDay,
+        const LocalDate(year: 2026, month: 7, day: 16).epochDay,
+      );
+      expect(view.presentation.source!.available, isTrue);
+      expect(tester.takeException(), isNull);
+      await _unmount(tester);
+    },
+  );
+
+  testWidgets('V8 monthly impact actual dashboard MotherCard golden', (
+    tester,
+  ) async {
+    await _setup(tester, richData: true, bookedMinute: 0);
+    final settings = tester
+        .widget<DashboardHeaderVisualTuner>(
+          find.byType(DashboardHeaderVisualTuner),
+        )
+        .balancePresentationSettings!;
+    settings.setDayFocusedPresentation(
+      BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+    );
+    await _settled(tester);
+    expect(find.byType(BalanceDailyMonthImpactView), findsOneWidget);
+    final scene = find.byKey(const ValueKey('paired-day-motion-scene'));
+    final boundary = tester.renderObject<RenderRepaintBoundary>(scene);
+    // Preserve the actual phone/MotherCard layout at 1:1, while excluding
+    // unrelated header-wave and LogBox ambient animation from this visual gate.
+    final bounds = tester
+        .getRect(find.byKey(const ValueKey('balance-day-focused-layout')))
+        .shift(-tester.getTopLeft(scene));
+    final crop = Rect.fromLTRB(
+      bounds.left.floorToDouble(),
+      bounds.top.floorToDouble(),
+      bounds.right.ceilToDouble(),
+      bounds.bottom.ceilToDouble(),
+    );
+    final full = await boundary.toImage(pixelRatio: 1);
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.drawImageRect(full, crop, Offset.zero & crop.size, Paint());
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(
+      crop.width.toInt(),
+      crop.height.toInt(),
+    );
+    try {
+      await expectLater(
+        image,
+        matchesGoldenFile(
+          '../../../goldens/balance_day_month_impact_dashboard.png',
+        ),
+      );
+    } finally {
+      image.dispose();
+      picture.dispose();
+      full.dispose();
+    }
+    expect(tester.takeException(), isNull);
+    await _unmount(tester);
+  });
+
   testWidgets(
     'intermediate paired motion frame shows Summary and rhythm moving together',
     (tester) async {
@@ -1235,9 +1533,9 @@ void main() {
 // Only acquisition is fixture data: Core's exact prepared membership, financial
 // projections, scene binding and temporal acceptance remain production code.
 final class _PairedMotionRepository implements DashboardDataRuntimeRepository {
-  _PairedMotionRepository({int bookedMinute = 720})
+  _PairedMotionRepository({int bookedMinute = 720, int historyDays = 120})
     : rows = List<DashboardLedgerEntry>.unmodifiable([
-        for (var offset = 0; offset < 120; offset++)
+        for (var offset = 0; offset < historyDays; offset++)
           for (final direction in ['income', 'expense'])
             DashboardLedgerEntry(
               id: '$direction-$offset',

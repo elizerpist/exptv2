@@ -146,6 +146,59 @@ final class DashboardBalanceDailyImpactPresentation {
   bool get isImproving => (valuePercent ?? 0) > 0;
 }
 
+/// Effect of the selected day on its own month's net-to-income percentage.
+/// Nullable ratios retain the distinction between undefined and a real zero.
+@immutable
+final class DashboardBalanceDailyMonthImpactPresentation {
+  const DashboardBalanceDailyMonthImpactPresentation({
+    required this.selectedEpochDay,
+    required this.incomeBeforeMinor,
+    required this.expenseBeforeMinor,
+    required this.incomeAfterMinor,
+    required this.expenseAfterMinor,
+    required this.ratioBeforePercent,
+    required this.ratioAfterPercent,
+    required this.dailyImpactPp,
+    required this.available,
+  });
+
+  factory DashboardBalanceDailyMonthImpactPresentation.unavailable({
+    required int selectedEpochDay,
+  }) => DashboardBalanceDailyMonthImpactPresentation(
+    selectedEpochDay: selectedEpochDay,
+    incomeBeforeMinor: 0,
+    expenseBeforeMinor: 0,
+    incomeAfterMinor: 0,
+    expenseAfterMinor: 0,
+    ratioBeforePercent: null,
+    ratioAfterPercent: null,
+    dailyImpactPp: null,
+    available: false,
+  );
+
+  final int selectedEpochDay;
+  final int incomeBeforeMinor;
+  final int expenseBeforeMinor;
+  final int incomeAfterMinor;
+  final int expenseAfterMinor;
+  final double? ratioBeforePercent;
+  final double? ratioAfterPercent;
+  final double? dailyImpactPp;
+  final bool available;
+  bool get isAvailable => available;
+  int get presentationId => Object.hash(
+    selectedEpochDay,
+    incomeBeforeMinor,
+    expenseBeforeMinor,
+    incomeAfterMinor,
+    expenseAfterMinor,
+    ratioBeforePercent,
+    ratioAfterPercent,
+    dailyImpactPp,
+    available,
+  );
+}
+
 /// The one immutable Napi 4 read model owned by Dashboard Core.
 @immutable
 final class DashboardBalanceDailyInsightsPresentation {
@@ -154,11 +207,13 @@ final class DashboardBalanceDailyInsightsPresentation {
     required this.timeScope,
     required this.momentum,
     required this.impact,
+    this.monthImpact,
   }) : presentationId = Object.hash(
          identity,
          timeScope.canonicalKey,
          momentum.available,
          impact.valuePercent,
+         monthImpact?.presentationId,
          Object.hashAll(
            momentum.rhythm.map(
              (point) => Object.hash(
@@ -174,6 +229,7 @@ final class DashboardBalanceDailyInsightsPresentation {
   final LedgerTimeScope timeScope;
   final DashboardBalanceDailyMomentumPresentation momentum;
   final DashboardBalanceDailyImpactPresentation impact;
+  final DashboardBalanceDailyMonthImpactPresentation? monthImpact;
   final int presentationId;
 
   factory DashboardBalanceDailyInsightsPresentation.unavailable({
@@ -236,6 +292,62 @@ abstract final class DashboardBalanceDailyInsightsProjection {
       timeScope: timeScope,
       momentum: _momentum(series, selectedEpochDay),
       impact: _impact(series, selectedEpochDay),
+      monthImpact: _monthImpact(series, selectedEpochDay),
+    );
+  }
+
+  static DashboardBalanceDailyMonthImpactPresentation _monthImpact(
+    _DailyBalanceSeries series,
+    int selectedEpochDay,
+  ) {
+    if (selectedEpochDay > series.asOfEpochDay) {
+      return DashboardBalanceDailyMonthImpactPresentation.unavailable(
+        selectedEpochDay: selectedEpochDay,
+      );
+    }
+    final date = DateTime.utc(1970).add(Duration(days: selectedEpochDay));
+    final monthStart = LocalDate(
+      year: date.year,
+      month: date.month,
+      day: 1,
+    ).epochDay;
+    var incomeBefore = 0, expenseBefore = 0;
+    for (var day = monthStart; day < selectedEpochDay; day++) {
+      // The legacy rolling windows match the as-of minute at D-30 too.
+      // This monthly snapshot deliberately includes every earlier full day.
+      incomeBefore += series.fullIncome[day] ?? 0;
+      expenseBefore += series.fullExpense[day] ?? 0;
+    }
+    final isToday = selectedEpochDay == series.asOfEpochDay;
+    final incomeAfter =
+        incomeBefore +
+        ((isToday
+                ? series.cutoffIncome
+                : series.fullIncome)[selectedEpochDay] ??
+            0);
+    final expenseAfter =
+        expenseBefore +
+        ((isToday
+                ? series.cutoffExpense
+                : series.fullExpense)[selectedEpochDay] ??
+            0);
+    final before = incomeBefore > 0
+        ? (incomeBefore - expenseBefore) / incomeBefore * 100
+        : null;
+    final after = incomeAfter > 0
+        ? (incomeAfter - expenseAfter) / incomeAfter * 100
+        : null;
+    final delta = before == null || after == null ? null : after - before;
+    return DashboardBalanceDailyMonthImpactPresentation(
+      selectedEpochDay: selectedEpochDay,
+      incomeBeforeMinor: incomeBefore,
+      expenseBeforeMinor: expenseBefore,
+      incomeAfterMinor: incomeAfter,
+      expenseAfterMinor: expenseAfter,
+      ratioBeforePercent: before,
+      ratioAfterPercent: after,
+      dailyImpactPp: delta,
+      available: delta != null,
     );
   }
 

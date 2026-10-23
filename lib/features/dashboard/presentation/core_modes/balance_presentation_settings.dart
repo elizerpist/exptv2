@@ -225,17 +225,20 @@ enum BalanceDayLayoutPresentation {
 enum BalanceDayFocusedPresentation {
   financialCompass,
   financialComparison,
-  dailyImpactFocus;
+  dailyImpactFocus,
+  monthlyNetMarginImpact;
 
   String get tunerLabel => switch (this) {
     financialCompass => 'Pénzügyi iránytű',
     financialComparison => 'Pénzügyi mérleg',
     dailyImpactFocus => 'Egyenlegarány',
+    monthlyNetMarginImpact => 'Napi hatás',
   };
   String get tunerDescription => switch (this) {
     financialCompass => 'A kiválasztott nap pénzügyi iránya.',
     financialComparison => 'A napi bevétel és kiadás összehasonlítása.',
     dailyImpactFocus => 'Két 30 napos időszak bevételi és kiadási aránya.',
+    monthlyNetMarginImpact => 'A kiválasztott nap hatása a havi nettóarányra.',
   };
 }
 

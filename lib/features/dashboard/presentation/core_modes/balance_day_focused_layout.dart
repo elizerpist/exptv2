@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../application/dashboard_balance_daily_insights_projection.dart';
 import '../dashboard_day_rhythm_navigation.dart';
 import 'balance_day_focused_visuals.dart';
+import 'balance_daily_month_impact_presentation.dart';
+import 'balance_daily_month_impact_ribbon.dart';
 import 'balance_day_ratio_comparison.dart';
 import 'balance_day_performance_index_presentation.dart';
 import 'balance_day_performance_index_view.dart';
@@ -52,6 +54,7 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
               ),
               child: _selector(
                 BalanceFocusedLayoutGeometry.topSectionHeight(c.maxHeight),
+                c.maxWidth - 24,
               ),
             ),
             Expanded(
@@ -66,6 +69,19 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
                               BalanceDayPerformanceIndexPresentation.fromMomentum(
                                 presentation.momentum,
                               );
+                          if (focusedPresentation ==
+                              BalanceDayFocusedPresentation
+                                  .monthlyNetMarginImpact) {
+                            return BalanceDailyMonthImpactView(
+                              key: const ValueKey(
+                                'balance-day-month-impact-view',
+                              ),
+                              presentation:
+                                  BalanceDailyMonthImpactPresentation.fromData(
+                                    presentation.monthImpact,
+                                  ),
+                            );
+                          }
                           if (focusedPresentation ==
                                   BalanceDayFocusedPresentation
                                       .dailyImpactFocus &&
@@ -97,6 +113,14 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
                                 bounds.maxHeight,
                               ),
                               child: switch (focusedPresentation) {
+                                BalanceDayFocusedPresentation
+                                    .monthlyNetMarginImpact =>
+                                  BalanceDailyMonthImpactView(
+                                    presentation:
+                                        BalanceDailyMonthImpactPresentation.fromData(
+                                          presentation.monthImpact,
+                                        ),
+                                  ),
                                 BalanceDayFocusedPresentation
                                     .financialCompass =>
                                   BalanceDayFinancialCompass(
@@ -149,14 +173,20 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
       );
     },
   );
-  Widget _selector(double height) {
+  Widget _selector(double height, double width) {
     final selected = focusedPresentation;
-    final order = [
-      BalanceDayFocusedPresentation.values[(selected.index + 2) % 3],
-      selected,
-      BalanceDayFocusedPresentation.values[(selected.index + 1) % 3],
-    ];
-    final diameter = math.min(56.0, math.max(18.0, height - 24));
+    final values = BalanceDayFocusedPresentation.values;
+    final selectedSlot = (values.length - 1) ~/ 2;
+    final order = List.generate(
+      values.length,
+      (slot) =>
+          values[(selected.index + slot - selectedSlot + values.length) %
+              values.length],
+    );
+    final diameter = math.min(
+      math.min(56.0, math.max(18.0, height - 24)),
+      width / (1 + .76 * (values.length - 1) + .5),
+    );
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -208,6 +238,9 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
                             Icons.account_balance_wallet_rounded,
                           BalanceDayFocusedPresentation.dailyImpactFocus =>
                             Icons.insights_rounded,
+                          BalanceDayFocusedPresentation
+                              .monthlyNetMarginImpact =>
+                            Icons.swap_horiz_rounded,
                         },
                         size: diameter * .45,
                         color: item == selected

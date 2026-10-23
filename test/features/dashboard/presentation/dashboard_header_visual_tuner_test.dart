@@ -269,6 +269,24 @@ void main() {
         balance.value.dayRatioPresentation,
         BalanceDayRatioPresentation.netMargin,
       );
+      expect(find.text('Napi hatás'), findsOneWidget);
+      await select('balance-day-focused-monthlyNetMarginImpact');
+      expect(
+        balance.value.dayFocusedPresentation,
+        BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+      );
+      expect(
+        balance.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      expect(
+        balance.value.dayRatioViewPresentation,
+        BalanceDayRatioViewPresentation.dualGauge,
+      );
+      expect(
+        balance.value.dayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
       await select('balance-day-focused-dailyImpactFocus');
       expect(toggle, findsNothing);
       expect(balance.value.showFocusedDayImpact, isTrue);

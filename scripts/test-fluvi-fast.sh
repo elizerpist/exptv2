@@ -5,6 +5,8 @@ set -euo pipefail
 # in the nightly/profile lanes; do not grow this list by duplicating an
 # invariant already owned below.
 flutter test \
+  test/features/dashboard/application/dashboard_balance_daily_month_impact_projection_test.dart \
+  test/features/dashboard/presentation/balance_daily_month_impact_test.dart \
   test/features/dashboard/presentation/balance_day_focused_layout_test.dart \
   test/features/dashboard/presentation/balance_day_focused_visuals_test.dart \
   test/features/dashboard/presentation/balance_day_visual_presentation_test.dart \

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="prototype-id" content="fluvi-balance-carousel-recovery/balance-day-month-impact-v8">
+<meta name="prototype-status" content="current"><title>Fluvi V8 — referencia és Flutter ellenőrzés</title>
+<style>body{font:16px/1.5 system-ui;margin:24px;background:#f3f5fa;color:#111b48}main{max-width:1536px;margin:auto}section{margin:24px 0;padding:20px;background:white;border-radius:20px}img{max-width:100%;height:auto}figure{margin:0}figcaption{font-weight:600}.states{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}a{color:#6a48af}li{margin:8px 0}.source{overflow:auto}.source img{max-width:none;width:1536px}label{display:block}</style></head><body><main>
+<h1>Balance Napi hatás V8 — vizuális ellenőrzés</h1><p>Az eredeti PNG és a tényleges Flutter goldenek összevetése. Ez a fejlesztési nézet nem része az alkalmazásnak.</p>
+<section><h2>Implementációs terv</h2><ol><li>A meglévő napi aggregátumból M…D−1 és M…D havi bevétel/kiadás. A mai nap kanonikus időpont-cutoffja érvényes; nincs 119 napos feltétel.</li><li>Független immutable pénzügyi és vizuális állapotmodell. Teljes pontosságú delta százalékpontban, explicit hiányzó nevezők.</li><li>Az enum végére kerülő negyedik avatar. Azonos felső magasság, megőrzött ikonméretek és anyag; módosított vízszintes kiosztás.</li><li>A kis referencia-kártyák kompozícióját követő egyetlen dinamikus fővizuál. Zárt felületű clay szalag, kiemelés, mélység, árnyék, két gömb, irányjelző és státuszsáv.</li><li>Unit, valódi Core-navigáció, mentés, reszponzív és golden ellenőrzés. A régi fővizuálok képpontjai a selector megengedett változásán kívül megmaradnak.</li><li>Formázás/elemzés, commit/push, azonos SHA-jú normál human APK letöltése és SHA-256 ellenőrzése.</li></ol></section>
+<section><h2>Kötelező referencia: napi.png</h2><label>Nagyítás <input type="range" min="50" max="150" value="100" oninput="document.querySelector('.source img').style.width=(1536*this.value/100)+'px'"></label><div class="source"><img src="assets/napi-reference.png" alt="Jóváhagyott napi.png: nagy részletes szalag és négy pénzügyi állapot"></div></section>
+<section><h2>Flutter eredmények</h2><p>A 23 korábbi Napi golden képpontkülönbsége kizárólag az avatarsor területére esik. A korábbi fővizuálok és a ritmuscsík változatlan.</p><div class="states">
+<figure><img src="assets/dashboard.png" alt="Valódi Dashboard Mother Card"><figcaption>Valódi Dashboard · 378 × 356</figcaption></figure>
+<figure><img src="assets/positive_decrease.png" alt="Csökkent, de pozitív"><figcaption>+30 → +26 · −4,0 pp</figcaption></figure>
+<figure><img src="assets/crossed_positive.png" alt="Negatívból pozitív"><figcaption>−12 → +8 · +20,0 pp</figcaption></figure>
+<figure><img src="assets/crossed_negative.png" alt="Pozitívból negatív"><figcaption>+5 → −3 · −8,0 pp</figcaption></figure>
+<figure><img src="assets/negative_improvement.png" alt="Javult, de negatív"><figcaption>−25 → −15 · +10,0 pp</figcaption></figure>
+<figure><img src="assets/neutral.png" alt="Változatlan"><figcaption>Változatlan</figcaption></figure>
+<figure><img src="assets/unavailable.png" alt="Nincs összehasonlítható adat"><figcaption>Hiányállapot</figcaption></figure>
+<figure><img src="assets/compact.png" alt="Kompakt méret"><figcaption>Kompakt telefon</figcaption></figure>
+</div></section><p><a href="../fluvi-balance-carousel-recovery-prototypes-index.html">Projektindex</a></p></main></body></html>

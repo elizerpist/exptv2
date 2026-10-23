@@ -268,7 +268,7 @@ class MainActivity : FlutterActivity() {
                             "balanceDayPerformanceVisualPresentation" to ((preferences.all["balanceDayPerformanceVisualPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "balanceDayRatioViewPresentation" to ((preferences.all["balanceDayRatioViewPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "balanceDayRatioPresentation" to ((preferences.all["balanceDayRatioPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
-                            "balanceDayFocusedPresentation" to preferences.getInt("balanceDayFocusedPresentation", 0),
+                            "balanceDayFocusedPresentation" to ((preferences.all["balanceDayFocusedPresentation"] as? Number)?.toInt()?.takeIf { it in 0..3 } ?: 0),
                             "balanceShowFocusedDayImpact" to preferences.getBoolean("balanceShowFocusedDayImpact", true),
                             "balanceSumLayoutPresentation" to preferences.getInt("balanceSumLayoutPresentation", 0),
                             "balanceSumFocusedPresentation" to preferences.getInt("balanceSumFocusedPresentation", 0),
@@ -305,8 +305,7 @@ class MainActivity : FlutterActivity() {
                         val balanceDayPerformanceVisualPresentation = ((values["balanceDayPerformanceVisualPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
                         val balanceDayRatioViewPresentation = ((values["balanceDayRatioViewPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
                         val balanceDayRatioPresentation = ((values["balanceDayRatioPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
-                        val balanceDayFocusedPresentation = (values["balanceDayFocusedPresentation"] as? Number)?.toInt() ?: 0
-                        require(balanceDayFocusedPresentation in 0..2) { "Invalid Balance day presentation." }
+                        val balanceDayFocusedPresentation = ((values["balanceDayFocusedPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..3 } ?: 0
                         val balanceShowFocusedDayImpact = values["balanceShowFocusedDayImpact"] as? Boolean ?: true
                         val balanceSumLayoutPresentation = (values["balanceSumLayoutPresentation"] as? Number)?.toInt() ?: 0
                         require(balanceSumLayoutPresentation in 0..1) { "Invalid Balance SUM presentation." }

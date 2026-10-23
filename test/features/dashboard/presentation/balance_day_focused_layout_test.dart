@@ -118,7 +118,19 @@ void main() {
         final selected = tester.getRect(
           find.byKey(ValueKey('balance-day-perspective-${p.name}')),
         );
-        expect(selected.center.dx, closeTo(rail.center.dx, .001));
+        final avatars = [
+          for (final item in BalanceDayFocusedPresentation.values)
+            tester.getRect(
+              find.byKey(ValueKey('balance-day-perspective-${item.name}')),
+            ),
+        ]..sort((a, b) => a.center.dx.compareTo(b.center.dx));
+        expect(avatars.length, 4);
+        expect(selected, avatars[1]);
+        expect(avatars.first.left, greaterThanOrEqualTo(rail.left));
+        expect(avatars.last.right, lessThanOrEqualTo(rail.right));
+        for (var i = 1; i < avatars.length; i++) {
+          expect(avatars[i].left, greaterThan(avatars[i - 1].right));
+        }
         final side = BalanceDayFocusedPresentation.values.firstWhere(
           (item) => item != p,
         );

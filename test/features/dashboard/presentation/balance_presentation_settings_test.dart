@@ -9,6 +9,56 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 void main() {
   test(
+    'monthly impact perspective retains earlier indices and independent ratio choices',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+      controller.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+      controller.setDayRatioViewPresentation(
+        BalanceDayRatioViewPresentation.performanceIndex,
+      );
+      controller.setDayPerformanceVisualPresentation(
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      final before = controller.value;
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      controller.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+      );
+      final expected = before.copyWith(
+        dayFocusedPresentation:
+            BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+        revision: before.revision + 1,
+      );
+      expect(controller.value, expected);
+      expect(controller.value.hashCode, expected.hashCode);
+      controller.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+      );
+      expect(notifications, 1);
+      for (final earlier in BalanceDayFocusedPresentation.values.take(3)) {
+        controller.setDayFocusedPresentation(earlier);
+        controller.setDayFocusedPresentation(
+          BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+        );
+        expect(
+          controller.value.dayRatioPresentation,
+          before.dayRatioPresentation,
+        );
+        expect(
+          controller.value.dayRatioViewPresentation,
+          before.dayRatioViewPresentation,
+        );
+        expect(
+          controller.value.dayPerformanceVisualPresentation,
+          before.dayPerformanceVisualPresentation,
+        );
+      }
+    },
+  );
+
+  test(
     'performance visual revises once and preserves both other ratio choices',
     () {
       final controller = BalancePresentationController();

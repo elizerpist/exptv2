@@ -16,6 +16,75 @@ void main() {
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
   test(
+    'fourth day perspective persists at index3 without changing earlier choices',
+    () async {
+      Map<String, Object?> stored = {};
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      final defaults = DashboardPresentationPreferences.defaults;
+      final choice = DashboardPresentationPreferences(
+        sumVisualStyle: defaults.sumVisualStyle,
+        showSumLayoutChooser: defaults.showSumLayoutChooser,
+        yearGridLayout: defaults.yearGridLayout,
+        yearMonthlyAmountPresentation: defaults.yearMonthlyAmountPresentation,
+        showDayContentViewChooser: defaults.showDayContentViewChooser,
+        balanceUsesChildCards: defaults.balanceUsesChildCards,
+        balanceHeaderGraphPresentation: defaults.balanceHeaderGraphPresentation,
+        balanceHeaderPartitionHeightPercent:
+            defaults.balanceHeaderPartitionHeightPercent,
+        balanceMonthCombinedCardPresentation:
+            defaults.balanceMonthCombinedCardPresentation,
+        balanceDayLayoutPresentation: BalanceDayLayoutPresentation.focused,
+        balanceDayFocusedPresentation:
+            BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+        balanceDayRatioPresentation: BalanceDayRatioPresentation.netMargin,
+        balanceDayRatioViewPresentation:
+            BalanceDayRatioViewPresentation.performanceIndex,
+        balanceDayPerformanceVisualPresentation:
+            BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      expect(BalanceDayFocusedPresentation.financialCompass.index, 0);
+      expect(BalanceDayFocusedPresentation.financialComparison.index, 1);
+      expect(BalanceDayFocusedPresentation.dailyImpactFocus.index, 2);
+      expect(BalanceDayFocusedPresentation.monthlyNetMarginImpact.index, 3);
+      await store.write(choice);
+      expect(stored['balanceDayFocusedPresentation'], 3);
+      expect(
+        await MethodChannelDashboardPresentationPreferencesStore().read(),
+        choice,
+      );
+      for (final index in [0, 1, 2, 3, -1, 4, 999]) {
+        stored['balanceDayFocusedPresentation'] = index;
+        final restored = await store.read();
+        expect(
+          restored.balanceDayFocusedPresentation,
+          BalanceDayFocusedPresentation.values[index >= 0 && index <= 3
+              ? index
+              : 0],
+        );
+        expect(
+          restored.balanceDayRatioPresentation,
+          BalanceDayRatioPresentation.netMargin,
+        );
+        expect(
+          restored.balanceDayRatioViewPresentation,
+          BalanceDayRatioViewPresentation.performanceIndex,
+        );
+        expect(
+          restored.balanceDayPerformanceVisualPresentation,
+          BalanceDayPerformanceVisualPresentation.horizontalMeter,
+        );
+      }
+    },
+  );
+
+  test(
     'day ratio persists independently and unknown legacy values use coverage',
     () async {
       Map<String, Object?> stored = {};
