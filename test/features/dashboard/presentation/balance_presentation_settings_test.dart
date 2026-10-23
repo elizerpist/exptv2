@@ -8,6 +8,66 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  test(
+    'day alternatives revise independently and retain hidden impact preference',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+      final original = controller.value;
+      expect(
+        original.dayLayoutPresentation,
+        BalanceDayLayoutPresentation.current,
+      );
+      expect(
+        original.dayFocusedPresentation,
+        BalanceDayFocusedPresentation.financialCompass,
+      );
+      expect(original.showFocusedDayImpact, isTrue);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.focused);
+      controller.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.financialComparison,
+      );
+      controller.setShowFocusedDayImpact(false);
+      final changed = original.copyWith(
+        dayLayoutPresentation: BalanceDayLayoutPresentation.focused,
+        dayFocusedPresentation:
+            BalanceDayFocusedPresentation.financialComparison,
+        showFocusedDayImpact: false,
+        revision: 3,
+      );
+      expect(controller.value, changed);
+      expect(controller.value.hashCode, changed.hashCode);
+      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.focused);
+      controller.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.financialComparison,
+      );
+      controller.setShowFocusedDayImpact(false);
+      expect(notifications, 3);
+      controller.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.dailyImpactFocus,
+      );
+      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.current);
+      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.focused);
+      expect(controller.value.showFocusedDayImpact, isFalse);
+      expect(
+        controller.value.dayFocusedPresentation,
+        BalanceDayFocusedPresentation.dailyImpactFocus,
+      );
+      controller.reset();
+      expect(
+        controller.value.dayLayoutPresentation,
+        BalanceDayLayoutPresentation.current,
+      );
+      expect(
+        controller.value.dayFocusedPresentation,
+        BalanceDayFocusedPresentation.financialCompass,
+      );
+      expect(controller.value.showFocusedDayImpact, isTrue);
+    },
+  );
+
   test('monthly layout switches independently and advances revision once', () {
     final controller = BalancePresentationController();
     addTearDown(controller.dispose);

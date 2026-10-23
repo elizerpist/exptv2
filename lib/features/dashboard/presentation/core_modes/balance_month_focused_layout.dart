@@ -5,6 +5,7 @@ import '../../../../core/design/fluvi_year_clay_capsule_painter.dart';
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import 'balance_alternative_scope_presentation.dart';
+import 'balance_focused_layout_geometry.dart';
 import 'balance_month_focused_chart_presentation.dart';
 import 'balance_month_spending_level_gauge.dart';
 import 'budget_clay_semicircle_gauge.dart';
@@ -86,13 +87,16 @@ class _BalanceMonthFocusedLayoutState extends State<BalanceMonthFocusedLayout> {
     if (chart == null) return const SizedBox.shrink();
     return LayoutBuilder(
       builder: (context, constraints) {
-        final selectorHeight = constraints.maxHeight * .21;
+        final selectorHeight = BalanceFocusedLayoutGeometry.topSectionHeight(
+          constraints.maxHeight,
+        );
         return Padding(
           key: const ValueKey('balance-month-focused-layout'),
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Column(
             children: [
               SizedBox(
+                key: const ValueKey('balance-month-focused-selector-zone'),
                 height: selectorHeight,
                 child: _selector(selectorHeight),
               ),

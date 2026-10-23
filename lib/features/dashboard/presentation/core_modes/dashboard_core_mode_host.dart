@@ -1,3 +1,4 @@
+import '../dashboard_day_rhythm_navigation.dart';
 import 'package:flutter/foundation.dart' show Listenable, ValueListenable;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -58,6 +59,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.balancePresentation,
     this.balanceLinkedPresentation,
     this.balancePresentationSettings,
+    this.balanceDayRhythmNavigation,
     this.balanceAdaptiveScope = const AllTimeScope(),
     this.budgetPresentation,
     this.categoryCollection,
@@ -106,6 +108,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.upperVerticalGestures,
   });
 
+  final DashboardDayRhythmNavigation? balanceDayRhythmNavigation;
   final DashboardCoreModeController controller;
   final DashboardCoreModePresentationLookup presentationFor;
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
@@ -364,6 +367,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
       DashboardMode.balance => BalanceDashboardCoreSurface(
         presentation: presentation,
         balancePresentation: widget.balancePresentation,
+        dayRhythmNavigation: widget.balanceDayRhythmNavigation,
         balanceLinkedPresentation: widget.balanceLinkedPresentation,
         presentationSettings: widget.balancePresentationSettings,
         adaptiveScope: widget.balanceAdaptiveScope,

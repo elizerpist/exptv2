@@ -24,6 +24,7 @@ import '../dashboard_border_style.dart';
 import '../dashboard_summary_presentation.dart';
 import '../dashboard_summary_auto_reset_controller.dart';
 import 'dashboard_summary_pill.dart';
+import 'dashboard_temporal_component_carousel.dart';
 
 typedef SummaryPillComponentCandidateProjector =
     DashboardNavigationState? Function({
@@ -184,9 +185,7 @@ final class SummarySegmentedTrackGeometry {
         (1 - gapCount / 8);
     final widthForNonnegativeBaselineGap =
         preRegressionInset + preRegressionPair * 2;
-    return math
-        .max(widthForVisuals, widthForNonnegativeBaselineGap)
-        .toDouble();
+    return math.max(widthForVisuals, widthForNonnegativeBaselineGap).toDouble();
   }
 
   factory SummarySegmentedTrackGeometry.resolve({
@@ -427,6 +426,7 @@ final class SummaryPillExperiment extends StatelessWidget {
     this.onBackgroundVerticalDragUpdate,
     this.onBackgroundVerticalDragEnd,
     this.autoResetMotionRegistry,
+    this.temporalCarouselCoordinator,
     this.presentation = const DashboardSummaryPresentationSettings.defaults(),
   }) : assert(variant == SummaryPillVariant.segmented);
 
@@ -485,6 +485,7 @@ final class SummaryPillExperiment extends StatelessWidget {
   final GestureDragUpdateCallback? onBackgroundVerticalDragUpdate;
   final GestureDragEndCallback? onBackgroundVerticalDragEnd;
   final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
+  final DashboardTemporalCarouselCoordinator? temporalCarouselCoordinator;
   final DashboardSummaryPresentationSettings presentation;
 
   @override
@@ -532,15 +533,12 @@ final class SummaryPillExperiment extends StatelessWidget {
                   preRegressionInset: inset,
                 );
             final preferredAmountWidth = constraints.maxWidth * .40;
-            final maximumAmountWidth =
-                math
-                    .max(
-                      0,
-                      constraints.maxWidth - inset - minimumNavigationWidth,
-                    )
-                    .toDouble();
-            final amountWidth =
-                math.min(preferredAmountWidth, maximumAmountWidth).toDouble();
+            final maximumAmountWidth = math
+                .max(0, constraints.maxWidth - inset - minimumNavigationWidth)
+                .toDouble();
+            final amountWidth = math
+                .min(preferredAmountWidth, maximumAmountWidth)
+                .toDouble();
             // This is the original quarter-track navigation footprint. It is
             // retained only as the measured pre-regression content-edge baseline
             // for the requested 50% gap—not as a visual or gesture lane.
@@ -625,6 +623,7 @@ final class SummaryPillExperiment extends StatelessWidget {
                 onSelectorDirectInputStarted: onSelectorDirectInputStarted,
                 onSelectorPointerDownDecision: onSelectorPointerDownDecision,
                 autoResetMotionRegistry: autoResetMotionRegistry,
+                temporalCarouselCoordinator: temporalCarouselCoordinator,
               ),
             );
             final amountZone = SizedBox(
@@ -880,6 +879,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     this.onSelectorDirectInputStarted,
     this.onSelectorPointerDownDecision,
     this.autoResetMotionRegistry,
+    this.temporalCarouselCoordinator,
   });
 
   final SummaryPillExperimentLevel level;
@@ -902,6 +902,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
   final ValueChanged<CenteredCarouselPointerDownDecision>?
   onSelectorPointerDownDecision;
   final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
+  final DashboardTemporalCarouselCoordinator? temporalCarouselCoordinator;
 
   @override
   Widget build(BuildContext context) => _FixedHierarchyTracks(
@@ -927,6 +928,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
       onDirectInputStarted: onSelectorDirectInputStarted,
       onPointerDownDecision: onSelectorPointerDownDecision,
       autoResetMotionRegistry: autoResetMotionRegistry,
+      temporalCarouselCoordinator: temporalCarouselCoordinator,
       motionDiagnostics: motionDiagnostics,
     ),
     onComponentCrossed: onComponentCrossed,
@@ -940,6 +942,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     onSelectorDirectInputStarted: onSelectorDirectInputStarted,
     onSelectorPointerDownDecision: onSelectorPointerDownDecision,
     autoResetMotionRegistry: autoResetMotionRegistry,
+    temporalCarouselCoordinator: temporalCarouselCoordinator,
   );
 }
 
@@ -969,6 +972,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     this.onSelectorDirectInputStarted,
     this.onSelectorPointerDownDecision,
     this.autoResetMotionRegistry,
+    this.temporalCarouselCoordinator,
   });
 
   final String keyPrefix;
@@ -997,6 +1001,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
   final ValueChanged<CenteredCarouselPointerDownDecision>?
   onSelectorPointerDownDecision;
   final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
+  final DashboardTemporalCarouselCoordinator? temporalCarouselCoordinator;
 
   @override
   Widget build(BuildContext context) {
@@ -1035,7 +1040,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
         if (level != SummaryPillExperimentLevel.sum)
           _track(
             geometry.interactionCellRectForTrack(yearTrack),
-            _HierarchyValueSelector(
+            DashboardTemporalComponentCarousel(
               key: ValueKey<String>('summary-pill-$keyPrefix-year-selector'),
               height: height,
               visualContentOffset: visualContentOffsetFor(yearTrack),
@@ -1088,6 +1093,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
               presentation: presentation.temporalFlingPresentation,
               component: DashboardTemporalAnchorComponent.year,
               autoResetMotionRegistry: autoResetMotionRegistry,
+              coordinator: temporalCarouselCoordinator,
             ),
           ),
         if ((level == SummaryPillExperimentLevel.month ||
@@ -1099,7 +1105,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
             level == SummaryPillExperimentLevel.day)
           _track(
             geometry.interactionCellRectForTrack(monthTrack),
-            _HierarchyValueSelector(
+            DashboardTemporalComponentCarousel(
               key: ValueKey<String>('summary-pill-$keyPrefix-month-selector'),
               height: height,
               visualContentOffset: visualContentOffsetFor(monthTrack),
@@ -1152,12 +1158,13 @@ final class _FixedHierarchyTracks extends StatelessWidget {
               presentation: presentation.temporalFlingPresentation,
               component: DashboardTemporalAnchorComponent.month,
               autoResetMotionRegistry: autoResetMotionRegistry,
+              coordinator: temporalCarouselCoordinator,
             ),
           ),
         if (level == SummaryPillExperimentLevel.day)
           _track(
             geometry.interactionCellRectForTrack(dayTrack),
-            _HierarchyValueSelector(
+            DashboardTemporalComponentCarousel(
               key: ValueKey<String>('summary-pill-$keyPrefix-day-selector'),
               height: height,
               visualContentOffset: visualContentOffsetFor(dayTrack),
@@ -1210,6 +1217,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
               presentation: presentation.temporalFlingPresentation,
               component: DashboardTemporalAnchorComponent.day,
               autoResetMotionRegistry: autoResetMotionRegistry,
+              coordinator: temporalCarouselCoordinator,
             ),
           ),
         if (presentation.showSeparators &&
@@ -1266,6 +1274,7 @@ final class _ModeSelector extends StatefulWidget {
     required this.onCrossed,
     this.onMotionActiveChanged,
     this.autoResetMotionRegistry,
+    this.temporalCarouselCoordinator,
     this.onDirectInputStarted,
     this.onPointerDownDecision,
     this.motionDiagnostics,
@@ -1277,6 +1286,7 @@ final class _ModeSelector extends StatefulWidget {
   final _LevelCrossed onCrossed;
   final ValueChanged<bool>? onMotionActiveChanged;
   final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
+  final DashboardTemporalCarouselCoordinator? temporalCarouselCoordinator;
   final VoidCallback? onDirectInputStarted;
   final ValueChanged<CenteredCarouselPointerDownDecision>?
   onPointerDownDecision;
@@ -1388,9 +1398,13 @@ final class _ModeSelectorState extends State<_ModeSelector> {
       height: widget.height,
       viewportKey: ValueKey<String>('${widget.key}-viewport'),
       motionDiagnostics: widget.motionDiagnostics,
-      onDirectPointerDown: widget.onDirectInputStarted,
+      onDirectPointerDown: () {
+        widget.onDirectInputStarted?.call();
+        widget.temporalCarouselCoordinator?.claim(this);
+      },
       onPointerDownDecision: widget.onPointerDownDecision,
       onMotionStarted: (origin) {
+        widget.temporalCarouselCoordinator?.noteMotionStarted();
         widget.onMotionActiveChanged?.call(true);
       },
       onMotionInterrupted: () => widget.onMotionActiveChanged?.call(false),
@@ -1447,468 +1461,6 @@ final class _ModeBadge extends StatelessWidget {
       child: Icon(item.icon, color: const Color(0xFF7564F5), size: 20),
     );
     return badge;
-  }
-}
-
-final class _HierarchyValueSelector extends StatefulWidget {
-  const _HierarchyValueSelector({
-    super.key,
-    required this.height,
-    required this.visualContentOffset,
-    required this.navigation,
-    required this.semanticsLabel,
-    required this.candidateForOffset,
-    required this.labelForCandidate,
-    required this.onCrossed,
-    this.paintedTargets,
-    this.onVisualTargetPainted,
-    this.onSettled,
-    required this.presentation,
-    required this.component,
-    this.onMotionActiveChanged,
-    this.autoResetMotionRegistry,
-    this.onDirectInputStarted,
-    this.onPointerDownDecision,
-    this.motionDiagnostics,
-  });
-
-  final double height;
-  final double visualContentOffset;
-  final DashboardNavigationController navigation;
-  final String semanticsLabel;
-  final DashboardNavigationState? Function(
-    DashboardNavigationState origin,
-    int offset,
-  )
-  candidateForOffset;
-  final String Function(DashboardNavigationState candidate) labelForCandidate;
-  final DashboardSegmentedTargetAcceptance Function(
-    DashboardNavigationState candidate,
-  )
-  onCrossed;
-  final ValueListenable<DashboardSegmentedTargetPainted?>? paintedTargets;
-  final ValueChanged<DashboardNavigationState>? onVisualTargetPainted;
-  final ValueChanged<DashboardNavigationState>? onSettled;
-  final SummaryTemporalFlingPresentation presentation;
-  final DashboardTemporalAnchorComponent component;
-  final ValueChanged<bool>? onMotionActiveChanged;
-  final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
-  final VoidCallback? onDirectInputStarted;
-  final ValueChanged<CenteredCarouselPointerDownDecision>?
-  onPointerDownDecision;
-  final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
-
-  @override
-  State<_HierarchyValueSelector> createState() =>
-      _HierarchyValueSelectorState();
-}
-
-final class _HierarchyValueSelectorState
-    extends State<_HierarchyValueSelector> {
-  late final CenteredCarouselController _controller =
-      CenteredCarouselController(initialIndex: 0);
-  late final DashboardSummaryAutoResetMotionRunner _resetRunner = _runResetStep;
-  late final VoidCallback _resetCanceller = _cancelResetMotion;
-  DashboardNavigationState? _motionOrigin;
-  DashboardNavigationState? _currentSemanticTarget;
-  DashboardNavigationState? _lastEmittedTarget;
-  DashboardNavigationState? _latestDesiredTarget;
-  DashboardNavigationState? _latestAcceptedTarget;
-  DashboardNavigationState? _latestPaintSelectedTarget;
-  DashboardNavigationState? _settleTarget;
-  DashboardSummaryAutoResetMotionRegistry? _attachedRegistry;
-  var _rebaseAfterDirectPreemption = false;
-  var _visualTargetFrameEpoch = 0;
-  var _motionIdle = false;
-
-  DashboardSummaryAutoResetStepKind get _resetStepKind =>
-      switch (widget.component) {
-        DashboardTemporalAnchorComponent.year =>
-          DashboardSummaryAutoResetStepKind.year,
-        DashboardTemporalAnchorComponent.month =>
-          DashboardSummaryAutoResetStepKind.month,
-        DashboardTemporalAnchorComponent.day => throw StateError(
-          'DAY is never a Summary reset target.',
-        ),
-      };
-
-  @override
-  void initState() {
-    super.initState();
-    _attachResetRunner();
-    widget.paintedTargets?.addListener(_onPaintedTargetChanged);
-  }
-
-  @override
-  void didUpdateWidget(covariant _HierarchyValueSelector oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(
-      oldWidget.autoResetMotionRegistry,
-      widget.autoResetMotionRegistry,
-    )) {
-      _detachResetRunner(oldWidget.autoResetMotionRegistry);
-      _attachResetRunner();
-    }
-    if (!identical(oldWidget.paintedTargets, widget.paintedTargets)) {
-      oldWidget.paintedTargets?.removeListener(_onPaintedTargetChanged);
-      widget.paintedTargets?.addListener(_onPaintedTargetChanged);
-    }
-  }
-
-  void _onPaintedTargetChanged() {
-    final painted = widget.paintedTargets?.value;
-    if (painted == null || painted.component != widget.component) return;
-    if (!_sameOwnedSemanticTarget(_latestAcceptedTarget, painted.target) ||
-        !_sameOwnedSemanticTarget(_latestPaintSelectedTarget, painted.target)) {
-      return;
-    }
-    // Rich paint is Phase-B evidence only.  It may enrich diagnostics, but a
-    // delayed/failed scene must not replace the latest accepted month as the
-    // release target.
-  }
-
-  void _clearMotionTargets() {
-    _visualTargetFrameEpoch += 1;
-    _currentSemanticTarget = null;
-    _lastEmittedTarget = null;
-    _latestDesiredTarget = null;
-    _latestAcceptedTarget = null;
-    _latestPaintSelectedTarget = null;
-    _settleTarget = null;
-    _motionOrigin = null;
-    _motionIdle = false;
-  }
-
-  void _scheduleVisualTargetPaint(DashboardNavigationState target) {
-    final scheduledEpoch = ++_visualTargetFrameEpoch;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          scheduledEpoch != _visualTargetFrameEpoch ||
-          !_sameOwnedSemanticTarget(_latestAcceptedTarget, target)) {
-        return;
-      }
-      widget.onVisualTargetPainted?.call(target);
-    });
-  }
-
-  /// Core synchronously promotes the last accepted semantic target when a
-  /// replacement pointer preempts a Time flight. The carousel's physical
-  /// logical offset still belongs to the old gesture at that exact boundary.
-  /// Keep the existing controller/position/physics, but structurally recenter
-  /// it after Core has promoted the semantic origin and before a new gesture
-  /// can snapshot that origin.
-  void _rebaseAfterCoreDirectPreemption() {
-    if (!_rebaseAfterDirectPreemption) return;
-    _rebaseAfterDirectPreemption = false;
-    _controller.interruptAndJumpToIndexSilently(0);
-  }
-
-  bool _trySettleAcceptedTarget() {
-    if (!_motionIdle) return false;
-    final settled = _settleTarget;
-    if (settled == null ||
-        !_sameOwnedSemanticTarget(_lastEmittedTarget, settled) ||
-        !_sameOwnedSemanticTarget(_latestDesiredTarget, settled) ||
-        !_sameOwnedSemanticTarget(_latestAcceptedTarget, settled)) {
-      return false;
-    }
-    widget.onSettled?.call(settled);
-    _clearMotionTargets();
-    return true;
-  }
-
-  void _attachResetRunner() {
-    final registry = widget.autoResetMotionRegistry;
-    if (registry == null ||
-        widget.component == DashboardTemporalAnchorComponent.day) {
-      return;
-    }
-    _attachedRegistry = registry;
-    registry.attach(
-      kind: _resetStepKind,
-      runner: _resetRunner,
-      cancelMotion: _resetCanceller,
-    );
-  }
-
-  void _detachResetRunner(DashboardSummaryAutoResetMotionRegistry? registry) {
-    if (widget.component != DashboardTemporalAnchorComponent.day) {
-      registry?.detach(
-        kind: _resetStepKind,
-        runner: _resetRunner,
-        cancelMotion: _resetCanceller,
-      );
-    }
-    if (identical(_attachedRegistry, registry)) _attachedRegistry = null;
-  }
-
-  Future<void> _runResetStep(DashboardSummaryAutoResetStep step) async {
-    if (step.kind != _resetStepKind || step.targetValue == null) return;
-    if (widget.component == DashboardTemporalAnchorComponent.day) return;
-    final current = switch (widget.component) {
-      DashboardTemporalAnchorComponent.year =>
-        widget.navigation.state.yearCursor,
-      DashboardTemporalAnchorComponent.month =>
-        widget.navigation.state.monthCursor.month,
-      DashboardTemporalAnchorComponent.day => 0,
-    };
-    final offset = switch (widget.component) {
-      DashboardTemporalAnchorComponent.month => _shortestMonthOffset(
-        current: current,
-        target: step.targetValue!,
-      ),
-      DashboardTemporalAnchorComponent.year => _shortestYearOffset(
-        current: current,
-        target: step.targetValue!,
-      ),
-      DashboardTemporalAnchorComponent.day => 0,
-    };
-    if (offset == 0) return;
-    await _controller.animateToIndex(
-      offset,
-      duration: Duration(milliseconds: 95 * offset.abs().clamp(1, 6).toInt()),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  void _cancelResetMotion() => _controller.jumpToIndexSilently(0);
-
-  int _shortestMonthOffset({required int current, required int target}) {
-    final values =
-        widget.navigation.temporalAvailability.monthsForYear(
-          widget.navigation.state.yearCursor,
-        ) ??
-        List<int>.generate(12, (index) => index + 1);
-    final currentIndex = values.indexOf(current);
-    final targetIndex = values.indexOf(target);
-    if (currentIndex < 0 || targetIndex < 0) return 0;
-    final forward = (targetIndex - currentIndex) % values.length;
-    return forward > values.length / 2 ? forward - values.length : forward;
-  }
-
-  int _shortestYearOffset({required int current, required int target}) {
-    final values = widget.navigation.temporalAvailability.allowedYears;
-    if (values == null) return target - current;
-    final currentIndex = values.indexOf(current);
-    final targetIndex = values.indexOf(target);
-    if (currentIndex < 0 || targetIndex < 0) return 0;
-    final forward = (targetIndex - currentIndex) % values.length;
-    return forward > values.length / 2 ? forward - values.length : forward;
-  }
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: widget.semanticsLabel,
-    child: Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        CenteredCarousel<int>(
-          dataSource: GeneratedCarouselDataSource<int>((index) => index),
-          controller: _controller,
-          spec: CenteredCarouselSpec(
-            itemExtent: widget.height,
-            scrollDirection: Axis.vertical,
-            visibleItemCount: 1,
-            minScale: 1,
-            neighborScale: 1,
-            outerScale: 1,
-            minOpacity: 1,
-            neighborOpacity: 1,
-            outerOpacity: 1,
-            enableHaptics: true,
-          ),
-          height: widget.height,
-          viewportKey: ValueKey<String>('${widget.key}-viewport'),
-          motionDiagnostics: widget.motionDiagnostics,
-          onDirectPointerDown: () {
-            widget.onDirectInputStarted?.call();
-            _rebaseAfterCoreDirectPreemption();
-          },
-          onPointerDownDecision: widget.onPointerDownDecision,
-          onMotionStarted: (origin) {
-            final semanticOrigin = widget.navigation.state;
-            _motionOrigin = semanticOrigin;
-            _currentSemanticTarget = semanticOrigin;
-            _lastEmittedTarget = null;
-            _latestDesiredTarget = null;
-            _latestAcceptedTarget = null;
-            _latestPaintSelectedTarget = null;
-            _settleTarget = null;
-            _motionIdle = false;
-            widget.onMotionActiveChanged?.call(true);
-          },
-          onMotionInterrupted: () {
-            _clearMotionTargets();
-            _rebaseAfterDirectPreemption = true;
-            widget.onMotionActiveChanged?.call(false);
-          },
-          onSelectedChanged: (offset) {
-            final origin = _motionOrigin ?? widget.navigation.state;
-            final candidate = widget.candidateForOffset(origin, offset);
-            if (candidate == null ||
-                _sameOwnedSemanticTarget(_currentSemanticTarget, candidate)) {
-              return;
-            }
-            _currentSemanticTarget = candidate;
-            _lastEmittedTarget = candidate;
-            _latestDesiredTarget = candidate;
-            final acceptance = widget.onCrossed(candidate);
-            if (!acceptance.isAcceptedSemanticIntent) return;
-            // An exact target has synchronously entered the shared visible
-            // lane. A cold target remains the latest physical semantic intent
-            // but Core retains the old valid visible frame until its exact
-            // painter resource binds. In both cases an emitted/rejected
-            // candidate cannot own release settlement.
-            _latestAcceptedTarget = candidate;
-            _latestPaintSelectedTarget = candidate;
-            // An accepted exact Phase-A frame owns release settlement. Rich
-            // paint remains diagnostic evidence owned by the coordinator.
-            _settleTarget = candidate;
-            if (acceptance.isExactLivePublication) {
-              _scheduleVisualTargetPaint(candidate);
-            }
-          },
-          onMotionIdle: (_) {
-            _motionIdle = true;
-            widget.onMotionActiveChanged?.call(false);
-            // Commit semantic ownership before recentering. The old order
-            // jumped to zero first, briefly restoring the previous origin
-            // while the rich-paint acknowledgement was still pending.
-            if (_trySettleAcceptedTarget()) {
-              _controller.jumpToIndexSilently(0);
-            }
-          },
-          itemBuilder: (context, offset, metrics) {
-            final origin = _motionOrigin ?? widget.navigation.state;
-            final candidate =
-                widget.candidateForOffset(origin, offset) ?? origin;
-            if (widget.presentation ==
-                SummaryTemporalFlingPresentation.dynamicTrio) {
-              return const SizedBox.shrink();
-            }
-            return Transform.translate(
-              offset: Offset(widget.visualContentOffset, 0),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  widget.labelForCandidate(candidate),
-                  maxLines: 1,
-                  style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
-                    color: FluviVisualTokens.textSecondary,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        if (widget.presentation == SummaryTemporalFlingPresentation.dynamicTrio)
-          Transform.translate(
-            offset: Offset(widget.visualContentOffset, 0),
-            child: ExcludeSemantics(
-              child: ClipRect(
-                child: IgnorePointer(
-                  child: ListenableBuilder(
-                    listenable: _controller,
-                    builder: (context, _) => _DynamicTrioValues(
-                      height: widget.height,
-                      rawIndex: _controller.rawCenteredLogicalIndex,
-                      isMoving: _controller.hasActiveScrollActivity,
-                      origin: _motionOrigin ?? widget.navigation.state,
-                      candidateForOffset: widget.candidateForOffset,
-                      labelForCandidate: widget.labelForCandidate,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    ),
-  );
-
-  bool _sameOwnedSemanticTarget(
-    DashboardNavigationState? left,
-    DashboardNavigationState right,
-  ) {
-    if (left == null) return false;
-    return switch (widget.component) {
-      DashboardTemporalAnchorComponent.year =>
-        left.yearCursor == right.yearCursor,
-      DashboardTemporalAnchorComponent.month =>
-        left.monthCursor.month == right.monthCursor.month,
-      DashboardTemporalAnchorComponent.day => left.dayCursor == right.dayCursor,
-    };
-  }
-
-  @override
-  void dispose() {
-    // A hierarchy track can disappear while the persistent mode selector is
-    // still dragging across a level. Only that selector owns the segmented
-    // adapter's variant-unmount release; clearing here would incorrectly end
-    // its shared Summary lane during an in-place track replacement.
-    widget.paintedTargets?.removeListener(_onPaintedTargetChanged);
-    _detachResetRunner(_attachedRegistry);
-    _controller.dispose();
-    super.dispose();
-  }
-}
-
-final class _DynamicTrioValues extends StatelessWidget {
-  const _DynamicTrioValues({
-    required this.height,
-    required this.rawIndex,
-    required this.isMoving,
-    required this.origin,
-    required this.candidateForOffset,
-    required this.labelForCandidate,
-  });
-
-  final double height;
-  final double rawIndex;
-  final bool isMoving;
-  final DashboardNavigationState origin;
-  final DashboardNavigationState? Function(DashboardNavigationState, int)
-  candidateForOffset;
-  final String Function(DashboardNavigationState) labelForCandidate;
-
-  @override
-  Widget build(BuildContext context) {
-    final offsets = SummaryDynamicTrioGeometry.offsetsFor(
-      rawIndex: rawIndex,
-      isMoving: isMoving,
-    );
-    return Stack(
-      clipBehavior: Clip.hardEdge,
-      children: <Widget>[for (final offset in offsets) _item(offset)],
-    );
-  }
-
-  Widget _item(int offset) {
-    final candidate = candidateForOffset(origin, offset) ?? origin;
-    final geometry = SummaryDynamicTrioGeometry.itemFor(
-      height: height,
-      offset: offset,
-      rawIndex: rawIndex,
-    );
-    return Positioned(
-      left: 0,
-      right: 0,
-      top: geometry.centerY - 10,
-      height: 20,
-      child: Transform.scale(
-        scale: geometry.scale,
-        child: Center(
-          child: Text(
-            key: ValueKey<String>('summary-pill-dynamic-trio-$offset'),
-            labelForCandidate(candidate),
-            maxLines: 1,
-            style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
-              color: FluviVisualTokens.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

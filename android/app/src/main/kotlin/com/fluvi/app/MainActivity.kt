@@ -264,6 +264,9 @@ class MainActivity : FlutterActivity() {
                             "showDayContentViewChooser" to preferences.getBoolean("showDayContentViewChooser", false),
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
                             "balanceHeaderGraphPresentation" to preferences.getInt("balanceHeaderGraphPresentation", 1),
+                            "balanceDayLayoutPresentation" to preferences.getInt("balanceDayLayoutPresentation", 0),
+                            "balanceDayFocusedPresentation" to preferences.getInt("balanceDayFocusedPresentation", 0),
+                            "balanceShowFocusedDayImpact" to preferences.getBoolean("balanceShowFocusedDayImpact", true),
                             "balanceMonthLayoutPresentation" to preferences.getInt("balanceMonthLayoutPresentation", 0),
                             "balanceYearLayoutPresentation" to preferences.getInt("balanceYearLayoutPresentation", 0),
                             "balanceDailyCalculationMode" to preferences.getInt("balanceDailyCalculationMode", 0),
@@ -291,6 +294,11 @@ class MainActivity : FlutterActivity() {
                             ?: throw IllegalArgumentException("Missing Day view chooser visibility.")
                         val balanceChildren = values["balanceUsesChildCards"] as? Boolean
                             ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
+                        val balanceDayLayoutPresentation = (values["balanceDayLayoutPresentation"] as? Number)?.toInt() ?: 0
+                        require(balanceDayLayoutPresentation in 0..1) { "Invalid Balance day presentation." }
+                        val balanceDayFocusedPresentation = (values["balanceDayFocusedPresentation"] as? Number)?.toInt() ?: 0
+                        require(balanceDayFocusedPresentation in 0..2) { "Invalid Balance day presentation." }
+                        val balanceShowFocusedDayImpact = values["balanceShowFocusedDayImpact"] as? Boolean ?: true
                         val balanceMonthLayoutPresentation = (values["balanceMonthLayoutPresentation"] as? Number)?.toInt() ?: 0
                         val balanceYearLayoutPresentation = (values["balanceYearLayoutPresentation"] as? Number)?.toInt() ?: 0
                         require(balanceMonthLayoutPresentation in 0..1) { "Invalid Balance month layout presentation." }
@@ -319,6 +327,9 @@ class MainActivity : FlutterActivity() {
                             .putInt("yearMonthlyAmountPresentation", yearMonthlyAmountPresentation)
                             .putBoolean("showDayContentViewChooser", showDayContentViewChooser)
                             .putBoolean("balanceUsesChildCards", balanceChildren)
+                            .putInt("balanceDayLayoutPresentation", balanceDayLayoutPresentation)
+                            .putInt("balanceDayFocusedPresentation", balanceDayFocusedPresentation)
+                            .putBoolean("balanceShowFocusedDayImpact", balanceShowFocusedDayImpact)
                             .putInt("balanceMonthLayoutPresentation", balanceMonthLayoutPresentation)
                             .putInt("balanceYearLayoutPresentation", balanceYearLayoutPresentation)
                             .putInt("balanceDailyCalculationMode", balanceDailyCalculationMode)

@@ -8,6 +8,7 @@ import '../../../../core/categories/presentation/budget_category_avatar_artwork.
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_alternative_scope_presentation.dart';
+import 'balance_focused_layout_geometry.dart';
 import 'balance_year_focused_chart_presentation.dart';
 import 'budget_clay_semicircle_gauge.dart';
 
@@ -93,7 +94,9 @@ final class _BalanceYearFocusedLayoutState
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final selectorHeight = constraints.maxHeight * .21;
+      final selectorHeight = BalanceFocusedLayoutGeometry.topSectionHeight(
+        constraints.maxHeight,
+      );
       final compact = constraints.maxHeight < 240;
       final selected = _selectedMonth == null
           ? null

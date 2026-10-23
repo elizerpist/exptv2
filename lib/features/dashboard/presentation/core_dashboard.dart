@@ -22,6 +22,7 @@ import '../../../core/design/dashboard_body_order.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../../../core/preferences/data/method_channel_dashboard_presentation_preferences_store.dart';
 import '../application/dashboard_core_controller.dart';
+import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../application/dashboard_core_mode_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/dashboard_budget_presentation_controller.dart';
@@ -40,6 +41,8 @@ import '../mind/domain/mind_header_score_chart_presentation.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
+import 'dashboard_day_rhythm_navigation.dart';
+import 'widgets/dashboard_temporal_component_carousel.dart';
 import 'core_modes/balance_presentation_settings.dart';
 import 'core_modes/balance_header_glass_configuration.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
@@ -168,6 +171,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final BudgetDistributionPageController _budgetDistributionPageController;
   late final DashboardHeaderVisualController _headerVisualController;
   late final bool _ownsHeaderVisualController;
+  final _temporalCarouselCoordinator = DashboardTemporalCarouselCoordinator();
   late final BalancePresentationController _balancePresentationSettings;
   late final DashboardPresentationPreferencesController
   _dashboardPresentationPreferences;
@@ -546,6 +550,9 @@ class _CoreDashboardState extends State<CoreDashboard>
         restored.balanceUsesChildCards,
       );
       _balancePresentationSettings
+        ..setDayLayoutPresentation(restored.balanceDayLayoutPresentation)
+        ..setDayFocusedPresentation(restored.balanceDayFocusedPresentation)
+        ..setShowFocusedDayImpact(restored.balanceShowFocusedDayImpact)
         ..setMonthLayoutPresentation(restored.balanceMonthLayoutPresentation)
         ..setYearLayoutPresentation(restored.balanceYearLayoutPresentation)
         ..setDailyCalculationMode(restored.balanceDailyCalculationMode)
@@ -581,6 +588,12 @@ class _CoreDashboardState extends State<CoreDashboard>
         showDayContentViewChooser: mind.showDayContentViewChooser,
         balanceUsesChildCards:
             _balancePresentationSettings.value.usesChildCards,
+        balanceDayLayoutPresentation:
+            _balancePresentationSettings.value.dayLayoutPresentation,
+        balanceDayFocusedPresentation:
+            _balancePresentationSettings.value.dayFocusedPresentation,
+        balanceShowFocusedDayImpact:
+            _balancePresentationSettings.value.showFocusedDayImpact,
         balanceMonthLayoutPresentation:
             _balancePresentationSettings.value.monthLayoutPresentation,
         balanceYearLayoutPresentation:
@@ -1067,6 +1080,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                       ),
                                       DashboardCoreModeHost(
                                         controller: modeController,
+                                        balanceDayRhythmNavigation:
+                                            _dayRhythmNavigation,
                                         balancePresentation:
                                             controller.balancePresentation,
                                         balanceLinkedPresentation: controller
@@ -1291,6 +1306,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                       _FramePosition(
                                         bounds: geometry.summaryBounds,
                                         child: _DashboardSummaryRegion(
+                                          temporalCarouselCoordinator:
+                                              _temporalCarouselCoordinator,
                                           bounds: geometry.summaryBounds,
                                           controller: controller,
                                           summaryPillVariants:
@@ -2102,6 +2119,50 @@ class _CoreDashboardState extends State<CoreDashboard>
     if (mounted) setState(() {});
   }
 
+  DashboardDayRhythmNavigation get _dayRhythmNavigation =>
+      DashboardDayRhythmNavigation(
+        navigation: controller.navigation,
+        coordinator: _temporalCarouselCoordinator,
+        candidateForOffset: (origin, offset) =>
+            controller.experimentalTemporalComponentOffsetCandidate(
+              plane: origin.plane,
+              isRailOpen: origin.isRailOpen,
+              component: DashboardTemporalAnchorComponent.day,
+              offset: offset,
+              base: origin,
+            ),
+        onCrossed: (candidate) =>
+            controller.navigateExperimentalTemporalComponentCandidate(
+              candidate: candidate,
+              component: DashboardTemporalAnchorComponent.day,
+            ),
+        paintedTargets: controller.segmentedTargetPainted,
+        onVisualTargetPainted: (candidate) =>
+            controller.noteSegmentedSummaryComponentVisualTargetPainted(
+              candidate: candidate,
+              component: DashboardTemporalAnchorComponent.day,
+            ),
+        onSettled: (candidate) =>
+            controller.settleExperimentalTemporalComponentCandidate(
+              candidate: candidate,
+              component: DashboardTemporalAnchorComponent.day,
+            ),
+        onMotionActiveChanged: (active) {
+          if (!mounted) return;
+          if (active) {
+            controller.beginSegmentedSummaryMotion();
+          } else {
+            controller.endSegmentedSummaryMotion();
+          }
+        },
+        onDirectInputStarted: () {
+          _cancelSummaryAutoReset();
+          controller.noteSummaryDirectPointerDown();
+        },
+        onPointerDownDecision: controller.recordSegmentedPointerDown,
+        motionDiagnostics: controller.railFlightRecorder,
+      );
+
   void _cancelSummaryAutoReset() {
     _summaryAutoResetController.cancel();
     _summaryAutoResetMotions.cancelActiveResetMotion();
@@ -2167,6 +2228,7 @@ class _CoreDashboardState extends State<CoreDashboard>
 
 class _DashboardSummaryRegion extends StatelessWidget {
   const _DashboardSummaryRegion({
+    required this.temporalCarouselCoordinator,
     required this.bounds,
     required this.controller,
     required this.summaryPillVariants,
@@ -2181,6 +2243,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
     required this.onBackgroundVerticalDragStart,
   });
 
+  final DashboardTemporalCarouselCoordinator temporalCarouselCoordinator;
   final DashboardBounds bounds;
   final DashboardCoreController controller;
   final SummaryPillVariantController summaryPillVariants;
@@ -2210,6 +2273,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
             builder: (context, presentation, _) => switch (variant) {
               SummaryPillVariant.legacy => _legacyPill(transitionEpoch),
               SummaryPillVariant.segmented => SummaryPillExperiment(
+                temporalCarouselCoordinator: temporalCarouselCoordinator,
                 variant: variant,
                 bounds: bounds,
                 navigation: controller.navigation,
@@ -2235,6 +2299,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
                   // a ballistic/scene callback can outlive a new pointer
                   // until its own asynchronous cleanup happens.
                   controller.noteSummaryDirectPointerDown();
+                  temporalCarouselCoordinator.preemptAll();
                   autoResetController.cancel();
                   autoResetMotions.cancelActiveResetMotion();
                 },
@@ -2311,6 +2376,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
 
   Widget _legacyPill(int transitionEpoch) {
     return DashboardSummaryPill(
+      temporalCarouselCoordinator: temporalCarouselCoordinator,
       bounds: bounds,
       navigation: controller.navigation,
       visibleFrames: controller.visibleFrames,
@@ -2321,7 +2387,10 @@ class _DashboardSummaryRegion extends StatelessWidget {
         active,
       ),
       onAmountMotionActiveChanged: onAmountMotionActiveChanged,
-      onDirectInputStarted: controller.noteSummaryDirectPointerDown,
+      onDirectInputStarted: () {
+        controller.noteSummaryDirectPointerDown();
+        temporalCarouselCoordinator.preemptAll();
+      },
       horizontalCandidateBuilder: _horizontalCandidate,
       performanceCounters: controller.performanceCounters,
       onToggleRail: controller.toggleRail,

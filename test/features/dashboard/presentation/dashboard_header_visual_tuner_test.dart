@@ -102,6 +102,83 @@ void main() {
   );
 
   testWidgets(
+    'focused day controls remain conditional and retain independent preferences',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final balance = BalancePresentationController();
+      addTearDown(balance.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 1700,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              balancePresentationSettings: balance,
+            ),
+          ),
+        ),
+      );
+      await _openTunerTopics(tester, controller, [
+        DashboardHeaderTunerSection.balancePresentation,
+      ]);
+      final original = balance.value;
+      expect(find.text('Napi nézet elrendezése'), findsOneWidget);
+      expect(find.text('Új nézet tartalma'), findsNothing);
+      final toggle = find.byKey(
+        const ValueKey('balance-focused-day-impact-toggle'),
+      );
+      expect(toggle, findsNothing);
+      Future<void> select(String key) async {
+        final target = find.byKey(ValueKey(key));
+        await tester.ensureVisible(target);
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.tap(target);
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      await select('balance-day-layout-focused');
+      expect(find.text('Új nézet tartalma'), findsOneWidget);
+      expect(toggle, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      await select('balance-focused-day-impact-toggle');
+      expect(balance.value.showFocusedDayImpact, isFalse);
+      await select('balance-day-focused-dailyImpactFocus');
+      expect(toggle, findsNothing);
+      expect(balance.value.showFocusedDayImpact, isFalse);
+      await select('balance-day-focused-financialComparison');
+      expect(toggle, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      await select('balance-day-layout-current');
+      expect(toggle, findsNothing);
+      expect(find.text('Új nézet tartalma'), findsNothing);
+      await select('balance-day-layout-focused');
+      expect(
+        balance.value.dayFocusedPresentation,
+        BalanceDayFocusedPresentation.financialComparison,
+      );
+      expect(balance.value.showFocusedDayImpact, isFalse);
+      expect(
+        balance.value.monthLayoutPresentation,
+        original.monthLayoutPresentation,
+      );
+      expect(
+        balance.value.yearLayoutPresentation,
+        original.yearLayoutPresentation,
+      );
+      expect(balance.value.dailyCalculationMode, original.dailyCalculationMode);
+      expect(
+        balance.value.headerGraphPresentation,
+        original.headerGraphPresentation,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
     'BGV-04: Balance glass controls are progressive, live, and retain independent material panels',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1800));
@@ -974,6 +1051,7 @@ void main() {
         const ValueKey<String>('balance-alternative-mother-card-visible-off'),
       );
       await tester.ensureVisible(motherCardOff);
+      await tester.pump(const Duration(milliseconds: 250));
       await tester.tap(motherCardOff);
       await tester.pump();
       expect(balance.value.alternativeMotherCardVisible, isFalse);

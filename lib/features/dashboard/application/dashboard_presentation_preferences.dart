@@ -17,6 +17,10 @@ final class DashboardPresentationPreferences {
     required this.showDayContentViewChooser,
     required this.balanceUsesChildCards,
     required this.balanceHeaderGraphPresentation,
+    this.balanceDayLayoutPresentation = BalanceDayLayoutPresentation.current,
+    this.balanceDayFocusedPresentation =
+        BalanceDayFocusedPresentation.financialCompass,
+    this.balanceShowFocusedDayImpact = true,
     this.balanceMonthLayoutPresentation =
         BalanceMonthLayoutPresentation.current,
     this.balanceYearLayoutPresentation = BalanceYearLayoutPresentation.current,
@@ -33,6 +37,9 @@ final class DashboardPresentationPreferences {
   final MindYearHeatmapGridLayout yearGridLayout;
   final MindYearMonthlyAmountPresentation yearMonthlyAmountPresentation;
   final bool showDayContentViewChooser;
+  final BalanceDayLayoutPresentation balanceDayLayoutPresentation;
+  final BalanceDayFocusedPresentation balanceDayFocusedPresentation;
+  final bool balanceShowFocusedDayImpact;
   final BalanceMonthLayoutPresentation balanceMonthLayoutPresentation;
   final BalanceYearLayoutPresentation balanceYearLayoutPresentation;
   final BalanceDailyCalculationMode balanceDailyCalculationMode;
@@ -70,6 +77,9 @@ final class DashboardPresentationPreferences {
       other.yearGridLayout == yearGridLayout &&
       other.yearMonthlyAmountPresentation == yearMonthlyAmountPresentation &&
       other.showDayContentViewChooser == showDayContentViewChooser &&
+      other.balanceDayLayoutPresentation == balanceDayLayoutPresentation &&
+      other.balanceDayFocusedPresentation == balanceDayFocusedPresentation &&
+      other.balanceShowFocusedDayImpact == balanceShowFocusedDayImpact &&
       other.balanceMonthLayoutPresentation == balanceMonthLayoutPresentation &&
       other.balanceYearLayoutPresentation == balanceYearLayoutPresentation &&
       other.balanceDailyCalculationMode == balanceDailyCalculationMode &&
@@ -91,6 +101,9 @@ final class DashboardPresentationPreferences {
     yearGridLayout,
     yearMonthlyAmountPresentation,
     showDayContentViewChooser,
+    balanceDayLayoutPresentation,
+    balanceDayFocusedPresentation,
+    balanceShowFocusedDayImpact,
     balanceMonthLayoutPresentation,
     balanceYearLayoutPresentation,
     balanceDailyCalculationMode,

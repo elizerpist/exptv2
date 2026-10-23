@@ -173,6 +173,38 @@ enum BalanceMonthCombinedCardPresentation {
   };
 }
 
+/// Presentation-only alternatives for the daily Balance content.
+enum BalanceDayLayoutPresentation {
+  current,
+  focused;
+
+  String get tunerLabel => switch (this) {
+    current => 'Eddigi',
+    focused => 'Új',
+  };
+  String get tunerDescription => switch (this) {
+    current => 'Jelenlegi napi Balance nézet a korábbi kártyákkal.',
+    focused => 'Interaktív ritmuscsík és fókuszált napi elemzés.',
+  };
+}
+
+enum BalanceDayFocusedPresentation {
+  financialCompass,
+  financialComparison,
+  dailyImpactFocus;
+
+  String get tunerLabel => switch (this) {
+    financialCompass => 'Pénzügyi iránytű',
+    financialComparison => 'Pénzügyi mérleg',
+    dailyImpactFocus => 'Napi hatás fókusz',
+  };
+  String get tunerDescription => switch (this) {
+    financialCompass => 'A kiválasztott nap pénzügyi iránya.',
+    financialComparison => 'A napi bevétel és kiadás összehasonlítása.',
+    dailyImpactFocus => 'A kiválasztott nap hatása a havi eredményre.',
+  };
+}
+
 /// Presentation-only alternative for the extended monthly Balance content.
 enum BalanceMonthLayoutPresentation {
   current,
@@ -254,6 +286,10 @@ final class BalancePresentationSettings {
     this.headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
     this.monthCombinedCardPresentation =
         BalanceMonthCombinedCardPresentation.incomeExpense,
+    this.dayLayoutPresentation = BalanceDayLayoutPresentation.current,
+    this.dayFocusedPresentation =
+        BalanceDayFocusedPresentation.financialCompass,
+    this.showFocusedDayImpact = true,
     this.monthLayoutPresentation = BalanceMonthLayoutPresentation.current,
     this.yearLayoutPresentation = BalanceYearLayoutPresentation.current,
     this.yearBarPresentation = BalanceYearBarPresentation.current,
@@ -317,6 +353,9 @@ final class BalancePresentationSettings {
       headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
       monthCombinedCardPresentation =
           BalanceMonthCombinedCardPresentation.incomeExpense,
+      dayLayoutPresentation = BalanceDayLayoutPresentation.current,
+      dayFocusedPresentation = BalanceDayFocusedPresentation.financialCompass,
+      showFocusedDayImpact = true,
       monthLayoutPresentation = BalanceMonthLayoutPresentation.current,
       yearLayoutPresentation = BalanceYearLayoutPresentation.current,
       yearBarPresentation = BalanceYearBarPresentation.current,
@@ -347,6 +386,9 @@ final class BalancePresentationSettings {
   final double headerPartitionHeightPercent;
   final BalanceHeaderGlassConfiguration headerGlassConfiguration;
   final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
+  final BalanceDayLayoutPresentation dayLayoutPresentation;
+  final BalanceDayFocusedPresentation dayFocusedPresentation;
+  final bool showFocusedDayImpact;
   final BalanceMonthLayoutPresentation monthLayoutPresentation;
   final BalanceYearLayoutPresentation yearLayoutPresentation;
   final BalanceYearBarPresentation yearBarPresentation;
@@ -395,6 +437,9 @@ final class BalancePresentationSettings {
     double? headerPartitionHeightPercent,
     BalanceHeaderGlassConfiguration? headerGlassConfiguration,
     BalanceMonthCombinedCardPresentation? monthCombinedCardPresentation,
+    BalanceDayLayoutPresentation? dayLayoutPresentation,
+    BalanceDayFocusedPresentation? dayFocusedPresentation,
+    bool? showFocusedDayImpact,
     BalanceMonthLayoutPresentation? monthLayoutPresentation,
     BalanceYearLayoutPresentation? yearLayoutPresentation,
     BalanceYearBarPresentation? yearBarPresentation,
@@ -445,6 +490,10 @@ final class BalancePresentationSettings {
         headerGlassConfiguration ?? this.headerGlassConfiguration,
     monthCombinedCardPresentation:
         monthCombinedCardPresentation ?? this.monthCombinedCardPresentation,
+    dayLayoutPresentation: dayLayoutPresentation ?? this.dayLayoutPresentation,
+    dayFocusedPresentation:
+        dayFocusedPresentation ?? this.dayFocusedPresentation,
+    showFocusedDayImpact: showFocusedDayImpact ?? this.showFocusedDayImpact,
     monthLayoutPresentation:
         monthLayoutPresentation ?? this.monthLayoutPresentation,
     yearLayoutPresentation:
@@ -489,6 +538,9 @@ final class BalancePresentationSettings {
       other.headerPartitionHeightPercent == headerPartitionHeightPercent &&
       other.headerGlassConfiguration == headerGlassConfiguration &&
       other.monthCombinedCardPresentation == monthCombinedCardPresentation &&
+      other.dayLayoutPresentation == dayLayoutPresentation &&
+      other.dayFocusedPresentation == dayFocusedPresentation &&
+      other.showFocusedDayImpact == showFocusedDayImpact &&
       other.monthLayoutPresentation == monthLayoutPresentation &&
       other.yearLayoutPresentation == yearLayoutPresentation &&
       other.yearBarPresentation == yearBarPresentation &&
@@ -522,6 +574,9 @@ final class BalancePresentationSettings {
     headerPartitionHeightPercent,
     headerGlassConfiguration,
     monthCombinedCardPresentation,
+    dayLayoutPresentation,
+    dayFocusedPresentation,
+    showFocusedDayImpact,
     monthLayoutPresentation,
     yearLayoutPresentation,
     yearBarPresentation,
@@ -721,6 +776,33 @@ final class BalancePresentationController
     if (current.monthCombinedCardPresentation == next) return;
     value = current.copyWith(
       monthCombinedCardPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setDayLayoutPresentation(BalanceDayLayoutPresentation next) {
+    final current = value;
+    if (current.dayLayoutPresentation == next) return;
+    value = current.copyWith(
+      dayLayoutPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setDayFocusedPresentation(BalanceDayFocusedPresentation next) {
+    final current = value;
+    if (current.dayFocusedPresentation == next) return;
+    value = current.copyWith(
+      dayFocusedPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setShowFocusedDayImpact(bool next) {
+    final current = value;
+    if (current.showFocusedDayImpact == next) return;
+    value = current.copyWith(
+      showFocusedDayImpact: next,
       revision: current.revision + 1,
     );
   }

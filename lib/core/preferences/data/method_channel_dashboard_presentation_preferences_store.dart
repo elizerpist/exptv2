@@ -56,6 +56,18 @@ final class MethodChannelDashboardPresentationPreferencesStore
             : MindYearMonthlyAmountPresentation.hidden,
         showDayContentViewChooser:
             values['showDayContentViewChooser'] as bool? ?? false,
+        balanceDayLayoutPresentation: _enumValue(
+          BalanceDayLayoutPresentation.values,
+          values['balanceDayLayoutPresentation'] as int?,
+          BalanceDayLayoutPresentation.current,
+        ),
+        balanceDayFocusedPresentation: _enumValue(
+          BalanceDayFocusedPresentation.values,
+          values['balanceDayFocusedPresentation'] as int?,
+          BalanceDayFocusedPresentation.financialCompass,
+        ),
+        balanceShowFocusedDayImpact:
+            values['balanceShowFocusedDayImpact'] as bool? ?? true,
         balanceMonthLayoutPresentation: _enumValue(
           BalanceMonthLayoutPresentation.values,
           values['balanceMonthLayoutPresentation'] as int?,
@@ -105,34 +117,39 @@ final class MethodChannelDashboardPresentationPreferencesStore
 
   @override
   Future<void> write(DashboardPresentationPreferences preferences) =>
-      _channel.invokeMethod<void>(
-        'writeDashboardPresentationSettings',
-        <String, Object>{
-          'sumVisualStyle': preferences.sumVisualStyle.index,
-          'showSumLayoutChooser': preferences.showSumLayoutChooser,
-          'yearGridLayout': preferences.yearGridLayout.index,
-          'yearMonthlyAmountPresentation':
-              preferences.yearMonthlyAmountPresentation.index,
-          'showDayContentViewChooser': preferences.showDayContentViewChooser,
-          'balanceMonthLayoutPresentation':
-              preferences.balanceMonthLayoutPresentation.index,
-          'balanceYearLayoutPresentation':
-              preferences.balanceYearLayoutPresentation.index,
-          'balanceDailyCalculationMode':
-              preferences.balanceDailyCalculationMode.index,
-          'balanceUsesChildCards': preferences.balanceUsesChildCards,
-          'balanceHeaderGraphPresentation':
-              preferences.balanceHeaderGraphPresentation.index,
-          'balanceMonthlySpendingChartPresentation':
-              preferences.balanceMonthlySpendingChartPresentation.index,
-          'balanceHeaderPartitionHeightPercent':
-              preferences.balanceHeaderPartitionHeightPercent,
-          'balanceMonthCombinedCardPresentation':
-              preferences.balanceMonthCombinedCardPresentation.index,
-          'balanceHeaderGlassConfigurationJson':
-              preferences.balanceHeaderGlassConfigurationJson,
-        },
-      );
+      _channel.invokeMethod<void>('writeDashboardPresentationSettings', <
+        String,
+        Object
+      >{
+        'sumVisualStyle': preferences.sumVisualStyle.index,
+        'showSumLayoutChooser': preferences.showSumLayoutChooser,
+        'yearGridLayout': preferences.yearGridLayout.index,
+        'yearMonthlyAmountPresentation':
+            preferences.yearMonthlyAmountPresentation.index,
+        'showDayContentViewChooser': preferences.showDayContentViewChooser,
+        'balanceDayLayoutPresentation':
+            preferences.balanceDayLayoutPresentation.index,
+        'balanceDayFocusedPresentation':
+            preferences.balanceDayFocusedPresentation.index,
+        'balanceShowFocusedDayImpact': preferences.balanceShowFocusedDayImpact,
+        'balanceMonthLayoutPresentation':
+            preferences.balanceMonthLayoutPresentation.index,
+        'balanceYearLayoutPresentation':
+            preferences.balanceYearLayoutPresentation.index,
+        'balanceDailyCalculationMode':
+            preferences.balanceDailyCalculationMode.index,
+        'balanceUsesChildCards': preferences.balanceUsesChildCards,
+        'balanceHeaderGraphPresentation':
+            preferences.balanceHeaderGraphPresentation.index,
+        'balanceMonthlySpendingChartPresentation':
+            preferences.balanceMonthlySpendingChartPresentation.index,
+        'balanceHeaderPartitionHeightPercent':
+            preferences.balanceHeaderPartitionHeightPercent,
+        'balanceMonthCombinedCardPresentation':
+            preferences.balanceMonthCombinedCardPresentation.index,
+        'balanceHeaderGlassConfigurationJson':
+            preferences.balanceHeaderGlassConfigurationJson,
+      });
 }
 
 T _enumValue<T extends Enum>(List<T> values, int? index, T fallback) =>

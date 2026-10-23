@@ -1307,6 +1307,119 @@ final class _BalancePresentationSection extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.only(top: 12, bottom: 6),
+          child: Text('Napi nézet elrendezése'),
+        ),
+        for (final layout in BalanceDayLayoutPresentation.values)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Semantics(
+              selected: settings.dayLayoutPresentation == layout,
+              button: true,
+              child: InkWell(
+                key: ValueKey<String>('balance-day-layout-${layout.name}'),
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => controller.setDayLayoutPresentation(layout),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: settings.dayLayoutPresentation == layout
+                        ? FluviVisualTokens.surface
+                        : FluviVisualTokens.surfaceMuted,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: settings.dayLayoutPresentation == layout
+                          ? Theme.of(context).colorScheme.primary
+                          : FluviVisualTokens.border,
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(layout.tunerLabel),
+                            Text(
+                              layout.tunerDescription,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (settings.dayLayoutPresentation == layout)
+                        const Icon(Icons.check_rounded, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (settings.dayLayoutPresentation ==
+            BalanceDayLayoutPresentation.focused) ...[
+          const Padding(
+            padding: EdgeInsets.only(top: 12, bottom: 6),
+            child: Text('Új nézet tartalma'),
+          ),
+          for (final layout in BalanceDayFocusedPresentation.values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Semantics(
+                selected: settings.dayFocusedPresentation == layout,
+                button: true,
+                child: InkWell(
+                  key: ValueKey<String>('balance-day-focused-${layout.name}'),
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => controller.setDayFocusedPresentation(layout),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: settings.dayFocusedPresentation == layout
+                          ? FluviVisualTokens.surface
+                          : FluviVisualTokens.surfaceMuted,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: settings.dayFocusedPresentation == layout
+                            ? Theme.of(context).colorScheme.primary
+                            : FluviVisualTokens.border,
+                      ),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(layout.tunerLabel),
+                              Text(
+                                layout.tunerDescription,
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (settings.dayFocusedPresentation == layout)
+                          const Icon(Icons.check_rounded, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (settings.dayFocusedPresentation !=
+              BalanceDayFocusedPresentation.dailyImpactFocus)
+            SwitchListTile(
+              key: const ValueKey('balance-focused-day-impact-toggle'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Alsó Napi hatás'),
+              subtitle: Text(settings.showFocusedDayImpact ? 'BE' : 'KI'),
+              value: settings.showFocusedDayImpact,
+              onChanged: controller.setShowFocusedDayImpact,
+            ),
+        ],
+        const Padding(
+          padding: EdgeInsets.only(top: 12, bottom: 6),
           child: Text('Havi nézet elrendezése'),
         ),
         for (final layout in BalanceMonthLayoutPresentation.values)

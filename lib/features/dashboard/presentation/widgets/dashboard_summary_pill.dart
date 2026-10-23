@@ -21,6 +21,7 @@ import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
 import '../summary_navigation_motion_controller.dart';
 import 'summary_navigation_motion_region.dart';
+import 'dashboard_temporal_component_carousel.dart';
 import 'summary_pill_text_transition.dart';
 
 /// Stable SummaryPill shell with independently listening navigation and amount
@@ -36,6 +37,7 @@ final class DashboardSummaryPill extends StatefulWidget {
     this.onMotionActiveChanged,
     this.onAmountMotionActiveChanged,
     this.onDirectInputStarted,
+    this.temporalCarouselCoordinator,
     required this.horizontalCandidateBuilder,
     required this.onToggleRail,
     required this.onMoveFiner,
@@ -58,6 +60,7 @@ final class DashboardSummaryPill extends StatefulWidget {
   /// only to preempt stale maintenance; it does not make the pointer an input
   /// lock or manufacture a navigation action.
   final VoidCallback? onDirectInputStarted;
+  final DashboardTemporalCarouselCoordinator? temporalCarouselCoordinator;
   final SummaryTextContent? Function(SummaryTransitionDirection direction)
   horizontalCandidateBuilder;
   final VoidCallback onToggleRail;
@@ -84,6 +87,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   static const _maximumSumResistance = 5.0;
   static const _shellReturnDuration = Duration(milliseconds: 100);
 
+  bool _gesturePreempted = false;
   _SummaryGestureAxis? _axis;
   double _dx = 0;
   double _dy = 0;
@@ -100,6 +104,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   @override
   void initState() {
     super.initState();
+    widget.temporalCarouselCoordinator?.attach(this, _preemptTemporalMotion);
     _navigationChanges = Listenable.merge([
       widget.navigation,
       widget.visibleFrames.navigationLane,
@@ -114,6 +119,13 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   @override
   void didUpdateWidget(covariant DashboardSummaryPill oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(
+      oldWidget.temporalCarouselCoordinator,
+      widget.temporalCarouselCoordinator,
+    )) {
+      oldWidget.temporalCarouselCoordinator?.detach(this);
+      widget.temporalCarouselCoordinator?.attach(this, _preemptTemporalMotion);
+    }
     if (!identical(oldWidget.navigation, widget.navigation) ||
         !identical(oldWidget.visibleFrames, widget.visibleFrames)) {
       _navigationChanges = Listenable.merge([
@@ -147,6 +159,21 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       direction: base.direction,
       isPreview: visible.mode == DashboardVisibleMode.preview,
     );
+  }
+
+  void _preemptTemporalMotion() {
+    _gesturePreempted = true;
+    _shellGeneration += 1;
+    _shellReturnController.stop();
+    _returnShellGeneration = null;
+    _stagedTextGeneration = null;
+    _returnStartsTextTransition = false;
+    _axis = null;
+    _dx = 0;
+    _dy = 0;
+    _setShellOffset(Offset.zero);
+    widget.navigationMotionController.cancelStagedTextMotion();
+    widget.onMotionActiveChanged?.call(false);
   }
 
   void _handleShellReturnTick() {
@@ -237,7 +264,11 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       height: widget.bounds.height,
       child: Listener(
         behavior: HitTestBehavior.opaque,
-        onPointerDown: (_) => widget.onDirectInputStarted?.call(),
+        onPointerDown: (_) {
+          widget.onDirectInputStarted?.call();
+          widget.temporalCarouselCoordinator?.claim(this);
+          _gesturePreempted = false;
+        },
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onPanStart: (_) => _beginGesture(),
@@ -262,6 +293,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   }
 
   void _beginGesture() {
+    if (_gesturePreempted) return;
     widget.onMotionActiveChanged?.call(true);
     _shellReturnController.stop();
     _shellGeneration += 1;
@@ -277,6 +309,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   }
 
   void _updateGesture(DragUpdateDetails details) {
+    if (_gesturePreempted) return;
     _dx += details.delta.dx;
     _dy += details.delta.dy;
     _axis ??= _axisFor(_dx, _dy);
@@ -312,6 +345,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
   }
 
   void _finishGesture(DragEndDetails details) {
+    if (_gesturePreempted) return;
     final axis = _axis;
     if (axis == null) {
       _startShellReturn();
@@ -372,6 +406,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       SummaryTextContent(title: value.planeTitle, subtitle: value.subtitle);
 
   void _startShellReturn({int? stagedTextGeneration}) {
+    if (_gesturePreempted) return;
     _returnStartOffset = _shellOffset.value;
     _axis = null;
     _dx = 0;
@@ -410,6 +445,7 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
 
   @override
   void dispose() {
+    widget.temporalCarouselCoordinator?.detach(this);
     widget.onMotionActiveChanged?.call(false);
     _shellReturnController.dispose();
     _shellOffset.dispose();

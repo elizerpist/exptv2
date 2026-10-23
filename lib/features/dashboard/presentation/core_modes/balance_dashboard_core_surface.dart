@@ -30,6 +30,8 @@ import 'balance_alternative_visual_tokens.dart';
 import 'balance_extended_sheet_layout.dart';
 import 'balance_year_focused_layout.dart';
 import 'balance_month_focused_layout.dart';
+import 'balance_day_focused_layout.dart';
+import '../dashboard_day_rhythm_navigation.dart';
 import 'balance_four_section_layout.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_header_glass_bar.dart';
@@ -334,8 +336,10 @@ class BalanceDashboardCoreSurface extends StatefulWidget {
     this.presentationSettings,
     this.adaptiveScope = const AllTimeScope(),
     this.headerHistoryChartPointerObserver,
+    this.dayRhythmNavigation,
   });
 
+  final DashboardDayRhythmNavigation? dayRhythmNavigation;
   final DashboardCoreModePresentation presentation;
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
   final ValueListenable<DashboardBalanceLinkedPresentation?>?
@@ -565,6 +569,7 @@ final class _BalanceDashboardCoreSurfaceState
             ),
             if (showsTetris)
               _BalanceAlternativeScopeScaffold(
+                dayRhythmNavigation: widget.dayRhythmNavigation,
                 monthPerspective: () => _monthPerspective,
                 onMonthPerspectiveChanged: (next) {
                   _monthPerspective = next;
@@ -954,6 +959,7 @@ final class _BalanceUnifiedHeaderContentBridge extends StatelessWidget {
 /// this UI boundary; it never asks for a second projection or query.
 final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
   const _BalanceAlternativeScopeScaffold({
+    this.dayRhythmNavigation,
     required this.monthPerspective,
     required this.onMonthPerspectiveChanged,
     required this.yearPerspective,
@@ -963,6 +969,7 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
     required this.presentationSettings,
   });
 
+  final DashboardDayRhythmNavigation? dayRhythmNavigation;
   final ValueGetter<BalanceMonthPerspective> monthPerspective;
   final ValueChanged<BalanceMonthPerspective> onMonthPerspectiveChanged;
   final ValueGetter<BalanceYearPerspective> yearPerspective;
@@ -1049,10 +1056,19 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
                           settings.monthlySpendingChartPresentation,
                     ),
             BalanceAlternativeDayPresentation() =>
-              _BalanceDayExtendedSheetScaffold(
-                geometry: geometry,
-                presentation: alternative,
-              ),
+              settings.dayLayoutPresentation ==
+                      BalanceDayLayoutPresentation.focused
+                  ? _BalanceDayFocusedScaffold(
+                      geometry: geometry,
+                      presentation: alternative,
+                      focusedPresentation: settings.dayFocusedPresentation,
+                      showFocusedDayImpact: settings.showFocusedDayImpact,
+                      navigation: dayRhythmNavigation,
+                    )
+                  : _BalanceDayExtendedSheetScaffold(
+                      geometry: geometry,
+                      presentation: alternative,
+                    ),
           },
         );
       },
@@ -1328,6 +1344,40 @@ final class _BalanceMonthFocusedScaffold extends StatelessWidget {
               presentation: presentation,
               initialPerspective: initialPerspective,
               onPerspectiveChanged: onPerspectiveChanged,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+final class _BalanceDayFocusedScaffold extends StatelessWidget {
+  const _BalanceDayFocusedScaffold({
+    required this.geometry,
+    required this.presentation,
+    required this.focusedPresentation,
+    required this.showFocusedDayImpact,
+    this.navigation,
+  });
+  final DashboardLayoutFrame geometry;
+  final BalanceAlternativeDayPresentation presentation;
+  final BalanceDayFocusedPresentation focusedPresentation;
+  final bool showFocusedDayImpact;
+  final DashboardDayRhythmNavigation? navigation;
+  @override
+  Widget build(BuildContext context) => DashboardCoreModeFramePosition(
+    bounds: DashboardHeaderContentMotherCardBounds.resolve(geometry: geometry),
+    child: LayoutBuilder(
+      builder: (context, c) => Stack(
+        children: [
+          Positioned.fromRect(
+            rect: _balanceAlternativeBodyRect(c, geometry.headerBounds.height),
+            child: BalanceDayFocusedLayout(
+              presentation: presentation.dailyInsights,
+              focusedPresentation: focusedPresentation,
+              showFocusedDayImpact: showFocusedDayImpact,
+              navigation: navigation,
             ),
           ),
         ],

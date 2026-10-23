@@ -40,6 +40,10 @@ void main() {
         showDayContentViewChooser: original.showDayContentViewChooser,
         balanceUsesChildCards: original.balanceUsesChildCards,
         balanceHeaderGraphPresentation: original.balanceHeaderGraphPresentation,
+        balanceDayLayoutPresentation: BalanceDayLayoutPresentation.focused,
+        balanceDayFocusedPresentation:
+            BalanceDayFocusedPresentation.dailyImpactFocus,
+        balanceShowFocusedDayImpact: false,
         balanceMonthLayoutPresentation: BalanceMonthLayoutPresentation.focused,
         balanceYearLayoutPresentation: BalanceYearLayoutPresentation.focused,
         balanceDailyCalculationMode: BalanceDailyCalculationMode.allTimeToDate,
@@ -53,6 +57,19 @@ void main() {
         await MethodChannelDashboardPresentationPreferencesStore().read(),
         choice,
       );
+      stored['balanceDayLayoutPresentation'] = 99;
+      stored['balanceDayFocusedPresentation'] = 99;
+      stored.remove('balanceShowFocusedDayImpact');
+      final restoredDay = await store.read();
+      expect(
+        restoredDay.balanceDayLayoutPresentation,
+        BalanceDayLayoutPresentation.current,
+      );
+      expect(
+        restoredDay.balanceDayFocusedPresentation,
+        BalanceDayFocusedPresentation.financialCompass,
+      );
+      expect(restoredDay.balanceShowFocusedDayImpact, isTrue);
       stored['balanceMonthLayoutPresentation'] = 99;
       expect(
         (await store.read()).balanceMonthLayoutPresentation,
@@ -167,6 +184,11 @@ void main() {
       'yearMonthlyAmountPresentation':
           MindYearMonthlyAmountPresentation.inline.index,
       'showDayContentViewChooser': false,
+      'balanceDayLayoutPresentation':
+          BalanceDayLayoutPresentation.current.index,
+      'balanceDayFocusedPresentation':
+          BalanceDayFocusedPresentation.financialCompass.index,
+      'balanceShowFocusedDayImpact': true,
       'balanceMonthLayoutPresentation':
           BalanceMonthLayoutPresentation.current.index,
       'balanceYearLayoutPresentation':
