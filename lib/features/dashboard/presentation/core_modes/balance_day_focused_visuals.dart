@@ -4,6 +4,7 @@ import '../../../../core/design/fluvi_year_clay_capsule_painter.dart';
 import '../../application/dashboard_balance_daily_insights_projection.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import 'budget_clay_semicircle_gauge.dart';
+import 'balance_day_visual_presentation.dart';
 
 const _ink = Color(0xff111d52);
 const _green = Color(0xff00a882);
@@ -164,65 +165,136 @@ final class BalanceDayFinancialComparison extends StatelessWidget {
     if (!momentum.available) {
       return const Center(child: Text('Még nincs összehasonlítható előzmény'));
     }
-    final p = momentum.selected;
+    final point = momentum.selected;
+    final scale = BalanceDayComparisonBarScale.fromPoint(point);
     return LayoutBuilder(
       builder: (context, bounds) {
         final compact = bounds.maxHeight < 240;
         return Column(
           children: [
+            _text(
+              point.quadrant.label,
+              size: compact ? 15 : 23,
+              weight: FontWeight.w800,
+            ),
+            _text(
+              _momentumDetail(point),
+              size: compact ? 8 : 11,
+              color: const Color(0xff52618c),
+            ),
             Row(
               children: [
-                SizedBox(
-                  width: compact ? 22 : 30,
-                  height: compact ? 22 : 30,
-                  child: FittedBox(
-                    child: _referenceIcon(Icons.balance_rounded),
-                  ),
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    'Az elmúlt 30 nap változása',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: _ink,
+                for (var group = 0; group < 2; group++)
+                  Expanded(
+                    child: _text(
+                      _percent(
+                        group == 0
+                            ? _change(
+                                point.currentIncomeMinor,
+                                point.referenceIncomeMinor,
+                              )
+                            : _change(
+                                point.currentExpenseMinor,
+                                point.referenceExpenseMinor,
+                              ),
+                      ),
+                      size: compact ? 18 : 29,
+                      color: group == 0 ? _green : _pink,
+                      weight: FontWeight.w800,
+                      lines: 1,
                     ),
                   ),
-                ),
               ],
             ),
-            SizedBox(height: compact ? 4 : 10),
             Expanded(
-              child: Row(
-                key: const ValueKey('balance-day-comparison-panels'),
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: _ComparisonPanel(
-                      title: 'Bevétel',
-                      current: p.currentIncomeMinor,
-                      reference: p.referenceIncomeMinor,
-                      color: _green,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _ComparisonPanel(
-                      title: 'Kiadás',
-                      current: p.currentExpenseMinor,
-                      reference: p.referenceExpenseMinor,
-                      color: _pink,
-                    ),
-                  ),
-                ],
+              child: CustomPaint(
+                key: const ValueKey('balance-day-comparison-chart'),
+                size: Size.infinite,
+                painter: BalanceDayComparisonPainter(scale),
               ),
             ),
-            SizedBox(height: compact ? 4 : 10),
-            _StatusStrip(
-              title: p.quadrant.label,
-              detail: _momentumDetail(p),
-              compact: compact,
+            Row(
+              children: [
+                for (var group = 0; group < 2; group++)
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: bounds.maxWidth * .05,
+                      ),
+                      child: Row(
+                        children: [
+                          for (
+                            var withinGroup = 0;
+                            withinGroup < 2;
+                            withinGroup++
+                          )
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: _text(
+                                      _money(
+                                        scale.amountsMinor[group * 2 +
+                                            withinGroup],
+                                      ),
+                                      size: compact ? 8 : 12,
+                                      weight: FontWeight.w800,
+                                      lines: 1,
+                                    ),
+                                  ),
+                                  _text(
+                                    withinGroup == 0
+                                        ? 'előző 30 nap'
+                                        : 'utolsó 30 nap',
+                                    size: compact ? 6 : 8,
+                                    color: const Color(0xff52618c),
+                                    lines: 1,
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            Row(
+              children: [
+                for (var group = 0; group < 2; group++)
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          height: 5,
+                          margin: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color:
+                                    (group == 0
+                                            ? const Color(0xffb17af2)
+                                            : _pink)
+                                        .withValues(alpha: .4),
+                              ),
+                            ),
+                            borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(5),
+                            ),
+                          ),
+                        ),
+                        _text(
+                          group == 0 ? 'Bevétel' : 'Kiadás',
+                          size: compact ? 9 : 13,
+                          color: group == 0 ? _ink : _pink,
+                          weight: FontWeight.w800,
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           ],
         );
@@ -231,237 +303,159 @@ final class BalanceDayFinancialComparison extends StatelessWidget {
   }
 }
 
-final class _ComparisonPanel extends StatelessWidget {
-  const _ComparisonPanel({
-    required this.title,
-    required this.current,
-    required this.reference,
-    required this.color,
-  });
-  final String title;
-  final int current, reference;
-  final Color color;
+final class BalanceDayImpactFocus extends StatelessWidget {
+  const BalanceDayImpactFocus({super.key, required this.impact});
+  final DashboardBalanceDailyImpactPresentation impact;
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, bounds) {
-      final compact = bounds.maxHeight < 150;
-      if (bounds.maxHeight < 65) {
-        return Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: .035),
-            borderRadius: BorderRadius.circular(17),
-            border: Border.all(color: color.withValues(alpha: .065)),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.account_balance_wallet_rounded,
-                    size: 10,
-                    color: color,
-                  ),
-                  const SizedBox(width: 3),
-                  Text(
-                    title,
-                    style: const TextStyle(fontSize: 7, height: 1, color: _ink),
-                  ),
-                  const SizedBox(width: 3),
-                  Expanded(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        _money(current),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          height: 1,
-                          fontWeight: FontWeight.w800,
-                          color: _ink,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 1),
-              Text(
-                'előző 30 nap: ${_money(reference)}',
-                maxLines: 1,
-                style: const TextStyle(fontSize: 6, height: 1, color: _ink),
-              ),
-              const SizedBox(height: 1),
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: CustomPaint(
-                        size: Size.infinite,
-                        painter: _PairPainter(current, reference, color),
-                      ),
-                    ),
-                    Text(
-                      _percent(_change(current, reference)),
-                      style: TextStyle(
-                        fontSize: 9,
-                        height: 1,
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-      return Container(
-        padding: EdgeInsets.all(compact ? 5 : 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .035),
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: color.withValues(alpha: .065)),
-        ),
-        child: Column(
+  Widget build(BuildContext context) {
+    final comparison = BalanceDaySevenDayComparisonPresentation.fromImpact(
+      impact,
+    );
+    final title = !impact.available
+        ? 'Nincs elegendő adat'
+        : impact.isImproving
+        ? 'Javulás'
+        : impact.isWorsening
+        ? 'Romlás'
+        : 'Nincs változás';
+    final detail = !impact.available
+        ? 'Az összehasonlításhoz további kiadási előzmények szükségesek.'
+        : impact.isImproving
+        ? 'Az aktuális nap csökkentette a 7 napos kiadási szintet.'
+        : impact.isWorsening
+        ? 'Az aktuális nap növelte a 7 napos kiadási szintet.'
+        : 'A két 7 napos időszak kiadási szintje megegyezik.';
+    return LayoutBuilder(
+      builder: (context, bounds) {
+        final compact = bounds.maxHeight < 240;
+        return Column(
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  padding: EdgeInsets.all(compact ? 3 : 7),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(compact ? 7 : 12),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Colors.white, color.withValues(alpha: .18)],
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.account_balance_wallet_rounded,
-                    color: color,
-                    size: compact ? 14 : 26,
-                  ),
+                Icon(
+                  Icons.bar_chart_rounded,
+                  color: const Color(0xff9258ef),
+                  size: compact ? 22 : 31,
                 ),
-                SizedBox(width: compact ? 4 : 6),
-                Expanded(
-                  child: Column(
-                    children: [
-                      _text(
-                        title,
-                        size: compact ? 8 : 11,
-                        color: color,
-                        lines: 1,
-                      ),
-                      if (compact)
-                        _text(
-                          _money(current),
-                          size: 12,
-                          weight: FontWeight.w800,
-                          lines: 1,
-                        ),
-                    ],
+                const SizedBox(width: 8),
+                Flexible(
+                  child: _text(
+                    title,
+                    size: compact ? 19 : 29,
+                    weight: FontWeight.w800,
                   ),
                 ),
               ],
             ),
-            if (!compact) ...[
-              const SizedBox(height: 4),
-              _text(
-                _money(current),
-                size: 16,
-                weight: FontWeight.w800,
-                lines: 1,
-              ),
-            ],
             _text(
-              'előző 30 nap: ${_money(reference)}',
-              size: compact ? 7 : 8,
+              _percent(impact.available ? impact.valuePercent : null),
+              size: compact ? 27 : 40,
+              weight: FontWeight.w800,
+              color: impact.isWorsening
+                  ? _pink
+                  : impact.isImproving
+                  ? _green
+                  : const Color(0xff7784aa),
               lines: 1,
             ),
-            SizedBox(height: compact ? 2 : 6),
-            Expanded(
+            _text(
+              detail,
+              size: compact ? 8 : 11,
+              color: const Color(0xff52618c),
+            ),
+            Expanded(child: _ImpactTube(impact: impact)),
+            Container(
+              key: const ValueKey('balance-day-seven-day-comparison'),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 8 : 14,
+                vertical: compact ? 5 : 12,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xfff5f7ff), Color(0xffeceffc)],
+                ),
+                border: Border.all(color: Colors.white.withValues(alpha: .85)),
+              ),
               child: Row(
                 children: [
-                  Expanded(
-                    child: CustomPaint(
-                      painter: _PairPainter(current, reference, color),
-                      size: Size.infinite,
-                    ),
+                  Icon(
+                    Icons.calendar_month_rounded,
+                    color: const Color(0xff929ac0),
+                    size: compact ? 18 : 26,
                   ),
                   Expanded(
-                    child: _text(
-                      _percent(_change(current, reference)),
-                      size: compact ? 11 : 20,
-                      color: color,
-                      weight: FontWeight.w800,
-                      lines: 1,
+                    child: _SevenDayColumn(
+                      total: comparison.previousTotalLabel,
+                      title: 'Előző 7 nap',
+                      average: comparison.previousDailyAverageLabel,
+                      compact: compact,
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: const Color(0xff929ac0),
+                    size: compact ? 18 : 26,
+                  ),
+                  Expanded(
+                    child: _SevenDayColumn(
+                      total: comparison.currentTotalLabel,
+                      title: 'Aktuális 7 nap',
+                      average: comparison.currentDailyAverageLabel,
+                      compact: compact,
                     ),
                   ),
                 ],
               ),
             ),
           ],
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
-final class BalanceDayImpactFocus extends StatelessWidget {
-  const BalanceDayImpactFocus({super.key, required this.impact});
-  final DashboardBalanceDailyImpactPresentation impact;
+final class _SevenDayColumn extends StatelessWidget {
+  const _SevenDayColumn({
+    required this.total,
+    required this.title,
+    required this.average,
+    required this.compact,
+  });
+  final String total, title, average;
+  final bool compact;
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, bounds) {
-      final compact = bounds.maxHeight < 240;
-      return Column(
-        children: [
-          _ImpactHeading(impact: impact, compact: compact),
-          Expanded(flex: 5, child: _ImpactTube(impact: impact)),
-          Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                Expanded(
-                  child: _SevenPanel(
-                    title: 'Előző 7 nap',
-                    value: impact.previousSevenExpenseMinor,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _SevenPanel(
-                    title: 'Aktuális 7 nap',
-                    value: impact.currentSevenExpenseMinor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: compact ? 6 : 10),
-          _StatusStrip(
-            compact: compact,
-            title: !impact.available
-                ? 'Nincs elegendő összehasonlítható adat'
-                : impact.isImproving
-                ? 'Javulás'
-                : impact.isWorsening
-                ? 'Romlás'
-                : 'Nincs változás',
-            detail: !impact.available
-                ? 'Még nincs összehasonlítható 7 napos időszak.'
-                : impact.isImproving
-                ? 'Az aktuális nap csökkentette a 7 napos kiadási szintet.'
-                : impact.isWorsening
-                ? 'Az aktuális nap növelte a 7 napos kiadási szintet.'
-                : 'A két 7 napos időszak kiadási szintje megegyezik.',
-            color: impact.isWorsening ? _pink : _green,
-          ),
-        ],
-      );
-    },
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        child: _text(
+          total,
+          size: compact ? 12 : 19,
+          weight: FontWeight.w800,
+          lines: 1,
+        ),
+      ),
+      _text(
+        title,
+        size: compact ? 7 : 10,
+        color: const Color(0xff52618c),
+        lines: 1,
+      ),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        child: _text(
+          average,
+          size: compact ? 6 : 9,
+          color: const Color(0xff7784aa),
+          lines: 1,
+        ),
+      ),
+    ],
   );
 }
 
@@ -521,137 +515,6 @@ final class _ImpactHeading extends StatelessWidget {
         ),
       ),
     ],
-  );
-}
-
-final class _SevenPanel extends StatelessWidget {
-  const _SevenPanel({required this.title, required this.value});
-  final String title;
-  final int value;
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, bounds) {
-      final compact = bounds.maxHeight < 75;
-      final tiny = bounds.maxHeight < 40;
-      return Container(
-        alignment: Alignment.center,
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 5 : 8,
-          vertical: compact ? 3 : 8,
-        ),
-        decoration: BoxDecoration(
-          color: const Color(0xfff3f5fe),
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.calendar_month_rounded,
-              color: const Color(0xff536491),
-              size: compact ? 14 : 23,
-            ),
-            SizedBox(width: compact ? 4 : 8),
-            Expanded(
-              child: DefaultTextStyle.merge(
-                style: const TextStyle(height: 1),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _text(
-                      title,
-                      size: tiny
-                          ? 7
-                          : compact
-                          ? 8
-                          : 10,
-                      color: const Color(0xff52618c),
-                      lines: 1,
-                    ),
-                    _text(
-                      _money(value),
-                      size: tiny
-                          ? 10
-                          : compact
-                          ? 12
-                          : 16,
-                      weight: FontWeight.w800,
-                      lines: 1,
-                    ),
-                    _text(
-                      '(${_money((value / 7).round())} / nap)',
-                      size: tiny
-                          ? 6
-                          : compact
-                          ? 7
-                          : 10,
-                      lines: 1,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
-
-final class _StatusStrip extends StatelessWidget {
-  const _StatusStrip({
-    required this.title,
-    required this.detail,
-    this.color = _green,
-    this.compact = false,
-  });
-  final String title, detail;
-  final Color color;
-  final bool compact;
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: EdgeInsets.symmetric(
-      horizontal: compact ? 8 : 12,
-      vertical: compact ? 6 : 10,
-    ),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(15),
-      gradient: LinearGradient(
-        colors: [color.withValues(alpha: .13), color.withValues(alpha: .08)],
-      ),
-    ),
-    child: Row(
-      children: [
-        Icon(Icons.trending_up_rounded, color: color, size: compact ? 22 : 29),
-        SizedBox(width: compact ? 7 : 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: compact ? 13 : 16,
-                  fontWeight: FontWeight.w800,
-                  color: _ink,
-                ),
-              ),
-              Text(
-                detail,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: compact ? 8 : 10,
-                  color: const Color(0xff52618c),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
   );
 }
 
@@ -776,32 +639,56 @@ void _sphere(Canvas canvas, Offset center, double r, Color base) {
   );
 }
 
-final class _PairPainter extends CustomPainter {
-  const _PairPainter(this.current, this.reference, this.color);
-  final int current, reference;
-  final Color color;
+/// Four flow volumes share one prepared financial scale and the Budget material.
+final class BalanceDayComparisonPainter extends CustomPainter {
+  const BalanceDayComparisonPainter(this.scale);
+  final BalanceDayComparisonBarScale scale;
+  List<Rect> barRects(Size size) {
+    final slot = size.width / 4;
+    final width = math.min(42.0, slot * .45);
+    final usableHeight = math.max(0.0, size.height - width * .3 - 4);
+    return [
+      for (var i = 0; i < 4; i++)
+        Rect.fromLTWH(
+          size.width * const [.15, .35, .65, .85][i] - width / 2,
+          usableHeight * (1 - scale.fractions[i]),
+          width,
+          usableHeight * scale.fractions[i],
+        ),
+    ];
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    final max = math.max(1, math.max(current, reference));
-    final width = math.min(19.0, size.width * .27);
-    for (var i = 0; i < 2; i++) {
-      final value = i == 0 ? reference : current;
-      if (value <= 0) continue;
-      final h = value / max * math.max(0, size.height - 8);
-      final rect = Rect.fromLTWH(
-        size.width * .15 + i * (width + 4),
-        size.height - h - 4,
-        width,
-        h,
+    const colors = [
+      Color(0xffb17af2),
+      Color(0xff18bba3),
+      Color(0xffefacd5),
+      _pink,
+    ];
+    final rects = barRects(size);
+    canvas.drawLine(
+      Offset(size.width / 2, 4),
+      Offset(size.width / 2, size.height - 4),
+      Paint()
+        ..color = const Color(0xffeef0f7)
+        ..strokeWidth = 1,
+    );
+    for (var i = 0; i < rects.length; i++) {
+      final rect = rects[i];
+      if (rect.height <= 0) continue;
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(rect.center.dx, rect.bottom + 2),
+          width: rect.width * 1.2,
+          height: 4,
+        ),
+        Paint()
+          ..color = colors[i].withValues(alpha: .12)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
       );
-      final material = BudgetClayActiveMaterial.forSemanticBase(
-        i == 0
-            ? (color == _green
-                  ? const Color(0xffb17af2)
-                  : Color.lerp(color, Colors.white, .42)!)
-            : color,
-      );
+      final material = BudgetClayActiveMaterial.forSemanticBase(colors[i]);
       FluviYearClayCapsulePainter.paint(
         canvas,
         rect: rect,
@@ -814,10 +701,8 @@ final class _PairPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _PairPainter old) =>
-      old.current != current ||
-      old.reference != reference ||
-      old.color != color;
+  bool shouldRepaint(covariant BalanceDayComparisonPainter old) =>
+      old.scale.source != scale.source;
 }
 
 final class _ImpactTube extends StatelessWidget {

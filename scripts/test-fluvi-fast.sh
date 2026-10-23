@@ -7,6 +7,7 @@ set -euo pipefail
 flutter test \
   test/features/dashboard/presentation/balance_day_focused_layout_test.dart \
   test/features/dashboard/presentation/balance_day_focused_visuals_test.dart \
+  test/features/dashboard/presentation/balance_day_visual_presentation_test.dart \
   test/features/dashboard/presentation/balance_day_momentum_rail_test.dart \
   test/features/dashboard/presentation/balance_day_momentum_rail_geometry_test.dart \
   test/features/dashboard/presentation/balance_day_visual_motion_sync_test.dart \

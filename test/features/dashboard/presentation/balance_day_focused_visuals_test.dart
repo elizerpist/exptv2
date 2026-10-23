@@ -90,6 +90,171 @@ void main() {
       }
     },
   );
+  testWidgets('V3 reference amounts share actual capsule geometry', (
+    tester,
+  ) async {
+    const point = DashboardBalanceDailyMomentumPoint(
+      epochDay: 1,
+      currentIncomeMinor: 70700000,
+      referenceIncomeMinor: 72100000,
+      currentExpenseMinor: 75699900,
+      referenceExpenseMinor: 65104500,
+      isCurrentHalf: true,
+      incomeAxis: -.1,
+      expenseAxis: .1,
+      magnitude: .2,
+    );
+    await pump(
+      tester,
+      BalanceDayFinancialComparison(
+        momentum: DashboardBalanceDailyMomentumPresentation(
+          available: true,
+          selected: point,
+          rhythm: const [],
+        ),
+      ),
+    );
+    final paint = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('balance-day-comparison-chart')),
+    );
+    final painter = paint.painter! as BalanceDayComparisonPainter;
+    final rects = painter.barRects(
+      tester.getSize(
+        find.byKey(const ValueKey('balance-day-comparison-chart')),
+      ),
+    );
+    expect(rects[3].height, greaterThan(rects[0].height));
+    expect(rects[0].height, greaterThan(rects[1].height));
+    expect(rects[1].height, greaterThan(rects[2].height));
+    expect(
+      rects[2].center.dx - rects[1].center.dx,
+      greaterThan(rects[1].center.dx - rects[0].center.dx),
+    );
+    expect(find.text('Figyelem szükséges'), findsOneWidget);
+    expect(
+      find.text('−1,9%'),
+      findsNothing,
+    ); // Existing formatter uses ASCII minus.
+    expect(find.text('-1,9%'), findsOneWidget);
+    expect(find.text('+16,3%'), findsOneWidget);
+    await expectLater(
+      find.byKey(const ValueKey('capture')),
+      matchesGoldenFile(
+        '../../../goldens/balance_day_financial_comparison_v3.png',
+      ),
+    );
+    const worsening = DashboardBalanceDailyImpactPresentation(
+      available: true,
+      previousSevenExpenseMinor: 4919500,
+      currentSevenExpenseMinor: 6602400,
+      valuePercent: -34.21079377985568,
+      scaleExtentPercent: 100,
+      markerFraction: .3289460311007216,
+      overflow: false,
+      todayNetMinor: 0,
+      referenceAverageNetMinor: 0,
+    );
+    await pump(tester, const BalanceDayImpactFocus(impact: worsening));
+    expect(find.text('Romlás'), findsOneWidget);
+    expect(find.text('-34,2%'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('balance-day-seven-day-comparison')),
+      findsOneWidget,
+    );
+    expect(find.text('Napi hatás'), findsNothing);
+    await expectLater(
+      find.byKey(const ValueKey('capture')),
+      matchesGoldenFile('../../../goldens/balance_day_impact_focus_v3.png'),
+    );
+  });
+
+  testWidgets('V3 comparison preserves every quadrant and zero reference', (
+    tester,
+  ) async {
+    for (final values in [
+      [200, 100, 100, 200],
+      [200, 100, 200, 100],
+      [100, 200, 100, 200],
+      [100, 200, 200, 100],
+      [0, 0, 0, 0],
+    ]) {
+      final point = DashboardBalanceDailyMomentumPoint(
+        epochDay: 1,
+        currentIncomeMinor: values[0],
+        referenceIncomeMinor: values[1],
+        currentExpenseMinor: values[2],
+        referenceExpenseMinor: values[3],
+        isCurrentHalf: true,
+        incomeAxis: 0,
+        expenseAxis: 0,
+        magnitude: 0,
+      );
+      await pump(
+        tester,
+        BalanceDayFinancialComparison(
+          momentum: DashboardBalanceDailyMomentumPresentation(
+            available: true,
+            selected: point,
+            rhythm: const [],
+          ),
+        ),
+        size: const Size(320, 190),
+      );
+      expect(find.text(point.quadrant.label), findsOneWidget);
+      final paint = tester.widget<CustomPaint>(
+        find.byKey(const ValueKey('balance-day-comparison-chart')),
+      );
+      final painter = paint.painter! as BalanceDayComparisonPainter;
+      if (values.every((value) => value == 0)) {
+        expect(find.text('—'), findsNWidgets(2));
+        expect(
+          painter
+              .barRects(const Size(280, 60))
+              .every((rect) => rect.height == 0),
+          isTrue,
+        );
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+  testWidgets('V3 impact keeps neutral, dynamic scale and overshoot states', (
+    tester,
+  ) async {
+    for (final percent in [0.0, 8.0, -8.0, 400.0, -400.0]) {
+      final source = DashboardBalanceDailyImpactPresentation(
+        available: true,
+        previousSevenExpenseMinor: 100000,
+        currentSevenExpenseMinor: 100000,
+        valuePercent: percent,
+        scaleExtentPercent: 15,
+        markerFraction: (.5 + percent / 30).clamp(0.0, 1.0),
+        overflow: percent.abs() > 15,
+        todayNetMinor: 0,
+        referenceAverageNetMinor: 0,
+      );
+      await pump(
+        tester,
+        BalanceDayImpactFocus(impact: source),
+        size: const Size(320, 190),
+      );
+      expect(
+        find.text(
+          percent == 0
+              ? 'Nincs változás'
+              : percent > 0
+              ? 'Javulás'
+              : 'Romlás',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('balance-day-seven-day-comparison')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('responsive normal and narrow lower bounds do not overflow', (
     tester,
   ) async {
@@ -117,7 +282,7 @@ void main() {
         'balance-day-compass-circle': BalanceDayFinancialCompass(
           momentum: momentum,
         ),
-        'balance-day-comparison-panels': BalanceDayFinancialComparison(
+        'balance-day-comparison-chart': BalanceDayFinancialComparison(
           momentum: momentum,
         ),
       }.entries) {
@@ -159,10 +324,7 @@ void main() {
           ),
         ),
       );
-      expect(
-        find.text('Nincs elegendő összehasonlítható adat'),
-        findsOneWidget,
-      );
+      expect(find.text('Nincs elegendő adat'), findsOneWidget);
       expect(find.text('—'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

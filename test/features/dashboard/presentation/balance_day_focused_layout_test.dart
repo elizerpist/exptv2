@@ -178,7 +178,7 @@ void main() {
   );
 
   testWidgets(
-    'impact toggle grows actual compass circle and comparison panels without moving rail',
+    'impact toggle grows actual compass circle and comparison chart without moving rail',
     (tester) async {
       final settings = BalancePresentationController()
         ..setDayLayoutPresentation(BalanceDayLayoutPresentation.focused);
@@ -204,7 +204,7 @@ void main() {
           ValueKey(
             p == BalanceDayFocusedPresentation.financialCompass
                 ? 'balance-day-compass-circle'
-                : 'balance-day-comparison-panels',
+                : 'balance-day-comparison-chart',
           ),
         );
         final on = tester.getRect(target).size;
