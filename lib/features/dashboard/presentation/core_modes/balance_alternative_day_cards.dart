@@ -6,6 +6,7 @@ import '../../application/dashboard_balance_daily_insights_projection.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import 'balance_alternative_extended_sheet_cards.dart';
 import 'balance_alternative_visual_tokens.dart';
+import 'balance_impact_meter.dart';
 
 /// The Napi 4 primary coordinate visual. All ledger calculation was completed
 /// by [DashboardBalanceDailyInsightsProjection] before this render boundary.
@@ -413,44 +414,13 @@ final class _ImpactTube extends StatelessWidget {
         children: <Widget>[
           Align(
             alignment: Alignment.centerLeft,
-            child: Container(
+            child: BalanceImpactMeter(
               width: compact
                   ? constraints.maxWidth * .38
                   : BalanceAlternativeHtmlTokens.logical(64),
               height: constraints.maxHeight,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6F9FD),
-                borderRadius: BorderRadius.circular(
-                  BalanceAlternativeHtmlTokens.logical(36),
-                ),
-                border: Border.all(color: const Color(0xFFDDE6F1)),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x100D2859),
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: FractionallySizedBox(
-                alignment: Alignment(0, 1 - presentation.markerFraction * 2),
-                heightFactor: .49,
-                widthFactor: .66,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: markerColor.withValues(alpha: .76),
-                    borderRadius: BorderRadius.circular(
-                      BalanceAlternativeHtmlTokens.logical(30),
-                    ),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: markerColor.withValues(alpha: .36),
-                        blurRadius: 12,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              markerFraction: presentation.markerFraction,
+              markerColor: markerColor,
             ),
           ),
           Positioned(

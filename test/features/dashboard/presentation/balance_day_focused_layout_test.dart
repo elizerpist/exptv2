@@ -443,6 +443,9 @@ void main() {
         settings.setDayRatioViewPresentation(
           BalanceDayRatioViewPresentation.performanceIndex,
         );
+        settings.setDayPerformanceVisualPresentation(
+          BalanceDayPerformanceVisualPresentation.horizontalMeter,
+        );
         await tester.pump();
         expect(find.byType(BalanceDayFocusedLayout), findsNothing);
         expect(

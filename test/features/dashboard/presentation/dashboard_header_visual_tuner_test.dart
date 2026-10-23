@@ -242,7 +242,28 @@ void main() {
         balance.value.dayRatioPresentation,
         BalanceDayRatioPresentation.netMargin,
       );
+      expect(find.text('30 napos teljesítmény megjelenítése'), findsOneWidget);
+      await select('balance-day-performance-visual-horizontalMeter');
+      expect(
+        balance.value.dayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      expect(
+        balance.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      await select('balance-day-performance-visual-semicircle');
+      expect(
+        balance.value.dayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.semicircle,
+      );
+      await select('balance-day-performance-visual-horizontalMeter');
       await select('balance-day-ratio-view-dualGauge');
+      expect(find.text('30 napos teljesítmény megjelenítése'), findsNothing);
+      expect(
+        balance.value.dayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
       expect(find.text('Két félkör számítása'), findsOneWidget);
       expect(
         balance.value.dayRatioPresentation,
@@ -267,6 +288,10 @@ void main() {
       expect(
         balance.value.dayRatioPresentation,
         BalanceDayRatioPresentation.netMargin,
+      );
+      expect(
+        balance.value.dayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
       );
       await select('balance-day-ratio-coverage');
       expect(

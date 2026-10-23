@@ -9,6 +9,74 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 void main() {
   test(
+    'performance visual revises once and preserves both other ratio choices',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+      final original = controller.value;
+      expect(
+        original.dayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.semicircle,
+      );
+      controller.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+      controller.setDayRatioViewPresentation(
+        BalanceDayRatioViewPresentation.performanceIndex,
+      );
+      final before = controller.value;
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      controller.setDayPerformanceVisualPresentation(
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      final expected = before.copyWith(
+        dayPerformanceVisualPresentation:
+            BalanceDayPerformanceVisualPresentation.horizontalMeter,
+        revision: before.revision + 1,
+      );
+      expect(controller.value, expected);
+      expect(controller.value.hashCode, expected.hashCode);
+      controller.setDayPerformanceVisualPresentation(
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      expect(notifications, 1);
+      controller.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.financialComparison,
+      );
+      controller.setDayRatioViewPresentation(
+        BalanceDayRatioViewPresentation.dualGauge,
+      );
+      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.current);
+      expect(
+        controller.value.dayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      expect(
+        controller.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      controller.setDayPerformanceVisualPresentation(
+        BalanceDayPerformanceVisualPresentation.semicircle,
+      );
+      expect(
+        controller.value.dayRatioViewPresentation,
+        BalanceDayRatioViewPresentation.dualGauge,
+      );
+      expect(
+        controller.value.sumLayoutPresentation,
+        original.sumLayoutPresentation,
+      );
+      expect(
+        controller.value.monthLayoutPresentation,
+        original.monthLayoutPresentation,
+      );
+      expect(
+        controller.value.yearLayoutPresentation,
+        original.yearLayoutPresentation,
+      );
+    },
+  );
+
+  test(
     'day ratio view revises independently and preserves dual gauge calculation',
     () {
       final controller = BalancePresentationController();

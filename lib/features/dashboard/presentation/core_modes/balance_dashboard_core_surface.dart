@@ -1127,6 +1127,8 @@ class _BalanceAlternativeScopeScaffoldState
                       focusedPresentation: settings.dayFocusedPresentation,
                       ratioPresentation: settings.dayRatioPresentation,
                       ratioViewPresentation: settings.dayRatioViewPresentation,
+                      performanceVisualPresentation:
+                          settings.dayPerformanceVisualPresentation,
                       showFocusedDayImpact: settings.showFocusedDayImpact,
                       navigation: dayRhythmNavigation,
                     )
@@ -1458,6 +1460,7 @@ final class _BalanceDayFocusedScaffold extends StatelessWidget {
     required this.focusedPresentation,
     required this.ratioPresentation,
     required this.ratioViewPresentation,
+    required this.performanceVisualPresentation,
     required this.showFocusedDayImpact,
     this.navigation,
     this.onFocusedPresentationChanged,
@@ -1467,6 +1470,7 @@ final class _BalanceDayFocusedScaffold extends StatelessWidget {
   final BalanceDayFocusedPresentation focusedPresentation;
   final BalanceDayRatioPresentation ratioPresentation;
   final BalanceDayRatioViewPresentation ratioViewPresentation;
+  final BalanceDayPerformanceVisualPresentation performanceVisualPresentation;
   final bool showFocusedDayImpact;
   final DashboardDayRhythmNavigation? navigation;
   final ValueChanged<BalanceDayFocusedPresentation>?
@@ -1484,6 +1488,7 @@ final class _BalanceDayFocusedScaffold extends StatelessWidget {
               focusedPresentation: focusedPresentation,
               ratioPresentation: ratioPresentation,
               ratioViewPresentation: ratioViewPresentation,
+              performanceVisualPresentation: performanceVisualPresentation,
               showFocusedDayImpact: showFocusedDayImpact,
               navigation: navigation,
               onFocusedPresentationChanged: onFocusedPresentationChanged,

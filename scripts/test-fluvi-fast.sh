@@ -8,6 +8,8 @@ flutter test \
   test/features/dashboard/presentation/balance_day_focused_layout_test.dart \
   test/features/dashboard/presentation/balance_day_focused_visuals_test.dart \
   test/features/dashboard/presentation/balance_day_visual_presentation_test.dart \
+  test/features/dashboard/presentation/balance_impact_meter_legacy_test.dart \
+  test/features/dashboard/presentation/balance_day_performance_horizontal_meter_test.dart \
   test/features/dashboard/presentation/balance_day_performance_index_presentation_test.dart \
   test/features/dashboard/presentation/balance_day_performance_index_view_test.dart \
   test/features/dashboard/presentation/balance_day_ratio_presentation_test.dart \

@@ -256,6 +256,22 @@ enum BalanceDayRatioViewPresentation {
   };
 }
 
+/// Visual-only rendering choice for the prepared 30 day performance index.
+enum BalanceDayPerformanceVisualPresentation {
+  semicircle,
+  horizontalMeter;
+
+  String get tunerLabel => switch (this) {
+    semicircle => 'Félkör',
+    horizontalMeter => 'Vízszintes meter',
+  };
+
+  String get tunerDescription => switch (this) {
+    semicircle => 'A 30 napos teljesítmény a közös clay félkörön.',
+    horizontalMeter => 'Ugyanaz a teljesítmény vízszintes clay skálán.',
+  };
+}
+
 enum BalanceDayRatioPresentation {
   coverage,
   netMargin;
@@ -355,6 +371,8 @@ final class BalancePresentationSettings {
     this.dayLayoutPresentation = BalanceDayLayoutPresentation.current,
     this.dayFocusedPresentation =
         BalanceDayFocusedPresentation.financialCompass,
+    this.dayPerformanceVisualPresentation =
+        BalanceDayPerformanceVisualPresentation.semicircle,
     this.dayRatioViewPresentation = BalanceDayRatioViewPresentation.dualGauge,
     this.dayRatioPresentation = BalanceDayRatioPresentation.coverage,
     this.showFocusedDayImpact = true,
@@ -426,6 +444,8 @@ final class BalancePresentationSettings {
           BalanceMonthCombinedCardPresentation.incomeExpense,
       dayLayoutPresentation = BalanceDayLayoutPresentation.current,
       dayFocusedPresentation = BalanceDayFocusedPresentation.financialCompass,
+      dayPerformanceVisualPresentation =
+          BalanceDayPerformanceVisualPresentation.semicircle,
       dayRatioViewPresentation = BalanceDayRatioViewPresentation.dualGauge,
       dayRatioPresentation = BalanceDayRatioPresentation.coverage,
       showFocusedDayImpact = true,
@@ -464,6 +484,8 @@ final class BalancePresentationSettings {
   final BalanceMonthCombinedCardPresentation monthCombinedCardPresentation;
   final BalanceDayLayoutPresentation dayLayoutPresentation;
   final BalanceDayFocusedPresentation dayFocusedPresentation;
+  final BalanceDayPerformanceVisualPresentation
+  dayPerformanceVisualPresentation;
   final BalanceDayRatioViewPresentation dayRatioViewPresentation;
   final BalanceDayRatioPresentation dayRatioPresentation;
   final bool showFocusedDayImpact;
@@ -520,6 +542,7 @@ final class BalancePresentationSettings {
     BalanceMonthCombinedCardPresentation? monthCombinedCardPresentation,
     BalanceDayLayoutPresentation? dayLayoutPresentation,
     BalanceDayFocusedPresentation? dayFocusedPresentation,
+    BalanceDayPerformanceVisualPresentation? dayPerformanceVisualPresentation,
     BalanceDayRatioViewPresentation? dayRatioViewPresentation,
     BalanceDayRatioPresentation? dayRatioPresentation,
     bool? showFocusedDayImpact,
@@ -579,6 +602,9 @@ final class BalancePresentationSettings {
     dayLayoutPresentation: dayLayoutPresentation ?? this.dayLayoutPresentation,
     dayFocusedPresentation:
         dayFocusedPresentation ?? this.dayFocusedPresentation,
+    dayPerformanceVisualPresentation:
+        dayPerformanceVisualPresentation ??
+        this.dayPerformanceVisualPresentation,
     dayRatioViewPresentation:
         dayRatioViewPresentation ?? this.dayRatioViewPresentation,
     dayRatioPresentation: dayRatioPresentation ?? this.dayRatioPresentation,
@@ -635,6 +661,8 @@ final class BalancePresentationSettings {
       other.monthCombinedCardPresentation == monthCombinedCardPresentation &&
       other.dayLayoutPresentation == dayLayoutPresentation &&
       other.dayFocusedPresentation == dayFocusedPresentation &&
+      other.dayPerformanceVisualPresentation ==
+          dayPerformanceVisualPresentation &&
       other.dayRatioViewPresentation == dayRatioViewPresentation &&
       other.dayRatioPresentation == dayRatioPresentation &&
       other.showFocusedDayImpact == showFocusedDayImpact &&
@@ -677,6 +705,7 @@ final class BalancePresentationSettings {
     monthCombinedCardPresentation,
     dayLayoutPresentation,
     dayFocusedPresentation,
+    dayPerformanceVisualPresentation,
     dayRatioViewPresentation,
     dayRatioPresentation,
     showFocusedDayImpact,
@@ -900,6 +929,17 @@ final class BalancePresentationController
     if (current.dayFocusedPresentation == next) return;
     value = current.copyWith(
       dayFocusedPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setDayPerformanceVisualPresentation(
+    BalanceDayPerformanceVisualPresentation next,
+  ) {
+    final current = value;
+    if (current.dayPerformanceVisualPresentation == next) return;
+    value = current.copyWith(
+      dayPerformanceVisualPresentation: next,
       revision: current.revision + 1,
     );
   }

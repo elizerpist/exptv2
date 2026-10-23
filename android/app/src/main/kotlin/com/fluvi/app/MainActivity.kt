@@ -265,6 +265,7 @@ class MainActivity : FlutterActivity() {
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
                             "balanceHeaderGraphPresentation" to preferences.getInt("balanceHeaderGraphPresentation", 1),
                             "balanceDayLayoutPresentation" to preferences.getInt("balanceDayLayoutPresentation", 0),
+                            "balanceDayPerformanceVisualPresentation" to ((preferences.all["balanceDayPerformanceVisualPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "balanceDayRatioViewPresentation" to ((preferences.all["balanceDayRatioViewPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "balanceDayRatioPresentation" to ((preferences.all["balanceDayRatioPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "balanceDayFocusedPresentation" to preferences.getInt("balanceDayFocusedPresentation", 0),
@@ -301,6 +302,7 @@ class MainActivity : FlutterActivity() {
                             ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
                         val balanceDayLayoutPresentation = (values["balanceDayLayoutPresentation"] as? Number)?.toInt() ?: 0
                         require(balanceDayLayoutPresentation in 0..1) { "Invalid Balance day presentation." }
+                        val balanceDayPerformanceVisualPresentation = ((values["balanceDayPerformanceVisualPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
                         val balanceDayRatioViewPresentation = ((values["balanceDayRatioViewPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
                         val balanceDayRatioPresentation = ((values["balanceDayRatioPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
                         val balanceDayFocusedPresentation = (values["balanceDayFocusedPresentation"] as? Number)?.toInt() ?: 0
@@ -340,6 +342,7 @@ class MainActivity : FlutterActivity() {
                             .putBoolean("showDayContentViewChooser", showDayContentViewChooser)
                             .putBoolean("balanceUsesChildCards", balanceChildren)
                             .putInt("balanceDayLayoutPresentation", balanceDayLayoutPresentation)
+                            .putInt("balanceDayPerformanceVisualPresentation", balanceDayPerformanceVisualPresentation)
                             .putInt("balanceDayRatioViewPresentation", balanceDayRatioViewPresentation)
                             .putInt("balanceDayRatioPresentation", balanceDayRatioPresentation)
                             .putInt("balanceDayFocusedPresentation", balanceDayFocusedPresentation)

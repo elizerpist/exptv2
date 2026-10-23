@@ -31,6 +31,10 @@ void main() {
         (await store.read()).balanceDayRatioPresentation,
         BalanceDayRatioPresentation.coverage,
       );
+      expect(
+        (await store.read()).balanceDayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.semicircle,
+      );
       final defaults = DashboardPresentationPreferences.defaults;
       final choice = DashboardPresentationPreferences(
         sumVisualStyle: defaults.sumVisualStyle,
@@ -48,11 +52,14 @@ void main() {
         balanceDayFocusedPresentation:
             BalanceDayFocusedPresentation.dailyImpactFocus,
         balanceShowFocusedDayImpact: false,
+        balanceDayPerformanceVisualPresentation:
+            BalanceDayPerformanceVisualPresentation.horizontalMeter,
         balanceDayRatioViewPresentation:
             BalanceDayRatioViewPresentation.performanceIndex,
         balanceDayRatioPresentation: BalanceDayRatioPresentation.netMargin,
       );
       await store.write(choice);
+      expect(stored['balanceDayPerformanceVisualPresentation'], 1);
       expect(stored['balanceDayRatioViewPresentation'], 1);
       expect(stored['balanceDayRatioPresentation'], 1);
       final restored =
@@ -60,6 +67,7 @@ void main() {
       expect(restored, choice);
       expect(restored.hashCode, choice.hashCode);
       for (final invalid in <Object?>[null, -1, 2, 999, 'unknown']) {
+        stored['balanceDayPerformanceVisualPresentation'] = invalid;
         stored['balanceDayRatioPresentation'] = invalid;
         stored['balanceDayRatioViewPresentation'] = invalid;
         final legacy = await store.read();
@@ -74,6 +82,10 @@ void main() {
         expect(
           legacy.balanceDayRatioViewPresentation,
           BalanceDayRatioViewPresentation.dualGauge,
+        );
+        expect(
+          legacy.balanceDayPerformanceVisualPresentation,
+          BalanceDayPerformanceVisualPresentation.semicircle,
         );
         expect(legacy.balanceShowFocusedDayImpact, isFalse);
       }
@@ -275,6 +287,8 @@ void main() {
       'balanceDayFocusedPresentation':
           BalanceDayFocusedPresentation.financialCompass.index,
       'balanceShowFocusedDayImpact': true,
+      'balanceDayPerformanceVisualPresentation':
+          BalanceDayPerformanceVisualPresentation.semicircle.index,
       'balanceDayRatioViewPresentation':
           BalanceDayRatioViewPresentation.dualGauge.index,
       'balanceDayRatioPresentation': BalanceDayRatioPresentation.coverage.index,

@@ -20,6 +20,8 @@ final class DashboardPresentationPreferences {
     this.balanceDayLayoutPresentation = BalanceDayLayoutPresentation.current,
     this.balanceDayFocusedPresentation =
         BalanceDayFocusedPresentation.financialCompass,
+    this.balanceDayPerformanceVisualPresentation =
+        BalanceDayPerformanceVisualPresentation.semicircle,
     this.balanceDayRatioViewPresentation =
         BalanceDayRatioViewPresentation.dualGauge,
     this.balanceDayRatioPresentation = BalanceDayRatioPresentation.coverage,
@@ -46,6 +48,8 @@ final class DashboardPresentationPreferences {
   final bool showDayContentViewChooser;
   final BalanceDayLayoutPresentation balanceDayLayoutPresentation;
   final BalanceDayFocusedPresentation balanceDayFocusedPresentation;
+  final BalanceDayPerformanceVisualPresentation
+  balanceDayPerformanceVisualPresentation;
   final BalanceDayRatioViewPresentation balanceDayRatioViewPresentation;
   final BalanceDayRatioPresentation balanceDayRatioPresentation;
   final bool balanceShowFocusedDayImpact;
@@ -91,6 +95,8 @@ final class DashboardPresentationPreferences {
       other.showDayContentViewChooser == showDayContentViewChooser &&
       other.balanceDayLayoutPresentation == balanceDayLayoutPresentation &&
       other.balanceDayFocusedPresentation == balanceDayFocusedPresentation &&
+      other.balanceDayPerformanceVisualPresentation ==
+          balanceDayPerformanceVisualPresentation &&
       other.balanceDayRatioViewPresentation ==
           balanceDayRatioViewPresentation &&
       other.balanceDayRatioPresentation == balanceDayRatioPresentation &&
@@ -122,6 +128,7 @@ final class DashboardPresentationPreferences {
     showDayContentViewChooser,
     balanceDayLayoutPresentation,
     balanceDayFocusedPresentation,
+    balanceDayPerformanceVisualPresentation,
     balanceDayRatioViewPresentation,
     balanceDayRatioPresentation,
     balanceShowFocusedDayImpact,

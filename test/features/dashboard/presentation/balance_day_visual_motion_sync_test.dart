@@ -26,6 +26,8 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_rat
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_month_focused_layout.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_month_net_margin_gauge.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_performance_index_view.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_performance_horizontal_meter_view.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_impact_meter.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
@@ -491,6 +493,132 @@ void main() {
       },
     );
   }
+  for (final fromRail in [false, true]) {
+    testWidgets(
+      'V7 ${fromRail ? 'rhythm' : 'Summary'} uses exact accepted performance snapshot and preserves dual mode',
+      (tester) async {
+        final core = await _setup(tester, richData: true, bookedMinute: 0);
+        final settings = tester
+            .widget<DashboardHeaderVisualTuner>(
+              find.byType(DashboardHeaderVisualTuner),
+            )
+            .balancePresentationSettings!;
+        settings.setDayFocusedPresentation(
+          BalanceDayFocusedPresentation.dailyImpactFocus,
+        );
+        settings.setDayRatioViewPresentation(
+          BalanceDayRatioViewPresentation.performanceIndex,
+        );
+        settings.setDayPerformanceVisualPresentation(
+          BalanceDayPerformanceVisualPresentation.horizontalMeter,
+        );
+        await _frames(tester, 4);
+        BalanceDayPerformanceHorizontalMeterView view() =>
+            tester.widget<BalanceDayPerformanceHorizontalMeterView>(
+              find.byType(BalanceDayPerformanceHorizontalMeterView),
+            );
+        final originalSource = view().presentation.periods.source;
+        final originalEpoch = core.navigation.state.navigationEpoch;
+        final originalQuery = core.navigation.state.parentQueryScope.key;
+        final originalGaugeState = tester.state(
+          find.byKey(
+            const ValueKey('balance-day-performance-horizontal-meter'),
+          ),
+        );
+        settings.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+        await _frames(tester, 2);
+        expect(core.navigation.state.navigationEpoch, originalEpoch);
+        expect(core.navigation.state.parentQueryScope.key, originalQuery);
+        expect(view().presentation.periods.source, same(originalSource));
+        expect(
+          tester.state(
+            find.byKey(
+              const ValueKey('balance-day-performance-horizontal-meter'),
+            ),
+          ),
+          same(originalGaugeState),
+        );
+        for (final name in [
+          'financialCompass',
+          'financialComparison',
+          'dailyImpactFocus',
+        ]) {
+          await tester.tap(
+            find.byKey(ValueKey('balance-day-perspective-$name')),
+          );
+          await _frames(tester, 2);
+          expect(
+            settings.value.dayRatioPresentation,
+            BalanceDayRatioPresentation.netMargin,
+          );
+          expect(core.navigation.state.navigationEpoch, originalEpoch);
+        }
+        final stableState = tester.state(
+          find.byKey(
+            const ValueKey('balance-day-performance-horizontal-meter'),
+          ),
+        );
+        void coherent() {
+          final model = view().presentation;
+          expect(find.byType(BalanceImpactMeter), findsOneWidget);
+          expect(find.byType(BudgetSemicircleGauge), findsNothing);
+          expect(
+            model.performanceIndex,
+            model.isAvailable
+                ? model.currentCoverage! / model.previousCoverage! * 100
+                : null,
+          );
+          expect(
+            model.previousIncomeMinor,
+            model.periods.source.referenceIncomeMinor,
+          );
+          expect(
+            model.currentExpenseMinor,
+            model.periods.source.currentExpenseMinor,
+          );
+          expect(
+            settings.value.dayRatioViewPresentation,
+            BalanceDayRatioViewPresentation.performanceIndex,
+          );
+        }
+
+        for (final distance in [-180.0, 180.0]) {
+          final before = core.navigation.state.navigationEpoch;
+          await tester.fling(
+            find.byKey(fromRail ? _rhythmKey : _summaryKey),
+            fromRail ? Offset(distance, 0) : Offset(0, distance),
+            2400,
+          );
+          for (var frame = 0; frame < 20; frame++) {
+            await _frames(tester, 1);
+            coherent();
+          }
+          await _settled(tester);
+          coherent();
+          expect(core.navigation.state.navigationEpoch, greaterThan(before));
+          final anchor = core.navigation.state.temporalAnchor;
+          expect(
+            view().presentation.periods.source.epochDay,
+            LocalDate(
+              year: anchor.visibleYear,
+              month: anchor.visibleMonth,
+              day: anchor.visibleDay,
+            ).epochDay,
+          );
+          expect(
+            tester.state(
+              find.byKey(
+                const ValueKey('balance-day-performance-horizontal-meter'),
+              ),
+            ),
+            same(stableState),
+          );
+        }
+        expect(tester.takeException(), isNull);
+        await _unmount(tester);
+      },
+    );
+  }
   testWidgets(
     'V5 ratio preference restores into a fresh real dashboard owner',
     (tester) async {
@@ -619,6 +747,82 @@ void main() {
       );
       expect(find.byType(BalanceDayPerformanceIndexView), findsOneWidget);
       expect(find.byType(BudgetSemicircleGauge), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await _unmount(tester);
+    },
+  );
+  testWidgets(
+    'V7 meter preference restores into a fresh real dashboard owner',
+    (tester) async {
+      final store = InMemoryDashboardPresentationPreferencesStore();
+      final first = DashboardPresentationPreferencesController(store: store);
+      addTearDown(first.dispose);
+      await first.restore();
+      await _setup(tester, richData: true, bookedMinute: 0, preferences: first);
+      final settings = tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .balancePresentationSettings!;
+      settings.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.dailyImpactFocus,
+      );
+      settings.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+      settings.setDayRatioViewPresentation(
+        BalanceDayRatioViewPresentation.performanceIndex,
+      );
+      settings.setDayPerformanceVisualPresentation(
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      await _frames(tester, 4);
+      expect(
+        (await store.read()).balanceDayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      await _unmount(tester);
+      final restarted = DashboardPresentationPreferencesController(
+        store: store,
+      );
+      addTearDown(restarted.dispose);
+      await restarted.restore();
+      await _setup(
+        tester,
+        richData: true,
+        bookedMinute: 0,
+        preferences: restarted,
+        initializeFocused: false,
+      );
+      final restored = tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .balancePresentationSettings!
+          .value;
+      expect(
+        restored.dayLayoutPresentation,
+        BalanceDayLayoutPresentation.focused,
+      );
+      expect(
+        restored.dayFocusedPresentation,
+        BalanceDayFocusedPresentation.dailyImpactFocus,
+      );
+      expect(
+        restored.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      expect(
+        restored.dayRatioViewPresentation,
+        BalanceDayRatioViewPresentation.performanceIndex,
+      );
+      expect(
+        find.byType(BalanceDayPerformanceHorizontalMeterView),
+        findsOneWidget,
+      );
+      expect(
+        restored.dayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      expect(find.byType(BudgetSemicircleGauge), findsNothing);
       expect(tester.takeException(), isNull);
       await _unmount(tester);
     },

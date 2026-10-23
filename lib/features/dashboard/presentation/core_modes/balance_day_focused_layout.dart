@@ -6,6 +6,7 @@ import 'balance_day_focused_visuals.dart';
 import 'balance_day_ratio_comparison.dart';
 import 'balance_day_performance_index_presentation.dart';
 import 'balance_day_performance_index_view.dart';
+import 'balance_day_performance_horizontal_meter_view.dart';
 import 'balance_day_ratio_presentation.dart';
 import 'balance_day_momentum_rail.dart';
 import 'balance_focused_layout_geometry.dart';
@@ -21,6 +22,8 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
     required this.showFocusedDayImpact,
     this.ratioPresentation = BalanceDayRatioPresentation.coverage,
     this.ratioViewPresentation = BalanceDayRatioViewPresentation.dualGauge,
+    this.performanceVisualPresentation =
+        BalanceDayPerformanceVisualPresentation.semicircle,
     this.navigation,
     this.onFocusedPresentationChanged,
   });
@@ -30,6 +33,7 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
   final bool showFocusedDayImpact;
   final BalanceDayRatioPresentation ratioPresentation;
   final BalanceDayRatioViewPresentation ratioViewPresentation;
+  final BalanceDayPerformanceVisualPresentation performanceVisualPresentation;
   final DashboardDayRhythmNavigation? navigation;
   final ValueChanged<BalanceDayFocusedPresentation>?
   onFocusedPresentationChanged;
@@ -57,50 +61,71 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
                     key: const ValueKey('balance-day-main-visual'),
                     child: RepaintBoundary(
                       child: LayoutBuilder(
-                        builder: (context, bounds) => FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: SizedBox(
-                            width: bounds.maxWidth,
-                            // Preserve the visual's material and typography at
-                            // very short phone bounds without clipping it.
-                            height: math.max(
-                              focusedPresentation ==
-                                      BalanceDayFocusedPresentation
-                                          .dailyImpactFocus
-                                  ? 170.0
-                                  : 140.0,
-                              bounds.maxHeight,
+                        builder: (context, bounds) {
+                          late final performancePresentation =
+                              BalanceDayPerformanceIndexPresentation.fromMomentum(
+                                presentation.momentum,
+                              );
+                          if (focusedPresentation ==
+                                  BalanceDayFocusedPresentation
+                                      .dailyImpactFocus &&
+                              ratioViewPresentation ==
+                                  BalanceDayRatioViewPresentation
+                                      .performanceIndex &&
+                              performanceVisualPresentation ==
+                                  BalanceDayPerformanceVisualPresentation
+                                      .horizontalMeter) {
+                            return BalanceDayPerformanceHorizontalMeterView(
+                              key: const ValueKey(
+                                'balance-day-performance-horizontal-meter',
+                              ),
+                              presentation: performancePresentation,
+                            );
+                          }
+                          return FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: SizedBox(
+                              width: bounds.maxWidth,
+                              // Preserve the visual's material and typography at
+                              // very short phone bounds without clipping it.
+                              height: math.max(
+                                focusedPresentation ==
+                                        BalanceDayFocusedPresentation
+                                            .dailyImpactFocus
+                                    ? 170.0
+                                    : 140.0,
+                                bounds.maxHeight,
+                              ),
+                              child: switch (focusedPresentation) {
+                                BalanceDayFocusedPresentation
+                                    .financialCompass =>
+                                  BalanceDayFinancialCompass(
+                                    momentum: presentation.momentum,
+                                  ),
+                                BalanceDayFocusedPresentation
+                                    .financialComparison =>
+                                  BalanceDayFinancialComparison(
+                                    momentum: presentation.momentum,
+                                  ),
+                                BalanceDayFocusedPresentation
+                                    .dailyImpactFocus =>
+                                  ratioViewPresentation ==
+                                          BalanceDayRatioViewPresentation
+                                              .performanceIndex
+                                      ? BalanceDayPerformanceIndexView(
+                                          presentation: performancePresentation,
+                                        )
+                                      : BalanceDayRatioComparisonView(
+                                          presentation:
+                                              BalanceDayRatioComparisonPresentation.fromMomentum(
+                                                presentation.momentum,
+                                                mode: ratioPresentation,
+                                              ),
+                                        ),
+                              },
                             ),
-                            child: switch (focusedPresentation) {
-                              BalanceDayFocusedPresentation.financialCompass =>
-                                BalanceDayFinancialCompass(
-                                  momentum: presentation.momentum,
-                                ),
-                              BalanceDayFocusedPresentation
-                                  .financialComparison =>
-                                BalanceDayFinancialComparison(
-                                  momentum: presentation.momentum,
-                                ),
-                              BalanceDayFocusedPresentation.dailyImpactFocus =>
-                                ratioViewPresentation ==
-                                        BalanceDayRatioViewPresentation
-                                            .performanceIndex
-                                    ? BalanceDayPerformanceIndexView(
-                                        presentation:
-                                            BalanceDayPerformanceIndexPresentation.fromMomentum(
-                                              presentation.momentum,
-                                            ),
-                                      )
-                                    : BalanceDayRatioComparisonView(
-                                        presentation:
-                                            BalanceDayRatioComparisonPresentation.fromMomentum(
-                                              presentation.momentum,
-                                              mode: ratioPresentation,
-                                            ),
-                                      ),
-                            },
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ),
