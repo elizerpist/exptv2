@@ -176,8 +176,20 @@ final class BalanceDayMomentumRailWindowController {
       _preempted = false;
       if (!_inFlight || generation != _generation || wasPreempted) {
         // Preserve the currently painted exact window on a new pointer too.
+        final initialGeneration = _generation < 0;
         _generation = generation;
-        _flightBaseOffset = _visual.rawOffset.roundToDouble();
+        if (initialGeneration) {
+          // A follower can mount after Summary has already accepted several
+          // ticks. Its prepared window is then ahead of the motion origin.
+          // Keep only the current fractional tick around an exact accepted
+          // window; otherwise align a retained/intermediate real window to
+          // the original continuous coordinate system.
+          _flightBaseOffset = _visual.originEpochDay == acceptedEpochDay
+              ? -rawOffset.roundToDouble()
+              : (originEpochDay - _visual.originEpochDay).toDouble();
+        } else {
+          _flightBaseOffset = _visual.rawOffset.roundToDouble();
+        }
         _inFlight = true;
       }
       final nextRawOffset = _flightBaseOffset + rawOffset;

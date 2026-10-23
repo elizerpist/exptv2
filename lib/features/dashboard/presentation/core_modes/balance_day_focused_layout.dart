@@ -188,7 +188,9 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 6, bottom: 5),
             child: Text(
-              selected.tunerLabel,
+              selected == BalanceDayFocusedPresentation.dailyImpactFocus
+                  ? 'Napi hatás'
+                  : selected.tunerLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),

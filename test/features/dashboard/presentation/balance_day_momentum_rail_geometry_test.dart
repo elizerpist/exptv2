@@ -191,6 +191,69 @@ void main() {
       expect(slot(ready), slot(before));
     },
   );
+  test(
+    'fresh midflight follower starts at accepted ordinary day plus fraction',
+    () {
+      final origin = const LocalDate(year: 2026, month: 7, day: 14).epochDay;
+      final accepted = window(const LocalDate(year: 2026, month: 7, day: 17));
+      final r = BalanceDayMomentumRailWindowController(accepted);
+      final frame = r.resolve(
+        presentation: accepted,
+        originEpochDay: origin,
+        rawOffset: 3.25,
+        isMoving: true,
+        generation: 5,
+        acceptedEpochDay: accepted.momentum.selected.epochDay,
+      );
+      expect(
+        frame.originEpochDay + frame.rawOffset,
+        accepted.momentum.selected.epochDay + .25,
+      );
+      expect(identical(frame.points, accepted.momentum.rhythm), isTrue);
+    },
+  );
+  test(
+    'fresh midflight follower at cyclic wrap uses accepted day plus fraction',
+    () {
+      final origin = const LocalDate(year: 2026, month: 1, day: 31).epochDay;
+      final accepted = window(const LocalDate(year: 2026, month: 1, day: 1));
+      final r = BalanceDayMomentumRailWindowController(accepted);
+      final frame = r.resolve(
+        presentation: accepted,
+        originEpochDay: origin,
+        rawOffset: 1.25,
+        isMoving: true,
+        generation: 5,
+        acceptedEpochDay: accepted.momentum.selected.epochDay,
+      );
+      expect(
+        frame.originEpochDay + frame.rawOffset,
+        accepted.momentum.selected.epochDay + .25,
+      );
+      expect(frame.rawOffset, .25);
+    },
+  );
+  test(
+    'fresh deferred or intermediate follower keeps the original virtual timeline',
+    () {
+      final origin = const LocalDate(year: 2026, month: 7, day: 14).epochDay;
+      final accepted = const LocalDate(year: 2026, month: 7, day: 17).epochDay;
+      for (final day in [14, 15]) {
+        final prepared = window(LocalDate(year: 2026, month: 7, day: day));
+        final r = BalanceDayMomentumRailWindowController(prepared);
+        final frame = r.resolve(
+          presentation: prepared,
+          originEpochDay: origin,
+          rawOffset: 3.25,
+          isMoving: true,
+          generation: 5,
+          acceptedEpochDay: accepted,
+        );
+        expect(frame.originEpochDay + frame.rawOffset, accepted + .25);
+        expect(identical(frame.points, prepared.momentum.rhythm), isTrue);
+      }
+    },
+  );
   test('ordinary next-day reanchor does not request a wrap fade', () {
     final date = const LocalDate(year: 2026, month: 6, day: 12);
     final old = window(date);
