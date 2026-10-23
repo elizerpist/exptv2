@@ -173,6 +173,40 @@ enum BalanceMonthCombinedCardPresentation {
   };
 }
 
+/// All-time content preferences independent of the other time scopes.
+enum BalanceSumLayoutPresentation {
+  current,
+  focused;
+
+  String get tunerLabel => switch (this) {
+    current => 'Eddigi',
+    focused => 'Új',
+  };
+  String get tunerDescription => switch (this) {
+    current =>
+      'Jelenlegi SUM Balance nézet a korábbi grafikonokkal és kártyákkal.',
+    focused =>
+      'Perspektívaválasztó és egyetlen nagy összesített elemzőgrafikon.',
+  };
+}
+
+enum BalanceSumFocusedPresentation {
+  distribution,
+  positiveRatio,
+  stability;
+
+  String get tunerLabel => switch (this) {
+    distribution => 'Eredmények eloszlása',
+    positiveRatio => 'Pozitív hónapok aránya',
+    stability => 'Pénzügyi stabilitás',
+  };
+  String get tunerDescription => switch (this) {
+    distribution => 'A havi pénzügyi eredmények eloszlása.',
+    positiveRatio => 'A pozitív eredményű hónapok aránya.',
+    stability => 'A havi eredmények kiegyensúlyozottsága.',
+  };
+}
+
 /// Presentation-only alternatives for the daily Balance content.
 enum BalanceDayLayoutPresentation {
   current,
@@ -290,6 +324,9 @@ final class BalancePresentationSettings {
     this.dayFocusedPresentation =
         BalanceDayFocusedPresentation.financialCompass,
     this.showFocusedDayImpact = true,
+    this.sumLayoutPresentation = BalanceSumLayoutPresentation.current,
+    this.sumFocusedPresentation = BalanceSumFocusedPresentation.distribution,
+    this.showSumFocusedSupplementaryStats = true,
     this.monthLayoutPresentation = BalanceMonthLayoutPresentation.current,
     this.yearLayoutPresentation = BalanceYearLayoutPresentation.current,
     this.yearBarPresentation = BalanceYearBarPresentation.current,
@@ -356,6 +393,9 @@ final class BalancePresentationSettings {
       dayLayoutPresentation = BalanceDayLayoutPresentation.current,
       dayFocusedPresentation = BalanceDayFocusedPresentation.financialCompass,
       showFocusedDayImpact = true,
+      sumLayoutPresentation = BalanceSumLayoutPresentation.current,
+      sumFocusedPresentation = BalanceSumFocusedPresentation.distribution,
+      showSumFocusedSupplementaryStats = true,
       monthLayoutPresentation = BalanceMonthLayoutPresentation.current,
       yearLayoutPresentation = BalanceYearLayoutPresentation.current,
       yearBarPresentation = BalanceYearBarPresentation.current,
@@ -389,6 +429,9 @@ final class BalancePresentationSettings {
   final BalanceDayLayoutPresentation dayLayoutPresentation;
   final BalanceDayFocusedPresentation dayFocusedPresentation;
   final bool showFocusedDayImpact;
+  final BalanceSumLayoutPresentation sumLayoutPresentation;
+  final BalanceSumFocusedPresentation sumFocusedPresentation;
+  final bool showSumFocusedSupplementaryStats;
   final BalanceMonthLayoutPresentation monthLayoutPresentation;
   final BalanceYearLayoutPresentation yearLayoutPresentation;
   final BalanceYearBarPresentation yearBarPresentation;
@@ -440,6 +483,9 @@ final class BalancePresentationSettings {
     BalanceDayLayoutPresentation? dayLayoutPresentation,
     BalanceDayFocusedPresentation? dayFocusedPresentation,
     bool? showFocusedDayImpact,
+    BalanceSumLayoutPresentation? sumLayoutPresentation,
+    BalanceSumFocusedPresentation? sumFocusedPresentation,
+    bool? showSumFocusedSupplementaryStats,
     BalanceMonthLayoutPresentation? monthLayoutPresentation,
     BalanceYearLayoutPresentation? yearLayoutPresentation,
     BalanceYearBarPresentation? yearBarPresentation,
@@ -494,6 +540,12 @@ final class BalancePresentationSettings {
     dayFocusedPresentation:
         dayFocusedPresentation ?? this.dayFocusedPresentation,
     showFocusedDayImpact: showFocusedDayImpact ?? this.showFocusedDayImpact,
+    sumLayoutPresentation: sumLayoutPresentation ?? this.sumLayoutPresentation,
+    sumFocusedPresentation:
+        sumFocusedPresentation ?? this.sumFocusedPresentation,
+    showSumFocusedSupplementaryStats:
+        showSumFocusedSupplementaryStats ??
+        this.showSumFocusedSupplementaryStats,
     monthLayoutPresentation:
         monthLayoutPresentation ?? this.monthLayoutPresentation,
     yearLayoutPresentation:
@@ -541,6 +593,10 @@ final class BalancePresentationSettings {
       other.dayLayoutPresentation == dayLayoutPresentation &&
       other.dayFocusedPresentation == dayFocusedPresentation &&
       other.showFocusedDayImpact == showFocusedDayImpact &&
+      other.sumLayoutPresentation == sumLayoutPresentation &&
+      other.sumFocusedPresentation == sumFocusedPresentation &&
+      other.showSumFocusedSupplementaryStats ==
+          showSumFocusedSupplementaryStats &&
       other.monthLayoutPresentation == monthLayoutPresentation &&
       other.yearLayoutPresentation == yearLayoutPresentation &&
       other.yearBarPresentation == yearBarPresentation &&
@@ -577,6 +633,9 @@ final class BalancePresentationSettings {
     dayLayoutPresentation,
     dayFocusedPresentation,
     showFocusedDayImpact,
+    sumLayoutPresentation,
+    sumFocusedPresentation,
+    showSumFocusedSupplementaryStats,
     monthLayoutPresentation,
     yearLayoutPresentation,
     yearBarPresentation,
@@ -803,6 +862,33 @@ final class BalancePresentationController
     if (current.showFocusedDayImpact == next) return;
     value = current.copyWith(
       showFocusedDayImpact: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setSumLayoutPresentation(BalanceSumLayoutPresentation next) {
+    final current = value;
+    if (current.sumLayoutPresentation == next) return;
+    value = current.copyWith(
+      sumLayoutPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setSumFocusedPresentation(BalanceSumFocusedPresentation next) {
+    final current = value;
+    if (current.sumFocusedPresentation == next) return;
+    value = current.copyWith(
+      sumFocusedPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setShowSumFocusedSupplementaryStats(bool next) {
+    final current = value;
+    if (current.showSumFocusedSupplementaryStats == next) return;
+    value = current.copyWith(
+      showSumFocusedSupplementaryStats: next,
       revision: current.revision + 1,
     );
   }

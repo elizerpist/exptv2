@@ -26,6 +26,7 @@ import 'balance_alternative_extended_sheet_cards.dart';
 import 'balance_alternative_day_cards.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_alternative_sum_cards.dart';
+import 'balance_sum_focused_layout.dart';
 import 'balance_alternative_visual_tokens.dart';
 import 'balance_extended_sheet_layout.dart';
 import 'balance_year_focused_layout.dart';
@@ -403,11 +404,16 @@ final class _BalanceDashboardCoreSurfaceState
         _boundSettings?.value ?? const BalancePresentationSettings.defaults();
     final previous = _lastObservedSettings;
     _lastObservedSettings = settings;
-    // Daily calculation belongs to the header listener. Its preference alone
-    // must not reconstruct the Balance shell or republish lower-card data.
+    // Header calculation and SUM content choices have dedicated listeners.
+    // Their preferences must not reconstruct the Balance shell or republish
+    // financial data; only the corresponding presentation subtree changes.
     if (previous != null &&
         settings.copyWith(
               dailyCalculationMode: previous.dailyCalculationMode,
+              sumLayoutPresentation: previous.sumLayoutPresentation,
+              sumFocusedPresentation: previous.sumFocusedPresentation,
+              showSumFocusedSupplementaryStats:
+                  previous.showSumFocusedSupplementaryStats,
               revision: previous.revision,
             ) ==
             previous) {
@@ -957,7 +963,7 @@ final class _BalanceUnifiedHeaderContentBridge extends StatelessWidget {
 /// Selects a distinct alternative body composition from canonical scope
 /// identity.  Only the immutable existing Balance primary presentation crosses
 /// this UI boundary; it never asks for a second projection or query.
-final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
+final class _BalanceAlternativeScopeScaffold extends StatefulWidget {
   const _BalanceAlternativeScopeScaffold({
     this.dayRhythmNavigation,
     required this.monthPerspective,
@@ -977,6 +983,43 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
   final DashboardLayoutFrame geometry;
   final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
   final ValueListenable<BalancePresentationSettings>? presentationSettings;
+
+  @override
+  State<_BalanceAlternativeScopeScaffold> createState() =>
+      _BalanceAlternativeScopeScaffoldState();
+}
+
+class _BalanceAlternativeScopeScaffoldState
+    extends State<_BalanceAlternativeScopeScaffold> {
+  DashboardBalanceLinkedPresentation? _preparedSource;
+  BalanceAlternativeScopePresentation? _preparedScope;
+  DashboardDayRhythmNavigation? get dayRhythmNavigation =>
+      widget.dayRhythmNavigation;
+  ValueGetter<BalanceMonthPerspective> get monthPerspective =>
+      widget.monthPerspective;
+  ValueChanged<BalanceMonthPerspective> get onMonthPerspectiveChanged =>
+      widget.onMonthPerspectiveChanged;
+  ValueGetter<BalanceYearPerspective> get yearPerspective =>
+      widget.yearPerspective;
+  ValueChanged<BalanceYearPerspective> get onYearPerspectiveChanged =>
+      widget.onYearPerspectiveChanged;
+  DashboardLayoutFrame get geometry => widget.geometry;
+  ValueListenable<DashboardBalanceLinkedPresentation?>? get presentation =>
+      widget.presentation;
+  ValueListenable<BalancePresentationSettings>? get presentationSettings =>
+      widget.presentationSettings;
+
+  BalanceAlternativeScopePresentation _scopeFor(
+    DashboardBalanceLinkedPresentation source,
+  ) {
+    // Presentation choices and collapse frames reuse the same prepared sample.
+    // A new immutable Core publication invalidates the composition as a unit.
+    if (!identical(source, _preparedSource)) {
+      _preparedSource = source;
+      _preparedScope = BalanceAlternativeScopePresentation.fromLinked(source);
+    }
+    return _preparedScope!;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1013,17 +1056,28 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
             child: _BalanceFourSectionScaffold(geometry: geometry),
           );
         }
-        final alternative = BalanceAlternativeScopePresentation.fromLinked(
-          value,
-        );
+        final alternative = _scopeFor(value);
         return BalanceAlternativeChildCardScope(
           usesChildCards: settings.usesChildCards,
           child: switch (alternative) {
             BalanceAlternativeSumPresentation() =>
-              _BalanceSumExtendedSheetScaffold(
-                geometry: geometry,
-                presentation: alternative,
-              ),
+              settings.sumLayoutPresentation ==
+                      BalanceSumLayoutPresentation.focused
+                  ? _BalanceSumFocusedScaffold(
+                      geometry: geometry,
+                      presentation: alternative,
+                      settings: settings,
+                      onPerspectiveChanged:
+                          presentationSettings is BalancePresentationController
+                          ? (presentationSettings
+                                    as BalancePresentationController)
+                                .setSumFocusedPresentation
+                          : null,
+                    )
+                  : _BalanceSumExtendedSheetScaffold(
+                      geometry: geometry,
+                      presentation: alternative,
+                    ),
             BalanceAlternativeYearPresentation() =>
               settings.yearLayoutPresentation ==
                       BalanceYearLayoutPresentation.focused
@@ -1315,8 +1369,42 @@ final class _BalanceMonthExtendedSheetScaffold extends StatelessWidget {
   );
 }
 
-/// Monthly alternative inside the existing Mother Card bounds. The
-/// physical shell/header stay owned by the established Balance surface.
+/// SUM alternative inside the existing Mother Card bounds.
+final class _BalanceSumFocusedScaffold extends StatelessWidget {
+  const _BalanceSumFocusedScaffold({
+    required this.geometry,
+    required this.presentation,
+    required this.settings,
+    this.onPerspectiveChanged,
+  });
+  final DashboardLayoutFrame geometry;
+  final BalanceAlternativeSumPresentation presentation;
+  final BalancePresentationSettings settings;
+  final ValueChanged<BalanceSumFocusedPresentation>? onPerspectiveChanged;
+  @override
+  Widget build(BuildContext context) => DashboardCoreModeFramePosition(
+    bounds: DashboardHeaderContentMotherCardBounds.resolve(geometry: geometry),
+    child: LayoutBuilder(
+      builder: (context, constraints) => Stack(
+        children: [
+          Positioned.fromRect(
+            rect: _balanceAlternativeBodyRect(
+              constraints,
+              geometry.headerBounds.height,
+            ),
+            child: BalanceSumFocusedLayout(
+              presentation: presentation,
+              perspective: settings.sumFocusedPresentation,
+              showSupplementaryStats: settings.showSumFocusedSupplementaryStats,
+              onPerspectiveChanged: onPerspectiveChanged,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 final class _BalanceMonthFocusedScaffold extends StatelessWidget {
   const _BalanceMonthFocusedScaffold({
     required this.initialPerspective,

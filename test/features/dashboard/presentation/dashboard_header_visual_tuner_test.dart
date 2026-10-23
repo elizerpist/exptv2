@@ -102,6 +102,84 @@ void main() {
   );
 
   testWidgets(
+    'focused SUM controls persist without changing other scope preferences',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final balance = BalancePresentationController();
+      addTearDown(balance.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 1700,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              balancePresentationSettings: balance,
+            ),
+          ),
+        ),
+      );
+      await _openTunerTopics(tester, controller, [
+        DashboardHeaderTunerSection.balancePresentation,
+      ]);
+      expect(find.text('SUM nézet elrendezése'), findsOneWidget);
+      expect(find.text('Új SUM nézet tartalma'), findsNothing);
+      final original = balance.value;
+      Future<void> select(String key) async {
+        final target = find.byKey(ValueKey(key));
+        await tester.ensureVisible(target);
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.tap(target);
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      await select('balance-sum-layout-focused');
+      expect(find.text('Új SUM nézet tartalma'), findsOneWidget);
+      expect(find.text('Eredmények eloszlása'), findsOneWidget);
+      expect(find.text('Pozitív hónapok aránya'), findsOneWidget);
+      expect(find.text('Pénzügyi stabilitás'), findsOneWidget);
+      await select('balance-sum-focused-positiveRatio');
+      await select('balance-sum-focused-supplementary-stats-toggle');
+      expect(balance.value.showSumFocusedSupplementaryStats, isFalse);
+      await select('balance-sum-focused-stability');
+      expect(
+        balance.value.sumFocusedPresentation,
+        BalanceSumFocusedPresentation.stability,
+      );
+      await select('balance-sum-layout-current');
+      expect(find.text('Új SUM nézet tartalma'), findsNothing);
+      await select('balance-sum-layout-focused');
+      expect(
+        balance.value.sumFocusedPresentation,
+        BalanceSumFocusedPresentation.stability,
+      );
+      expect(balance.value.showSumFocusedSupplementaryStats, isFalse);
+      expect(
+        balance.value.dayLayoutPresentation,
+        original.dayLayoutPresentation,
+      );
+      expect(
+        balance.value.dayFocusedPresentation,
+        original.dayFocusedPresentation,
+      );
+      expect(balance.value.showFocusedDayImpact, original.showFocusedDayImpact);
+      expect(
+        balance.value.monthLayoutPresentation,
+        original.monthLayoutPresentation,
+      );
+      expect(
+        balance.value.yearLayoutPresentation,
+        original.yearLayoutPresentation,
+      );
+      expect(balance.value.dailyCalculationMode, original.dailyCalculationMode);
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
     'focused day controls remain conditional and retain independent preferences',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1800));

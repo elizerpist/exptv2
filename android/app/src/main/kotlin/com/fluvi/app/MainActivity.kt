@@ -267,6 +267,9 @@ class MainActivity : FlutterActivity() {
                             "balanceDayLayoutPresentation" to preferences.getInt("balanceDayLayoutPresentation", 0),
                             "balanceDayFocusedPresentation" to preferences.getInt("balanceDayFocusedPresentation", 0),
                             "balanceShowFocusedDayImpact" to preferences.getBoolean("balanceShowFocusedDayImpact", true),
+                            "balanceSumLayoutPresentation" to preferences.getInt("balanceSumLayoutPresentation", 0),
+                            "balanceSumFocusedPresentation" to preferences.getInt("balanceSumFocusedPresentation", 0),
+                            "balanceShowSumFocusedSupplementaryStats" to preferences.getBoolean("balanceShowSumFocusedSupplementaryStats", true),
                             "balanceMonthLayoutPresentation" to preferences.getInt("balanceMonthLayoutPresentation", 0),
                             "balanceYearLayoutPresentation" to preferences.getInt("balanceYearLayoutPresentation", 0),
                             "balanceDailyCalculationMode" to preferences.getInt("balanceDailyCalculationMode", 0),
@@ -299,6 +302,11 @@ class MainActivity : FlutterActivity() {
                         val balanceDayFocusedPresentation = (values["balanceDayFocusedPresentation"] as? Number)?.toInt() ?: 0
                         require(balanceDayFocusedPresentation in 0..2) { "Invalid Balance day presentation." }
                         val balanceShowFocusedDayImpact = values["balanceShowFocusedDayImpact"] as? Boolean ?: true
+                        val balanceSumLayoutPresentation = (values["balanceSumLayoutPresentation"] as? Number)?.toInt() ?: 0
+                        require(balanceSumLayoutPresentation in 0..1) { "Invalid Balance SUM presentation." }
+                        val balanceSumFocusedPresentation = (values["balanceSumFocusedPresentation"] as? Number)?.toInt() ?: 0
+                        require(balanceSumFocusedPresentation in 0..2) { "Invalid Balance SUM presentation." }
+                        val balanceShowSumFocusedSupplementaryStats = values["balanceShowSumFocusedSupplementaryStats"] as? Boolean ?: true
                         val balanceMonthLayoutPresentation = (values["balanceMonthLayoutPresentation"] as? Number)?.toInt() ?: 0
                         val balanceYearLayoutPresentation = (values["balanceYearLayoutPresentation"] as? Number)?.toInt() ?: 0
                         require(balanceMonthLayoutPresentation in 0..1) { "Invalid Balance month layout presentation." }
@@ -330,6 +338,9 @@ class MainActivity : FlutterActivity() {
                             .putInt("balanceDayLayoutPresentation", balanceDayLayoutPresentation)
                             .putInt("balanceDayFocusedPresentation", balanceDayFocusedPresentation)
                             .putBoolean("balanceShowFocusedDayImpact", balanceShowFocusedDayImpact)
+                            .putInt("balanceSumLayoutPresentation", balanceSumLayoutPresentation)
+                            .putInt("balanceSumFocusedPresentation", balanceSumFocusedPresentation)
+                            .putBoolean("balanceShowSumFocusedSupplementaryStats", balanceShowSumFocusedSupplementaryStats)
                             .putInt("balanceMonthLayoutPresentation", balanceMonthLayoutPresentation)
                             .putInt("balanceYearLayoutPresentation", balanceYearLayoutPresentation)
                             .putInt("balanceDailyCalculationMode", balanceDailyCalculationMode)

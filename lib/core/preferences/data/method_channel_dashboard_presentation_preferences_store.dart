@@ -68,6 +68,18 @@ final class MethodChannelDashboardPresentationPreferencesStore
         ),
         balanceShowFocusedDayImpact:
             values['balanceShowFocusedDayImpact'] as bool? ?? true,
+        balanceSumLayoutPresentation: _enumValue(
+          BalanceSumLayoutPresentation.values,
+          values['balanceSumLayoutPresentation'] as int?,
+          BalanceSumLayoutPresentation.current,
+        ),
+        balanceSumFocusedPresentation: _enumValue(
+          BalanceSumFocusedPresentation.values,
+          values['balanceSumFocusedPresentation'] as int?,
+          BalanceSumFocusedPresentation.distribution,
+        ),
+        balanceShowSumFocusedSupplementaryStats:
+            values['balanceShowSumFocusedSupplementaryStats'] as bool? ?? true,
         balanceMonthLayoutPresentation: _enumValue(
           BalanceMonthLayoutPresentation.values,
           values['balanceMonthLayoutPresentation'] as int?,
@@ -132,6 +144,12 @@ final class MethodChannelDashboardPresentationPreferencesStore
         'balanceDayFocusedPresentation':
             preferences.balanceDayFocusedPresentation.index,
         'balanceShowFocusedDayImpact': preferences.balanceShowFocusedDayImpact,
+        'balanceSumLayoutPresentation':
+            preferences.balanceSumLayoutPresentation.index,
+        'balanceSumFocusedPresentation':
+            preferences.balanceSumFocusedPresentation.index,
+        'balanceShowSumFocusedSupplementaryStats':
+            preferences.balanceShowSumFocusedSupplementaryStats,
         'balanceMonthLayoutPresentation':
             preferences.balanceMonthLayoutPresentation.index,
         'balanceYearLayoutPresentation':

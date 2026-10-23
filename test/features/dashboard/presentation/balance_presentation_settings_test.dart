@@ -9,6 +9,64 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 void main() {
   test(
+    'SUM alternatives revise independently and retain hidden impact preference',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+      final original = controller.value;
+      expect(
+        original.sumLayoutPresentation,
+        BalanceSumLayoutPresentation.current,
+      );
+      expect(
+        original.sumFocusedPresentation,
+        BalanceSumFocusedPresentation.distribution,
+      );
+      expect(original.showSumFocusedSupplementaryStats, isTrue);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.focused);
+      controller.setSumFocusedPresentation(
+        BalanceSumFocusedPresentation.positiveRatio,
+      );
+      controller.setShowSumFocusedSupplementaryStats(false);
+      final changed = original.copyWith(
+        sumLayoutPresentation: BalanceSumLayoutPresentation.focused,
+        sumFocusedPresentation: BalanceSumFocusedPresentation.positiveRatio,
+        showSumFocusedSupplementaryStats: false,
+        revision: 3,
+      );
+      expect(controller.value, changed);
+      expect(controller.value.hashCode, changed.hashCode);
+      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.focused);
+      controller.setSumFocusedPresentation(
+        BalanceSumFocusedPresentation.positiveRatio,
+      );
+      controller.setShowSumFocusedSupplementaryStats(false);
+      expect(notifications, 3);
+      controller.setSumFocusedPresentation(
+        BalanceSumFocusedPresentation.stability,
+      );
+      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.current);
+      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.focused);
+      expect(controller.value.showSumFocusedSupplementaryStats, isFalse);
+      expect(
+        controller.value.sumFocusedPresentation,
+        BalanceSumFocusedPresentation.stability,
+      );
+      controller.reset();
+      expect(
+        controller.value.sumLayoutPresentation,
+        BalanceSumLayoutPresentation.current,
+      );
+      expect(
+        controller.value.sumFocusedPresentation,
+        BalanceSumFocusedPresentation.distribution,
+      );
+      expect(controller.value.showSumFocusedSupplementaryStats, isTrue);
+    },
+  );
+  test(
     'day alternatives revise independently and retain hidden impact preference',
     () {
       final controller = BalancePresentationController();

@@ -21,6 +21,10 @@ final class DashboardPresentationPreferences {
     this.balanceDayFocusedPresentation =
         BalanceDayFocusedPresentation.financialCompass,
     this.balanceShowFocusedDayImpact = true,
+    this.balanceSumLayoutPresentation = BalanceSumLayoutPresentation.current,
+    this.balanceSumFocusedPresentation =
+        BalanceSumFocusedPresentation.distribution,
+    this.balanceShowSumFocusedSupplementaryStats = true,
     this.balanceMonthLayoutPresentation =
         BalanceMonthLayoutPresentation.current,
     this.balanceYearLayoutPresentation = BalanceYearLayoutPresentation.current,
@@ -40,6 +44,9 @@ final class DashboardPresentationPreferences {
   final BalanceDayLayoutPresentation balanceDayLayoutPresentation;
   final BalanceDayFocusedPresentation balanceDayFocusedPresentation;
   final bool balanceShowFocusedDayImpact;
+  final BalanceSumLayoutPresentation balanceSumLayoutPresentation;
+  final BalanceSumFocusedPresentation balanceSumFocusedPresentation;
+  final bool balanceShowSumFocusedSupplementaryStats;
   final BalanceMonthLayoutPresentation balanceMonthLayoutPresentation;
   final BalanceYearLayoutPresentation balanceYearLayoutPresentation;
   final BalanceDailyCalculationMode balanceDailyCalculationMode;
@@ -80,6 +87,10 @@ final class DashboardPresentationPreferences {
       other.balanceDayLayoutPresentation == balanceDayLayoutPresentation &&
       other.balanceDayFocusedPresentation == balanceDayFocusedPresentation &&
       other.balanceShowFocusedDayImpact == balanceShowFocusedDayImpact &&
+      other.balanceSumLayoutPresentation == balanceSumLayoutPresentation &&
+      other.balanceSumFocusedPresentation == balanceSumFocusedPresentation &&
+      other.balanceShowSumFocusedSupplementaryStats ==
+          balanceShowSumFocusedSupplementaryStats &&
       other.balanceMonthLayoutPresentation == balanceMonthLayoutPresentation &&
       other.balanceYearLayoutPresentation == balanceYearLayoutPresentation &&
       other.balanceDailyCalculationMode == balanceDailyCalculationMode &&
@@ -104,6 +115,9 @@ final class DashboardPresentationPreferences {
     balanceDayLayoutPresentation,
     balanceDayFocusedPresentation,
     balanceShowFocusedDayImpact,
+    balanceSumLayoutPresentation,
+    balanceSumFocusedPresentation,
+    balanceShowSumFocusedSupplementaryStats,
     balanceMonthLayoutPresentation,
     balanceYearLayoutPresentation,
     balanceDailyCalculationMode,

@@ -553,6 +553,11 @@ class _CoreDashboardState extends State<CoreDashboard>
         ..setDayLayoutPresentation(restored.balanceDayLayoutPresentation)
         ..setDayFocusedPresentation(restored.balanceDayFocusedPresentation)
         ..setShowFocusedDayImpact(restored.balanceShowFocusedDayImpact)
+        ..setSumLayoutPresentation(restored.balanceSumLayoutPresentation)
+        ..setSumFocusedPresentation(restored.balanceSumFocusedPresentation)
+        ..setShowSumFocusedSupplementaryStats(
+          restored.balanceShowSumFocusedSupplementaryStats,
+        )
         ..setMonthLayoutPresentation(restored.balanceMonthLayoutPresentation)
         ..setYearLayoutPresentation(restored.balanceYearLayoutPresentation)
         ..setDailyCalculationMode(restored.balanceDailyCalculationMode)
@@ -594,6 +599,12 @@ class _CoreDashboardState extends State<CoreDashboard>
             _balancePresentationSettings.value.dayFocusedPresentation,
         balanceShowFocusedDayImpact:
             _balancePresentationSettings.value.showFocusedDayImpact,
+        balanceSumLayoutPresentation:
+            _balancePresentationSettings.value.sumLayoutPresentation,
+        balanceSumFocusedPresentation:
+            _balancePresentationSettings.value.sumFocusedPresentation,
+        balanceShowSumFocusedSupplementaryStats:
+            _balancePresentationSettings.value.showSumFocusedSupplementaryStats,
         balanceMonthLayoutPresentation:
             _balancePresentationSettings.value.monthLayoutPresentation,
         balanceYearLayoutPresentation:

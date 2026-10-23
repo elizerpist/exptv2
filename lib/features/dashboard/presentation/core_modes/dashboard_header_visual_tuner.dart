@@ -1420,6 +1420,118 @@ final class _BalancePresentationSection extends StatelessWidget {
         ],
         const Padding(
           padding: EdgeInsets.only(top: 12, bottom: 6),
+          child: Text('SUM nézet elrendezése'),
+        ),
+        for (final layout in BalanceSumLayoutPresentation.values)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Semantics(
+              selected: settings.sumLayoutPresentation == layout,
+              button: true,
+              child: InkWell(
+                key: ValueKey<String>('balance-sum-layout-${layout.name}'),
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => controller.setSumLayoutPresentation(layout),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: settings.sumLayoutPresentation == layout
+                        ? FluviVisualTokens.surface
+                        : FluviVisualTokens.surfaceMuted,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: settings.sumLayoutPresentation == layout
+                          ? Theme.of(context).colorScheme.primary
+                          : FluviVisualTokens.border,
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(layout.tunerLabel),
+                            Text(
+                              layout.tunerDescription,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (settings.sumLayoutPresentation == layout)
+                        const Icon(Icons.check_rounded, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (settings.sumLayoutPresentation ==
+            BalanceSumLayoutPresentation.focused) ...[
+          const Padding(
+            padding: EdgeInsets.only(top: 12, bottom: 6),
+            child: Text('Új SUM nézet tartalma'),
+          ),
+          for (final layout in BalanceSumFocusedPresentation.values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Semantics(
+                selected: settings.sumFocusedPresentation == layout,
+                button: true,
+                child: InkWell(
+                  key: ValueKey<String>('balance-sum-focused-${layout.name}'),
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => controller.setSumFocusedPresentation(layout),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: settings.sumFocusedPresentation == layout
+                          ? FluviVisualTokens.surface
+                          : FluviVisualTokens.surfaceMuted,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: settings.sumFocusedPresentation == layout
+                            ? Theme.of(context).colorScheme.primary
+                            : FluviVisualTokens.border,
+                      ),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(layout.tunerLabel),
+                              Text(
+                                layout.tunerDescription,
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (settings.sumFocusedPresentation == layout)
+                          const Icon(Icons.check_rounded, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          SwitchListTile(
+            key: const ValueKey(
+              'balance-sum-focused-supplementary-stats-toggle',
+            ),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Kiegészítő statisztikák megjelenítése'),
+            value: settings.showSumFocusedSupplementaryStats,
+            onChanged: controller.setShowSumFocusedSupplementaryStats,
+          ),
+        ],
+        const Padding(
+          padding: EdgeInsets.only(top: 12, bottom: 6),
           child: Text('Havi nézet elrendezése'),
         ),
         for (final layout in BalanceMonthLayoutPresentation.values)

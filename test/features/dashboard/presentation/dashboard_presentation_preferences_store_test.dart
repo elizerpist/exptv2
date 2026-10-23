@@ -40,6 +40,9 @@ void main() {
         showDayContentViewChooser: original.showDayContentViewChooser,
         balanceUsesChildCards: original.balanceUsesChildCards,
         balanceHeaderGraphPresentation: original.balanceHeaderGraphPresentation,
+        balanceSumLayoutPresentation: BalanceSumLayoutPresentation.focused,
+        balanceSumFocusedPresentation: BalanceSumFocusedPresentation.stability,
+        balanceShowSumFocusedSupplementaryStats: false,
         balanceDayLayoutPresentation: BalanceDayLayoutPresentation.focused,
         balanceDayFocusedPresentation:
             BalanceDayFocusedPresentation.dailyImpactFocus,
@@ -57,6 +60,19 @@ void main() {
         await MethodChannelDashboardPresentationPreferencesStore().read(),
         choice,
       );
+      stored['balanceSumLayoutPresentation'] = 99;
+      stored['balanceSumFocusedPresentation'] = 99;
+      stored.remove('balanceShowSumFocusedSupplementaryStats');
+      final restoredSum = await store.read();
+      expect(
+        restoredSum.balanceSumLayoutPresentation,
+        BalanceSumLayoutPresentation.current,
+      );
+      expect(
+        restoredSum.balanceSumFocusedPresentation,
+        BalanceSumFocusedPresentation.distribution,
+      );
+      expect(restoredSum.balanceShowSumFocusedSupplementaryStats, isTrue);
       stored['balanceDayLayoutPresentation'] = 99;
       stored['balanceDayFocusedPresentation'] = 99;
       stored.remove('balanceShowFocusedDayImpact');
@@ -184,6 +200,11 @@ void main() {
       'yearMonthlyAmountPresentation':
           MindYearMonthlyAmountPresentation.inline.index,
       'showDayContentViewChooser': false,
+      'balanceSumLayoutPresentation':
+          BalanceSumLayoutPresentation.current.index,
+      'balanceSumFocusedPresentation':
+          BalanceSumFocusedPresentation.distribution.index,
+      'balanceShowSumFocusedSupplementaryStats': true,
       'balanceDayLayoutPresentation':
           BalanceDayLayoutPresentation.current.index,
       'balanceDayFocusedPresentation':
