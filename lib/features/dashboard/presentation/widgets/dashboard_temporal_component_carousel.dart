@@ -413,14 +413,16 @@ final class DashboardTemporalComponentCarouselState
           },
           itemBuilder: (context, offset, metrics) {
             if (widget.visualBuilder != null) return const SizedBox.shrink();
-            final origin = _motionOrigin ?? widget.navigation.state;
-            final candidate =
-                widget.candidateForOffset(origin, offset) ?? origin;
+            // Overlay renderers own the visible content. The generated cells
+            // only supply shared physics; they must not project unused dates.
             if (widget.visualBuilder != null ||
                 widget.presentation ==
                     SummaryTemporalFlingPresentation.dynamicTrio) {
               return const SizedBox.shrink();
             }
+            final origin = _motionOrigin ?? widget.navigation.state;
+            final candidate =
+                widget.candidateForOffset(origin, offset) ?? origin;
             return Transform.translate(
               offset: Offset(widget.visualContentOffset, 0),
               child: FittedBox(

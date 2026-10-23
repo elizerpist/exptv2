@@ -40,6 +40,7 @@ void main() {
       );
       addTearDown(navigation.dispose);
       var raw = 0.0, crossings = 0, settles = 0;
+      var candidateCalls = 0;
       final coordinator = DashboardTemporalCarouselCoordinator();
       await tester.pumpWidget(
         MaterialApp(
@@ -59,14 +60,16 @@ void main() {
                 scrollDirection: Axis.horizontal,
                 itemExtent: 10,
                 visibleItemCount: 61,
-                candidateForOffset: (origin, offset) =>
-                    navigation.temporalComponentOffsetCandidate(
-                      plane: TimePlane.month,
-                      isRailOpen: true,
-                      component: DashboardTemporalAnchorComponent.day,
-                      offset: offset,
-                      base: origin,
-                    ),
+                candidateForOffset: (origin, offset) {
+                  candidateCalls++;
+                  return navigation.temporalComponentOffsetCandidate(
+                    plane: TimePlane.month,
+                    isRailOpen: true,
+                    component: DashboardTemporalAnchorComponent.day,
+                    offset: offset,
+                    base: origin,
+                  );
+                },
                 labelForCandidate: (candidate) => '${candidate.dayCursor}',
                 onCrossed: (candidate) {
                   crossings++;
@@ -83,6 +86,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(
+        candidateCalls,
+        0,
+        reason: 'Invisible carousel cells must not project temporal candidates',
+      );
       final gesture = await tester.startGesture(
         tester.getCenter(find.byKey(const ValueKey('rail'))),
       );
