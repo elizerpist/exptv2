@@ -165,43 +165,54 @@ final class BalanceDayFinancialComparison extends StatelessWidget {
     if (!momentum.available) {
       return const Center(child: Text('Még nincs összehasonlítható előzmény'));
     }
-    final point = momentum.selected;
-    final scale = BalanceDayComparisonBarScale.fromPoint(point);
+    final comparison = BalanceDayPeriodComparisonPresentation.fromPoint(
+      momentum.selected,
+    );
+    final scale = BalanceDayComparisonBarScale.fromComparison(comparison);
+    Color resultColor(int amount) => amount > 0
+        ? _green
+        : amount < 0
+        ? _pink
+        : _ink;
     return LayoutBuilder(
       builder: (context, bounds) {
         final compact = bounds.maxHeight < 240;
         return Column(
           children: [
-            _text(
-              point.quadrant.label,
-              size: compact ? 15 : 23,
-              weight: FontWeight.w800,
-            ),
-            _text(
-              _momentumDetail(point),
-              size: compact ? 8 : 11,
-              color: const Color(0xff52618c),
-            ),
             Row(
               children: [
-                for (var group = 0; group < 2; group++)
+                for (final period in [comparison.previous, comparison.current])
                   Expanded(
-                    child: _text(
-                      _percent(
-                        group == 0
-                            ? _change(
-                                point.currentIncomeMinor,
-                                point.referenceIncomeMinor,
-                              )
-                            : _change(
-                                point.currentExpenseMinor,
-                                point.referenceExpenseMinor,
-                              ),
+                    child: Column(
+                      key: ValueKey(
+                        'balance-day-comparison-period-${period.period.name}',
                       ),
-                      size: compact ? 18 : 29,
-                      color: group == 0 ? _green : _pink,
-                      weight: FontWeight.w800,
-                      lines: 1,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _text(
+                          period.period == BalanceDayComparisonPeriod.previous
+                              ? 'Előző 30 nap'
+                              : 'Utolsó 30 nap',
+                          size: compact ? 9 : 13,
+                          color:
+                              period.period ==
+                                  BalanceDayComparisonPeriod.previous
+                              ? const Color(0xffa076d6)
+                              : _green,
+                        ),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: _text(
+                            BalanceDayPeriodComparisonPresentation.signedAmountLabel(
+                              period.netMinor,
+                            ),
+                            size: compact ? 18 : 27,
+                            color: resultColor(period.netMinor),
+                            weight: FontWeight.w800,
+                            lines: 1,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
@@ -230,7 +241,14 @@ final class BalanceDayFinancialComparison extends StatelessWidget {
                           )
                             Expanded(
                               child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  _text(
+                                    withinGroup == 0 ? 'Bevétel' : 'Kiadás',
+                                    size: compact ? 7 : 10,
+                                    color: withinGroup == 0 ? _green : _pink,
+                                    lines: 1,
+                                  ),
                                   FittedBox(
                                     fit: BoxFit.scaleDown,
                                     child: _text(
@@ -239,17 +257,9 @@ final class BalanceDayFinancialComparison extends StatelessWidget {
                                             withinGroup],
                                       ),
                                       size: compact ? 8 : 12,
-                                      weight: FontWeight.w800,
+                                      weight: FontWeight.w700,
                                       lines: 1,
                                     ),
-                                  ),
-                                  _text(
-                                    withinGroup == 0
-                                        ? 'előző 30 nap'
-                                        : 'utolsó 30 nap',
-                                    size: compact ? 6 : 8,
-                                    color: const Color(0xff52618c),
-                                    lines: 1,
                                   ),
                                 ],
                               ),
@@ -260,41 +270,22 @@ final class BalanceDayFinancialComparison extends StatelessWidget {
                   ),
               ],
             ),
-            Row(
-              children: [
-                for (var group = 0; group < 2; group++)
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          height: 5,
-                          margin: const EdgeInsets.symmetric(horizontal: 10),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color:
-                                    (group == 0
-                                            ? const Color(0xffb17af2)
-                                            : _pink)
-                                        .withValues(alpha: .4),
-                              ),
-                            ),
-                            borderRadius: const BorderRadius.vertical(
-                              bottom: Radius.circular(5),
-                            ),
-                          ),
-                        ),
-                        _text(
-                          group == 0 ? 'Bevétel' : 'Kiadás',
-                          size: compact ? 9 : 13,
-                          color: group == 0 ? _ink : _pink,
-                          weight: FontWeight.w800,
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+            _text(
+              'Mérlegváltozás',
+              size: compact ? 8 : 11,
+              color: const Color(0xff52618c),
+            ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: _text(
+                BalanceDayPeriodComparisonPresentation.signedAmountLabel(
+                  comparison.netDeltaMinor,
+                ),
+                size: compact ? 16 : 23,
+                color: resultColor(comparison.netDeltaMinor),
+                weight: FontWeight.w800,
+                lines: 1,
+              ),
             ),
           ],
         );
@@ -643,6 +634,8 @@ void _sphere(Canvas canvas, Offset center, double r, Color base) {
 final class BalanceDayComparisonPainter extends CustomPainter {
   const BalanceDayComparisonPainter(this.scale);
   final BalanceDayComparisonBarScale scale;
+  static Color colorFor(BalanceDayComparisonFlow flow) =>
+      flow == BalanceDayComparisonFlow.income ? const Color(0xff18bba3) : _pink;
   List<Rect> barRects(Size size) {
     final slot = size.width / 4;
     final width = math.min(42.0, slot * .45);
@@ -661,12 +654,6 @@ final class BalanceDayComparisonPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    const colors = [
-      Color(0xffb17af2),
-      Color(0xff18bba3),
-      Color(0xffefacd5),
-      _pink,
-    ];
     final rects = barRects(size);
     canvas.drawLine(
       Offset(size.width / 2, 4),
@@ -677,6 +664,7 @@ final class BalanceDayComparisonPainter extends CustomPainter {
     );
     for (var i = 0; i < rects.length; i++) {
       final rect = rects[i];
+      final color = colorFor(scale.bars[i].flow);
       if (rect.height <= 0) continue;
       canvas.drawOval(
         Rect.fromCenter(
@@ -685,10 +673,10 @@ final class BalanceDayComparisonPainter extends CustomPainter {
           height: 4,
         ),
         Paint()
-          ..color = colors[i].withValues(alpha: .12)
+          ..color = color.withValues(alpha: .12)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
       );
-      final material = BudgetClayActiveMaterial.forSemanticBase(colors[i]);
+      final material = BudgetClayActiveMaterial.forSemanticBase(color);
       FluviYearClayCapsulePainter.paint(
         canvas,
         rect: rect,

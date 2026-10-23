@@ -21,6 +21,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_core_mode_control
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_momentum_rail.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_focused_visuals.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
@@ -46,12 +47,15 @@ Future<DashboardCoreController> _setup(
   WidgetTester tester, {
   DateTime? date,
   bool richData = false,
+  int bookedMinute = 720,
   SummaryTemporalFlingPresentation presentation =
       SummaryTemporalFlingPresentation.dynamicTrio,
 }) async {
   final core = DashboardCoreController(
     initialCoreRevision: 1,
-    dataRepository: richData ? _PairedMotionRepository() : null,
+    dataRepository: richData
+        ? _PairedMotionRepository(bookedMinute: bookedMinute)
+        : null,
     yearWindowRadius: richData ? 1 : 12,
     initialDate: date ?? DateTime(2026, 7, 16),
     initialPlane: TimePlane.month,
@@ -190,6 +194,120 @@ void main() {
   });
 
   tearDownAll(() => goldenFileComparator = originalComparator);
+
+  for (final fromRail in [false, true]) {
+    testWidgets(
+      'V4 ${fromRail ? 'rhythm' : 'Summary'} navigation publishes exact period comparison',
+      (tester) async {
+        // Midnight bookings keep both terminal dates inside the existing intraday cutoff.
+        final core = await _setup(tester, richData: true, bookedMinute: 0);
+        final tuner = tester.widget<DashboardHeaderVisualTuner>(
+          find.byType(DashboardHeaderVisualTuner),
+        );
+        tuner.balancePresentationSettings!.setDayFocusedPresentation(
+          BalanceDayFocusedPresentation.financialComparison,
+        );
+        await _frames(tester, 4);
+        void check() {
+          final visual = tester.widget<BalanceDayFinancialComparison>(
+            find.byType(BalanceDayFinancialComparison),
+          );
+          final source = visual.momentum.selected;
+          final chart =
+              tester
+                      .widget<CustomPaint>(
+                        find.byKey(
+                          const ValueKey('balance-day-comparison-chart'),
+                        ),
+                      )
+                      .painter!
+                  as BalanceDayComparisonPainter;
+          expect(
+            source.epochDay,
+            LocalDate(
+              year: core.navigation.state.temporalAnchor.visibleYear,
+              month: core.navigation.state.temporalAnchor.visibleMonth,
+              day: core.navigation.state.temporalAnchor.visibleDay,
+            ).epochDay,
+          );
+          expect(chart.scale.source, same(source));
+          int expected(String direction, int start, int end) =>
+              _PairedMotionRepository().rows
+                  .where(
+                    (row) =>
+                        row.direction == direction &&
+                        row.bookedLocalEpochDay >= start &&
+                        row.bookedLocalEpochDay <= end,
+                  )
+                  .fold<int>(0, (sum, row) => sum + row.amountMinor);
+          expect(
+            source.referenceIncomeMinor,
+            expected('income', source.epochDay - 59, source.epochDay - 30),
+          );
+          expect(
+            source.referenceExpenseMinor,
+            expected('expense', source.epochDay - 59, source.epochDay - 30),
+          );
+          expect(
+            source.currentIncomeMinor,
+            expected('income', source.epochDay - 29, source.epochDay),
+          );
+          expect(
+            source.currentExpenseMinor,
+            expected('expense', source.epochDay - 29, source.epochDay),
+          );
+
+          expect(chart.scale.amountsMinor, [
+            source.referenceIncomeMinor,
+            source.referenceExpenseMinor,
+            source.currentIncomeMinor,
+            source.currentExpenseMinor,
+          ]);
+          expect(
+            chart.scale.comparison.netDeltaMinor,
+            (source.currentIncomeMinor - source.currentExpenseMinor) -
+                (source.referenceIncomeMinor - source.referenceExpenseMinor),
+          );
+          expect(find.text('Mérlegváltozás'), findsOneWidget);
+        }
+
+        check();
+        for (final delta in [-180.0, 180.0]) {
+          final start = core.navigation.state.navigationEpoch;
+          await tester.fling(
+            find.byKey(fromRail ? _rhythmKey : _summaryKey),
+            fromRail ? Offset(delta, 0) : Offset(0, delta),
+            2400,
+          );
+          for (var frame = 0; frame < 30; frame++) {
+            await _frames(tester, 1);
+            // Compare only the accepted financial snapshot; visual preview may lead.
+            final source = tester
+                .widget<BalanceDayFinancialComparison>(
+                  find.byType(BalanceDayFinancialComparison),
+                )
+                .momentum
+                .selected;
+            final chart =
+                tester
+                        .widget<CustomPaint>(
+                          find.byKey(
+                            const ValueKey('balance-day-comparison-chart'),
+                          ),
+                        )
+                        .painter!
+                    as BalanceDayComparisonPainter;
+            expect(chart.scale.source, same(source));
+          }
+          await _settled(tester);
+          expect(core.navigation.state.navigationEpoch, greaterThan(start));
+          check();
+        }
+        expect(tester.takeException(), isNull);
+        await _unmount(tester);
+      },
+    );
+  }
 
   for (final presentation in SummaryTemporalFlingPresentation.values) {
     for (final fromRail in [false, true]) {
@@ -484,28 +602,31 @@ void main() {
 // Only acquisition is fixture data: Core's exact prepared membership, financial
 // projections, scene binding and temporal acceptance remain production code.
 final class _PairedMotionRepository implements DashboardDataRuntimeRepository {
-  final rows = List<DashboardLedgerEntry>.unmodifiable([
-    for (var offset = 0; offset < 120; offset++)
-      for (final direction in ['income', 'expense'])
-        DashboardLedgerEntry(
-          id: '$direction-$offset',
-          partnerId: 'partner-$direction',
-          categoryId: 'day-$direction',
-          direction: direction,
-          amountMinor: direction == 'income'
-              ? 200000 + (offset * 7 % 9) * 25000
-              : 150000 + (offset * 5 % 11) * 18000,
-          bookedLocalEpochDay:
-              const LocalDate(year: 2026, month: 7, day: 16).epochDay - offset,
-          bookedLocalTimeMinutes: 720,
-          categoryDisplayName: direction == 'income'
-              ? 'Napi bevétel'
-              : 'Napi kiadás',
-          partnerDisplayName: 'Napi pénzforgalom',
-          categoryColorId: 'fallback',
-          categoryIconId: 'fallback',
-        ),
-  ]);
+  _PairedMotionRepository({int bookedMinute = 720})
+    : rows = List<DashboardLedgerEntry>.unmodifiable([
+        for (var offset = 0; offset < 120; offset++)
+          for (final direction in ['income', 'expense'])
+            DashboardLedgerEntry(
+              id: '$direction-$offset',
+              partnerId: 'partner-$direction',
+              categoryId: 'day-$direction',
+              direction: direction,
+              amountMinor: direction == 'income'
+                  ? 200000 + (offset * 7 % 9) * 25000
+                  : 150000 + (offset * 5 % 11) * 18000,
+              bookedLocalEpochDay:
+                  const LocalDate(year: 2026, month: 7, day: 16).epochDay -
+                  offset,
+              bookedLocalTimeMinutes: bookedMinute,
+              categoryDisplayName: direction == 'income'
+                  ? 'Napi bevétel'
+                  : 'Napi kiadás',
+              partnerDisplayName: 'Napi pénzforgalom',
+              categoryColorId: 'fallback',
+              categoryIconId: 'fallback',
+            ),
+      ]);
+  final List<DashboardLedgerEntry> rows;
   List<DashboardLedgerEntry> _rowsFor(CurrentLedgerQueryScope scope) {
     final boundaries = scope.timeScope.boundaries;
     return rows

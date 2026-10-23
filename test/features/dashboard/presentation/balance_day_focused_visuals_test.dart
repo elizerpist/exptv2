@@ -90,9 +90,7 @@ void main() {
       }
     },
   );
-  testWidgets('V3 reference amounts share actual capsule geometry', (
-    tester,
-  ) async {
+  testWidgets('V4 periods share actual capsule geometry', (tester) async {
     const point = DashboardBalanceDailyMomentumPoint(
       epochDay: 1,
       currentIncomeMinor: 70700000,
@@ -118,29 +116,39 @@ void main() {
       find.byKey(const ValueKey('balance-day-comparison-chart')),
     );
     final painter = paint.painter! as BalanceDayComparisonPainter;
+    final colors = painter.scale.bars
+        .map((bar) => BalanceDayComparisonPainter.colorFor(bar.flow))
+        .toList();
+    expect(colors[0], colors[2]);
+    expect(colors[1], colors[3]);
+    expect(colors[0], isNot(colors[1]));
     final rects = painter.barRects(
       tester.getSize(
         find.byKey(const ValueKey('balance-day-comparison-chart')),
       ),
     );
     expect(rects[3].height, greaterThan(rects[0].height));
-    expect(rects[0].height, greaterThan(rects[1].height));
-    expect(rects[1].height, greaterThan(rects[2].height));
+    expect(rects[0].height, greaterThan(rects[2].height));
+    expect(rects[2].height, greaterThan(rects[1].height));
     expect(
       rects[2].center.dx - rects[1].center.dx,
       greaterThan(rects[1].center.dx - rects[0].center.dx),
     );
-    expect(find.text('Figyelem szükséges'), findsOneWidget);
-    expect(
-      find.text('−1,9%'),
-      findsNothing,
-    ); // Existing formatter uses ASCII minus.
-    expect(find.text('-1,9%'), findsOneWidget);
-    expect(find.text('+16,3%'), findsOneWidget);
+    expect(find.text('Figyelem szükséges'), findsNothing);
+    expect(find.text('-1,9%'), findsNothing);
+    expect(find.text('+16,3%'), findsNothing);
+    expect(find.text('Előző 30 nap'), findsOneWidget);
+    expect(find.text('Utolsó 30 nap'), findsOneWidget);
+    expect(find.text('Bevétel'), findsNWidgets(2));
+    expect(find.text('Kiadás'), findsNWidgets(2));
+    expect(find.text('+69955 Ft'), findsOneWidget);
+    expect(find.text('-49999 Ft'), findsOneWidget);
+    expect(find.text('-119954 Ft'), findsOneWidget);
+    expect(find.text('Mérlegváltozás'), findsOneWidget);
     await expectLater(
       find.byKey(const ValueKey('capture')),
       matchesGoldenFile(
-        '../../../goldens/balance_day_financial_comparison_v3.png',
+        '../../../goldens/balance_day_financial_comparison_v4.png',
       ),
     );
     const worsening = DashboardBalanceDailyImpactPresentation(
@@ -168,55 +176,58 @@ void main() {
     );
   });
 
-  testWidgets('V3 comparison preserves every quadrant and zero reference', (
-    tester,
-  ) async {
-    for (final values in [
-      [200, 100, 100, 200],
-      [200, 100, 200, 100],
-      [100, 200, 100, 200],
-      [100, 200, 200, 100],
-      [0, 0, 0, 0],
-    ]) {
-      final point = DashboardBalanceDailyMomentumPoint(
-        epochDay: 1,
-        currentIncomeMinor: values[0],
-        referenceIncomeMinor: values[1],
-        currentExpenseMinor: values[2],
-        referenceExpenseMinor: values[3],
-        isCurrentHalf: true,
-        incomeAxis: 0,
-        expenseAxis: 0,
-        magnitude: 0,
-      );
-      await pump(
-        tester,
-        BalanceDayFinancialComparison(
-          momentum: DashboardBalanceDailyMomentumPresentation(
-            available: true,
-            selected: point,
-            rhythm: const [],
-          ),
-        ),
-        size: const Size(320, 190),
-      );
-      expect(find.text(point.quadrant.label), findsOneWidget);
-      final paint = tester.widget<CustomPaint>(
-        find.byKey(const ValueKey('balance-day-comparison-chart')),
-      );
-      final painter = paint.painter! as BalanceDayComparisonPainter;
-      if (values.every((value) => value == 0)) {
-        expect(find.text('—'), findsNWidgets(2));
-        expect(
-          painter
-              .barRects(const Size(280, 60))
-              .every((rect) => rect.height == 0),
-          isTrue,
+  testWidgets(
+    'V4 comparison shows period nets without quadrant or percentages',
+    (tester) async {
+      for (final values in [
+        [200, 100, 100, 200],
+        [200, 100, 200, 100],
+        [100, 200, 100, 200],
+        [100, 200, 200, 100],
+        [0, 0, 0, 0],
+        [100000000000, 200000000000, 80000000000, 250000000000],
+      ]) {
+        final point = DashboardBalanceDailyMomentumPoint(
+          epochDay: 1,
+          currentIncomeMinor: values[0],
+          referenceIncomeMinor: values[1],
+          currentExpenseMinor: values[2],
+          referenceExpenseMinor: values[3],
+          isCurrentHalf: true,
+          incomeAxis: 0,
+          expenseAxis: 0,
+          magnitude: 0,
         );
+        await pump(
+          tester,
+          BalanceDayFinancialComparison(
+            momentum: DashboardBalanceDailyMomentumPresentation(
+              available: true,
+              selected: point,
+              rhythm: const [],
+            ),
+          ),
+          size: const Size(320, 190),
+        );
+        expect(find.text(point.quadrant.label), findsNothing);
+        expect(find.text('Mérlegváltozás'), findsOneWidget);
+        final paint = tester.widget<CustomPaint>(
+          find.byKey(const ValueKey('balance-day-comparison-chart')),
+        );
+        final painter = paint.painter! as BalanceDayComparisonPainter;
+        if (values.every((value) => value == 0)) {
+          expect(find.text('0 Ft'), findsNWidgets(7));
+          expect(
+            painter
+                .barRects(const Size(280, 60))
+                .every((rect) => rect.height == 0),
+            isTrue,
+          );
+        }
+        expect(tester.takeException(), isNull);
       }
-      expect(tester.takeException(), isNull);
-    }
-  });
+    },
+  );
   testWidgets('V3 impact keeps neutral, dynamic scale and overshoot states', (
     tester,
   ) async {
@@ -315,6 +326,21 @@ void main() {
         ),
       );
       expect(find.text('Még nincs összehasonlítható előzmény'), findsOneWidget);
+      await pump(
+        tester,
+        BalanceDayFinancialComparison(
+          momentum: DashboardBalanceDailyMomentumPresentation.unavailable(
+            selectedEpochDay: 1,
+          ),
+        ),
+      );
+      expect(find.text('Még nincs összehasonlítható előzmény'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('balance-day-comparison-chart')),
+        findsNothing,
+      );
+      expect(find.text('Mérlegváltozás'), findsNothing);
+
       await pump(
         tester,
         BalanceDayImpactFocus(

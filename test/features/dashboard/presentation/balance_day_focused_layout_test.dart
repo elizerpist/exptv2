@@ -208,6 +208,20 @@ void main() {
           ),
         );
         final on = tester.getRect(target).size;
+        if (p == BalanceDayFocusedPresentation.financialComparison) {
+          expect(
+            tester.getRect(target).center.dx,
+            closeTo(
+              tester
+                  .getRect(
+                    find.byKey(const ValueKey('balance-day-rhythm-bars')),
+                  )
+                  .center
+                  .dx,
+              .001,
+            ),
+          );
+        }
         final rail = tester.getRect(
           find.byKey(const ValueKey('balance-day-focused-top-section')),
         );
@@ -230,6 +244,20 @@ void main() {
           same(railState),
         );
         expect(tester.getRect(target).height, greaterThan(on.height));
+        if (p == BalanceDayFocusedPresentation.financialComparison) {
+          expect(
+            tester.getRect(target).center.dx,
+            closeTo(
+              tester
+                  .getRect(
+                    find.byKey(const ValueKey('balance-day-rhythm-bars')),
+                  )
+                  .center
+                  .dx,
+              .001,
+            ),
+          );
+        }
         if (p == BalanceDayFocusedPresentation.financialCompass) {
           expect(tester.getRect(target).width, greaterThan(on.width));
         }
@@ -291,6 +319,41 @@ void main() {
         );
         expect(bottomRect.height, inInclusiveRange(60.0, 80.0));
         expect(bottomRect.bottom, closeTo(size.height, .001));
+        for (final impact in [false, true]) {
+          await pump(
+            BalanceDayFocusedLayout(
+              presentation: daySource.dailyInsights,
+              focusedPresentation:
+                  BalanceDayFocusedPresentation.financialComparison,
+              showFocusedDayImpact: impact,
+            ),
+          );
+          final chart = tester.getRect(
+            find.byKey(const ValueKey('balance-day-comparison-chart')),
+          );
+          final rhythm = tester.getRect(
+            find.byKey(const ValueKey('balance-day-rhythm-bars')),
+          );
+          final previous = tester.getRect(
+            find.byKey(
+              const ValueKey('balance-day-comparison-period-previous'),
+            ),
+          );
+          final current = tester.getRect(
+            find.byKey(const ValueKey('balance-day-comparison-period-current')),
+          );
+          expect(previous.width, closeTo(current.width, .001));
+          expect(previous.right, closeTo(chart.center.dx, .001));
+          expect(current.left, closeTo(chart.center.dx, .001));
+          expect(chart.center.dx, closeTo(rhythm.center.dx, .001));
+          expect(
+            tester.getRect(
+              find.byKey(const ValueKey('balance-day-focused-bottom-section')),
+            ),
+            bottomRect,
+          );
+          expect(tester.takeException(), isNull);
+        }
         final sumSource =
             BalanceAlternativeScopePresentation.fromLinked(
                   _linked(const AllTimeScope()),
