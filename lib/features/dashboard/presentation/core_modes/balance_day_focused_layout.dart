@@ -4,6 +4,8 @@ import '../../application/dashboard_balance_daily_insights_projection.dart';
 import '../dashboard_day_rhythm_navigation.dart';
 import 'balance_day_focused_visuals.dart';
 import 'balance_day_ratio_comparison.dart';
+import 'balance_day_performance_index_presentation.dart';
+import 'balance_day_performance_index_view.dart';
 import 'balance_day_ratio_presentation.dart';
 import 'balance_day_momentum_rail.dart';
 import 'balance_focused_layout_geometry.dart';
@@ -18,6 +20,7 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
     required this.focusedPresentation,
     required this.showFocusedDayImpact,
     this.ratioPresentation = BalanceDayRatioPresentation.coverage,
+    this.ratioViewPresentation = BalanceDayRatioViewPresentation.dualGauge,
     this.navigation,
     this.onFocusedPresentationChanged,
   });
@@ -26,6 +29,7 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
   // Retained constructor compatibility; the focused UI no longer uses 7-day impact.
   final bool showFocusedDayImpact;
   final BalanceDayRatioPresentation ratioPresentation;
+  final BalanceDayRatioViewPresentation ratioViewPresentation;
   final DashboardDayRhythmNavigation? navigation;
   final ValueChanged<BalanceDayFocusedPresentation>?
   onFocusedPresentationChanged;
@@ -78,13 +82,22 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
                                   momentum: presentation.momentum,
                                 ),
                               BalanceDayFocusedPresentation.dailyImpactFocus =>
-                                BalanceDayRatioComparisonView(
-                                  presentation:
-                                      BalanceDayRatioComparisonPresentation.fromMomentum(
-                                        presentation.momentum,
-                                        mode: ratioPresentation,
+                                ratioViewPresentation ==
+                                        BalanceDayRatioViewPresentation
+                                            .performanceIndex
+                                    ? BalanceDayPerformanceIndexView(
+                                        presentation:
+                                            BalanceDayPerformanceIndexPresentation.fromMomentum(
+                                              presentation.momentum,
+                                            ),
+                                      )
+                                    : BalanceDayRatioComparisonView(
+                                        presentation:
+                                            BalanceDayRatioComparisonPresentation.fromMomentum(
+                                              presentation.momentum,
+                                              mode: ratioPresentation,
+                                            ),
                                       ),
-                                ),
                             },
                           ),
                         ),

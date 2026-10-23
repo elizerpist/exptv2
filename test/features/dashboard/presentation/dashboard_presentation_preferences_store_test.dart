@@ -48,9 +48,12 @@ void main() {
         balanceDayFocusedPresentation:
             BalanceDayFocusedPresentation.dailyImpactFocus,
         balanceShowFocusedDayImpact: false,
+        balanceDayRatioViewPresentation:
+            BalanceDayRatioViewPresentation.performanceIndex,
         balanceDayRatioPresentation: BalanceDayRatioPresentation.netMargin,
       );
       await store.write(choice);
+      expect(stored['balanceDayRatioViewPresentation'], 1);
       expect(stored['balanceDayRatioPresentation'], 1);
       final restored =
           await MethodChannelDashboardPresentationPreferencesStore().read();
@@ -58,6 +61,7 @@ void main() {
       expect(restored.hashCode, choice.hashCode);
       for (final invalid in <Object?>[null, -1, 2, 999, 'unknown']) {
         stored['balanceDayRatioPresentation'] = invalid;
+        stored['balanceDayRatioViewPresentation'] = invalid;
         final legacy = await store.read();
         expect(
           legacy.balanceDayRatioPresentation,
@@ -66,6 +70,10 @@ void main() {
         expect(
           legacy.balanceDayFocusedPresentation,
           BalanceDayFocusedPresentation.dailyImpactFocus,
+        );
+        expect(
+          legacy.balanceDayRatioViewPresentation,
+          BalanceDayRatioViewPresentation.dualGauge,
         );
         expect(legacy.balanceShowFocusedDayImpact, isFalse);
       }
@@ -267,6 +275,8 @@ void main() {
       'balanceDayFocusedPresentation':
           BalanceDayFocusedPresentation.financialCompass.index,
       'balanceShowFocusedDayImpact': true,
+      'balanceDayRatioViewPresentation':
+          BalanceDayRatioViewPresentation.dualGauge.index,
       'balanceDayRatioPresentation': BalanceDayRatioPresentation.coverage.index,
       'balanceMonthLayoutPresentation':
           BalanceMonthLayoutPresentation.current.index,

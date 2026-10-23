@@ -220,9 +220,30 @@ void main() {
       await select('balance-day-layout-focused');
       expect(find.text('Új nézet tartalma'), findsOneWidget);
       expect(toggle, findsNothing);
-      expect(find.text('Egyenlegarány számítása'), findsOneWidget);
+      expect(find.text('Két félkör számítása'), findsOneWidget);
       expect(find.text('Egyenlegarány'), findsOneWidget);
       await select('balance-day-ratio-netMargin');
+      expect(
+        balance.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      expect(find.text('Egyenlegarány megjelenítése'), findsOneWidget);
+      await select('balance-day-ratio-view-performanceIndex');
+      expect(
+        balance.value.dayRatioViewPresentation,
+        BalanceDayRatioViewPresentation.performanceIndex,
+      );
+      expect(find.text('Két félkör számítása'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('balance-day-ratio-netMargin')),
+        findsNothing,
+      );
+      expect(
+        balance.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      await select('balance-day-ratio-view-dualGauge');
+      expect(find.text('Két félkör számítása'), findsOneWidget);
       expect(
         balance.value.dayRatioPresentation,
         BalanceDayRatioPresentation.netMargin,
@@ -236,7 +257,7 @@ void main() {
         BalanceDayRatioPresentation.netMargin,
       );
       await select('balance-day-layout-current');
-      expect(find.text('Egyenlegarány számítása'), findsNothing);
+      expect(find.text('Két félkör számítása'), findsNothing);
       expect(find.text('Új nézet tartalma'), findsNothing);
       await select('balance-day-layout-focused');
       expect(

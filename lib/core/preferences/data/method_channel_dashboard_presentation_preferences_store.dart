@@ -66,6 +66,13 @@ final class MethodChannelDashboardPresentationPreferencesStore
           values['balanceDayFocusedPresentation'] as int?,
           BalanceDayFocusedPresentation.financialCompass,
         ),
+        balanceDayRatioViewPresentation: _enumValue(
+          BalanceDayRatioViewPresentation.values,
+          values['balanceDayRatioViewPresentation'] is int
+              ? values['balanceDayRatioViewPresentation'] as int
+              : null,
+          BalanceDayRatioViewPresentation.dualGauge,
+        ),
         balanceDayRatioPresentation: _enumValue(
           BalanceDayRatioPresentation.values,
           values['balanceDayRatioPresentation'] is int
@@ -150,6 +157,8 @@ final class MethodChannelDashboardPresentationPreferencesStore
             preferences.balanceDayLayoutPresentation.index,
         'balanceDayFocusedPresentation':
             preferences.balanceDayFocusedPresentation.index,
+        'balanceDayRatioViewPresentation':
+            preferences.balanceDayRatioViewPresentation.index,
         'balanceDayRatioPresentation':
             preferences.balanceDayRatioPresentation.index,
         'balanceShowFocusedDayImpact': preferences.balanceShowFocusedDayImpact,

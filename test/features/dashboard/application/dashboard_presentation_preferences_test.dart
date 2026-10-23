@@ -22,6 +22,8 @@ void main() {
           yearMonthlyAmountPresentation:
               MindYearMonthlyAmountPresentation.hidden,
           showDayContentViewChooser: true,
+          balanceDayRatioViewPresentation:
+              BalanceDayRatioViewPresentation.performanceIndex,
           balanceDayRatioPresentation: BalanceDayRatioPresentation.netMargin,
           balanceUsesChildCards: false,
           balanceHeaderGraphPresentation:
@@ -50,6 +52,10 @@ void main() {
       expect(
         restored.value.balanceDayRatioPresentation,
         BalanceDayRatioPresentation.netMargin,
+      );
+      expect(
+        restored.value.balanceDayRatioViewPresentation,
+        BalanceDayRatioViewPresentation.performanceIndex,
       );
       expect(restored.value.balanceUsesChildCards, isFalse);
       expect(

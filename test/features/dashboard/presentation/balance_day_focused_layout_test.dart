@@ -440,6 +440,9 @@ void main() {
         );
         settings.setShowFocusedDayImpact(false);
         settings.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+        settings.setDayRatioViewPresentation(
+          BalanceDayRatioViewPresentation.performanceIndex,
+        );
         await tester.pump();
         expect(find.byType(BalanceDayFocusedLayout), findsNothing);
         expect(

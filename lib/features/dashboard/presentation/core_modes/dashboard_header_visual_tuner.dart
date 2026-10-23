@@ -1409,28 +1409,30 @@ final class _BalancePresentationSection extends StatelessWidget {
             ),
           const Padding(
             padding: EdgeInsets.only(top: 12, bottom: 6),
-            child: Text('Egyenlegarány számítása'),
+            child: Text('Egyenlegarány megjelenítése'),
           ),
-          for (final layout in BalanceDayRatioPresentation.values)
+          for (final layout in BalanceDayRatioViewPresentation.values)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Semantics(
-                selected: settings.dayRatioPresentation == layout,
+                selected: settings.dayRatioViewPresentation == layout,
                 button: true,
                 child: InkWell(
-                  key: ValueKey<String>('balance-day-ratio-${layout.name}'),
+                  key: ValueKey<String>(
+                    'balance-day-ratio-view-${layout.name}',
+                  ),
                   borderRadius: BorderRadius.circular(14),
-                  onTap: () => controller.setDayRatioPresentation(layout),
+                  onTap: () => controller.setDayRatioViewPresentation(layout),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: settings.dayRatioPresentation == layout
+                      color: settings.dayRatioViewPresentation == layout
                           ? FluviVisualTokens.surface
                           : FluviVisualTokens.surfaceMuted,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: settings.dayRatioPresentation == layout
+                        color: settings.dayRatioViewPresentation == layout
                             ? Theme.of(context).colorScheme.primary
                             : FluviVisualTokens.border,
                       ),
@@ -1449,7 +1451,7 @@ final class _BalancePresentationSection extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (settings.dayRatioPresentation == layout)
+                        if (settings.dayRatioViewPresentation == layout)
                           const Icon(Icons.check_rounded, size: 20),
                       ],
                     ),
@@ -1457,6 +1459,59 @@ final class _BalancePresentationSection extends StatelessWidget {
                 ),
               ),
             ),
+          if (settings.dayRatioViewPresentation ==
+              BalanceDayRatioViewPresentation.dualGauge) ...[
+            const Padding(
+              padding: EdgeInsets.only(top: 12, bottom: 6),
+              child: Text('Két félkör számítása'),
+            ),
+            for (final layout in BalanceDayRatioPresentation.values)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Semantics(
+                  selected: settings.dayRatioPresentation == layout,
+                  button: true,
+                  child: InkWell(
+                    key: ValueKey<String>('balance-day-ratio-${layout.name}'),
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => controller.setDayRatioPresentation(layout),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: settings.dayRatioPresentation == layout
+                            ? FluviVisualTokens.surface
+                            : FluviVisualTokens.surfaceMuted,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: settings.dayRatioPresentation == layout
+                              ? Theme.of(context).colorScheme.primary
+                              : FluviVisualTokens.border,
+                        ),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(layout.tunerLabel),
+                                Text(
+                                  layout.tunerDescription,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (settings.dayRatioPresentation == layout)
+                            const Icon(Icons.check_rounded, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ],
         const Padding(
           padding: EdgeInsets.only(top: 12, bottom: 6),
