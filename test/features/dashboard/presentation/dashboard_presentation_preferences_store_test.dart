@@ -16,6 +16,63 @@ void main() {
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
   test(
+    'day ratio persists independently and unknown legacy values use coverage',
+    () async {
+      Map<String, Object?> stored = {};
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      expect(
+        (await store.read()).balanceDayRatioPresentation,
+        BalanceDayRatioPresentation.coverage,
+      );
+      final defaults = DashboardPresentationPreferences.defaults;
+      final choice = DashboardPresentationPreferences(
+        sumVisualStyle: defaults.sumVisualStyle,
+        showSumLayoutChooser: defaults.showSumLayoutChooser,
+        yearGridLayout: defaults.yearGridLayout,
+        yearMonthlyAmountPresentation: defaults.yearMonthlyAmountPresentation,
+        showDayContentViewChooser: defaults.showDayContentViewChooser,
+        balanceUsesChildCards: defaults.balanceUsesChildCards,
+        balanceHeaderGraphPresentation: defaults.balanceHeaderGraphPresentation,
+        balanceHeaderPartitionHeightPercent:
+            defaults.balanceHeaderPartitionHeightPercent,
+        balanceMonthCombinedCardPresentation:
+            defaults.balanceMonthCombinedCardPresentation,
+        balanceDayLayoutPresentation: BalanceDayLayoutPresentation.focused,
+        balanceDayFocusedPresentation:
+            BalanceDayFocusedPresentation.dailyImpactFocus,
+        balanceShowFocusedDayImpact: false,
+        balanceDayRatioPresentation: BalanceDayRatioPresentation.netMargin,
+      );
+      await store.write(choice);
+      expect(stored['balanceDayRatioPresentation'], 1);
+      final restored =
+          await MethodChannelDashboardPresentationPreferencesStore().read();
+      expect(restored, choice);
+      expect(restored.hashCode, choice.hashCode);
+      for (final invalid in <Object?>[null, -1, 2, 999, 'unknown']) {
+        stored['balanceDayRatioPresentation'] = invalid;
+        final legacy = await store.read();
+        expect(
+          legacy.balanceDayRatioPresentation,
+          BalanceDayRatioPresentation.coverage,
+        );
+        expect(
+          legacy.balanceDayFocusedPresentation,
+          BalanceDayFocusedPresentation.dailyImpactFocus,
+        );
+        expect(legacy.balanceShowFocusedDayImpact, isFalse);
+      }
+    },
+  );
+
+  test(
     'daily calculation survives a native adapter write/read and invalid legacy values default safely',
     () async {
       Map<String, Object?> stored = <String, Object?>{};
@@ -210,6 +267,7 @@ void main() {
       'balanceDayFocusedPresentation':
           BalanceDayFocusedPresentation.financialCompass.index,
       'balanceShowFocusedDayImpact': true,
+      'balanceDayRatioPresentation': BalanceDayRatioPresentation.coverage.index,
       'balanceMonthLayoutPresentation':
           BalanceMonthLayoutPresentation.current.index,
       'balanceYearLayoutPresentation':

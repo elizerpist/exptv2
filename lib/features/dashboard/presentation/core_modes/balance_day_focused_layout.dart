@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../application/dashboard_balance_daily_insights_projection.dart';
 import '../dashboard_day_rhythm_navigation.dart';
 import 'balance_day_focused_visuals.dart';
+import 'balance_day_ratio_comparison.dart';
+import 'balance_day_ratio_presentation.dart';
 import 'balance_day_momentum_rail.dart';
 import 'balance_focused_layout_geometry.dart';
 import 'balance_presentation_settings.dart';
@@ -15,21 +17,21 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
     required this.presentation,
     required this.focusedPresentation,
     required this.showFocusedDayImpact,
+    this.ratioPresentation = BalanceDayRatioPresentation.coverage,
     this.navigation,
     this.onFocusedPresentationChanged,
   });
   final DashboardBalanceDailyInsightsPresentation presentation;
   final BalanceDayFocusedPresentation focusedPresentation;
+  // Retained constructor compatibility; the focused UI no longer uses 7-day impact.
   final bool showFocusedDayImpact;
+  final BalanceDayRatioPresentation ratioPresentation;
   final DashboardDayRhythmNavigation? navigation;
   final ValueChanged<BalanceDayFocusedPresentation>?
   onFocusedPresentationChanged;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, c) {
-      final impactVisible =
-          showFocusedDayImpact &&
-          focusedPresentation != BalanceDayFocusedPresentation.dailyImpactFocus;
       return Padding(
         key: const ValueKey('balance-day-focused-layout'),
         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -76,8 +78,12 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
                                   momentum: presentation.momentum,
                                 ),
                               BalanceDayFocusedPresentation.dailyImpactFocus =>
-                                BalanceDayImpactFocus(
-                                  impact: presentation.impact,
+                                BalanceDayRatioComparisonView(
+                                  presentation:
+                                      BalanceDayRatioComparisonPresentation.fromMomentum(
+                                        presentation.momentum,
+                                        mode: ratioPresentation,
+                                      ),
                                 ),
                             },
                           ),
@@ -85,14 +91,6 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (impactVisible)
-                    SizedBox(
-                      key: const ValueKey('balance-day-compact-impact'),
-                      height: (c.maxHeight * .20).clamp(48.0, 92.0),
-                      child: BalanceDayCompactImpact(
-                        impact: presentation.impact,
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -188,9 +186,7 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 6, bottom: 5),
             child: Text(
-              selected == BalanceDayFocusedPresentation.dailyImpactFocus
-                  ? 'Napi hatás'
-                  : selected.tunerLabel,
+              selected.tunerLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),

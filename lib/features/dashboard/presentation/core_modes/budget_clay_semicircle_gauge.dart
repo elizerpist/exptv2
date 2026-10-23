@@ -71,6 +71,45 @@ final class BudgetClayGaugeOvershootZone {
       highlight == other.highlight;
 }
 
+/// Presentation-only coordinate mapping; the financial value is never clamped.
+@immutable
+final class BudgetSemicircleScalePresentation {
+  const BudgetSemicircleScalePresentation({
+    required this.domainMinimum,
+    required this.domainNeutral,
+    required this.domainMaximum,
+    required this.rawValue,
+  }) : assert(domainMinimum < domainMaximum),
+       assert(domainNeutral >= domainMinimum && domainNeutral <= domainMaximum);
+  final double domainMinimum, domainNeutral, domainMaximum, rawValue;
+  double _normalize(double value) => value.isFinite
+      ? ((value - domainMinimum) / (domainMaximum - domainMinimum))
+            .clamp(0.0, 1.0)
+            .toDouble()
+      : 0.0;
+  double get visualProgress => _normalize(rawValue);
+  double get neutralProgress => _normalize(domainNeutral);
+  bool get hasVisualOverflow =>
+      rawValue.isFinite &&
+      (rawValue < domainMinimum || rawValue > domainMaximum);
+  bool get isUnderflow => rawValue.isFinite && rawValue < domainMinimum;
+  String _label(double value) =>
+      '${value > 0 && domainMinimum < 0 ? '+' : ''}${value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1).replaceAll('.', ',').replaceAll('-', '−')}%';
+  String get leftEndpointLabel => _label(domainMinimum);
+  String get rightEndpointLabel => _label(domainMaximum);
+  String get neutralLabel => _label(domainNeutral);
+  @override
+  bool operator ==(Object other) =>
+      other is BudgetSemicircleScalePresentation &&
+      domainMinimum == other.domainMinimum &&
+      domainNeutral == other.domainNeutral &&
+      domainMaximum == other.domainMaximum &&
+      rawValue == other.rawValue;
+  @override
+  int get hashCode =>
+      Object.hash(domainMinimum, domainNeutral, domainMaximum, rawValue);
+}
+
 /// Paint-ready data for the shared SUM/MONTH semicircle hero.
 ///
 /// `rawRatio` is intentionally preserved for the KPI label while
@@ -78,6 +117,41 @@ final class BudgetClayGaugeOvershootZone {
 /// painter performs category lookup, repository reads, or health resolution.
 @immutable
 final class BudgetSemicircleMaterialPresentation {
+  /// Uses the shared clay body and sphere without Budget limit health policy.
+  factory BudgetSemicircleMaterialPresentation.forScale({
+    required BudgetSemicircleScalePresentation scale,
+    required Color activeColor,
+    required Color semanticColor,
+  }) {
+    final active = BudgetClayActiveMaterial.forSemanticBase(activeColor);
+    final marker = BudgetProgressRingSphereMaterial.forHealthColor(
+      semanticColor,
+    );
+    final material = BudgetClayActiveMaterial(
+      colors: active.colors,
+      depthColors: active.depthColors,
+      stops: active.stops,
+      markerMaterial: marker,
+    );
+    return BudgetSemicircleMaterialPresentation._(
+      rawRatio: scale.rawValue,
+      visualProgress: scale.visualProgress,
+      targetProgress: scale.neutralProgress,
+      health: BudgetClayGaugeHealth.incomeTargetReached,
+      activeGradient: active.colors,
+      progressGradient: active.colors,
+      progressDepthGradient: active.depthColors,
+      progressStops: active.stops,
+      markerMaterial: marker,
+      segmentedMaterial: material,
+      solidFixedGreenMaterial: material,
+      solidTargetAccentMaterial: material,
+      overshootZones: const [],
+      hasVisualOverflow: scale.hasVisualOverflow,
+      semanticScale: scale,
+    );
+  }
+
   factory BudgetSemicircleMaterialPresentation.resolve({
     required double rawRatio,
     required LedgerDirection direction,
@@ -204,6 +278,7 @@ final class BudgetSemicircleMaterialPresentation {
     required this.solidTargetAccentMaterial,
     required this.overshootZones,
     required this.hasVisualOverflow,
+    this.semanticScale,
   });
 
   final double rawRatio;
@@ -227,6 +302,7 @@ final class BudgetSemicircleMaterialPresentation {
   final BudgetClayActiveMaterial solidTargetAccentMaterial;
   final List<BudgetClayGaugeOvershootZone> overshootZones;
   final bool hasVisualOverflow;
+  final BudgetSemicircleScalePresentation? semanticScale;
 
   /// Selecting a material is a prepared-object lookup: no semantic health,
   /// category palette, or shader-stop work happens in the painter hot path.
@@ -242,6 +318,7 @@ final class BudgetSemicircleMaterialPresentation {
   };
 
   bool sameVisualAs(BudgetSemicircleMaterialPresentation other) =>
+      semanticScale == other.semanticScale &&
       rawRatio == other.rawRatio &&
       visualProgress == other.visualProgress &&
       targetProgress == other.targetProgress &&
@@ -575,11 +652,17 @@ final class BudgetSemicircleGauge extends StatefulWidget {
     required this.presentation,
     required this.primaryLabel,
     required this.secondaryLabel,
+    this.primaryColor,
+    this.primaryFontSize = 24,
+    this.showMarker = true,
   });
 
   final BudgetSemicircleMaterialPresentation presentation;
   final String primaryLabel;
   final String secondaryLabel;
+  final Color? primaryColor;
+  final double primaryFontSize;
+  final bool showMarker;
 
   @override
   State<BudgetSemicircleGauge> createState() => _BudgetSemicircleGaugeState();
@@ -636,12 +719,15 @@ final class _BudgetSemicircleGaugeState extends State<BudgetSemicircleGauge>
       child: _GaugeTextLayer(
         primaryLabel: widget.primaryLabel,
         secondaryLabel: widget.secondaryLabel,
+        primaryColor: widget.primaryColor,
+        primaryFontSize: widget.primaryFontSize,
+        scale: widget.presentation.semanticScale,
       ),
       builder: (context, textLayer) => BudgetSemicircleMaterialPreferences(
         presentation: widget.presentation,
         progress: _visibleProgress,
         layout: BudgetSemicircleMaterialLayout.sumHero,
-        showMarker: true,
+        showMarker: widget.showMarker,
         child: textLayer!,
       ),
     ),
@@ -652,10 +738,16 @@ final class _GaugeTextLayer extends StatelessWidget {
   const _GaugeTextLayer({
     required this.primaryLabel,
     required this.secondaryLabel,
+    this.primaryColor,
+    this.primaryFontSize = 24,
+    this.scale,
   });
 
   final String primaryLabel;
   final String secondaryLabel;
+  final Color? primaryColor;
+  final double primaryFontSize;
+  final BudgetSemicircleScalePresentation? scale;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -664,6 +756,15 @@ final class _GaugeTextLayer extends StatelessWidget {
         constraints.biggest,
         layout: BudgetSemicircleMaterialLayout.sumHero,
       );
+      final neutralProgress = scale?.neutralProgress ?? .5;
+      // Preserve the exact existing midpoint coordinate while supporting any
+      // other semantic neutral on the same canonical arc.
+      final neutralPoint = neutralProgress == .5
+          ? Offset(geometry.trackRect.center.dx, geometry.trackRect.top)
+          : geometry.pointAtProgress(neutralProgress);
+      final neutralRotation = neutralProgress == .5
+          ? 0.0
+          : math.pi * (neutralProgress - .5);
       return Stack(
         fit: StackFit.expand,
         children: <Widget>[
@@ -677,9 +778,9 @@ final class _GaugeTextLayer extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     primaryLabel,
-                    style: const TextStyle(
-                      color: FluviVisualTokens.textPrimary,
-                      fontSize: 24,
+                    style: TextStyle(
+                      color: primaryColor ?? FluviVisualTokens.textPrimary,
+                      fontSize: primaryFontSize,
                       fontWeight: FontWeight.w900,
                       height: 1,
                     ),
@@ -699,15 +800,54 @@ final class _GaugeTextLayer extends StatelessWidget {
               ),
             ),
           ),
+          if (scale != null) ...[
+            Positioned(
+              left: neutralPoint.dx - .5,
+              top: neutralPoint.dy - geometry.stroke * .7,
+              child: Transform.rotate(
+                angle: neutralRotation,
+                child: Container(
+                  key: const ValueKey<String>('budget-semicircle-neutral-tick'),
+                  width: 1,
+                  height: geometry.stroke * 1.4,
+                  color: FluviVisualTokens.textSecondary.withValues(alpha: .35),
+                ),
+              ),
+            ),
+            _EndpointLabel(
+              key: const ValueKey<String>(
+                'budget-semicircle-neutral-reference',
+              ),
+              label: scale!.neutralLabel,
+              center: neutralPoint,
+              top: neutralPoint.dy - geometry.stroke * .7 - 11,
+            ),
+            if (scale!.hasVisualOverflow)
+              Positioned(
+                left: scale!.isUnderflow ? 0 : null,
+                right: scale!.isUnderflow ? null : 0,
+                top: geometry.endpointLabelTop - 16,
+                child: Text(
+                  scale!.isUnderflow ? '‹' : '›',
+                  key: const ValueKey<String>(
+                    'budget-semicircle-scale-overflow',
+                  ),
+                  style: TextStyle(
+                    color: primaryColor,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+          ],
           _EndpointLabel(
             key: const ValueKey<String>('budget-semicircle-left-endpoint'),
-            label: '0%',
+            label: scale?.leftEndpointLabel ?? '0%',
             center: geometry.leftEndpoint,
             top: geometry.endpointLabelTop,
           ),
           _EndpointLabel(
             key: const ValueKey<String>('budget-semicircle-right-endpoint'),
-            label: '100%+',
+            label: scale?.rightEndpointLabel ?? '100%+',
             center: geometry.rightEndpoint,
             top: geometry.endpointLabelTop,
           ),
@@ -787,6 +927,14 @@ final class BudgetSemicircleMaterialGeometry {
   final double scale;
   final double stroke;
   final double markerRadius;
+
+  Offset pointAtProgress(double progress) {
+    final angle = math.pi + math.pi * progress;
+    return Offset(
+      trackRect.center.dx + math.cos(angle) * trackRadius,
+      trackRect.center.dy + math.sin(angle) * trackRadius,
+    );
+  }
 
   double get trackRadius => trackRect.width / 2;
   double get activeStripWidth => stroke * .46;

@@ -22,6 +22,9 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_momentum_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_focused_visuals.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_ratio_comparison.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
@@ -48,6 +51,8 @@ Future<DashboardCoreController> _setup(
   DateTime? date,
   bool richData = false,
   int bookedMinute = 720,
+  DashboardPresentationPreferencesController? preferences,
+  bool initializeFocused = true,
   SummaryTemporalFlingPresentation presentation =
       SummaryTemporalFlingPresentation.dynamicTrio,
 }) async {
@@ -77,6 +82,7 @@ Future<DashboardCoreController> _setup(
           style: ThemeData(fontFamily: 'Inter').textTheme.bodyMedium!,
           child: CoreDashboard(
             controller: core,
+            dashboardPresentationPreferences: preferences,
             modeController: modes,
             categoryCollection: emptyTestCategoryCollection,
           ),
@@ -88,9 +94,11 @@ Future<DashboardCoreController> _setup(
   final tuner = tester.widget<DashboardHeaderVisualTuner>(
     find.byType(DashboardHeaderVisualTuner),
   );
-  tuner.balancePresentationSettings!.setDayLayoutPresentation(
-    BalanceDayLayoutPresentation.focused,
-  );
+  if (initializeFocused) {
+    tuner.balancePresentationSettings!.setDayLayoutPresentation(
+      BalanceDayLayoutPresentation.focused,
+    );
+  }
   tuner.summaryPresentation!.selectTemporalFlingPresentation(presentation);
   await _frames(tester, 6);
   expect(find.byKey(_summaryKey), findsOneWidget);
@@ -194,6 +202,186 @@ void main() {
   });
 
   tearDownAll(() => goldenFileComparator = originalComparator);
+
+  for (final fromRail in [false, true]) {
+    testWidgets(
+      'V5 ${fromRail ? 'rhythm' : 'Summary'} uses exact accepted ratio snapshot and preserves mode',
+      (tester) async {
+        final core = await _setup(tester, richData: true, bookedMinute: 0);
+        final settings = tester
+            .widget<DashboardHeaderVisualTuner>(
+              find.byType(DashboardHeaderVisualTuner),
+            )
+            .balancePresentationSettings!;
+        settings.setDayFocusedPresentation(
+          BalanceDayFocusedPresentation.dailyImpactFocus,
+        );
+        await _frames(tester, 4);
+        BalanceDayRatioComparisonView view() =>
+            tester.widget<BalanceDayRatioComparisonView>(
+              find.byType(BalanceDayRatioComparisonView),
+            );
+        BudgetSemicircleGauge gauge(String period) =>
+            tester.widget<BudgetSemicircleGauge>(
+              find.byKey(ValueKey('balance-day-ratio-$period')),
+            );
+        final originalSource = view().presentation.periods.source;
+        final originalEpoch = core.navigation.state.navigationEpoch;
+        final originalQuery = core.navigation.state.parentQueryScope.key;
+        final originalGaugeState = tester.state(
+          find.byKey(const ValueKey('balance-day-ratio-previous')),
+        );
+        settings.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+        await _frames(tester, 2);
+        expect(core.navigation.state.navigationEpoch, originalEpoch);
+        expect(core.navigation.state.parentQueryScope.key, originalQuery);
+        expect(view().presentation.periods.source, same(originalSource));
+        expect(
+          tester.state(
+            find.byKey(const ValueKey('balance-day-ratio-previous')),
+          ),
+          same(originalGaugeState),
+        );
+        for (final name in [
+          'financialCompass',
+          'financialComparison',
+          'dailyImpactFocus',
+        ]) {
+          await tester.tap(
+            find.byKey(ValueKey('balance-day-perspective-$name')),
+          );
+          await _frames(tester, 2);
+          expect(
+            settings.value.dayRatioPresentation,
+            BalanceDayRatioPresentation.netMargin,
+          );
+          expect(core.navigation.state.navigationEpoch, originalEpoch);
+        }
+        final stableState = tester.state(
+          find.byKey(const ValueKey('balance-day-ratio-previous')),
+        );
+        void coherent() {
+          final model = view().presentation;
+          expect(
+            gauge('previous').presentation.semanticScale!.rawValue,
+            model.previous.rawPercentage,
+          );
+          expect(
+            gauge('current').presentation.semanticScale!.rawValue,
+            model.current.rawPercentage,
+          );
+          expect(
+            model.previous.incomeMinor,
+            model.periods.source.referenceIncomeMinor,
+          );
+          expect(
+            model.current.expenseMinor,
+            model.periods.source.currentExpenseMinor,
+          );
+          expect(model.mode, BalanceDayRatioPresentation.netMargin);
+        }
+
+        for (final distance in [-180.0, 180.0]) {
+          final before = core.navigation.state.navigationEpoch;
+          await tester.fling(
+            find.byKey(fromRail ? _rhythmKey : _summaryKey),
+            fromRail ? Offset(distance, 0) : Offset(0, distance),
+            2400,
+          );
+          for (var frame = 0; frame < 20; frame++) {
+            await _frames(tester, 1);
+            coherent();
+          }
+          await _settled(tester);
+          coherent();
+          expect(core.navigation.state.navigationEpoch, greaterThan(before));
+          final anchor = core.navigation.state.temporalAnchor;
+          expect(
+            view().presentation.periods.source.epochDay,
+            LocalDate(
+              year: anchor.visibleYear,
+              month: anchor.visibleMonth,
+              day: anchor.visibleDay,
+            ).epochDay,
+          );
+          expect(
+            tester.state(
+              find.byKey(const ValueKey('balance-day-ratio-previous')),
+            ),
+            same(stableState),
+          );
+        }
+        expect(tester.takeException(), isNull);
+        await _unmount(tester);
+      },
+    );
+  }
+  testWidgets(
+    'V5 ratio preference restores into a fresh real dashboard owner',
+    (tester) async {
+      final store = InMemoryDashboardPresentationPreferencesStore();
+      final first = DashboardPresentationPreferencesController(store: store);
+      addTearDown(first.dispose);
+      await first.restore();
+      await _setup(tester, richData: true, bookedMinute: 0, preferences: first);
+      final settings = tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .balancePresentationSettings!;
+      settings.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.dailyImpactFocus,
+      );
+      settings.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+      await _frames(tester, 4);
+      expect(
+        (await store.read()).balanceDayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      await _unmount(tester);
+      final restarted = DashboardPresentationPreferencesController(
+        store: store,
+      );
+      addTearDown(restarted.dispose);
+      await restarted.restore();
+      await _setup(
+        tester,
+        richData: true,
+        bookedMinute: 0,
+        preferences: restarted,
+        initializeFocused: false,
+      );
+      final restored = tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .balancePresentationSettings!
+          .value;
+      expect(
+        restored.dayLayoutPresentation,
+        BalanceDayLayoutPresentation.focused,
+      );
+      expect(
+        restored.dayFocusedPresentation,
+        BalanceDayFocusedPresentation.dailyImpactFocus,
+      );
+      expect(
+        restored.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      expect(
+        tester
+            .widget<BalanceDayRatioComparisonView>(
+              find.byType(BalanceDayRatioComparisonView),
+            )
+            .presentation
+            .mode,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      expect(tester.takeException(), isNull);
+      await _unmount(tester);
+    },
+  );
 
   for (final fromRail in [false, true]) {
     testWidgets(
@@ -735,9 +923,10 @@ final class _PairedMotionRepository implements DashboardDataRuntimeRepository {
   Map<String, Object?> performanceReport() => const {};
 }
 
-/// Crop the actual simultaneously mounted surfaces from one held-drag frame.
-/// Integer bounds and equal source/destination extents preserve every pixel;
-/// unrelated Header/LogBox paint is outside this feature's visual acceptance.
+/// Capture the actual mounted bar layer and Summary from one held-drag frame.
+/// The V5 full-height compass casts a faint shadow into the rail's parent
+/// canvas. Capture the bars' existing RepaintBoundary so unrelated sibling
+/// paint cannot change a motion golden. No mock chart or rescaling is used.
 Future<ui.Image> _capturePairedSurfaces(WidgetTester tester) async {
   final boundaryFinder = find.byKey(const ValueKey('paired-day-motion-scene'));
   final boundary = tester.renderObject<RenderRepaintBoundary>(boundaryFinder);
@@ -752,7 +941,25 @@ Future<ui.Image> _capturePairedSurfaces(WidgetTester tester) async {
     );
   }
 
-  final rail = region(find.byKey(const ValueKey('balance-day-momentum-rail')));
+  final barsFinder = find.byKey(const ValueKey('balance-day-rhythm-bars'));
+  final railBounds = tester.getRect(barsFinder);
+  RenderRepaintBoundary? barsBoundary;
+  tester.element(barsFinder).visitAncestorElements((element) {
+    if (element.widget is RepaintBoundary) {
+      barsBoundary = element.findRenderObject()! as RenderRepaintBoundary;
+      return false;
+    }
+    return true;
+  });
+  final bars = await barsBoundary!.toImage(pixelRatio: 1);
+  expect(bars.width, railBounds.width.ceil());
+  expect(bars.height, railBounds.height.ceil());
+  final rail = Rect.fromLTWH(
+    0,
+    0,
+    bars.width.toDouble(),
+    bars.height.toDouble(),
+  );
   final summary = region(find.byKey(_summaryKey));
   const padding = 16;
   final width =
@@ -775,7 +982,12 @@ Future<ui.Image> _capturePairedSurfaces(WidgetTester tester) async {
   final canvas = ui.Canvas(recorder);
   canvas.drawColor(Colors.white, ui.BlendMode.src);
   final paint = ui.Paint()..filterQuality = ui.FilterQuality.none;
-  canvas.drawImageRect(full, rail, railDestination & rail.size, paint);
+  canvas.drawImageRect(
+    bars,
+    Rect.fromLTWH(0, 0, bars.width.toDouble(), bars.height.toDouble()),
+    railDestination & rail.size,
+    paint,
+  );
   canvas.drawImageRect(full, summary, summaryDestination & summary.size, paint);
   final picture = recorder.endRecording();
   try {
@@ -783,6 +995,7 @@ Future<ui.Image> _capturePairedSurfaces(WidgetTester tester) async {
   } finally {
     picture.dispose();
     full.dispose();
+    bars.dispose();
   }
 }
 

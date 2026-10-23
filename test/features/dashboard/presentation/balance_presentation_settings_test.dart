@@ -9,6 +9,59 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 void main() {
   test(
+    'day ratio changes only its presentation preference and revises once',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+      final original = controller.value;
+      expect(
+        original.dayRatioPresentation,
+        BalanceDayRatioPresentation.coverage,
+      );
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      controller.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+      expect(
+        controller.value,
+        original.copyWith(
+          dayRatioPresentation: BalanceDayRatioPresentation.netMargin,
+          revision: original.revision + 1,
+        ),
+      );
+      expect(
+        controller.value.hashCode,
+        original
+            .copyWith(
+              dayRatioPresentation: BalanceDayRatioPresentation.netMargin,
+              revision: original.revision + 1,
+            )
+            .hashCode,
+      );
+      controller.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+      expect(notifications, 1);
+      controller.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.dailyImpactFocus,
+      );
+      controller.setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.financialCompass,
+      );
+      expect(
+        controller.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      controller.setDayRatioPresentation(BalanceDayRatioPresentation.coverage);
+      expect(
+        controller.value.dayRatioPresentation,
+        original.dayRatioPresentation,
+      );
+      expect(
+        controller.value.showFocusedDayImpact,
+        original.showFocusedDayImpact,
+      );
+    },
+  );
+
+  test(
     'SUM alternatives revise independently and retain hidden impact preference',
     () {
       final controller = BalancePresentationController();

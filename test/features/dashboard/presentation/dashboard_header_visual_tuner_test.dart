@@ -219,25 +219,40 @@ void main() {
 
       await select('balance-day-layout-focused');
       expect(find.text('Új nézet tartalma'), findsOneWidget);
-      expect(toggle, findsOneWidget);
-      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
-      await select('balance-focused-day-impact-toggle');
-      expect(balance.value.showFocusedDayImpact, isFalse);
+      expect(toggle, findsNothing);
+      expect(find.text('Egyenlegarány számítása'), findsOneWidget);
+      expect(find.text('Egyenlegarány'), findsOneWidget);
+      await select('balance-day-ratio-netMargin');
+      expect(
+        balance.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
       await select('balance-day-focused-dailyImpactFocus');
       expect(toggle, findsNothing);
-      expect(balance.value.showFocusedDayImpact, isFalse);
+      expect(balance.value.showFocusedDayImpact, isTrue);
       await select('balance-day-focused-financialComparison');
-      expect(toggle, findsOneWidget);
-      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      expect(
+        balance.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
       await select('balance-day-layout-current');
-      expect(toggle, findsNothing);
+      expect(find.text('Egyenlegarány számítása'), findsNothing);
       expect(find.text('Új nézet tartalma'), findsNothing);
       await select('balance-day-layout-focused');
       expect(
         balance.value.dayFocusedPresentation,
         BalanceDayFocusedPresentation.financialComparison,
       );
-      expect(balance.value.showFocusedDayImpact, isFalse);
+      expect(
+        balance.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      await select('balance-day-ratio-coverage');
+      expect(
+        balance.value.dayRatioPresentation,
+        BalanceDayRatioPresentation.coverage,
+      );
+      expect(balance.value.showFocusedDayImpact, isTrue);
       expect(
         balance.value.monthLayoutPresentation,
         original.monthLayoutPresentation,

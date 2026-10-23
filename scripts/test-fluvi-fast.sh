@@ -8,6 +8,10 @@ flutter test \
   test/features/dashboard/presentation/balance_day_focused_layout_test.dart \
   test/features/dashboard/presentation/balance_day_focused_visuals_test.dart \
   test/features/dashboard/presentation/balance_day_visual_presentation_test.dart \
+  test/features/dashboard/presentation/balance_day_ratio_presentation_test.dart \
+  test/features/dashboard/presentation/balance_day_ratio_comparison_test.dart \
+  test/features/dashboard/presentation/budget_semicircle_semantic_scale_test.dart \
+  test/features/dashboard/application/dashboard_presentation_preferences_test.dart \
   test/features/dashboard/presentation/balance_day_momentum_rail_test.dart \
   test/features/dashboard/presentation/balance_day_momentum_rail_geometry_test.dart \
   test/features/dashboard/presentation/balance_day_visual_motion_sync_test.dart \

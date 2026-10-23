@@ -1407,15 +1407,55 @@ final class _BalancePresentationSection extends StatelessWidget {
                 ),
               ),
             ),
-          if (settings.dayFocusedPresentation !=
-              BalanceDayFocusedPresentation.dailyImpactFocus)
-            SwitchListTile(
-              key: const ValueKey('balance-focused-day-impact-toggle'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Alsó Napi hatás'),
-              subtitle: Text(settings.showFocusedDayImpact ? 'BE' : 'KI'),
-              value: settings.showFocusedDayImpact,
-              onChanged: controller.setShowFocusedDayImpact,
+          const Padding(
+            padding: EdgeInsets.only(top: 12, bottom: 6),
+            child: Text('Egyenlegarány számítása'),
+          ),
+          for (final layout in BalanceDayRatioPresentation.values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Semantics(
+                selected: settings.dayRatioPresentation == layout,
+                button: true,
+                child: InkWell(
+                  key: ValueKey<String>('balance-day-ratio-${layout.name}'),
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => controller.setDayRatioPresentation(layout),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: settings.dayRatioPresentation == layout
+                          ? FluviVisualTokens.surface
+                          : FluviVisualTokens.surfaceMuted,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: settings.dayRatioPresentation == layout
+                            ? Theme.of(context).colorScheme.primary
+                            : FluviVisualTokens.border,
+                      ),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(layout.tunerLabel),
+                              Text(
+                                layout.tunerDescription,
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (settings.dayRatioPresentation == layout)
+                          const Icon(Icons.check_rounded, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
         ],
         const Padding(

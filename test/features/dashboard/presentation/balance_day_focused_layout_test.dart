@@ -22,6 +22,8 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_focused_layout.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_ratio_comparison.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_semicircle_gauge.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_day_cards.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_year_focused_layout.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_sum_focused_layout.dart';
@@ -160,9 +162,7 @@ void main() {
         expect(linked.value, same(original));
         expect(
           find.byKey(const ValueKey('balance-day-compact-impact')),
-          p == BalanceDayFocusedPresentation.dailyImpactFocus
-              ? findsNothing
-              : findsOneWidget,
+          findsNothing,
         );
         expect(tester.takeException(), isNull);
       }
@@ -178,7 +178,7 @@ void main() {
   );
 
   testWidgets(
-    'impact toggle grows actual compass circle and comparison chart without moving rail',
+    'legacy impact preference leaves full focused visuals and rail unchanged',
     (tester) async {
       final settings = BalancePresentationController()
         ..setDayLayoutPresentation(BalanceDayLayoutPresentation.focused);
@@ -243,7 +243,7 @@ void main() {
           tester.state(find.byKey(const ValueKey('balance-day-momentum-rail'))),
           same(railState),
         );
-        expect(tester.getRect(target).height, greaterThan(on.height));
+        expect(tester.getRect(target).height, on.height);
         if (p == BalanceDayFocusedPresentation.financialComparison) {
           expect(
             tester.getRect(target).center.dx,
@@ -259,7 +259,7 @@ void main() {
           );
         }
         if (p == BalanceDayFocusedPresentation.financialCompass) {
-          expect(tester.getRect(target).width, greaterThan(on.width));
+          expect(tester.getRect(target).width, on.width);
         }
         expect(
           tester.getRect(
@@ -439,6 +439,7 @@ void main() {
           BalanceDayFocusedPresentation.dailyImpactFocus,
         );
         settings.setShowFocusedDayImpact(false);
+        settings.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
         await tester.pump();
         expect(find.byType(BalanceDayFocusedLayout), findsNothing);
         expect(
@@ -538,7 +539,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('five focused daily whole-content golden endpoints', (
+  testWidgets('six focused daily whole-content golden endpoints', (
     tester,
   ) async {
     final settings = BalancePresentationController()
@@ -565,7 +566,7 @@ void main() {
         false,
         'comparison_off',
       ),
-      (BalanceDayFocusedPresentation.dailyImpactFocus, true, 'impact_focus'),
+      (BalanceDayFocusedPresentation.dailyImpactFocus, true, 'ratio_coverage'),
     ]) {
       settings.setDayFocusedPresentation(variant.$1);
       settings.setShowFocusedDayImpact(variant.$2);
@@ -578,6 +579,26 @@ void main() {
         ),
       );
     }
+    final exactLinked = linked.value;
+    settings.setDayRatioPresentation(BalanceDayRatioPresentation.netMargin);
+    await tester.pumpAndSettle();
+    expect(find.byType(BudgetSemicircleGauge), findsNWidgets(2));
+    expect(
+      tester
+          .widget<BalanceDayRatioComparisonView>(
+            find.byType(BalanceDayRatioComparisonView),
+          )
+          .presentation
+          .mode,
+      BalanceDayRatioPresentation.netMargin,
+    );
+    expect(linked.value, same(exactLinked));
+    await expectLater(
+      find.byKey(const ValueKey('day-focused-evidence')),
+      matchesGoldenFile(
+        '../../../goldens/balance_day_focused_ratio_net_margin.png',
+      ),
+    );
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

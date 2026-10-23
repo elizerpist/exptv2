@@ -265,6 +265,7 @@ class MainActivity : FlutterActivity() {
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
                             "balanceHeaderGraphPresentation" to preferences.getInt("balanceHeaderGraphPresentation", 1),
                             "balanceDayLayoutPresentation" to preferences.getInt("balanceDayLayoutPresentation", 0),
+                            "balanceDayRatioPresentation" to ((preferences.all["balanceDayRatioPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "balanceDayFocusedPresentation" to preferences.getInt("balanceDayFocusedPresentation", 0),
                             "balanceShowFocusedDayImpact" to preferences.getBoolean("balanceShowFocusedDayImpact", true),
                             "balanceSumLayoutPresentation" to preferences.getInt("balanceSumLayoutPresentation", 0),
@@ -299,6 +300,7 @@ class MainActivity : FlutterActivity() {
                             ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
                         val balanceDayLayoutPresentation = (values["balanceDayLayoutPresentation"] as? Number)?.toInt() ?: 0
                         require(balanceDayLayoutPresentation in 0..1) { "Invalid Balance day presentation." }
+                        val balanceDayRatioPresentation = ((values["balanceDayRatioPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
                         val balanceDayFocusedPresentation = (values["balanceDayFocusedPresentation"] as? Number)?.toInt() ?: 0
                         require(balanceDayFocusedPresentation in 0..2) { "Invalid Balance day presentation." }
                         val balanceShowFocusedDayImpact = values["balanceShowFocusedDayImpact"] as? Boolean ?: true
@@ -336,6 +338,7 @@ class MainActivity : FlutterActivity() {
                             .putBoolean("showDayContentViewChooser", showDayContentViewChooser)
                             .putBoolean("balanceUsesChildCards", balanceChildren)
                             .putInt("balanceDayLayoutPresentation", balanceDayLayoutPresentation)
+                            .putInt("balanceDayRatioPresentation", balanceDayRatioPresentation)
                             .putInt("balanceDayFocusedPresentation", balanceDayFocusedPresentation)
                             .putBoolean("balanceShowFocusedDayImpact", balanceShowFocusedDayImpact)
                             .putInt("balanceSumLayoutPresentation", balanceSumLayoutPresentation)

@@ -20,6 +20,7 @@ final class DashboardPresentationPreferences {
     this.balanceDayLayoutPresentation = BalanceDayLayoutPresentation.current,
     this.balanceDayFocusedPresentation =
         BalanceDayFocusedPresentation.financialCompass,
+    this.balanceDayRatioPresentation = BalanceDayRatioPresentation.coverage,
     this.balanceShowFocusedDayImpact = true,
     this.balanceSumLayoutPresentation = BalanceSumLayoutPresentation.current,
     this.balanceSumFocusedPresentation =
@@ -43,6 +44,7 @@ final class DashboardPresentationPreferences {
   final bool showDayContentViewChooser;
   final BalanceDayLayoutPresentation balanceDayLayoutPresentation;
   final BalanceDayFocusedPresentation balanceDayFocusedPresentation;
+  final BalanceDayRatioPresentation balanceDayRatioPresentation;
   final bool balanceShowFocusedDayImpact;
   final BalanceSumLayoutPresentation balanceSumLayoutPresentation;
   final BalanceSumFocusedPresentation balanceSumFocusedPresentation;
@@ -86,6 +88,7 @@ final class DashboardPresentationPreferences {
       other.showDayContentViewChooser == showDayContentViewChooser &&
       other.balanceDayLayoutPresentation == balanceDayLayoutPresentation &&
       other.balanceDayFocusedPresentation == balanceDayFocusedPresentation &&
+      other.balanceDayRatioPresentation == balanceDayRatioPresentation &&
       other.balanceShowFocusedDayImpact == balanceShowFocusedDayImpact &&
       other.balanceSumLayoutPresentation == balanceSumLayoutPresentation &&
       other.balanceSumFocusedPresentation == balanceSumFocusedPresentation &&
@@ -106,7 +109,7 @@ final class DashboardPresentationPreferences {
           balanceHeaderGlassConfigurationJson;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll(<Object?>[
     sumVisualStyle,
     showSumLayoutChooser,
     yearGridLayout,
@@ -114,6 +117,7 @@ final class DashboardPresentationPreferences {
     showDayContentViewChooser,
     balanceDayLayoutPresentation,
     balanceDayFocusedPresentation,
+    balanceDayRatioPresentation,
     balanceShowFocusedDayImpact,
     balanceSumLayoutPresentation,
     balanceSumFocusedPresentation,
@@ -127,7 +131,7 @@ final class DashboardPresentationPreferences {
     balanceHeaderPartitionHeightPercent,
     balanceMonthCombinedCardPresentation,
     balanceHeaderGlassConfigurationJson,
-  );
+  ]);
 }
 
 abstract interface class DashboardPresentationPreferencesStore {
