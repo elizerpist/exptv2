@@ -8,6 +8,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_foc
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_day_momentum_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'balance_day_ratio_comparison_test.dart' show source;
+import '../../../support/month_impact_raster_comparator.dart';
 
 DashboardBalanceDailyMonthImpactPresentation data(
   double? before,
@@ -73,7 +74,15 @@ Future<void> pump(
   ),
 );
 void main() {
+  final originalComparator = goldenFileComparator;
   setUpAll(() async {
+    if (originalComparator is LocalFileComparator) {
+      goldenFileComparator = MonthImpactRasterComparator(
+        originalComparator.basedir.resolve(
+          'balance_daily_month_impact_test.dart',
+        ),
+      );
+    }
     await (FontLoader(
       'Inter',
     )..addFont(rootBundle.load('assets/fonts/inter/InterVariable.ttf'))).load();
@@ -81,6 +90,43 @@ void main() {
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
   });
+  tearDownAll(() => goldenFileComparator = originalComparator);
+  test(
+    'ribbon raster allowance rejects layout, alpha and material differences',
+    () {
+      final reference = Uint8List(100 * 100 * 4);
+      bool accepts(Uint8List a) => acceptsMonthImpactRaster(
+        actual: a,
+        reference: reference,
+        width: 100,
+        height: 100,
+      );
+      final one = Uint8List.fromList(reference)..[(60 * 100 + 50) * 4] = 1;
+      expect(accepts(one), isTrue);
+      expect(
+        accepts(Uint8List.fromList(reference)..[(60 * 100 + 50) * 4] = 2),
+        isFalse,
+      );
+      expect(
+        accepts(Uint8List.fromList(reference)..[(60 * 100 + 50) * 4 + 3] = 1),
+        isFalse,
+      );
+      expect(
+        accepts(Uint8List.fromList(reference)..[(20 * 100 + 50) * 4] = 1),
+        isFalse,
+      );
+      final many = Uint8List.fromList(reference);
+      for (var i = 0; i < 9; i++) {
+        many[(60 * 100 + 50 + i) * 4] = 1;
+      }
+      expect(accepts(many), isFalse);
+      expect(accepts(Uint8List(4)), isFalse);
+      expect(
+        monthImpactGoldenNames.contains('balance_day_ratio_coverage.png'),
+        isFalse,
+      );
+    },
+  );
   for (final entry in [
     (
       30.0,

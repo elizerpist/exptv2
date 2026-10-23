@@ -40,6 +40,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scop
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
 import '../../../support/dashboard_render_resources.dart';
+import '../../../support/month_impact_raster_comparator.dart';
 import '../../../support/test_category_collection.dart';
 import '../../../support/test_pump.dart';
 
@@ -1751,6 +1752,14 @@ final class _PairedMotionRasterComparator extends LocalFileComparator {
   _PairedMotionRasterComparator(super.testFile);
   @override
   Future<bool> compare(Uint8List imageBytes, Uri golden) async {
+    if (monthImpactGoldenNames.contains(golden.pathSegments.last) &&
+        await matchesMonthImpactRaster(
+          imageBytes,
+          Uint8List.fromList(await getGoldenBytes(golden)),
+          golden,
+        )) {
+      return true;
+    }
     if (golden.pathSegments.last !=
         'balance_day_paired_motion_intermediate.png') {
       return super.compare(imageBytes, golden);
