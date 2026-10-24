@@ -1456,6 +1456,14 @@ void main() {
       expect(repository.prepareCalls, 1);
       expect(core.ensureMindBehavioralScoreProjection(), isTrue);
 
+      // On a physical mode transition the compact slider can accept its first
+      // thumb update while Header score projection admission is still queued.
+      // The first live preview must rebuild that resident projection and then
+      // publish its exact range in the same turn; it may not leave a stale
+      // Header score behind the already-visible heatmap.
+      core.mindBehavioralScore.clear();
+      expect(core.mindBehavioralScore.projection, isNull);
+
       const previewValues = QueryAmountRangeValues(
         minimumScaled100: 100000,
         maximumScaled100: 300000,

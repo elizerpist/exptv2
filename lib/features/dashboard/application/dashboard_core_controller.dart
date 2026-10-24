@@ -4787,7 +4787,7 @@ final class DashboardCoreController {
     required LedgerDirection direction,
     required QueryAmountRangeValues values,
   }) {
-    final projection = mindBehavioralScore.projection;
+    var projection = mindBehavioralScore.projection;
     final expectedProjection = MindBehavioralScoreIdentity(
       upstreamScopeKey:
           '${QueryAmountRange.domainScope(appliedScope).key.value}|${_mindFocusIdentityFor(base, QueryAmountRange.domainScope(appliedScope))}',
@@ -4811,10 +4811,28 @@ final class DashboardCoreController {
     final navigationEpoch = acceptedVisibleDay
         ? visible.navigationEpoch
         : navigation.state.navigationEpoch;
-    var held = _mindScoreInteractionIdentity;
+    // A physical RangeSlider can become interactive one frame before an
+    // ordinary Mind Header admission has installed its non-temporal score
+    // projection.  The heatmap preview is already resident at this point, so
+    // rejecting that first preview would leave the score on a preceding
+    // range while the heatmap advances.  Install the existing projection
+    // synchronously, then target the same exact preview range below.  This
+    // creates no new data owner or animation timeline.
     if (projection == null || projection.identity != expectedProjection) {
+      ensureMindBehavioralScoreProjection(
+        direction: direction,
+        respectAcceptedMindTemporalTarget: false,
+      );
+      projection = mindBehavioralScore.projection;
+      if (projection?.identity != expectedProjection) {
+        return mindBehavioralScore.rejectStalePublication();
+      }
+    }
+    final resolvedProjection = projection;
+    if (resolvedProjection == null) {
       return mindBehavioralScore.rejectStalePublication();
     }
+    var held = _mindScoreInteractionIdentity;
     if (held != null &&
         (held.projection != expectedProjection ||
             held.navigationEpoch != navigationEpoch)) {
@@ -4832,12 +4850,12 @@ final class DashboardCoreController {
       _mindScoreInteractionIdentity = current;
     }
     final target = _mindScoreTargetEpochDayForScope(
-      projection: projection,
+      projection: resolvedProjection,
       range: values,
       timeScope: timeScope,
     );
     final request = _mindScoreSeriesRequest(
-      projection: projection,
+      projection: resolvedProjection,
       range: values,
       timeScope: timeScope,
       targetEpochDay: target,
