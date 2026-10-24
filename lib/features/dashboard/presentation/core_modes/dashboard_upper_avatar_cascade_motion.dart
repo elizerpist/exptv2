@@ -20,13 +20,13 @@ final class DashboardUpperAvatarCascadeMotion {
   // A 0.30 slope was mathematically continuous, but a 2–10% drag only moved
   // the lane by 0.6–3.07% of its track. That reads as a hold on-device. Keep
   // the track slower than the body while making the first drag frames visible.
-  static const double initialSlope = .55;
+  static const double initialSlope = .40;
 
   static double retimedSeparation(double separation) {
     final bounded = separation.clamp(0.0, 1.0).toDouble();
     if (bounded == 0 || bounded == 1) return bounded;
-    final cubic = math.pow(bounded, 3).toDouble();
-    return initialSlope * bounded + (1 - initialSlope) * cubic;
+    final delayedComponent = math.pow(bounded, 3).toDouble();
+    return initialSlope * bounded + (1 - initialSlope) * delayedComponent;
   }
 
   static double expansionFor(DashboardLayoutFrame frame) =>

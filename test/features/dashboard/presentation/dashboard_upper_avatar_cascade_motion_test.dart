@@ -105,11 +105,11 @@ void main() {
       // track while travelling a clearly non-zero share of its own track.
       expect(
         DashboardUpperAvatarCascadeMotion.retimedSeparation(.02),
-        closeTo(.0110036, 1e-7),
+        closeTo(.0080048, 1e-7),
       );
       expect(
         DashboardUpperAvatarCascadeMotion.retimedSeparation(.10),
-        closeTo(.05545, 1e-7),
+        closeTo(.0406, 1e-7),
       );
     },
   );

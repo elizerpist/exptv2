@@ -280,6 +280,7 @@ class FluviLedgerWriteUseCaseTest {
                 )
             }
         }
+        Unit
     }
 
     private fun command(
