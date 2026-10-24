@@ -1,0 +1,75 @@
+{
+  "baselineCommit": "9cace8bd4adba5c6cf50cd19c473646fc79849c0",
+  "freshEndpointComparisons": [
+    {
+      "image": "core_dashboard_budget_collapsed_unchanged.png",
+      "baselineRgbaSha256": "752d28552d0e1d5c98811c299d1f472262ee18ab87d86605efa87dccc318da04",
+      "fixedRgbaSha256": "752d28552d0e1d5c98811c299d1f472262ee18ab87d86605efa87dccc318da04",
+      "differentPixels": 0,
+      "size": [
+        412,
+        892
+      ]
+    },
+    {
+      "image": "core_dashboard_budget_expanded_unchanged.png",
+      "baselineRgbaSha256": "037ba77a2b122c46904f2341df5fcb7e51d0397ba6e1d80efbf619dd11b44fd9",
+      "fixedRgbaSha256": "037ba77a2b122c46904f2341df5fcb7e51d0397ba6e1d80efbf619dd11b44fd9",
+      "differentPixels": 0,
+      "size": [
+        412,
+        892
+      ]
+    },
+    {
+      "image": "core_dashboard_collapsed_unchanged.png",
+      "baselineRgbaSha256": "669ae5f230c91c10029a27051bcb48ccc697ada335d226e815554835233a7ff3",
+      "fixedRgbaSha256": "669ae5f230c91c10029a27051bcb48ccc697ada335d226e815554835233a7ff3",
+      "differentPixels": 0,
+      "size": [
+        412,
+        892
+      ]
+    },
+    {
+      "image": "core_dashboard_expanded_unchanged.png",
+      "baselineRgbaSha256": "daa90dbfde5eb0c075279915337eacb10778c8ee16dbdf0c58429612329cf396",
+      "fixedRgbaSha256": "daa90dbfde5eb0c075279915337eacb10778c8ee16dbdf0c58429612329cf396",
+      "differentPixels": 0,
+      "size": [
+        412,
+        892
+      ]
+    },
+    {
+      "image": "core_dashboard_mind_collapsed_unchanged.png",
+      "baselineRgbaSha256": "d8d4cc5fad5387da1464f080d53e2281bc8dded8ab84e44a571494af98f302d5",
+      "fixedRgbaSha256": "d8d4cc5fad5387da1464f080d53e2281bc8dded8ab84e44a571494af98f302d5",
+      "differentPixels": 0,
+      "size": [
+        412,
+        892
+      ]
+    },
+    {
+      "image": "core_dashboard_mind_expanded_unchanged.png",
+      "baselineRgbaSha256": "bffce8bd0f31425508fde1de855bcc4f836b3256cc2b4674276f5ed74c95854e",
+      "fixedRgbaSha256": "bffce8bd0f31425508fde1de855bcc4f836b3256cc2b4674276f5ed74c95854e",
+      "differentPixels": 0,
+      "size": [
+        412,
+        892
+      ]
+    }
+  ],
+  "preexistingFailures": {
+    "geometryTests": 9,
+    "dayHeaderFixture": 1,
+    "historicalCoreGoldens": 6
+  },
+  "firstFrameBottom": {
+    "oldExpanded": 599,
+    "oldAtTravel0_1": 612.4607689701897,
+    "fixedAtTravel0_1": 598.9952627728846
+  }
+}

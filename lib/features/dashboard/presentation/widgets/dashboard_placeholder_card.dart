@@ -23,6 +23,8 @@ class DashboardPlaceholderCard extends StatelessWidget {
     this.borderRadiusOverride,
     this.showsDepth = true,
     this.showsBorder = true,
+    this.depthProgress = 1,
+    this.borderProgress = 1,
     this.child,
   });
 
@@ -36,6 +38,8 @@ class DashboardPlaceholderCard extends StatelessWidget {
   final BorderRadius? borderRadiusOverride;
   final bool showsDepth;
   final bool showsBorder;
+  final double depthProgress;
+  final double borderProgress;
   final Widget? child;
 
   @override
@@ -43,11 +47,16 @@ class DashboardPlaceholderCard extends StatelessWidget {
     final depth = DashboardShadowStyleScope.profileOf(
       context,
     ).depthFor(cornerFamily);
+    final border = showsBorder
+        ? borderOverride ??
+              DashboardBorderScope.profileOf(context).borderFor(borderSurface)
+        : null;
     final card = FluviRoundedBox(
       color: depth.surfaceColor ?? surfaceColor,
       border: showsBorder
-          ? borderOverride ??
-                DashboardBorderScope.profileOf(context).borderFor(borderSurface)
+          ? (borderProgress == 1
+                ? border
+                : BoxBorder.lerp(null, border, borderProgress))
           : null,
       borderRadius:
           borderRadiusOverride ??
@@ -55,7 +64,18 @@ class DashboardPlaceholderCard extends StatelessWidget {
             cornerFamily,
             size: Size(bounds.width, bounds.height),
           ),
-      boxShadow: showsDepth ? depth.shadows : const <BoxShadow>[],
+      boxShadow: showsDepth
+          ? (depthProgress == 1
+                ? depth.shadows
+                : [
+                    for (final shadow in depth.shadows)
+                      shadow.copyWith(
+                        color: shadow.color.withValues(
+                          alpha: shadow.color.a * depthProgress,
+                        ),
+                      ),
+                  ])
+          : const <BoxShadow>[],
       child: child ?? const SizedBox.expand(),
     );
 

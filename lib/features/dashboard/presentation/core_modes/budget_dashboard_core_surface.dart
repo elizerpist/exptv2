@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart'
-    show ValueListenable, immutable, kDebugMode;
+    show ValueListenable, immutable, kDebugMode, listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -27,6 +27,9 @@ import '../widgets/dashboard_placeholder_card.dart';
 import '../widgets/dashboard_render_diagnostic_probe.dart';
 import '../widgets/dashboard_render_phase_probe.dart';
 import '../budget_content_card_style.dart';
+import '../dashboard_shadow_style.dart';
+import '../dashboard_border_style.dart';
+import 'budget_unified_mother_card_geometry.dart';
 import '../budget_section_order.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
@@ -147,7 +150,6 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     contentCardStyle ?? _alwaysUnifiedBudgetContent,
                 builder: (context, layout, _) => _BudgetUnifiedContentCard(
                   geometry: geometry,
-                  section: section,
                   contentLayout: layout,
                   headerVisualFrame: headerVisualFrame,
                 ),
@@ -212,17 +214,10 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 valueListenable:
                     contentCardStyle ?? _alwaysUnifiedBudgetContent,
                 builder: (context, layout, _) {
-                  final contentProgress = geometry.zone2Opacity
+                  final unified = layout == BudgetContentLayout.unifiedCard;
+                  final separation = (1 - geometry.headerExpansionProgress)
                       .clamp(0.0, 1.0)
                       .toDouble();
-                  // The existing Budget cascade owns transitional motion. The
-                  // shared shell exists only at its settled endpoint so it
-                  // cannot become a full-height opaque slab while Card2 is
-                  // still translating/scaling through the legacy path.
-                  final isHeaderLinked =
-                      layout == BudgetContentLayout.unifiedCard &&
-                      contentProgress >= .999 &&
-                      geometry.collapseProgress <= .001;
                   final headerRadius =
                       DashboardCornerRoundnessScope.profileOf(
                         context,
@@ -244,10 +239,10 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                         ),
                       );
                   final seamShape = DashboardHeaderContentSeamShape.resolve(
-                    seamless: isHeaderLinked,
+                    seamless: unified,
                     headerRadius: headerRadius,
                     contentRadius: contentRadius,
-                    expansionProgress: contentProgress,
+                    expansionProgress: geometry.headerExpansionProgress,
                   );
                   return DashboardCoreModeHeaderScaffold(
                     bounds: geometry.headerBounds,
@@ -283,8 +278,10 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     visualController: headerVisualController,
                     visualFrameListenable: headerVisualFrame,
                     borderRadiusOverride: seamShape.headerRadius,
-                    showsDepth: !isHeaderLinked,
-                    showsBorder: !isHeaderLinked,
+                    showsDepth: true,
+                    showsBorder: true,
+                    depthProgress: unified ? separation : 1,
+                    borderProgress: unified ? separation : 1,
                     borderSurface: DashboardBorderSurface.budgetHeader,
                     visualInset: EdgeInsets.zero,
                     // The source title starts at x=20/y=16. Text keeps the
@@ -625,19 +622,15 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   }
 }
 
-/// Unified Budget uses the same shared Header/content seam primitive as Mind.
-/// It connects the existing physical bounds without changing Budget section
-/// order, selected avatar, page-controller, query, or financial ownership.
+/// One persistent material composition. Neither PageView nor avatar input is
+/// a child of this decorative surface, so vertical frames cannot reparent them.
 final class _BudgetUnifiedContentCard extends StatelessWidget {
   const _BudgetUnifiedContentCard({
     required this.geometry,
-    required this.section,
     required this.contentLayout,
     required this.headerVisualFrame,
   });
-
   final DashboardLayoutFrame geometry;
-  final _BudgetSectionLayout section;
   final BudgetContentLayout contentLayout;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
 
@@ -646,72 +639,105 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
     if (contentLayout != BudgetContentLayout.unifiedCard) {
       return const SizedBox.shrink();
     }
-    final contentProgress = geometry.zone2Opacity.clamp(0.0, 1.0).toDouble();
-    // Preserve the proven Budget cascade during an in-flight collapse. The
-    // linked Header/body physical shell is a settled presentation state; a
-    // static combined rectangle during the existing transform would paint an
-    // opaque slab across its otherwise transparent transition lane. Keeping
-    // the surface mounted but transparent preserves the existing structural
-    // topology and controller lifecycle until the settled shell takes over.
-    final showsLinkedSurface =
-        contentProgress >= .999 && geometry.collapseProgress <= .001;
-    if (!showsLinkedSurface) {
-      return _BudgetUnifiedTransitionSurface(
-        geometry: geometry,
-        section: section,
-      );
-    }
-    final headerRadius = DashboardCornerRoundnessScope.profileOf(context)
-        .borderRadiusFor(
-          DashboardCornerSurfaceFamily.header,
-          size: Size(geometry.headerBounds.width, geometry.headerBounds.height),
-        );
-    final contentRadius = DashboardCornerRoundnessScope.profileOf(context)
-        .borderRadiusFor(
-          DashboardCornerSurfaceFamily.budgetDistributionCard,
-          size: Size(
-            geometry.modeContentBounds.width,
-            geometry.modeContentBounds.height,
-          ),
-        );
-    final seamShape = DashboardHeaderContentSeamShape.resolve(
-      seamless: true,
-      headerRadius: headerRadius,
-      contentRadius: contentRadius,
-      expansionProgress: 1,
+    final corners = DashboardCornerRoundnessScope.profileOf(context);
+    final transition = BudgetUnifiedMotherCardGeometry.resolve(
+      frame: geometry,
+      headerRadius: corners.borderRadiusFor(
+        DashboardCornerSurfaceFamily.header,
+        size: Size(geometry.headerBounds.width, geometry.headerBounds.height),
+      ),
+      contentRadius: corners.borderRadiusFor(
+        DashboardCornerSurfaceFamily.budgetDistributionCard,
+        size: Size(
+          geometry.modeContentBounds.width,
+          geometry.modeContentBounds.height,
+        ),
+      ),
     );
-    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
-      geometry: geometry,
-    );
-    final bridgeHeight =
-        (geometry.modeContentBounds.top - geometry.headerBounds.bottom + 34)
-            .clamp(0.0, combinedBounds.height - geometry.headerBounds.height)
-            .toDouble();
+    final bounds = transition.paintBounds;
+    final body = transition.visibleBodyBounds.shift(-bounds.topLeft);
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.budgetDistributionCard);
+    final border = DashboardBorderScope.profileOf(
+      context,
+    ).borderFor(DashboardBorderSurface.budgetContent);
     return DashboardCoreModeFramePosition(
-      bounds: combinedBounds,
-      child: Opacity(
-        opacity: showsLinkedSurface ? 1 : 0,
-        child: LayoutBuilder(
-          builder: (context, _) => DashboardRenderDiagnosticProbe(
+      bounds: DashboardBounds(
+        left: bounds.left,
+        top: bounds.top,
+        width: bounds.width,
+        height: bounds.height,
+      ),
+      child: IgnorePointer(
+        child: SizedBox.expand(
+          key: const ValueKey('budget-unified-header-content-surface'),
+          child: DashboardRenderDiagnosticProbe(
             candidate: 'budgetUnifiedHeaderContentSurface',
-            material: 'surface=DashboardPlaceholderCard header+content',
-            clip:
-                'none; descendant BudgetDistributionCardShell owns viewport clip',
-            zOrder: 'unifiedHeaderSurface<header<chartCascade<avatarCascade',
-            child: DashboardPlaceholderCard(
-              bounds: combinedBounds,
-              fillParent: true,
-              semanticKey: const ValueKey<String>(
-                'budget-unified-header-content-surface',
-              ),
-              cornerFamily: DashboardCornerSurfaceFamily.budgetDistributionCard,
-              borderSurface: DashboardBorderSurface.budgetContent,
-              borderRadiusOverride: seamShape.outerRadius,
-              child: _BudgetUnifiedHeaderContentBridge(
-                headerHeight: geometry.headerBounds.height,
-                bridgeHeight: bridgeHeight,
-                headerVisualFrame: headerVisualFrame,
-              ),
+            material: 'persistent compound perimeter + one moving body',
+            clip: 'body decoration only; PageView owns its unchanged viewport',
+            zOrder: 'unifiedSurface<chartCascade<avatarCascade<header',
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    key: const ValueKey('budget-unified-perimeter'),
+                    painter: _BudgetJoinedPerimeterPainter(
+                      transition: transition,
+                      shadows: depth.shadows,
+                      headerBase:
+                          depth.surfaceColor ?? FluviVisualTokens.surface,
+                      border: null,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: body.left,
+                  top: body.top,
+                  width: body.width,
+                  height: body.height,
+                  child: Opacity(
+                    opacity: transition.opacity,
+                    child: DashboardPlaceholderCard(
+                      bounds: DashboardBounds(
+                        left: 0,
+                        top: 0,
+                        width: body.width,
+                        height: body.height,
+                      ),
+                      fillParent: true,
+                      semanticKey: const ValueKey('budget-unified-moving-body'),
+                      cornerFamily:
+                          DashboardCornerSurfaceFamily.budgetDistributionCard,
+                      borderSurface: DashboardBorderSurface.budgetContent,
+                      borderRadiusOverride: transition.shape.contentRadius,
+                      depthProgress: transition.separation,
+                      borderProgress: transition.separation,
+                      child: ClipRRect(
+                        borderRadius: transition.shape.contentRadius,
+                        child: Opacity(
+                          opacity: 1 - transition.separation,
+                          child: _BudgetUnifiedHeaderContentBridge(
+                            headerHeight: 0,
+                            bridgeHeight: transition.bridgeHeight,
+                            headerVisualFrame: headerVisualFrame,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _BudgetJoinedPerimeterPainter(
+                      transition: transition,
+                      shadows: const [],
+                      border: border,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -720,49 +746,115 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
   }
 }
 
-/// Keeps Budget's established lower-card cascade as the physical owner during
-/// an in-flight collapse. The Header/content shell replaces it only at the
-/// fully expanded unified endpoint, so a transparent parent never exposes an
-/// unowned neutral slab between the two representations.
-final class _BudgetUnifiedTransitionSurface extends StatelessWidget {
-  const _BudgetUnifiedTransitionSurface({
-    required this.geometry,
-    required this.section,
+/// A perimeter has no opaque fill. Its path follows the two actual surfaces,
+/// so an opened gap never retains the former full-height white backplate.
+final class _BudgetJoinedPerimeterPainter extends CustomPainter {
+  const _BudgetJoinedPerimeterPainter({
+    required this.transition,
+    required this.shadows,
+    required this.border,
+    this.headerBase,
   });
-
-  final DashboardLayoutFrame geometry;
-  final _BudgetSectionLayout section;
+  final Color? headerBase;
+  final BudgetUnifiedMotherCardGeometry transition;
+  final List<BoxShadow> shadows;
+  final BoxBorder? border;
 
   @override
-  Widget build(BuildContext context) {
-    final bounds = geometry.modeContentBounds;
-    final motion = section.motionFor(
-      geometry.lowerCardMotion!,
-      from: geometry.zone2Bounds,
-      to: bounds,
-    );
-    return DashboardCoreModeOpacityPosition(
-      bounds: bounds,
-      opacity: motion.opacity,
-      offset: Offset(0, motion.top - bounds.top),
-      scale: motion.scale,
-      child: DashboardRenderDiagnosticProbe(
-        candidate: 'budgetUnifiedTransitionSurface',
-        material: 'settledHeaderContentShell=off; lowerCascade=on',
-        clip: 'none; descendant BudgetDistributionCardShell owns viewport clip',
-        zOrder: 'transitionSurface<chartCascade<avatarCascade',
-        child: DashboardPlaceholderCard(
-          bounds: bounds,
-          fillParent: true,
-          semanticKey: const ValueKey<String>(
-            'budget-unified-header-content-surface',
+  void paint(Canvas canvas, Size size) {
+    final t = transition;
+    final origin = -t.paintBounds.topLeft;
+    final header = t.headerBounds.shift(origin);
+    final body = t.visibleBodyBounds.shift(origin);
+    final alpha = (1 - t.separation) * t.opacity;
+    Path contour({Offset offset = Offset.zero, double spread = 0}) =>
+        Path.combine(
+          PathOperation.union,
+          Path()..addRRect(
+            t.shape.headerRadius.toRRect(header.shift(offset).inflate(spread)),
           ),
-          cornerFamily: DashboardCornerSurfaceFamily.budgetDistributionCard,
-          borderSurface: DashboardBorderSurface.budgetContent,
-        ),
-      ),
-    );
+          Path()..addRRect(
+            t.shape.contentRadius.toRRect(body.shift(offset).inflate(spread)),
+          ),
+        );
+    for (final shadow in shadows) {
+      final paint = shadow
+          .copyWith(
+            color: shadow.color.withValues(alpha: shadow.color.a * alpha),
+          )
+          .toPaint();
+      if (t.separation == 0) {
+        // Exact authored BoxDecoration endpoint, including its shadow raster.
+        canvas.drawRRect(
+          t.shape.outerRadius.toRRect(
+            (Offset.zero & size)
+                .shift(shadow.offset)
+                .inflate(shadow.spreadRadius),
+          ),
+          paint,
+        );
+      } else {
+        canvas.drawPath(
+          contour(offset: shadow.offset, spread: shadow.spreadRadius),
+          paint,
+        );
+      }
+    }
+    final base = headerBase;
+    if (base != null) {
+      canvas.drawRRect(
+        t.shape.headerRadius.toRRect(header),
+        Paint()..color = base.withValues(alpha: base.a * (1 - t.separation)),
+      );
+    }
+    final outline = border;
+    if (outline != null) {
+      if (t.separation == 0) {
+        outline.paint(
+          canvas,
+          Offset.zero & size,
+          borderRadius: t.shape.outerRadius,
+        );
+      } else {
+        final paint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = outline.top.width
+          ..color = outline.top.color.withValues(
+            alpha: outline.top.color.a * alpha,
+          );
+        // A joined outline owns only outer edges. New contact-edge borders
+        // belong to the independently interpolated Header/body, never a
+        // full-strength compound-path stroke on the first fractional frame.
+        final headerCut =
+            header.bottom -
+            t.shape.headerRadius.bottomLeft.y -
+            outline.top.width;
+        final bodyCut =
+            body.top + t.shape.contentRadius.topLeft.y + outline.top.width;
+        canvas.save();
+        canvas.clipRect(Rect.fromLTRB(0, 0, size.width, headerCut));
+        canvas.drawRRect(t.shape.headerRadius.toRRect(header), paint);
+        canvas.restore();
+        canvas.save();
+        canvas.clipRect(Rect.fromLTRB(0, bodyCut, size.width, size.height));
+        canvas.drawRRect(t.shape.contentRadius.toRRect(body), paint);
+        canvas.restore();
+      }
+    }
   }
+
+  @override
+  bool shouldRepaint(covariant _BudgetJoinedPerimeterPainter old) =>
+      old.transition.visibleBodyBounds != transition.visibleBodyBounds ||
+      old.transition.headerBounds != transition.headerBounds ||
+      old.transition.paintBounds != transition.paintBounds ||
+      old.transition.separation != transition.separation ||
+      old.transition.opacity != transition.opacity ||
+      old.transition.shape.headerRadius != transition.shape.headerRadius ||
+      old.transition.shape.contentRadius != transition.shape.contentRadius ||
+      !listEquals(old.shadows, shadows) ||
+      old.border != border ||
+      old.headerBase != headerBase;
 }
 
 /// The shared card stays white like Budget's existing body. This shallow,

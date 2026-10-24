@@ -307,6 +307,8 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     this.borderRadiusOverride,
     this.showsDepth = true,
     this.showsBorder = true,
+    this.depthProgress = 1,
+    this.borderProgress = 1,
     this.borderSurface = DashboardBorderSurface.header,
     this.visualInset = const EdgeInsets.all(1),
   });
@@ -329,6 +331,10 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final BorderRadius? borderRadiusOverride;
   final bool showsDepth;
   final bool showsBorder;
+
+  /// Optional master-driven material intensity; defaults preserve every caller.
+  final double depthProgress;
+  final double borderProgress;
   final DashboardBorderSurface borderSurface;
 
   /// Keeps the animated material inside a physical card seam where required.
@@ -358,6 +364,8 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
             borderRadius: borderRadius,
             showsDepth: showsDepth,
             showsBorder: showsBorder,
+            depthProgress: depthProgress,
+            borderProgress: borderProgress,
             borderSurface: borderSurface,
             visualInset: visualInset,
           ),
@@ -545,6 +553,8 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     required this.borderRadius,
     required this.showsDepth,
     required this.showsBorder,
+    required this.depthProgress,
+    required this.borderProgress,
     required this.borderSurface,
     required this.visualInset,
   });
@@ -557,6 +567,8 @@ final class _HeaderPhysicalShell extends StatelessWidget {
   final BorderRadius borderRadius;
   final bool showsDepth;
   final bool showsBorder;
+  final double depthProgress;
+  final double borderProgress;
   final DashboardBorderSurface borderSurface;
   final EdgeInsets visualInset;
 
@@ -581,6 +593,8 @@ final class _HeaderPhysicalShell extends StatelessWidget {
         borderRadiusOverride: borderRadius,
         showsDepth: showsDepth,
         showsBorder: showsBorder,
+        depthProgress: depthProgress,
+        borderProgress: borderProgress,
       );
     }
     return SizedBox.expand(
@@ -592,7 +606,18 @@ final class _HeaderPhysicalShell extends StatelessWidget {
           FluviRoundedBox(
             color: Colors.transparent,
             borderRadius: borderRadius,
-            boxShadow: showsDepth ? depth.outerShadows : const <BoxShadow>[],
+            boxShadow: showsDepth
+                ? (depthProgress == 1
+                      ? depth.outerShadows
+                      : [
+                          for (final shadow in depth.outerShadows)
+                            shadow.copyWith(
+                              color: shadow.color.withValues(
+                                alpha: shadow.color.a * depthProgress,
+                              ),
+                            ),
+                        ])
+                : const <BoxShadow>[],
             child: const SizedBox.expand(),
           ),
           // Layer 2: only this clipped painter listens to the shared ticker.
@@ -632,11 +657,16 @@ final class _HeaderPhysicalShell extends StatelessWidget {
           // edge-only ring; the animated layer remains the sole fill owner.
           if (showsDepth && depth.innerShadows.isNotEmpty)
             IgnorePointer(
-              child: CustomPaint(
-                key: const ValueKey<String>('dashboard-header-depth-highlight'),
-                painter: _HeaderDepthHighlightPainter(
-                  borderRadius: borderRadius,
-                  shadows: depth.innerShadows,
+              child: Opacity(
+                opacity: depthProgress,
+                child: CustomPaint(
+                  key: const ValueKey<String>(
+                    'dashboard-header-depth-highlight',
+                  ),
+                  painter: _HeaderDepthHighlightPainter(
+                    borderRadius: borderRadius,
+                    shadows: depth.innerShadows,
+                  ),
                 ),
               ),
             ),
@@ -645,7 +675,9 @@ final class _HeaderPhysicalShell extends StatelessWidget {
             IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  border: border,
+                  border: borderProgress == 1
+                      ? border
+                      : BoxBorder.lerp(null, border, borderProgress),
                   borderRadius: borderRadius,
                 ),
               ),

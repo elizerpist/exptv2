@@ -5,6 +5,10 @@ set -euo pipefail
 # in the nightly/profile lanes; do not grow this list by duplicating an
 # invariant already owned below.
 flutter test \
+  test/features/dashboard/presentation/budget_unified_mother_card_geometry_test.dart \
+  test/features/dashboard/presentation/budget_unified_detachment_test.dart \
+  test/features/dashboard/presentation/budget_unified_detachment_state_test.dart \
+  test/features/dashboard/presentation/budget_distribution_pager_test.dart \
   test/features/dashboard/application/dashboard_balance_daily_month_impact_projection_test.dart \
   test/features/dashboard/presentation/balance_daily_month_impact_test.dart \
   test/features/dashboard/presentation/balance_day_focused_layout_test.dart \
@@ -91,3 +95,8 @@ flutter test \
 # Preserve Budget's authored annual clay baselines after sharing its primitive.
 flutter test test/features/dashboard/presentation/budget_secondary_analysis_card_test.dart \
   --plain-name YEAR
+
+# Budget's unified transition preserves the existing PageView/cascade owners.
+# The historical DAY header fixture is outside this physical-animation change.
+flutter test test/features/dashboard/presentation/budget_dashboard_core_surface_test.dart \
+  --name 'Unified Budget composition|BUD-HDR-02|production Budget Card2|Budget avatar/content variants'
