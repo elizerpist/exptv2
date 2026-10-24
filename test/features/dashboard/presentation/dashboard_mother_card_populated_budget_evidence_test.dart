@@ -87,7 +87,22 @@ void main() {
     addTearDown(drawables.dispose);
     addTearDown(rail.dispose);
     addTearDown(pages.dispose);
-    for (final progress in [0.0, .20, .35, .50, .65, .80, 1.0]) {
+    final progressSamples = stage == 'phase3-shadow-avatar'
+        ? const <double>[
+            0,
+            .02,
+            .05,
+            .10,
+            .20,
+            .35,
+            .50,
+            .65,
+            .80,
+            .95,
+            1,
+          ]
+        : const <double>[0, .20, .35, .50, .65, .80, 1];
+    for (final progress in progressSamples) {
       await tester.pumpWidget(
         MaterialApp(
           theme: ThemeData(fontFamily: 'Inter'),

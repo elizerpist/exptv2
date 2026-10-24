@@ -178,6 +178,10 @@ final class _BalanceDashboardCoreSurfaceState
               showsDepth: true,
               showsBorder: true,
               depthProgress: transition.separation,
+              contactShadowProgress:
+                  DashboardHeaderContactShadow.progressForSeparation(
+                    transition.separation,
+                  ),
               borderProgress: transition.separation,
               visualInset: EdgeInsets.zero,
               detail: _BalanceHeaderDetail(

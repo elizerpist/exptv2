@@ -7,9 +7,24 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_upper
 
 void main() {
   test(
-    'upper avatar retiming preserves endpoints and leaves lower cascade raw',
+    'upper avatar retiming starts immediately, stays slower and leaves lower cascade raw',
     () {
-      const samples = [0.0, .05, .10, .20, .35, .50, .65, .80, .95, 1.0];
+      const samples = [
+        0.0,
+        .005,
+        .01,
+        .02,
+        .05,
+        .10,
+        .20,
+        .35,
+        .50,
+        .65,
+        .80,
+        .95,
+        1.0,
+      ];
+      var previousRetimed = -1.0;
       for (final separation in samples) {
         final frame = DashboardGeometryResolver.resolve(
           metrics: DashboardLayoutMetrics.reference,
@@ -31,6 +46,23 @@ void main() {
               ? separation
               : lessThan(separation),
         );
+        final retimedSeparation =
+            DashboardUpperAvatarCascadeMotion.retimedSeparation(separation);
+        expect(retimedSeparation, greaterThan(previousRetimed));
+        if (separation > 0 && separation < 1) {
+          expect(retimedSeparation, greaterThan(0));
+          expect(retimedSeparation, lessThan(separation));
+          expect(retimed.opacity, lessThan(1));
+          expect(
+            retimed.top,
+            lessThan(frame.motherCardCascadeGeometry.upperExpandedTop),
+          );
+          expect(
+            retimed.scale,
+            lessThan(frame.motherCardCascadeGeometry.upperExpandedScale),
+          );
+        }
+        previousRetimed = retimedSeparation;
         expect(
           retimed.progress,
           closeTo(
@@ -57,6 +89,16 @@ void main() {
           expect(retimed.top, greaterThan(raw.top));
         }
       }
+
+      const epsilon = .0001;
+      final initialFiniteDifference =
+          DashboardUpperAvatarCascadeMotion.retimedSeparation(epsilon) /
+          epsilon;
+      expect(
+        initialFiniteDifference,
+        closeTo(DashboardUpperAvatarCascadeMotion.initialSlope, .001),
+      );
+      expect(initialFiniteDifference, greaterThan(.1));
     },
   );
 }

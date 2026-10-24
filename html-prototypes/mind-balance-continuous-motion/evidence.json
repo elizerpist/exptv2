@@ -166,5 +166,57 @@
   {
     "src": "assets/shared-motion/phase2-avatar-balance-focused-100000.png",
     "label": "phase 2 focused Balance selector 100%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-mind-0.png",
+    "label": "phase 3 Mind: kontaktárnyék 0%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-balance-5000.png",
+    "label": "phase 3 Balance: kontaktárnyék 5%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-budget-5000.png",
+    "label": "phase 3 Budget: kontaktárnyék 5%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-populated-budget-2000.png",
+    "label": "phase 3 Budget: avatarsor azonnali mozgása 2%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-populated-budget-10000.png",
+    "label": "phase 3 Budget: avatarsor azonnali mozgása 10%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-populated-budget-50000.png",
+    "label": "phase 3 Budget: content az avatarsor alatt 50%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-populated-budget-65000.png",
+    "label": "phase 3 Budget: átfedési fázis 65%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-populated-budget-95000.png",
+    "label": "phase 3 Budget: Header-occlusion 95%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-balance-focused-2000.png",
+    "label": "phase 3 focused Balance: selector azonnali mozgása 2%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-balance-focused-10000.png",
+    "label": "phase 3 focused Balance: selector azonnali mozgása 10%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-balance-focused-35000.png",
+    "label": "phase 3 focused Balance: content a selector alatt 35%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-balance-focused-50000.png",
+    "label": "phase 3 focused Balance: Header-occlusion 50%"
+  },
+  {
+    "src": "assets/shared-motion/phase3-shadow-avatar-balance-focused-95000.png",
+    "label": "phase 3 focused Balance: késői Header-occlusion 95%"
   }
 ]

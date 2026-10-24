@@ -137,6 +137,13 @@ void main() {
         expect(header.visualInset, EdgeInsets.zero);
         expect(header.borderSurface, DashboardBorderSurface.header);
         expect(header.depthProgress, closeTo(collapse / 180, 1e-10));
+        expect(
+          header.contactShadowProgress,
+          closeTo(
+            DashboardHeaderContactShadow.progressForSeparation(collapse / 180),
+            1e-10,
+          ),
+        );
         expect(header.borderProgress, header.depthProgress);
         final rect = tester.getRect(body);
         if (collapse <= 9 && previous != null && collapse > previousCollapse) {
@@ -219,9 +226,12 @@ void main() {
   testWidgets(
     'Budget applies the shared retiming only to its upper avatar layers',
     (tester) async {
+      double? expandedTop;
       for (final collapse in [
         0.0,
+        3.6,
         9.0,
+        18.0,
         36.0,
         63.0,
         90.0,
@@ -271,6 +281,7 @@ void main() {
         );
         expect(avatar.motion.top, closeTo(expectedUpper.top, 1e-8));
         expect(avatar.motion.opacity, closeTo(expectedUpper.opacity, 1e-8));
+        expandedTop ??= avatar.motion.top;
         expect(backplate.motion.top, closeTo(avatar.motion.top, 1e-8));
         expect(backplate.motion.opacity, closeTo(avatar.motion.opacity, 1e-8));
         expect(lower.motion.top, closeTo(geometry.lowerCardMotion!.top, 1e-8));
@@ -279,6 +290,16 @@ void main() {
           closeTo(geometry.lowerCardMotion!.opacity, 1e-8),
         );
         if (collapse > 0 && collapse < 180) {
+          expect(
+            avatar.motion.top,
+            lessThan(expandedTop),
+            reason: 'the Budget avatar rail must move on its first swipe frame',
+          );
+          expect(
+            avatar.motion.opacity,
+            lessThan(1),
+            reason: 'the Budget avatar rail must fade on its first swipe frame',
+          );
           expect(avatar.motion.top, greaterThan(geometry.upperCardMotion!.top));
           expect(
             avatar.motion.opacity,
@@ -305,7 +326,9 @@ void main() {
       for (final state in [
         (0.0, 'joined_color'),
         (.1, 'first'),
+        (3.6, 'two_percent'),
         (9.0, 'five'),
+        (18.0, 'ten'),
         (36.0, 'early'),
         (63.0, 'thirty_five'),
         (90.0, 'half'),
@@ -410,6 +433,14 @@ void main() {
                 '../../../goldens/budget_unified_detachment_contours_first.png',
               ),
             );
+          }
+          final contactShadow = find.byKey(
+            const ValueKey<String>('dashboard-header-contact-shadow'),
+          );
+          if (style == DashboardShadowStyle.none || travel == 180) {
+            expect(contactShadow, findsNothing);
+          } else {
+            expect(contactShadow, findsOneWidget);
           }
           expect(tester.takeException(), isNull);
         }

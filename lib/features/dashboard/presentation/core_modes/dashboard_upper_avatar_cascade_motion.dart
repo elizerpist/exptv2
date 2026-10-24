@@ -8,17 +8,22 @@ import '../../../../core/design/header_cascade_motion.dart';
 /// The shared Header cascade remains the geometry authority for the physical
 /// Mother Card and lower analytical content. This adapter samples that same
 /// master progress with a slower collapse separation for just the visual upper
-/// lane: `f(s) = s³`, where `s` is normalized separation. It preserves
-/// both endpoints while holding the avatar row in its readable region longer.
+/// lane: `f(s) = a*s + (1-a)*s³`, where `s` is normalized separation. The
+/// positive linear component starts position, scale and opacity motion on the
+/// first fractional swipe frame, while the cubic component keeps the lane
+/// slower than the lower analytical cascade.
 final class DashboardUpperAvatarCascadeMotion {
   const DashboardUpperAvatarCascadeMotion._();
 
-  static const double separationExponent = 3;
+  /// `f'(0)`. Keep this positive: a pure cubic creates a perceptible initial
+  /// hold even though it is mathematically continuous.
+  static const double initialSlope = .30;
 
   static double retimedSeparation(double separation) {
     final bounded = separation.clamp(0.0, 1.0).toDouble();
     if (bounded == 0 || bounded == 1) return bounded;
-    return math.pow(bounded, separationExponent).toDouble();
+    final cubic = math.pow(bounded, 3).toDouble();
+    return initialSlope * bounded + (1 - initialSlope) * cubic;
   }
 
   static double expansionFor(DashboardLayoutFrame frame) =>

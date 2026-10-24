@@ -1210,7 +1210,9 @@ void main() {
     for (final state in [
       (0.0, 'expanded'),
       (.1, 'first_frame'),
+      (3.6, 'two_percent'),
       (9.0, 'early'),
+      (18.0, 'ten'),
       (63.0, 'thirty_five'),
       (90.0, 'half'),
       (117.0, 'sixty_five'),
@@ -1242,6 +1244,16 @@ void main() {
         ),
       );
       await tester.pump();
+      final header = tester.widget<DashboardCoreModeHeaderScaffold>(
+        find.byType(DashboardCoreModeHeaderScaffold),
+      );
+      expect(
+        header.contactShadowProgress,
+        closeTo(
+          DashboardHeaderContactShadow.progressForSeparation(state.$1 / 180),
+          1e-8,
+        ),
+      );
       final partition = state.$1 < 1
           ? tester.getRect(
               find.byKey(

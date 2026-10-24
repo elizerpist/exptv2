@@ -57,9 +57,11 @@ void main() {
         );
         Element? firstElement;
         String? selectedLabel;
+        Rect? expandedUpperRect;
         var observedReadableCrossing = false;
         for (final separation in [
           0.0,
+          .02,
           .05,
           .10,
           .20,
@@ -163,6 +165,7 @@ void main() {
           final upperRect = tester.getRect(selector);
           final lowerRect = tester.getRect(lowerChart);
           expect(upperRect.isFinite && lowerRect.isFinite, isTrue);
+          expandedUpperRect ??= upperRect;
           if (entry.key == 'month' &&
               (separation == .35 || separation == .50 || separation == .65)) {
             expect(
@@ -187,6 +190,18 @@ void main() {
           );
           expect(opacity.opacity, scope.upperMotion.opacity);
           if (separation > 0 && separation < 1) {
+            expect(
+              upperRect.top,
+              lessThan(expandedUpperRect.top),
+              reason:
+                  'the Balance selector must move on its first fractional swipe frame',
+            );
+            expect(
+              opacity.opacity,
+              lessThan(1),
+              reason:
+                  'the Balance selector must fade on its first fractional swipe frame',
+            );
             expect(
               scope.upperMotion.opacity,
               greaterThan(frame.motherCardCascade.upper.opacity),

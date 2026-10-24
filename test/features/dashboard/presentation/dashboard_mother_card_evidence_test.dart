@@ -97,8 +97,23 @@ void main() {
         ),
       );
       addTearDown(focused.dispose);
+      final progressSamples = stage == 'phase3-shadow-avatar'
+          ? const <double>[
+              0,
+              .02,
+              .05,
+              .10,
+              .20,
+              .35,
+              .50,
+              .65,
+              .80,
+              .95,
+              1,
+            ]
+          : const <double>[0, .05, .2, .35, .5, .65, .8, 1];
       for (final mode in ['budget', 'balance', 'balance-focused', 'mind']) {
-        for (final progress in [0.0, .05, .2, .35, .5, .65, .8, 1.0]) {
+        for (final progress in progressSamples) {
           final travel = progress * 180;
           if (mode.startsWith('balance')) {
             await tester.pumpWidget(

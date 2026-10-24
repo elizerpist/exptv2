@@ -168,6 +168,11 @@ class MindDashboardCoreSurface extends StatelessWidget {
       showsDepth: true,
       showsBorder: true,
       depthProgress: isSeamless ? transition.separation : 1,
+      contactShadowProgress: isSeamless
+          ? DashboardHeaderContactShadow.progressForSeparation(
+              transition.separation,
+            )
+          : 0,
       borderProgress: isSeamless ? transition.separation : 1,
       visualInset: EdgeInsets.zero,
       detail: behavioralScore == null

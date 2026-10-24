@@ -102,3 +102,29 @@ the lower analytical transform continue to consume the original master cascade.
 The inspected 35% and 50% captures show lower content behind visible avatars;
 the 65% capture shows the avatar layer entering the foreground Header's
 occlusion. The two moments are distinct in both Budget and focused Balance.
+
+## Phase 3 — contact-shadow restoration and continuous avatar start
+
+`phase3-shadow-avatar-*` is a rendered Flutter capture at 0%, 2%, 5%, 10%,
+20%, 35%, 50%, 65%, 80%, 95%, and 100% master separation. It covers the
+Mind, Balance, focused Balance, and Budget surfaces; the matching
+`phase3-shadow-avatar-populated-budget-*` sequence uses the nonempty Budget
+avatar rail and two-category distribution. The source tests intentionally
+write PNGs from `RenderRepaintBoundary`; they do not synthesize images from
+the geometry data.
+
+The Header contact layer uses only the active profile's blurred shadow
+components and fades from 36% profile alpha at connection to zero as the
+pre-existing detached Header shadow gains intensity. This avoids both the old
+flat connection and the zero-blur foot's hard divider. The 0%, 2%, and 5%
+Mind/Balance/Budget captures show a soft neutral falloff immediately below the
+Header on the white Mother Card, with no colour bridge or exposed white border.
+
+The upper-lane mapping is now `f(s) = 0.30s + 0.70s³`. Its positive initial
+slope moves and fades Budget avatars and the focused Balance selector from the
+first fractional frame, while `f(s) < s` through the open interval keeps them
+behind the lower analytical lane. The focused Balance 35% image and populated
+Budget 50%/65% images show the analytical content passing beneath still
+visible avatars; the focused Balance 50% and populated Budget 95% images show
+the subsequent Header occlusion. The Mother Card resolver and lower cascade
+are not modified by this phase.

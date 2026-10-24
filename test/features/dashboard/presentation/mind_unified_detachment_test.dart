@@ -153,6 +153,13 @@ void main() {
           expect(header.visualInset, EdgeInsets.zero);
           expect(header.borderSurface, DashboardBorderSurface.header);
           expect(header.depthProgress, closeTo(travel / 180, 1e-8));
+          expect(
+            header.contactShadowProgress,
+            closeTo(
+              DashboardHeaderContactShadow.progressForSeparation(travel / 180),
+              1e-8,
+            ),
+          );
           expect(header.borderProgress, closeTo(travel / 180, 1e-8));
           if (travel == 90) {
             expect(tester.getRect(material).width, lessThan(original.width));
@@ -400,7 +407,9 @@ void main() {
     for (final state in [
       (0.0, 'expanded'),
       (.1, 'first'),
+      (3.6, 'two_percent'),
       (9.0, 'early'),
+      (18.0, 'ten'),
       (63.0, 'thirty_five'),
       (90.0, 'half'),
       (117.0, 'sixty_five'),

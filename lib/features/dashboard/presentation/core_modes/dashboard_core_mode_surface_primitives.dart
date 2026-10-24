@@ -308,6 +308,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     this.showsDepth = true,
     this.showsBorder = true,
     this.depthProgress = 1,
+    this.contactShadowProgress = 0,
     this.borderProgress = 1,
     this.borderSurface = DashboardBorderSurface.header,
     this.visualInset = EdgeInsets.zero,
@@ -334,6 +335,11 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
 
   /// Optional master-driven material intensity; defaults preserve every caller.
   final double depthProgress;
+
+  /// A lower-edge-only contact shadow while the Header and Mother Card are
+  /// physically connected. It deliberately does not replace the Header's
+  /// independent outer depth, which continues to use [depthProgress].
+  final double contactShadowProgress;
   final double borderProgress;
   final DashboardBorderSurface borderSurface;
 
@@ -366,6 +372,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
             showsDepth: showsDepth,
             showsBorder: showsBorder,
             depthProgress: depthProgress,
+            contactShadowProgress: contactShadowProgress,
             borderProgress: borderProgress,
             borderSurface: borderSurface,
             visualInset: visualInset,
@@ -555,6 +562,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     required this.showsDepth,
     required this.showsBorder,
     required this.depthProgress,
+    required this.contactShadowProgress,
     required this.borderProgress,
     required this.borderSurface,
     required this.visualInset,
@@ -569,6 +577,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
   final bool showsDepth;
   final bool showsBorder;
   final double depthProgress;
+  final double contactShadowProgress;
   final double borderProgress;
   final DashboardBorderSurface borderSurface;
   final EdgeInsets visualInset;
@@ -583,19 +592,55 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     final border = DashboardBorderScope.profileOf(
       context,
     ).borderFor(borderSurface);
+    // A zero-blur foot is appropriate for a detached card, but would become a
+    // hard divider at the joined Header/Mother Card contact. Retain only the
+    // active profile's genuinely soft components for the contact handoff.
+    final contactShadows = <BoxShadow>[
+      for (final shadow in depth.outerShadows)
+        if (shadow.blurRadius > 0) shadow,
+    ];
+    final contactExtent = _HeaderContactShadowPainter.extentFor(contactShadows);
+    final showsContactShadow =
+        showsDepth && contactShadowProgress > 0 && contactShadows.isNotEmpty;
+    Widget contactShadow() => Positioned(
+      left: 0,
+      right: 0,
+      top: 0,
+      height: bounds.height + contactExtent,
+      child: IgnorePointer(
+        child: CustomPaint(
+          key: const ValueKey<String>('dashboard-header-contact-shadow'),
+          painter: _HeaderContactShadowPainter(
+            headerHeight: bounds.height,
+            borderRadius: borderRadius,
+            shadows: contactShadows,
+            progress: contactShadowProgress,
+          ),
+        ),
+      ),
+    );
     if (visualController == null || frames == null) {
-      return DashboardPlaceholderCard(
-        bounds: bounds,
-        fillParent: true,
-        semanticKey: semanticKey,
-        surfaceColor: surfaceColor,
-        cornerFamily: DashboardCornerSurfaceFamily.header,
-        borderSurface: borderSurface,
-        borderRadiusOverride: borderRadius,
-        showsDepth: showsDepth,
-        showsBorder: showsBorder,
-        depthProgress: depthProgress,
-        borderProgress: borderProgress,
+      return SizedBox.expand(
+        child: Stack(
+          clipBehavior: Clip.none,
+          fit: StackFit.expand,
+          children: [
+            if (showsContactShadow) contactShadow(),
+            DashboardPlaceholderCard(
+              bounds: bounds,
+              fillParent: true,
+              semanticKey: semanticKey,
+              surfaceColor: surfaceColor,
+              cornerFamily: DashboardCornerSurfaceFamily.header,
+              borderSurface: borderSurface,
+              borderRadiusOverride: borderRadius,
+              showsDepth: showsDepth,
+              showsBorder: showsBorder,
+              depthProgress: depthProgress,
+              borderProgress: borderProgress,
+            ),
+          ],
+        ),
       );
     }
     return SizedBox.expand(
@@ -604,6 +649,11 @@ final class _HeaderPhysicalShell extends StatelessWidget {
         clipBehavior: Clip.none,
         fit: StackFit.expand,
         children: <Widget>[
+          // This lower-only treatment preserves contact depth at the joined
+          // endpoint. It uses the active Header profile, rather than a new
+          // palette or a coloured bridge, and fades out as the independent
+          // Header shadow takes ownership during separation.
+          if (showsContactShadow) contactShadow(),
           // Layer 1: card shadow and border keep their existing geometry.
           FluviRoundedBox(
             color: Colors.transparent,
@@ -688,6 +738,83 @@ final class _HeaderPhysicalShell extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Presentation policy for the physical Header/Mother Card contact. The
+/// independent Header depth is still driven by separation, while this layer
+/// starts visibly connected and yields continuously to that outer shadow.
+final class DashboardHeaderContactShadow {
+  const DashboardHeaderContactShadow._();
+
+  static const double connectedOpacity = .36;
+
+  static double progressForSeparation(double separation) {
+    final bounded = separation.clamp(0.0, 1.0).toDouble();
+    return connectedOpacity * (1 - bounded);
+  }
+}
+
+/// Paints only the soft lower portion of the existing Header shadow profile.
+/// The extended paint box lets the blur fall over the Mother Card even though
+/// the Header itself has its own exact physical bounds.
+final class _HeaderContactShadowPainter extends CustomPainter {
+  const _HeaderContactShadowPainter({
+    required this.headerHeight,
+    required this.borderRadius,
+    required this.shadows,
+    required this.progress,
+  });
+
+  final double headerHeight;
+  final BorderRadius borderRadius;
+  final List<BoxShadow> shadows;
+  final double progress;
+
+  static double extentFor(List<BoxShadow> shadows) => shadows.fold<double>(
+    0,
+    (extent, shadow) => math.max(
+      extent,
+      shadow.offset.dy.abs() +
+          shadow.spreadRadius.abs() +
+          shadow.blurRadius * 2,
+    ),
+  );
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0 || shadows.isEmpty || headerHeight <= 0) return;
+    final headerRect = Rect.fromLTWH(0, 0, size.width, headerHeight);
+    // The Header fill is painted later, so one physical pixel of overlap avoids
+    // a clipped hard edge while retaining only the below-Header shadow raster.
+    canvas.save();
+    canvas.clipRect(
+      Rect.fromLTRB(0, math.max(0, headerHeight - 1), size.width, size.height),
+    );
+    for (final shadow in shadows) {
+      final paint = shadow
+          .copyWith(
+            color: shadow.color.withValues(
+              alpha: (shadow.color.a * progress.clamp(0.0, 1.0)).toDouble(),
+            ),
+            blurStyle: BlurStyle.outer,
+          )
+          .toPaint();
+      canvas.drawRRect(
+        borderRadius.toRRect(
+          headerRect.shift(shadow.offset).inflate(shadow.spreadRadius),
+        ),
+        paint,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeaderContactShadowPainter oldDelegate) =>
+      oldDelegate.headerHeight != headerHeight ||
+      oldDelegate.borderRadius != borderRadius ||
+      oldDelegate.progress != progress ||
+      !listEquals(oldDelegate.shadows, shadows);
 }
 
 /// An edge-masked rendition of the source-defined inner highlight for coloured

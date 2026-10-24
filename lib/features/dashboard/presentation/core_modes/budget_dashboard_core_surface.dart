@@ -299,6 +299,11 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     showsDepth: true,
                     showsBorder: true,
                     depthProgress: unified ? separation : 1,
+                    contactShadowProgress: unified
+                        ? DashboardHeaderContactShadow.progressForSeparation(
+                            separation,
+                          )
+                        : 0,
                     borderProgress: unified ? separation : 1,
                     borderSurface: DashboardBorderSurface.header,
                     visualInset: EdgeInsets.zero,
