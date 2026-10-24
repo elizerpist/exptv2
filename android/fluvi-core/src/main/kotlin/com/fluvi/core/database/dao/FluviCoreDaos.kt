@@ -165,6 +165,9 @@ internal interface FluviPartnerDao {
     @Query("SELECT * FROM fluvi_partners")
     suspend fun allPartners(): List<FluviPartnerEntity>
 
+    @Query("SELECT * FROM fluvi_partner_aliases WHERE partner_id IN (:partnerIds)")
+    suspend fun aliasesForPartnerIds(partnerIds: List<String>): List<FluviPartnerAliasEntity>
+
     @Query(
         """
         SELECT partners.*
@@ -300,6 +303,30 @@ internal interface FluviLedgerDao {
         entryId: String,
         categoryId: String,
         mode: CategoryAssignmentMode,
+        updatedAtUtcMs: Long,
+    ): Int
+
+    @Query(
+        "UPDATE fluvi_ledger_entries SET " +
+            "partner_id = :partnerId, category_id = :categoryId, " +
+            "category_assignment_mode = :categoryAssignmentMode, note = :note, " +
+            "amount_scaled_100 = :amountScaled100, " +
+            "booked_local_epoch_day = :bookedLocalEpochDay, " +
+            "booked_local_time_minutes = :bookedLocalTimeMinutes, " +
+            "occurred_at_utc_ms = :occurredAtUtcMs, updated_at_utc_ms = :updatedAtUtcMs, " +
+            "revision = revision + 1 WHERE id = :entryId AND revision = :expectedRevision",
+    )
+    suspend fun updateEditorEntry(
+        entryId: String,
+        expectedRevision: Long,
+        partnerId: String,
+        categoryId: String,
+        categoryAssignmentMode: CategoryAssignmentMode,
+        note: String?,
+        amountScaled100: Long,
+        bookedLocalEpochDay: Long,
+        bookedLocalTimeMinutes: Int,
+        occurredAtUtcMs: Long,
         updatedAtUtcMs: Long,
     ): Int
 

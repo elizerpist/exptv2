@@ -23,6 +23,11 @@ import '../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
+import '../../features/manual_transactions/data/method_channel_manual_transaction_repository.dart';
+import '../../features/manual_transactions/data/unavailable_manual_transaction_repository.dart';
+import '../../features/manual_transactions/domain/manual_transaction_repository.dart';
+import '../../features/manual_transactions/presentation/creation_selector_sheet.dart';
+import '../../features/manual_transactions/presentation/manual_transaction_editor.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
 import '../../features/dashboard/application/transaction_direction_controller.dart';
@@ -85,6 +90,7 @@ class FluviAppShell extends StatefulWidget {
     this.categoryRepository,
     this.financialLimitRepository,
     this.queryRepository,
+    this.manualTransactionRepository,
     this.initialDate,
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
@@ -98,6 +104,7 @@ class FluviAppShell extends StatefulWidget {
   final CategoryRepository? categoryRepository;
   final FinancialLimitRepository? financialLimitRepository;
   final QueryMenuRepository? queryRepository;
+  final ManualTransactionRepository? manualTransactionRepository;
   final DateTime? initialDate;
   final TimePlane initialPlane;
   final bool initialRailOpen;
@@ -175,6 +182,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   late final DashboardShellPresentationController _shellPresentation;
   late final bool _ownsShellPresentation;
   late final DashboardHeaderVisualController _headerVisualController;
+  late final ManualTransactionRepository _manualTransactionRepository;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
   int _startupAttemptGeneration = 0;
@@ -219,6 +227,11 @@ class _FluviAppShellState extends State<FluviAppShell>
         (kIsWeb
             ? const EmptyCategoryRepository()
             : MethodChannelCategoryRepository());
+    _manualTransactionRepository =
+        widget.manualTransactionRepository ??
+        (kIsWeb
+            ? const UnavailableManualTransactionRepository()
+            : MethodChannelManualTransactionRepository());
     _categoryCollection = CategoryCollectionController(
       repository: _categoryRepository,
       onDiagnostic: _recordCategoryCollectionDiagnostic,
@@ -316,6 +329,75 @@ class _FluviAppShellState extends State<FluviAppShell>
         FluviDiagnosticLogger.log,
       );
     }
+  }
+
+  Future<void> _openCreationSelector() async {
+    final action = await showCreationSelectorSheet(context);
+    if (!mounted || action == null) return;
+    if (action != CreationSelectorAction.manualTransaction) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ez a létrehozási mód még nem érhető el.'),
+        ),
+      );
+      return;
+    }
+    final direction =
+        _controller.transactionDirection.direction ==
+            TransactionDirection.income
+        ? LedgerDirection.income
+        : LedgerDirection.expense;
+    await Navigator.of(context).push<bool>(
+      PageRouteBuilder<bool>(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            ManualTransactionEditor.create(
+              repository: _manualTransactionRepository,
+              categories: _categoryCollection.value,
+              direction: direction,
+            ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
+              child: child,
+            ),
+      ),
+    );
+  }
+
+  Future<void> _openEditTransaction(String entryId) async {
+    await Navigator.of(context).push<bool>(
+      PageRouteBuilder<bool>(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            ManualTransactionEditor.edit(
+              repository: _manualTransactionRepository,
+              categories: _categoryCollection.value,
+              entryId: entryId,
+            ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
+              child: child,
+            ),
+      ),
+    );
   }
 
   @override
@@ -745,6 +827,7 @@ class _FluviAppShellState extends State<FluviAppShell>
                                         _financialLimitRepository,
                                     onBudgetCategoryInputUpdated:
                                         _recordBudgetCategoryRailInputUpdated,
+                                    onEditEntry: _openEditTransaction,
                                     preparedLogBoxRasters:
                                         _preparedLogBoxRasters!,
                                     shellPresentation: _shellPresentation,
@@ -826,6 +909,10 @@ class _FluviAppShellState extends State<FluviAppShell>
                               onChanged: (item) {
                                 if (item == Bnb03Item.search) {
                                   _openQueryMenu();
+                                  return;
+                                }
+                                if (item == Bnb03Item.shop) {
+                                  _openCreationSelector();
                                   return;
                                 }
                                 setState(() => _selectedNavigationItem = item);

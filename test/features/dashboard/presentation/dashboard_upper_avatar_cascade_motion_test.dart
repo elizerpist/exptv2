@@ -99,6 +99,18 @@ void main() {
         closeTo(DashboardUpperAvatarCascadeMotion.initialSlope, .001),
       );
       expect(initialFiniteDifference, greaterThan(.1));
+
+      // The practical early-drag guard: the visible lane must not fall back
+      // to a near-stationary cubic start. It remains behind the raw content
+      // track while travelling a clearly non-zero share of its own track.
+      expect(
+        DashboardUpperAvatarCascadeMotion.retimedSeparation(.02),
+        closeTo(.0110036, 1e-7),
+      );
+      expect(
+        DashboardUpperAvatarCascadeMotion.retimedSeparation(.10),
+        closeTo(.05545, 1e-7),
+      );
     },
   );
 }

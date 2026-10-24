@@ -42,6 +42,9 @@ internal class FluviPartnerRepository(
 
     suspend fun allEntities(): List<FluviPartnerEntity> = partners.allPartners()
 
+    suspend fun aliasesForPartnerIds(partnerIds: Collection<String>): List<FluviPartnerAliasEntity> =
+        if (partnerIds.isEmpty()) emptyList() else partners.aliasesForPartnerIds(partnerIds.toList())
+
     suspend fun requireById(partnerId: String): FluviPartnerEntity = requireNotNull(
         partners.findById(partnerId),
     ) {

@@ -5,11 +5,15 @@ import androidx.test.core.app.ApplicationProvider
 import com.fluvi.core.database.FluviDatabase
 import com.fluvi.core.database.FluviDatabaseFactory
 import com.fluvi.core.model.CategoryAssignmentMode
+import com.fluvi.core.model.CreateManualTransactionCommand
 import com.fluvi.core.model.FluviClock
 import com.fluvi.core.model.FluviIdGenerator
+import com.fluvi.core.model.LedgerRevisionConflictException
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.LedgerCategorySelection
+import com.fluvi.core.model.ManualTransactionPartnerSelection
+import com.fluvi.core.model.UpdateLedgerEntryCommand
 import com.fluvi.core.model.CreateLedgerEntryCommand
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviLedgerDeletionArchiveRepository
@@ -165,10 +169,125 @@ class FluviLedgerWriteUseCaseTest {
         }
     }
 
+    @Test
+    fun manualCreateUsesPartnerDefaultOrEntryOverrideWithoutChangingPartner() = runBlocking {
+        val inherited = ledger.createManual(
+            CreateManualTransactionCommand(
+                partner = ManualTransactionPartnerSelection.Existing(tescoId),
+                categorySelection = LedgerCategorySelection.PartnerDefault,
+                direction = LedgerDirection.expense,
+                amountScaled100 = 12_450L,
+                bookedLocalEpochDay = 20_001L,
+                bookedLocalTimeMinutes = 601,
+                occurredAtUtcMs = 1_700_000_000_001L,
+                note = "Milk",
+            ),
+        )
+        val override = ledger.createManual(
+            CreateManualTransactionCommand(
+                partner = ManualTransactionPartnerSelection.Existing(tescoId),
+                categorySelection = LedgerCategorySelection.EntryOverride(clothesId),
+                direction = LedgerDirection.expense,
+                amountScaled100 = 12_450L,
+                bookedLocalEpochDay = 20_001L,
+                bookedLocalTimeMinutes = 601,
+                occurredAtUtcMs = 1_700_000_000_001L,
+                note = null,
+            ),
+        )
+
+        assertEquals(foodId, inherited.categoryId)
+        assertEquals(CategoryAssignmentMode.partnerDefault, inherited.categoryAssignmentMode)
+        assertEquals(clothesId, override.categoryId)
+        assertEquals(CategoryAssignmentMode.entryOverride, override.categoryAssignmentMode)
+        assertEquals(foodId, database.partnerDao().findById(tescoId)?.defaultCategoryId)
+    }
+
+    @Test
+    fun newPartnerAndManualTransactionRollbackTogetherWhenValidationFails() = runBlocking {
+        val before = partners.listPartners().size
+
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                ledger.createManual(
+                    CreateManualTransactionCommand(
+                        partner = ManualTransactionPartnerSelection.New("Lidl", foodId),
+                        categorySelection = LedgerCategorySelection.PartnerDefault,
+                        direction = LedgerDirection.expense,
+                        amountScaled100 = 0L,
+                        bookedLocalEpochDay = 20_001L,
+                        bookedLocalTimeMinutes = 600,
+                        occurredAtUtcMs = 1_700_000_000_000L,
+                        note = null,
+                    ),
+                )
+            }
+        }
+
+        assertEquals(before, partners.listPartners().size)
+    }
+
+    @Test
+    fun editorUpdateIsAtomicAndPreservesImportedSourceIdentity() = runBlocking {
+        val push = ledger.create(
+            command(
+                selection = LedgerCategorySelection.PartnerDefault,
+                amountScaled100 = 1_000L,
+                bookedLocalTimeMinutes = 600,
+                originKind = LedgerOriginKind.push,
+                notificationInboxId = "notification-1",
+            ),
+        )
+
+        val updated = ledger.updateEntry(
+            UpdateLedgerEntryCommand(
+                entryId = push.id,
+                expectedRevision = push.revision,
+                partner = ManualTransactionPartnerSelection.Existing(tescoId),
+                categorySelection = LedgerCategorySelection.EntryOverride(clothesId),
+                amountScaled100 = 9_999L,
+                bookedLocalEpochDay = 20_123L,
+                bookedLocalTimeMinutes = 777,
+                occurredAtUtcMs = 42L,
+                note = "Edited",
+            ),
+        )
+
+        assertEquals(push.id, updated.id)
+        assertEquals(LedgerOriginKind.push, updated.originKind)
+        assertEquals("notification-1", updated.notificationInboxId)
+        assertEquals(1_700_000_000_000L, updated.occurredAtUtcMs)
+        assertEquals(9_999L, updated.amountScaled100)
+        assertEquals(clothesId, updated.categoryId)
+        assertEquals(CategoryAssignmentMode.entryOverride, updated.categoryAssignmentMode)
+        assertEquals("Edited", updated.note)
+        assertEquals(push.revision + 1L, updated.revision)
+
+        assertThrows(LedgerRevisionConflictException::class.java) {
+            runBlocking {
+                ledger.updateEntry(
+                    UpdateLedgerEntryCommand(
+                        entryId = push.id,
+                        expectedRevision = push.revision,
+                        partner = ManualTransactionPartnerSelection.Existing(tescoId),
+                        categorySelection = LedgerCategorySelection.PartnerDefault,
+                        amountScaled100 = 1L,
+                        bookedLocalEpochDay = 20_000L,
+                        bookedLocalTimeMinutes = 1,
+                        occurredAtUtcMs = 1L,
+                        note = null,
+                    ),
+                )
+            }
+        }
+    }
+
     private fun command(
         selection: LedgerCategorySelection = LedgerCategorySelection.PartnerDefault,
         amountScaled100: Long = 1_000L,
         bookedLocalTimeMinutes: Int = 600,
+        originKind: LedgerOriginKind = LedgerOriginKind.manual,
+        notificationInboxId: String? = null,
     ) = CreateLedgerEntryCommand(
         partnerId = tescoId,
         categorySelection = selection,
@@ -178,8 +297,8 @@ class FluviLedgerWriteUseCaseTest {
         bookedLocalEpochDay = 20_000L,
         bookedLocalTimeMinutes = bookedLocalTimeMinutes,
         occurredAtUtcMs = 1_700_000_000_000L,
-        originKind = LedgerOriginKind.manual,
-        notificationInboxId = null,
+        originKind = originKind,
+        notificationInboxId = notificationInboxId,
     )
 
     private class TestIdGenerator : FluviIdGenerator {

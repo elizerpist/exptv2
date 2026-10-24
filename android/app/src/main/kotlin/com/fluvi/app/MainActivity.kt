@@ -6,10 +6,17 @@ import android.util.Log
 import com.fluvi.core.FluviCore
 import com.fluvi.core.FluviCoreFactory
 import com.fluvi.core.model.FluviCategory
+import com.fluvi.core.model.CreateManualTransactionCommand
+import com.fluvi.core.model.FluviLedgerEntryDetail
+import com.fluvi.core.model.FluviPartnerDirectoryEntry
 import com.fluvi.core.model.FluviFinancialLimitKey
 import com.fluvi.core.model.FluviFinancialLimitPeriod
 import com.fluvi.core.model.FluviFinancialLimitTarget
 import com.fluvi.core.model.LedgerDirection
+import com.fluvi.core.model.LedgerCategorySelection
+import com.fluvi.core.model.ManualTransactionPartnerSelection
+import com.fluvi.core.model.UpdateLedgerEntryCommand
+import com.fluvi.core.model.UpdatePartnerCommand
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
@@ -47,6 +54,7 @@ class MainActivity : FlutterActivity() {
     private val queryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var core: FluviCore? = null
     private var categoryChannel: MethodChannel? = null
+    private var manualTransactionChannel: MethodChannel? = null
     private var financialLimitChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
     private var queryTaskQueue: BinaryMessenger.TaskQueue? = null
@@ -114,6 +122,30 @@ class MainActivity : FlutterActivity() {
                                 null,
                             )
                         }
+                }
+            }
+        }
+        manualTransactionChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            MANUAL_TRANSACTION_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            handleManualTransactionCall(call, fluviCore)
+                        }
+                    }.onSuccess(result::success).onFailure { error ->
+                        result.error(
+                            when (error) {
+                                is com.fluvi.core.model.LedgerRevisionConflictException -> "revision_conflict"
+                                is IllegalArgumentException -> "validation"
+                                else -> "manual_transaction_error"
+                            },
+                            error.message ?: "Manual transaction operation failed.",
+                            null,
+                        )
+                    }
                 }
             }
         }
@@ -400,6 +432,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         categoryChannel?.setMethodCallHandler(null)
+        manualTransactionChannel?.setMethodCallHandler(null)
         categoryChannel = null
         financialLimitChannel?.setMethodCallHandler(null)
         financialLimitChannel = null
@@ -458,6 +491,133 @@ class MainActivity : FlutterActivity() {
         }
         else -> throw IllegalArgumentException("Unknown category method: ${call.method}")
     }
+
+    private suspend fun handleManualTransactionCall(
+        call: MethodCall,
+        fluviCore: FluviCore,
+    ): Any? = when (call.method) {
+        "listPartners" -> fluviCore.partners.listPartners().map(::partnerDirectoryMap)
+        "getPartnerById" -> fluviCore.partners
+            .getPartnerById(requireArgument(call, "partnerId"))
+            ?.let(::partnerDirectoryMap)
+        "getLedgerEntryById" -> ledgerEntryDetailMap(
+            fluviCore.ledger.getLedgerEntryById(requireArgument(call, "entryId")),
+        )
+        "createManualTransaction" -> ledgerEntryDetailMap(
+            fluviCore.ledger.createManual(
+                CreateManualTransactionCommand(
+                    partner = manualPartnerSelection(requireArguments(call)),
+                    categorySelection = categorySelection(requireArguments(call)),
+                    direction = LedgerDirection.valueOf(requireArgument(call, "direction")),
+                    amountScaled100 = requireLong(call, "amountScaled100"),
+                    bookedLocalEpochDay = requireLong(call, "bookedLocalEpochDay"),
+                    bookedLocalTimeMinutes = requireInt(call, "bookedLocalTimeMinutes"),
+                    occurredAtUtcMs = requireLong(call, "occurredAtUtcMs"),
+                    note = call.argument<String>("note"),
+                ),
+            ).let { created -> fluviCore.ledger.getLedgerEntryById(created.id) },
+        )
+        "updateTransaction" -> ledgerEntryDetailMap(
+            fluviCore.ledger.updateEntry(
+                UpdateLedgerEntryCommand(
+                    entryId = requireArgument(call, "entryId"),
+                    expectedRevision = requireLong(call, "expectedRevision"),
+                    partner = manualPartnerSelection(requireArguments(call)),
+                    categorySelection = categorySelection(requireArguments(call)),
+                    amountScaled100 = requireLong(call, "amountScaled100"),
+                    bookedLocalEpochDay = requireLong(call, "bookedLocalEpochDay"),
+                    bookedLocalTimeMinutes = requireInt(call, "bookedLocalTimeMinutes"),
+                    occurredAtUtcMs = requireLong(call, "occurredAtUtcMs"),
+                    note = call.argument<String>("note"),
+                ),
+            ).let { updated -> fluviCore.ledger.getLedgerEntryById(updated.id) },
+        )
+        "updatePartner" -> partnerDirectoryMap(
+            fluviCore.partners.updatePartner(
+                UpdatePartnerCommand(
+                    partnerId = requireArgument(call, "partnerId"),
+                    displayNameOverride = call.argument<String>("displayNameOverride"),
+                    defaultCategoryId = requireArgument(call, "defaultCategoryId"),
+                ),
+            ),
+        )
+        "resolvePartner" -> fluviCore.partners
+            .getPartnerById(requireArgument(call, "partnerId"))
+            ?.let(::partnerDirectoryMap)
+        else -> throw IllegalArgumentException("Unknown manual transaction method: ${call.method}")
+    }
+
+    private fun requireArguments(call: MethodCall): Map<String, Any?> =
+        requireNotNull(call.arguments as? Map<String, Any?>) {
+            "Manual transaction arguments must be a map."
+        }
+
+    private fun manualPartnerSelection(arguments: Map<String, Any?>): ManualTransactionPartnerSelection {
+        val raw = requireNotNull(arguments["partner"] as? Map<*, *>) {
+            "Missing manual transaction partner."
+        }
+        val kind = raw["kind"] as? String ?: throw IllegalArgumentException("Partner kind is required.")
+        return when (kind) {
+            "existing" -> ManualTransactionPartnerSelection.Existing(
+                raw["partnerId"] as? String ?: throw IllegalArgumentException("Partner ID is required."),
+            )
+            "new" -> ManualTransactionPartnerSelection.New(
+                displayName = raw["displayName"] as? String
+                    ?: throw IllegalArgumentException("Partner name is required."),
+                defaultCategoryId = raw["defaultCategoryId"] as? String
+                    ?: throw IllegalArgumentException("Partner default category is required."),
+            )
+            else -> throw IllegalArgumentException("Unknown manual partner kind: $kind")
+        }
+    }
+
+    private fun categorySelection(arguments: Map<String, Any?>): LedgerCategorySelection {
+        val raw = requireNotNull(arguments["categorySelection"] as? Map<*, *>) {
+            "Missing category selection."
+        }
+        return when (raw["mode"] as? String) {
+            "partnerDefault" -> LedgerCategorySelection.PartnerDefault
+            "entryOverride" -> LedgerCategorySelection.EntryOverride(
+                raw["categoryId"] as? String
+                    ?: throw IllegalArgumentException("Override category is required."),
+            )
+            else -> throw IllegalArgumentException("Unknown category selection mode.")
+        }
+    }
+
+    private fun requireLong(call: MethodCall, key: String): Long =
+        (call.argument<Number>(key) ?: throw IllegalArgumentException("Missing $key.")).toLong()
+
+    private fun requireInt(call: MethodCall, key: String): Int =
+        (call.argument<Number>(key) ?: throw IllegalArgumentException("Missing $key.")).toInt()
+
+    private fun partnerDirectoryMap(partner: FluviPartnerDirectoryEntry): Map<String, Any?> = mapOf(
+        "partnerId" to partner.partnerId,
+        "displayName" to partner.displayName,
+        "originalName" to partner.originalName,
+        "defaultCategoryId" to partner.defaultCategoryId,
+        "defaultCategoryName" to partner.defaultCategoryName,
+        "categoryColorId" to partner.categoryColorId,
+        "categoryIconId" to partner.categoryIconId,
+        "isUncategorized" to partner.isUncategorized,
+        "searchNames" to partner.searchNames,
+    )
+
+    private fun ledgerEntryDetailMap(entry: FluviLedgerEntryDetail): Map<String, Any?> = mapOf(
+        "entryId" to entry.entryId,
+        "partnerId" to entry.partnerId,
+        "categoryId" to entry.categoryId,
+        "categoryAssignmentMode" to entry.categoryAssignmentMode.name,
+        "direction" to entry.direction.name,
+        "amountScaled100" to entry.amountScaled100,
+        "bookedLocalEpochDay" to entry.bookedLocalEpochDay,
+        "bookedLocalTimeMinutes" to entry.bookedLocalTimeMinutes,
+        "occurredAtUtcMs" to entry.occurredAtUtcMs,
+        "note" to entry.note,
+        "originKind" to entry.originKind.name,
+        "notificationInboxId" to entry.notificationInboxId,
+        "revision" to entry.revision,
+    )
 
     private suspend fun handleFinancialLimitCall(
         call: MethodCall,
@@ -1148,6 +1308,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         const val CATEGORY_CHANNEL = "com.fluvi/category_repository"
+        const val MANUAL_TRANSACTION_CHANNEL = "com.fluvi/manual_transactions"
         const val FINANCIAL_LIMIT_CHANNEL = "com.fluvi/financial_limits"
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
         const val QUERY_MENU_CHANNEL = "com.fluvi/query_menu"

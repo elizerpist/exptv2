@@ -11,6 +11,7 @@ import com.fluvi.core.model.FluviIdGenerator
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.FluviSystemIds
+import com.fluvi.core.model.UpdatePartnerCommand
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviLedgerRepository
 import com.fluvi.core.repository.FluviPartnerRepository
@@ -108,6 +109,32 @@ class FluviPartnerAndCategoryUseCaseTest {
         assertEquals(transportId, database.partnerDao().findById(tescoId)?.defaultCategoryId)
         assertEquals(1, outbox.pendingFor(inheritedId).size)
         assertTrue(outbox.pendingFor(inheritedId).single().payloadJson.contains(transportId))
+    }
+
+    @Test
+    fun atomicPartnerEditorUpdateRenamesAndRetargetsOnlyInheritedEntries() = runBlocking {
+        val inheritedId = insertEntry(
+            categoryId = foodId,
+            mode = CategoryAssignmentMode.partnerDefault,
+        )
+        val overrideId = insertEntry(
+            categoryId = clothesId,
+            mode = CategoryAssignmentMode.entryOverride,
+        )
+
+        val updated = partners.updatePartner(
+            UpdatePartnerCommand(
+                partnerId = tescoId,
+                displayNameOverride = "Tesco Hypermarket",
+                defaultCategoryId = transportId,
+            ),
+        )
+
+        assertEquals("Tesco Hypermarket", updated.displayName)
+        assertEquals(transportId, updated.defaultCategoryId)
+        assertEquals(transportId, database.ledgerDao().findById(inheritedId)?.categoryId)
+        assertEquals(clothesId, database.ledgerDao().findById(overrideId)?.categoryId)
+        assertTrue(outbox.pendingFor(inheritedId).single().payloadJson.contains("Tesco Hypermarket"))
     }
 
     @Test

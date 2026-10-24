@@ -64,6 +64,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.sceneWindowProvider,
     this.preparedSceneCache,
     this.onEntryTap,
+    this.onEditEntry,
     this.onAvatarTap,
     this.partnerSwipe,
     this.onPartnerFocus,
@@ -109,6 +110,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
   final ValueChanged<String>? onEntryTap;
+  final ValueChanged<String>? onEditEntry;
   final ValueChanged<DashboardLogRowViewModel>? onAvatarTap;
   final DashboardLogBoxPartnerSwipeController? partnerSwipe;
   final Future<bool> Function(DashboardLogRowViewModel row)? onPartnerFocus;
@@ -713,6 +715,7 @@ final class _DashboardLogBoxViewportState
                               sceneWindowProvider: widget.sceneWindowProvider,
                               preparedSceneCache: widget.preparedSceneCache,
                               onEntryTap: widget.onEntryTap,
+                              onEditEntry: widget.onEditEntry,
                               onAvatarTap: widget.onAvatarTap,
                               partnerSwipe: widget.partnerSwipe,
                               onPartnerFocus: widget.onPartnerFocus,
@@ -1699,6 +1702,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.sceneWindowProvider,
     required this.preparedSceneCache,
     required this.onEntryTap,
+    required this.onEditEntry,
     required this.onAvatarTap,
     required this.partnerSwipe,
     required this.onPartnerFocus,
@@ -1737,6 +1741,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
   final ValueChanged<String>? onEntryTap;
+  final ValueChanged<String>? onEditEntry;
   final ValueChanged<DashboardLogRowViewModel>? onAvatarTap;
   final DashboardLogBoxPartnerSwipeController? partnerSwipe;
   final Future<bool> Function(DashboardLogRowViewModel row)? onPartnerFocus;
@@ -2208,6 +2213,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                   sceneWindowProvider: sceneWindowProvider,
                   preparedSceneCache: preparedSceneCache,
                   onEntryTap: onEntryTap,
+                  onEditEntry: onEditEntry,
                   onAvatarTap: onAvatarTap,
                   hitTestController: hitTestController,
                   partnerSwipe: partnerSwipe,

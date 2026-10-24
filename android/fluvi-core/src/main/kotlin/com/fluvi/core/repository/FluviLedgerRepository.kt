@@ -63,6 +63,32 @@ internal class FluviLedgerRepository(
         return requireById(entryId)
     }
 
+    suspend fun updateEditorEntry(
+        entryId: String,
+        expectedRevision: Long,
+        partnerId: String,
+        categoryId: String,
+        categoryAssignmentMode: CategoryAssignmentMode,
+        note: String?,
+        amountScaled100: Long,
+        bookedLocalEpochDay: Long,
+        bookedLocalTimeMinutes: Int,
+        occurredAtUtcMs: Long,
+        updatedAtUtcMs: Long,
+    ): Boolean = ledger.updateEditorEntry(
+        entryId = entryId,
+        expectedRevision = expectedRevision,
+        partnerId = partnerId,
+        categoryId = categoryId,
+        categoryAssignmentMode = categoryAssignmentMode,
+        note = note,
+        amountScaled100 = amountScaled100,
+        bookedLocalEpochDay = bookedLocalEpochDay,
+        bookedLocalTimeMinutes = bookedLocalTimeMinutes,
+        occurredAtUtcMs = occurredAtUtcMs,
+        updatedAtUtcMs = updatedAtUtcMs,
+    ) == 1
+
     suspend fun delete(entryId: String) {
         check(ledger.delete(entryId) == 1) {
             "Ledger delete did not affect exactly one row."

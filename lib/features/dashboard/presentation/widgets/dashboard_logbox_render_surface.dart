@@ -157,6 +157,7 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
     this.sceneWindowProvider,
     this.preparedSceneCache,
     this.onEntryTap,
+    this.onEditEntry,
     this.onAvatarTap,
     this.hitTestController,
     this.partnerSwipe,
@@ -183,6 +184,11 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
   final DashboardLogBoxSceneWindow Function()? sceneWindowProvider;
   final DashboardLogBoxPreparedSceneCache? preparedSceneCache;
   final ValueChanged<String>? onEntryTap;
+
+  /// Opens the shared transaction editor for the row whose painted pencil was
+  /// tapped.  This stays at the one bounded surface level: adding an editor
+  /// action must not create a gesture/widget subtree for every LogBox row.
+  final ValueChanged<String>? onEditEntry;
   final ValueChanged<DashboardLogRowViewModel>? onAvatarTap;
   final DashboardLogBoxSurfaceHitTestController? hitTestController;
   final DashboardLogBoxPartnerSwipeController? partnerSwipe;
@@ -609,6 +615,7 @@ final class _DashboardLogBoxRenderSurfaceState
                               rowTop: hit.rowTop,
                             ) ??
                             false) {
+                          widget.onEditEntry?.call(hit.item.row.entryId);
                           return;
                         }
                         if (hit.avatarBounds.contains(details.localPosition)) {

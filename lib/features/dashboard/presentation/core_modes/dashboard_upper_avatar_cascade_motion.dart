@@ -17,7 +17,10 @@ final class DashboardUpperAvatarCascadeMotion {
 
   /// `f'(0)`. Keep this positive: a pure cubic creates a perceptible initial
   /// hold even though it is mathematically continuous.
-  static const double initialSlope = .30;
+  // A 0.30 slope was mathematically continuous, but a 2–10% drag only moved
+  // the lane by 0.6–3.07% of its track. That reads as a hold on-device. Keep
+  // the track slower than the body while making the first drag frames visible.
+  static const double initialSlope = .55;
 
   static double retimedSeparation(double separation) {
     final bounded = separation.clamp(0.0, 1.0).toDouble();
