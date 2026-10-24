@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
@@ -30,6 +31,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_dashboard_core_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 
+import '../../../support/dashboard_render_resources.dart';
+
 void main() {
   const stage = String.fromEnvironment('MOTHER_CARD_BUDGET_EVIDENCE');
   testWidgets('populated Budget distribution intermediate evidence', (
@@ -40,6 +43,7 @@ void main() {
     await (FontLoader(
       'Inter',
     )..addFont(rootBundle.load('assets/fonts/inter/InterVariable.ttf'))).load();
+    await prepareDashboardTestRenderResources();
     final categories = ValueNotifier<List<FluviCategory>>([
       _category('food', 'Food', 'color_01'),
       _category('rent', 'Rent', 'color_02'),
@@ -83,7 +87,7 @@ void main() {
     addTearDown(drawables.dispose);
     addTearDown(rail.dispose);
     addTearDown(pages.dispose);
-    for (final progress in [0.0, .1 / 180, .05, .35, .5, .65, .95, 1.0]) {
+    for (final progress in [0.0, .20, .35, .50, .65, .80, 1.0]) {
       await tester.pumpWidget(
         MaterialApp(
           theme: ThemeData(fontFamily: 'Inter'),
@@ -97,6 +101,7 @@ void main() {
                 child: Stack(
                   children: [
                     BudgetDashboardCoreSurface(
+                      avatarContentStyle: BudgetAvatarContentStyle.avatarRail,
                       presentation: DashboardCoreModePresentation(
                         geometry: DashboardGeometryResolver.resolve(
                           metrics: DashboardLayoutMetrics.reference,

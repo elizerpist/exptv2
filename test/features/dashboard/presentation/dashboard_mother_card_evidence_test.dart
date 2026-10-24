@@ -52,8 +52,6 @@ void main() {
           chartColor: Colors.white,
         ),
       );
-      addTearDown(visual.dispose);
-      addTearDown(headerFrame.dispose);
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         balance.motherCardComparisonBalanceFixture(),
       );
@@ -183,6 +181,9 @@ void main() {
           });
         }
       }
+      await tester.pumpWidget(const SizedBox.shrink());
+      visual.dispose();
+      headerFrame.dispose();
     },
     skip: const String.fromEnvironment('MOTHER_CARD_EVIDENCE').isEmpty,
   );

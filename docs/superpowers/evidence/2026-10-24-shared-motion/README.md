@@ -66,14 +66,9 @@ reviewed. These populated scenes complement the full empty-ledger dashboard
 captures. The latter preserve real controller topology and controls geometry,
 but cannot independently establish meaningful chart clipping quality.
 
-Final evidence runs succeeded: 24 rich scenes (current Balance, focused Month
-Balance and populated year Mind; eight states each), eight populated Budget
-scenes, and 24 live full-dashboard scenes. Final focused 35%/50%/65% images were
-inspected after the upper-adapter correction: the caption/chart-heading overlap
-is absent, and the selector moves behind the Header earlier than the chart.
-The before/after measurement suite passes three tests, including actual
-adapter/shared-policy parity at eleven normalized states and Summary exclusion
-at the three measured intermediate states.
+The earlier focused captures are retained as timing history. They demonstrate
+the former failure: the selector entered the Header before the lower analytical
+content reached its visual region.
 
 ## Phase 1 — unified Header cleanup
 
@@ -92,3 +87,18 @@ the 20–80% frames have a white Mother Card surface with only the Header's
 soft physical shadow in the detached gap. There is no Header-colour wash,
 white one-pixel visual inset, or default Header outline. The images are
 actual `RenderRepaintBoundary` captures with the Header visual engine active.
+
+## Phase 2 — upper avatar cascade retiming
+
+`phase2-avatar-populated-budget-*` and `phase2-avatar-balance-focused-*` are
+actual Flutter captures at 0%, 20%, 35%, 50%, 65%, 80%, and 100% master
+separation. The Budget capture prepares the production vector atlas and uses a
+nonempty two-category avatar rail; the Balance capture uses the focused Month
+perspective selector and analytical chart.
+
+The shared presentation adapter maps normalized separation as `f(s) = s³`.
+It changes only the upper avatar/perspective lane. The shared Mother Card and
+the lower analytical transform continue to consume the original master cascade.
+The inspected 35% and 50% captures show lower content behind visible avatars;
+the 65% capture shows the avatar layer entering the foreground Header's
+occlusion. The two moments are distinct in both Budget and focused Balance.

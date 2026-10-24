@@ -110,5 +110,61 @@
   {
     "src": "assets/shared-motion/new-balance-focused-100000.png",
     "label": "balance-focused új 100% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-populated-budget-0.png",
+    "label": "phase 2 Budget avatar rail 0%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-populated-budget-20000.png",
+    "label": "phase 2 Budget avatar rail 20%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-populated-budget-35000.png",
+    "label": "phase 2 Budget: chart az avatarok mögött 35%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-populated-budget-50000.png",
+    "label": "phase 2 Budget: chart az avatarok mögött 50%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-populated-budget-65000.png",
+    "label": "phase 2 Budget: avatarok Header-occlusionben 65%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-populated-budget-80000.png",
+    "label": "phase 2 Budget avatar rail 80%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-populated-budget-100000.png",
+    "label": "phase 2 Budget avatar rail 100%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-balance-focused-0.png",
+    "label": "phase 2 focused Balance selector 0%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-balance-focused-20000.png",
+    "label": "phase 2 focused Balance selector 20%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-balance-focused-35000.png",
+    "label": "phase 2 Balance: chart a selector mögött 35%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-balance-focused-50000.png",
+    "label": "phase 2 Balance: chart a selector mögött 50%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-balance-focused-65000.png",
+    "label": "phase 2 Balance: selector Header-occlusionben 65%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-balance-focused-80000.png",
+    "label": "phase 2 focused Balance selector 80%"
+  },
+  {
+    "src": "assets/shared-motion/phase2-avatar-balance-focused-100000.png",
+    "label": "phase 2 focused Balance selector 100%"
   }
 ]

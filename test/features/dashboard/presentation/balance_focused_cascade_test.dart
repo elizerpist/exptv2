@@ -5,6 +5,7 @@ import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_focused_cascade.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_unified_mother_card_geometry.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_upper_avatar_cascade_motion.dart';
 
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
@@ -55,9 +56,8 @@ void main() {
           ),
         );
         Element? firstElement;
-        Rect? expanded;
-        Rect? expandedChart;
         String? selectedLabel;
+        var observedReadableCrossing = false;
         for (final separation in [
           0.0,
           .05,
@@ -162,37 +162,18 @@ void main() {
           );
           final upperRect = tester.getRect(selector);
           final lowerRect = tester.getRect(lowerChart);
-          final lowerOrigin = MatrixUtils.transformPoint(
-            geometry.contentTransform,
-            Offset(frame.headerBounds.left, frame.headerBounds.bottom),
-          ).dy;
-          expect(
-            upperRect.top,
-            closeTo(
-              lowerOrigin +
-                  frame.motherCardCascade.upper.top -
-                  frame.motherCardCascadeGeometry.upperExpandedTop +
-                  12 * scope.upperTransform.storage[0],
-              1e-7,
-            ),
-          );
           expect(upperRect.isFinite && lowerRect.isFinite, isTrue);
-          if (separation == 0) expandedChart ??= lowerRect;
           if (entry.key == 'month' &&
-              (separation == .35 || separation == .50)) {
-            final upperDisplacement = expanded!.top - upperRect.top;
-            final lowerDisplacement = expandedChart!.top - lowerRect.top;
+              (separation == .35 || separation == .50 || separation == .65)) {
             expect(
-              upperDisplacement,
-              greaterThan(lowerDisplacement),
+              scope.upperMotion.top,
+              greaterThan(frame.motherCardCascade.upper.top),
               reason:
-                  'the selector must advance before the chart at $separation',
+                  'the selector must remain below its original upper-track position at $separation',
             );
-            expect(
-              lowerRect.top - upperRect.bottom,
-              greaterThanOrEqualTo(expandedChart.top - expanded.bottom),
-              reason: 'the chart must not overtake the selector caption',
-            );
+            observedReadableCrossing |=
+                lowerRect.top < upperRect.bottom &&
+                scope.upperMotion.opacity > .1;
           }
 
           if (separation > 0 && separation < .8) {
@@ -204,12 +185,22 @@ void main() {
           final opacity = tester.widget<BalanceCascadeOpacity>(
             find.byKey(const ValueKey('balance-upper-cascade-opacity')),
           );
-          expect(opacity.opacity, frame.motherCardCascade.upper.opacity);
-          if (separation == 0) {
-            expanded ??= tester.getRect(selector);
-            expect(tester.getRect(selector), expanded);
+          expect(opacity.opacity, scope.upperMotion.opacity);
+          if (separation > 0 && separation < 1) {
+            expect(
+              scope.upperMotion.opacity,
+              greaterThan(frame.motherCardCascade.upper.opacity),
+            );
           }
           expect(tester.takeException(), isNull);
+        }
+        if (entry.key == 'month') {
+          expect(
+            observedReadableCrossing,
+            isTrue,
+            reason:
+                'At least one intermediate frame must show lower content beneath a still-visible selector.',
+          );
         }
         settings
           ..setSumLayoutPresentation(BalanceSumLayoutPresentation.current)
@@ -267,8 +258,14 @@ void main() {
               expect(actual.storage[i], closeTo(expected.storage[i], 1e-8));
             }
             expect(
-              frame.motherCardCascade.upper.opacity,
-              closeTo(1 - separation, 1e-8),
+              scope.upperMotion.opacity,
+              closeTo(
+                1 -
+                    DashboardUpperAvatarCascadeMotion.retimedSeparation(
+                      separation,
+                    ),
+                1e-8,
+              ),
             );
             if (separation > 0 && separation < .8) {
               expect(
@@ -348,7 +345,10 @@ void main() {
         );
         expect(
           opacity.opacity,
-          closeTo(frame.motherCardCascade.upper.opacity, 1e-8),
+          closeTo(
+            DashboardUpperAvatarCascadeMotion.resolve(frame).opacity,
+            1e-8,
+          ),
         );
         final lowerOpacity = tester.widget<BalanceCascadeOpacity>(
           find

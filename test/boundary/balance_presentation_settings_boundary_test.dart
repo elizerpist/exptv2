@@ -13,7 +13,7 @@ void main() {
     );
     expect(
       budgetSurface,
-      contains('borderSurface: DashboardBorderSurface.budgetHeader'),
+      contains('borderSurface: DashboardBorderSurface.header'),
     );
   });
 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/header_cascade_motion.dart';
+import 'dashboard_upper_avatar_cascade_motion.dart';
 
 /// One master frame supplies the accepted lower transform and upper cascade.
 /// No layout measurements, controllers or independently eased tracks are used.
@@ -19,25 +21,39 @@ class BalanceFocusedCascadeScope extends InheritedWidget {
   static BalanceFocusedCascadeScope? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<BalanceFocusedCascadeScope>();
 
+  CascadedCardMotion get upperMotion =>
+      DashboardUpperAvatarCascadeMotion.resolve(frame);
+
   Matrix4 get upperTransform {
     if (frame.headerExpansionProgress == 1) return Matrix4.identity();
-    final motion = frame.motherCardCascade.upper;
+    final motion = upperMotion;
     final header = frame.headerBounds;
     final canvasWidth = header.width + 2 * header.left;
     final layoutWidth = canvasWidth - motion.left - motion.right;
     final scale = layoutWidth * motion.scale / header.width;
     final left = motion.left + layoutWidth * (1 - motion.scale) / 2;
-    // Adapt the Budget upper cascade to Balance's preserved analytical
-    // coordinate system. Both groups inherit its full accepted moving origin;
-    // the selector adds the upper cascade displacement independently. Using
-    // only the physical anchor here lets the lower chart overtake its caption.
-    // Inset, scale and opacity remain the unmodified upper cascade values.
-    final lowerContentOrigin = MatrixUtils.transformPoint(
-      lowerTransform,
-      Offset(header.left, header.bottom),
-    ).dy;
+    // The lower analytical subtree keeps [lowerTransform] exactly as authored.
+    // The selector samples its complete lower-cascade origin at the retimed
+    // separation, including the lower lane's own shift. That prevents the
+    // inherited lower transform from pulling the avatar row under the Header
+    // before the content/selector crossing is visible.
+    final visualSeparation =
+        DashboardUpperAvatarCascadeMotion.retimedSeparation(
+          1 - frame.headerExpansionProgress,
+        );
+    final visualLower = HeaderCascadeMotion.calculate(
+      masterProgress: 1 - visualSeparation,
+      geometry: frame.motherCardCascadeGeometry,
+    ).lower;
+    final visualTargetTop =
+        visualLower.top + frame.modeContentBounds.top - frame.zone2Bounds.top;
+    final visualZone2Shift = visualLower.top - frame.zone2Bounds.top;
+    final visualLowerContentOrigin =
+        header.bottom +
+        (visualTargetTop - header.bottom) * visualSeparation +
+        visualZone2Shift;
     final upperContentOrigin =
-        lowerContentOrigin +
+        visualLowerContentOrigin +
         motion.top -
         frame.motherCardCascadeGeometry.upperExpandedTop;
     return Matrix4.identity()
@@ -123,14 +139,15 @@ class BalanceFocusedCascadeColumn extends StatelessWidget {
       return lower(child);
     }
 
-    return Column(
+    return _BalanceFocusedCascadePaintColumn(
+      key: const ValueKey('balance-focused-cascade-paint-order'),
       crossAxisAlignment: crossAxisAlignment,
       children: [
         for (var i = 0; i < children.length; i++)
           if (i == 0)
             BalanceCascadeOpacity(
               key: const ValueKey('balance-upper-cascade-opacity'),
-              opacity: scope?.frame.motherCardCascade.upper.opacity ?? 1,
+              opacity: scope?.upperMotion.opacity ?? 1,
               child: Transform(
                 key: const ValueKey('balance-upper-cascade-transform'),
                 alignment: Alignment.topLeft,
@@ -143,6 +160,92 @@ class BalanceFocusedCascadeColumn extends StatelessWidget {
             preserveFlex(children[i]),
       ],
     );
+  }
+}
+
+/// Retains the authored Flex layout and child identity while painting the first
+/// selector child after the lower analytical children. The visual order is
+/// therefore Mother Card → lower content → selector; the Header remains a
+/// later sibling of the entire Balance content layer.
+final class _BalanceFocusedCascadePaintColumn extends Column {
+  const _BalanceFocusedCascadePaintColumn({
+    super.key,
+    required super.children,
+    required super.crossAxisAlignment,
+  });
+
+  @override
+  RenderFlex createRenderObject(BuildContext context) =>
+      _RenderBalanceFocusedCascadePaintColumn(
+        direction: direction,
+        mainAxisAlignment: mainAxisAlignment,
+        mainAxisSize: mainAxisSize,
+        crossAxisAlignment: crossAxisAlignment,
+        textDirection: getEffectiveTextDirection(context),
+        verticalDirection: verticalDirection,
+        textBaseline: textBaseline,
+        clipBehavior: clipBehavior,
+        spacing: spacing,
+      );
+}
+
+final class _RenderBalanceFocusedCascadePaintColumn extends RenderFlex {
+  _RenderBalanceFocusedCascadePaintColumn({
+    required super.direction,
+    required super.mainAxisAlignment,
+    required super.mainAxisSize,
+    required super.crossAxisAlignment,
+    required super.textDirection,
+    required super.verticalDirection,
+    required super.textBaseline,
+    required super.clipBehavior,
+    required super.spacing,
+  });
+
+  void _paintChild(PaintingContext context, Offset offset, RenderBox child) {
+    final parentData = child.parentData! as FlexParentData;
+    context.paintChild(child, parentData.offset + offset);
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final upper = firstChild;
+    for (
+      RenderBox? child = upper == null ? null : childAfter(upper);
+      child != null;
+      child = childAfter(child)
+    ) {
+      _paintChild(context, offset, child);
+    }
+    if (upper != null) _paintChild(context, offset, upper);
+  }
+
+  bool _hitTestChild(
+    BoxHitTestResult result,
+    Offset position,
+    RenderBox child,
+  ) {
+    final parentData = child.parentData! as FlexParentData;
+    return result.addWithPaintOffset(
+      offset: parentData.offset,
+      position: position,
+      hitTest: (result, transformed) =>
+          child.hitTest(result, position: transformed),
+    );
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    final upper = firstChild;
+    if (upper != null && _hitTestChild(result, position, upper)) return true;
+    for (
+      RenderBox? child = lastChild;
+      child != null && child != upper;
+      child = childBefore(child)
+    ) {
+      if (_hitTestChild(result, position, child)) return true;
+    }
+    return false;
   }
 }
 

@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.
 import 'package:fluvi/features/dashboard/presentation/budget_section_order.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_upper_avatar_cascade_motion.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
@@ -211,6 +212,78 @@ void main() {
             );
             expect(tester.takeException(), isNull);
           }
+        }
+      }
+    },
+  );
+  testWidgets(
+    'Budget applies the shared retiming only to its upper avatar layers',
+    (tester) async {
+      for (final collapse in [
+        0.0,
+        9.0,
+        36.0,
+        63.0,
+        90.0,
+        117.0,
+        144.0,
+        171.0,
+        180.0,
+      ]) {
+        await pump(
+          tester,
+          collapse,
+          style: BudgetAvatarContentStyle.avatarRail,
+        );
+        final avatar = tester.widget<DashboardCoreModeCascadeCard>(
+          find
+              .ancestor(
+                of: find.byKey(
+                  const ValueKey('dashboard-core-mode-budget-card-1'),
+                ),
+                matching: find.byType(DashboardCoreModeCascadeCard),
+              )
+              .first,
+        );
+        final backplate = tester.widget<DashboardCoreModeCascadeCard>(
+          find
+              .ancestor(
+                of: find.byKey(
+                  const ValueKey('budget-avatar-content-rail-backplate'),
+                ),
+                matching: find.byType(DashboardCoreModeCascadeCard),
+              )
+              .first,
+        );
+        final lower = tester.widget<DashboardCoreModeCascadeCard>(
+          find
+              .ancestor(
+                of: find.byKey(
+                  const ValueKey('dashboard-core-mode-budget-card-2'),
+                ),
+                matching: find.byType(DashboardCoreModeCascadeCard),
+              )
+              .first,
+        );
+        final geometry = frame(collapse);
+        final expectedUpper = DashboardUpperAvatarCascadeMotion.resolve(
+          geometry,
+        );
+        expect(avatar.motion.top, closeTo(expectedUpper.top, 1e-8));
+        expect(avatar.motion.opacity, closeTo(expectedUpper.opacity, 1e-8));
+        expect(backplate.motion.top, closeTo(avatar.motion.top, 1e-8));
+        expect(backplate.motion.opacity, closeTo(avatar.motion.opacity, 1e-8));
+        expect(lower.motion.top, closeTo(geometry.lowerCardMotion!.top, 1e-8));
+        expect(
+          lower.motion.opacity,
+          closeTo(geometry.lowerCardMotion!.opacity, 1e-8),
+        );
+        if (collapse > 0 && collapse < 180) {
+          expect(avatar.motion.top, greaterThan(geometry.upperCardMotion!.top));
+          expect(
+            avatar.motion.opacity,
+            greaterThan(geometry.upperCardMotion!.opacity),
+          );
         }
       }
     },

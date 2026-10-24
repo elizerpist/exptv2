@@ -1,1 +1,64 @@
-<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="prototype-id" content="fluvi-balance-carousel-recovery/mind-balance-continuous-motion"><meta name="prototype-status" content="current"><title>Közös Mother Card cascade</title><style>body{font:16px/1.5 system-ui;background:#eef2fa;color:#183052;margin:24px}main{max-width:1100px;margin:auto}.layers{display:flex;gap:16px;flex-wrap:wrap}.layers article{background:white;padding:20px;border-radius:20px;flex:1;min-width:220px}img{max-width:100%;background:white}a{color:#6647bb}input{width:90%}.gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}figure{margin:0}svg{width:100%;height:230px}</style></head><body><main><a href="../fluvi-balance-carousel-recovery-prototypes-index.html">Prototípus-katalógus</a><h1>Budget / Balance / Mind — közös Mother Card cascade</h1><p>A Budget elfogadott animációjának elvei: egyetlen master progress, állandó tartalmi subtree, külön fizikai anyag és belső mozgás. Az alábbi vázlat a rétegeket magyarázza; a Flutter-képek adják az ellenőrzési bizonyítékot.</p><div class="layers"><article><h2>1. Fizikai kártya</h2><p>Folyamatos top / bottom / szélesség. A nyíló résben nincs fehér háttérlemez.</p></article><article><h2>2. Felső avatarok</h2><p>Budget és Balance: korábban induló upper cascade, önálló pozíció, skála és opacitás.</p></article><article><h2>3. Alsó tartalom</h2><p>Saját, progressből származó slide és scale. Ugyanaz az interaktív heatmap vagy Balance-analitika marad a fában.</p></article><article><h2>4. Header elöl</h2><p>A belső sarkok, keret és árnyék a leválással együtt erősödnek.</p></article></div><label>Geometriai rétegvázlat — leválás <input id="progress" type="range" min="0" max="100" value="0"></label><svg viewBox="0 0 420 230"><rect id="body" x="40" y="65" width="340" height="145" rx="0" fill="white" stroke="#ccd6e6"/><g id="upper" fill="#9179d3"><circle cx="110" cy="90" r="13"/><circle cx="210" cy="90" r="16"/><circle cx="310" cy="90" r="13"/></g><g id="content"><rect x="65" y="115" width="185" height="40" rx="10" fill="#e4dcfb"/><rect x="265" y="115" width="90" height="40" rx="10" fill="#d3efeb"/><rect x="65" y="165" width="290" height="25" rx="8" fill="#f5dfe9"/></g><rect id="header" x="40" y="15" width="340" height="50" rx="16" fill="#b4b4ef"/></svg><h2>Flutter ellenőrzési képek — korábbi referencia és új köztes állapotok</h2><div class="gallery" id="gallery"></div><script>const q=document.querySelector.bind(document);q('#progress').oninput=e=>{let p=e.target.value/100;let b=q('#body');b.setAttribute('x',40+20*p);b.setAttribute('width',340-40*p);b.setAttribute('y',65-55*p);b.setAttribute('height',145-100*p);b.setAttribute('rx',16*p);q('#content').setAttribute('transform',`translate(${p*20},${-p*35}) scale(${1-p*.08})`);q('#content').setAttribute('opacity',1-p);q('#upper').setAttribute('transform',`translate(${p*25},${-p*90}) scale(${1-p*.12})`);q('#upper').setAttribute('opacity',Math.max(0,1-p*1.8))};fetch('evidence.json').then(r=>r.json()).then(items=>q('#gallery').innerHTML=items.map(i=>`<figure><img src="${i.src}" alt="${i.label}"><figcaption>${i.label}</figcaption></figure>`).join('')).catch(()=>{});</script></main></body></html>
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="prototype-id" content="fluvi-balance-carousel-recovery/mind-balance-continuous-motion">
+  <meta name="prototype-status" content="current">
+  <title>Közös Mother Card cascade</title>
+  <style>
+    body { margin: 24px; background: #eef2fa; color: #183052; font: 16px/1.5 system-ui; }
+    main { max-width: 1100px; margin: auto; }
+    .layers { display: flex; flex-wrap: wrap; gap: 16px; }
+    .layers article { min-width: 220px; flex: 1; padding: 20px; border-radius: 20px; background: white; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+    figure { margin: 0; }
+    img { max-width: 100%; background: white; }
+    a { color: #6647bb; }
+    input { width: 90%; }
+    svg { width: 100%; height: 230px; }
+  </style>
+</head>
+<body>
+<main>
+  <a href="../fluvi-balance-carousel-recovery-prototypes-index.html">Prototípus-katalógus</a>
+  <h1>Budget / Balance / Mind — közös Mother Card cascade</h1>
+  <p>Az elfogadott fizikai Mother Card egy master progressből mozog. A Flutter-képek a tényleges ellenőrzési bizonyítékok.</p>
+  <div class="layers">
+    <article><h2>1. Fizikai kártya</h2><p>Folyamatos top, bottom és szélesség. A nyíló résben nincs világos színátmeneti sáv.</p></article>
+    <article><h2>2. Felső avatarok</h2><p>Budget és Balance esetén csak a felső vizuális track lassul. A chart fölött marad, majd a Header mögé fut.</p></article>
+    <article><h2>3. Alsó tartalom</h2><p>Saját, változatlan slide és scale pályát követ.</p></article>
+    <article><h2>4. Header elöl</h2><p>A Header árnyéka a Mother Card felületére esik, maga a Header marad a legfelső réteg.</p></article>
+  </div>
+  <label>Geometriai rétegvázlat — leválás <input id="progress" type="range" min="0" max="100" value="0"></label>
+  <svg viewBox="0 0 420 230" aria-label="Rétegvázlat">
+    <rect id="body" x="40" y="65" width="340" height="145" rx="0" fill="white" stroke="#ccd6e6"/>
+    <g id="content"><rect x="65" y="115" width="185" height="40" rx="10" fill="#e4dcfb"/><rect x="265" y="115" width="90" height="40" rx="10" fill="#d3efeb"/><rect x="65" y="165" width="290" height="25" rx="8" fill="#f5dfe9"/></g>
+    <g id="upper" fill="#9179d3"><circle cx="110" cy="90" r="13"/><circle cx="210" cy="90" r="16"/><circle cx="310" cy="90" r="13"/></g>
+    <rect id="header" x="40" y="15" width="340" height="50" rx="16" fill="#b4b4ef"/>
+  </svg>
+  <h2>Flutter ellenőrzési képek</h2>
+  <div class="gallery" id="gallery"></div>
+</main>
+<script>
+  const q = document.querySelector.bind(document);
+  q('#progress').oninput = event => {
+    const p = event.target.value / 100;
+    const upperP = p * p * p;
+    const body = q('#body');
+    body.setAttribute('x', 40 + 20 * p);
+    body.setAttribute('width', 340 - 40 * p);
+    body.setAttribute('y', 65 - 55 * p);
+    body.setAttribute('height', 145 - 100 * p);
+    body.setAttribute('rx', 16 * p);
+    q('#content').setAttribute('transform', `translate(${p * 20},${-p * 35}) scale(${1 - p * .08})`);
+    q('#content').setAttribute('opacity', 1 - p);
+    q('#upper').setAttribute('transform', `translate(${upperP * 25},${-upperP * 90}) scale(${1 - upperP * .12})`);
+    q('#upper').setAttribute('opacity', Math.max(0, 1 - upperP * 1.8));
+  };
+  fetch('evidence.json').then(response => response.json()).then(items => {
+    q('#gallery').innerHTML = items.map(item => `<figure><img src="${item.src}" alt="${item.label}"><figcaption>${item.label}</figcaption></figure>`).join('');
+  });
+</script>
+</body>
+</html>

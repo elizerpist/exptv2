@@ -47,6 +47,7 @@ import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
 import 'dashboard_header_visual_engine.dart';
+import 'dashboard_upper_avatar_cascade_motion.dart';
 
 // In the production diagnostic route, DashboardHeaderContrastText keeps its
 // existing identity-sensitive foreground painter so the outer phase probe can
@@ -122,6 +123,9 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
             avatarContentStyle == BudgetAvatarContentStyle.overlappingGlow
             ? _selectedAvatarAccent(context)
             : null;
+        final upperAvatarMotion = DashboardUpperAvatarCascadeMotion.resolve(
+          geometry,
+        );
         return KeyedSubtree(
           key: const ValueKey('dashboard-core-mode-budget'),
           child: Stack(
@@ -139,7 +143,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                   child: DashboardCoreModeCascadeCard(
                     bounds: section.avatarBounds,
                     motion: section.motionFor(
-                      geometry.upperCardMotion!,
+                      upperAvatarMotion,
                       from: geometry.subheaderOneBounds,
                       to: section.avatarBounds,
                     ),
@@ -201,7 +205,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                   builder: (context, layout, _) => DashboardCoreModeCascadeCard(
                     bounds: section.avatarBounds,
                     motion: section.motionFor(
-                      geometry.upperCardMotion!,
+                      upperAvatarMotion,
                       from: geometry.subheaderOneBounds,
                       to: section.avatarBounds,
                     ),
