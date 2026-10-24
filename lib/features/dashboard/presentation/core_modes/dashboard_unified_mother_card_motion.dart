@@ -28,7 +28,6 @@ final class DashboardUnifiedMotherCardMotion {
     required this.contentScale,
     required this.bodyOpacity,
     required this.shape,
-    required this.bridgeHeight,
   });
 
   final double separation;
@@ -36,7 +35,7 @@ final class DashboardUnifiedMotherCardMotion {
   final Rect detachedTargetBounds, bodyBounds, visibleBodyBounds;
   final Rect contentMotionBounds;
   final Matrix4 contentTransform;
-  final double contentScale, bodyOpacity, bridgeHeight;
+  final double contentScale, bodyOpacity;
   final DashboardHeaderContentSeamShape shape;
   Rect get paintBounds => headerBounds.expandToInclude(visibleBodyBounds);
   double get depthProgress => separation;
@@ -162,11 +161,6 @@ final class DashboardUnifiedMotherCardMotion {
         contentRadius: contentRadius,
         expansionProgress: 1 - s,
       ),
-      bridgeHeight:
-          (spec.upperExpandedTop - header.bottom + 34)
-              .clamp(0.0, visible.height)
-              .toDouble() *
-          (1 - s),
     );
   }
 

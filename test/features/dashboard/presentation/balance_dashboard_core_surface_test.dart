@@ -3,6 +3,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_border_profile.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
@@ -1408,6 +1409,14 @@ void main() {
               }
               final header = tester.widget<DashboardCoreModeHeaderScaffold>(
                 find.byType(DashboardCoreModeHeaderScaffold),
+              );
+              expect(header.visualInset, EdgeInsets.zero);
+              expect(header.borderSurface, DashboardBorderSurface.header);
+              expect(
+                find.byKey(
+                  const ValueKey('balance-unified-header-color-bleed'),
+                ),
+                findsNothing,
               );
               expect(header.depthProgress, closeTo(fraction, 1e-8));
               expect(header.borderProgress, closeTo(fraction, 1e-8));

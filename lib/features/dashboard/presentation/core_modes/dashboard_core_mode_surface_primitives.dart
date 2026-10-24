@@ -310,7 +310,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     this.depthProgress = 1,
     this.borderProgress = 1,
     this.borderSurface = DashboardBorderSurface.header,
-    this.visualInset = const EdgeInsets.all(1),
+    this.visualInset = EdgeInsets.zero,
   });
 
   final DashboardBounds bounds;
@@ -337,9 +337,9 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final double borderProgress;
   final DashboardBorderSurface borderSurface;
 
-  /// Keeps the animated material inside a physical card seam where required.
-  /// A linked Budget Header deliberately selects zero so its palette fills the
-  /// unified Mother Card rather than exposing that white parent seam.
+  /// The animated Header material reaches the exact physical edge. The Header
+  /// owns its clip, so a presentation must not expose a neutral inset between
+  /// the dynamic palette and its physical shell.
   final EdgeInsets visualInset;
 
   @override
@@ -353,6 +353,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     return DashboardCoreModeFramePosition(
       bounds: bounds,
       child: Stack(
+        clipBehavior: Clip.none,
         fit: StackFit.expand,
         children: [
           _HeaderPhysicalShell(
@@ -600,6 +601,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     return SizedBox.expand(
       key: semanticKey,
       child: Stack(
+        clipBehavior: Clip.none,
         fit: StackFit.expand,
         children: <Widget>[
           // Layer 1: card shadow and border keep their existing geometry.

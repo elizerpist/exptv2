@@ -156,7 +156,6 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 builder: (context, layout, _) => _BudgetUnifiedContentCard(
                   geometry: geometry,
                   contentLayout: layout,
-                  headerVisualFrame: headerVisualFrame,
                 ),
               ),
               _BudgetMotherCardContentClip(
@@ -297,7 +296,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     showsBorder: true,
                     depthProgress: unified ? separation : 1,
                     borderProgress: unified ? separation : 1,
-                    borderSurface: DashboardBorderSurface.budgetHeader,
+                    borderSurface: DashboardBorderSurface.header,
                     visualInset: EdgeInsets.zero,
                     // The source title starts at x=20/y=16. Text keeps the
                     // existing tuner/menu clearance internally; the partition
@@ -695,11 +694,9 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
   const _BudgetUnifiedContentCard({
     required this.geometry,
     required this.contentLayout,
-    required this.headerVisualFrame,
   });
   final DashboardLayoutFrame geometry;
   final BudgetContentLayout contentLayout;
-  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
 
   @override
   Widget build(BuildContext context) {
@@ -781,17 +778,6 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
                       borderRadiusOverride: transition.shape.contentRadius,
                       depthProgress: transition.separation,
                       borderProgress: transition.separation,
-                      child: ClipRRect(
-                        borderRadius: transition.shape.contentRadius,
-                        child: Opacity(
-                          opacity: 1 - transition.separation,
-                          child: _BudgetUnifiedHeaderContentBridge(
-                            headerHeight: 0,
-                            bridgeHeight: transition.bridgeHeight,
-                            headerVisualFrame: headerVisualFrame,
-                          ),
-                        ),
-                      ),
                     ),
                   ),
                 ),
@@ -922,57 +908,6 @@ final class _BudgetJoinedPerimeterPainter extends CustomPainter {
       !listEquals(old.shadows, shadows) ||
       old.border != border ||
       old.headerBase != headerBase;
-}
-
-/// The shared card stays white like Budget's existing body. This shallow,
-/// non-interactive bridge carries only a small amount of the live Header
-/// colour past the radius-free seam, mirroring Mind's seamless language.
-final class _BudgetUnifiedHeaderContentBridge extends StatelessWidget {
-  const _BudgetUnifiedHeaderContentBridge({
-    required this.headerHeight,
-    required this.bridgeHeight,
-    required this.headerVisualFrame,
-  });
-
-  final double headerHeight;
-  final double bridgeHeight;
-  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
-
-  @override
-  Widget build(BuildContext context) {
-    final frames = headerVisualFrame;
-    if (frames == null || bridgeHeight <= 0) return const SizedBox.expand();
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        Positioned(
-          left: 0,
-          right: 0,
-          top: headerHeight,
-          height: bridgeHeight,
-          child: IgnorePointer(
-            child: ValueListenableBuilder<DashboardHeaderVisualFrame>(
-              valueListenable: frames,
-              builder: (context, frame, _) => DecoratedBox(
-                key: const ValueKey('budget-unified-header-color-bleed'),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: <Color>[
-                      frame.colorB.withValues(alpha: .14),
-                      frame.colorA.withValues(alpha: .04),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 final ValueListenable<BudgetContentLayout> _alwaysUnifiedBudgetContent =

@@ -74,3 +74,21 @@ is absent, and the selector moves behind the Header earlier than the chart.
 The before/after measurement suite passes three tests, including actual
 adapter/shared-policy parity at eleven normalized states and Summary exclusion
 at the three measured intermediate states.
+
+## Phase 1 — unified Header cleanup
+
+`phase1-header-*` is a 32-frame rendered Flutter capture from the cleanup
+branch. Each of Budget, Balance, focused Balance, and Mind has the same
+dynamic plum Header frame at 0%, 5%, 20%, 35%, 50%, 65%, 80%, and 100%
+master separation. It is generated with:
+
+```sh
+flutter test --dart-define=MOTHER_CARD_EVIDENCE=phase1-header \
+  test/features/dashboard/presentation/dashboard_mother_card_evidence_test.dart
+```
+
+The inspected 0% contact frames have one continuous Header/Card boundary;
+the 20–80% frames have a white Mother Card surface with only the Header's
+soft physical shadow in the detached gap. There is no Header-colour wash,
+white one-pixel visual inset, or default Header outline. The images are
+actual `RenderRepaintBoundary` captures with the Header visual engine active.

@@ -169,6 +169,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
       showsBorder: true,
       depthProgress: isSeamless ? transition.separation : 1,
       borderProgress: isSeamless ? transition.separation : 1,
+      visualInset: EdgeInsets.zero,
       detail: behavioralScore == null
           ? null
           : _MindHeaderScoreDetail(
@@ -193,7 +194,6 @@ class MindDashboardCoreSurface extends StatelessWidget {
               transition: transition,
               bounds: bodyBounds,
               dotsBounds: geometry.zone2IndicatorBounds,
-              headerVisualFrame: headerVisualFrame,
               body: _bodyChild(),
             )
           else
@@ -451,12 +451,10 @@ final class _MindMovingContent extends StatelessWidget {
     required this.transition,
     required this.bounds,
     required this.dotsBounds,
-    required this.headerVisualFrame,
     this.body,
   });
   final MindUnifiedMotherCardGeometry transition;
   final DashboardBounds bounds, dotsBounds;
-  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final Widget? body;
 
   @override
@@ -512,48 +510,6 @@ final class _MindMovingContent extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (headerVisualFrame case final frames?)
-                          Positioned.fill(
-                            child: Align(
-                              alignment: Alignment.topCenter,
-                              child: SizedBox(
-                                height: 34 * (1 - transition.separation),
-                                child: Opacity(
-                                  opacity: 1 - transition.separation,
-                                  child:
-                                      ValueListenableBuilder<
-                                        DashboardHeaderVisualFrame
-                                      >(
-                                        valueListenable: frames,
-                                        builder: (context, frame, _) =>
-                                            DecoratedBox(
-                                              key: const ValueKey(
-                                                'mind-seamless-header-color-bleed',
-                                              ),
-                                              decoration: BoxDecoration(
-                                                gradient: LinearGradient(
-                                                  begin: Alignment.topCenter,
-                                                  end: Alignment.bottomCenter,
-                                                  colors: [
-                                                    frame.colorB.withValues(
-                                                      alpha: .14,
-                                                    ),
-                                                    frame.colorA.withValues(
-                                                      alpha: .04,
-                                                    ),
-                                                    Colors.white.withValues(
-                                                      alpha: 0,
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                              child: const SizedBox.expand(),
-                                            ),
-                                      ),
-                                ),
-                              ),
-                            ),
-                          ),
                         SizedBox.expand(
                           key: const ValueKey('dashboard-core-mode-mind-body'),
                           child: body ?? const SizedBox.expand(),

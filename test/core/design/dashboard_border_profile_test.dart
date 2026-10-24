@@ -18,7 +18,7 @@ void main() {
   test('border defaults preserve each outer-surface appearance', () {
     const settings = DashboardBorderSettings.defaults;
 
-    expect(settings.isEnabled(DashboardBorderSurface.header), isTrue);
+    expect(settings.isEnabled(DashboardBorderSurface.header), isFalse);
     expect(settings.isEnabled(DashboardBorderSurface.incomeDirection), isFalse);
     expect(
       settings.isEnabled(DashboardBorderSurface.expenseDirection),
@@ -42,7 +42,7 @@ void main() {
 
     expect(changed.isEnabled(DashboardBorderSurface.incomeDirection), isTrue);
     expect(changed.isEnabled(DashboardBorderSurface.expenseDirection), isFalse);
-    expect(changed.isEnabled(DashboardBorderSurface.header), isTrue);
+    expect(changed.isEnabled(DashboardBorderSurface.header), isFalse);
     expect(changed.isEnabled(DashboardBorderSurface.searchPill), isTrue);
   });
 }

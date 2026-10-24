@@ -145,10 +145,7 @@ final class _BalanceDashboardCoreSurfaceState
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            _BalanceUnifiedHeaderContentSurface(
-              transition: transition,
-              headerVisualFrame: widget.headerVisualFrame,
-            ),
+            _BalanceUnifiedHeaderContentSurface(transition: transition),
             _BalanceContentMotion(
               transition: transition,
               frame: geometry,
@@ -182,6 +179,7 @@ final class _BalanceDashboardCoreSurfaceState
               showsBorder: true,
               depthProgress: transition.separation,
               borderProgress: transition.separation,
+              visualInset: EdgeInsets.zero,
               detail: _BalanceHeaderDetail(
                 contextProjection: _headerContextProjection,
                 balancePresentation: widget.balancePresentation,
@@ -206,12 +204,8 @@ final class _BalanceDashboardCoreSurfaceState
 
 /// The stable material owner is independent from the analytical subtree.
 final class _BalanceUnifiedHeaderContentSurface extends StatelessWidget {
-  const _BalanceUnifiedHeaderContentSurface({
-    required this.transition,
-    required this.headerVisualFrame,
-  });
+  const _BalanceUnifiedHeaderContentSurface({required this.transition});
   final BalanceUnifiedMotherCardGeometry transition;
-  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   @override
   Widget build(BuildContext context) {
     final depth = DashboardShadowStyleScope.profileOf(
@@ -230,14 +224,6 @@ final class _BalanceUnifiedHeaderContentSurface extends StatelessWidget {
       ).borderFor(DashboardBorderSurface.balanceContent),
       semanticKey: const ValueKey('balance-unified-header-content-surface'),
       bodyKey: const ValueKey('balance-unified-moving-body'),
-      child: Opacity(
-        opacity: 1 - transition.separation,
-        child: _BalanceUnifiedHeaderContentBridge(
-          headerHeight: 0,
-          bridgeHeight: transition.bridgeHeight,
-          headerVisualFrame: headerVisualFrame,
-        ),
-      ),
     );
   }
 }
@@ -292,56 +278,6 @@ final class _BalanceBodyClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(_BalanceBodyClipper old) =>
       old.rect != rect || old.radius != radius;
-}
-
-/// A shallow non-interactive live Header-color bridge. It is intentionally
-/// restricted to the seam rather than tinting the whole Balance body.
-final class _BalanceUnifiedHeaderContentBridge extends StatelessWidget {
-  const _BalanceUnifiedHeaderContentBridge({
-    required this.headerHeight,
-    required this.bridgeHeight,
-    required this.headerVisualFrame,
-  });
-
-  final double headerHeight;
-  final double bridgeHeight;
-  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
-
-  @override
-  Widget build(BuildContext context) {
-    final frames = headerVisualFrame;
-    if (frames == null || bridgeHeight <= 0) return const SizedBox.expand();
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        Positioned(
-          left: 0,
-          right: 0,
-          top: headerHeight,
-          height: bridgeHeight,
-          child: IgnorePointer(
-            child: ValueListenableBuilder<DashboardHeaderVisualFrame>(
-              valueListenable: frames,
-              builder: (context, frame, _) => DecoratedBox(
-                key: const ValueKey('balance-unified-header-color-bleed'),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: <Color>[
-                      frame.colorB.withValues(alpha: .14),
-                      frame.colorA.withValues(alpha: .04),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 /// Selects a distinct alternative body composition from canonical scope

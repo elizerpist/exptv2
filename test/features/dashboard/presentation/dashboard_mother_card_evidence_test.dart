@@ -17,6 +17,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_p
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
@@ -38,6 +39,21 @@ void main() {
           .load();
       final changes = ChangeNotifier();
       addTearDown(changes.dispose);
+      final visual = DashboardHeaderVisualController(vsync: tester)
+        ..selectEffect(DashboardHeaderEffectId.staticEffect);
+      final headerFrame = ValueNotifier<DashboardHeaderVisualFrame>(
+        const DashboardHeaderVisualFrame(
+          colors: <Color>[Color(0xff9b426a), Color(0xff632f8d)],
+          stops: <double>[0, 1],
+          opacity: 1,
+          colorA: Color(0xff9b426a),
+          colorB: Color(0xff632f8d),
+          foregroundTextColor: Colors.white,
+          chartColor: Colors.white,
+        ),
+      );
+      addTearDown(visual.dispose);
+      addTearDown(headerFrame.dispose);
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         balance.motherCardComparisonBalanceFixture(),
       );
@@ -83,17 +99,8 @@ void main() {
         ),
       );
       addTearDown(focused.dispose);
-      for (final mode in ['balance', 'balance-focused', 'mind']) {
-        for (final progress in [
-          0.0,
-          .0005555555555556,
-          .05,
-          .35,
-          .5,
-          .65,
-          .95,
-          1.0,
-        ]) {
+      for (final mode in ['budget', 'balance', 'balance-focused', 'mind']) {
+        for (final progress in [0.0, .05, .2, .35, .5, .65, .8, 1.0]) {
           final travel = progress * 180;
           if (mode.startsWith('balance')) {
             await tester.pumpWidget(
@@ -110,6 +117,8 @@ void main() {
                         children: [
                           BalanceDashboardCoreSurface(
                             balanceLinkedPresentation: linked,
+                            headerVisualController: visual,
+                            headerVisualFrame: headerFrame,
                             presentationSettings: mode == 'balance-focused'
                                 ? focused
                                 : null,
@@ -134,9 +143,21 @@ void main() {
               ),
             );
           } else if (mode == 'budget') {
-            await budget.pump(tester, travel);
+            await budget.pump(
+              tester,
+              travel,
+              visual: visual,
+              colors: headerFrame,
+            );
           } else {
-            await mind.pumpMind(tester, travel, changes, year: year);
+            await mind.pumpMind(
+              tester,
+              travel,
+              changes,
+              year: year,
+              visual: visual,
+              colors: headerFrame,
+            );
           }
           await tester.pump();
           expect(tester.takeException(), isNull);

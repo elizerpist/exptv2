@@ -17,7 +17,6 @@ final class BalanceUnifiedMotherCardGeometry {
   Rect get cascadeBounds => motion.detachedTargetBounds;
   DashboardHeaderContentSeamShape get shape => motion.shape;
   double get opacity => motion.bodyOpacity;
-  double get bridgeHeight => motion.bridgeHeight;
   final Matrix4 contentTransform;
   double get contentScale => contentTransform.entry(0, 0);
   double get contentShift =>

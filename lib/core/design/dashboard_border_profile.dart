@@ -26,7 +26,7 @@ enum DashboardBorderSurface {
 @immutable
 final class DashboardBorderSettings {
   const DashboardBorderSettings({
-    this.header = true,
+    this.header = false,
     this.budgetHeader = false,
     this.incomeDirection = false,
     this.expenseDirection = false,

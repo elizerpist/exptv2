@@ -17,7 +17,6 @@ final class MindUnifiedMotherCardGeometry {
   Rect get cascadeBounds => motion.detachedTargetBounds;
   DashboardHeaderContentSeamShape get shape => motion.shape;
   double get opacity => motion.bodyOpacity;
-  double get bridgeHeight => motion.bridgeHeight;
   Rect get contentBounds => Rect.fromLTWH(
     headerBounds.left,
     motion.contentMotionBounds.top,

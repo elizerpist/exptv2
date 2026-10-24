@@ -2,6 +2,7 @@ import '../../../support/mother_card_raster_comparator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/core/design/dashboard_border_profile.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
@@ -31,6 +32,7 @@ Future<void> pumpMind(
   ValueNotifier<MindTemporalHeatmapFrame?>? temporal,
   MindYearHeatmapPresentationController? heatmapSettings,
   ValueChanged<QueryAmountRangeValues>? onCommitted,
+  DashboardHeaderVisualController? visual,
   ValueNotifier<DashboardHeaderVisualFrame>? colors,
 }) => tester.pumpWidget(
   MaterialApp(
@@ -47,6 +49,7 @@ Future<void> pumpMind(
               children: [
                 MindDashboardCoreSurface(
                   temporalPlane: plane,
+                  headerVisualController: visual,
                   headerVisualFrame: colors,
                   showTemporalDayHeatmap: day,
                   yearHeatmap: year,
@@ -147,6 +150,8 @@ void main() {
           final header = tester.widget<DashboardCoreModeHeaderScaffold>(
             find.byType(DashboardCoreModeHeaderScaffold),
           );
+          expect(header.visualInset, EdgeInsets.zero);
+          expect(header.borderSurface, DashboardBorderSurface.header);
           expect(header.depthProgress, closeTo(travel / 180, 1e-8));
           expect(header.borderProgress, closeTo(travel / 180, 1e-8));
           if (travel == 90) {
@@ -352,7 +357,7 @@ void main() {
       },
     );
   }
-  testWidgets('Mind reactive bridge stays inside moving physical viewport', (
+  testWidgets('Mind leaves the Mother Card white when Header colors change', (
     tester,
   ) async {
     final changes = ChangeNotifier();
@@ -372,13 +377,7 @@ void main() {
       await tester.pump();
       expect(
         find.byKey(const ValueKey('mind-seamless-header-color-bleed')),
-        findsOneWidget,
-      );
-      await expectLater(
-        find.byKey(capture),
-        matchesGoldenFile(
-          '../../../goldens/mind_unified_detachment_bridge_${state.$2}.png',
-        ),
+        findsNothing,
       );
     }
     colors.value = const DashboardHeaderVisualFrame(
@@ -389,12 +388,10 @@ void main() {
       colorB: Colors.pink,
     );
     await tester.pump();
-    final bridge = tester.widget<DecoratedBox>(
+    expect(
       find.byKey(const ValueKey('mind-seamless-header-color-bleed')),
+      findsNothing,
     );
-    final gradient =
-        (bridge.decoration as BoxDecoration).gradient as LinearGradient;
-    expect(gradient.colors.first, Colors.pink.withValues(alpha: .14));
     expect(tester.takeException(), isNull);
   });
   testWidgets('Mind intermediate physical golden states', (tester) async {

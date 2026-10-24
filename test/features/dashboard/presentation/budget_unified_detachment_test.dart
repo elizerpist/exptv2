@@ -133,6 +133,8 @@ void main() {
         final header = tester.widget<DashboardCoreModeHeaderScaffold>(
           find.byType(DashboardCoreModeHeaderScaffold),
         );
+        expect(header.visualInset, EdgeInsets.zero);
+        expect(header.borderSurface, DashboardBorderSurface.header);
         expect(header.depthProgress, closeTo(collapse / 180, 1e-10));
         expect(header.borderProgress, header.depthProgress);
         final rect = tester.getRect(body);
@@ -246,17 +248,10 @@ void main() {
             '../../../goldens/budget_unified_detachment_${state.$2}.png',
           ),
         );
-        final bridge = find.byKey(
-          const ValueKey('budget-unified-header-color-bleed'),
+        expect(
+          find.byKey(const ValueKey('budget-unified-header-color-bleed')),
+          findsNothing,
         );
-        final body = tester.getRect(
-          find.byKey(const ValueKey('budget-unified-moving-body')),
-        );
-        if (bridge.evaluate().isNotEmpty) {
-          final rect = tester.getRect(bridge);
-          expect(rect.top, greaterThanOrEqualTo(body.top));
-          expect(rect.bottom, lessThanOrEqualTo(body.bottom + 1e-7));
-        }
         expect(tester.takeException(), isNull);
       }
       await tester.pumpWidget(const SizedBox.shrink());
@@ -268,7 +263,7 @@ void main() {
     'enabled contours and every shadow style emerge from master progress',
     (tester) async {
       final borders = DashboardBorderController()
-        ..setEnabled(DashboardBorderSurface.budgetHeader, true)
+        ..setEnabled(DashboardBorderSurface.header, true)
         ..setEnabled(DashboardBorderSurface.budgetContent, true);
       final shadows = DashboardShadowStyleController();
       addTearDown(borders.dispose);
@@ -330,7 +325,7 @@ void main() {
           final border = material.border!;
           final normal = DashboardBorderProfile(
             borders.value,
-          ).borderFor(DashboardBorderSurface.budgetHeader)!;
+          ).borderFor(DashboardBorderSurface.header)!;
           expect(
             border.top.width,
             closeTo(normal.top.width * travel / 180, 1e-8),
