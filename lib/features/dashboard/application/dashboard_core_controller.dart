@@ -4836,15 +4836,14 @@ final class DashboardCoreController {
     if (held != null &&
         (held.projection != expectedProjection ||
             held.navigationEpoch != navigationEpoch)) {
-      // The one physical range control deliberately survives a Sum/Year/Month
-      // switch while its thumb remains held. That accepted temporal target
-      // synchronously publishes a new score identity before the next preview
-      // frame. Rebase this interaction guard only to that already-published,
-      // exact current target; accepting the old held identity here would let
-      // the heatmap preview advance while the Header score was rejected.
+      // A real rail can expose the compact slider after navigation has
+      // advanced but before a deferred Header retarget reaches this same
+      // prepared projection.  The slider's next preview is the authoritative
+      // opportunity to publish the current temporal target with its exact
+      // heatmap range.  Reject only a changed prepared projection; a stale
+      // temporal epoch is safely replaced by [publishTarget] below.
       final current = mindBehavioralScore.identity;
-      if (current?.projection != expectedProjection ||
-          current?.navigationEpoch != navigationEpoch) {
+      if (current?.projection != expectedProjection) {
         return mindBehavioralScore.rejectStalePublication();
       }
       _mindScoreInteractionIdentity = current;
