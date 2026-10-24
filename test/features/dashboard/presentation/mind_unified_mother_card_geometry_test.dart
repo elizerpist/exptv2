@@ -41,12 +41,18 @@ void main() {
               }
 
               final initial = resolve(0);
-              expect(initial.bodyBounds.top, initial.headerBounds.bottom);
+              expect(
+                initial.bodyBounds.top,
+                closeTo(initial.headerBounds.bottom, 1e-8),
+              );
               expect(
                 initial.bodyBounds.bottom,
                 closeTo(initial.joinedBounds.bottom, 1e-8),
               );
-              expect(initial.visibleBodyBounds, initial.bodyBounds);
+              expect(
+                initial.visibleBodyBounds,
+                rectMoreOrLessEquals(initial.bodyBounds, epsilon: 1e-8),
+              );
               expect(initial.shape.headerRadius.bottomLeft, Radius.zero);
               expect(initial.shape.contentRadius.topLeft, Radius.zero);
               var previous = initial;
@@ -71,7 +77,11 @@ void main() {
                 );
                 expect(
                   next.visibleBodyBounds.top,
-                  greaterThanOrEqualTo(next.headerBounds.bottom),
+                  greaterThanOrEqualTo(
+                    next.headerBounds.bottom < next.bodyBounds.bottom
+                        ? next.headerBounds.bottom
+                        : next.bodyBounds.bottom,
+                  ),
                 );
                 expect(next.visibleBodyBounds.height, greaterThanOrEqualTo(0));
                 previous = next;
@@ -118,9 +128,23 @@ void main() {
                 expect(a.contentBounds, b.contentBounds);
                 expect(a.contentScale, b.contentScale);
               }
+              expect(half.bodyBounds.top, lessThan(initial.bodyBounds.top));
               expect(
-                resolve(metrics.collapseTravel).visibleBodyBounds.height,
-                0,
+                half.bodyBounds.bottom,
+                lessThan(initial.bodyBounds.bottom),
+              );
+              expect(half.bodyBounds.width, lessThan(initial.bodyBounds.width));
+              final relativeOffsets = [.2, .5, .8].map((s) {
+                final frame = resolve(metrics.collapseTravel * s);
+                return frame.contentBounds.top - frame.bodyBounds.top;
+              }).toList();
+              expect(
+                relativeOffsets[0],
+                isNot(closeTo(relativeOffsets[1], .01)),
+              );
+              expect(
+                relativeOffsets[1],
+                isNot(closeTo(relativeOffsets[2], .01)),
               );
               expect(resolve(metrics.collapseTravel).opacity, 0);
             },

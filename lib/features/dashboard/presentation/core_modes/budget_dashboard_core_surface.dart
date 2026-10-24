@@ -30,6 +30,7 @@ import '../budget_content_card_style.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
 import 'budget_unified_mother_card_geometry.dart';
+import 'dashboard_unified_mother_card_motion.dart';
 import '../budget_section_order.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
@@ -132,18 +133,22 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
               // only non-positioned child and collapse the Budget stack.
               const SizedBox.expand(),
               if (avatarContentStyle == BudgetAvatarContentStyle.avatarRail)
-                DashboardCoreModeCascadeCard(
-                  bounds: section.avatarBounds,
-                  motion: section.motionFor(
-                    geometry.upperCardMotion!,
-                    from: geometry.subheaderOneBounds,
-                    to: section.avatarBounds,
+                _BudgetMotherCardContentClip(
+                  geometry: geometry,
+                  contentCardStyle: contentCardStyle,
+                  child: DashboardCoreModeCascadeCard(
+                    bounds: section.avatarBounds,
+                    motion: section.motionFor(
+                      geometry.upperCardMotion!,
+                      from: geometry.subheaderOneBounds,
+                      to: section.avatarBounds,
+                    ),
+                    semanticKey: const ValueKey(
+                      'budget-avatar-content-rail-backplate',
+                    ),
+                    showPlaceholderSurface: false,
+                    content: const _BudgetAvatarRailBackplate(),
                   ),
-                  semanticKey: const ValueKey(
-                    'budget-avatar-content-rail-backplate',
-                  ),
-                  showPlaceholderSurface: false,
-                  content: const _BudgetAvatarRailBackplate(),
                 ),
               ValueListenableBuilder<BudgetContentLayout>(
                 valueListenable:
@@ -154,60 +159,70 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                   headerVisualFrame: headerVisualFrame,
                 ),
               ),
-              DashboardRenderDiagnosticProbe(
-                candidate: 'budgetChartCascadeCard',
-                material: 'contentOnly DashboardCoreModeCascadeCard',
-                clip: 'none at cascade; child owns rounded viewport clip',
-                zOrder: 'unifiedSurface<chartCascade<avatarCascade',
-                child: DashboardCoreModeCascadeCard(
-                  bounds: relationship.chartBounds,
-                  motion: section.motionFor(
-                    geometry.lowerCardMotion!,
-                    from: geometry.zone2Bounds,
-                    to: relationship.chartBounds,
-                  ),
-                  semanticKey: const ValueKey(
-                    'dashboard-core-mode-budget-card-2',
-                  ),
-                  showPlaceholderSurface: false,
-                  content: ValueListenableBuilder<BudgetContentLayout>(
-                    valueListenable:
-                        contentCardStyle ?? _alwaysUnifiedBudgetContent,
-                    builder: (context, layout, _) => _distributionContent(
-                      surfaceOwner: layout == BudgetContentLayout.unifiedCard
-                          ? BudgetDistributionSurfaceOwner.unifiedParent
-                          : BudgetDistributionSurfaceOwner.splitCard2,
-                      topGlowColor: selectedAvatarAccent,
+              _BudgetMotherCardContentClip(
+                geometry: geometry,
+                contentCardStyle: contentCardStyle,
+                fadeTrailingEdge: true,
+                child: DashboardRenderDiagnosticProbe(
+                  candidate: 'budgetChartCascadeCard',
+                  material: 'contentOnly DashboardCoreModeCascadeCard',
+                  clip:
+                      'shared physical viewport unified; child viewport split',
+                  zOrder: 'unifiedSurface<chartCascade<avatarCascade',
+                  child: DashboardCoreModeCascadeCard(
+                    bounds: relationship.chartBounds,
+                    motion: section.motionFor(
+                      geometry.lowerCardMotion!,
+                      from: geometry.zone2Bounds,
+                      to: relationship.chartBounds,
+                    ),
+                    semanticKey: const ValueKey(
+                      'dashboard-core-mode-budget-card-2',
+                    ),
+                    showPlaceholderSurface: false,
+                    content: ValueListenableBuilder<BudgetContentLayout>(
+                      valueListenable:
+                          contentCardStyle ?? _alwaysUnifiedBudgetContent,
+                      builder: (context, layout, _) => _distributionContent(
+                        surfaceOwner: layout == BudgetContentLayout.unifiedCard
+                            ? BudgetDistributionSurfaceOwner.unifiedParent
+                            : BudgetDistributionSurfaceOwner.splitCard2,
+                        topGlowColor: selectedAvatarAccent,
+                      ),
                     ),
                   ),
                 ),
               ),
-              ValueListenableBuilder<BudgetContentLayout>(
-                valueListenable:
-                    contentCardStyle ?? _alwaysUnifiedBudgetContent,
-                builder: (context, layout, _) => DashboardCoreModeCascadeCard(
-                  bounds: section.avatarBounds,
-                  motion: section.motionFor(
-                    geometry.upperCardMotion!,
-                    from: geometry.subheaderOneBounds,
-                    to: section.avatarBounds,
+              _BudgetMotherCardContentClip(
+                geometry: geometry,
+                contentCardStyle: contentCardStyle,
+                child: ValueListenableBuilder<BudgetContentLayout>(
+                  valueListenable:
+                      contentCardStyle ?? _alwaysUnifiedBudgetContent,
+                  builder: (context, layout, _) => DashboardCoreModeCascadeCard(
+                    bounds: section.avatarBounds,
+                    motion: section.motionFor(
+                      geometry.upperCardMotion!,
+                      from: geometry.subheaderOneBounds,
+                      to: section.avatarBounds,
+                    ),
+                    semanticKey: const ValueKey(
+                      'dashboard-core-mode-budget-card-1',
+                    ),
+                    showPlaceholderSurface: false,
+                    contentVerticalInputOverflow:
+                        BudgetTargetAvatarRail.selectedInputVerticalOverflow,
+                    // The shared card starts at the authored mode-content top.
+                    // Moving this full input parent down exactly one existing
+                    // overflow clears the selected 112px chrome without changing
+                    // Split's baseline rail position, hit bounds or carousel state.
+                    contentVerticalOffset:
+                        layout == BudgetContentLayout.unifiedCard ||
+                            order == BudgetSectionOrder.chartThenAvatars
+                        ? BudgetTargetAvatarRail.selectedInputVerticalOverflow
+                        : 0,
+                    content: _avatarContent(context),
                   ),
-                  semanticKey: const ValueKey(
-                    'dashboard-core-mode-budget-card-1',
-                  ),
-                  showPlaceholderSurface: false,
-                  contentVerticalInputOverflow:
-                      BudgetTargetAvatarRail.selectedInputVerticalOverflow,
-                  // The shared card starts at the authored mode-content top.
-                  // Moving this full input parent down exactly one existing
-                  // overflow clears the selected 112px chrome without changing
-                  // Split's baseline rail position, hit bounds or carousel state.
-                  contentVerticalOffset:
-                      layout == BudgetContentLayout.unifiedCard ||
-                          order == BudgetSectionOrder.chartThenAvatars
-                      ? BudgetTargetAvatarRail.selectedInputVerticalOverflow
-                      : 0,
-                  content: _avatarContent(context),
                 ),
               ),
               ValueListenableBuilder<BudgetContentLayout>(
@@ -620,6 +635,58 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     }
     return selected.baseColorArgb == 0 ? null : Color(selected.baseColorArgb);
   }
+}
+
+/// A stable viewport clip around each existing interactive cascade layer.
+/// Layout and gesture transforms remain owned by the original CascadeCard.
+final class _BudgetMotherCardContentClip extends StatelessWidget {
+  const _BudgetMotherCardContentClip({
+    required this.geometry,
+    required this.contentCardStyle,
+    required this.child,
+    this.fadeTrailingEdge = false,
+  });
+  final bool fadeTrailingEdge;
+  final DashboardLayoutFrame geometry;
+  final ValueListenable<BudgetContentLayout>? contentCardStyle;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<BudgetContentLayout>(
+        valueListenable: contentCardStyle ?? _alwaysUnifiedBudgetContent,
+        child: child,
+        builder: (context, layout, child) {
+          final corners = DashboardCornerRoundnessScope.profileOf(context);
+          final transition = BudgetUnifiedMotherCardGeometry.resolve(
+            frame: geometry,
+            headerRadius: corners.borderRadiusFor(
+              DashboardCornerSurfaceFamily.header,
+              size: Size(
+                geometry.headerBounds.width,
+                geometry.headerBounds.height,
+              ),
+            ),
+            contentRadius: corners.borderRadiusFor(
+              DashboardCornerSurfaceFamily.budgetDistributionCard,
+              size: Size(
+                geometry.modeContentBounds.width,
+                geometry.modeContentBounds.height,
+              ),
+            ),
+          );
+          return DashboardMotherCardContentClip(
+            bounds: transition.visibleBodyBounds,
+            radius: transition.shape.contentRadius,
+            enabled: layout == BudgetContentLayout.unifiedCard,
+            // Four existing gap units form a continuous, density-independent
+            // trailing fade. At expansion the exact original paint path runs.
+            trailingFadeExtent: fadeTrailingEdge
+                ? geometry.motherCardGap * 4 * transition.separation
+                : 0,
+            child: child!,
+          );
+        },
+      );
 }
 
 /// One persistent material composition. Neither PageView nor avatar input is

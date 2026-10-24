@@ -6,6 +6,7 @@ import '../../../../core/categories/presentation/budget_category_avatar_artwork.
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_focused_layout_geometry.dart';
+import 'balance_focused_cascade.dart';
 import 'balance_month_focused_chart_presentation.dart';
 import 'balance_month_net_margin_gauge.dart';
 import 'balance_month_net_margin_presentation.dart';
@@ -101,7 +102,8 @@ class _BalanceMonthFocusedLayoutState extends State<BalanceMonthFocusedLayout> {
         return Padding(
           key: const ValueKey('balance-month-focused-layout'),
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Column(
+          child: BalanceFocusedCascadeColumn(
+            horizontalPadding: 14,
             children: [
               SizedBox(
                 key: const ValueKey('balance-month-focused-selector-zone'),

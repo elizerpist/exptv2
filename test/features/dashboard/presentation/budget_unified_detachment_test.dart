@@ -232,7 +232,9 @@ void main() {
         (.1, 'first'),
         (9.0, 'five'),
         (36.0, 'early'),
+        (63.0, 'thirty_five'),
         (90.0, 'half'),
+        (117.0, 'sixty_five'),
         (144.0, 'near'),
         (180.0, 'detached_color'),
       ]) {

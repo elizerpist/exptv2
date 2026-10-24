@@ -1210,7 +1210,9 @@ void main() {
       (0.0, 'expanded'),
       (.1, 'first_frame'),
       (9.0, 'early'),
+      (63.0, 'thirty_five'),
       (90.0, 'half'),
+      (117.0, 'sixty_five'),
       (171.0, 'near_collapsed'),
       (180.0, 'collapsed'),
     ]) {
@@ -1794,3 +1796,7 @@ DashboardBalancePartnerInsight _employerPartnerInsight() {
     ),
   );
 }
+
+/// Shared rich fixture for deliberate old/new Mother Card visual evidence.
+DashboardBalanceLinkedPresentation motherCardComparisonBalanceFixture() =>
+    _richAlternativeMonthLinked();

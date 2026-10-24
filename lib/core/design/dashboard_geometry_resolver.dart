@@ -192,6 +192,39 @@ abstract final class DashboardGeometryResolver {
         lowerExpandedScale: DashboardMotionTokens.restingScale,
       ),
     );
+    // One stable, Header-attached reference canvas for physical Mother Cards.
+    // Structural body order and Mind's unified bounds remain untouched.
+    final motherCardExpandedTop =
+        metrics.headerTop +
+        metrics.headerExpandedHeight +
+        expandedHeaderExtraHeight +
+        metrics.standardGap;
+    final motherCardCascadeGeometry = HeaderCascadeGeometry(
+      upperCollapsedTop:
+          metrics.headerTop +
+          metrics.headerCollapsedHeight -
+          DashboardMotionTokens.upperHiddenOverlap,
+      upperExpandedTop: motherCardExpandedTop,
+      upperHeight: metrics.subheaderOneHeight,
+      upperCollapsedInset:
+          metrics.contentGutter + DashboardMotionTokens.upperNestedInset,
+      upperExpandedInset: metrics.contentGutter,
+      upperCollapsedScale: DashboardMotionTokens.subheaderOneCollapseScale,
+      upperExpandedScale: DashboardMotionTokens.restingScale,
+      lowerExpandedTop:
+          motherCardExpandedTop +
+          metrics.subheaderOneHeight +
+          metrics.standardGap,
+      lowerExpandedInset: metrics.contentGutter,
+      lowerHiddenOverlap: DashboardMotionTokens.lowerHiddenOverlap,
+      lowerNestedInset: DashboardMotionTokens.lowerNestedInset,
+      lowerCollapsedScale: DashboardMotionTokens.zone2CollapseScale,
+      lowerExpandedScale: DashboardMotionTokens.restingScale,
+    );
+    final motherCardCascade = HeaderCascadeMotion.calculate(
+      masterProgress: headerExpansionProgress,
+      geometry: motherCardCascadeGeometry,
+    );
     final upperCardMotion = isSplitMode ? cascade.upper : null;
     final lowerCardMotion = isSplitMode ? cascade.lower : null;
 
@@ -263,6 +296,9 @@ abstract final class DashboardGeometryResolver {
               zone2Progress,
             ),
       lowerCardMotion: lowerCardMotion,
+      motherCardCascade: motherCardCascade,
+      motherCardCascadeGeometry: motherCardCascadeGeometry,
+      motherCardGap: metrics.standardGap,
       isRailExpanded: isRailExpanded,
       hasPhysicalRail: hasPhysicalRail,
       hasStandaloneCollapseHandle: hasStandaloneCollapseHandle,

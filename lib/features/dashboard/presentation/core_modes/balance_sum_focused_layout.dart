@@ -6,6 +6,7 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_balance_monthly_net_distribution_projection.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_focused_layout_geometry.dart';
+import 'balance_focused_cascade.dart';
 import 'balance_presentation_settings.dart';
 import 'balance_sum_focused_chart_presentation.dart';
 import 'balance_sum_positive_ratio_gauge.dart';
@@ -96,7 +97,8 @@ class _BalanceSumFocusedLayoutState extends State<BalanceSumFocusedLayout> {
       return Padding(
         key: const ValueKey('balance-sum-focused-layout'),
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: Column(
+        child: BalanceFocusedCascadeColumn(
+          horizontalPadding: 14,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(

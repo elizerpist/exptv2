@@ -9,6 +9,7 @@ import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_focused_layout_geometry.dart';
+import 'balance_focused_cascade.dart';
 import 'balance_year_focused_chart_presentation.dart';
 import 'budget_clay_semicircle_gauge.dart';
 
@@ -104,7 +105,8 @@ final class _BalanceYearFocusedLayoutState
       return Padding(
         key: const ValueKey('balance-year-focused-layout'),
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: Column(
+        child: BalanceFocusedCascadeColumn(
+          horizontalPadding: 14,
           children: [
             SizedBox(
               key: const ValueKey('balance-year-focused-selector-zone'),

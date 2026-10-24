@@ -67,6 +67,9 @@ class DashboardLayoutFrame {
     required this.zone2Shift,
     required this.zone2Scale,
     required this.lowerCardMotion,
+    required this.motherCardCascade,
+    required this.motherCardCascadeGeometry,
+    required this.motherCardGap,
     required this.isRailExpanded,
     required this.hasPhysicalRail,
     required this.hasStandaloneCollapseHandle,
@@ -133,6 +136,12 @@ class DashboardLayoutFrame {
   final double zone2Shift;
   final double zone2Scale;
   final CascadedCardMotion? lowerCardMotion;
+
+  /// Read-only Budget-equivalent cascade for the shared Mother Card. Unified
+  /// Mind retains its structural composition and nullable lowerCardMotion.
+  final HeaderCascadeResult motherCardCascade;
+  final HeaderCascadeGeometry motherCardCascadeGeometry;
+  final double motherCardGap;
   final bool isRailExpanded;
   final bool hasPhysicalRail;
   final bool hasStandaloneCollapseHandle;

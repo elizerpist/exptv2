@@ -404,7 +404,9 @@ void main() {
       (0.0, 'expanded'),
       (.1, 'first'),
       (9.0, 'early'),
+      (63.0, 'thirty_five'),
       (90.0, 'half'),
+      (117.0, 'sixty_five'),
       (171.0, 'near'),
       (180.0, 'collapsed'),
     ]) {

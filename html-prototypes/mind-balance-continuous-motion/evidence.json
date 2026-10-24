@@ -1,74 +1,114 @@
 [
   {
-    "src": "assets/mind_unified_detachment_expanded.png",
-    "label": "mind unified detachment expanded"
+    "src": "assets/shared-motion/old-balance-35000.png",
+    "label": "balance old 35% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/mind_unified_detachment_first.png",
-    "label": "mind unified detachment first"
+    "src": "assets/shared-motion/new-balance-35000.png",
+    "label": "balance new 35% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/mind_unified_detachment_early.png",
-    "label": "mind unified detachment early"
+    "src": "assets/shared-motion/old-balance-50000.png",
+    "label": "balance old 50% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/mind_unified_detachment_half.png",
-    "label": "mind unified detachment half"
+    "src": "assets/shared-motion/new-balance-50000.png",
+    "label": "balance new 50% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/mind_unified_detachment_near.png",
-    "label": "mind unified detachment near"
+    "src": "assets/shared-motion/old-balance-65000.png",
+    "label": "balance old 65% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/mind_unified_detachment_collapsed.png",
-    "label": "mind unified detachment collapsed"
+    "src": "assets/shared-motion/new-balance-65000.png",
+    "label": "balance new 65% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/balance_unified_detachment_expanded.png",
-    "label": "balance unified detachment expanded"
+    "src": "assets/shared-motion/old-populated-budget-35000.png",
+    "label": "populated-budget old 35% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/balance_unified_detachment_first_frame.png",
-    "label": "balance unified detachment first frame"
+    "src": "assets/shared-motion/new-populated-budget-35000.png",
+    "label": "populated-budget new 35% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/balance_unified_detachment_early.png",
-    "label": "balance unified detachment early"
+    "src": "assets/shared-motion/old-populated-budget-50000.png",
+    "label": "populated-budget old 50% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/balance_unified_detachment_half.png",
-    "label": "balance unified detachment half"
+    "src": "assets/shared-motion/new-populated-budget-50000.png",
+    "label": "populated-budget new 50% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/balance_unified_detachment_near_collapsed.png",
-    "label": "balance unified detachment near collapsed"
+    "src": "assets/shared-motion/old-populated-budget-65000.png",
+    "label": "populated-budget old 65% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/balance_unified_detachment_collapsed.png",
-    "label": "balance unified detachment collapsed"
+    "src": "assets/shared-motion/new-populated-budget-65000.png",
+    "label": "populated-budget new 65% — azonos feltöltött tesztadatok"
   },
   {
-    "src": "assets/mind_unified_detachment_bridge_expanded.png",
-    "label": "mind unified detachment bridge expanded"
+    "src": "assets/shared-motion/new-mind-0.png",
+    "label": "mind új 0% — valódi interaktív tartalom"
   },
   {
-    "src": "assets/mind_unified_detachment_bridge_half.png",
-    "label": "mind unified detachment bridge half"
+    "src": "assets/shared-motion/new-mind-56.png",
+    "label": "mind új 0.056% — valódi interaktív tartalom"
   },
   {
-    "src": "assets/mind_unified_detachment_year_heatmap_expanded.png",
-    "label": "mind unified detachment year heatmap expanded"
+    "src": "assets/shared-motion/new-mind-5000.png",
+    "label": "mind új 5% — valódi interaktív tartalom"
   },
   {
-    "src": "assets/mind_unified_detachment_year_heatmap_half.png",
-    "label": "mind unified detachment year heatmap half"
+    "src": "assets/shared-motion/new-mind-35000.png",
+    "label": "mind új 35% — valódi interaktív tartalom"
   },
   {
-    "src": "assets/mind_unified_detachment_month_heatmap_expanded.png",
-    "label": "mind unified detachment month heatmap expanded"
+    "src": "assets/shared-motion/new-mind-50000.png",
+    "label": "mind új 50% — valódi interaktív tartalom"
   },
   {
-    "src": "assets/mind_unified_detachment_month_heatmap_half.png",
-    "label": "mind unified detachment month heatmap half"
+    "src": "assets/shared-motion/new-mind-65000.png",
+    "label": "mind új 65% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-mind-95000.png",
+    "label": "mind új 95% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-mind-100000.png",
+    "label": "mind új 100% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-balance-focused-0.png",
+    "label": "balance-focused új 0% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-balance-focused-56.png",
+    "label": "balance-focused új 0.056% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-balance-focused-5000.png",
+    "label": "balance-focused új 5% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-balance-focused-35000.png",
+    "label": "balance-focused új 35% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-balance-focused-50000.png",
+    "label": "balance-focused új 50% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-balance-focused-65000.png",
+    "label": "balance-focused új 65% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-balance-focused-95000.png",
+    "label": "balance-focused új 95% — valódi interaktív tartalom"
+  },
+  {
+    "src": "assets/shared-motion/new-balance-focused-100000.png",
+    "label": "balance-focused új 100% — valódi interaktív tartalom"
   }
 ]

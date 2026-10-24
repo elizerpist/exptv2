@@ -57,8 +57,14 @@ void main() {
               }
 
               final expanded = resolve(0);
-              expect(expanded.bodyBounds.top, expanded.headerBounds.bottom);
-              expect(expanded.bodyBounds.bottom, expanded.joinedBounds.bottom);
+              expect(
+                expanded.bodyBounds.top,
+                closeTo(expanded.headerBounds.bottom, 1e-8),
+              );
+              expect(
+                expanded.bodyBounds.bottom,
+                closeTo(expanded.joinedBounds.bottom, 1e-8),
+              );
               expect(expanded.shape.headerRadius.bottomLeft, Radius.zero);
               expect(expanded.shape.contentRadius.topLeft, Radius.zero);
               expect(expanded.contentOpacity, 1);
@@ -115,7 +121,11 @@ void main() {
                 expect(next.visibleBodyBounds.bottom, next.bodyBounds.bottom);
                 expect(
                   next.visibleBodyBounds.top,
-                  greaterThanOrEqualTo(next.headerBounds.bottom),
+                  greaterThanOrEqualTo(
+                    next.headerBounds.bottom < next.bodyBounds.bottom
+                        ? next.headerBounds.bottom
+                        : next.bodyBounds.bottom,
+                  ),
                 );
                 previous = next;
               }

@@ -25,6 +25,7 @@ import 'balance_month_focused_layout.dart';
 import 'balance_day_focused_layout.dart';
 import '../dashboard_day_rhythm_navigation.dart';
 import 'balance_four_section_layout.dart';
+import 'balance_focused_cascade.dart';
 import 'balance_unified_mother_card_geometry.dart';
 import 'dashboard_joined_mother_card_material.dart';
 import 'balance_header_history_chart.dart';
@@ -150,6 +151,7 @@ final class _BalanceDashboardCoreSurfaceState
             ),
             _BalanceContentMotion(
               transition: transition,
+              frame: geometry,
               child: _BalanceAlternativeScopeScaffold(
                 dayRhythmNavigation: widget.dayRhythmNavigation,
                 monthPerspective: () => _monthPerspective,
@@ -244,18 +246,17 @@ final class _BalanceUnifiedHeaderContentSurface extends StatelessWidget {
 /// inner slide are resolved in the same viewport coordinates; chart state and
 /// prepared financial samples survive every forward/reverse collapse frame.
 final class _BalanceContentMotion extends StatelessWidget {
-  const _BalanceContentMotion({required this.transition, required this.child});
+  const _BalanceContentMotion({
+    required this.transition,
+    required this.frame,
+    required this.child,
+  });
+  final DashboardLayoutFrame frame;
   final BalanceUnifiedMotherCardGeometry transition;
   final Widget child;
   @override
   Widget build(BuildContext context) {
     final t = transition;
-    final scale = t.contentScale;
-    // Keep the authored dashboard coordinate space. At expansion the matrix
-    // is exactly identity, avoiding compensating fractional translations and
-    // preserving the original chart raster as well as its logical geometry.
-    final x = t.bodyBounds.left - t.headerBounds.left * scale;
-    final y = t.bodyBounds.top + t.contentShift - t.headerBounds.bottom * scale;
     return Positioned.fill(
       child: IgnorePointer(
         ignoring: t.separation > .02,
@@ -265,14 +266,14 @@ final class _BalanceContentMotion extends StatelessWidget {
             t.visibleBodyBounds,
             t.shape.contentRadius,
           ),
-          child: Opacity(
-            opacity: t.contentOpacity,
-            child: Transform(
-              key: const ValueKey('balance-unified-content-transform'),
-              alignment: Alignment.topLeft,
-              transform: Matrix4.identity()
-                ..translateByDouble(x, y, 0, 1)
-                ..scaleByDouble(scale, scale, 1, 1),
+          child: Transform(
+            key: const ValueKey('balance-unified-content-transform'),
+            alignment: Alignment.topLeft,
+            transform: t.contentTransform,
+            child: BalanceFocusedCascadeScope(
+              frame: frame,
+              lowerTransform: t.contentTransform,
+              lowerOpacity: t.contentOpacity,
               child: Stack(clipBehavior: Clip.none, children: [child]),
             ),
           ),
@@ -777,6 +778,7 @@ final class _BalanceSumFocusedScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _BalanceScopeFrame(
     geometry: geometry,
+    focused: true,
     child: LayoutBuilder(
       builder: (context, constraints) => Stack(
         children: [
@@ -813,6 +815,7 @@ final class _BalanceMonthFocusedScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _BalanceScopeFrame(
     geometry: geometry,
+    focused: true,
     child: LayoutBuilder(
       builder: (context, constraints) => Stack(
         children: [
@@ -858,6 +861,7 @@ final class _BalanceDayFocusedScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _BalanceScopeFrame(
     geometry: geometry,
+    focused: true,
     child: LayoutBuilder(
       builder: (context, c) => Stack(
         children: [
@@ -895,6 +899,7 @@ final class _BalanceYearFocusedScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _BalanceScopeFrame(
     geometry: geometry,
+    focused: true,
     child: LayoutBuilder(
       builder: (context, constraints) => Stack(
         children: [
@@ -1088,7 +1093,12 @@ final class _BalanceFourSectionScaffold extends StatelessWidget {
 /// At accepted dimensions this is an identity mapping. Compact viewports retain
 /// the same live charts in a bounded, uniformly scaled canvas.
 final class _BalanceScopeFrame extends StatelessWidget {
-  const _BalanceScopeFrame({required this.geometry, required this.child});
+  const _BalanceScopeFrame({
+    required this.geometry,
+    required this.child,
+    this.focused = false,
+  });
+  final bool focused;
   final DashboardLayoutFrame geometry;
   final Widget child;
   @override
@@ -1105,19 +1115,41 @@ final class _BalanceScopeFrame extends StatelessWidget {
       BalanceFourSectionLayout.minimumRenderableBodyHeight +
           BalanceAlternativeHtmlTokens.outerInset * 2,
     );
+    final motion = BalanceFocusedCascadeScope.maybeOf(context);
+    final canvasHeight = geometry.headerBounds.height + bodyHeight;
+    final fitted =
+        width != bounds.width ||
+        bodyHeight != geometry.canonicalMotherCardContentHeight;
+    final canvasScale = fitted
+        ? math.min(bounds.width / width, bounds.height / canvasHeight)
+        : 1.0;
+    final authored = Matrix4.identity()
+      ..translateByDouble(
+        bounds.left + (bounds.width - width * canvasScale) / 2,
+        bounds.top +
+            (geometry.headerBounds.height +
+                    BalanceAlternativeHtmlTokens.outerInset) *
+                canvasScale,
+        0,
+        1,
+      )
+      ..scaleByDouble(canvasScale, canvasScale, 1, 1);
+    final scopedChild = focused
+        ? BalanceFocusedCanvasScope(localToViewport: authored, child: child)
+        : Opacity(opacity: motion?.lowerOpacity ?? 1, child: child);
     return DashboardCoreModeFramePosition(
       bounds: bounds,
       child:
           width == bounds.width &&
               bodyHeight == geometry.canonicalMotherCardContentHeight
-          ? child
+          ? scopedChild
           : FittedBox(
               fit: BoxFit.contain,
               alignment: Alignment.topCenter,
               child: SizedBox(
                 width: width,
                 height: geometry.headerBounds.height + bodyHeight,
-                child: child,
+                child: scopedChild,
               ),
             ),
     );

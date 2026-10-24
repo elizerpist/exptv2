@@ -6,6 +6,9 @@ set -euo pipefail
 # invariant already owned below.
 flutter test \
   test/support/mother_card_raster_comparator_test.dart \
+  test/features/dashboard/presentation/dashboard_mother_card_comparison_test.dart \
+  test/features/dashboard/presentation/dashboard_mother_card_content_clip_test.dart \
+  test/features/dashboard/presentation/balance_focused_cascade_test.dart \
   test/features/dashboard/presentation/mind_unified_mother_card_geometry_test.dart \
   test/features/dashboard/presentation/mind_unified_detachment_test.dart \
   test/features/dashboard/presentation/balance_unified_mother_card_geometry_test.dart \

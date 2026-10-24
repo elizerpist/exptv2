@@ -12,6 +12,7 @@ import 'balance_day_performance_horizontal_meter_view.dart';
 import 'balance_day_ratio_presentation.dart';
 import 'balance_day_momentum_rail.dart';
 import 'balance_focused_layout_geometry.dart';
+import 'balance_focused_cascade.dart';
 import 'balance_presentation_settings.dart';
 
 /// Controlled Day content: a shared avatar allocation, one main visual and a
@@ -45,7 +46,8 @@ final class BalanceDayFocusedLayout extends StatelessWidget {
       return Padding(
         key: const ValueKey('balance-day-focused-layout'),
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Column(
+        child: BalanceFocusedCascadeColumn(
+          horizontalPadding: 12,
           children: [
             SizedBox(
               key: const ValueKey('balance-day-focused-top-section'),

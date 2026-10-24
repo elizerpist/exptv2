@@ -1,0 +1,694 @@
+{
+  "referenceCommit": "2e809f2",
+  "viewport": [
+    412,
+    892
+  ],
+  "note": "Deterministic authored layout envelopes, clipped at old physical bottom; not measured rendered ink.",
+  "rows": [
+    {
+      "mode": "budget",
+      "stretch": 0.0,
+      "separation": 0.35,
+      "body": [
+        30.421698393813212,
+        218.18600609756095,
+        381.57830160618676,
+        585.8410670731707
+      ],
+      "contentLayoutEnvelope": [
+        30.421698393813212,
+        293.54573170731703,
+        381.57830160618676,
+        563.8506097560976
+      ],
+      "visibleContentBottom": 563.8506097560976,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 21.99045731707315,
+      "summary": [
+        17.0,
+        542.65,
+        395.0,
+        601.65
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        591.3
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        222.3
+      ]
+    },
+    {
+      "mode": "budget",
+      "stretch": 0.0,
+      "separation": 0.5,
+      "body": [
+        37.67162403331352,
+        204.5426829268293,
+        374.3283759666864,
+        570.2621951219512
+      ],
+      "contentLayoutEnvelope": [
+        37.67162403331352,
+        273.0853658536586,
+        374.3283759666864,
+        541.3780487804879
+      ],
+      "visibleContentBottom": 541.3780487804879,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 28.884146341463293,
+      "summary": [
+        17.0,
+        482.5,
+        395.0,
+        541.5
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        588.0
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        219.0
+      ]
+    },
+    {
+      "mode": "budget",
+      "stretch": 0.0,
+      "separation": 0.65,
+      "body": [
+        45.78889054134446,
+        182.8619207317073,
+        366.2111094586555,
+        545.8303963414634
+      ],
+      "contentLayoutEnvelope": [
+        45.78889054134446,
+        248.1798780487805,
+        366.2111094586555,
+        514.4603658536585
+      ],
+      "visibleContentBottom": 514.4603658536585,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 31.37003048780491,
+      "summary": [
+        17.0,
+        422.34999999999997,
+        395.0,
+        481.34999999999997
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        584.7
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        215.7
+      ]
+    },
+    {
+      "mode": "budget",
+      "stretch": 48.0,
+      "separation": 0.35,
+      "body": [
+        30.421698393813212,
+        235.47112804878049,
+        381.57830160618676,
+        645.0597499999999
+      ],
+      "contentLayoutEnvelope": [
+        30.421698393813212,
+        313.9603658536585,
+        381.57830160618676,
+        614.9325609756097
+      ],
+      "visibleContentBottom": 614.9325609756097,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 30.12718902439019,
+      "summary": [
+        17.0,
+        589.45,
+        395.0,
+        648.45
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        654.9
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        237.9
+      ]
+    },
+    {
+      "mode": "budget",
+      "stretch": 48.0,
+      "separation": 0.5,
+      "body": [
+        37.67162403331352,
+        218.8841463414634,
+        374.3283759666864,
+        620.310975609756
+      ],
+      "contentLayoutEnvelope": [
+        37.67162403331352,
+        289.7682926829268,
+        374.3283759666864,
+        581.4756097560976
+      ],
+      "visibleContentBottom": 581.4756097560976,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 38.83536585365846,
+      "summary": [
+        17.0,
+        518.5,
+        395.0,
+        577.5
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        648.0
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        231.0
+      ]
+    },
+    {
+      "mode": "budget",
+      "stretch": 48.0,
+      "separation": 0.65,
+      "body": [
+        45.78889054134446,
+        193.36411585365857,
+        366.2111094586555,
+        583.7063475609757
+      ],
+      "contentLayoutEnvelope": [
+        45.78889054134446,
+        259.8140243902439,
+        366.2111094586555,
+        542.3618292682927
+      ],
+      "visibleContentBottom": 542.3618292682927,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 41.344518292683006,
+      "summary": [
+        17.0,
+        447.55,
+        395.0,
+        506.55
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        641.1
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        224.1
+      ]
+    },
+    {
+      "mode": "balance",
+      "stretch": 0.0,
+      "separation": 0.35,
+      "body": [
+        30.421698393813212,
+        218.18600609756095,
+        381.57830160618676,
+        585.8410670731707
+      ],
+      "contentLayoutEnvelope": [
+        30.421698393813212,
+        198.87956647828668,
+        381.57830160618676,
+        519.3796408387864
+      ],
+      "visibleContentBottom": 519.3796408387864,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 66.46142623438436,
+      "summary": [
+        17.0,
+        542.65,
+        395.0,
+        601.65
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        591.3
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        222.3
+      ]
+    },
+    {
+      "mode": "balance",
+      "stretch": 0.0,
+      "separation": 0.5,
+      "body": [
+        37.67162403331352,
+        204.5426829268293,
+        374.3283759666864,
+        570.2621951219512
+      ],
+      "contentLayoutEnvelope": [
+        37.67162403331352,
+        164.31556471488065,
+        374.3283759666864,
+        471.58164782867334
+      ],
+      "visibleContentBottom": 471.58164782867334,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 98.68054729327787,
+      "summary": [
+        17.0,
+        482.5,
+        395.0,
+        541.5
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        588.0
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        219.0
+      ]
+    },
+    {
+      "mode": "balance",
+      "stretch": 0.0,
+      "separation": 0.65,
+      "body": [
+        45.78889054134446,
+        182.8619207317073,
+        366.2111094586555,
+        545.8303963414634
+      ],
+      "contentLayoutEnvelope": [
+        45.78889054134446,
+        117.21393271437069,
+        366.2111094586555,
+        409.66278331350384
+      ],
+      "visibleContentBottom": 409.66278331350384,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 136.16761302795953,
+      "summary": [
+        17.0,
+        422.34999999999997,
+        395.0,
+        481.34999999999997
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        584.7
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        215.7
+      ]
+    },
+    {
+      "mode": "balance",
+      "stretch": 48.0,
+      "separation": 0.35,
+      "body": [
+        30.421698393813212,
+        235.47112804878049,
+        381.57830160618676,
+        645.0597499999999
+      ],
+      "contentLayoutEnvelope": [
+        30.421698393813212,
+        212.5793225758477,
+        381.57830160618676,
+        577.6707116299822
+      ],
+      "visibleContentBottom": 577.6707116299822,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 67.38903837001772,
+      "summary": [
+        17.0,
+        589.45,
+        395.0,
+        648.45
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        654.9
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        237.9
+      ]
+    },
+    {
+      "mode": "balance",
+      "stretch": 48.0,
+      "separation": 0.5,
+      "body": [
+        37.67162403331352,
+        218.8841463414634,
+        374.3283759666864,
+        620.310975609756
+      ],
+      "contentLayoutEnvelope": [
+        37.67162403331352,
+        171.339954958783,
+        374.3283759666864,
+        521.3561018101469
+      ],
+      "visibleContentBottom": 521.3561018101469,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 98.95487379960912,
+      "summary": [
+        17.0,
+        518.5,
+        395.0,
+        577.5
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        648.0
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        231.0
+      ]
+    },
+    {
+      "mode": "balance",
+      "stretch": 48.0,
+      "separation": 0.65,
+      "body": [
+        45.78889054134446,
+        193.36411585365857,
+        366.2111094586555,
+        583.7063475609757
+      ],
+      "contentLayoutEnvelope": [
+        45.78889054134446,
+        115.3502741777854,
+        366.2111094586555,
+        448.48766051245013
+      ],
+      "visibleContentBottom": 448.48766051245013,
+      "bottomClippedHeightFraction": 0.0,
+      "bodyMinusUnclippedContentBottom": 135.21868704852557,
+      "summary": [
+        17.0,
+        447.55,
+        395.0,
+        506.55
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        641.1
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        224.1
+      ]
+    },
+    {
+      "mode": "mind",
+      "stretch": 0.0,
+      "separation": 0.35,
+      "body": [
+        19.646000000000015,
+        214.9451612903226,
+        392.354,
+        454.7951612903226
+      ],
+      "contentLayoutEnvelope": [
+        19.316774193548383,
+        214.9451612903226,
+        392.6832258064516,
+        568.5567741935483
+      ],
+      "visibleContentBottom": 454.7951612903226,
+      "bottomClippedHeightFraction": 0.3217134527037135,
+      "bodyMinusUnclippedContentBottom": -113.76161290322574,
+      "summary": [
+        17.0,
+        542.65,
+        395.0,
+        601.65
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        591.3
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        222.3
+      ]
+    },
+    {
+      "mode": "mind",
+      "stretch": 0.0,
+      "separation": 0.5,
+      "body": [
+        20.78,
+        205.83870967741936,
+        391.22,
+        390.3387096774194
+      ],
+      "contentLayoutEnvelope": [
+        21.145806451612913,
+        205.83870967741936,
+        390.8541935483871,
+        555.9858064516129
+      ],
+      "visibleContentBottom": 390.3387096774194,
+      "bottomClippedHeightFraction": 0.47307859553957043,
+      "bodyMinusUnclippedContentBottom": -165.64709677419353,
+      "summary": [
+        17.0,
+        482.5,
+        395.0,
+        541.5
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        588.0
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        219.0
+      ]
+    },
+    {
+      "mode": "mind",
+      "stretch": 0.0,
+      "separation": 0.65,
+      "body": [
+        21.914000000000016,
+        196.73225806451612,
+        390.086,
+        325.8822580645161
+      ],
+      "contentLayoutEnvelope": [
+        22.974838709677414,
+        196.73225806451612,
+        389.02516129032256,
+        543.4148387096774
+      ],
+      "visibleContentBottom": 325.8822580645161,
+      "bottomClippedHeightFraction": 0.6274690243748116,
+      "bodyMinusUnclippedContentBottom": -217.53258064516126,
+      "summary": [
+        17.0,
+        422.35,
+        395.0,
+        481.35
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        584.7
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        215.7
+      ]
+    },
+    {
+      "mode": "mind",
+      "stretch": 48.0,
+      "separation": 0.35,
+      "body": [
+        19.646000000000015,
+        230.5451612903226,
+        392.354,
+        501.5951612903226
+      ],
+      "contentLayoutEnvelope": [
+        19.316774193548383,
+        230.5451612903226,
+        392.6832258064516,
+        614.9743225806452
+      ],
+      "visibleContentBottom": 501.5951612903226,
+      "bottomClippedHeightFraction": 0.2949286180834189,
+      "bodyMinusUnclippedContentBottom": -113.3791612903226,
+      "summary": [
+        17.0,
+        589.45,
+        395.0,
+        648.45
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        654.9
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        237.9
+      ]
+    },
+    {
+      "mode": "mind",
+      "stretch": 48.0,
+      "separation": 0.5,
+      "body": [
+        20.78,
+        217.83870967741936,
+        391.22,
+        426.3387096774194
+      ],
+      "contentLayoutEnvelope": [
+        21.145806451612913,
+        217.83870967741936,
+        390.8541935483871,
+        591.4593548387097
+      ],
+      "visibleContentBottom": 426.3387096774194,
+      "bottomClippedHeightFraction": 0.441947326251226,
+      "bodyMinusUnclippedContentBottom": -165.12064516129033,
+      "summary": [
+        17.0,
+        518.5,
+        395.0,
+        577.5
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        648.0
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        231.0
+      ]
+    },
+    {
+      "mode": "mind",
+      "stretch": 48.0,
+      "separation": 0.65,
+      "body": [
+        21.914000000000016,
+        205.13225806451612,
+        390.086,
+        351.0822580645161
+      ],
+      "contentLayoutEnvelope": [
+        22.974838709677414,
+        205.13225806451612,
+        389.02516129032256,
+        568.0837419354839
+      ],
+      "visibleContentBottom": 351.0822580645161,
+      "bottomClippedHeightFraction": 0.5978801396720934,
+      "bodyMinusUnclippedContentBottom": -217.00148387096777,
+      "summary": [
+        17.0,
+        447.54999999999995,
+        395.0,
+        506.54999999999995
+      ],
+      "joined": [
+        17.0,
+        104.0,
+        395.0,
+        641.1
+      ],
+      "header": [
+        17.0,
+        104.0,
+        395.0,
+        224.1
+      ]
+    }
+  ]
+}

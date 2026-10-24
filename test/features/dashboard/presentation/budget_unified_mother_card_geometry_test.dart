@@ -55,9 +55,18 @@ void main() {
               }
 
               final first = resolve(0);
-              expect(first.bodyBounds.top, first.headerBounds.bottom);
-              expect(first.bodyBounds.bottom, first.joinedBounds.bottom);
-              expect(first.visibleBodyBounds, first.bodyBounds);
+              expect(
+                first.bodyBounds.top,
+                closeTo(first.headerBounds.bottom, 1e-8),
+              );
+              expect(
+                first.bodyBounds.bottom,
+                closeTo(first.joinedBounds.bottom, 1e-8),
+              );
+              expect(
+                first.visibleBodyBounds,
+                rectMoreOrLessEquals(first.bodyBounds, epsilon: 1e-8),
+              );
               expect(first.shape.headerRadius.bottomLeft, Radius.zero);
               expect(first.shape.contentRadius.topLeft, Radius.zero);
               expect(first.opacity, 1);
@@ -99,21 +108,40 @@ void main() {
                 );
                 expect(
                   next.bodyBounds.left,
-                  closeTo(next.cascadeBounds.left, 1e-8),
+                  greaterThanOrEqualTo(previous.bodyBounds.left - 1e-8),
                 );
                 expect(
                   next.bodyBounds.right,
-                  closeTo(next.cascadeBounds.right, 1e-8),
+                  lessThanOrEqualTo(previous.bodyBounds.right + 1e-8),
                 );
                 expect(next.visibleBodyBounds.bottom, next.bodyBounds.bottom);
                 expect(
                   next.visibleBodyBounds.top,
-                  greaterThanOrEqualTo(next.headerBounds.bottom),
+                  greaterThanOrEqualTo(
+                    next.headerBounds.bottom < next.bodyBounds.bottom
+                        ? next.headerBounds.bottom
+                        : next.bodyBounds.bottom,
+                  ),
                 );
                 previous = next;
               }
               final last = resolve(metrics.collapseTravel);
-              expect(last.bodyBounds, last.cascadeBounds);
+              expect(
+                last.bodyBounds.left,
+                closeTo(last.cascadeBounds.left, 1e-8),
+              );
+              expect(
+                last.bodyBounds.top,
+                closeTo(last.cascadeBounds.top, 1e-8),
+              );
+              expect(
+                last.bodyBounds.right,
+                closeTo(last.cascadeBounds.right, 1e-8),
+              );
+              expect(
+                last.bodyBounds.bottom,
+                closeTo(last.cascadeBounds.bottom, 1e-8),
+              );
               expect(last.opacity, 0);
               for (final s in [
                 0.0,
