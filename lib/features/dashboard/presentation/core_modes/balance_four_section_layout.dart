@@ -9,8 +9,8 @@ import 'package:flutter/foundation.dart';
 final class BalanceFourSectionLayout {
   /// The existing authored four-card content has a meaningful compact-phone
   /// lower bound. Below it, preserving all four live cards would produce
-  /// clipped text/plots; the Balance surface retains its established
-  /// carousel/detail fallback for such transient geometry.
+  /// clipped text/plots; the canonical scope canvas scales uniformly below
+  /// these dimensions without mounting a different presentation family.
   static const minimumRenderableBodyWidth = 240.0;
   static const minimumRenderableBodyHeight = 180.0;
 

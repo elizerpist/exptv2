@@ -5,6 +5,14 @@ set -euo pipefail
 # in the nightly/profile lanes; do not grow this list by duplicating an
 # invariant already owned below.
 flutter test \
+  test/features/dashboard/presentation/mind_unified_mother_card_geometry_test.dart \
+  test/features/dashboard/presentation/mind_unified_detachment_test.dart \
+  test/features/dashboard/presentation/balance_unified_mother_card_geometry_test.dart \
+  test/features/dashboard/presentation/balance_metric_cards_test.dart \
+  test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart \
+  test/features/dashboard/presentation/balance_four_section_layout_test.dart \
+  test/features/dashboard/presentation/dashboard_core_mode_host_test.dart \
+  test/boundary/balance_presentation_settings_boundary_test.dart \
   test/features/dashboard/presentation/budget_unified_mother_card_geometry_test.dart \
   test/features/dashboard/presentation/budget_unified_detachment_test.dart \
   test/features/dashboard/presentation/budget_unified_detachment_state_test.dart \
@@ -83,13 +91,6 @@ flutter test \
   test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart \
   test/features/dashboard/motion/dashboard_semantic_catalog_test.dart \
   test/shared/presentation/fluvi_slide_up_sheet_test.dart \
-  "$@"
-
-# The header integration owner includes its two new visual endpoints. Other
-# historical surface goldens remain in their existing local/nightly lane.
-flutter test \
-  test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart \
-  --plain-name 'daily calculation changes amount and bar atomically without navigation or lower data changes' \
   "$@"
 
 # Preserve Budget's authored annual clay baselines after sharing its primitive.

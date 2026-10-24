@@ -34,6 +34,10 @@ import '../dashboard_corner_roundness.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
 import 'dashboard_header_visual_engine.dart';
+import 'mind_unified_mother_card_geometry.dart';
+import 'dashboard_joined_mother_card_material.dart';
+import '../dashboard_shadow_style.dart';
+import '../dashboard_border_style.dart';
 
 /// UI-side acknowledgement of one actually laid-out/painted immutable Mind
 /// frame. Core owns the correlation trace; this callback only reports the
@@ -141,9 +145,10 @@ class MindDashboardCoreSurface extends StatelessWidget {
       contentRadius: contentRadius,
       expansionProgress: geometry.headerExpansionProgress,
     );
-    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
-      geometry: geometry,
-      bodyReveal: geometry.headerExpansionProgress,
+    final transition = MindUnifiedMotherCardGeometry.resolve(
+      frame: geometry,
+      headerRadius: headerRadius,
+      contentRadius: contentRadius,
     );
     final header = DashboardCoreModeHeaderScaffold(
       bounds: geometry.headerBounds,
@@ -160,8 +165,10 @@ class MindDashboardCoreSurface extends StatelessWidget {
       detailRight: 0,
       detailBottom: 0,
       borderRadiusOverride: surfaceShape.headerRadius,
-      showsDepth: !isSeamless,
-      showsBorder: !isSeamless,
+      showsDepth: true,
+      showsBorder: true,
+      depthProgress: isSeamless ? transition.separation : 1,
+      borderProgress: isSeamless ? transition.separation : 1,
       detail: behavioralScore == null
           ? null
           : _MindHeaderScoreDetail(
@@ -180,31 +187,14 @@ class MindDashboardCoreSurface extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          if (isSeamless) _MindMovingMaterial(transition: transition),
           if (isSeamless)
-            DashboardCoreModeFramePosition(
-              bounds: combinedBounds,
-              child: DashboardPlaceholderCard(
-                bounds: combinedBounds,
-                fillParent: true,
-                semanticKey: const ValueKey(
-                  'dashboard-core-mode-mind-seamless-surface',
-                ),
-                cornerFamily: DashboardCornerSurfaceFamily.contentCard,
-                borderSurface: DashboardBorderSurface.mindContent,
-                borderRadiusOverride: surfaceShape.outerRadius,
-              ),
-            ),
-          if (isSeamless)
-            DashboardCoreModeTopReveal(
+            _MindMovingContent(
+              transition: transition,
               bounds: bodyBounds,
-              reveal: geometry.headerExpansionProgress,
-              child: _MindSeamlessBodySurface(
-                bounds: bodyBounds,
-                dotsBounds: geometry.zone2IndicatorBounds,
-                borderRadius: surfaceShape.contentRadius,
-                headerVisualFrame: headerVisualFrame,
-                body: _bodyChild(),
-              ),
+              dotsBounds: geometry.zone2IndicatorBounds,
+              headerVisualFrame: headerVisualFrame,
+              body: _bodyChild(),
             )
           else
             DashboardCoreModeOpacityPosition(
@@ -428,82 +418,169 @@ class MindDashboardCoreSurface extends StatelessWidget {
   }
 }
 
-/// Mind's existing analytical body rendered inside the seamless outer shell.
-/// It retains the original body widget and dot content; only the container
-/// relationship changes. The small gradient is a shallow, non-interactive
-/// connection cue from the reactive Header to the otherwise white body.
-final class _MindSeamlessBodySurface extends StatelessWidget {
-  const _MindSeamlessBodySurface({
+/// Decorative material and real content are siblings. Vertical progress never
+/// reparents the heatmap, range controller or its scrollable subtree.
+final class _MindMovingMaterial extends StatelessWidget {
+  const _MindMovingMaterial({required this.transition});
+  final MindUnifiedMotherCardGeometry transition;
+
+  @override
+  Widget build(BuildContext context) {
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.contentCard);
+    return DashboardJoinedMotherCardMaterial(
+      headerBounds: transition.headerBounds,
+      bodyBounds: transition.visibleBodyBounds,
+      shape: transition.shape,
+      separation: transition.separation,
+      opacity: transition.opacity,
+      headerBase: depth.surfaceColor ?? FluviVisualTokens.surface,
+      shadows: depth.shadows,
+      border: DashboardBorderScope.profileOf(
+        context,
+      ).borderFor(DashboardBorderSurface.mindContent),
+      semanticKey: const ValueKey('dashboard-core-mode-mind-seamless-surface'),
+      bodyKey: const ValueKey('mind-unified-moving-body'),
+    );
+  }
+}
+
+final class _MindMovingContent extends StatelessWidget {
+  const _MindMovingContent({
+    required this.transition,
     required this.bounds,
     required this.dotsBounds,
-    required this.borderRadius,
     required this.headerVisualFrame,
     this.body,
   });
-
-  final DashboardBounds bounds;
-  final DashboardBounds dotsBounds;
-  final BorderRadius borderRadius;
+  final MindUnifiedMotherCardGeometry transition;
+  final DashboardBounds bounds, dotsBounds;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final Widget? body;
 
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
-    children: <Widget>[
-      DashboardPlaceholderCard(
-        bounds: bounds,
-        fillParent: true,
-        semanticKey: const ValueKey('dashboard-core-mode-mind-body'),
-        borderSurface: DashboardBorderSurface.mindContent,
-        borderRadiusOverride: borderRadius,
-        showsDepth: false,
-        showsBorder: false,
-        child: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            if (headerVisualFrame case final frames?)
-              ValueListenableBuilder<DashboardHeaderVisualFrame>(
-                valueListenable: frames,
-                builder: (context, frame, _) => IgnorePointer(
-                  child: Align(
+  Widget build(BuildContext context) {
+    final visible = transition.visibleBodyBounds;
+    final content = transition.contentBounds;
+    return Positioned.fromRect(
+      rect: visible,
+      child: IgnorePointer(
+        ignoring: transition.separation > .02,
+        child: ClipRRect(
+          borderRadius: transition.shape.contentRadius,
+          child: Opacity(
+            opacity: transition.opacity,
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Positioned(
+                  left: content.left - visible.left,
+                  top: content.top - visible.top,
+                  width: content.width,
+                  height: content.height,
+                  child: Transform.scale(
+                    scale: transition.contentScale,
                     alignment: Alignment.topCenter,
-                    child: SizedBox(
-                      height: 34,
-                      child: DecoratedBox(
-                        key: const ValueKey('mind-seamless-header-color-bleed'),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: <Color>[
-                              frame.colorB.withValues(alpha: .14),
-                              frame.colorA.withValues(alpha: .04),
-                              Colors.white.withValues(alpha: 0),
-                            ],
+                    child: Stack(
+                      fit: StackFit.expand,
+                      clipBehavior: Clip.hardEdge,
+                      children: [
+                        // Retain the original borderless body wash over the
+                        // joined perimeter at expansion. It has no depth or
+                        // border ownership, fades with separation, and cannot
+                        // paint outside the moving physical-body clip.
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color:
+                                    (DashboardShadowStyleScope.profileOf(
+                                                  context,
+                                                )
+                                                .depthFor(
+                                                  DashboardCornerSurfaceFamily
+                                                      .contentCard,
+                                                )
+                                                .surfaceColor ??
+                                            FluviVisualTokens.surface)
+                                        .withValues(
+                                          alpha: 1 - transition.separation,
+                                        ),
+                                borderRadius: transition.shape.contentRadius,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        if (headerVisualFrame case final frames?)
+                          Positioned.fill(
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              child: SizedBox(
+                                height: 34 * (1 - transition.separation),
+                                child: Opacity(
+                                  opacity: 1 - transition.separation,
+                                  child:
+                                      ValueListenableBuilder<
+                                        DashboardHeaderVisualFrame
+                                      >(
+                                        valueListenable: frames,
+                                        builder: (context, frame, _) =>
+                                            DecoratedBox(
+                                              key: const ValueKey(
+                                                'mind-seamless-header-color-bleed',
+                                              ),
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                  colors: [
+                                                    frame.colorB.withValues(
+                                                      alpha: .14,
+                                                    ),
+                                                    frame.colorA.withValues(
+                                                      alpha: .04,
+                                                    ),
+                                                    Colors.white.withValues(
+                                                      alpha: 0,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              child: const SizedBox.expand(),
+                                            ),
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        SizedBox.expand(
+                          key: const ValueKey('dashboard-core-mode-mind-body'),
+                          child: body ?? const SizedBox.expand(),
+                        ),
+                        Positioned(
+                          left: dotsBounds.left - bounds.left,
+                          top: dotsBounds.top - bounds.top,
+                          width: dotsBounds.width,
+                          height: dotsBounds.height,
+                          child: DashboardPlaceholderDots(
+                            bounds: dotsBounds,
+                            semanticKey: const ValueKey(
+                              'dashboard-core-mode-mind-dots',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-            body ?? const SizedBox.expand(),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
-      Positioned(
-        left: dotsBounds.left - bounds.left,
-        top: dotsBounds.top - bounds.top,
-        width: dotsBounds.width,
-        height: dotsBounds.height,
-        child: DashboardPlaceholderDots(
-          bounds: dotsBounds,
-          semanticKey: const ValueKey('dashboard-core-mode-mind-dots'),
-        ),
-      ),
-    ],
-  );
+    );
+  }
 }
 
 final class _MindTemporalEntryFrameProbe<T> extends StatefulWidget {

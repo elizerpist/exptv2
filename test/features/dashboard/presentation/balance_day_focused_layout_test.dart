@@ -29,6 +29,64 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_year_fo
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_sum_focused_layout.dart';
 
 void main() {
+  testWidgets('DAY content identity survives collapse and immediate reverse', (
+    tester,
+  ) async {
+    final scope = _day;
+    final settings = BalancePresentationController()
+      ..setDayLayoutPresentation(BalanceDayLayoutPresentation.focused)
+      ..setDayFocusedPresentation(
+        BalanceDayFocusedPresentation.financialComparison,
+      );
+    final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+      _linked(scope),
+    );
+    final header = ValueNotifier<DashboardBalancePresentation?>(_header(scope));
+    addTearDown(settings.dispose);
+    addTearDown(linked.dispose);
+    addTearDown(header.dispose);
+    await tester.pumpWidget(_host(scope, settings, linked, header));
+    await tester.pump();
+    final focused = find.byType(BalanceDayFocusedLayout);
+    final element = tester.element(focused);
+    final railState = tester.state(
+      find.byKey(const ValueKey('balance-day-momentum-rail')),
+    );
+    final prepared = linked.value;
+    final mother = tester.element(
+      find.byKey(const ValueKey('balance-unified-header-content-surface')),
+    );
+    for (final fraction in [0.0005, .05, .35, .1, .7, 1.0, 0.0]) {
+      await tester.pumpWidget(
+        _host(scope, settings, linked, header, collapseFraction: fraction),
+      );
+      await tester.pump();
+      expect(focused, findsOneWidget);
+      expect(tester.element(focused), same(element));
+      expect(linked.value, same(prepared));
+      expect(
+        tester.element(
+          find.byKey(const ValueKey('balance-unified-header-content-surface')),
+        ),
+        same(mother),
+      );
+      expect(
+        find.byKey(const ValueKey('balance-upper-carousel')),
+        findsNothing,
+      );
+      expect(
+        settings.value.dayFocusedPresentation,
+        BalanceDayFocusedPresentation.financialComparison,
+      );
+      expect(
+        tester.state(find.byKey(const ValueKey('balance-day-momentum-rail'))),
+        same(railState),
+      );
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   final originalComparator = goldenFileComparator;
   setUpAll(() async {
     if (originalComparator is LocalFileComparator) {

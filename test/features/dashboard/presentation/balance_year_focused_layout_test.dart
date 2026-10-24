@@ -333,14 +333,25 @@ void main() {
       );
       await tester.pump();
       expect(find.text('Egyenleg alakulása'), findsOneWidget);
-      await tester.pumpWidget(
-        _host(scope, settings, linked, header, collapseFraction: 1),
-      );
-      await tester.pump();
-      expect(find.byType(BalanceYearFocusedLayout), findsNothing);
-      await tester.pumpWidget(_host(scope, settings, linked, header));
-      await tester.pump();
-      expect(find.text('Egyenleg alakulása'), findsOneWidget);
+      final focused = find.byType(BalanceYearFocusedLayout);
+      final element = tester.element(focused);
+      final state = tester.state(focused);
+      final prepared = linked.value;
+      for (final fraction in [0.0005, .05, .35, .1, .7, 1.0, 0.0]) {
+        await tester.pumpWidget(
+          _host(scope, settings, linked, header, collapseFraction: fraction),
+        );
+        await tester.pump();
+        expect(focused, findsOneWidget);
+        expect(tester.element(focused), same(element));
+        expect(tester.state(focused), same(state));
+        expect(linked.value, same(prepared));
+        expect(
+          find.byKey(const ValueKey('balance-upper-carousel')),
+          findsNothing,
+        );
+        expect(find.text('Egyenleg alakulása'), findsOneWidget);
+      }
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

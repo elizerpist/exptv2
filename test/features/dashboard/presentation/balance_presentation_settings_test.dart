@@ -9,6 +9,64 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 void main() {
   test(
+    'retained content settings revise without owning outer layout state',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      final initial = controller.value;
+      controller.setChartMode(BalanceHeaderChartMode.adaptiveSummary);
+      expect(
+        controller.value,
+        initial.copyWith(
+          chartMode: BalanceHeaderChartMode.adaptiveSummary,
+          revision: 1,
+        ),
+      );
+      controller.setChartMode(BalanceHeaderChartMode.adaptiveSummary);
+      expect(notifications, 1);
+      controller.setUsesChildCards(false);
+      expect(controller.value.usesChildCards, isFalse);
+      expect(
+        controller.value.sumLayoutPresentation,
+        initial.sumLayoutPresentation,
+      );
+      expect(
+        controller.value.yearLayoutPresentation,
+        initial.yearLayoutPresentation,
+      );
+      expect(
+        controller.value.monthLayoutPresentation,
+        initial.monthLayoutPresentation,
+      );
+      expect(
+        controller.value.dayLayoutPresentation,
+        initial.dayLayoutPresentation,
+      );
+      expect(controller.value.copyWith(), controller.value);
+      expect(controller.value.copyWith().hashCode, controller.value.hashCode);
+      controller.reset();
+      expect(controller.value, initial);
+    },
+  );
+
+  test('all retained per-scope persisted layout indices remain stable', () {
+    expect(BalanceSumLayoutPresentation.current.index, 0);
+    expect(BalanceSumLayoutPresentation.focused.index, 1);
+    expect(BalanceYearLayoutPresentation.current.index, 0);
+    expect(BalanceYearLayoutPresentation.focused.index, 1);
+    expect(BalanceMonthLayoutPresentation.current.index, 0);
+    expect(BalanceMonthLayoutPresentation.focused.index, 1);
+    expect(BalanceDayLayoutPresentation.current.index, 0);
+    expect(BalanceDayLayoutPresentation.focused.index, 1);
+    expect(BalanceDayFocusedPresentation.monthlyNetMarginImpact.index, 3);
+    expect(BalanceDayRatioPresentation.netMargin.index, 1);
+    expect(BalanceDayRatioViewPresentation.performanceIndex.index, 1);
+    expect(BalanceDayPerformanceVisualPresentation.horizontalMeter.index, 1);
+  });
+
+  test(
     'monthly impact perspective retains earlier indices and independent ratio choices',
     () {
       final controller = BalancePresentationController();
@@ -442,164 +500,6 @@ void main() {
   );
 
   test(
-    'Balance presentation settings retain chart/time choices and independently own Balance card presentation alternatives',
-    () {
-      final controller = BalancePresentationController();
-      addTearDown(controller.dispose);
-
-      expect(controller.value.chartMode, BalanceHeaderChartMode.compound);
-      expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
-      expect(
-        controller.value.latestTransactionCardPresentation,
-        BalanceLatestTransactionCardPresentation.avatarPartner,
-      );
-      expect(controller.value.balanceCarouselBorderEnabled, isTrue);
-      expect(controller.value.balanceCarouselBorderOpacity, 1);
-      expect(controller.value.balanceCarouselBackgroundOpacity, 1);
-      expect(controller.value.balanceCarouselWaveOpacity, 1);
-      expect(
-        controller.value.balanceCarouselWaveSpeedMultiplier,
-        balanceCarouselWaveDefaultSpeedMultiplier,
-      );
-      expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
-      expect(controller.value.balanceCarouselWaveAnimationEnabled, isTrue);
-      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
-      expect(controller.value.balanceContentCardBorderOpacity, 1);
-      expect(
-        controller.value.visibleBalanceCarouselCardKinds,
-        equals(
-          Set<BalanceCarouselCardKind>.from(BalanceCarouselCardKind.values),
-        ),
-      );
-      controller
-        ..setChartMode(BalanceHeaderChartMode.adaptiveSummary)
-        ..setTimeLabels(BalanceHeaderChartTimeLabels.visible)
-        ..setLatestTransactionCardPresentation(
-          BalanceLatestTransactionCardPresentation.threeLine,
-        )
-        ..setBalanceCarouselBorderEnabled(false)
-        ..setBalanceCarouselBorderOpacity(.42)
-        ..setBalanceCarouselBackgroundOpacity(.73)
-        ..setBalanceCarouselWaveOpacity(.61)
-        ..setBalanceCarouselTintedBackgroundEnabled(false)
-        ..setBalanceContentCardBorderOpacity(.27);
-      expect(
-        controller.value.chartMode,
-        BalanceHeaderChartMode.adaptiveSummary,
-      );
-      expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.visible);
-      expect(
-        controller.value.latestTransactionCardPresentation,
-        BalanceLatestTransactionCardPresentation.threeLine,
-      );
-      expect(controller.value.balanceCarouselBorderEnabled, isFalse);
-      expect(
-        controller.value.balanceCarouselBorderOpacity,
-        .42,
-        reason:
-            'Disabling the outline must preserve the independently chosen opacity.',
-      );
-      expect(controller.value.balanceCarouselBackgroundOpacity, .73);
-      expect(controller.value.balanceCarouselWaveOpacity, .61);
-      expect(controller.value.balanceCarouselTintedBackgroundEnabled, isFalse);
-      expect(controller.value.balanceContentCardBorderOpacity, .27);
-      expect(controller.value.revision, 9);
-
-      final unchangedRevision = controller.value.revision;
-      controller.setLatestTransactionCardPresentation(
-        BalanceLatestTransactionCardPresentation.threeLine,
-      );
-      expect(controller.value.revision, unchangedRevision);
-      expect(
-        controller.value.copyWith(),
-        controller.value,
-        reason: 'The render-only setting participates in value identity.',
-      );
-    },
-  );
-
-  test(
-    'BCV-SETTINGS RED: card visibility is typed, canonical, and refuses an empty carousel',
-    () {
-      final controller = BalancePresentationController();
-      addTearDown(controller.dispose);
-
-      expect(
-        controller.setBalanceCarouselCardVisible(
-          BalanceCarouselCardKind.forecast,
-          false,
-        ),
-        isTrue,
-      );
-      expect(
-        controller.value.isBalanceCarouselCardVisible(
-          BalanceCarouselCardKind.forecast,
-        ),
-        isFalse,
-      );
-      expect(
-        controller.setBalanceCarouselCardVisible(
-          BalanceCarouselCardKind.forecast,
-          true,
-        ),
-        isTrue,
-      );
-      for (final kind in BalanceCarouselCardKind.values.skip(1)) {
-        expect(controller.setBalanceCarouselCardVisible(kind, false), isTrue);
-      }
-      expect(
-        controller.setBalanceCarouselCardVisible(
-          BalanceCarouselCardKind.cashflow,
-          false,
-        ),
-        isFalse,
-        reason: 'At least one Balance carousel card must remain visible.',
-      );
-      expect(
-        controller.value.visibleBalanceCarouselCardKinds,
-        <BalanceCarouselCardKind>{BalanceCarouselCardKind.cashflow},
-      );
-
-      controller.reset();
-      expect(
-        controller.value.visibleBalanceCarouselCardKinds,
-        equals(
-          Set<BalanceCarouselCardKind>.from(BalanceCarouselCardKind.values),
-        ),
-      );
-    },
-  );
-
-  test(
-    'Balance visual customization clamps only its opacity writer and preserves every sibling setting',
-    () {
-      final controller = BalancePresentationController();
-      addTearDown(controller.dispose);
-
-      controller
-        ..setBalanceCarouselBorderOpacity(-.2)
-        ..setBalanceCarouselBackgroundOpacity(1.2)
-        ..setBalanceCarouselWaveOpacity(1.4)
-        ..setBalanceContentCardBorderOpacity(.5);
-
-      expect(controller.value.balanceCarouselBorderOpacity, 0);
-      expect(controller.value.balanceCarouselBackgroundOpacity, 1);
-      expect(controller.value.balanceCarouselWaveOpacity, 1);
-      expect(controller.value.balanceContentCardBorderOpacity, .5);
-      expect(controller.value.balanceCarouselBorderEnabled, isTrue);
-      expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
-
-      final revision = controller.value.revision;
-      controller
-        ..setBalanceCarouselBorderOpacity(0)
-        ..setBalanceCarouselBackgroundOpacity(1)
-        ..setBalanceCarouselWaveOpacity(1)
-        ..setBalanceContentCardBorderOpacity(.5);
-      expect(controller.value.revision, revision);
-    },
-  );
-
-  test(
     'BALANCE-REFINEMENT-SETTINGS: header partition and Month rhythm stay revisioned presentation-only choices',
     () {
       final controller = BalancePresentationController();
@@ -714,107 +614,12 @@ void main() {
   );
 
   test(
-    'BWA-SETTINGS RED: tint visibility gates stored background opacity without changing wave or border choices',
-    () {
-      final controller = BalancePresentationController();
-      addTearDown(controller.dispose);
-
-      controller
-        ..setBalanceCarouselBorderOpacity(.42)
-        ..setBalanceCarouselWaveOpacity(.61)
-        ..setBalanceCarouselBackgroundOpacity(.38)
-        ..setBalanceCarouselTintedBackgroundEnabled(false);
-
-      expect(controller.value.balanceCarouselTintedBackgroundEnabled, isFalse);
-      expect(controller.value.balanceCarouselBackgroundOpacity, .38);
-      expect(controller.value.balanceCarouselBorderOpacity, .42);
-      expect(controller.value.balanceCarouselWaveOpacity, .61);
-
-      controller.setBalanceCarouselTintedBackgroundEnabled(true);
-      expect(controller.value.balanceCarouselBackgroundOpacity, .38);
-      controller.setBalanceCarouselWaveOpacity(.17);
-      expect(controller.value.balanceCarouselBackgroundOpacity, .38);
-      expect(controller.value.balanceCarouselBorderOpacity, .42);
-    },
-  );
-
-  test(
-    'BWD-SETTINGS RED: wave animation and colored content border retain independent stored opacity defaults',
-    () {
-      final dynamic controller = BalancePresentationController();
-      addTearDown(controller.dispose);
-
-      expect(controller.value.balanceCarouselWaveAnimationEnabled, isTrue);
-      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
-      expect(controller.value.balanceCarouselBorderOpacity, 1);
-      expect(controller.value.balanceContentCardBorderOpacity, 1);
-
-      controller
-        ..setBalanceCarouselWaveAnimationEnabled(true)
-        ..setBalanceContentCardColoredBorderEnabled(true)
-        ..setBalanceCarouselBorderOpacity(.37)
-        ..setBalanceContentCardBorderOpacity(.63)
-        ..setBalanceCarouselWaveAnimationEnabled(false)
-        ..setBalanceContentCardColoredBorderEnabled(false);
-
-      expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
-      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
-      expect(
-        controller.value.balanceCarouselBorderOpacity,
-        .37,
-        reason:
-            'The carousel visibility choices must not rewrite border alpha.',
-      );
-      expect(
-        controller.value.balanceContentCardBorderOpacity,
-        .63,
-        reason: 'The content color toggle must not rewrite its border alpha.',
-      );
-    },
-  );
-
-  test(
     'BWD-DEFAULTS RED: Balance starts with the compound header function',
     () {
       final controller = BalancePresentationController();
       addTearDown(controller.dispose);
 
       expect(controller.value.chartMode, BalanceHeaderChartMode.compound);
-    },
-  );
-
-  test(
-    'WV-SPEED RED: wave speed is independently clamped and resolves the authored cycle duration',
-    () {
-      final controller = BalancePresentationController();
-      addTearDown(controller.dispose);
-
-      expect(controller.value.balanceCarouselWaveSpeedMultiplier, 1);
-      expect(
-        balanceCarouselWaveEffectiveDuration(
-          controller.value.balanceCarouselWaveSpeedMultiplier,
-        ),
-        const Duration(seconds: 6),
-      );
-
-      controller
-        ..setBalanceCarouselWaveSpeedMultiplier(.5)
-        ..setBalanceCarouselWaveSpeedMultiplier(2);
-      expect(
-        balanceCarouselWaveEffectiveDuration(.5),
-        const Duration(seconds: 12),
-      );
-      expect(
-        balanceCarouselWaveEffectiveDuration(2),
-        const Duration(seconds: 3),
-      );
-
-      controller.setBalanceCarouselWaveSpeedMultiplier(9);
-      expect(controller.value.balanceCarouselWaveSpeedMultiplier, 3);
-      controller.setBalanceCarouselWaveSpeedMultiplier(0);
-      expect(controller.value.balanceCarouselWaveSpeedMultiplier, .25);
-      expect(controller.value.balanceCarouselWaveOpacity, 1);
-      expect(controller.value.balanceCarouselBorderOpacity, 1);
     },
   );
 
@@ -989,20 +794,6 @@ void main() {
       expect(day.points.single.entryId, '2025-salary');
     },
   );
-  test(
-    'ALT-MOTHER-RED: alternative Balance mother card is visible by default, user-changeable, and resettable',
-    () {
-      final controller = BalancePresentationController();
-      addTearDown(controller.dispose);
-
-      expect(controller.value.alternativeMotherCardVisible, isTrue);
-      controller.setAlternativeMotherCardVisible(false);
-      expect(controller.value.alternativeMotherCardVisible, isFalse);
-      controller.reset();
-      expect(controller.value.alternativeMotherCardVisible, isTrue);
-    },
-  );
-
   test(
     'BALANCE-CHILD-CARDS-01: child-card chrome defaults on and remains a revisioned presentation-only preference',
     () {

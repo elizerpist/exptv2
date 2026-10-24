@@ -29,155 +29,161 @@ void main() {
         initialMode: DashboardModeSpec.balance,
       );
       final headerVisual = DashboardHeaderVisualController(vsync: tester);
-      final balanceHeaderFrame = DashboardBalanceHeaderColorPolicy(
-        tuning: headerVisual.tuning,
-      );
-      final balance = ValueNotifier<DashboardBalancePresentation?>(
-        DashboardBalancePresentation(
-          scopeKey: 'all',
-          coreRevision: 1,
-          incomeTotalMinor: 1000,
-          expenseTotalMinor: 100,
-          netTotalMinor: 900,
-          formattedNetTotal: '9 Ft',
-          presentationId: 1,
-          history: DashboardBalanceHistorySeries(
-            startInclusiveEpochMinute: 20000 * 1440,
-            endInclusiveEpochMinute: 20100 * 1440,
-            points: const <DashboardBalanceHistoryPoint>[
-              DashboardBalanceHistoryPoint(
-                entryId: 'first',
-                epochDay: 20000,
-                epochMinute: 20000 * 1440,
-                incomeTotalMinor: 1000,
-                expenseTotalMinor: 0,
-                balanceMinor: 1000,
-              ),
-              DashboardBalanceHistoryPoint(
-                entryId: 'last',
-                epochDay: 20100,
-                epochMinute: 20100 * 1440,
-                incomeTotalMinor: 1000,
-                expenseTotalMinor: 100,
-                balanceMinor: 900,
-              ),
-            ],
-          ),
-        ),
-      );
-      final settings = BalancePresentationController();
-      final expansion = _ExpansionRecorder();
-      addTearDown(controller.dispose);
-      addTearDown(balanceHeaderFrame.dispose);
-      addTearDown(balance.dispose);
-      addTearDown(settings.dispose);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SizedBox(
-            width: DashboardLayoutMetrics.reference.canvasWidth,
-            height: DashboardLayoutMetrics.reference.canvasHeight,
-            child: DashboardCoreModeHost(
-              controller: controller,
-              presentationFor: (mode) => _presentationFor(mode),
-              balancePresentation: balance,
-              balancePresentationSettings: settings,
-              balanceHeaderVisualFrame: balanceHeaderFrame,
-              headerVisualController: headerVisual,
-              onVerticalExpansionStart: expansion.begin,
-              onVerticalExpansionDragBy: expansion.dragBy,
-              onVerticalExpansionEnd: expansion.end,
+      try {
+        final balanceHeaderFrame = DashboardBalanceHeaderColorPolicy(
+          tuning: headerVisual.tuning,
+        );
+        final balance = ValueNotifier<DashboardBalancePresentation?>(
+          DashboardBalancePresentation(
+            scopeKey: 'all',
+            coreRevision: 1,
+            incomeTotalMinor: 1000,
+            expenseTotalMinor: 100,
+            netTotalMinor: 900,
+            formattedNetTotal: '9 Ft',
+            presentationId: 1,
+            history: DashboardBalanceHistorySeries(
+              startInclusiveEpochMinute: 20000 * 1440,
+              endInclusiveEpochMinute: 20100 * 1440,
+              points: const <DashboardBalanceHistoryPoint>[
+                DashboardBalanceHistoryPoint(
+                  entryId: 'first',
+                  epochDay: 20000,
+                  epochMinute: 20000 * 1440,
+                  incomeTotalMinor: 1000,
+                  expenseTotalMinor: 0,
+                  balanceMinor: 1000,
+                ),
+                DashboardBalanceHistoryPoint(
+                  entryId: 'last',
+                  epochDay: 20100,
+                  epochMinute: 20100 * 1440,
+                  incomeTotalMinor: 1000,
+                  expenseTotalMinor: 100,
+                  balanceMinor: 900,
+                ),
+              ],
             ),
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      final button = tester.getRect(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-visual-tuner-button'),
-        ),
-      );
-      final header = tester.getRect(
-        find.byKey(
-          const ValueKey<String>('dashboard-core-mode-balance-header'),
-        ),
-      );
-      final modeIcon = tester.getRect(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-mode-icon-balance'),
-        ),
-      );
-      expect(button.bottom, lessThanOrEqualTo(header.top));
-      expect(button.right, closeTo(header.right - 8, .01));
-      expect(
-        modeIcon.right,
-        closeTo(header.right - 14, .01),
-        reason: 'The mode action remains in the Header right corner.',
-      );
-      final balanceModeLabel = find.byKey(
-        const ValueKey<String>('dashboard-core-mode-label-balance'),
-      );
-      expect(balanceModeLabel, findsNothing);
-      final balanceModeIcon = find.byKey(
-        const ValueKey<String>('dashboard-header-mode-icon-balance'),
-      );
-      expect(balanceModeIcon, findsOneWidget);
-      headerVisual.setBalanceHeaderIconColor(
-        DashboardHeaderForegroundColor.black,
-      );
-      await tester.pump();
-      expect(
-        tester
-            .widget<PreparedVectorPictureView>(
-              find.descendant(
-                of: balanceModeIcon,
-                matching: find.byType(PreparedVectorPictureView),
+        );
+        final settings = BalancePresentationController()
+          ..setHeaderGraphPresentation(
+            BalanceHeaderGraphPresentation.lineChart,
+          );
+        final expansion = _ExpansionRecorder();
+        addTearDown(controller.dispose);
+        addTearDown(balanceHeaderFrame.dispose);
+        addTearDown(balance.dispose);
+        addTearDown(settings.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: SizedBox(
+              width: DashboardLayoutMetrics.reference.canvasWidth,
+              height: DashboardLayoutMetrics.reference.canvasHeight,
+              child: DashboardCoreModeHost(
+                controller: controller,
+                presentationFor: (mode) => _presentationFor(mode),
+                balancePresentation: balance,
+                balancePresentationSettings: settings,
+                balanceHeaderVisualFrame: balanceHeaderFrame,
+                headerVisualController: headerVisual,
+                onVerticalExpansionStart: expansion.begin,
+                onVerticalExpansionDragBy: expansion.dragBy,
+                onVerticalExpansionEnd: expansion.end,
               ),
-            )
-            .color,
-        Colors.black,
-        reason: 'The Header action consumes the mode-local icon channel.',
-      );
-      headerVisual.setGlobalTypography(FluviTypographyProfile.colorLab);
-      await tester.pump();
-      expect(balanceModeIcon, findsOneWidget);
-      headerVisual.setGlobalTypography(FluviTypographyProfile.app);
-      await tester.pump();
-      expect(balanceModeIcon, findsOneWidget);
-      await tester.tap(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-visual-tuner-button'),
-        ),
-      );
-      await tester.pump();
-      expect(headerVisual.tunerOpen.value, isTrue);
-
-      final plot = tester.getRect(
-        find.byKey(
-          const ValueKey<String>('balance-header-history-chart-paint'),
-        ),
-      );
-      await tester.tapAt(Offset(plot.left + 3, plot.center.dy));
-      await tester.pump();
-      expect(
-        find.byKey(
-          const ValueKey<String>(
-            'balance-header-history-chart-selected-amount',
+            ),
           ),
-        ),
-        findsOneWidget,
-      );
-      await tester.drag(
-        find.byKey(
-          const ValueKey<String>('dashboard-core-mode-header-gesture-region'),
-        ),
-        const Offset(0, -100),
-      );
-      await tester.pump();
-      expect(expansion.starts, 1);
-      await tester.pumpWidget(const SizedBox.shrink());
-      headerVisual.dispose();
+        );
+        await tester.pump();
+        await tester.pump();
+
+        final button = tester.getRect(
+          find.byKey(
+            const ValueKey<String>('dashboard-header-visual-tuner-button'),
+          ),
+        );
+        final header = tester.getRect(
+          find.byKey(
+            const ValueKey<String>('dashboard-core-mode-balance-header'),
+          ),
+        );
+        final modeIcon = tester.getRect(
+          find.byKey(
+            const ValueKey<String>('dashboard-header-mode-icon-balance'),
+          ),
+        );
+        expect(button.bottom, lessThanOrEqualTo(header.top));
+        expect(button.right, closeTo(header.right - 8, .01));
+        expect(
+          modeIcon.right,
+          closeTo(header.right - 14, .01),
+          reason: 'The mode action remains in the Header right corner.',
+        );
+        final balanceModeLabel = find.byKey(
+          const ValueKey<String>('dashboard-core-mode-label-balance'),
+        );
+        expect(balanceModeLabel, findsNothing);
+        final balanceModeIcon = find.byKey(
+          const ValueKey<String>('dashboard-header-mode-icon-balance'),
+        );
+        expect(balanceModeIcon, findsOneWidget);
+        headerVisual.setBalanceHeaderIconColor(
+          DashboardHeaderForegroundColor.black,
+        );
+        await tester.pump();
+        expect(
+          tester
+              .widget<PreparedVectorPictureView>(
+                find.descendant(
+                  of: balanceModeIcon,
+                  matching: find.byType(PreparedVectorPictureView),
+                ),
+              )
+              .color,
+          Colors.black,
+          reason: 'The Header action consumes the mode-local icon channel.',
+        );
+        headerVisual.setGlobalTypography(FluviTypographyProfile.colorLab);
+        await tester.pump();
+        expect(balanceModeIcon, findsOneWidget);
+        headerVisual.setGlobalTypography(FluviTypographyProfile.app);
+        await tester.pump();
+        expect(balanceModeIcon, findsOneWidget);
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>('dashboard-header-visual-tuner-button'),
+          ),
+        );
+        await tester.pump();
+        expect(headerVisual.tunerOpen.value, isTrue);
+
+        final plot = tester.getRect(
+          find.byKey(
+            const ValueKey<String>('balance-header-history-chart-paint'),
+          ),
+        );
+        await tester.tapAt(Offset(plot.left + 3, plot.center.dy));
+        await tester.pump();
+        expect(
+          find.byKey(
+            const ValueKey<String>(
+              'balance-header-history-chart-selected-amount',
+            ),
+          ),
+          findsOneWidget,
+        );
+        await tester.drag(
+          find.byKey(
+            const ValueKey<String>('dashboard-core-mode-header-gesture-region'),
+          ),
+          const Offset(0, -100),
+        );
+        await tester.pump();
+        expect(expansion.starts, 1);
+        await tester.pumpWidget(const SizedBox.shrink());
+      } finally {
+        headerVisual.dispose();
+      }
     },
   );
 
@@ -215,6 +221,19 @@ void main() {
         );
         expect(
           find.byKey(const ValueKey('dashboard-core-mode-mind-card-2')),
+          findsNothing,
+        );
+      } else if (mode == DashboardModeSpec.balance) {
+        expect(
+          find.byKey(const ValueKey('balance-unified-header-content-surface')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('balance-tetris-slot-1')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('balance-upper-carousel')),
           findsNothing,
         );
       } else {
@@ -603,9 +622,7 @@ void main() {
     final header = find.byKey(
       const ValueKey('dashboard-core-mode-balance-header'),
     );
-    final card = find.byKey(
-      const ValueKey('dashboard-core-mode-balance-card-1'),
-    );
+    final card = find.byKey(const ValueKey('balance-tetris-slot-1'));
     final headerBefore = tester.getRect(header);
     final cardBefore = tester.getRect(card);
 
@@ -766,7 +783,7 @@ void main() {
     await tester.pumpWidget(_ModeHostHarness(controller: controller));
 
     await tester.drag(
-      find.byKey(const ValueKey('dashboard-core-mode-balance-card-1')),
+      find.byKey(const ValueKey('balance-tetris-slot-1')),
       const Offset(-260, 0),
     );
     await tester.pump();

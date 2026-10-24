@@ -1,0 +1,74 @@
+[
+  {
+    "src": "assets/mind_unified_detachment_expanded.png",
+    "label": "mind unified detachment expanded"
+  },
+  {
+    "src": "assets/mind_unified_detachment_first.png",
+    "label": "mind unified detachment first"
+  },
+  {
+    "src": "assets/mind_unified_detachment_early.png",
+    "label": "mind unified detachment early"
+  },
+  {
+    "src": "assets/mind_unified_detachment_half.png",
+    "label": "mind unified detachment half"
+  },
+  {
+    "src": "assets/mind_unified_detachment_near.png",
+    "label": "mind unified detachment near"
+  },
+  {
+    "src": "assets/mind_unified_detachment_collapsed.png",
+    "label": "mind unified detachment collapsed"
+  },
+  {
+    "src": "assets/balance_unified_detachment_expanded.png",
+    "label": "balance unified detachment expanded"
+  },
+  {
+    "src": "assets/balance_unified_detachment_first_frame.png",
+    "label": "balance unified detachment first frame"
+  },
+  {
+    "src": "assets/balance_unified_detachment_early.png",
+    "label": "balance unified detachment early"
+  },
+  {
+    "src": "assets/balance_unified_detachment_half.png",
+    "label": "balance unified detachment half"
+  },
+  {
+    "src": "assets/balance_unified_detachment_near_collapsed.png",
+    "label": "balance unified detachment near collapsed"
+  },
+  {
+    "src": "assets/balance_unified_detachment_collapsed.png",
+    "label": "balance unified detachment collapsed"
+  },
+  {
+    "src": "assets/mind_unified_detachment_bridge_expanded.png",
+    "label": "mind unified detachment bridge expanded"
+  },
+  {
+    "src": "assets/mind_unified_detachment_bridge_half.png",
+    "label": "mind unified detachment bridge half"
+  },
+  {
+    "src": "assets/mind_unified_detachment_year_heatmap_expanded.png",
+    "label": "mind unified detachment year heatmap expanded"
+  },
+  {
+    "src": "assets/mind_unified_detachment_year_heatmap_half.png",
+    "label": "mind unified detachment year heatmap half"
+  },
+  {
+    "src": "assets/mind_unified_detachment_month_heatmap_expanded.png",
+    "label": "mind unified detachment month heatmap expanded"
+  },
+  {
+    "src": "assets/mind_unified_detachment_month_heatmap_half.png",
+    "label": "mind unified detachment month heatmap half"
+  }
+]

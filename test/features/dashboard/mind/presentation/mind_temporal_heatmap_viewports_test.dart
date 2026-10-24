@@ -45,7 +45,8 @@ void main() {
         contributions: contributions,
       ).preview(range);
       final frames = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
-      final settings = MindYearHeatmapPresentationController();
+      final settings = MindYearHeatmapPresentationController()
+        ..setSumVisualStyle(MindSumVisualStyle.current);
       addTearDown(frames.dispose);
       addTearDown(settings.dispose);
 
@@ -652,7 +653,8 @@ void main() {
         contributions: contributions,
       ).preview(range);
       final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
-      final settings = MindYearHeatmapPresentationController();
+      final settings = MindYearHeatmapPresentationController()
+        ..setSumVisualStyle(MindSumVisualStyle.current);
       addTearDown(listenable.dispose);
       addTearDown(settings.dispose);
       await tester.pumpWidget(
@@ -1537,6 +1539,7 @@ void main() {
     'SUM-HEADER/CURVE-01 RED: detailed bands share the overlay header and receive independent curve presentation settings',
     (tester) async {
       final settings = MindYearHeatmapPresentationController()
+        ..setSumVisualStyle(MindSumVisualStyle.current)
         ..setSumLineInterpolationMode(MindSumLineInterpolationMode.catmullRom)
         ..setSumLineCatmullRomTension(.63)
         ..setSumLineTemporalSmoothingEnabled(true)
@@ -2236,7 +2239,8 @@ void main() {
         ],
       ).preview(range);
       final frameListenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
-      final settings = MindYearHeatmapPresentationController();
+      final settings = MindYearHeatmapPresentationController()
+        ..setSumVisualStyle(MindSumVisualStyle.current);
       addTearDown(frameListenable.dispose);
       addTearDown(settings.dispose);
       await tester.pumpWidget(

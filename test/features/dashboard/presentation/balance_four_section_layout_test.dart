@@ -33,7 +33,7 @@ void main() {
   });
 
   test(
-    'TET-03 RED: the full four-child composition only mounts when its shared body window has usable phone-card capacity',
+    'TET-03: capacity is responsive guidance, never a legacy layout selector',
     () {
       expect(
         BalanceFourSectionLayout.canRenderWithin(
@@ -47,8 +47,8 @@ void main() {
         ),
         isFalse,
         reason:
-            'A transient tiny dashboard frame must retain the established '
-            'carousel/detail fallback rather than clipping four live cards.',
+            'Tiny windows request bounded scaling of the same analytical content; '
+            'the capacity hint must never select the retired carousel.',
       );
     },
   );

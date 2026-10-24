@@ -1077,92 +1077,43 @@ void main() {
         BalanceYearBarPresentation.clay3d,
       );
 
-      final labels = find.byKey(
-        const ValueKey<String>(
-          'balance-header-history-chart-time-labels-hidden',
-        ),
-      );
-      await tester.ensureVisible(labels);
-      await tester.pump(const Duration(milliseconds: 250));
-      await tester.tap(labels);
-      await tester.pump();
-      expect(balance.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
-
-      final latestDefault = find.byKey(
-        const ValueKey<String>(
-          'balance-latest-card-presentation-avatarPartner',
-        ),
-      );
-      await tester.ensureVisible(latestDefault);
-      expect(latestDefault, findsOneWidget);
-      final latestThreeLine = find.byKey(
-        const ValueKey<String>('balance-latest-card-presentation-threeLine'),
-      );
-      await tester.tap(latestThreeLine);
-      await tester.pump();
-      expect(
-        balance.value.latestTransactionCardPresentation,
-        BalanceLatestTransactionCardPresentation.threeLine,
-      );
-
-      expect(find.text('BALANCE CAROUSEL'), findsOneWidget);
-      expect(find.text('BALANCE CONTENT CARD'), findsOneWidget);
-      final tintedBackground = find.byKey(
-        const ValueKey<String>('balance-carousel-tinted-background-enabled'),
-      );
-      final borderEnabled = find.byKey(
-        const ValueKey<String>('balance-carousel-border-enabled'),
-      );
-      final borderOpacity = find.byKey(
-        const ValueKey<String>('balance-carousel-border-opacity'),
-      );
-      final backgroundOpacity = find.byKey(
-        const ValueKey<String>('balance-carousel-background-opacity'),
-      );
-      final waveOpacity = find.byKey(
-        const ValueKey<String>('balance-carousel-wave-opacity'),
-      );
-      final waveAnimation = find.byKey(
-        const ValueKey<String>('balance-carousel-wave-animation-enabled'),
-      );
-      final waveSpeed = find.byKey(
-        const ValueKey<String>('balance-carousel-wave-speed'),
-      );
-      final contentColoredBorder = find.byKey(
-        const ValueKey<String>('balance-content-card-colored-border-enabled'),
-      );
-      final contentBorderOpacity = find.byKey(
-        const ValueKey<String>('balance-content-card-border-opacity'),
-      );
-      expect(tintedBackground, findsOneWidget);
-      expect(borderEnabled, findsOneWidget);
-      expect(borderOpacity, findsOneWidget);
-      expect(backgroundOpacity, findsOneWidget);
-      expect(waveOpacity, findsOneWidget);
-      expect(waveAnimation, findsOneWidget);
-      expect(waveSpeed, findsOneWidget);
-      expect(contentColoredBorder, findsOneWidget);
-      expect(contentBorderOpacity, findsOneWidget);
-
-      final cardVisibilitySubmenu = find.byKey(
-        const ValueKey<String>('balance-carousel-card-visibility-submenu'),
-      );
-      expect(cardVisibilitySubmenu, findsOneWidget);
-
-      final balanceSurfaceStyle = find.byKey(
-        const ValueKey<String>('balance-content-surface-style'),
-      );
-      expect(balanceSurfaceStyle, findsOneWidget);
+      for (final removed in <String>[
+        'balance-header-history-chart-time-labels-hidden',
+        'balance-latest-card-presentation-avatarPartner',
+        'balance-latest-card-presentation-threeLine',
+        'balance-carousel-tinted-background-enabled',
+        'balance-carousel-border-enabled',
+        'balance-carousel-border-opacity',
+        'balance-carousel-background-opacity',
+        'balance-carousel-wave-opacity',
+        'balance-carousel-wave-animation-enabled',
+        'balance-carousel-wave-speed',
+        'balance-content-card-colored-border-enabled',
+        'balance-content-card-border-opacity',
+        'balance-carousel-card-visibility-submenu',
+        'balance-content-surface-style',
+        'balance-unified-body-layout',
+        'balance-alternative-mother-card-visible',
+      ]) {
+        expect(
+          find.byKey(ValueKey<String>(removed)),
+          findsNothing,
+          reason: 'Retired Balance presentation controls must not be mounted.',
+        );
+      }
+      for (final title in <String>[
+        'BALANCE CAROUSEL',
+        'BALANCE CONTENT CARD',
+        'BALANCE ELRENDEZÉS',
+        'Balance kártyák',
+        'Utolsó tranzakció kártya',
+      ]) {
+        expect(find.text(title), findsNothing);
+      }
       final childCardsOff = find.byKey(
         const ValueKey<String>('balance-uses-child-cards-off'),
       );
-      expect(
-        childCardsOff,
-        findsOneWidget,
-        reason:
-            'The user-facing child-card setting belongs in the existing '
-            'hamburger tuner even before unified Balance is selected.',
-      );
+      expect(childCardsOff, findsOneWidget);
       tester
           .widget<RadioGroup<bool>>(
             find.ancestor(
@@ -1174,156 +1125,9 @@ void main() {
       await tester.pump();
       expect(balance.value.usesChildCards, isFalse);
       expect(
-        find.byKey(const ValueKey<String>('balance-unified-body-layout')),
-        findsOneWidget,
-        reason:
-            'Child-card chrome is independent from the already-selected '
-            'unified Balance content layout.',
+        balance.value.yearBarPresentation,
+        BalanceYearBarPresentation.clay3d,
       );
-      final unifiedBalance = find.byKey(
-        const ValueKey<String>('balance-content-style-unified'),
-      );
-      tester
-          .widget<RadioGroup<BalanceContentSurfaceStyle>>(
-            find.ancestor(
-              of: unifiedBalance,
-              matching: find.byType(RadioGroup<BalanceContentSurfaceStyle>),
-            ),
-          )
-          .onChanged(BalanceContentSurfaceStyle.unifiedCard);
-      await tester.pump();
-      expect(
-        balance.value.contentSurfaceStyle,
-        BalanceContentSurfaceStyle.unifiedCard,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('balance-unified-body-layout')),
-        findsOneWidget,
-      );
-      final motherCardVisible = find.byKey(
-        const ValueKey<String>('balance-alternative-mother-card-visible'),
-      );
-      expect(motherCardVisible, findsOneWidget);
-      final motherCardOff = find.byKey(
-        const ValueKey<String>('balance-alternative-mother-card-visible-off'),
-      );
-      await tester.ensureVisible(motherCardOff);
-      await tester.pump(const Duration(milliseconds: 250));
-      await tester.tap(motherCardOff);
-      await tester.pump();
-      expect(balance.value.alternativeMotherCardVisible, isFalse);
-      final fourSections = find.byKey(
-        const ValueKey<String>('balance-unified-body-four-section'),
-      );
-      tester
-          .widget<RadioGroup<BalanceUnifiedBodyLayout>>(
-            find.ancestor(
-              of: fourSections,
-              matching: find.byType(RadioGroup<BalanceUnifiedBodyLayout>),
-            ),
-          )
-          .onChanged(BalanceUnifiedBodyLayout.fourSectionTetris);
-      await tester.pump();
-      expect(
-        balance.value.unifiedBodyLayout,
-        BalanceUnifiedBodyLayout.fourSectionTetris,
-      );
-
-      final waveAnimationOn = find.byKey(
-        const ValueKey<String>('balance-carousel-wave-animation-enabled-on'),
-      );
-      await tester.ensureVisible(waveAnimationOn);
-      await tester.tap(waveAnimationOn);
-      await tester.pump();
-      expect(
-        (balance.value as dynamic).balanceCarouselWaveAnimationEnabled,
-        isTrue,
-      );
-
-      final contentColoredBorderOn = find.byKey(
-        const ValueKey<String>(
-          'balance-content-card-colored-border-enabled-on',
-        ),
-      );
-      await tester.ensureVisible(contentColoredBorderOn);
-      await tester.tap(contentColoredBorderOn);
-      await tester.pump();
-      expect(
-        (balance.value as dynamic).balanceContentCardColoredBorderEnabled,
-        isTrue,
-      );
-
-      final tintOff = find.byKey(
-        const ValueKey<String>(
-          'balance-carousel-tinted-background-enabled-off',
-        ),
-      );
-      tester
-          .widget<RadioGroup<bool>>(
-            find.ancestor(of: tintOff, matching: find.byType(RadioGroup<bool>)),
-          )
-          .onChanged(false);
-      await tester.pump();
-      expect(balance.value.balanceCarouselTintedBackgroundEnabled, isFalse);
-      expect(balance.value.balanceCarouselBorderEnabled, isTrue);
-
-      final borderOff = find.byKey(
-        const ValueKey<String>('balance-carousel-border-enabled-off'),
-      );
-      tester
-          .widget<RadioGroup<bool>>(
-            find.ancestor(
-              of: borderOff,
-              matching: find.byType(RadioGroup<bool>),
-            ),
-          )
-          .onChanged(false);
-      await tester.pump();
-      expect(balance.value.balanceCarouselBorderEnabled, isFalse);
-      expect(balance.value.balanceCarouselTintedBackgroundEnabled, isFalse);
-
-      tester
-          .widget<Slider>(
-            find.descendant(of: borderOpacity, matching: find.byType(Slider)),
-          )
-          .onChanged!(.4);
-      tester
-          .widget<Slider>(
-            find.descendant(
-              of: backgroundOpacity,
-              matching: find.byType(Slider),
-            ),
-          )
-          .onChanged!(.7);
-      tester
-          .widget<Slider>(
-            find.descendant(of: waveOpacity, matching: find.byType(Slider)),
-          )
-          .onChanged!(.6);
-      tester
-          .widget<Slider>(
-            find.descendant(of: waveSpeed, matching: find.byType(Slider)),
-          )
-          .onChanged!(2.5);
-      tester
-          .widget<Slider>(
-            find.descendant(
-              of: contentBorderOpacity,
-              matching: find.byType(Slider),
-            ),
-          )
-          .onChanged!(.2);
-      await tester.pump();
-      expect(balance.value.balanceCarouselBorderOpacity, .4);
-      expect(balance.value.balanceCarouselBackgroundOpacity, .7);
-      expect(balance.value.balanceCarouselWaveOpacity, .6);
-      expect(balance.value.balanceCarouselWaveSpeedMultiplier, 2.5);
-      expect(balance.value.balanceContentCardBorderOpacity, .2);
-      expect(find.text('40%'), findsOneWidget);
-      expect(find.text('70%'), findsOneWidget);
-      expect(find.text('60%'), findsOneWidget);
-      expect(find.text('2,50×'), findsOneWidget);
-      expect(find.text('20%'), findsOneWidget);
 
       expect(
         find.byKey(const ValueKey<String>('balance-carousel-width-boost')),

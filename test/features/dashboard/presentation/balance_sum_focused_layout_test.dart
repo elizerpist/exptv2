@@ -22,6 +22,57 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  testWidgets('SUM content identity survives collapse and immediate reverse', (
+    tester,
+  ) async {
+    final scope = const AllTimeScope();
+    final settings = BalancePresentationController()
+      ..setSumLayoutPresentation(BalanceSumLayoutPresentation.focused)
+      ..setSumFocusedPresentation(BalanceSumFocusedPresentation.stability);
+    final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+      _linked(scope),
+    );
+    final header = ValueNotifier<DashboardBalancePresentation?>(_header(scope));
+    addTearDown(settings.dispose);
+    addTearDown(linked.dispose);
+    addTearDown(header.dispose);
+    await tester.pumpWidget(_host(scope, settings, linked, header));
+    await tester.pump();
+    final focused = find.byType(BalanceSumFocusedLayout);
+    final element = tester.element(focused);
+    final state = tester.state(focused);
+    final prepared = linked.value;
+    final mother = tester.element(
+      find.byKey(const ValueKey('balance-unified-header-content-surface')),
+    );
+    for (final fraction in [0.0005, .05, .35, .1, .7, 1.0, 0.0]) {
+      await tester.pumpWidget(
+        _host(scope, settings, linked, header, collapseFraction: fraction),
+      );
+      await tester.pump();
+      expect(focused, findsOneWidget);
+      expect(tester.element(focused), same(element));
+      expect(tester.state(focused), same(state));
+      expect(linked.value, same(prepared));
+      expect(
+        tester.element(
+          find.byKey(const ValueKey('balance-unified-header-content-surface')),
+        ),
+        same(mother),
+      );
+      expect(
+        find.byKey(const ValueKey('balance-upper-carousel')),
+        findsNothing,
+      );
+      expect(
+        settings.value.sumFocusedPresentation,
+        BalanceSumFocusedPresentation.stability,
+      );
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   setUpAll(() async {
     await (FontLoader(
       'Inter',

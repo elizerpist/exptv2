@@ -16,6 +16,93 @@ void main() {
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
   test(
+    'obsolete Balance keys cannot reactivate legacy layouts or erase scope choices',
+    () async {
+      final legacy = <String, Object?>{
+        'balanceContentSurfaceStyle': 0,
+        'contentSurfaceStyle': 0,
+        'balanceUnifiedBodyLayout': 0,
+        'unifiedBodyLayout': 0,
+        'alternativeMotherCardVisible': false,
+        'balanceCarouselWaveAnimationEnabled': true,
+        'hiddenBalanceCarouselCardKinds': <int>[0, 1, 2],
+        'balanceHeaderChartTimeLabels': 1,
+        'balanceLatestTransactionCardPresentation': 1,
+        'balanceSumLayoutPresentation': 1,
+        'balanceYearLayoutPresentation': 1,
+        'balanceMonthLayoutPresentation': 1,
+        'balanceDayLayoutPresentation': 1,
+        'balanceDayFocusedPresentation': 3,
+        'balanceDayRatioPresentation': 1,
+        'balanceDayRatioViewPresentation': 1,
+        'balanceDayPerformanceVisualPresentation': 1,
+        'balanceUsesChildCards': false,
+        'sumVisualStyle': 0,
+      };
+      Map<String, Object?>? written;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          written = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return legacy;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      final restored = await store.read();
+      expect(
+        restored.balanceSumLayoutPresentation,
+        BalanceSumLayoutPresentation.focused,
+      );
+      expect(
+        restored.balanceYearLayoutPresentation,
+        BalanceYearLayoutPresentation.focused,
+      );
+      expect(
+        restored.balanceMonthLayoutPresentation,
+        BalanceMonthLayoutPresentation.focused,
+      );
+      expect(
+        restored.balanceDayLayoutPresentation,
+        BalanceDayLayoutPresentation.focused,
+      );
+      expect(
+        restored.balanceDayFocusedPresentation,
+        BalanceDayFocusedPresentation.monthlyNetMarginImpact,
+      );
+      expect(
+        restored.balanceDayRatioPresentation,
+        BalanceDayRatioPresentation.netMargin,
+      );
+      expect(
+        restored.balanceDayRatioViewPresentation,
+        BalanceDayRatioViewPresentation.performanceIndex,
+      );
+      expect(
+        restored.balanceDayPerformanceVisualPresentation,
+        BalanceDayPerformanceVisualPresentation.horizontalMeter,
+      );
+      expect(restored.balanceUsesChildCards, isFalse);
+      await store.write(restored);
+      for (final key in <String>[
+        'balanceContentSurfaceStyle',
+        'contentSurfaceStyle',
+        'balanceUnifiedBodyLayout',
+        'unifiedBodyLayout',
+        'alternativeMotherCardVisible',
+        'balanceCarouselWaveAnimationEnabled',
+        'hiddenBalanceCarouselCardKinds',
+        'balanceHeaderChartTimeLabels',
+        'balanceLatestTransactionCardPresentation',
+      ]) {
+        expect(written, isNot(contains(key)));
+      }
+      expect(written!['balanceDayFocusedPresentation'], 3);
+      expect(written!['balanceDayRatioPresentation'], 1);
+      expect(written!['balanceDayPerformanceVisualPresentation'], 1);
+    },
+  );
+
+  test(
     'fourth day perspective persists at index3 without changing earlier choices',
     () async {
       Map<String, Object?> stored = {};
