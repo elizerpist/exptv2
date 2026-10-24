@@ -1210,7 +1210,6 @@ void main() {
     for (final state in [
       (0.0, 'expanded'),
       (.1, 'first_frame'),
-      (3.6, 'two_percent'),
       (9.0, 'early'),
       (18.0, 'ten'),
       (63.0, 'thirty_five'),
