@@ -1,3 +1,4 @@
+import '../../../support/mother_card_raster_comparator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
@@ -84,6 +85,16 @@ Future<void> pumpMind(
   ),
 );
 void main() {
+  final originalComparator = goldenFileComparator;
+  setUpAll(() {
+    if (originalComparator is LocalFileComparator) {
+      goldenFileComparator = MotherCardRasterComparator(
+        originalComparator.basedir.resolve('mind_unified_detachment_test.dart'),
+      );
+    }
+  });
+  tearDownAll(() => goldenFileComparator = originalComparator);
+
   for (final scope in [
     (TimePlane.sum, false),
     (TimePlane.year, false),

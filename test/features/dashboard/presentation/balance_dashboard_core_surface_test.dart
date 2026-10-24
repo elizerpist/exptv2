@@ -1,3 +1,4 @@
+import '../../../support/mother_card_raster_comparator.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_history_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +30,18 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  final originalComparator = goldenFileComparator;
+  setUpAll(() {
+    if (originalComparator is LocalFileComparator) {
+      goldenFileComparator = MotherCardRasterComparator(
+        originalComparator.basedir.resolve(
+          'balance_dashboard_core_surface_test.dart',
+        ),
+      );
+    }
+  });
+  tearDownAll(() => goldenFileComparator = originalComparator);
+
   // Keep retained financial/header assertions deterministic under reduced motion.
   setUp(() {
     TestWidgetsFlutterBinding.ensureInitialized()

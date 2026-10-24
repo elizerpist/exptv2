@@ -93,6 +93,29 @@ No physical-device interaction or performance measurement was performed during
 this recovery turn. Golden/state/geometry checks provide the visual and local
 regression evidence; the online profile lane is separate from the human APK.
 
+## Cross-architecture raster verification
+
+The first online Flutter job (run 40072572208, bbaf4c35) found four bounded
+ARM64/x64 rounding differences. Downloaded failure artifacts were inspected:
+
+| Golden | Differing pixels | Total RGB units | Maximum channel delta |
+| --- | ---: | ---: | ---: |
+| balance_alternative_eves_surface | 9 | 9 | 1 |
+| balance_unified_detachment_early | 1 | 1 | 1 |
+| mind_unified_detachment_first | 25 | 68 | 1 |
+| mind_unified_detachment_early | 64 | 178 | 1 |
+
+MotherCardRasterComparator permits changes only at these measured pixel
+coordinates, for these named images and exact dimensions, within the recorded
+total-unit budget. A repeated ARM64 early frame added 18 measured positions
+(33 differences / 86 units, still below the 178-unit limit); the accepted mask
+is their union. Alpha must remain exact. No global percentage tolerance is
+introduced. Comparator tests reject larger channel deltas, alpha changes,
+unmeasured pixels, excess total error, unrelated names and changed dimensions.
+The failed online run was cancelled after capturing evidence; the replacement
+commit reruns the normal verification/build pipeline. Focused renderer checks
+and four comparator rejection tests pass locally; targeted analyze has no issues.
+
 ## Files
 
 The staged implementation inventory below excludes unrelated historical local
@@ -176,3 +199,6 @@ A	test/goldens/mind_unified_detachment_near.png
 A	test/goldens/mind_unified_detachment_year_heatmap_expanded.png
 A	test/goldens/mind_unified_detachment_year_heatmap_half.png
 ```
+
+Additional test infrastructure: test/support/mother_card_raster_comparator.dart
+and test/support/mother_card_raster_comparator_test.dart.
