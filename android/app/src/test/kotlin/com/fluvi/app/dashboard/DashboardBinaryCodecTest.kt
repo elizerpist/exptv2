@@ -422,5 +422,11 @@ class DashboardBinaryCodecTest {
         val noteBytes = readInt()
         if (noteBytes >= 0) skipBytes(noteBytes)
         readLong()
+        readBoolean()
+        val recurrenceOccurrenceIdBytes = readInt()
+        if (recurrenceOccurrenceIdBytes >= 0) {
+            skipBytes(recurrenceOccurrenceIdBytes)
+        }
+        readBoolean()
     }
 }
