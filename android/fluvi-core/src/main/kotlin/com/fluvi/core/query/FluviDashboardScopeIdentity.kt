@@ -44,6 +44,7 @@ internal data class FluviDashboardScopeIdentity(
                 categoryIds = scope.categoryIds,
                 partnerIds = scope.partnerIds,
                 refinements = scope.refinements,
+                ghostFilterMode = scope.ghostFilterMode,
             )
         }
 
@@ -54,6 +55,7 @@ internal data class FluviDashboardScopeIdentity(
             categoryIds: Set<String>,
             partnerIds: Set<String>,
             refinements: FluviQueryRefinements,
+            ghostFilterMode: FluviGhostFilterMode = FluviGhostFilterMode.both,
         ): FluviDashboardScopeIdentity {
             require(timeScopeKey.isCanonicalDashboardTimeScopeKey()) {
                 "Invalid dashboard structural time scope: $timeScopeKey"
@@ -68,6 +70,7 @@ internal data class FluviDashboardScopeIdentity(
                 categoryIds = categoryIds,
                 partnerIds = partnerIds,
                 refinements = refinements,
+                ghostFilterMode = ghostFilterMode,
             )
         }
 
@@ -78,6 +81,7 @@ internal data class FluviDashboardScopeIdentity(
             categoryIds: Set<String>,
             partnerIds: Set<String>,
             refinements: FluviQueryRefinements,
+            ghostFilterMode: FluviGhostFilterMode,
         ): FluviDashboardScopeIdentity {
             val queryKey = buildList {
                 add(direction.name)
@@ -85,6 +89,9 @@ internal data class FluviDashboardScopeIdentity(
                 add("categories:${categoryIds.sorted().joinToString(",")}")
                 add("partners:${partnerIds.sorted().joinToString(",")}")
                 add("refinements:${refinements.canonicalDashboardKey}")
+                if (ghostFilterMode != FluviGhostFilterMode.both) {
+                    add("ghost:${ghostFilterMode.name}")
+                }
                 queryPeriodGroups.takeIf { it.isNotEmpty() }?.let { groups ->
                     add("periods:${groups.canonicalDashboardFilterKey}")
                 }

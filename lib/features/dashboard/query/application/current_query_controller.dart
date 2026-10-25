@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../domain/dashboard_directional_query_set.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/ledger_direction.dart';
+import '../domain/ghost_filter_mode.dart';
 import '../domain/query_amount_range.dart';
 import '../domain/query_menu_data.dart';
 
@@ -167,6 +168,25 @@ final class CurrentQueryController extends ChangeNotifier {
     _lastChangedDirection = direction;
     _generation += 1;
     _directionGenerations[direction] = generationFor(direction) + 1;
+    notifyListeners();
+    return true;
+  }
+
+  /// Atomically replaces the shared ghost membership mode for both directional
+  /// templates. The dashboard controller prepares the matching native index
+  /// before invoking this publication; this owner only publishes the coherent
+  /// immutable state once.
+  bool replaceGhostFilterMode(GhostFilterMode mode) {
+    final nextQueries = _queries.withGhostFilterMode(mode);
+    if (nextQueries == _queries) return false;
+    _queries = nextQueries;
+    _facetPresentations.clear();
+    _amountDomains.clear();
+    _generation += 1;
+    _directionGenerations[LedgerDirection.income] =
+        generationFor(LedgerDirection.income) + 1;
+    _directionGenerations[LedgerDirection.expense] =
+        generationFor(LedgerDirection.expense) + 1;
     notifyListeners();
     return true;
   }

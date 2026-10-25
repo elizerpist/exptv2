@@ -15,6 +15,7 @@ import com.fluvi.core.model.RecurrenceTriggerKind
 import com.fluvi.core.model.UpdateOccurrenceOverrideCommand
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
+import com.fluvi.core.query.FluviGhostFilterMode
 import com.fluvi.core.query.FluviQueryScope
 import kotlinx.coroutines.runBlocking
 import java.time.Instant
@@ -53,12 +54,23 @@ class FluviRecurrenceUseCaseTest {
         assertEquals(12, ghosts.map { it.occurrenceKey }.distinct().size)
         assertTrue(ghosts.all { it.status == RecurrenceOccurrenceStatus.pending })
         assertEquals(0L, core.query.total(com.fluvi.core.query.FluviQueryScope(direction = LedgerDirection.expense)).amountScaled100)
+        val onlyGhostScope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            ghostFilterMode = FluviGhostFilterMode.onlyGhost,
+        )
+        val nonGhostScope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            ghostFilterMode = FluviGhostFilterMode.nonGhost,
+        )
         val preview = core.query.readSlice(
             com.fluvi.core.query.FluviQueryScope(direction = LedgerDirection.expense),
         )
         assertEquals(0L, preview.entryCount)
         assertEquals(12L, preview.presentationEntryCount)
         assertTrue(preview.entries.all { it.isPendingGhost })
+        assertEquals(0L, core.query.total(onlyGhostScope).amountScaled100)
+        assertEquals(12L, core.query.readSlice(onlyGhostScope).presentationEntryCount)
+        assertEquals(0L, core.query.readSlice(nonGhostScope).presentationEntryCount)
         val firstGhostDay = java.time.LocalDate.ofEpochDay(ghosts.first().expectedLocalEpochDay)
         val dayScopedPreview = core.query.readSlice(
             FluviQueryScope(
@@ -84,9 +96,22 @@ class FluviRecurrenceUseCaseTest {
             core.recurrences.realizedLedgerEntryId(requireNotNull(entry.recurrenceOccurrenceId)),
         )
         assertTrue(core.recurrences.realizeDueTimeOccurrences(Long.MAX_VALUE).isEmpty())
+        assertEquals(12L, core.query.total(onlyGhostScope).entryCount)
+        assertEquals(12L * 449_000L, core.query.total(onlyGhostScope).amountScaled100)
+        assertEquals(0L, core.query.total(nonGhostScope).entryCount)
+        assertTrue(
+            core.query.readSlice(onlyGhostScope).entries.all {
+                !it.isPendingGhost && it.recurrenceOccurrenceId != null
+            },
+        )
 
         core.recurrences.setShowPendingGhostsInLedger(false)
         assertFalse(core.recurrences.dashboard().showPendingGhostsInLedger)
+        assertEquals(
+            12L,
+            core.query.readSlice(onlyGhostScope).presentationEntryCount,
+            "Hiding pending previews must not hide realized ghost-origin ledger entries.",
+        )
         assertEquals(rule.ruleId, core.recurrences.rules().single().ruleId)
     }
 

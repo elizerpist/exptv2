@@ -6,6 +6,7 @@ import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryRefinements
 import com.fluvi.core.query.FluviQueryScope
+import com.fluvi.core.query.FluviGhostFilterMode
 import com.fluvi.core.query.FluviDashboardDirectionalQuerySet
 import com.fluvi.core.query.FluviTimelineCursor
 import com.fluvi.core.query.FluviPreparedYearWindow
@@ -70,6 +71,9 @@ object DashboardQueryArguments {
                 )?.toLong(),
                 noteContains = refinements["noteContains"] as String?,
             ),
+            ghostFilterMode = (arguments["ghostFilterMode"] as? String)
+                ?.let(FluviGhostFilterMode::valueOf)
+                ?: FluviGhostFilterMode.both,
         )
     }
 
@@ -114,6 +118,11 @@ object DashboardQueryArguments {
         return if (start == null || end == null) null else FluviPreparedYearWindow(start, end)
     }
 
+    fun ghostFilterMode(arguments: Map<*, *>): FluviGhostFilterMode =
+        (arguments["ghostFilterMode"] as? String)
+            ?.let(FluviGhostFilterMode::valueOf)
+            ?: FluviGhostFilterMode.both
+
     fun cursor(arguments: Map<*, *>): FluviTimelineCursor? {
         val raw = arguments["after"] ?: return null
         val cursor = requireMap(raw, "dashboard cursor")
@@ -125,6 +134,9 @@ object DashboardQueryArguments {
                 queryNumber(cursor, "bookedLocalTimeMinutes"),
             ).toInt(),
             entryId = requireValue(cursor, "entryId"),
+            timelineSegment = queryNumber(cursor, "timelineSegment")?.toInt() ?: 1,
+            pendingSortBucket = queryNumber(cursor, "pendingSortBucket")?.toInt() ?: 2,
+            pendingExpectedAtUtcMs = queryNumber(cursor, "pendingExpectedAtUtcMs")?.toLong() ?: 0L,
         )
     }
 

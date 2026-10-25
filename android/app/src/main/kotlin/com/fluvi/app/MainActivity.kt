@@ -1253,6 +1253,7 @@ class MainActivity : FlutterActivity() {
             val yearWindow = requireNotNull(
                 DashboardQueryArguments.preparedYearWindow(arguments),
             ) { "Prepared Budget limits require an explicit year window." }
+            val ghostFilterMode = DashboardQueryArguments.ghostFilterMode(arguments)
             emitDiagnostic(
                 stage = "FINANCIAL_LIMIT_SNAPSHOT_PREPARE_STARTED",
                 message = "FINANCIAL_LIMIT_SNAPSHOT_PREPARE_STARTED",
@@ -1263,6 +1264,7 @@ class MainActivity : FlutterActivity() {
             val snapshot = fluviCore.budget.preparedLimitSnapshot(
                 expectedRevision = expectedRevision,
                 yearWindow = yearWindow,
+                ghostFilterMode = ghostFilterMode,
             )
             currentCoroutineContext().ensureActive()
             val payload = DashboardBinaryCodec.encodePreparedBudgetLimitSnapshot(snapshot)
@@ -1293,6 +1295,7 @@ class MainActivity : FlutterActivity() {
             val yearWindow = requireNotNull(
                 DashboardQueryArguments.preparedYearWindow(arguments),
             ) { "Prepared Budget partner distribution requires an explicit year window." }
+            val ghostFilterMode = DashboardQueryArguments.ghostFilterMode(arguments)
             emitDiagnostic(
                 stage = "BUDGET_PARTNER_SNAPSHOT_PREPARE_STARTED",
                 message = "BUDGET_PARTNER_SNAPSHOT_PREPARE_STARTED",
@@ -1303,6 +1306,7 @@ class MainActivity : FlutterActivity() {
             val snapshot = fluviCore.budget.preparedPartnerDistributionSnapshot(
                 expectedRevision = expectedRevision,
                 yearWindow = yearWindow,
+                ghostFilterMode = ghostFilterMode,
             )
             currentCoroutineContext().ensureActive()
             val payload = DashboardBinaryCodec.encodePreparedBudgetPartnerDistributionSnapshot(snapshot)
@@ -1421,6 +1425,7 @@ class MainActivity : FlutterActivity() {
         append("|refinements:")
         append("min=${scope.refinements.minimumAmountScaled100 ?: ""}")
         append(",max=${scope.refinements.maximumAmountScaled100 ?: ""}")
+        append("|ghost=${scope.ghostFilterMode.name}")
         // Diagnostics need stable request correlation, not user-entered text.
         append(",hasNote=${scope.refinements.noteContains != null}")
     }

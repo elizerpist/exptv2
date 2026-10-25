@@ -2911,6 +2911,8 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
     required this.semanticLabel,
     required this.amountStyle,
     required this.isPendingGhost,
+    required this.hasGhostOrigin,
+    required this.hasCategoryOverride,
     required this.categoryColorHandle,
     required this.categoryIconHandle,
     required this.textLayout,
@@ -2936,6 +2938,8 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
       semanticLabel: row.semanticLabel,
       amountStyle: row.amountStyle,
       isPendingGhost: row.isPendingGhost,
+      hasGhostOrigin: row.hasGhostOrigin,
+      hasCategoryOverride: row.hasCategoryOverride,
       categoryColorHandle: row.categoryColorHandle,
       categoryIconHandle: row.categoryIconHandle,
       textLayout: textLayout,
@@ -2951,6 +2955,8 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
   final String semanticLabel;
   final LogAmountStyle amountStyle;
   final bool isPendingGhost;
+  final bool hasGhostOrigin;
+  final bool hasCategoryOverride;
   final int categoryColorHandle;
   final int categoryIconHandle;
   final DashboardPreparedLogBoxRowTextLayout textLayout;
@@ -2962,7 +2968,9 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
       categoryColorHandle == other.categoryColorHandle &&
       categoryIconHandle == other.categoryIconHandle &&
       amountStyle == other.amountStyle &&
-      isPendingGhost == other.isPendingGhost;
+      isPendingGhost == other.isPendingGhost &&
+      hasGhostOrigin == other.hasGhostOrigin &&
+      hasCategoryOverride == other.hasCategoryOverride;
 }
 
 /// One all-or-nothing renderer resource for a semantic Phase-A slot.

@@ -1956,6 +1956,13 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         height: DashboardLogBoxTokens.avatarIconSize,
       ),
     );
+    _paintCategoryOverrideBadge(
+      canvas,
+      avatarRect: badgeRect,
+      categoryColorHandle: readable.categoryColorHandle,
+      categoryIconHandle: readable.categoryIconHandle,
+      isOverride: readable.hasCategoryOverride,
+    );
     readable.textLayout.paint(
       canvas,
       rowTop,
@@ -1963,6 +1970,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       amountForeground: readable.amountStyle == LogAmountStyle.expense
           ? expenseAmountColor
           : incomeAmountColor,
+    );
+    _paintGhostOriginBadge(
+      canvas,
+      textLayout: readable.textLayout,
+      rowTop: rowTop,
+      hasGhostOrigin: readable.hasGhostOrigin,
     );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
     if (ghostLayer) canvas.restore();
@@ -2158,11 +2171,24 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       rasters.glyph(row.categoryIconHandle),
       iconRect,
     );
+    _paintCategoryOverrideBadge(
+      canvas,
+      avatarRect: badgeRect,
+      categoryColorHandle: row.categoryColorHandle,
+      categoryIconHandle: row.categoryIconHandle,
+      isOverride: row.hasCategoryOverride,
+    );
     preparedText.paint(
       canvas,
       rowTop,
       rowHeight: rowHeight,
       amountForeground: _amountForegroundFor(row),
+    );
+    _paintGhostOriginBadge(
+      canvas,
+      textLayout: preparedText,
+      rowTop: rowTop,
+      hasGhostOrigin: row.hasGhostOrigin,
     );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
     if (ghostLayer) canvas.restore();
@@ -2649,11 +2675,24 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         height: DashboardLogBoxTokens.avatarIconSize,
       ),
     );
+    _paintCategoryOverrideBadge(
+      canvas,
+      avatarRect: badgeRect,
+      categoryColorHandle: row.categoryColorHandle,
+      categoryIconHandle: row.categoryIconHandle,
+      isOverride: row.hasCategoryOverride,
+    );
     preparedText.paint(
       canvas,
       rowTop,
       rowHeight: rowHeight,
       amountForeground: _amountForegroundFor(row),
+    );
+    _paintGhostOriginBadge(
+      canvas,
+      textLayout: preparedText,
+      rowTop: rowTop,
+      hasGhostOrigin: row.hasGhostOrigin,
     );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
     if (ghostLayer) canvas.restore();
@@ -2764,12 +2803,25 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       rasters.glyph(row.categoryIconHandle),
       iconRect,
     );
+    _paintCategoryOverrideBadge(
+      canvas,
+      avatarRect: badgeRect,
+      categoryColorHandle: row.categoryColorHandle,
+      categoryIconHandle: row.categoryIconHandle,
+      isOverride: row.hasCategoryOverride,
+    );
 
     preparedText.paint(
       canvas,
       rowTop,
       rowHeight: rowHeight,
       amountForeground: _amountForegroundFor(row),
+    );
+    _paintGhostOriginBadge(
+      canvas,
+      textLayout: preparedText,
+      rowTop: rowTop,
+      hasGhostOrigin: row.hasGhostOrigin,
     );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
     if (ghostLayer) canvas.restore();
@@ -2855,6 +2907,78 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     PreparedLogBoxVectorGlyph glyph,
     Rect target,
   ) => _drawPreparedVectorResource(canvas, glyph, target);
+
+  /// The assignment mode is independent from the effective avatar. Draw the
+  /// small category visual directly into the existing painter so overrides do
+  /// not create a second per-row widget or hit target.
+  void _paintCategoryOverrideBadge(
+    Canvas canvas, {
+    required Rect avatarRect,
+    required int categoryColorHandle,
+    required int categoryIconHandle,
+    required bool isOverride,
+  }) {
+    if (!isOverride) return;
+    final outer = Rect.fromCircle(
+      center: Offset(avatarRect.right - 1, avatarRect.bottom - 1),
+      radius: 8,
+    );
+    canvas.drawCircle(
+      outer.center,
+      outer.width / 2,
+      Paint()..color = Colors.white,
+    );
+    final inner = Rect.fromCircle(center: outer.center, radius: 6.5);
+    _drawPreparedVectorBadge(canvas, rasters.badge(categoryColorHandle), inner);
+    _drawPreparedVectorGlyph(
+      canvas,
+      rasters.glyph(categoryIconHandle),
+      Rect.fromCenter(center: inner.center, width: 7.5, height: 7.5),
+    );
+  }
+
+  /// Paints a small neutral vector immediately before the prepared time text.
+  /// The bounds come from the exact paragraph prepared for this row, keeping
+  /// baseline/scale aligned with the existing typography without relayout.
+  void _paintGhostOriginBadge(
+    Canvas canvas, {
+    required DashboardPreparedLogBoxRowTextLayout textLayout,
+    required double rowTop,
+    required bool hasGhostOrigin,
+  }) {
+    if (!hasGhostOrigin) return;
+    final timeBounds = textLayout.timeBounds(rowTop, rowHeight: rowHeight);
+    final size = (timeBounds.height * .78).clamp(8.0, 13.0).toDouble();
+    final center = Offset(timeBounds.left - 4 - size / 2, timeBounds.center.dy);
+    final paint = Paint()
+      ..color = FluviVisualTokens.textSecondary.withValues(alpha: .72)
+      ..style = PaintingStyle.fill;
+    final body = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: center, width: size, height: size * .82),
+      Radius.circular(size * .34),
+    );
+    canvas.drawRRect(body, paint);
+    final eye = Paint()..color = Colors.white.withValues(alpha: .86);
+    final eyeRadius = size * .075;
+    canvas.drawCircle(
+      Offset(center.dx - size * .19, center.dy - size * .08),
+      eyeRadius,
+      eye,
+    );
+    canvas.drawCircle(
+      Offset(center.dx + size * .19, center.dy - size * .08),
+      eyeRadius,
+      eye,
+    );
+    final tail = Path()
+      ..moveTo(center.dx - size * .28, center.dy + size * .3)
+      ..lineTo(center.dx - size * .42, center.dy + size * .52)
+      ..lineTo(center.dx - size * .06, center.dy + size * .36)
+      ..lineTo(center.dx + size * .18, center.dy + size * .52)
+      ..lineTo(center.dx + size * .3, center.dy + size * .29)
+      ..close();
+    canvas.drawPath(tail, paint);
+  }
 
   void _drawPreparedVectorResource(
     Canvas canvas,

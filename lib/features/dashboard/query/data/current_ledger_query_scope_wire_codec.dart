@@ -1,5 +1,6 @@
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/dashboard_directional_query_set.dart';
+import '../domain/ghost_filter_mode.dart';
 import '../domain/ledger_direction.dart';
 import '../domain/query_temporal_filter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
@@ -18,6 +19,7 @@ final class CurrentLedgerQueryScopeWireCodec {
         'categoryIds': _sorted(scope.categoryIds),
         'partnerIds': _sorted(scope.partnerIds),
         'refinements': scope.refinements,
+        'ghostFilterMode': scope.ghostFilterMode.name,
         // Search is a prepared dashboard overlay rather than a persisted
         // Query Menu field. It intentionally does not cross the platform
         // query boundary as a database predicate.
@@ -111,6 +113,11 @@ final class CurrentLedgerQueryScopeWireCodec {
       categoryIds: _stringSet(raw['categoryIds'], 'categoryIds'),
       partnerIds: _stringSet(raw['partnerIds'], 'partnerIds'),
       refinements: refinements,
+      ghostFilterMode: switch (raw['ghostFilterMode']) {
+        null => GhostFilterMode.both,
+        final String value => GhostFilterMode.values.byName(value),
+        _ => throw FormatException('ghostFilterMode must be a string.'),
+      },
     );
   }
 

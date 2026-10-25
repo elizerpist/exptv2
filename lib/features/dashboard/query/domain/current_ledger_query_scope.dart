@@ -1,4 +1,5 @@
 import '../../time_navigation/domain/ledger_time_scope.dart';
+import 'ghost_filter_mode.dart';
 import 'ledger_direction.dart';
 import 'query_temporal_filter.dart';
 
@@ -56,6 +57,7 @@ class CurrentLedgerQueryScope {
     Set<String> categoryIds = const <String>{},
     Set<String> partnerIds = const <String>{},
     Map<String, Object?> refinements = const <String, Object?>{},
+    this.ghostFilterMode = GhostFilterMode.both,
     this.normalizedSearch,
     this.temporalFilter = const QueryTemporalFilter.allTime(),
   }) : categoryIds = Set.unmodifiable(categoryIds),
@@ -67,6 +69,10 @@ class CurrentLedgerQueryScope {
   final Set<String> categoryIds;
   final Set<String> partnerIds;
   final Map<String, Object?> refinements;
+
+  /// Shared recurring-origin query dimension. `both` is the historical
+  /// default and intentionally retains the legacy canonical key bytes.
+  final GhostFilterMode ghostFilterMode;
 
   /// Dashboard-local interactive search overlay. It is part of the immutable
   /// prepared projection identity, but deliberately not a committed Query
@@ -103,6 +109,9 @@ class CurrentLedgerQueryScope {
     if (temporalFilter.isRestrictive) {
       values.add('periods:${temporalFilter.canonicalKey}');
     }
+    if (ghostFilterMode != GhostFilterMode.both) {
+      values.add('ghost:${ghostFilterMode.name}');
+    }
     return values.join('|');
   }
 
@@ -112,6 +121,7 @@ class CurrentLedgerQueryScope {
     Set<String>? categoryIds,
     Set<String>? partnerIds,
     Map<String, Object?>? refinements,
+    GhostFilterMode? ghostFilterMode,
     String? normalizedSearch,
     bool clearNormalizedSearch = false,
     QueryTemporalFilter? temporalFilter,
@@ -122,6 +132,7 @@ class CurrentLedgerQueryScope {
       categoryIds: categoryIds ?? this.categoryIds,
       partnerIds: partnerIds ?? this.partnerIds,
       refinements: refinements ?? this.refinements,
+      ghostFilterMode: ghostFilterMode ?? this.ghostFilterMode,
       normalizedSearch: clearNormalizedSearch
           ? null
           : normalizedSearch ?? this.normalizedSearch,

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
@@ -90,6 +91,33 @@ void main() {
       );
 
       expect(controller.generation, before);
+    },
+  );
+
+  test(
+    'ghost membership replacement is atomic across both directional templates',
+    () {
+      final controller = CurrentQueryController(
+        initialScope: scope(LedgerDirection.expense),
+      );
+      addTearDown(controller.dispose);
+      final before = controller.generation;
+
+      controller.replaceGhostFilterMode(GhostFilterMode.onlyGhost);
+
+      expect(
+        controller.scopeFor(LedgerDirection.expense).ghostFilterMode,
+        GhostFilterMode.onlyGhost,
+      );
+      expect(
+        controller.scopeFor(LedgerDirection.income).ghostFilterMode,
+        GhostFilterMode.onlyGhost,
+      );
+      expect(controller.generation, before + 1);
+      expect(
+        controller.scopeFor(LedgerDirection.expense).key.value,
+        contains('ghost:onlyGhost'),
+      );
     },
   );
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/dashboard_directional_query_set.dart';
+import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
@@ -193,6 +194,45 @@ void main() {
       );
       expect(reused, same(first));
       expect(repository.partnerDistributionSnapshotCalls, 1);
+    },
+  );
+
+  test(
+    'keeps Budget banks separate for each shared ghost membership mode',
+    () async {
+      final repository = _BudgetRuntimeRepository();
+      final scheduler = _StableFrameScheduler();
+      final published = <PreparedDashboardIndex>[];
+      final runtime = _runtime(repository, scheduler, published.add);
+      addTearDown(runtime.dispose);
+
+      final bootstrap = runtime.bootstrap(initialCoreRevision: 7);
+      await pumpEventQueue();
+      repository.complete(0);
+      final bothIndex = await bootstrap;
+      final onlyGhostIndex = PreparedDashboardIndex.complete(
+        key: _withGhostFilterMode(bothIndex.key, GhostFilterMode.onlyGhost),
+        frames: const {},
+        catalogs: const {},
+        generation: 2,
+        contentDigest: 99,
+        preparedAt: DateTime.utc(2026, 8, 12),
+        buildMetrics: const PreparedDashboardIndexBuildMetrics.synthetic(),
+      );
+
+      await runtime.prepareBudgetLimitSnapshotFor(onlyGhostIndex);
+      await runtime.prepareBudgetPartnerDistributionSnapshotFor(onlyGhostIndex);
+
+      expect(repository.budgetSnapshotCalls, 2);
+      expect(repository.partnerDistributionSnapshotCalls, 2);
+      expect(repository.budgetGhostFilterModes, <GhostFilterMode>[
+        GhostFilterMode.both,
+        GhostFilterMode.onlyGhost,
+      ]);
+      expect(repository.partnerGhostFilterModes, <GhostFilterMode>[
+        GhostFilterMode.both,
+        GhostFilterMode.onlyGhost,
+      ]);
     },
   );
 
@@ -542,6 +582,24 @@ PreparedDashboardIndexRequest _queryRequest(
   yearWindowRadius: 12,
 ).requestFor(coreRevision: 1, reason: reason);
 
+PreparedDashboardIndexKey _withGhostFilterMode(
+  PreparedDashboardIndexKey key,
+  GhostFilterMode ghostFilterMode,
+) => PreparedDashboardIndexKey(
+  modelVersion: key.modelVersion,
+  coreRevision: key.coreRevision,
+  categoryIdsKey: key.categoryIdsKey,
+  partnerIdsKey: key.partnerIdsKey,
+  refinementsKey: key.refinementsKey,
+  temporalFilterKey: key.temporalFilterKey,
+  pageSize: key.pageSize,
+  yearWindowStart: key.yearWindowStart,
+  yearWindowEndInclusive: key.yearWindowEndInclusive,
+  ghostFilterMode: ghostFilterMode,
+  incomeFilterKey: key.incomeFilterKey,
+  expenseFilterKey: key.expenseFilterKey,
+);
+
 final class _StableFrameScheduler implements DashboardStableFrameScheduler {
   final List<void Function()> _callbacks = [];
 
@@ -667,6 +725,8 @@ final class _BudgetRuntimeRepository extends _RuntimeRepository
 
   int budgetSnapshotCalls = 0;
   int partnerDistributionSnapshotCalls = 0;
+  final List<GhostFilterMode> budgetGhostFilterModes = <GhostFilterMode>[];
+  final List<GhostFilterMode> partnerGhostFilterModes = <GhostFilterMode>[];
   final int partnerRevisionOffset;
 
   @override
@@ -674,8 +734,10 @@ final class _BudgetRuntimeRepository extends _RuntimeRepository
     required int coreRevision,
     required int yearWindowStart,
     required int yearWindowEndInclusive,
+    GhostFilterMode ghostFilterMode = GhostFilterMode.both,
   }) async {
     budgetSnapshotCalls += 1;
+    budgetGhostFilterModes.add(ghostFilterMode);
     final yearCount = yearWindowEndInclusive - yearWindowStart + 1;
     final periodSliceCount = 1 + yearCount + yearCount * 12;
     List<PreparedBudgetLimitCell> cells() =>
@@ -707,8 +769,10 @@ final class _BudgetRuntimeRepository extends _RuntimeRepository
     required int coreRevision,
     required int yearWindowStart,
     required int yearWindowEndInclusive,
+    GhostFilterMode ghostFilterMode = GhostFilterMode.both,
   }) async {
     partnerDistributionSnapshotCalls += 1;
+    partnerGhostFilterModes.add(ghostFilterMode);
     final yearCount = yearWindowEndInclusive - yearWindowStart + 1;
     final periodSliceCount = 1 + yearCount + yearCount * 12;
     PreparedBudgetPartnerDistributionDirectionBank bank() =>

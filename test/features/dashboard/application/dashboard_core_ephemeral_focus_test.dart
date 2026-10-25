@@ -24,6 +24,7 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentat
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
@@ -11007,6 +11008,7 @@ final class _MindFooterRepository extends _FocusSeedRepository
     required int coreRevision,
     required int yearWindowStart,
     required int yearWindowEndInclusive,
+    GhostFilterMode ghostFilterMode = GhostFilterMode.both,
   }) async {
     final yearCount = yearWindowEndInclusive - yearWindowStart + 1;
     final sliceCount = 1 + yearCount + yearCount * 12;

@@ -14,7 +14,7 @@ import com.fluvi.core.repository.canonicalPartnerIdOf
 import java.time.LocalDate
 
 /**
- * Query-independent, bounded native acquisition for the Budget dashboard.
+ * Bounded native acquisition for the Budget dashboard.
  * One grouped ledger scan covers aggregate/category SUM/YEAR/MONTH values;
  * target count changes the dense output size, never the SQL-call count.
  */
@@ -27,7 +27,7 @@ class FluviBudgetReadService internal constructor(
 ) {
 
     /**
-     * Query-independent partner distribution acquisition. One ledger grouped
+     * Ghost-filter-aware partner distribution acquisition. One ledger grouped
      * scan plus canonical partner/category snapshots covers both directions
      * and the complete SUM/YEAR/MONTH prepared window; partner/category count
      * never changes this bounded SQL-call shape.
@@ -35,6 +35,7 @@ class FluviBudgetReadService internal constructor(
     suspend fun preparedPartnerDistributionSnapshot(
         expectedRevision: Long,
         yearWindow: FluviPreparedYearWindow,
+        ghostFilterMode: FluviGhostFilterMode = FluviGhostFilterMode.both,
     ): FluviPreparedBudgetPartnerDistributionSnapshot = database.withTransaction {
         require(expectedRevision > 0L)
         val startedAt = System.nanoTime()
@@ -50,7 +51,7 @@ class FluviBudgetReadService internal constructor(
                 "SELECT direction, partner_id, category_id, booked_local_epoch_day, " +
                     "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100, " +
                     "COUNT(*) AS transaction_count " +
-                    "FROM fluvi_ledger_entries " +
+                    "FROM fluvi_ledger_entries " + ghostLedgerMembershipWhere(ghostFilterMode) + " " +
                     "GROUP BY direction, partner_id, category_id, booked_local_epoch_day",
             ),
         ).use { cursor ->
@@ -142,6 +143,7 @@ class FluviBudgetReadService internal constructor(
     suspend fun preparedLimitSnapshot(
         expectedRevision: Long,
         yearWindow: FluviPreparedYearWindow,
+        ghostFilterMode: FluviGhostFilterMode = FluviGhostFilterMode.both,
     ): FluviPreparedBudgetLimitSnapshot = database.withTransaction {
         require(expectedRevision > 0L)
         val startedAt = System.nanoTime()
@@ -159,7 +161,7 @@ class FluviBudgetReadService internal constructor(
                 "SELECT direction, category_id, booked_local_epoch_day, booked_local_time_minutes, " +
                     "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100, " +
                     "COUNT(*) AS transaction_count " +
-                    "FROM fluvi_ledger_entries " +
+                    "FROM fluvi_ledger_entries " + ghostLedgerMembershipWhere(ghostFilterMode) + " " +
                     "GROUP BY direction, category_id, booked_local_epoch_day, booked_local_time_minutes",
             ),
         ).use { cursor ->
@@ -356,6 +358,14 @@ class FluviBudgetReadService internal constructor(
         amount: Long,
     ) {
         actuals[cellIndex(targetCount, slice, handle)] += amount
+    }
+
+    private fun ghostLedgerMembershipWhere(
+        mode: FluviGhostFilterMode,
+    ): String = when (mode) {
+        FluviGhostFilterMode.nonGhost -> "WHERE recurrence_occurrence_id IS NULL"
+        FluviGhostFilterMode.onlyGhost -> "WHERE recurrence_occurrence_id IS NOT NULL"
+        FluviGhostFilterMode.both -> ""
     }
 
     private fun cellIndex(

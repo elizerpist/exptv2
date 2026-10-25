@@ -101,6 +101,7 @@ class FluviLedgerReadService internal constructor(
             val temporalScope = FluviQueryScope(
                 direction = scope.direction,
                 periodGroups = scope.periodGroups,
+                ghostFilterMode = scope.ghostFilterMode,
             )
             val availableMonths = queryDashboardDailyAggregates(
                 SqlWhere(
@@ -414,12 +415,8 @@ class FluviLedgerReadService internal constructor(
                     presentationRows += ghost
                 }
             }
-            presentationRows.sortWith(
-                compareBy<FluviDashboardLedgerRow> { it.direction.name }
-                    .thenByDescending { it.bookedLocalEpochDay }
-                    .thenByDescending { it.bookedLocalTimeMinutes }
-                    .thenByDescending { it.entryId },
-            )
+            val presentationNow = System.currentTimeMillis()
+            presentationRows.sortWith(presentationRowComparator(presentationNow))
             val retained = retainPreparedRows(
                 rows = presentationRows,
                 previewCapacity = previewPageSize + 1,
@@ -503,6 +500,7 @@ class FluviLedgerReadService internal constructor(
                     categoryIds = filter.categoryIds,
                     partnerIds = filter.partnerIds,
                     refinements = filter.refinements,
+                    ghostFilterMode = filter.ghostFilterMode,
                 ).queryKey
                 val retainedIds = native.retained.rowIdsByBucket[bucket].orEmpty()
                 val visibleIds = retainedIds.take(previewPageSize)
@@ -760,6 +758,7 @@ class FluviLedgerReadService internal constructor(
         expandedPartnerIds: Set<String>,
     ): Boolean {
         if (direction != scope.direction) return false
+        if (scope.ghostFilterMode == FluviGhostFilterMode.nonGhost) return false
         if (scope.categoryIds.isNotEmpty() && categoryId !in scope.categoryIds) return false
         if (expandedPartnerIds.isNotEmpty() && partnerId !in expandedPartnerIds) return false
         if (!scope.periodGroups.all { group ->
@@ -803,6 +802,7 @@ class FluviLedgerReadService internal constructor(
                 categoryIds = filter.categoryIds,
                 expandedPartnerIds = requireNotNull(expandedPartnerIdsByDirection[direction]),
                 refinements = filter.refinements,
+                ghostFilterMode = filter.ghostFilterMode,
             )
             directionClauses += "(" + clauses.joinToString(" AND ") + ")"
         }
@@ -818,9 +818,15 @@ class FluviLedgerReadService internal constructor(
         categoryIds: Set<String>,
         expandedPartnerIds: Set<String>,
         refinements: FluviQueryRefinements,
+        ghostFilterMode: FluviGhostFilterMode = FluviGhostFilterMode.both,
         tableAlias: String? = null,
     ) {
         fun column(name: String): String = tableAlias?.let { "$it.$name" } ?: name
+        when (ghostFilterMode) {
+            FluviGhostFilterMode.nonGhost -> clauses += "${column("recurrence_occurrence_id")} IS NULL"
+            FluviGhostFilterMode.onlyGhost -> clauses += "${column("recurrence_occurrence_id")} IS NOT NULL"
+            FluviGhostFilterMode.both -> Unit
+        }
         categoryIds.sorted().takeIf { it.isNotEmpty() }?.let { values ->
             clauses += "${column("category_id")} IN (" + values.placeholders() + ")"
             arguments.addAll(values)
@@ -879,19 +885,39 @@ class FluviLedgerReadService internal constructor(
             tableAlias = "ledger",
         )
         val ghostWhere = ghostPresentationWhere(scope, expandedPartners)
-        val arguments = ArrayList<Any>(ledgerWhere.arguments.size + ghostWhere.arguments.size + 7)
+        val presentationNow = System.currentTimeMillis()
+        val arguments = ArrayList<Any>(ledgerWhere.arguments.size + ghostWhere.arguments.size + 20)
         arguments.addAll(ledgerWhere.arguments)
         arguments.addAll(ghostWhere.arguments)
+        // The bucket is calculated once for this page so due/future ordering
+        // cannot drift while SQLite evaluates the union.
+        arguments += presentationNow
         val outerCursor = after?.let { cursor ->
+            require(cursor.timelineSegment in 0..1) { "Invalid presentation cursor segment." }
+            arguments += cursor.timelineSegment
+            arguments += cursor.timelineSegment
+            arguments += cursor.pendingSortBucket
+            arguments += cursor.pendingSortBucket
+            arguments += cursor.pendingExpectedAtUtcMs
+            arguments += cursor.pendingExpectedAtUtcMs
+            arguments += cursor.pendingExpectedAtUtcMs
+            arguments += cursor.entryId
+            arguments += cursor.timelineSegment
             arguments += cursor.bookedLocalEpochDay
             arguments += cursor.bookedLocalEpochDay
             arguments += cursor.bookedLocalTimeMinutes
             arguments += cursor.bookedLocalEpochDay
             arguments += cursor.bookedLocalTimeMinutes
             arguments += cursor.entryId
-            " WHERE (booked_local_epoch_day < ? OR " +
+            " WHERE (timeline_segment > ? OR " +
+                "(timeline_segment = 0 AND ? = 0 AND (" +
+                "pending_sort_bucket > ? OR " +
+                "(pending_sort_bucket = ? AND ((pending_sort_bucket = 0 AND pending_expected_at_utc_ms < ?) OR " +
+                "(pending_sort_bucket = 1 AND pending_expected_at_utc_ms > ?) OR " +
+                "(pending_expected_at_utc_ms = ? AND timeline_id > ?))))) OR " +
+                "(timeline_segment = 1 AND ? = 1 AND (booked_local_epoch_day < ? OR " +
                 "(booked_local_epoch_day = ? AND booked_local_time_minutes < ?) OR " +
-                "(booked_local_epoch_day = ? AND booked_local_time_minutes = ? AND timeline_id < ?))"
+                "(booked_local_epoch_day = ? AND booked_local_time_minutes = ? AND timeline_id < ?))))"
         }.orEmpty()
         arguments += limit
         val sql = "SELECT * FROM (" +
@@ -905,7 +931,8 @@ class FluviLedgerReadService internal constructor(
             "category.color_id AS category_color_id, category.icon_id AS category_icon_id, " +
             "ledger.category_assignment_mode AS assignment_mode, ledger.origin_kind AS origin_kind, " +
             "ledger.note AS note, 0 AS is_pending_ghost, " +
-            "ledger.recurrence_occurrence_id AS recurrence_occurrence_id, 0 AS amount_is_unknown " +
+            "ledger.recurrence_occurrence_id AS recurrence_occurrence_id, 0 AS amount_is_unknown, " +
+            "1 AS timeline_segment, 2 AS pending_sort_bucket, 0 AS pending_expected_at_utc_ms " +
             "FROM fluvi_ledger_entries AS ledger " +
             "JOIN fluvi_partners AS partner ON partner.id = ledger.partner_id " +
             "JOIN fluvi_categories AS category ON category.id = ledger.category_id " +
@@ -921,14 +948,20 @@ class FluviLedgerReadService internal constructor(
             "ghost_category.color_id AS category_color_id, ghost_category.icon_id AS category_icon_id, " +
             "occurrence.category_assignment_mode AS assignment_mode, 'recurring' AS origin_kind, " +
             "occurrence.note AS note, 1 AS is_pending_ghost, occurrence.id AS recurrence_occurrence_id, " +
-            "CASE WHEN occurrence.expected_amount_scaled_100 IS NULL THEN 1 ELSE 0 END AS amount_is_unknown " +
+            "CASE WHEN occurrence.expected_amount_scaled_100 IS NULL THEN 1 ELSE 0 END AS amount_is_unknown, " +
+            "0 AS timeline_segment, CASE WHEN occurrence.expected_at_utc_ms <= ? THEN 0 ELSE 1 END AS pending_sort_bucket, " +
+            "occurrence.expected_at_utc_ms AS pending_expected_at_utc_ms " +
             "FROM fluvi_recurrence_occurrences AS occurrence " +
             "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
             "JOIN fluvi_partners AS ghost_partner ON ghost_partner.id = occurrence.partner_id " +
             "JOIN fluvi_categories AS ghost_category ON ghost_category.id = occurrence.category_id " +
             ghostWhere.sql +
             ")" + outerCursor +
-            " ORDER BY booked_local_epoch_day DESC, booked_local_time_minutes DESC, timeline_id DESC LIMIT ?"
+            " ORDER BY timeline_segment ASC, pending_sort_bucket ASC, " +
+            "CASE WHEN timeline_segment = 0 AND pending_sort_bucket = 0 THEN pending_expected_at_utc_ms END DESC, " +
+            "CASE WHEN timeline_segment = 0 AND pending_sort_bucket = 1 THEN pending_expected_at_utc_ms END ASC, " +
+            "CASE WHEN timeline_segment = 0 THEN timeline_id END ASC, " +
+            "booked_local_epoch_day DESC, booked_local_time_minutes DESC, timeline_id DESC LIMIT ?"
         val rows = mutableListOf<FluviDashboardLedgerRow>()
         database.openHelper.readableDatabase.query(SimpleSQLiteQuery(sql, arguments.toTypedArray())).use { cursor ->
             while (cursor.moveToNext()) rows += cursor.toPresentationRow()
@@ -940,6 +973,11 @@ class FluviLedgerReadService internal constructor(
         scope: FluviQueryScope,
         expandedPartnerIds: Set<String>,
     ): SqlWhere {
+        if (scope.ghostFilterMode == FluviGhostFilterMode.nonGhost) {
+            // Keep the union SQL valid while making this branch empty. This
+            // remains a native predicate, not a Dart-side row removal.
+            return SqlWhere("WHERE 0", emptyList())
+        }
         val clauses = mutableListOf(
             "occurrence.status = 'pending'",
             "rule.is_active = 1",
@@ -1111,6 +1149,11 @@ class FluviLedgerReadService internal constructor(
         val arguments = mutableListOf<Any>()
         clauses += "${column("direction")} = ?"
         arguments += scope.direction.name
+        when (scope.ghostFilterMode) {
+            FluviGhostFilterMode.nonGhost -> clauses += "${column("recurrence_occurrence_id")} IS NULL"
+            FluviGhostFilterMode.onlyGhost -> clauses += "${column("recurrence_occurrence_id")} IS NOT NULL"
+            FluviGhostFilterMode.both -> Unit
+        }
 
         appendPeriodGroups(clauses, arguments, scope.periodGroups, tableAlias)
 
@@ -1348,11 +1391,45 @@ class FluviLedgerReadService internal constructor(
         )
     }
 
-    private fun FluviDashboardLedgerRow.toCursor(): FluviTimelineCursor = FluviTimelineCursor(
+    private fun FluviDashboardLedgerRow.toCursor(
+        nowUtcMs: Long = System.currentTimeMillis(),
+    ): FluviTimelineCursor = FluviTimelineCursor(
         bookedLocalEpochDay = bookedLocalEpochDay,
         bookedLocalTimeMinutes = bookedLocalTimeMinutes,
         entryId = entryId,
+        timelineSegment = if (isPendingGhost) 0 else 1,
+        pendingSortBucket = if (!isPendingGhost) 2 else if (occurredAtUtcMs <= nowUtcMs) 0 else 1,
+        pendingExpectedAtUtcMs = if (isPendingGhost) occurredAtUtcMs else 0L,
     )
+
+    private fun presentationRowComparator(
+        nowUtcMs: Long,
+    ): Comparator<FluviDashboardLedgerRow> = Comparator { left, right ->
+        val direction = left.direction.name.compareTo(right.direction.name)
+        if (direction != 0) return@Comparator direction
+        val leftSegment = if (left.isPendingGhost) 0 else 1
+        val rightSegment = if (right.isPendingGhost) 0 else 1
+        val segment = leftSegment.compareTo(rightSegment)
+        if (segment != 0) return@Comparator segment
+        if (leftSegment == 0) {
+            val leftBucket = if (left.occurredAtUtcMs <= nowUtcMs) 0 else 1
+            val rightBucket = if (right.occurredAtUtcMs <= nowUtcMs) 0 else 1
+            val bucket = leftBucket.compareTo(rightBucket)
+            if (bucket != 0) return@Comparator bucket
+            val expected = if (leftBucket == 0) {
+                right.occurredAtUtcMs.compareTo(left.occurredAtUtcMs)
+            } else {
+                left.occurredAtUtcMs.compareTo(right.occurredAtUtcMs)
+            }
+            if (expected != 0) return@Comparator expected
+            return@Comparator left.entryId.compareTo(right.entryId)
+        }
+        val day = right.bookedLocalEpochDay.compareTo(left.bookedLocalEpochDay)
+        if (day != 0) return@Comparator day
+        val minute = right.bookedLocalTimeMinutes.compareTo(left.bookedLocalTimeMinutes)
+        if (minute != 0) return@Comparator minute
+        right.entryId.compareTo(left.entryId)
+    }
 
     private data class MaterializedTimelinePage(
         val page: FluviLedgerTimelinePage<FluviLedgerEntryEntity>,

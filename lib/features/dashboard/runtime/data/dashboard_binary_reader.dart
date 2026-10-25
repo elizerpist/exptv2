@@ -101,6 +101,9 @@ final class DashboardBinaryReader {
           'bookedLocalEpochDay': readInt64('$label.bookedLocalEpochDay'),
           'bookedLocalTimeMinutes': readInt32('$label.bookedLocalTimeMinutes'),
           'entryId': readString('$label.entryId'),
+          'timelineSegment': readInt32('$label.timelineSegment'),
+          'pendingSortBucket': readInt32('$label.pendingSortBucket'),
+          'pendingExpectedAtUtcMs': readInt64('$label.pendingExpectedAtUtcMs'),
         }
       : null;
 

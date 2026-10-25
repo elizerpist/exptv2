@@ -30,6 +30,7 @@ class DashboardLogRowViewModel {
     required this.semanticLabel,
     this.isPendingGhost = false,
     this.hasGhostOrigin = false,
+    this.hasCategoryOverride = false,
     this.amountIsUnknown = false,
     this.categoryId = '',
     this.partnerId = '',
@@ -43,6 +44,9 @@ class DashboardLogRowViewModel {
          formattedAmount,
          displayTime,
          amountStyle,
+         isPendingGhost,
+         hasGhostOrigin,
+         hasCategoryOverride,
        );
 
   /// Rich per-row presentation is intentionally created only by a bounded
@@ -81,6 +85,7 @@ class DashboardLogRowViewModel {
           '${isExpense ? 'kiadás' : 'bevétel'}, $categoryDisplayName',
       isPendingGhost: entry.isPendingGhost,
       hasGhostOrigin: entry.recurrenceOccurrenceId != null,
+      hasCategoryOverride: entry.assignmentMode == 'entryOverride',
       amountIsUnknown: entry.amountIsUnknown,
     );
   }
@@ -103,6 +108,7 @@ class DashboardLogRowViewModel {
   final int categoryIconHandle;
   final bool isPendingGhost;
   final bool hasGhostOrigin;
+  final bool hasCategoryOverride;
   final bool amountIsUnknown;
 
   /// Prepared once with the immutable row so paint-time lookup is O(1).

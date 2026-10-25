@@ -7,6 +7,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
@@ -451,6 +452,8 @@ final class DashboardDataRuntime {
   DashboardPreparedIndexPublication? _pendingPublication;
   PreparedBudgetLimitSnapshot? _activeBudgetSnapshot;
   PreparedBudgetPartnerDistributionSnapshot? _activePartnerDistributionSnapshot;
+  _BudgetSnapshotKey? _activeBudgetSnapshotKey;
+  _BudgetSnapshotKey? _activePartnerDistributionSnapshotKey;
   _BudgetSnapshotRequest? _inFlightBudgetSnapshot;
   _PartnerDistributionSnapshotRequest? _inFlightPartnerDistributionSnapshot;
   Future<PreparedDashboardIndex>? _bootstrapFuture;
@@ -515,8 +518,8 @@ final class DashboardDataRuntime {
     return index;
   }
 
-  /// Acquires one query-independent exact bank at most once per revision and
-  /// physical year window. Query candidates call this after their immutable
+  /// Acquires one ghost-membership-aware exact bank at most once per revision,
+  /// filter mode and physical year window. Query candidates call this after their immutable
   /// index build; same-revision applies join the existing bank rather than
   /// starting another native aggregate read.
   Future<PreparedBudgetLimitSnapshot?> prepareBudgetLimitSnapshotFor(
@@ -526,7 +529,9 @@ final class DashboardDataRuntime {
     if (repository == null) return null;
     final key = _BudgetSnapshotKey.fromIndex(index);
     final active = _activeBudgetSnapshot;
-    if (active != null && key.matches(active)) {
+    if (active != null &&
+        key == _activeBudgetSnapshotKey &&
+        key.matches(active)) {
       _recordBudgetSnapshotReused(key);
       return active;
     }
@@ -539,6 +544,7 @@ final class DashboardDataRuntime {
       coreRevision: key.coreRevision,
       yearWindowStart: key.yearWindowStart,
       yearWindowEndInclusive: key.yearWindowEndInclusive,
+      ghostFilterMode: key.ghostFilterMode,
     );
     final request = _BudgetSnapshotRequest(key, future);
     _inFlightBudgetSnapshot = request;
@@ -548,6 +554,7 @@ final class DashboardDataRuntime {
         throw StateError('Prepared Budget snapshot identity is inexact.');
       }
       _activeBudgetSnapshot = snapshot;
+      _activeBudgetSnapshotKey = key;
       return snapshot;
     } finally {
       if (identical(_inFlightBudgetSnapshot, request)) {
@@ -556,8 +563,8 @@ final class DashboardDataRuntime {
     }
   }
 
-  /// Acquires the sibling exact partner bank once per revision/window. It is
-  /// intentionally Query-independent and joins an existing in-flight native
+  /// Acquires the sibling exact partner bank once per revision/window/mode. It
+  /// uses the same ghost membership predicate and joins an existing in-flight native
   /// request rather than making a second bridge acquisition for Query Apply.
   Future<PreparedBudgetPartnerDistributionSnapshot?>
   prepareBudgetPartnerDistributionSnapshotFor(
@@ -567,7 +574,9 @@ final class DashboardDataRuntime {
     if (repository == null) return null;
     final key = _BudgetSnapshotKey.fromIndex(index);
     final active = _activePartnerDistributionSnapshot;
-    if (active != null && key.matchesPartnerDistribution(active)) {
+    if (active != null &&
+        key == _activePartnerDistributionSnapshotKey &&
+        key.matchesPartnerDistribution(active)) {
       _recordPartnerDistributionSnapshotReused(key);
       return active;
     }
@@ -580,6 +589,7 @@ final class DashboardDataRuntime {
       coreRevision: key.coreRevision,
       yearWindowStart: key.yearWindowStart,
       yearWindowEndInclusive: key.yearWindowEndInclusive,
+      ghostFilterMode: key.ghostFilterMode,
     );
     final request = _PartnerDistributionSnapshotRequest(key, future);
     _inFlightPartnerDistributionSnapshot = request;
@@ -591,6 +601,7 @@ final class DashboardDataRuntime {
         );
       }
       _activePartnerDistributionSnapshot = snapshot;
+      _activePartnerDistributionSnapshotKey = key;
       return snapshot;
     } finally {
       if (identical(_inFlightPartnerDistributionSnapshot, request)) {
@@ -953,6 +964,7 @@ final class _BudgetSnapshotKey {
     required this.coreRevision,
     required this.yearWindowStart,
     required this.yearWindowEndInclusive,
+    required this.ghostFilterMode,
   });
 
   factory _BudgetSnapshotKey.fromIndex(PreparedDashboardIndex index) =>
@@ -960,11 +972,13 @@ final class _BudgetSnapshotKey {
         coreRevision: index.coreRevision,
         yearWindowStart: index.key.yearWindowStart,
         yearWindowEndInclusive: index.key.yearWindowEndInclusive,
+        ghostFilterMode: index.key.ghostFilterMode,
       );
 
   final int coreRevision;
   final int yearWindowStart;
   final int yearWindowEndInclusive;
+  final GhostFilterMode ghostFilterMode;
 
   bool matches(PreparedBudgetLimitSnapshot snapshot) =>
       snapshot.coreRevision == coreRevision &&
@@ -983,11 +997,16 @@ final class _BudgetSnapshotKey {
       other is _BudgetSnapshotKey &&
       other.coreRevision == coreRevision &&
       other.yearWindowStart == yearWindowStart &&
-      other.yearWindowEndInclusive == yearWindowEndInclusive;
+      other.yearWindowEndInclusive == yearWindowEndInclusive &&
+      other.ghostFilterMode == ghostFilterMode;
 
   @override
-  int get hashCode =>
-      Object.hash(coreRevision, yearWindowStart, yearWindowEndInclusive);
+  int get hashCode => Object.hash(
+    coreRevision,
+    yearWindowStart,
+    yearWindowEndInclusive,
+    ghostFilterMode,
+  );
 }
 
 final class _BudgetSnapshotRequest {

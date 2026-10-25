@@ -114,6 +114,20 @@ final class DashboardPreparedLogBoxRowTextLayout {
   /// a paragraph for each visible transaction.
   int get amountTintPictureBuildCount => _tintedAmountPictures.length;
 
+  /// Exact rectangle of the already prepared time paragraph. Badges use this
+  /// instead of a second font-size constant so they remain aligned under
+  /// typography scaling and never change the LogBox row geometry.
+  Rect timeBounds(double rowTop, {required double rowHeight}) {
+    final rightHeight = amount.height + time.height;
+    final rightTop = rowTop + (rowHeight - rightHeight) / 2;
+    return Rect.fromLTWH(
+      rightEdge - time.width,
+      rightTop + amount.height,
+      time.width,
+      time.height,
+    );
+  }
+
   /// The foreground is a presentation-only compositing input. It paints a
   /// prepared paragraph without re-layout, so palette changes retain text and
   /// scene cache without creating a [TextPainter] in the paint hot path.
@@ -143,10 +157,7 @@ final class DashboardPreparedLogBoxRowTextLayout {
       canvas.drawPicture(picture);
       canvas.restore();
     }
-    time.paint(
-      canvas,
-      Offset(rightEdge - time.width, rightTop + amount.height),
-    );
+    time.paint(canvas, timeBounds(rowTop, rowHeight: rowHeight).topLeft);
   }
 
   void dispose() {

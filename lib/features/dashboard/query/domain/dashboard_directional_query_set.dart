@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'current_ledger_query_scope.dart';
+import 'ghost_filter_mode.dart';
 import 'ledger_direction.dart';
 
 /// The two independent applied filter templates represented by one dashboard.
@@ -54,6 +55,15 @@ final class DashboardDirectionalQuerySet {
       expense: scope,
     ),
   };
+
+  /// The quick filter is a single dashboard state. Updating both immutable
+  /// templates together prevents direction changes from resurrecting a stale
+  /// ghost mode.
+  DashboardDirectionalQuerySet withGhostFilterMode(GhostFilterMode mode) =>
+      DashboardDirectionalQuerySet(
+        income: income.copyWith(ghostFilterMode: mode),
+        expense: expense.copyWith(ghostFilterMode: mode),
+      );
 
   /// Canonical cache/request identity. Each half includes its direction, so
   /// swapping otherwise equal filters remains impossible.

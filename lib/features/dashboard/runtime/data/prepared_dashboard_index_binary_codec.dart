@@ -97,7 +97,7 @@ final class IsolateDashboardPreparedIndexDecodeWorker
 /// semantic catalogs and immutable presentation frames off the UI isolate.
 abstract final class DashboardPreparedIndexBinaryCodec {
   static const int magic = 0x464c4449;
-  static const int version = 6;
+  static const int version = 7;
   static const int expectedSqlCallCount = 6;
   static const int maximumPayloadBytes = 128 * 1024 * 1024;
   static const int maximumRowCount = 200000;

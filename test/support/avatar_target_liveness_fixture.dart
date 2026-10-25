@@ -4,6 +4,7 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_g
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
@@ -174,6 +175,7 @@ final class AvatarTargetLivenessRepository
     required int coreRevision,
     required int yearWindowStart,
     required int yearWindowEndInclusive,
+    GhostFilterMode ghostFilterMode = GhostFilterMode.both,
   }) async {
     final periodCount = 1 + (yearWindowEndInclusive - yearWindowStart + 1) * 13;
     PreparedBudgetLimitDirectionBank bank(bool expense) =>

@@ -10,6 +10,7 @@ import '../../motion/dashboard_semantic_catalog.dart';
 import 'prepared_presentation_frame.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/local_date.dart';
@@ -245,6 +246,7 @@ final class PreparedDashboardIndexKey {
     required this.pageSize,
     required this.yearWindowStart,
     required this.yearWindowEndInclusive,
+    this.ghostFilterMode = GhostFilterMode.both,
     this.incomeFilterKey = '',
     this.expenseFilterKey = '',
   });
@@ -272,6 +274,7 @@ final class PreparedDashboardIndexKey {
     expenseFilterKey: _filterIdentity(
       scope.copyWith(direction: LedgerDirection.expense),
     ),
+    ghostFilterMode: scope.ghostFilterMode,
   );
 
   factory PreparedDashboardIndexKey.fromDirectionalQuerySet({
@@ -281,21 +284,29 @@ final class PreparedDashboardIndexKey {
     required int yearWindowStart,
     required int yearWindowEndInclusive,
     int modelVersion = currentModelVersion,
-  }) => PreparedDashboardIndexKey(
-    modelVersion: modelVersion,
-    coreRevision: coreRevision,
-    // Compatibility fields are retained for older fixtures and diagnostics;
-    // all new identity checks select the directional key below.
-    categoryIdsKey: canonicalValues(queries.income.categoryIds),
-    partnerIdsKey: canonicalValues(queries.income.partnerIds),
-    refinementsKey: canonicalRefinements(queries.income.refinements),
-    temporalFilterKey: queries.income.temporalFilter.canonicalKey,
-    pageSize: pageSize,
-    yearWindowStart: yearWindowStart,
-    yearWindowEndInclusive: yearWindowEndInclusive,
-    incomeFilterKey: _filterIdentity(queries.income),
-    expenseFilterKey: _filterIdentity(queries.expense),
-  );
+  }) {
+    if (queries.income.ghostFilterMode != queries.expense.ghostFilterMode) {
+      throw ArgumentError(
+        'A prepared dashboard index requires one shared ghost filter mode.',
+      );
+    }
+    return PreparedDashboardIndexKey(
+      modelVersion: modelVersion,
+      coreRevision: coreRevision,
+      // Compatibility fields are retained for older fixtures and diagnostics;
+      // all new identity checks select the directional key below.
+      categoryIdsKey: canonicalValues(queries.income.categoryIds),
+      partnerIdsKey: canonicalValues(queries.income.partnerIds),
+      refinementsKey: canonicalRefinements(queries.income.refinements),
+      temporalFilterKey: queries.income.temporalFilter.canonicalKey,
+      pageSize: pageSize,
+      yearWindowStart: yearWindowStart,
+      yearWindowEndInclusive: yearWindowEndInclusive,
+      incomeFilterKey: _filterIdentity(queries.income),
+      expenseFilterKey: _filterIdentity(queries.expense),
+      ghostFilterMode: queries.income.ghostFilterMode,
+    );
+  }
 
   static const int currentModelVersion = 4;
 
@@ -308,6 +319,7 @@ final class PreparedDashboardIndexKey {
   final int pageSize;
   final int yearWindowStart;
   final int yearWindowEndInclusive;
+  final GhostFilterMode ghostFilterMode;
   final String incomeFilterKey;
   final String expenseFilterKey;
 
@@ -357,6 +369,7 @@ final class PreparedDashboardIndexKey {
       other.partnerIdsKey == partnerIdsKey &&
       other.refinementsKey == refinementsKey &&
       other.temporalFilterKey == temporalFilterKey &&
+      other.ghostFilterMode == ghostFilterMode &&
       other.incomeFilterKey == incomeFilterKey &&
       other.expenseFilterKey == expenseFilterKey &&
       other.pageSize == pageSize &&
@@ -371,6 +384,7 @@ final class PreparedDashboardIndexKey {
     partnerIdsKey,
     refinementsKey,
     temporalFilterKey,
+    ghostFilterMode,
     incomeFilterKey,
     expenseFilterKey,
     pageSize,

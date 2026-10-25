@@ -37,6 +37,7 @@ import '../motion/dashboard_semantic_catalog.dart';
 import '../query/domain/ledger_direction.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/dashboard_directional_query_set.dart';
+import '../query/domain/ghost_filter_mode.dart';
 import '../query/domain/query_amount_range.dart';
 import '../query/application/current_query_controller.dart';
 import '../query/application/query_composer_controller.dart';
@@ -7203,6 +7204,114 @@ final class DashboardCoreController {
         });
     _queryApplyInFlight = operation;
     return operation;
+  }
+
+  /// Commits one shared ghost-membership change for both directional query
+  /// templates.  The old complete dashboard remains visible while a matching
+  /// native index is prepared, then navigation, index and filter owner are
+  /// replaced at the same publication boundary.
+  Future<bool> cycleGhostFilterMode() => applyGhostFilterMode(
+    currentQuery.scopeFor(LedgerDirection.expense).ghostFilterMode.next,
+  );
+
+  Future<bool> applyGhostFilterMode(GhostFilterMode mode) {
+    final desiredQueries = currentQuery.queries.withGhostFilterMode(mode);
+    if (desiredQueries == currentQuery.queries) return Future<bool>.value(true);
+    _cancelActiveComposerApply(reason: 'ghostQuickFilter');
+    final generation = ++_queryApplyGeneration;
+    late final Future<bool> operation;
+    operation =
+        _applyGhostFilterMode(
+          desiredQueries: desiredQueries,
+          generation: generation,
+        ).whenComplete(() {
+          if (identical(_queryApplyInFlight, operation)) {
+            _queryApplyInFlight = null;
+            _activeComposerApplyIdentity = null;
+            _activeQueryApplyCacheKey = null;
+            _activeMindAmountInteractionGeneration = null;
+            _activeInteractionPublicationOrder = null;
+          }
+        });
+    _activeComposerApplyIdentity = null;
+    _activeQueryApplyCacheKey = 'ghost:${mode.name}';
+    _activeMindAmountInteractionGeneration = null;
+    _activeInteractionPublicationOrder = null;
+    _queryApplyInFlight = operation;
+    return operation;
+  }
+
+  Future<bool> _applyGhostFilterMode({
+    required DashboardDirectionalQuerySet desiredQueries,
+    required int generation,
+  }) async {
+    final window = _activePreparedQueryYearWindow();
+    if (window == null || _disposed || generation != _queryApplyGeneration) {
+      return false;
+    }
+    final template = DashboardIndexRequestTemplate.forPreparedYearWindow(
+      directionalQueries: desiredQueries,
+      pageSize: pageSize,
+      yearWindow: window,
+    );
+    try {
+      final index = await dataRuntime.prepareQuery(template);
+      if (_disposed || generation != _queryApplyGeneration) return false;
+      final snapshots = await Future.wait<Object?>(<Future<Object?>>[
+        dataRuntime.prepareBudgetLimitSnapshotFor(index),
+        dataRuntime.prepareBudgetPartnerDistributionSnapshotFor(index),
+      ]);
+      if (_disposed || generation != _queryApplyGeneration) return false;
+      final activeDirection = navigation.state.parentQueryScope.direction;
+      final activeScope = desiredQueries.scopeFor(activeDirection);
+      final availability = DashboardTemporalAvailability.fromTemporalFilter(
+        activeScope.temporalFilter,
+      );
+      final publicationState = navigation.appliedQueryCandidate(
+        activeScope,
+        availability: availability,
+        coreRevision: index.coreRevision,
+      );
+      final published = await installPreparedIndex(
+        index,
+        budgetLimitSnapshot: snapshots[0] as PreparedBudgetLimitSnapshot?,
+        partnerDistributionSnapshot:
+            snapshots[1] as PreparedBudgetPartnerDistributionSnapshot?,
+        publicationState: publicationState,
+        shouldPublish: () => !_disposed && generation == _queryApplyGeneration,
+        beforePublish: () {
+          navigation.replaceAppliedQuery(
+            activeScope,
+            availability: availability,
+            coreRevision: index.coreRevision,
+          );
+          currentQuery.replaceGhostFilterMode(activeScope.ghostFilterMode);
+        },
+      );
+      if (!published || _disposed || generation != _queryApplyGeneration) {
+        return false;
+      }
+      dataRuntime.commitPreparedQuery(index, template);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'GHOST_QUICK_FILTER_APPLIED',
+          queryKey: activeScope.key.value,
+          direction: activeDirection.name,
+          coreRevision: index.coreRevision,
+          scope: 'mode=${activeScope.ghostFilterMode.name}',
+        ),
+      );
+      return true;
+    } on Object catch (error) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'GHOST_QUICK_FILTER_FAILED',
+          error: '$error',
+          scope: 'mode=${desiredQueries.income.ghostFilterMode.name}',
+        ),
+      );
+      return false;
+    }
   }
 
   Future<bool> _applyPreparedQuery(

@@ -5,12 +5,20 @@ import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerOriginKind
 
+/** Shared dashboard membership filter for recurrence-origin rows. */
+enum class FluviGhostFilterMode {
+    nonGhost,
+    onlyGhost,
+    both,
+}
+
 data class FluviQueryScope(
     val direction: LedgerDirection,
     val periodGroups: List<FluviPeriodGroup> = emptyList(),
     val categoryIds: Set<String> = emptySet(),
     val partnerIds: Set<String> = emptySet(),
     val refinements: FluviQueryRefinements = FluviQueryRefinements(),
+    val ghostFilterMode: FluviGhostFilterMode = FluviGhostFilterMode.both,
 ) {
     init {
         require(periodGroups.map { it.key }.distinct().size == periodGroups.size) {
@@ -106,6 +114,11 @@ data class FluviTimelineCursor(
     val bookedLocalEpochDay: Long,
     val bookedLocalTimeMinutes: Int,
     val entryId: String,
+    /** 0 = pending ghost segment; 1 = normal chronological segment. */
+    val timelineSegment: Int = 1,
+    /** 0 = due/overdue; 1 = future; 2 = non-pending row. */
+    val pendingSortBucket: Int = 2,
+    val pendingExpectedAtUtcMs: Long = 0L,
 )
 
 data class FluviLedgerTimelinePage<T>(

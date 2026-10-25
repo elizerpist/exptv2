@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/data/current_ledger_query_scope_wire_codec.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -18,6 +19,7 @@ void main() {
         ]),
         categoryIds: const <String>{'food'},
         refinements: const <String, Object?>{'noteContains': 'Tesco'},
+        ghostFilterMode: GhostFilterMode.onlyGhost,
       );
 
       final encoded = CurrentLedgerQueryScopeWireCodec.encodeNavigatedScope(
@@ -36,6 +38,7 @@ void main() {
       expect(decoded.temporalFilter, scope.temporalFilter);
       expect(decoded.categoryIds, <String>{'food'});
       expect(decoded.refinements['noteContains'], 'Tesco');
+      expect(decoded.ghostFilterMode, GhostFilterMode.onlyGhost);
     },
   );
 }

@@ -23,6 +23,8 @@ void main() {
     expect(page.queryKey, request.scope.key);
     expect(page.payload.entryCount, 156);
     expect(page.payload.nextCursor, isNotNull);
+    expect(page.payload.nextCursor!['timelineSegment'], 1);
+    expect(page.payload.nextCursor!['pendingSortBucket'], 2);
   });
 
   test('rejects a navigation transport key as a structural time identity', () {
@@ -101,7 +103,10 @@ Uint8List _payload(
     ..boolean(true)
     ..int64(19_999)
     ..int32(600)
-    ..string('ordinal-one-cursor');
+    ..string('ordinal-one-cursor')
+    ..int32(1)
+    ..int32(2)
+    ..int64(0);
   return writer.takeBytes();
 }
 

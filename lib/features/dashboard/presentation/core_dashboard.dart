@@ -75,6 +75,7 @@ import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/domain/year_month.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
+import 'widgets/dashboard_ghost_quick_filter.dart';
 import 'widgets/dashboard_logbox_viewport.dart';
 import 'widgets/dashboard_render_phase_probe.dart';
 import 'widgets/dashboard_render_diagnostic_probe.dart';
@@ -209,16 +210,39 @@ class _CoreDashboardState extends State<CoreDashboard>
     candidate: 'collapseHandle',
     material: 'DashboardCollapseHandle ${style.name}',
     clip: 'none',
-    zOrder: 'modeContent<logBoxViewport<collapseHandle',
-    child: DashboardCollapseHandle(
-      bounds: bounds,
-      style: style,
-      isDragging: isDragging,
-      onTap: controller.expansion.toggle,
-      onVerticalDragStart: (_) => _upperVerticalGestures.begin(),
-      onVerticalDragUpdate: (details) =>
-          _upperVerticalGestures.dragByViewport(details.delta.dy),
-      onVerticalDragEnd: (_) => _upperVerticalGestures.end(),
+    zOrder: 'modeContent<logBoxViewport<collapseHandle<ghostQuickFilter',
+    child: Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        DashboardCollapseHandle(
+          bounds: bounds,
+          style: style,
+          isDragging: isDragging,
+          onTap: controller.expansion.toggle,
+          onVerticalDragStart: (_) => _upperVerticalGestures.begin(),
+          onVerticalDragUpdate: (details) =>
+              _upperVerticalGestures.dragByViewport(details.delta.dy),
+          onVerticalDragEnd: (_) => _upperVerticalGestures.end(),
+        ),
+        Positioned(
+          right: 0,
+          top: (bounds.height - 48) / 2,
+          child: AnimatedBuilder(
+            animation: controller.currentQuery,
+            builder: (context, _) => DashboardGhostQuickFilter(
+              mode: controller.currentQuery
+                  .scopeFor(
+                    controller.transactionDirection.direction ==
+                            TransactionDirection.income
+                        ? LedgerDirection.income
+                        : LedgerDirection.expense,
+                  )
+                  .ghostFilterMode,
+              onTap: () => unawaited(controller.cycleGhostFilterMode()),
+            ),
+          ),
+        ),
+      ],
     ),
   );
 

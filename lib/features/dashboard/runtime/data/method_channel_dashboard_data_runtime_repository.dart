@@ -4,6 +4,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../logbox/application/committed_log_viewport_cache.dart';
 import '../../query/data/current_ledger_query_scope_wire_codec.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import '../domain/prepared_dashboard_index.dart';
 import '../domain/prepared_budget_limit_snapshot.dart';
 import '../domain/prepared_budget_partner_distribution_snapshot.dart';
@@ -146,6 +147,7 @@ final class MethodChannelDashboardDataRuntimeRepository
     required int coreRevision,
     required int yearWindowStart,
     required int yearWindowEndInclusive,
+    GhostFilterMode ghostFilterMode = GhostFilterMode.both,
   }) async {
     _budgetSnapshotCalls += 1;
     _platformCalls += 1;
@@ -156,6 +158,7 @@ final class MethodChannelDashboardDataRuntimeRepository
         'coreRevision': coreRevision,
         'yearWindowStart': yearWindowStart,
         'yearWindowEndInclusive': yearWindowEndInclusive,
+        'ghostFilterMode': ghostFilterMode.name,
       },
     );
     timer.stop();
@@ -220,6 +223,7 @@ final class MethodChannelDashboardDataRuntimeRepository
     required int coreRevision,
     required int yearWindowStart,
     required int yearWindowEndInclusive,
+    GhostFilterMode ghostFilterMode = GhostFilterMode.both,
   }) async {
     _partnerDistributionSnapshotCalls += 1;
     _platformCalls += 1;
@@ -230,6 +234,7 @@ final class MethodChannelDashboardDataRuntimeRepository
         'coreRevision': coreRevision,
         'yearWindowStart': yearWindowStart,
         'yearWindowEndInclusive': yearWindowEndInclusive,
+        'ghostFilterMode': ghostFilterMode.name,
       },
     );
     timer.stop();

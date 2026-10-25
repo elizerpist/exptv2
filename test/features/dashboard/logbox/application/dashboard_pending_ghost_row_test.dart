@@ -33,4 +33,33 @@ void main() {
       expect(row.semanticLabel, startsWith('Várható, Netflix'));
     },
   );
+
+  test(
+    'explicit category assignments retain their override identity for painter badges',
+    () {
+      final row = DashboardLogRowViewModel.fromLedgerEntry(
+        const DashboardLedgerEntry(
+          id: 'ghost:override-1',
+          partnerId: 'partner-1',
+          partnerDisplayName: 'Netflix',
+          categoryId: 'category-entertainment',
+          categoryDisplayName: 'Szórakozás',
+          categoryColorId: 'orange',
+          categoryIconId: 'gamepad',
+          assignmentMode: 'entryOverride',
+          direction: 'expense',
+          amountMinor: 449000,
+          isPendingGhost: true,
+          recurrenceOccurrenceId: 'occurrence-override-1',
+          bookedLocalEpochDay: 20_500,
+          bookedLocalTimeMinutes: 480,
+        ),
+      );
+
+      expect(row.hasGhostOrigin, isTrue);
+      expect(row.hasCategoryOverride, isTrue);
+      expect(row.categoryColorId, 'orange');
+      expect(row.categoryIconId, 'gamepad');
+    },
+  );
 }

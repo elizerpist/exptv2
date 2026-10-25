@@ -99,6 +99,7 @@ final class DashboardTemporalAnchor {
     final partners = scope.partnerIds.toList()..sort();
     return 'categories:${categories.join(',')}|'
         'partners:${partners.join(',')}|'
-        'refinements:${DashboardQueryRefinementCanonicalizer.canonicalValue(scope.refinements)}';
+        'refinements:${DashboardQueryRefinementCanonicalizer.canonicalValue(scope.refinements)}|'
+        'ghost:${scope.ghostFilterMode.name}';
   }
 }
