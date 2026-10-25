@@ -13,6 +13,9 @@ import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.LedgerCategorySelection
 import com.fluvi.core.model.ManualTransactionPartnerSelection
+import com.fluvi.core.model.NotificationParseStatus
+import com.fluvi.core.model.NotificationProcessingStatus
+import com.fluvi.core.model.NotificationTrainingStatus
 import com.fluvi.core.model.UpdateLedgerEntryCommand
 import com.fluvi.core.model.CreateLedgerEntryCommand
 import com.fluvi.core.repository.FluviCategoryRepository
@@ -229,6 +232,7 @@ class FluviLedgerWriteUseCaseTest {
 
     @Test
     fun editorUpdateIsAtomicAndPreservesImportedSourceIdentity() = runBlocking {
+        insertNotificationInbox("notification-1")
         val push = ledger.create(
             command(
                 selection = LedgerCategorySelection.PartnerDefault,
@@ -281,6 +285,39 @@ class FluviLedgerWriteUseCaseTest {
             }
         }
         Unit
+    }
+
+    private fun insertNotificationInbox(id: String) {
+        database.openHelper.writableDatabase.execSQL(
+            """
+            INSERT INTO fluvi_notification_inbox (
+                id,
+                raw_notification_text,
+                source_package_name,
+                source_app_label,
+                received_at_utc_ms,
+                parse_status,
+                processing_status,
+                training_status,
+                ledger_entry_id,
+                created_at_utc_ms,
+                updated_at_utc_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            arrayOf(
+                id,
+                "Bank notification",
+                "com.bank",
+                "Bank",
+                1_700_000_000_000L,
+                NotificationParseStatus.recognized.name,
+                NotificationProcessingStatus.transaction_created.name,
+                NotificationTrainingStatus.unused.name,
+                null,
+                1_700_000_000_000L,
+                1_700_000_000_000L,
+            ),
+        )
     }
 
     private fun command(
