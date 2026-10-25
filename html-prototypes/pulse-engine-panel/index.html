@@ -1,0 +1,2734 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="prototype-id" content="exptv2/pulse-engine-panel">
+  <meta name="prototype-status" content="current">
+  <title>Pulse motor felület · EXPTV2 bemutató</title>
+  <style>
+    :root {
+      --bg: #eef3f7;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --ink: #172033;
+      --muted: #647086;
+      --line: #dbe3ec;
+      --cyan: #08a7c7;
+      --blue: #3366d9;
+      --green: #16a36a;
+      --amber: #d08a00;
+      --red: #e34a4a;
+      --pink: #d54f93;
+      --violet: #7657d9;
+      --shadow: 0 18px 46px rgba(22, 35, 55, .12), 0 2px 8px rgba(22, 35, 55, .06);
+      --r: 8px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(120deg, rgba(8, 167, 199, .14), transparent 28%),
+        linear-gradient(260deg, rgba(213, 79, 147, .10), transparent 32%),
+        var(--bg);
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    .page {
+      width: calc(100vw - 28px);
+      max-width: none;
+      margin: 0 auto;
+      padding: 22px 0 48px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(25px, 4vw, 42px);
+      line-height: 1.02;
+      letter-spacing: 0;
+      max-width: 760px;
+    }
+
+    h2 {
+      font-size: 20px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      font-size: 13px;
+      line-height: 1.2;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .lede {
+      max-width: 780px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .status-pill {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid rgba(8, 167, 199, .28);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .74);
+      box-shadow: 0 4px 16px rgba(22, 35, 55, .07);
+      color: #0b6677;
+      font-weight: 750;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 5px rgba(22, 163, 106, .12);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .phone {
+      min-height: 720px;
+      border-radius: 36px;
+      padding: 16px;
+      background: #121724;
+      box-shadow: var(--shadow);
+      color: white;
+      position: sticky;
+      top: 18px;
+    }
+
+    .phone-screen {
+      min-height: 688px;
+      border-radius: 26px;
+      overflow: hidden;
+      background: #f3f6f8;
+      color: var(--ink);
+      position: relative;
+    }
+
+    .device-status {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      color: rgba(255, 255, 255, .9);
+      background: #111827;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .header-card {
+      height: 186px;
+      margin: 12px;
+      border-radius: 20px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,.52), transparent 28%),
+        linear-gradient(132deg, #43d4e6 0%, #2766e8 48%, #864dde 100%);
+      box-shadow: 0 18px 32px rgba(23, 32, 51, .18);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      animation: headerMorph 6s ease-in-out infinite;
+    }
+
+    .header-card:after {
+      content: "";
+      position: absolute;
+      inset: -20%;
+      background: conic-gradient(from 130deg, transparent, rgba(255,255,255,.32), transparent, rgba(255,255,255,.18), transparent);
+      animation: sweep 6s ease-in-out infinite;
+      opacity: .7;
+    }
+
+    .normal-kpi, .pulse-kpi {
+      position: absolute;
+      inset: 20px;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .normal-kpi {
+      animation: normalText 6s ease-in-out infinite;
+    }
+
+    .pulse-kpi {
+      opacity: 0;
+      transform: translateY(8px);
+      animation: pulseText 6s ease-in-out infinite;
+    }
+
+    .kicker {
+      font-size: 12px;
+      color: rgba(255,255,255,.76);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 10px;
+    }
+
+    .money {
+      font-size: 34px;
+      font-weight: 860;
+      letter-spacing: 0;
+      color: white;
+      text-shadow: 0 2px 18px rgba(0,0,0,.18);
+    }
+
+    .pulse-copy {
+      max-width: 280px;
+      color: white;
+      font-size: 23px;
+      line-height: 1.08;
+      font-weight: 850;
+      letter-spacing: 0;
+      text-shadow: 0 2px 18px rgba(0,0,0,.18);
+    }
+
+    .pulse-detail {
+      margin-top: 10px;
+      color: rgba(255,255,255,.84);
+      font-size: 13px;
+      line-height: 1.35;
+      max-width: 280px;
+    }
+
+    @keyframes headerMorph {
+      0%, 30%, 100% {
+        background:
+          radial-gradient(circle at 20% 20%, rgba(255,255,255,.52), transparent 28%),
+          linear-gradient(132deg, #43d4e6 0%, #2766e8 48%, #864dde 100%);
+      }
+      42%, 68% {
+        background:
+          radial-gradient(circle at 20% 20%, rgba(255,255,255,.54), transparent 30%),
+          linear-gradient(132deg, #f0a623 0%, #e15b5b 48%, #b047a8 100%);
+      }
+    }
+
+    @keyframes sweep {
+      0%, 32%, 100% { transform: rotate(0deg) scale(1); opacity: .18; }
+      44%, 66% { transform: rotate(92deg) scale(1.08); opacity: .6; }
+    }
+
+    @keyframes normalText {
+      0%, 30%, 100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+      42%, 68% { opacity: 0; transform: translateY(-10px); filter: blur(7px); }
+    }
+
+    @keyframes pulseText {
+      0%, 32%, 100% { opacity: 0; transform: translateY(8px); filter: blur(7px); }
+      44%, 68% { opacity: 1; transform: translateY(0); filter: blur(0); }
+    }
+
+    .phone-panel {
+      margin: 12px;
+      padding: 14px;
+      border-radius: var(--r);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 22px rgba(23, 32, 51, .08);
+    }
+
+    .selected-story {
+      display: grid;
+      gap: 10px;
+    }
+
+    .story-score {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .scorebar {
+      height: 8px;
+      border-radius: 99px;
+      background: #e8edf3;
+      overflow: hidden;
+    }
+
+    .scorebar > span {
+      display: block;
+      height: 100%;
+      width: 86%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--amber), var(--red), var(--pink));
+    }
+
+    .scenario-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .scenario-buttons button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      background: #f7fafc;
+      border-radius: var(--r);
+      color: var(--ink);
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    .scenario-buttons button.active {
+      color: white;
+      background: var(--ink);
+      border-color: var(--ink);
+    }
+
+    .content {
+      display: grid;
+      gap: 18px;
+    }
+
+    .workspace {
+      margin-top: 18px;
+    }
+
+    .horizontal-tabs {
+      position: sticky;
+      top: 10px;
+      z-index: 5;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      padding: 8px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(219, 227, 236, .9);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 10px 24px rgba(22, 35, 55, .08);
+      backdrop-filter: blur(12px);
+      scrollbar-width: none;
+    }
+
+    .horizontal-tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab-button {
+      flex: 0 0 auto;
+      min-height: 40px;
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .tab-button.active {
+      border-color: #172033;
+      background: #172033;
+      color: #fff;
+    }
+
+    .tab-panel {
+      display: block;
+    }
+
+    .tab-panel[hidden] {
+      display: none;
+    }
+
+    .tab-panel > .card,
+    .tab-panel > .grid-2 {
+      margin-top: 0 !important;
+    }
+
+    .group-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(280px, .75fr);
+      align-items: start;
+      gap: 18px;
+    }
+
+    .group-panel[hidden] {
+      display: none;
+    }
+
+    .group-panel > .dossier-section + .dossier-section {
+      margin-top: 0;
+    }
+
+    .group-panel > .dossier-section[data-dossier-section="manual"],
+    .group-panel > .dossier-section[data-dossier-section="forecasts"],
+    .group-panel > .dossier-section[data-dossier-section="triggers"] {
+      grid-column: 1 / -1;
+    }
+
+    .group-panel > .dossier-section[data-dossier-section="story"] {
+      grid-column: 1;
+    }
+
+    .group-panel > .dossier-section[data-dossier-section="tuning"] {
+      grid-column: 2;
+    }
+
+    .group-panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .group-panel-head p {
+      color: var(--muted);
+      line-height: 1.5;
+      margin-top: 5px;
+    }
+
+    .group-flow,
+    .shared-engine-trace {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(136px, 1fr));
+      gap: 10px;
+    }
+
+    .group-flow-step,
+    .shared-engine-step {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+    }
+
+    .group-flow-step strong,
+    .shared-engine-step strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .group-flow-step p,
+    .shared-engine-step p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .source-domain {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .engine-decision-trace {
+      margin-top: 18px;
+    }
+
+    .engine-scenario-tabs {
+      max-width: 560px;
+    }
+
+    .engine-trace-output {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .trace-stage {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+    }
+
+    .trace-stage h3 {
+      color: var(--ink);
+      font-size: 14px;
+      text-transform: none;
+    }
+
+    .trace-stage > p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .trace-stage-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .trace-source-list,
+    .trace-candidate-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .trace-copy-fragment,
+    .trace-source-button,
+    .trace-candidate {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .trace-candidate.selected {
+      border-color: rgba(227, 74, 74, .42);
+      background: #fff7f7;
+    }
+
+    .trace-candidate.suppressed {
+      background: #f6f8fb;
+      opacity: .82;
+    }
+
+    .trace-ledger {
+      display: grid;
+      gap: 5px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .trace-lifecycle {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 12px;
+    }
+
+    .trace-omitted {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .trace-all-role-map {
+      margin-top: 14px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .trace-all-role-map summary {
+      cursor: pointer;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .trace-all-role-map[open] summary {
+      margin-bottom: 10px;
+    }
+
+    .trace-source-button {
+      width: 100%;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .trace-copy-fragment strong,
+    .trace-candidate strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .trace-copy-fragment p,
+    .trace-source-button span,
+    .trace-candidate p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .trace-source-button:focus-visible {
+      outline: 3px solid rgba(8, 167, 199, .45);
+      outline-offset: 2px;
+    }
+
+    .group-summary-link {
+      margin-top: 8px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .signal-row[data-group-summary] {
+      cursor: pointer;
+    }
+
+    .signal-row[data-group-summary]:focus-visible {
+      outline: 3px solid rgba(8, 167, 199, .45);
+      outline-offset: 3px;
+    }
+
+    .card {
+      background: rgba(255,255,255,.86);
+      border: 1px solid rgba(219, 227, 236, .9);
+      border-radius: var(--r);
+      box-shadow: 0 10px 30px rgba(22, 35, 55, .07);
+      padding: 18px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .section-head p {
+      color: var(--muted);
+      max-width: 760px;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-top: 5px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 10px;
+    }
+
+    .flow-step {
+      min-height: 124px;
+      padding: 12px;
+      border-radius: var(--r);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      position: relative;
+    }
+
+    .flow-step strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .flow-step p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .pulse-semantic-flowchart {
+      margin: 18px 0;
+      border-color: rgba(79, 55, 168, .24);
+      background:
+        linear-gradient(135deg, rgba(242, 239, 255, .72), rgba(255, 255, 255, .96) 42%),
+        var(--surface);
+    }
+
+    .pulse-semantic-flowchart .section-head p {
+      max-width: 900px;
+    }
+
+    .semantic-flow-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .8);
+    }
+
+    .semantic-flow-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .semantic-flow-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #7b8798;
+    }
+
+    .semantic-flow-dot.wait { background: var(--amber); }
+    .semantic-flow-dot.stop { background: var(--red); }
+    .semantic-flow-dot.go { background: var(--green); }
+    .semantic-flow-dot.compose { background: #7453d7; }
+
+    .semantic-flow-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+      counter-reset: pulse-flow;
+    }
+
+    .semantic-flow-step {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      min-width: 0;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 7px 18px rgba(22, 35, 55, .05);
+    }
+
+    .semantic-flow-step-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+    }
+
+    .semantic-flow-index {
+      flex: 0 0 auto;
+      display: inline-grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .semantic-flow-step h3 {
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.2;
+    }
+
+    .semantic-flow-step-head p,
+    .semantic-flow-node p,
+    .semantic-flow-branch p,
+    .semantic-flow-note {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .semantic-flow-node {
+      padding: 10px;
+      border: 1px solid #dbe3ec;
+      border-radius: 8px;
+      background: var(--surface-2);
+    }
+
+    .semantic-flow-node strong,
+    .semantic-flow-branch strong {
+      display: block;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .semantic-flow-branches {
+      display: grid;
+      gap: 8px;
+    }
+
+    .semantic-flow-branch {
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-left: 4px solid #8793a5;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .semantic-flow-branch.wait {
+      border-left-color: var(--amber);
+      background: #fffaf0;
+    }
+
+    .semantic-flow-branch.stop {
+      border-left-color: var(--red);
+      background: #fff5f5;
+    }
+
+    .semantic-flow-branch.go {
+      border-left-color: var(--green);
+      background: #f2fbf6;
+    }
+
+    .semantic-flow-branch.compose {
+      border-left-color: #7453d7;
+      background: #f7f4ff;
+    }
+
+    .semantic-flow-branch .tagrow {
+      margin-top: 7px;
+    }
+
+    .semantic-flow-arrow {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: #4f37a8;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .semantic-flow-arrow::before {
+      content: "→";
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .semantic-flow-formula {
+      padding: 10px;
+      border: 1px dashed #baaef0;
+      border-radius: 8px;
+      background: #fbfaff;
+      color: #443285;
+      font-size: 11px;
+      font-weight: 750;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .semantic-flow-formula code {
+      color: inherit;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .tagrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 24px;
+      padding: 4px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .tag.bad { color: #9f2424; background: #fff2f2; border-color: #f3c9c9; }
+    .tag.good { color: #087144; background: #eefaf4; border-color: #bee8d1; }
+    .tag.warn { color: #805400; background: #fff7df; border-color: #efd99a; }
+    .tag.info { color: #075e70; background: #e9f8fb; border-color: #bce6ee; }
+    .tag.violet { color: #4f37a8; background: #f2efff; border-color: #d8d0ff; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .chart-card {
+      min-height: 332px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .chart-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .chart-title strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .chart-title span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      display: block;
+      margin-top: 3px;
+    }
+
+    .chart {
+      width: 100%;
+      height: 142px;
+      border-radius: var(--r);
+      background:
+        linear-gradient(#eff4f9 1px, transparent 1px) 0 33% / 100% 33%,
+        #fbfdff;
+      border: 1px solid #e3ebf3;
+    }
+
+    .trigger-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .trigger-card {
+      min-height: 318px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 13px;
+      border-radius: var(--r);
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .trigger-card.deferred {
+      background: #f7f9fb;
+      border-style: dashed;
+      opacity: .82;
+    }
+
+    .trigger-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .trigger-id {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 7px;
+      border-radius: 6px;
+      background: #172033;
+      color: white;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .trigger-card > strong {
+      display: block;
+      font-size: 14px;
+      line-height: 1.22;
+    }
+
+    .trigger-copy {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.42;
+      min-height: 50px;
+    }
+
+    .trigger-chart {
+      width: 100%;
+      height: 78px;
+      border-radius: var(--r);
+      border: 1px solid #e3ebf3;
+      background: #fbfdff;
+    }
+
+    .trigger-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .trigger-meta span {
+      min-height: 35px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .metric-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .metric {
+      min-height: 58px;
+      padding: 9px;
+      border-radius: var(--r);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+
+    .metric b {
+      display: block;
+      font-size: 15px;
+      line-height: 1.1;
+    }
+
+    .metric small {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .user-defined {
+      margin-top: auto;
+      padding: 10px;
+      border: 1px dashed rgba(8, 167, 199, .45);
+      border-radius: var(--r);
+      background: rgba(233, 248, 251, .54);
+    }
+
+    .user-defined strong {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      color: #075e70;
+      margin-bottom: 8px;
+    }
+
+    .control-line {
+      display: grid;
+      grid-template-columns: minmax(88px, .8fr) minmax(120px, 1.2fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 30px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .control-line input[type="range"] {
+      width: 100%;
+      accent-color: var(--cyan);
+    }
+
+    .mini-select {
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+      color: var(--ink);
+      padding: 0 8px;
+      font-size: 12px;
+    }
+
+    .signal-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .manual-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .manual-card {
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+      padding: 14px;
+    }
+
+    .manual-card strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .manual-card p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
+
+    .step-list,
+    .rule-list {
+      margin: 0;
+      padding-left: 19px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .status-box {
+      min-height: 72px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+    }
+
+    .status-box b {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .status-box span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.3;
+      display: block;
+    }
+
+    .signal-row {
+      display: grid;
+      grid-template-columns: 1.05fr .85fr .55fr;
+      gap: 10px;
+      align-items: stretch;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+    }
+
+    .signal-row strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .signal-row p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+
+    .weight {
+      font-size: 27px;
+      font-weight: 850;
+      text-align: right;
+    }
+
+    .weights-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .story-card {
+      min-height: 198px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+      padding: 14px;
+    }
+
+    .story-card.primary {
+      border-color: rgba(227, 74, 74, .34);
+      background: linear-gradient(180deg, #fff7f7, #fff);
+    }
+
+    .story-card h3 {
+      color: var(--ink);
+      text-transform: none;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .story-card p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .lifecycle-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: var(--r);
+      font-size: 13px;
+    }
+
+    .lifecycle-table th,
+    .lifecycle-table td {
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .lifecycle-table th {
+      color: var(--muted);
+      background: var(--surface-2);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .matrix {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .matrix-card {
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      padding: 12px;
+      background: #fff;
+      min-height: 176px;
+    }
+
+    .matrix-card strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .matrix-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      text-align: center;
+    }
+
+    .plain-language-flowchart-image {
+      margin-top: 18px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+    }
+
+    .plain-language-flowchart-image img {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+    }
+
+    .plain-language-flowchart-image figcaption,
+    .plain-language-flowchart-rule {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .plain-language-flowchart-rule {
+      color: var(--ink);
+      font-weight: 850;
+    }
+
+    @media (max-width: 1100px) {
+      .hero-grid,
+      .grid-2,
+      .grid-3,
+      .weights-grid,
+      .manual-grid,
+      .matrix {
+        grid-template-columns: 1fr;
+      }
+
+      .phone {
+        position: static;
+        min-height: auto;
+      }
+
+      .horizontal-tabs {
+        top: 0;
+      }
+
+      .flow {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        width: min(100vw - 18px, 520px);
+        padding-top: 12px;
+      }
+
+      .topbar {
+        display: block;
+      }
+
+      .status-pill {
+        margin-top: 12px;
+        width: fit-content;
+      }
+
+      .phone {
+        padding: 10px;
+        border-radius: 24px;
+      }
+
+      .phone-screen {
+        border-radius: 18px;
+      }
+
+      .header-card {
+        height: 168px;
+        margin: 9px;
+        padding: 16px;
+      }
+
+      .money {
+        font-size: 28px;
+      }
+
+      .pulse-copy {
+        font-size: 20px;
+      }
+
+      .section-head {
+        display: block;
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .signal-row {
+        grid-template-columns: 1fr;
+      }
+
+      .weight {
+        text-align: left;
+      }
+
+      .metric-strip {
+        grid-template-columns: 1fr;
+      }
+
+      .control-line {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .scenario-buttons {
+        grid-template-columns: 1fr;
+      }
+
+      .tab-button {
+        min-height: 38px;
+        font-size: 12px;
+      }
+
+      .trace-stage-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .layout-board {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      align-items: stretch;
+      gap: 12px;
+      min-width: 0;
+      max-width: 100%;
+      overflow-x: visible;
+    }
+
+    .layout-board > * {
+      min-width: 0;
+    }
+
+    .layout-board--flow,
+    .layout-board--forecast {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .layout-board--trigger,
+    .layout-board--manual,
+    .layout-board--engine {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .layout-board--trigger .trigger-card,
+    .layout-board--forecast .chart-card {
+      min-height: 0;
+    }
+
+    .pulse-phase-rail {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin: 0 0 14px;
+    }
+
+    .pulse-phase {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid rgba(79, 55, 168, .22);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .86);
+    }
+
+    .pulse-phase > span {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #4f37a8;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .pulse-phase strong {
+      align-self: center;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.2;
+    }
+
+    .pulse-phase p {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.42;
+    }
+
+    .semantic-flow-step:nth-child(3n) .semantic-flow-arrow::before {
+      content: "↓";
+    }
+
+    .semantic-flow-step:last-child .semantic-flow-arrow {
+      display: none;
+    }
+
+    @media (max-width: 860px) {
+      .group-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .group-panel > .dossier-section[data-dossier-section="story"],
+      .group-panel > .dossier-section[data-dossier-section="tuning"] {
+        grid-column: 1;
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .page {
+        width: calc(100vw - 20px);
+        max-width: none;
+      }
+
+      .layout-board--flow,
+      .layout-board--forecast,
+      .layout-board--trigger,
+      .layout-board--manual,
+      .layout-board--engine {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .pulse-phase-rail {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .semantic-flow-step:nth-child(3n) .semantic-flow-arrow::before {
+        content: "→";
+      }
+
+      .semantic-flow-step:nth-child(2n) .semantic-flow-arrow::before {
+        content: "↓";
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        width: calc(100vw - 16px);
+        max-width: none;
+      }
+
+      .layout-board--flow,
+      .layout-board--forecast,
+      .layout-board--trigger,
+      .layout-board--manual,
+      .layout-board--engine {
+        grid-template-columns: 1fr;
+      }
+
+      .pulse-phase-rail {
+        grid-template-columns: 1fr;
+      }
+
+      .semantic-flow-step .semantic-flow-arrow::before {
+        content: "↓";
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <h1>Pulse motor</h1>
+        <p class="lede">
+          Bemutató minta a helyben működő Pulse motorhoz: előrejelzések,
+          kiváltó események, összetartozó helyzetek, felső üzenet és minden
+          szinten állítható beállítások.
+        </p>
+      </div>
+      <div class="status-pill"><span class="dot"></span> Helyben, kiszámíthatóan működik · nem használ mesterséges intelligenciát</div>
+    </header>
+
+    <section class="card pulse-semantic-flowchart" data-pulse-semantic-flowchart aria-labelledby="semantic-flow-title">
+      <div class="section-head">
+        <div>
+          <h2 id="semantic-flow-title">Pulse folyamatábra · hogyan lesz egy változásból felső üzenet?</h2>
+          <p>
+            Ez nem eseménylista. A folyamat azt mutatja, hogy melyik jel mikor csak megfigyelés,
+            mikor áll össze belőle üzenetjelölt, mikor vár, és mikor jelenik meg felül.
+          </p>
+        </div>
+        <span class="tag violet">pontszám ≠ üzenet</span>
+      </div>
+
+      <aside class="semantic-flow-legend" aria-label="Pulse folyamatábra jelmagyarázata">
+        <span><i class="semantic-flow-dot"></i>számítás / feldolgozás</span>
+        <span><i class="semantic-flow-dot wait"></i>várakozik, még nem kap pontszámot</span>
+        <span><i class="semantic-flow-dot stop"></i>elvetett / nincs felső üzenet</span>
+        <span><i class="semantic-flow-dot compose"></i>helyzet- és mondatépítés</span>
+        <span><i class="semantic-flow-dot go"></i>kiválasztott vagy megjelenített</span>
+      </aside>
+
+      <div class="pulse-phase-rail" data-pulse-phase-rail aria-label="A Pulse egyszerű olvasási útja">
+        <article class="pulse-phase" data-pulse-phase="change"><span>1</span><strong>Változás</strong><p>Valami pénzügyi vagy alkalmazásállapot változik.</p></article>
+        <article class="pulse-phase" data-pulse-phase="validation"><span>2</span><strong>Adatellenőrzés</strong><p>Csak a számolható jel mehet tovább.</p></article>
+        <article class="pulse-phase" data-pulse-phase="situation"><span>3</span><strong>Helyzet</strong><p>Az összetartozó jelek egy történetté állnak össze.</p></article>
+        <article class="pulse-phase" data-pulse-phase="priority"><span>4</span><strong>Fontosság</strong><p>A kész helyzetek közül egy nyer.</p></article>
+        <article class="pulse-phase" data-pulse-phase="message"><span>5</span><strong>Felső üzenet</strong><p>Csak a kiválasztott helyzet jelenik meg felül.</p></article>
+      </div>
+
+      <ol class="semantic-flow-grid layout-board layout-board--flow" data-layout-board="semantic-flow">
+        <li class="semantic-flow-step" data-flow-stage="entry">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">01</span>
+            <div>
+              <h3>Belépési esemény</h3>
+              <p>A megtekintés és a motor által észlelt változás két külön dolog.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch wait" data-flow-branch="inspect-only">
+              <strong>Pontszám megnyitása vagy kiválasztása</strong>
+              <p>Csak megtekintés: fókusz, szűrés vagy saját beállítás. Nem indít új jelet és nem jelenít meg Pulse-üzenetet.</p>
+              <div class="tagrow"><span class="tag warn">csak megtekintés</span><span class="tag">nincs felső üzenet</span></div>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="trigger-input">
+              <strong>Egy szám vagy az alkalmazás állapota változik</strong>
+              <p>Előrejelzés, keret, esedékesség, adatpontossági határ, ütemezett számítás, az alkalmazás megnyitása vagy a dátumváltás indít új számítást.</p>
+              <div class="tagrow"><span class="tag good">új számolás indul</span><span class="tag info">újraszámol</span></div>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">friss állapot készül</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="recalculation">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">02</span>
+            <div>
+              <h3>Helyi újraszámítás</h3>
+              <p>A motor a jelenlegi állapotot számolja, nem régi szöveget játszik vissza.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>A jel leírása</strong>
+            <p>jel azonosítója · érintett terület · zóna · irány · erősség · számolhatóság · változás · állapot-azonosító.</p>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Mi változott?</strong>
+            <p>Csak az érdemben megváltozott állapot-azonosító indíthat később új megjelenést; az állapot itt még nem üzenetjelölt.</p>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">előbb szűrés, utána pontszám</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="source-gate">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">03</span>
+            <div>
+              <h3>Versenybe kerülhet-e?</h3>
+              <p>Előbb dől el, hogy egy jel egyáltalán versenyezhet-e.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch stop" data-flow-branch="no-copy">
+              <strong>Nem lehet belőle felső üzenet</strong>
+              <p>A későbbre halasztott HF-008 és a csak a motorhoz tartozó HF-015–HF-019 nem ír üzenetet; ezek a rendszer szabályai és ellenőrző ágai.</p>
+              <div class="tagrow"><span class="tag bad">nincs üzenetszöveg</span><span class="tag">nincs pontszám</span></div>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="input-check">
+              <strong>Adatellenőrzés a pontszám előtt</strong>
+              <p>Hiányzó összeg vagy dátum: az érintett jel várakozik, pontszám nélkül.</p>
+              <p>Hiányzó kategória csak a kategóriaalapú HF-002, HF-012 és HF-020 jeleket állítja meg; a teljes költés és pénzáramlás tovább számolható.</p>
+              <p>A várt, de meg nem érkezett bevétel nem adathiba: a HF-007 saját szabály szerint számolható.</p>
+              <div class="tagrow"><span class="tag good">hatókörhöz kötött</span><span class="tag warn">nincs általános levonás</span></div>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="wait-no-score">
+              <strong>Várakozik, pontszám nélkül</strong>
+              <p>Elavult, elnémított, már megmutatott vagy elutasított azonos helyzet, hiányzó szükséges bemenet, adatérkezési késés vagy még nem teljesült csoporthatár.</p>
+              <div class="tagrow"><span class="tag warn">még vár</span><span class="tag">később újraszámol</span></div>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">a versenyző jelek mehetnek tovább</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="evidence">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">04</span>
+            <div>
+              <h3>Jelek összeállítása egy helyzetté</h3>
+              <p>Nem minden jel adódik össze: csak az ugyanahhoz a helyzethez tartozó jelek kapcsolhatók össze.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Mennyi jel kell hozzá?</strong>
+            <p>1 súlyos jel · 1 pénzben nagy, biztos jel · 2 összefüggő közepes jel · 3 összefüggő gyenge jel · érdemi javulás · késleltetett, csoportosított adatpontossági jel.</p>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch wait" data-flow-branch="forming">
+              <strong>Még alakuló üzenetjelölt</strong>
+              <p>Hiányzik egy alátámasztó jel vagy még nem teljesült a kapcsolódó határ. A helyzet megfigyelhető, de még nem kész és nem kap pontszámot.</p>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="ready">
+              <strong>Kész üzenetjelölt</strong>
+              <p>Egy fő jel vezet; a rokon jelek alátámasztást, időzítést vagy óvatosságot adnak, nem új alapértéket.</p>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">csak a kész jelölt kap pontszámot</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="priority">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">05</span>
+            <div>
+              <h3>Fontossági pontszám · nem belépési feltétel</h3>
+              <p>A pontszám sorrendet állít fel; nem enged vissza egy kizárt vagy még alakuló jelet.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-formula" data-flow-formula>
+            <code>pontszám = fő jel alapértéke + pénzben nagy eltérés +15 + 3 napon belüli esedékesség +10 + kapcsolódó jel +10 − nemrég elutasított −30</code>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>A pontszám önmagában nem elég</strong>
+            <p>Csak a versenyző, kész, friss helyzetek hasonlíthatók össze, amikor van lehetőség a megjelenítésre. Nincs általános megjelenési határ: egy 35 pontos adatpontossági helyzet is nyerhet, ha nincs erősebb kész helyzet.</p>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">a kész jelöltek versenyeznek</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="selection">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">06</span>
+            <div>
+              <h3>Kiválasztás · egy aktuális üzenet</h3>
+              <p>A motor nem küld ki tíz üzenetet, és a többieket nem teszi rejtett várólistára.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch go" data-flow-branch="selected">
+              <strong>Legerősebb kész jelölt → kiválasztva</strong>
+              <p>Azonos pontszámnál előbb a sürgős határidő, aztán a frissebb valódi változás, végül az állandó HF-sorrend dönt.</p>
+              <div class="tagrow"><span class="tag good">kiválasztva</span><span class="tag violet">mindig ugyanúgy dönt</span></div>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="suppressed-not-queued">
+              <strong>Gyengébb kész jelölt → most nem jelenik meg</strong>
+              <p>Nem várólista. A következő újraszámításkor újra versenyezhet, ha az állapot még friss.</p>
+              <div class="tagrow"><span class="tag warn">nem kerül várólistára</span></div>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">a kiválasztott helyzetből áll össze a mondat</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="composition">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">07</span>
+            <div>
+              <h3>Az üzenet felépítése</h3>
+              <p>Egy felső üzenet több valós mondatrészből állhat, de minden részhez ismert kiinduló jel tartozik.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branch compose">
+            <strong>Megengedett mondatrészek</strong>
+            <p>fő állítás · alátámasztó rész · idő vagy ok · óvatos megfogalmazás · javulás.</p>
+            <div class="tagrow"><span class="tag violet">HF fő mondat</span><span class="tag violet">alátámasztás</span><span class="tag violet">óvatosság</span></div>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Mi nem kerül bele?</strong>
+            <p>Ismétlődő, még váró, felülírt vagy gyengébb jel; a későbbre halasztott és a csak a motorhoz tartozó jel sem írhat felhasználónak szóló felső üzenetet.</p>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">a kiválasztott helyzet megjelenésre vár</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="delivery">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">08</span>
+            <div>
+              <h3>Mikor jelenhet meg?</h3>
+              <p>A döntés és a tényleges felső üzenet megjelenése külön állapot lehet.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch go" data-flow-branch="shown">
+              <strong>Az alkalmazás nyitva van → megjelenik</strong>
+              <p>Az aktuálisan kiválasztott helyzet egyetlen felső Pulse-üzenetként jelenik meg.</p>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="pending-resume">
+              <strong>Az alkalmazás nincs nyitva → eltárolja</strong>
+              <p>A háttérben futó újraszámítás eltárolja az aktuális kiválasztott állapotot; az üzenet csak megnyitás után jelenik meg.</p>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">az állapot-azonosító dönti el a következő kört</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="lifecycle">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">09</span>
+            <div>
+              <h3>Az üzenet életútja</h3>
+              <p>A Pulse nem ismétlődik végtelenül: az állapot és az állapot-azonosító viszi tovább a döntést.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch stop" data-flow-branch="no-header">
+              <strong>Nincs kész jelölt → nincs felső üzenet</strong>
+              <p>A nyomkövetés és a jelkártya megmarad, de nincs üzenet és nincs pontszám miatti kényszerítés.</p>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="superseded">
+              <strong>Erősebb friss állapot → felülírja</strong>
+              <p>A várakozó vagy kiválasztott helyzet lecserélhető, mielőtt elavult üzenet jutna felülre.</p>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="retrigger">
+              <strong>Új állapot-azonosító vagy megoldott helyzet → újra ellenőrzi</strong>
+              <p>A már megmutatott vagy elutasított azonos helyzet nem ismétel. Valódi változás, megoldás vagy új esedékesség újra az újraszámításhoz vezet.</p>
+            </article>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="hero-grid">
+      <aside class="phone" aria-label="Felső Pulse-üzenet előnézete">
+        <div class="phone-screen">
+          <div class="device-status"><span>9:41</span><span>EXPTV2</span></div>
+          <div class="header-card">
+            <div class="normal-kpi">
+              <div class="kicker">Egyenleg</div>
+              <div class="money">-372 047 Ft</div>
+            </div>
+            <div class="pulse-kpi">
+              <div class="kicker">Pulse</div>
+              <div class="pulse-copy" id="phonePulse">A hónap vége szoros lesz.</div>
+              <div class="pulse-detail" id="phoneDetail">3 keret túlfutás felé tart, és még 42 000 Ft fix kiadás várható.</div>
+            </div>
+          </div>
+
+          <div class="phone-panel selected-story">
+            <div>
+              <h3>Felső üzenet megjelenése</h3>
+              <p style="margin-top:7px;color:var(--muted);font-size:13px;line-height:1.45;">
+                A felső sáv egyetlen aktuális helyzetet kap. A többi jel nem
+                dobódik el: a felületen látható marad.
+              </p>
+            </div>
+            <div class="story-score">
+              <span id="selectedTitle">Keret és fix kiadások helyzete</span>
+              <strong id="selectedScore">86</strong>
+            </div>
+            <div class="scorebar"><span id="scorebar"></span></div>
+            <div class="tagrow">
+              <span class="tag bad">versenyben van</span>
+              <span class="tag warn">romló helyzet</span>
+              <span class="tag info">új állapot</span>
+            </div>
+            <div class="scenario-buttons" role="tablist" aria-label="Felső üzenet példái">
+              <button class="active" type="button" role="tab" aria-selected="true" aria-controls="engine-trace-output" data-scenario="risk">Kockázat</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-scenario="recovery">Javulás</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-scenario="data">Adat</button>
+            </div>
+          </div>
+
+          <div class="phone-panel">
+            <h3>Saját megjelenítési beállítások</h3>
+            <div class="user-defined" style="margin-top:10px;">
+              <strong><span>Felső üzenet szabályai</span><span>te állítod</span></strong>
+              <div class="control-line">
+                <span>Újrajelzésig vár</span>
+                <input type="range" min="1" max="14" value="4" data-out="cooldownOut">
+                <b><span id="cooldownOut">4</span> nap</b>
+              </div>
+              <div class="control-line">
+                <span>Ismétlés</span>
+                <select class="mini-select">
+                  <option>Csak valódi változás után</option>
+                  <option>Naponta legfeljebb egyszer</option>
+                  <option>Mindig kérdezzen rá</option>
+                </select>
+                <b>biztonságos</b>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="content">
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <h2>Mi ez a Pulse motor?</h2>
+              <p>
+                Nem mesterséges intelligencia és nem értesítéslista. A motor helyben, a pénzügyi
+                állapotból jeleket képez, majd egyetlen aktuális
+                felső üzenetet választ. A felület nem árasztja el az embert üzenetekkel, hanem
+                megmutatja, mi történt a háttérben.
+              </p>
+            </div>
+            <span class="tag good">friss állapot, nem régi szöveg</span>
+          </div>
+
+          <div class="flow">
+            <div class="flow-step">
+              <strong>1. Kiinduló számok</strong>
+              <p>Tranzakciók, keretek, ismétlődő tételek, pontszámvonal és gördülő összesítések.</p>
+              <div class="tagrow"><span class="tag info">helyben számol</span><span class="tag">Ft</span></div>
+            </div>
+            <div class="flow-step">
+              <strong>2. Előrejelzett helyzetek</strong>
+              <p>Hó vége, kategóriafogyás, éves keret, várt bevétel, tartaléknapok.</p>
+              <div class="tagrow"><span class="tag warn">háttérben számolt grafikonok</span></div>
+            </div>
+            <div class="flow-step">
+              <strong>3. Észlelt jelek</strong>
+              <p>Zóna, irány, erősség, számolhatóság, változás és állapot-azonosító.</p>
+              <div class="tagrow"><span class="tag bad">jelzést indít</span><span class="tag good">javulás</span></div>
+            </div>
+            <div class="flow-step">
+              <strong>4. Helyzet összeállítása</strong>
+              <p>Az összetartozó jelek csoportosítása a közös helyzet szerint.</p>
+              <div class="tagrow"><span class="tag violet">fontosság szerint</span></div>
+            </div>
+            <div class="flow-step">
+              <strong>5. Felső üzenet megjelenése</strong>
+              <p>Egy helyzet jelenik meg Pulse-üzenetként; a felület őrzi a teljes előzményt.</p>
+              <div class="tagrow"><span class="tag info">egyetlen aktuális üzenet</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <h2>Mi történik 10 kiváltó eseménynél?</h2>
+              <p>
+                Nem dobjuk el őket, és nem játszunk le tíz felső üzenetet. A
+                motor előbb elavult állapotot szűr, majd csoportosít, pontoz,
+                és egy összerakott helyzetet küld felülre. A felületen mind a tíz
+                jel látható marad.
+              </p>
+            </div>
+            <span class="tag bad">nem üzenetlista</span>
+          </div>
+
+          <div class="signal-list">
+            <div class="signal-row" data-group-summary="budget" role="button" tabindex="0" aria-controls="group-budget">
+              <div>
+                <strong>Keretre nehezedő nyomás</strong>
+                <p>Étel havi fogyása, éves utazási keret, napi biztonságos költés, heti költési ütem.</p>
+                <div class="tagrow"><span class="tag bad">4 jel</span><span class="tag warn">egy helyzethez tartozik</span></div>
+              </div>
+              <div class="user-defined">
+                <strong><span>Csoport beállítása</span><span>te állítod</span></strong>
+                <div class="control-line"><span>Fontosság</span><input type="range" min="30" max="120" value="92" data-out="budgetWeight"><b><span id="budgetWeight">92</span></b></div>
+              </div>
+              <div class="weight">92</div>
+            </div>
+            <div class="signal-row" data-group-summary="cashflow" role="button" tabindex="0" aria-controls="group-cashflow">
+              <div>
+                <strong>Szűk pénzáramlás</strong>
+                <p>Hiányzó várt bevétel, bevétel–kiadás arány, megtakarítási kockázat, egyenlegtartalék.</p>
+                <div class="tagrow"><span class="tag bad">4 jel</span><span class="tag violet">fix kiadásokkal együtt értelmezi</span></div>
+              </div>
+              <div class="user-defined">
+                <strong><span>Csoport beállítása</span><span>te állítod</span></strong>
+                <div class="control-line"><span>Előnyben részesíti</span><select class="mini-select"><option>Korán figyelmeztet</option><option>Kiegyensúlyozott</option><option>Csak súlyos esetet</option></select><b>figyel</b></div>
+              </div>
+              <div class="weight">88</div>
+            </div>
+            <div class="signal-row" data-group-summary="data-quality" role="button" tabindex="0" aria-controls="group-data-quality">
+              <div>
+                <strong>Adatpontosság</strong>
+                <p>A kategorizálatlan tételek csak a kategóriaalapú előrejelzéseket állítják várakozásra.</p>
+                <div class="tagrow"><span class="tag info">1 jel</span><span class="tag">késleltetett</span></div>
+              </div>
+              <div class="user-defined">
+                <strong><span>Csoport beállítása</span><span>te állítod</span></strong>
+                <div class="control-line"><span>Késleltetés</span><input type="range" min="1" max="48" value="12" data-out="dataDelay"><b><span id="dataDelay">12</span> óra</b></div>
+              </div>
+              <div class="weight">35</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="card engine-decision-trace" data-engine-decision-trace aria-labelledby="engine-trace-title">
+      <div class="section-head">
+        <div>
+          <h2 id="engine-trace-title">A motor döntésének nyomvonala</h2>
+          <p>Ugyanaz a helyi állapot végigkövethető a kiinduló jelektől az egyetlen kiválasztott felső üzenetig.</p>
+        </div>
+        <span class="tag violet">miért ez az üzenet?</span>
+      </div>
+      <div class="scenario-buttons engine-scenario-tabs" role="tablist" aria-label="A döntés példái" data-engine-scenario-tabs>
+        <button class="active" type="button" role="tab" aria-selected="true" aria-controls="engine-trace-output" data-engine-scenario="risk">Kockázat</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-engine-scenario="recovery">Javulás</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-engine-scenario="data">Adatpontosság</button>
+      </div>
+      <div class="engine-trace-output" id="engine-trace-output" role="tabpanel">
+        <section class="trace-stage" data-trace-stage="recalculation">
+          <h3>1. Újraszámítás</h3>
+          <p>Az adatváltozás vagy az alkalmazás újbóli megnyitása friss számítást indít.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="eligibility">
+          <h3>2. Adatellenőrzés és verseny</h3>
+          <p>Előbb a szükséges bemeneteket ellenőrzi. Csak ezután versenyezhet a friss, nem elnémított és valóban megváltozott jel.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="formation">
+          <h3>3. Helyzet összeállítása</h3>
+          <p>Csak egymáshoz tartozó alátámasztó jelek alkothatnak közös helyzetet.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="priority">
+          <h3>4. Fontosság számítása</h3>
+          <p>A fő jel alapértéke és a látható módosítók döntik el, melyik kész helyzet erősebb.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="delivery">
+          <h3>5. Megjelenés és ismétlés</h3>
+          <p>A kiválasztott helyzet egyszer jut felülre; azonos helyzet nem ismétel.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="copy-map">
+          <h3>6. A mondat részei</h3>
+          <p>A fő állítás, alátámasztás, idő vagy ok és az óvatos megfogalmazás minden része konkrét HF-jelhez kötődik.</p>
+        </section>
+      </div>
+    </section>
+
+    <section class="workspace" aria-label="Pulse csoportok">
+      <div class="horizontal-tabs" role="tablist" aria-label="Pulse csoportválasztó">
+        <button class="tab-button active" id="group-rail-budget" type="button" role="tab" aria-selected="true" aria-controls="group-budget" data-group-rail="budget">Keretnyomás</button>
+        <button class="tab-button" id="group-rail-cashflow" type="button" role="tab" aria-selected="false" aria-controls="group-cashflow" data-group-rail="cashflow">Pénzáramlási nyomás</button>
+        <button class="tab-button" id="group-rail-data-quality" type="button" role="tab" aria-selected="false" aria-controls="group-data-quality" data-group-rail="data-quality">Adatpontosság</button>
+      </div>
+
+      <section class="group-panel active" id="group-budget" role="tabpanel" aria-labelledby="group-rail-budget" data-group-panel="budget">
+        <section class="card dossier-section" data-dossier-section="manual">
+          <div data-group-manual-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="forecasts">
+          <div data-group-forecast-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="triggers">
+          <div class="group-panel-head">
+            <div><h2>Keretnyomást kiváltó események</h2><p>Minden kerethez tartozó számítás, határ és kiváltó esemény egy átnézhető felületen.</p></div>
+            <span class="tag bad">9 jel</span>
+          </div>
+          <div class="trigger-grid layout-board layout-board--trigger" data-group-trigger-grid data-layout-board="triggers">
+            <article class="trigger-card" data-card-slot="HF-001" data-hf-id="HF-001" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-002" data-hf-id="HF-002" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-003" data-hf-id="HF-003" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-004" data-hf-id="HF-004" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-012" data-hf-id="HF-012" data-source-domain="behavior_shift"></article>
+            <article class="trigger-card" data-card-slot="HF-013" data-hf-id="HF-013" data-source-domain="behavior_shift"></article>
+            <article class="trigger-card" data-card-slot="HF-014" data-hf-id="HF-014" data-source-domain="behavior_shift"></article>
+            <article class="trigger-card" data-card-slot="HF-015" data-hf-id="HF-015" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-020" data-hf-id="HF-020" data-source-domain="budget_pressure"></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="story">
+          <div data-group-story-content></div>
+          <h3 style="margin:18px 0 10px;">Közös motorfolyamat</h3>
+          <div class="shared-engine-trace layout-board layout-board--engine" data-shared-engine-trace data-layout-board="engine">
+            <article class="shared-engine-step" data-shared-hf-id="HF-016" data-source-domain="engine"><strong>Fontosság és kiválasztás</strong><p>Szűr, csoportosít, pontoz, majd kiválaszt egy aktuális felső üzenetet.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-017" data-source-domain="engine"><strong>Állapot és ismétlés</strong><p>A megváltozott helyzet újra jelezhet; a változatlanul megmutatott nem ismétlődik.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-018" data-source-domain="engine"><strong>Felső üzenet megjelenése</strong><p>Csak a kiválasztott helyzet jelenik meg felül.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-019" data-source-domain="engine"><strong>Felület magyarázata</strong><p>A felület megmutatja a kiinduló jeleket, az összeállást, a választást, az előzményeket és a beállításokat.</p></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="tuning">
+          <div data-group-tuning-content></div>
+        </section>
+      </section>
+
+      <section class="group-panel" id="group-cashflow" role="tabpanel" aria-labelledby="group-rail-cashflow" data-group-panel="cashflow" hidden>
+        <section class="card dossier-section" data-dossier-section="manual">
+          <div data-group-manual-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="forecasts">
+          <div data-group-forecast-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="triggers">
+          <div class="group-panel-head">
+            <div><h2>Pénzáramlást kiváltó események</h2><p>Fix terhek, várt bevételek, arányok, célok és egyenlegtartalék egy közös pénzáramlási nézetben.</p></div>
+            <span class="tag bad">6 aktív + 1 későbbre halasztott</span>
+          </div>
+          <div class="trigger-grid layout-board layout-board--trigger" data-group-trigger-grid data-layout-board="triggers">
+            <article class="trigger-card" data-card-slot="HF-005" data-hf-id="HF-005" data-source-domain="fixed_load"></article>
+            <article class="trigger-card" data-card-slot="HF-006" data-hf-id="HF-006" data-source-domain="fixed_load"></article>
+            <article class="trigger-card" data-card-slot="HF-007" data-hf-id="HF-007" data-source-domain="cashflow_pressure"></article>
+            <article class="trigger-card deferred" data-card-slot="HF-008" data-hf-id="HF-008" data-source-domain="cashflow_pressure"><span class="tag">későbbre halasztva</span><span class="source-domain">nem aktív</span></article>
+            <article class="trigger-card" data-card-slot="HF-009" data-hf-id="HF-009" data-source-domain="cashflow_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-010" data-hf-id="HF-010" data-source-domain="cashflow_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-011" data-hf-id="HF-011" data-source-domain="cashflow_pressure"></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="story">
+          <div data-group-story-content></div>
+          <h3 style="margin:18px 0 10px;">Közös motorfolyamat</h3>
+          <div class="shared-engine-trace layout-board layout-board--engine" data-shared-engine-trace data-layout-board="engine">
+            <article class="shared-engine-step" data-shared-hf-id="HF-016" data-source-domain="engine"><strong>Fontosság és kiválasztás</strong><p>Szűr, csoportosít, pontoz, majd kiválaszt egy aktuális felső üzenetet.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-017" data-source-domain="engine"><strong>Állapot és ismétlés</strong><p>A megváltozott helyzet újra jelezhet; a változatlanul megmutatott nem ismétlődik.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-018" data-source-domain="engine"><strong>Felső üzenet megjelenése</strong><p>Csak a kiválasztott helyzet jelenik meg felül.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-019" data-source-domain="engine"><strong>Felület magyarázata</strong><p>A felület megmutatja a kiinduló jeleket, az összeállást, a választást, az előzményeket és a beállításokat.</p></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="tuning">
+          <div data-group-tuning-content></div>
+        </section>
+      </section>
+
+      <section class="group-panel" id="group-data-quality" role="tabpanel" aria-labelledby="group-rail-data-quality" data-group-panel="data-quality" hidden>
+        <section class="card dossier-section" data-dossier-section="manual">
+          <div data-group-manual-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="forecasts">
+          <div data-group-forecast-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="triggers">
+          <div class="group-panel-head">
+            <div><h2>Adatpontosságot jelző események</h2><p>Ez nem pénzügyi riasztás: megmutatja, ha a hiányzó kategória csak a kategóriaalapú számításokat állítja várakozásra.</p></div>
+            <span class="tag info">1 késleltetett jel</span>
+          </div>
+          <div class="trigger-grid layout-board layout-board--trigger" data-group-trigger-grid data-layout-board="triggers">
+            <article class="trigger-card" data-card-slot="HF-021" data-hf-id="HF-021" data-source-domain="data_quality"></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="story">
+          <div data-group-story-content></div>
+          <h3 style="margin:18px 0 10px;">Közös motorfolyamat</h3>
+          <div class="shared-engine-trace layout-board layout-board--engine" data-shared-engine-trace data-layout-board="engine">
+            <article class="shared-engine-step" data-shared-hf-id="HF-016" data-source-domain="engine"><strong>Fontosság és kiválasztás</strong><p>Szűr, csoportosít, pontoz, majd kiválaszt egy aktuális felső üzenetet.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-017" data-source-domain="engine"><strong>Állapot és ismétlés</strong><p>A megváltozott helyzet újra jelezhet; a változatlanul megmutatott nem ismétlődik.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-018" data-source-domain="engine"><strong>Felső üzenet megjelenése</strong><p>Csak a kiválasztott helyzet jelenik meg felül.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-019" data-source-domain="engine"><strong>Felület magyarázata</strong><p>A felület megmutatja a kiinduló jeleket, az összeállást, a választást, az előzményeket és a beállításokat.</p></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="tuning">
+          <div data-group-tuning-content></div>
+        </section>
+      </section>
+    </section>
+
+
+    <figure class="plain-language-flowchart-image" data-plain-language-flowchart>
+      <img src="assets/pulse-egyszeru-mukodes.png" loading="lazy" decoding="async"
+        alt="Egyszerű folyamatábra: a pontszám megtekintése csak információ; egy adatváltozást a rendszer ellenőriz, majd vagy vár, vagy kiválaszt egy üzenetet, amely az alkalmazás megnyitásakor jelenik meg. A pontszám önmagában nem elég.">
+      <figcaption>Egyszerű magyarázat: mikor lesz egy adatváltozásból üzenet, és mikor nem.</figcaption>
+      <p class="plain-language-flowchart-rule">A pontszám önmagában nem elég.</p>
+    </figure>
+
+    <p class="footer-note">
+      Bemutató fájl: docs/prototypes/pulse_engine_panel_mockup.html ·
+      Ez a jövőbeli alkalmazásfelület tervmintája, nem működő alkalmazáskód.
+    </p>
+  </main>
+
+  <script>
+    const decisionTraceScenarios = {
+      risk: {
+        phone: {
+          pulse: "A hónap vége szoros lesz.",
+          detail: "3 keret túlfutás felé tart, és még 42 000 Ft fix kiadás várható.",
+          title: "Keret és fix kiadások helyzete"
+        },
+        recalculation: {
+          event: "Egy tranzakció megváltozott, miközben az alkalmazás nyitva van",
+          background: "A háttérben az állapot frissül, de a felső üzenet a megnyitásig vár."
+        },
+        inputChecks: [
+          { status: "számolható", scope: "A kiválasztott keret- és pénzáramlási helyzet", reason: "Az érintett tételek összege, dátuma és a szükséges kategóriaalapú alátámasztás megvan." }
+        ],
+        signals: [
+          { id: "HF-001", state: "eligible", group: "budget", reason: "A hó végi előrejelzés keret fölé ment, ez új helyzet." },
+          { id: "HF-002", state: "eligible", group: "budget", reason: "Az ételkategória súlyos zónában van; ugyanahhoz a hó végi helyzethez tartozik." },
+          { id: "HF-005", state: "eligible", group: "cashflow", reason: "42 000 Ft fix kiadás érdemben számít a hónap végén." },
+          { id: "HF-006", state: "eligible", group: "cashflow", reason: "Ismétlődő kiadás esedékes a közeli időablakban." },
+          { id: "HF-003", state: "waiting", group: "budget", reason: "Segítő részlet; nincs önálló napi Pulse-üzenet." },
+          { id: "HF-021", state: "waiting", group: "data-quality", reason: "A késleltetés és a csoporthatár még nem állított össze külön adatpontossági helyzetet." }
+        ],
+        candidates: [
+          {
+            id: "month-end-tight",
+            title: "Keret és fix kiadások helyzete",
+            status: "selected",
+            dominant: "HF-001",
+            base: 85,
+            baseLabel: "Hó végi előrejelzés keret fölött",
+            modifiers: [
+              { label: "Pénzben nagy eltérés", value: 15 },
+              { label: "Kapcsolódó alátámasztó jel", value: 10 }
+            ],
+            evidence: "1 erős jel és kapcsolódó keret- és pénzáramlási alátámasztás",
+            outcome: "Ezt választotta ki az egyetlen aktuális felső Pulse-üzenethez."
+          },
+          {
+            id: "cashflow-due",
+            title: "Közelgő fix kiadások helyzete",
+            status: "suppressed",
+            dominant: "HF-006",
+            base: 70,
+            baseLabel: "7 napon belüli fix kiadás",
+            modifiers: [{ label: "3 napon belüli esedékesség", value: 10 }],
+            evidence: "1 erős, pénzben nagy, esedékes jel",
+            outcome: "Kész, de a 80 pont alulmarad a kiválasztott 100 pontos helyzettel szemben."
+          }
+        ],
+        lifecycle: [
+          { state: "observing", reason: "Az előrejelzés kiinduló adatai frissültek." },
+          { state: "eligible", reason: "Valódi változás történt, és az alátámasztás friss." },
+          { state: "ready", reason: "Erős jel kapcsolódó, pénzben nagy alátámasztással." },
+          { state: "selected", reason: "Ennek a legmagasabb a jelenlegi pontszáma." },
+          { state: "delivered", reason: "Nyitott alkalmazásban most megjelenhet felül." },
+          { state: "shown", reason: "Azonos helyzetet nem ismétel." }
+        ],
+        copy: [
+          { slot: "Fő mondat", source: "HF-001", text: "A hónap vége szoros lesz." },
+          { slot: "Alátámasztás", source: "HF-002", text: "3 keret túlfutás felé tart," },
+          { slot: "Idő vagy ok", source: "HF-005", text: "és még 42 000 Ft fix kiadás várható." }
+        ],
+        omitted: [
+          { id: "HF-003", reason: "Csak segítő részlet; nincs saját napi Pulse-üzenete." },
+          { id: "HF-021", reason: "A saját késleltetési és csoportosítási szabályára vár." }
+        ]
+      },
+      recovery: {
+        phone: {
+          pulse: "Visszajött a kereten belüli pálya.",
+          detail: "A várt bevétel megérkezése után az előrejelzés már tartható.",
+          title: "Javuló helyzet"
+        },
+        recalculation: {
+          event: "Az alkalmazás megnyílt a bevétel megérkezése után",
+          background: "Egy megoldódott fontos kockázat csak új, érdemi változásként jelezhet egyszer javulást."
+        },
+        inputChecks: [
+          { status: "számolható", scope: "A javuló helyzet", reason: "A bevétel megérkezése tényleges változás; az érintett összegek és dátumok megvannak." }
+        ],
+        signals: [
+          { id: "HF-001", state: "resolved", group: "budget", reason: "Az előrejelzés visszajött a keret alá." },
+          { id: "HF-007", state: "eligible", group: "cashflow", reason: "Megérkezett a várt bevétel; valódi változás történt." },
+          { id: "HF-014", state: "eligible", group: "budget", reason: "A meglévő pontszám iránya javult; a motor nem talál ki hozzá okot." }
+        ],
+        candidates: [
+          {
+            id: "recovery",
+            title: "Javuló helyzet",
+            status: "selected",
+            dominant: "HF-007",
+            base: 70,
+            baseLabel: "Érdemi javuló irány",
+            modifiers: [],
+            evidence: "Egy korábban fontos kockázat megoldódott, ehhez friss javulás társul",
+            outcome: "Egyszer kiválasztja; ez nem rutinszerű dicséret."
+          }
+        ],
+        lifecycle: [
+          { state: "shown risk", reason: "A korábbi hó végi kockázat már megjelent." },
+          { state: "resolved", reason: "A keret és az előrejelzés ismét tartható." },
+          { state: "new fingerprint", reason: "A bevétel megérkezése új állapotot hozott." },
+          { state: "ready", reason: "Érdemi javulás egy fontos kockázat után." },
+          { state: "selected", reason: "Nincs erősebb jelenlegi kockázat." },
+          { state: "shown recovery", reason: "A javulás nem ismétel azonos helyzetben." }
+        ],
+        copy: [
+          { slot: "Fő mondat", source: "HF-001", text: "Visszajött a kereten belüli pálya." },
+          { slot: "Javulás", source: "HF-007", text: "A várt bevétel megérkezése után" },
+          { slot: "Alátámasztás", source: "HF-014", text: "az előrejelzés már tartható." }
+        ],
+        omitted: []
+      },
+      data: {
+        phone: {
+          pulse: "Találtam 3 kategorizálatlan tételt.",
+          detail: "A teljes költés és pénzáramlás számolható; csak a kategóriaalapú előrejelzések várakoznak.",
+          title: "Adatpontossági helyzet"
+        },
+        recalculation: {
+          event: "Késleltetett alkalmazásállapot-ellenőrzés",
+          background: "A háttérben a csoportosított állapot frissül; a felső üzenet csak nyitott alkalmazásban jelenik meg."
+        },
+        inputChecks: [
+          { status: "számolható", scope: "Teljes költés és pénzáramlás", reason: "Mindhárom tétel összege és dátuma megvan; a kategória hiánya ezt nem érinti." },
+          { status: "várakozik, pontszám nélkül", scope: "Kategóriaalapú jelek: HF-002, HF-012, HF-020", reason: "Három tételnek nincs kategóriája. Csak ezek állnak meg; a HF-021 külön magyarázó jel." }
+        ],
+        signals: [
+          { id: "HF-021", state: "eligible", group: "data-quality", reason: "Teljesült a 12 órás késleltetés és a csoporthatár; nem von le pontot pénzügyi jelből." },
+          { id: "HF-002", state: "waiting", group: "budget", reason: "Három tételnek nincs kategóriája, ezért a havi kategórialimit nem kap pontszámot." }
+        ],
+        candidates: [
+          {
+            id: "data-quality",
+            title: "Adatpontossági helyzet",
+            status: "selected",
+            dominant: "HF-021",
+            base: 35,
+            baseLabel: "Önálló, csoportosított adatpontossági jel",
+            modifiers: [],
+            evidence: "Három kategóriahiány a HF-002, HF-012 és HF-020 jelet állítja meg; a teljes költés és pénzáramlás ettől még számolható.",
+            outcome: "Saját, 35 pontos magyarázó jelként lett kiválasztva; egyetlen pénzügyi jel pontszámából sem von le."
+          }
+        ],
+        lifecycle: [
+          { state: "observing", reason: "A kategorizálatlan tételeket követi." },
+          { state: "waiting", reason: "A késleltetés és a csoportosítás megakadályozza a felesleges zajt." },
+          { state: "eligible", reason: "Letelt a 12 óra és teljesült a darabszámhatár." },
+          { state: "ready", reason: "Az adatpontossági alátámasztás csoportosítva van." },
+          { state: "selected", reason: "Nincs erősebb kész helyzet." },
+          { state: "shown", reason: "Ez továbbra is az alkalmazás állapotát magyarázza, nem pénzügyi vészhelyzet." }
+        ],
+        copy: [
+          { slot: "Fő mondat", source: "HF-021", text: "Találtam 3 kategorizálatlan tételt." },
+          { slot: "Óvatos megfogalmazás", source: "HF-021", text: "A teljes költés számolható, de a kategóriaalapú előrejelzések most várakoznak." }
+        ],
+        omitted: [
+          { id: "HF-002", reason: "A hiányzó kategória miatt várakozik, ezért nem kap pontszámot és nem lehet ennek a helyzetnek az alátámasztása." }
+        ]
+      }
+    };
+
+    const sourceCopyRoles = {
+      "HF-001": { group: "budget", role: "fő mondat", mode: "can-lead", reason: "Hó végi előrejelzés állítása." },
+      "HF-002": { group: "budget", role: "alátámasztás", mode: "support", reason: "Havi kategórialimit bizonyítéka." },
+      "HF-003": { group: "budget", role: "segítő részlet", mode: "support", reason: "Csak érdemi zónaváltás vagy egy nagyobb helyzet részlete." },
+      "HF-004": { group: "budget", role: "alátámasztás", mode: "support", reason: "Heti költési ütem összevetése." },
+      "HF-005": { group: "cashflow", role: "idő vagy ok", mode: "support", reason: "Pénzben nagy fix kiadás összege." },
+      "HF-006": { group: "cashflow", role: "idő vagy ok", mode: "support", reason: "Közeli esedékesség időzítése." },
+      "HF-007": { group: "cashflow", role: "fő mondat vagy javulás", mode: "can-lead", reason: "Hiányzó vagy megérkezett várt bevétel." },
+      "HF-008": { group: "cashflow", role: "nincs", mode: "deferred-no-copy", reason: "Az első verzióban átfed a HF-007-tel és a HF-010-zel." },
+      "HF-009": { group: "cashflow", role: "fő mondat", mode: "can-lead", reason: "Bevétel–kiadás arányának kockázata." },
+      "HF-010": { group: "cashflow", role: "fő mondat", mode: "can-lead", reason: "Megtakarítási cél kockázata." },
+      "HF-011": { group: "cashflow", role: "fő mondat", mode: "can-lead", reason: "Egyenlegtartalék kockázata." },
+      "HF-012": { group: "budget", role: "alátámasztás", mode: "support", reason: "Kategória költési viselkedésének változása." },
+      "HF-013": { group: "budget", role: "alátámasztás", mode: "support", reason: "Gördülő teljes költési trend." },
+      "HF-014": { group: "budget", role: "háttér", mode: "support", reason: "Csak a meglévő pontszám mozgását jelzi." },
+      "HF-015": { group: "budget", role: "nincs", mode: "engine-only", reason: "Felülírási szabály, nem üzenetforrás." },
+      "HF-016": { group: "engine", role: "nincs", mode: "engine-only", reason: "A fontosság és a kiválasztás magyarázata." },
+      "HF-017": { group: "engine", role: "nincs", mode: "engine-only", reason: "Az ismétlés szabályainak magyarázata." },
+      "HF-018": { group: "engine", role: "nincs", mode: "engine-only", reason: "A felső üzenet megjelenésének magyarázata." },
+      "HF-019": { group: "engine", role: "nincs", mode: "engine-only", reason: "A felület magyarázata." },
+      "HF-020": { group: "budget", role: "alátámasztás", mode: "support", reason: "Éves kerethez tartozó háttér." },
+      "HF-021": { group: "data-quality", role: "óvatos megfogalmazás", mode: "can-lead", reason: "Saját adatpontossági helyzet; nem von le pontot pénzügyi jelből." }
+    };
+
+    const magyarAllapot = {
+      observing: "megfigyelve",
+      waiting: "várakozik",
+      eligible: "versenyben van",
+      ready: "kész",
+      selected: "kiválasztva",
+      suppressed: "most nem jelenik meg",
+      resolved: "megoldódott",
+      delivered: "megjelenítésre kész",
+      shown: "megjelent",
+      "shown risk": "korábban megjelent kockázat",
+      "new fingerprint": "új állapot",
+      "shown recovery": "megjelent javulás"
+    };
+
+    const magyarCsoport = {
+      budget: "keret",
+      cashflow: "pénzáramlás",
+      "data-quality": "adatpontosság",
+      engine: "motor"
+    };
+
+    const magyarSzerepMod = {
+      "can-lead": "vezethet",
+      support: "alátámaszt",
+      "deferred-no-copy": "későbbre halasztott, nincs üzenet",
+      "engine-only": "csak háttérszabály"
+    };
+
+    const magyarJelCsoport = {
+      budget_pressure: "keretnyomás",
+      cashflow_pressure: "pénzáramlási nyomás",
+      data_quality: "adatpontosság",
+      behavior_shift: "költési változás",
+      fixed_load: "fix kiadások",
+      engine: "motor",
+      lifecycle: "ismétlés",
+      delivery: "megjelenítés",
+      reducer: "összeállítási szabály",
+      panel: "felület"
+    };
+
+    function allapotFelirat(allapot) {
+      return magyarAllapot[allapot] || allapot;
+    }
+
+    function csoportFelirat(csoport) {
+      return magyarCsoport[csoport] || csoport;
+    }
+
+    function szerepModFelirat(mod) {
+      return magyarSzerepMod[mod] || mod;
+    }
+
+    function jelCsoportFelirat(csoport) {
+      return magyarJelCsoport[csoport] || csoport;
+    }
+
+    function kartyaAllapotFelirat(allapot) {
+      return allapot === "deferred" ? "későbbre halasztva" : allapot;
+    }
+
+    function copyRoleBadge(id) {
+      const role = sourceCopyRoles[id];
+      if (!role) return "";
+      const tone = role.mode === "can-lead" ? "bad"
+        : role.mode === "support" ? "violet"
+          : role.mode === "deferred-no-copy" ? "warn" : "info";
+      return '<span class="tag ' + tone + ' copy-role" title="' + role.reason + '">' + role.role + ' · ' + szerepModFelirat(role.mode) + '</span>';
+    }
+
+    function calculatePriority(candidate) {
+      const delta = candidate.modifiers.reduce((sum, modifier) => sum + modifier.value, 0);
+      return Math.max(0, Math.min(100, candidate.base + delta));
+    }
+
+    function traceTone(state) {
+      if (["eligible", "resolved", "ready", "shown", "shown recovery"].includes(state)) return "good";
+      if (["selected"].includes(state)) return "bad";
+      if (["suppressed", "waiting", "new fingerprint"].includes(state)) return "warn";
+      return "info";
+    }
+
+    function traceSourceControl(id, content) {
+      const role = sourceCopyRoles[id];
+      const canNavigate = role && !["engine-only", "deferred-no-copy"].includes(role.mode);
+      if (!canNavigate) {
+        return '<div class="trace-source-button"><div class="trigger-top"><span class="trigger-id">' + id + '</span>' + copyRoleBadge(id) + '</div>' + content + '<span>' + (role ? role.reason : "Nincs kijelölt jel-szerep") + '</span></div>';
+      }
+      return '<div class="trace-source-button" role="button" tabindex="0" data-trace-source="' + id + '"><div class="trigger-top"><span class="trigger-id">' + id + '</span>' + copyRoleBadge(id) + '</div>' + content + '</div>';
+    }
+
+    function renderAllSourceRoles() {
+      return Object.entries(sourceCopyRoles).map(([id, role]) => '<article class="trace-candidate">' + traceSourceControl(id, '<strong>' + role.role + '</strong><p>' + role.reason + '</p>') + '</article>').join("");
+    }
+
+    function renderSharedEngineRoleBadges() {
+      document.querySelectorAll("[data-shared-hf-id]").forEach((step) => {
+        const id = step.dataset.sharedHfId;
+        if (!step.querySelector(".copy-role")) {
+          step.insertAdjacentHTML("beforeend", '<div class="tagrow">' + copyRoleBadge(id) + '</div>');
+        }
+      });
+    }
+
+    function traceSignal(signal) {
+      return '<article class="trace-candidate">' + traceSourceControl(signal.id, '<div class="trigger-top"><span class="tag ' + traceTone(signal.state) + '">' + allapotFelirat(signal.state) + '</span></div><strong>' + csoportFelirat(signal.group) + '</strong><p>' + signal.reason + '</p>') + '</article>';
+    }
+
+    function traceInputCheck(check) {
+      const tone = check.status === "számolható" ? "good" : "warn";
+      return '<article class="trace-candidate"><div class="trigger-top"><span class="tag ' + tone + '">' + check.status + '</span></div><strong>' + check.scope + '</strong><p>' + check.reason + '</p></article>';
+    }
+
+    function traceCandidate(candidate) {
+      const score = calculatePriority(candidate);
+      const modifiers = candidate.modifiers.length
+        ? candidate.modifiers.map((modifier) => '<span>' + (modifier.value >= 0 ? "+" : "") + modifier.value + ' · ' + modifier.label + '</span>').join("")
+        : '<span>0 · nincs további módosító</span>';
+      return '<article class="trace-candidate ' + candidate.status + '">' + traceSourceControl(candidate.dominant, '<div class="trigger-top"><span class="tag ' + traceTone(candidate.status) + '">' + allapotFelirat(candidate.status) + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p><div class="trace-ledger"><span>Alapérték ' + candidate.base + ' · ' + candidate.baseLabel + '</span>' + modifiers + '<b>Fontosság ' + score + ' / 100</b></div><p>' + candidate.outcome + '</p>') + '</article>';
+    }
+
+    function renderDecisionTrace(scenarioKey) {
+      const scenario = decisionTraceScenarios[scenarioKey];
+      const selected = scenario.candidates.find((candidate) => candidate.status === "selected");
+      const stage = (name) => document.querySelector('[data-trace-stage="' + name + '"]');
+
+      stage("recalculation").innerHTML = '<h3>1. Újraszámítás</h3><div class="trace-stage-grid"><article class="trace-candidate"><strong>Esemény</strong><p>' + scenario.recalculation.event + '</p></article><article class="trace-candidate"><strong>Nyitott vagy bezárt alkalmazás</strong><p>' + scenario.recalculation.background + '</p></article></div>';
+      stage("eligibility").innerHTML = '<h3>2. Adatellenőrzés és verseny</h3><p>Előbb a szükséges bemenetek számolhatósága dől el. A várakozó, elavult, elnémított vagy változatlan jel pontszámot sem kap; a hiányzó kategória csak a saját kategóriaalapú jelét állítja meg.</p><div class="trace-candidate-list">' + scenario.inputChecks.map(traceInputCheck).join("") + '</div><div class="trace-source-list">' + scenario.signals.map(traceSignal).join("") + '</div>';
+      stage("formation").innerHTML = '<h3>3. Helyzet összeállítása</h3><p>Csak egymáshoz tartozó alátámasztó jelek épülnek közös helyzetté; nem kapcsolódó jel nem adódik hozzá.</p><div class="trace-candidate-list">' + scenario.candidates.map((candidate) => '<article class="trace-candidate">' + traceSourceControl(candidate.dominant, '<div class="trigger-top"><span class="tag ' + traceTone(candidate.status) + '">' + allapotFelirat(candidate.status) + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p>') + '</article>').join("") + '</div>';
+      stage("priority").innerHTML = '<h3>4. Fontosság számítása</h3><p>A fő, versenyző jel alapértékére csak a megnevezett helyzetmódosító kerül. A rokon jelek alapértéke nem adódik össze automatikusan.</p><div class="trace-candidate-list">' + scenario.candidates.map(traceCandidate).join("") + '</div>';
+      stage("delivery").innerHTML = '<h3>5. Megjelenés és ismétlés</h3><p><b>' + selected.title + '</b> lett kiválasztva, mert a fontossága ' + calculatePriority(selected) + ' / 100. A gyengébb helyzet nem várólistára kerül, hanem a következő újraszámításkor újra versenyez.</p><div class="trace-source-list">' + traceSourceControl(selected.dominant, '<strong>A kiválasztott felső üzenet jele</strong><p>' + selected.outcome + '</p>') + '</div><div class="trace-lifecycle">' + scenario.lifecycle.map((entry) => '<span class="tag ' + traceTone(entry.state) + '" title="' + entry.reason + '">' + allapotFelirat(entry.state) + '</span>').join("") + '</div>';
+      stage("copy-map").innerHTML = '<h3>6. A mondat részei</h3><p>A felső üzenet nem eseménylista: minden kimondott mondatrésznek van kiinduló jele.</p><div class="trace-source-list">' + scenario.copy.map((entry) => '<article class="trace-copy-fragment">' + traceSourceControl(entry.source, '<strong>' + entry.slot + '</strong><p>' + entry.text + '</p>') + '</article>').join("") + '</div>' + (scenario.omitted.length ? '<div class="trace-source-list"><p class="trace-omitted">Kimaradt jelek:</p>' + scenario.omitted.map((entry) => traceSourceControl(entry.id, '<strong>Kimadt</strong><p>' + entry.reason + '</p>')).join("") + '</div>' : '') + '<details class="trace-all-role-map" data-all-source-roles><summary>Teljes HF-jel → mondatrész térkép</summary><div class="trace-candidate-list">' + renderAllSourceRoles() + '</div></details>';
+    }
+
+    const scenarioControlGroups = [
+      Array.from(document.querySelectorAll("[data-scenario]")),
+      Array.from(document.querySelectorAll("[data-engine-scenario]"))
+    ];
+
+    function scenarioKeyFor(button) {
+      return button.dataset.scenario || button.dataset.engineScenario;
+    }
+
+    function applyScenario(scenarioKey) {
+      const scenario = decisionTraceScenarios[scenarioKey];
+      scenarioControlGroups.flat().forEach((button) => {
+        const active = scenarioKeyFor(button) === scenarioKey;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      const selected = scenario.candidates.find((candidate) => candidate.status === "selected");
+      const score = calculatePriority(selected);
+      document.getElementById("phonePulse").textContent = scenario.phone.pulse;
+      document.getElementById("phoneDetail").textContent = scenario.phone.detail;
+      document.getElementById("selectedTitle").textContent = scenario.phone.title;
+      document.getElementById("selectedScore").textContent = score;
+      document.getElementById("scorebar").style.width = score + "%";
+      renderDecisionTrace(scenarioKey);
+    }
+
+    scenarioControlGroups.forEach((buttons) => {
+      buttons.forEach((button, index) => {
+        button.addEventListener("click", () => applyScenario(scenarioKeyFor(button)));
+        button.addEventListener("keydown", (event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          const nextIndex = event.key === "Home" ? 0
+            : event.key === "End" ? buttons.length - 1
+            : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+          const next = buttons[nextIndex];
+          next.focus();
+          applyScenario(scenarioKeyFor(next));
+        });
+      });
+    });
+
+    applyScenario("risk");
+
+    const groupDossiers = {
+      budget: {
+        title: "Keretnyomás",
+        tag: "költési ütem + keretek",
+        manual: [
+          ["Kiinduló adatok", "Változó költés, havi és éves keretek, hátralévő napok, kategóriák és a pontszám alakulása."],
+          ["Számítás", "Költési ütem, előrejelzett arány, napi költési keret, heti lehetőség és gördülő 30 napos változás."],
+          ["Kiváltó esemény", "Csak zónaváltás, pénzben érdemi eltérés vagy valódi javulás után kerülhet versenybe."],
+          ["Adatellenőrzés", "Hiányzó összeg vagy dátum csak az érintett jelet várakoztatja. Hiányzó kategória csak a HF-002, HF-012 és HF-020 jelet állítja meg; a teljes költés és pénzáramlás tovább számolható."]
+        ],
+        forecasts: [
+          ["Hó végi kiadási előrejelzés", "HF-001 · változó költési ütem + fix tételek", "keret fölött", "bad", "line", "A változó ütemet a már aktivált és hátralévő fix terhek egészítik ki."],
+          ["Havi kategórialimit fogyása", "HF-002 · előrejelzett kategóriaarány", "súlyos", "warn", "bars", "A havi kategóriakeret saját előrejelzést kap; nem a teljes költés másolata."],
+          ["Éves kategórialimit fogyása", "HF-020 · éves ütem", "figyel", "violet", "line", "Az éves keret külön időszak és külön ütem, ezért külön jel."],
+          ["Költési viselkedés változása", "HF-012 · HF-013 · HF-014", "érdemi változás", "violet", "wave", "Kategóriaugrás, teljes gördülő trend és a meglévő pontszám iránya együtt is átnézhető."]
+        ],
+        triggers: {
+          "HF-001": ["Hó végi kiadási előrejelzés", "budget_pressure", "A becsült hó végi kiadás keret fölé lép, rosszabb zónába kerül, vagy érdemben visszajön a keret alá.", "változó költési ütem + már aktivált vagy várakozó fix kiadások", "keret fölötti előrejelzés", "normál → rosszabb", "line", "Előrejelzés kiinduló értéke", "Érzékenység", 1, 10, 6, "/10"],
+          "HF-002": ["Havi kategórialimit fogyása", "budget_pressure", "Egy havi kategóriakeret előrejelzése figyelmeztető, súlyos vagy túllépett zónába lép. Hiányzó kategóriánál várakozik, és nem kap pontszámot.", "előrejelzett kategóriaköltés / havi keret", "étel: súlyos", "figyelmeztető → súlyos", "bars", "Kategóriahatár", "Figyelmeztetés ettől", 60, 95, 75, "%"],
+          "HF-003": ["Napi biztonságos költés", "budget_pressure", "Csak érdemi napi költési határváltáskor jelez, vagy egy erősebb keret- vagy pénzáramlási helyzet magyarázó része.", "hátralévő havi keret / hátralévő napok", "540 Ft / nap", "segítő zóna megváltozott", "gauge", "Napi költési szabály", "Legkisebb esés", 5, 50, 20, "%"],
+          "HF-004": ["Heti költési ütem", "budget_pressure", "A heti változó költés érdemben gyorsabb vagy lassabb az aktuális hónap napjaiból számolt heti lehetőségnél.", "havi keret / az aktuális hónap napjai × 7", "gyorsabb az ütemnél", "normál → figyelmeztető", "line", "Heti érzékenység", "Ütemkülönbség", 5, 40, 15, "%"],
+          "HF-012": ["Legnagyobb kategóriaugrás", "behavior_shift", "Egy változó kategória gördülő 30 napban legalább 10 000 Ft és 30% változást mutat, vagy új kategóriaként pénzben érdemi. Hiányzó kategóriánál várakozik, és nem kap pontszámot.", "aktuális kategória 30 napja − előző kategória 30 napja", "étel +24%", "stabil → kiugró", "bars", "Kategória pénzügyi jelentősége", "Legkisebb összeg", 5000, 30000, 10000, " Ft"],
+          "HF-013": ["Teljes költési trend 30 nap", "behavior_shift", "A teljes gördülő 30 napos változó költés legalább ±15% és ±10 000 Ft mértékben romlik vagy javul.", "aktuális változó költés 30 napja − előző változó költés 30 napja", "gördülő +17%", "normál → rosszabb", "wave", "Trend pénzügyi jelentősége", "Legkisebb arány", 5, 35, 15, "%"],
+          "HF-014": ["Pontszám iránya", "behavior_shift", "A meglévő pontszám legalább nyolc pontot mozdul, vagy piros, sárga vagy zöld zónát vált.", "csak a meglévő pontszám; nem számol újat", "60 → 52", "zöld → sárga", "line", "Pontszám mozgása", "Legkisebb mozgás", 4, 15, 8, " pont"],
+          "HF-015": ["Erősebb zóna felülírja a régit", "budget_pressure", "Egy keretnél csak a legerősebb aktuális zóna aktív; a 90 felülírja a korábbi 75-öt.", "normál → figyelmeztető → súlyos → túllépett", "90%", "figyelmeztető → súlyos", "steps", "Felülírás szigorúsága", "Szigor", 1, 10, 8, "/10"],
+          "HF-020": ["Éves kategórialimit fogyása", "budget_pressure", "Az éves kategóriakeret az éves költési ütem alapján figyelmeztető, súlyos vagy túllépett irányba megy. Hiányzó kategóriánál várakozik, és nem kap pontszámot.", "év elejétől költött összeg / éves ütem", "utazás: figyel", "normál → figyelmeztető", "line", "Éves időszak", "Érzékenység", 1, 10, 6, "/10"]
+        },
+        story: ["Kerethelyzet útja", "A rokon keret-, ütem- és költésváltozási jelek egy helyzetté állhatnak össze. Egy súlyos jel önmagában elég; két kapcsolódó közepes jel is elérheti az alátámasztáshoz szükséges szintet.", "Példa", "Hó végi előrejelzés + heti ütem + kategóriaugrás → a hónap vége szoros lehet.", "Állapot útja", "A régi 75%-os állapot felülíródik, ha már a 90% az aktuális igazság."],
+        tuning: ["Keretcsoport beállítása", "A csoport fontossága, az adatellenőrzés szabálya és a pozitív vagy javuló helyzetek láthatósága itt állítható.", "Csoport fontossága", "Fontosság", 30, 120, 92, ""]
+      },
+      cashflow: {
+        title: "Pénzáramlási nyomás",
+        tag: "bevétel + fix kiadás + tartalék",
+        manual: [
+          ["Kiinduló adatok", "Aktuális egyenleg, várt bevételek, ismétlődő várható tételek, fix terhek, megtakarítási cél és havi bevétel–kiadás."],
+          ["Számítás", "Fix kiadások, a következő hét esedékessége, hiányzó várt bevétel, arány, megtakarítási előrejelzés és tartaléknapok."],
+          ["Kiváltó esemény", "Az esedékes vagy lejárt események, zónaváltások és pénzben érdemi mozgások magasabb fontosságot kaphatnak."],
+          ["Adatellenőrzés", "A várt, de meg nem érkezett bevétel nem adathiba: a HF-007 ezt a tényt számolja. Hiányzó összeg vagy dátum csak az érintett jelét várakoztatja."]
+        ],
+        forecasts: [
+          ["Várt bevétel és fix kiadások", "HF-005 · HF-006 · HF-007", "42 ezer Ft vár", "violet", "bars", "A fix terhek, a közeli esedékesség és a hiányzó várt bevétel ugyanabban a pénzáramlási helyzetben találkozhat."],
+          ["Bevétel–kiadás arány és megtakarítási cél", "HF-009 · HF-010", "szoros", "warn", "gauge", "A megtakarítási cél a HF-001 kiadási előrejelzésére épül, nem egy másik régi képletre."],
+          ["Egyenlegtartalék napokban", "HF-011 · gördülő változó költési ütem", "31 nap", "good", "gauge", "A tartalék a gördülő változó napi költést használja; a fix terhek külön kapcsolható jelek."]
+        ],
+        triggers: {
+          "HF-005": ["Fix kiadások terhe", "fixed_load", "A havi fix vagy ismétlődő teher a teljes összeg, az aktív és a várakozó tételek, valamint a legnagyobb tétel alapján pénzben érdemi.", "aktív + várakozó ismétlődő kiadások", "42 000 Ft vár", "teher nőtt", "bars", "Fix kiadás érzékenysége", "Legkisebb teher", 10000, 100000, 30000, " Ft"],
+          "HF-006": ["Következő 7 napi ismétlődő kiadás", "fixed_load", "A következő hét várakozó ismétlődő kiadásai fontosak vagy közel esedékesek.", "darabszám + összeg + legközelebbi esedékesség", "3 tétel / 7 nap", "kívül → esedékes időablakban", "steps", "Esedékességi időablak", "Napok", 3, 14, 7, " nap"],
+          "HF-007": ["Hiányzó várt bevétel", "cashflow_pressure", "Várt bevétel esedékes vagy lejárt, de még nem érkezett meg; érkezéskor javulást is jelezhet.", "várakozó várt bevétel esedékességi állapota", "hiányzik 120 ezer Ft", "várt → lejárt", "steps", "Türelmi idő", "Napok", 0, 14, 3, " nap"],
+          "HF-008": ["Bevételi cél kockázata", "cashflow_pressure", "Az első verzióban későbbre halasztott jel: átfed a megtakarítási cél előrejelzésével és a hiányzó várt bevétellel, ezért nem aktív.", "a HF-007 és HF-010 lefedi", "deferred", "nem aktív", "mute", "Későbbre halasztott jel", "Láthatóság", 0, 1, 1, ""],
+          "HF-009": ["Bevétel–kiadás arány", "cashflow_pressure", "Az adott havi kiadás és bevétel aránya figyelő, szoros vagy negatív pénzáramlási zónába lép; bevétel nélkül nincs pánik.", "adott havi kiadás / adott havi bevétel", "91% szoros", "figyelő → szoros", "gauge", "Arányzónák", "Szoros ettől", 60, 100, 90, "%"],
+          "HF-010": ["Megtakarítási cél előrejelzése", "cashflow_pressure", "A várt bevétel mínusz a HF-001 kiadási előrejelzése alapján a megtakarítási cél veszélyben lehet vagy várhatóan elmarad.", "várt bevétel − hó végi kiadási előrejelzés", "a cél 70%-a", "jó úton → veszélyben", "gauge", "Cél alsó határa", "Veszélyben ettől", 50, 95, 75, "%"],
+          "HF-011": ["Egyenlegtartalék napokban", "cashflow_pressure", "Az aktuális egyenleg és a gördülő 30 napos változó napi költés aránya stabil, figyelő, szoros vagy súlyos zónát vált.", "egyenleg / gördülő változó napi költés", "31 nap stabil", "figyelő → stabil", "gauge", "Stabil tartalék", "Legalább ennyi nap", 14, 60, 30, " nap"]
+        },
+        story: ["Pénzáramlási helyzet útja", "A fix kiadások önmagukban is lehetnek pénzben jelentősek, de gyakran a hiányzó várt bevétel, arány, megtakarítás vagy tartalék mellé kapcsolódnak.", "Példa", "Hiányzó várt bevétel + három közeli fix kiadás + szoros arány → pénzáramlási nyomás.", "Állapot útja", "Megérkezett bevétel vagy javult tartalék esetén ugyanebből a helyzetből javuló Pulse-üzenet is születhet."],
+        tuning: ["Pénzáramlási csoport beállítása", "A korai figyelmeztetés előnye, a fix kiadások fontossága és a javulások láthatósága szabályozható.", "Csoport fontossága", "Fontosság", 30, 120, 88, ""]
+      },
+      "data-quality": {
+        title: "Adatpontosság",
+        tag: "adatellenőrzés + késleltetett jelzés",
+        manual: [
+          ["Kiinduló adatok", "Kategorizálatlan tranzakciók száma, összege, kora, valamint az érintett kategóriaalapú jelek."],
+          ["Számítás", "A motor egy csoportos alkalmazásállapot-jelet képez, nem minden új tételhez küld külön Pulse-üzenetet. A teljes költés és pénzáramlás ettől még számolható."],
+          ["Kiváltó esemény", "Késleltetés és darabszám- vagy pénzösszeghatár után kerülhet versenybe. A HF-021 saját jel, nem von le pontot pénzügyi helyzetből."],
+          ["Adatellenőrzés", "Ha az összeg vagy dátum hiányzik, az érintett számítás várakozik. Ha csak a kategória hiányzik, kizárólag a HF-002, HF-012 és HF-020 várakozik."]
+        ],
+        forecasts: [
+          ["Adatpontosság állapota", "HF-021 · késleltetett, csoportosított alkalmazásállapot", "3 ismeretlen", "info", "bars", "A grafikon azt mutatja, hány tétel kategóriája hiányzik, ezért mely kategóriaalapú jelek várakoznak. Nem csökkenti a teljes pénzügyi pontszámot."]
+        ],
+        triggers: {
+          "HF-021": ["Kategorizálatlan tételek állapota", "data_quality", "A kategorizálatlan tételek csak a HF-002, HF-012 és HF-020 jelet állítják várakozásra. A HF-021 késleltetve, saját magyarázó jelként jelenhet meg; nem von le pontot más jelből.", "darabszám + kategorizálatlan összeg + legrégebbi tétel", "3 ismeretlen", "várakozik → versenybe kerül", "bars", "Adatvisszajelzés késleltetése", "Késleltetés", 1, 48, 12, " óra"]
+        },
+        story: ["Adatpontossági helyzet útja", "Az adatpontossági jel a felületen még alakuló vagy várakozó állapotban látszik. Nem bünteti a pénzügyi helyzeteket: csak megmutatja, hogy mely kategóriaalapú számítások nem kaphatnak pontszámot.", "Példa", "Három kategorizálatlan tétel → a teljes költés számolható, a HF-002, HF-012 és HF-020 várakozik; a HF-021 ezt magyarázza.", "Állapot útja", "Kategorizáláskor a jel megoldódik; ugyanaz a helyzet nem ismétlődik feleslegesen."],
+        tuning: ["Adatpontosság beállítása", "A késleltetés, a legkisebb tételszám és a felső üzenetbe engedés szabályozható.", "Csoport késleltetése", "Késleltetés", 1, 48, 12, " óra"]
+      }
+    };
+
+    function chartSvg(kind, tone) {
+      const colors = {
+        bad: "#e34a4a",
+        warn: "#d08a00",
+        violet: "#7657d9",
+        good: "#16a36a",
+        info: "#08a7c7"
+      };
+      const color = colors[tone] || colors.info;
+      if (kind === "bars") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><rect x="20" y="42" width="30" height="24" rx="4" fill="' + color + '"/><rect x="72" y="30" width="30" height="36" rx="4" fill="' + color + '" opacity=".76"/><rect x="124" y="17" width="30" height="49" rx="4" fill="' + color + '" opacity=".58"/><rect x="176" y="36" width="30" height="30" rx="4" fill="' + color + '" opacity=".38"/></svg>';
+      }
+      if (kind === "gauge") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M34 61 A86 86 0 0 1 206 61" fill="none" stroke="#dbe3ec" stroke-width="14" stroke-linecap="round"/><path d="M34 61 A86 86 0 0 1 166 22" fill="none" stroke="' + color + '" stroke-width="14" stroke-linecap="round"/><circle cx="166" cy="22" r="5" fill="' + color + '"/></svg>';
+      }
+      if (kind === "steps") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M18 60 H72 V46 H126 V30 H180 V14 H222" fill="none" stroke="' + color + '" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/><path d="M18 66 H222" stroke="#dbe3ec" stroke-width="2"/></svg>';
+      }
+      if (kind === "mute") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M26 39 H214" stroke="#cbd5e1" stroke-width="12" stroke-linecap="round"/><path d="M72 18 L168 60 M168 18 L72 60" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/></svg>';
+      }
+      if (kind === "wave") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M18 58 C54 64 76 52 110 43 S174 18 222 22" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round"/><path d="M18 62 H222" stroke="#dbe3ec" stroke-width="2"/></svg>';
+      }
+      return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M18 62 L68 56 L118 43 L170 29 L222 16" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round"/><path d="M18 43 H222" stroke="#d08a00" stroke-width="2" stroke-dasharray="5 5"/></svg>';
+    }
+
+    function safeOutputId(scope, title, label) {
+      return "group-" + scope + "-" + (title + "-" + label).toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-control";
+    }
+
+    function rangeControl(scope, title, label, min, max, value, unit) {
+      const outputId = safeOutputId(scope, title, label);
+      return '<div class="user-defined"><strong><span>' + title + '</span><span>te állítod</span></strong><div class="control-line"><span>' + label + '</span><input type="range" min="' + min + '" max="' + max + '" value="' + value + '" data-out="' + outputId + '"><b><span id="' + outputId + '">' + value + '</span>' + unit + '</b></div></div>';
+    }
+
+    function renderManual(dossier) {
+      return '<div class="group-panel-head"><div><h2>Hogyan működik a ' + dossier.title + '?</h2><p>Ez a nézet együtt mutatja a számításokat, előrejelzéseket, kiváltó eseményeket és a felső üzenethez vezető utakat.</p></div><span class="tag info">' + dossier.tag + '</span></div><div class="group-flow layout-board layout-board--manual" data-layout-board="manual">' + dossier.manual.map((entry) => '<article class="group-flow-step"><strong>' + entry[0] + '</strong><p>' + entry[1] + '</p></article>').join('') + '</div>';
+    }
+
+    function renderForecasts(dossier) {
+      return '<div class="group-panel-head"><div><h2>Előrejelzések és számítások</h2><p>A nagy grafikonok összefoglalók; a hozzájuk tartozó minden konkrét kiváltó esemény az alábbi átnézőkártyákban látható.</p></div><span class="tag violet">számítási nézet</span></div><div class="grid-3 layout-board layout-board--forecast" data-layout-board="forecasts">' + dossier.forecasts.map((entry) => '<article class="card chart-card"><div class="chart-title"><div><strong>' + entry[0] + '</strong><span>' + entry[1] + '</span></div><span class="tag ' + entry[3] + '">' + entry[2] + '</span></div>' + chartSvg(entry[4], entry[3]) + '<p class="source-domain">' + entry[5] + '</p></article>').join('') + '</div>';
+    }
+
+    function renderTriggerCard(group, id, trigger) {
+      const title = trigger[0];
+      const domain = trigger[1];
+      const deferred = trigger[4] === "deferred";
+      const tagTone = deferred ? "" : domain === "data_quality" ? "info" : domain === "behavior_shift" || domain === "fixed_load" ? "violet" : "bad";
+      return '<div class="trigger-top"><span class="trigger-id">' + id + '</span><span class="tag ' + tagTone + '">' + (deferred ? "későbbre halasztva" : jelCsoportFelirat(domain)) + '</span>' + copyRoleBadge(id) + '</div><strong>' + title + '</strong><p class="trigger-copy">' + trigger[2] + '</p>' + chartSvg(trigger[6], tagTone || "info") + '<div class="trigger-meta"><span>Számítás: ' + trigger[3] + '</span><span>Állapot: ' + kartyaAllapotFelirat(trigger[4]) + '</span><span>Változás: ' + trigger[5] + '</span></div><p class="source-domain">Jel csoportja · ' + jelCsoportFelirat(domain) + (deferred ? ' · nem aktív' : '') + '</p>' + rangeControl(group, trigger[7], trigger[8], trigger[9], trigger[10], trigger[11], trigger[12]);
+    }
+
+    function renderStory(dossier) {
+      return '<div class="group-panel-head"><div><h2>' + dossier.story[0] + '</h2><p>' + dossier.story[1] + '</p></div><span class="tag warn">helyzet → felső üzenet</span></div><div class="status-grid"><div class="status-box"><b>' + dossier.story[2] + '</b><span>' + dossier.story[3] + '</span></div><div class="status-box"><b>' + dossier.story[4] + '</b><span>' + dossier.story[5] + '</span></div></div>';
+    }
+
+    function renderTuning(group, dossier) {
+      const tuning = dossier.tuning;
+      return '<div class="group-panel-head"><div><h2>' + tuning[0] + '</h2><p>' + tuning[1] + '</p></div><span class="tag good">átlátható beállítás</span></div>' + rangeControl(group, tuning[2], tuning[3], tuning[4], tuning[5], tuning[6], tuning[7]);
+    }
+
+    Object.entries(groupDossiers).forEach(([group, dossier]) => {
+      const panel = document.querySelector('[data-group-panel="' + group + '"]');
+      panel.querySelector('[data-group-manual-content]').innerHTML = renderManual(dossier);
+      panel.querySelector('[data-group-forecast-content]').innerHTML = renderForecasts(dossier);
+      panel.querySelector('[data-group-story-content]').innerHTML = renderStory(dossier);
+      panel.querySelector('[data-group-tuning-content]').innerHTML = renderTuning(group, dossier);
+      panel.querySelectorAll('[data-card-slot]').forEach((slot) => {
+        const trigger = dossier.triggers[slot.dataset.cardSlot];
+        if (!trigger) throw new Error('Missing group trigger data for ' + slot.dataset.cardSlot);
+        slot.classList.toggle('deferred', trigger[4] === 'deferred');
+        slot.innerHTML = renderTriggerCard(group, slot.dataset.cardSlot, trigger);
+      });
+    });
+
+    renderSharedEngineRoleBadges();
+
+    const groupRailButtons = Array.from(document.querySelectorAll('[data-group-rail]'));
+    const groupPanels = Array.from(document.querySelectorAll('[data-group-panel]'));
+    const groupSummaries = Array.from(document.querySelectorAll('[data-group-summary]'));
+    const groupRail = document.querySelector('[aria-label="Pulse csoportválasztó"]');
+
+    function selectGroup(group, shouldScroll = true) {
+      groupRailButtons.forEach((button) => {
+        const active = button.dataset.groupRail === group;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-selected', String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      groupPanels.forEach((panel) => {
+        const active = panel.dataset.groupPanel === group;
+        panel.hidden = !active;
+        panel.classList.toggle('active', active);
+      });
+      if (shouldScroll && groupRail) {
+        groupRail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    function selectTraceSource(sourceId) {
+      const role = sourceCopyRoles[sourceId];
+      if (!role || role.group === "engine" || ["engine-only", "deferred-no-copy"].includes(role.mode)) return;
+      selectGroup(role.group, false);
+      requestAnimationFrame(() => {
+        const card = document.querySelector('[data-hf-id="' + sourceId + '"]');
+        if (!card) return;
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.tabIndex = -1;
+        card.focus({ preventScroll: true });
+      });
+    }
+
+    const traceRoot = document.querySelector("[data-engine-decision-trace]");
+    if (traceRoot) {
+      traceRoot.addEventListener("click", (event) => {
+        const source = event.target.closest("[data-trace-source]");
+        if (source) selectTraceSource(source.dataset.traceSource);
+      });
+      traceRoot.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const source = event.target.closest("[data-trace-source]");
+        if (!source) return;
+        event.preventDefault();
+        selectTraceSource(source.dataset.traceSource);
+      });
+    }
+
+    groupRailButtons.forEach((button, index) => {
+      button.addEventListener('click', () => selectGroup(button.dataset.groupRail));
+      button.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const nextIndex = event.key === 'Home' ? 0
+          : event.key === 'End' ? groupRailButtons.length - 1
+          : (index + (event.key === 'ArrowRight' ? 1 : -1) + groupRailButtons.length) % groupRailButtons.length;
+        const nextButton = groupRailButtons[nextIndex];
+        nextButton.focus();
+        selectGroup(nextButton.dataset.groupRail, false);
+      });
+    });
+
+    groupSummaries.forEach((summary) => {
+      const select = () => selectGroup(summary.dataset.groupSummary);
+      summary.addEventListener('click', select);
+      summary.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          select();
+        }
+      });
+    });
+
+    document.querySelectorAll("input[type='range'][data-out]").forEach((range) => {
+      const output = document.getElementById(range.dataset.out);
+      if (!output) return;
+      output.textContent = range.value;
+      range.addEventListener("input", () => {
+        output.textContent = range.value;
+      });
+    });
+
+    selectGroup('budget', false);
+  </script>
+</body>
+</html>
