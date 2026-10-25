@@ -1,4 +1,5 @@
 import '../../dashboard/query/domain/ledger_direction.dart';
+import '../../manual_transactions/domain/manual_transaction_models.dart';
 import 'automation_models.dart';
 
 abstract interface class AutomationRepository {
@@ -53,6 +54,47 @@ abstract interface class AutomationRepository {
     String? trainingCorrectionJson,
   });
   Future<void> ignoreReview(String notificationId);
+  Future<RecurrenceDashboardSnapshot> recurrenceDashboard();
+  Future<List<RecurrenceRule>> recurringRules();
+  Future<List<RecurrenceOccurrence>> recurrenceOccurrences({
+    RecurrenceOccurrenceStatus? status,
+    int limit = 100,
+    int offset = 0,
+  });
+  Future<String?> realizedRecurrenceLedgerEntryId(String occurrenceId);
+  Future<RecurrenceRule> createRecurringRule({
+    required String name,
+    required String partnerId,
+    required ManualCategorySelection categorySelection,
+    required LedgerDirection direction,
+    String? note,
+    required RecurrenceTriggerKind triggerKind,
+    required RecurrenceAmountPolicy amountPolicy,
+    int? amountScaled100,
+    required int dayOfMonth,
+    required int localTimeMinutes,
+    required int startLocalEpochDay,
+    int? endLocalEpochDay,
+    required String timezoneId,
+    String? pushProfileId,
+    String? pushRuleId,
+    int amountToleranceScaled100 = 0,
+    int dayWindow = 2,
+  });
+  Future<void> setRecurringRuleActive(String ruleId, bool isActive);
+  Future<void> archiveRecurringRule(String ruleId);
+  Future<void> setShowPendingGhosts(bool show);
+  Future<void> skipRecurrenceOccurrence(String occurrenceId);
+  Future<RecurrenceOccurrence> updateRecurrenceOccurrence({
+    required String occurrenceId,
+    int? expectedAmountScaled100,
+    int? expectedLocalEpochDay,
+    int? expectedLocalTimeMinutes,
+    String? partnerId,
+    ManualCategorySelection? categorySelection,
+    bool noteChanged = false,
+    String? note,
+  });
 }
 
 abstract interface class AutomationPermissionRepository {

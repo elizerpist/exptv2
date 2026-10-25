@@ -43,7 +43,7 @@ void main() {
 
     expect(index.generation, 7);
     expect(index.coreRevision, 3);
-    expect(index.buildMetrics.sqlCallCount, 5);
+    expect(index.buildMetrics.sqlCallCount, 6);
     expect(index.buildMetrics.nativeSqlDurationMicros, 1);
     expect(index.buildMetrics.uniquePreviewRowCount, 1);
     expect(index.buildMetrics.serializationDurationMicros, 5);
@@ -517,7 +517,7 @@ Uint8List _payload(
     ..int32(24)
     ..int32(request.key.yearWindowStart)
     ..int32(request.key.yearWindowEndInclusive)
-    ..int32(5)
+    ..int32(6)
     ..int32(1)
     ..int32(1)
     ..int32(1)
@@ -599,7 +599,7 @@ Uint8List _heavyPayload(
     ..int32(24)
     ..int32(request.key.yearWindowStart)
     ..int32(request.key.yearWindowEndInclusive)
-    ..int32(5)
+    ..int32(6)
     ..int32(1)
     ..int32(rowCount)
     ..int32(rowCount)
@@ -700,6 +700,9 @@ final class _Writer {
     int32(600);
     nullableString('tükörfúrógép');
     int64(1700000000000);
+    boolean(false);
+    nullableString(null);
+    boolean(false);
   }
 
   void frame({
@@ -714,6 +717,7 @@ final class _Writer {
     string(timeScopeKey);
     string('income');
     int64(12345);
+    int64(entryCount ?? indices.length);
     int64(entryCount ?? indices.length);
     int32(indices.length);
     for (final index in indices) {

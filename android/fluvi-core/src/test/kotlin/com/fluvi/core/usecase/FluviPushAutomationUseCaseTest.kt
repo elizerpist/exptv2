@@ -5,13 +5,21 @@ import androidx.test.core.app.ApplicationProvider
 import com.fluvi.core.FluviCore
 import com.fluvi.core.FluviCoreFactory
 import com.fluvi.core.model.CapturedPushNotification
+import com.fluvi.core.model.CreateRecurrenceRuleCommand
 import com.fluvi.core.model.CreatePushProfileCommand
+import com.fluvi.core.model.FluviSystemIds
+import com.fluvi.core.model.LedgerCategorySelection
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.PushFieldRole
 import com.fluvi.core.model.PushFieldSpan
 import com.fluvi.core.model.PushTransactionDirection
+import com.fluvi.core.model.RecurrenceAmountPolicy
+import com.fluvi.core.model.RecurrenceOccurrenceStatus
+import com.fluvi.core.model.RecurrenceTriggerKind
 import kotlinx.coroutines.runBlocking
+import java.time.Instant
+import java.time.ZoneId
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -124,5 +132,99 @@ class FluviPushAutomationUseCaseTest {
         assertTrue(core.automation.capture(allowed) is com.fluvi.core.model.FluviPushCaptureResult.Stored)
         assertTrue(core.automation.capture(allowed) is com.fluvi.core.model.FluviPushCaptureResult.Duplicate)
         assertEquals(1, core.automation.inbox(profile.profileId, 10, 0).size)
+    }
+
+    @Test
+    fun activeParserRealizesOneMatchingGhostAndLaterPushIsOnlyEvidence() = runBlocking {
+        val profile = core.automation.createProfile(
+            CreatePushProfileCommand(
+                packageName = "com.ghost.bank",
+                appLabel = "Ghost Bank",
+                displayName = "Ghost Bank",
+                defaultDirection = PushTransactionDirection.automatic,
+                monitoringRequested = true,
+                notificationAccessGranted = true,
+            ),
+        )
+        val text = "4 690 Ft összeget fizettél itt: Netflix. A(z) HUF Zseb egyenlege: 71 795,87 Ft."
+        val receivedAt = System.currentTimeMillis()
+        val trainingEvent = CapturedPushNotification(
+            packageName = profile.packageName,
+            appLabel = profile.appLabel,
+            title = "Kártyás vásárlás",
+            text = text,
+            notificationKey = "ghost-training",
+            receivedAtUtcMs = receivedAt,
+        )
+        core.automation.capture(trainingEvent)
+        val sample = core.automation.inbox(profile.profileId, 10, 0).single()
+        val rule = core.automation.createRule(
+            com.fluvi.core.model.CreatePushRuleCommand(
+                profileId = profile.profileId,
+                notificationId = sample.notificationId,
+                name = "Netflix terhelés",
+                direction = LedgerDirection.expense,
+                spans = listOf(
+                    PushFieldSpan(0, "4 690".length, PushFieldRole.amount),
+                    PushFieldSpan(
+                        text.indexOf("Netflix"),
+                        text.indexOf("Netflix") + "Netflix".length,
+                        PushFieldRole.merchant,
+                    ),
+                    PushFieldSpan(
+                        text.indexOf("HUF Zseb"),
+                        text.indexOf("HUF Zseb") + "HUF Zseb".length,
+                        PushFieldRole.account,
+                    ),
+                    PushFieldSpan(
+                        text.indexOf("71 795,87"),
+                        text.indexOf("71 795,87") + "71 795,87".length,
+                        PushFieldRole.balance,
+                    ),
+                ),
+            ),
+        )
+        assertTrue(core.automation.backtest(rule.ruleId).activationReady)
+        core.automation.activateRule(rule.ruleId)
+        val partnerId = core.partners.findOrCreate("Netflix", FluviSystemIds.UNCATEGORIZED_CATEGORY)
+        val local = Instant.ofEpochMilli(receivedAt).atZone(ZoneId.of("Europe/Budapest"))
+        val recurring = core.recurrences.create(
+            CreateRecurrenceRuleCommand(
+                name = "Netflix", partnerId = partnerId,
+                categorySelection = LedgerCategorySelection.PartnerDefault,
+                direction = LedgerDirection.expense, note = null,
+                triggerKind = RecurrenceTriggerKind.push,
+                amountPolicy = RecurrenceAmountPolicy.estimated,
+                amountScaled100 = 449_000L,
+                dayOfMonth = local.dayOfMonth,
+                localTimeMinutes = local.hour * 60 + local.minute,
+                startLocalEpochDay = local.toLocalDate().toEpochDay(),
+                endLocalEpochDay = null,
+                timezoneId = "Europe/Budapest",
+                pushProfileId = profile.profileId,
+                pushRuleId = rule.ruleId,
+                amountToleranceScaled100 = 25_000L,
+                dayWindow = 2,
+            ),
+        )
+        val booked = core.automation.capture(
+            trainingEvent.copy(notificationKey = "ghost-realize", receivedAtUtcMs = receivedAt + 60_000L),
+        ) as com.fluvi.core.model.FluviPushCaptureResult.Booked
+        val entry = core.ledger.getLedgerEntryById(booked.ledgerEntryId)
+        assertEquals(469_000L, entry.amountScaled100)
+        assertEquals(LedgerOriginKind.push, entry.originKind)
+        assertTrue(entry.recurrenceOccurrenceId != null)
+        assertEquals(
+            RecurrenceOccurrenceStatus.realized,
+            core.recurrences.occurrences().single { it.ruleId == recurring.ruleId && it.occurrenceId == entry.recurrenceOccurrenceId }.status,
+        )
+
+        val evidence = core.automation.capture(
+            trainingEvent.copy(notificationKey = "ghost-evidence", receivedAtUtcMs = receivedAt + 120_000L),
+        ) as com.fluvi.core.model.FluviPushCaptureResult.Booked
+        assertEquals(booked.ledgerEntryId, evidence.ledgerEntryId)
+        assertEquals(1L, core.query.total(com.fluvi.core.query.FluviQueryScope(
+            direction = LedgerDirection.expense,
+        )).entryCount)
     }
 }

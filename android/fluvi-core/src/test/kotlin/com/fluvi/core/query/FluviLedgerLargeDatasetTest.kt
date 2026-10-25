@@ -158,7 +158,7 @@ class FluviLedgerLargeDatasetTest {
                 assertEquals(expenseEntryCount(minimum, ENTRY_COUNT.toLong()), all.entryCount)
                 assertEquals(sumOddValues(minimum, ENTRY_COUNT.toLong()), all.totalMinor)
                 assertTrue(daily.isNotEmpty())
-                assertEquals(5, index.buildMetrics.sqlCallCount)
+                assertEquals(6, index.buildMetrics.sqlCallCount)
                 // The ordered preview scan may finish before exhausting the
                 // selected rows once every aggregate bucket has pageSize + 1
                 // retained rows. It must nevertheless be nonempty and never

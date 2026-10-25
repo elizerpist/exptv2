@@ -33,6 +33,8 @@ import '../../features/automation/data/unavailable_automation_repository.dart';
 import '../../features/automation/domain/automation_repository.dart';
 import '../../features/automation/presentation/automation_dashboard_page.dart';
 import '../../features/automation/presentation/push_profile_wizard_page.dart';
+import '../../features/automation/presentation/recurring_transaction_wizard_page.dart';
+import '../../features/automation/presentation/ghost_manager_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
@@ -368,19 +370,25 @@ class _FluviAppShellState extends State<FluviAppShell>
       );
       return;
     }
-    if (action != CreationSelectorAction.manualTransaction) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ez a létrehozási mód még nem érhető el.'),
-        ),
-      );
-      return;
-    }
     final direction =
         _controller.transactionDirection.direction ==
             TransactionDirection.income
         ? LedgerDirection.income
         : LedgerDirection.expense;
+    if (action == CreationSelectorAction.recurringTransaction) {
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          fullscreenDialog: true,
+          builder: (_) => RecurringTransactionWizardPage(
+            repository: _automationRepository,
+            manualRepository: _manualTransactionRepository,
+            categories: _categoryCollection.value,
+            initialDirection: direction,
+          ),
+        ),
+      );
+      return;
+    }
     await Navigator.of(context).push<bool>(
       PageRouteBuilder<bool>(
         pageBuilder: (context, animation, secondaryAnimation) =>
@@ -408,6 +416,20 @@ class _FluviAppShellState extends State<FluviAppShell>
   }
 
   Future<void> _openEditTransaction(String entryId) async {
+    if (entryId.startsWith('ghost:')) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => GhostManagerPage(
+            repository: _automationRepository,
+            manualRepository: _manualTransactionRepository,
+            categories: _categoryCollection.value,
+            initialOccurrenceId: entryId.substring('ghost:'.length),
+            onOpenLedgerEntry: _openEditTransaction,
+          ),
+        ),
+      );
+      return;
+    }
     await Navigator.of(context).push<bool>(
       PageRouteBuilder<bool>(
         pageBuilder: (context, animation, secondaryAnimation) =>
@@ -919,6 +941,16 @@ class _FluviAppShellState extends State<FluviAppShell>
                               AutomationDashboardPage(
                                 repository: _automationRepository,
                                 permissions: _automationPermissionRepository,
+                                manualRepository: _manualTransactionRepository,
+                                categories: _categoryCollection.value,
+                                direction:
+                                    _controller
+                                            .transactionDirection
+                                            .direction ==
+                                        TransactionDirection.income
+                                    ? LedgerDirection.income
+                                    : LedgerDirection.expense,
+                                onOpenLedgerEntry: _openEditTransaction,
                               ),
                               SettingsPage(
                                 permissions: _automationPermissionRepository,

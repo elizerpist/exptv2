@@ -615,6 +615,19 @@ final class _DashboardLogBoxRenderSurfaceState
                               rowTop: hit.rowTop,
                             ) ??
                             false) {
+                          // Pending ghosts have no Ledger entry ID. Their
+                          // stable ghost identity is deliberately forwarded
+                          // so the shell can open the occurrence workflow,
+                          // rather than attempting a manual Ledger edit.
+                          widget.onEditEntry?.call(hit.item.row.entryId);
+                          return;
+                        }
+                        // A pending occurrence has no real Ledger entry and
+                        // therefore no normal row-detail route.  Its whole
+                        // painted card is the occurrence entry point; keeping
+                        // this decision in the bounded hit-test surface avoids
+                        // a per-row GestureDetector subtree.
+                        if (hit.item.row.isPendingGhost) {
                           widget.onEditEntry?.call(hit.item.row.entryId);
                           return;
                         }
@@ -1915,6 +1928,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       rowTop: rowTop,
       showsSeparator: showsSeparator,
     );
+    final ghostLayer = _beginGhostVisualLayer(
+      canvas,
+      width: width,
+      rowTop: rowTop,
+      isPendingGhost: readable.isPendingGhost,
+    );
     final badgeTop =
         rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2;
     final badgeRect = Rect.fromLTWH(
@@ -1946,6 +1965,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
           : incomeAmountColor,
     );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
+    if (ghostLayer) canvas.restore();
   }
 
   void _paintCommittedViewport(
@@ -2109,6 +2129,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     if (_isActiveSwipeItem(item)) return true;
     _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
     final row = item.row;
+    final ghostLayer = _beginGhostVisualLayer(
+      canvas,
+      width: width,
+      rowTop: rowTop,
+      isPendingGhost: row.isPendingGhost,
+    );
     final badgeTop =
         rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2;
     final badgeRect = Rect.fromLTWH(
@@ -2139,6 +2165,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       amountForeground: _amountForegroundFor(row),
     );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
+    if (ghostLayer) canvas.restore();
     return true;
   }
 
@@ -2594,6 +2621,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required DashboardPreparedLogBoxRowTextLayout preparedText,
   }) {
     final row = item.row;
+    final ghostLayer = _beginGhostVisualLayer(
+      canvas,
+      width: width,
+      rowTop: rowTop,
+      isPendingGhost: row.isPendingGhost,
+    );
     final badgeTop =
         rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2;
     final badgeRect = Rect.fromLTWH(
@@ -2623,15 +2656,36 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       amountForeground: _amountForegroundFor(row),
     );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
+    if (ghostLayer) canvas.restore();
   }
 
   bool _isActiveSwipeItem(DashboardLogViewportItemViewModel item) =>
+      !item.row.isPendingGhost &&
       partnerSwipe?.activeEntryId == item.row.entryId;
 
   Color _amountForegroundFor(DashboardLogRowViewModel row) =>
       row.amountStyle == LogAmountStyle.expense
       ? expenseAmountColor
       : incomeAmountColor;
+
+  bool _beginGhostVisualLayer(
+    Canvas canvas, {
+    required double width,
+    required double rowTop,
+    required bool isPendingGhost,
+  }) {
+    if (!isPendingGhost) return false;
+    canvas.saveLayer(
+      Rect.fromLTWH(
+        DashboardLogBoxTokens.horizontalGutter,
+        rowTop,
+        width - DashboardLogBoxTokens.horizontalGutter * 2,
+        rowHeight,
+      ),
+      Paint()..color = const Color(0xa6ffffff),
+    );
+    return true;
+  }
 
   DashboardLogViewportItemViewModel? _activeItemInGroup(
     DashboardLogViewportState state,
@@ -2681,6 +2735,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
 
     final row = item.row;
+    final ghostLayer = _beginGhostVisualLayer(
+      canvas,
+      width: width,
+      rowTop: rowTop,
+      isPendingGhost: row.isPendingGhost,
+    );
     final badgeTop =
         rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2;
     final badgeRect = Rect.fromLTWH(
@@ -2712,6 +2772,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       amountForeground: _amountForegroundFor(row),
     );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
+    if (ghostLayer) canvas.restore();
     return true;
   }
 

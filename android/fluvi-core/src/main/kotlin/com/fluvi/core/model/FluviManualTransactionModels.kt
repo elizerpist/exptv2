@@ -28,6 +28,7 @@ data class FluviLedgerEntryDetail(
     val note: String?,
     val originKind: LedgerOriginKind,
     val notificationInboxId: String?,
+    val recurrenceOccurrenceId: String? = null,
     val revision: Long,
 )
 

@@ -16,6 +16,7 @@ import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
+import com.fluvi.core.model.FluviSystemIds
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviPartnerRepository
 import com.fluvi.core.repository.canonicalPartnerIdOf
@@ -185,10 +186,22 @@ class FluviLedgerReadService internal constructor(
     ): FluviDashboardLedgerSlice {
         val identity = FluviDashboardScopeIdentity.forCommitted(scope)
         val aggregate = total(scope)
-        val page = timeline(scope, after, pageSize)
-        val categories = categoryRepository.allEntities().associateBy { it.id }
-        val partners = partnerRepository.allEntities().associateBy { it.id }
-        val rows = page.entries.map { it.toDashboardRow(categories, partners) }
+        // `readSlice` is retained for small, direct consumers. It must use the
+        // same presentation timeline as committed paging: using the historical
+        // Ledger-only helper here would make ghost-only future scopes disappear
+        // depending on which dashboard reader happened to be active.
+        val rowsWithLookahead = mergedPresentationPage(
+            scope = scope,
+            after = after,
+            limit = pageSize + 1,
+        )
+        val rows = rowsWithLookahead.take(pageSize)
+        val nextCursor = if (rowsWithLookahead.size > pageSize) {
+            rows.last().toCursor()
+        } else {
+            null
+        }
+        val presentationEntryCount = aggregate.entryCount + pendingGhostPresentationCount(scope)
         val coreRevision = currentCoreRevision()
         return FluviDashboardLedgerSlice(
             queryKey = identity.queryKey,
@@ -197,8 +210,9 @@ class FluviLedgerReadService internal constructor(
             timeScopeKey = identity.timeScopeKey,
             totalMinor = aggregate.amountScaled100,
             entryCount = aggregate.entryCount,
+            presentationEntryCount = presentationEntryCount,
             entries = rows,
-            nextCursor = page.nextCursor,
+            nextCursor = nextCursor,
         )
     }
 
@@ -217,10 +231,14 @@ class FluviLedgerReadService internal constructor(
         expectedRevision: Long,
         authoritativeTotalMinor: Long,
         authoritativeEntryCount: Long,
+        authoritativePresentationEntryCount: Long = authoritativeEntryCount,
     ): FluviCommittedDashboardPageRead {
         require(expectedRevision > 0L) { "Committed page requires a revision." }
         require(authoritativeEntryCount >= 0L) {
             "Committed page count must not be negative."
+        }
+        require(authoritativePresentationEntryCount >= authoritativeEntryCount) {
+            "Committed presentation count must include every booked entry."
         }
         require(pageSize in 1..MAX_PAGE_SIZE) {
             "Page size must be between 1 and $MAX_PAGE_SIZE."
@@ -231,15 +249,11 @@ class FluviLedgerReadService internal constructor(
             require(revisionBefore == expectedRevision) {
                 "Committed page revision changed before reading."
             }
-            val where = where(scope, after, tableAlias = "ledger")
-            val arguments = where.arguments.toMutableList()
-            arguments += pageSize + 1
             val sqlStartedAtNanos = System.nanoTime()
-            val rows = ledger.queryCommittedDashboardRows(
-                SimpleSQLiteQuery(
-                    committedDashboardPageSql(where.sql),
-                    arguments.toTypedArray(),
-                ),
+            val rows = mergedPresentationPage(
+                scope = scope,
+                after = after,
+                limit = pageSize + 1,
             )
             val sqlDurationNanos = (System.nanoTime() - sqlStartedAtNanos)
                 .coerceAtLeast(0L)
@@ -261,7 +275,8 @@ class FluviLedgerReadService internal constructor(
                 timeScopeKey = identity.timeScopeKey,
                 totalMinor = authoritativeTotalMinor,
                 entryCount = authoritativeEntryCount,
-                entries = pageRows.map(::toDashboardRow),
+                presentationEntryCount = authoritativePresentationEntryCount,
+                entries = pageRows,
                 nextCursor = nextCursor,
             )
             FluviCommittedDashboardPageRead(
@@ -360,6 +375,10 @@ class FluviLedgerReadService internal constructor(
                 expandedPartnerIdsByDirection = expandedPartnerIdsByDirection,
                 directions = directions,
             )
+            val categories = sqlCalls.record {
+                categoryRepository.allEntities()
+            }
+            preparationCheckpoint()
             val aggregationStartedAtNanos = System.nanoTime()
             val aggregateRows = sqlCalls.record {
                 queryDashboardDailyAggregates(sqlWhere)
@@ -371,19 +390,41 @@ class FluviLedgerReadService internal constructor(
                 yearWindow = yearWindow,
             )
             preparationCheckpoint()
-            val retained = sqlCalls.record {
-                scanPreparedDashboardIndexRows(
-                    sqlWhere = sqlWhere,
-                    requiredCounts = aggregates.mapValues { (_, aggregate) ->
-                        minOf(aggregate.entryCount, previewPageSize.toLong() + 1L).toInt()
-                    },
-                )
+            val realRows = sqlCalls.record {
+                scanPreparedLedgerRows(sqlWhere)
             }
             preparationCheckpoint()
-            val categories = sqlCalls.record {
-                categoryRepository.allEntities()
+            val pendingOccurrences = sqlCalls.record {
+                database.recurrenceDao().activeVisiblePendingOccurrences(FluviSystemIds.APP_SETTINGS)
             }
             preparationCheckpoint()
+            val categoriesById = categories.associateBy { it.id }
+            val partnersById = partnerEntities.associateBy { it.id }
+            val presentationRows = ArrayList<FluviDashboardLedgerRow>(
+                realRows.size + pendingOccurrences.size,
+            )
+            realRows.forEach { entry ->
+                presentationRows += entry.toDashboardRow(categoriesById, partnersById)
+            }
+            pendingOccurrences.forEach { occurrence ->
+                val filter = directionalFilters.scopeFor(occurrence.direction)
+                val partnerIds = requireNotNull(expandedPartnerIdsByDirection[occurrence.direction])
+                val ghost = occurrence.toPendingGhostRow(categoriesById, partnersById)
+                if (ghost.matchesDashboardFilter(filter, partnerIds)) {
+                    presentationRows += ghost
+                }
+            }
+            presentationRows.sortWith(
+                compareBy<FluviDashboardLedgerRow> { it.direction.name }
+                    .thenByDescending { it.bookedLocalEpochDay }
+                    .thenByDescending { it.bookedLocalTimeMinutes }
+                    .thenByDescending { it.entryId },
+            )
+            val retained = retainPreparedRows(
+                rows = presentationRows,
+                previewCapacity = previewPageSize + 1,
+                yearWindow = yearWindow,
+            )
             val coreRevision = sqlCalls.record {
                 currentCoreRevision()
             }
@@ -393,21 +434,19 @@ class FluviLedgerReadService internal constructor(
             }
             PreparedDashboardIndexNativeRead(
                 aggregates = aggregates,
-                verticalGeometryBuckets = aggregateRows
-                    .sortedWith(
-                        compareBy<FluviLedgerDailyAggregateRow> { it.direction }
-                            .thenByDescending { it.bookedLocalEpochDay },
-                    )
-                    .map { row ->
+                verticalGeometryBuckets = retained.presentationDailyCounts
+                    .entries
+                    .sortedWith(compareBy({ it.key.direction.name }, { -it.key.epochDay }))
+                    .map { (key, count) ->
                         FluviPreparedDashboardGeometryDayBucket(
-                            direction = LedgerDirection.valueOf(row.direction),
-                            bookedLocalEpochDay = row.bookedLocalEpochDay,
-                            entryCount = row.entryCount,
+                            direction = key.direction,
+                            bookedLocalEpochDay = key.epochDay,
+                            entryCount = count,
                         )
                     },
                 retained = retained,
-                categories = categories.associateBy { it.id },
-                partners = partnerEntities.associateBy { it.id },
+                categories = categoriesById,
+                partners = partnersById,
                 coreRevision = coreRevision,
                 sqlCallCount = sqlCalls.count,
                 sqlDurationNanos = sqlCalls.durationNanos,
@@ -430,10 +469,7 @@ class FluviLedgerReadService internal constructor(
         val rows = ArrayList<FluviDashboardLedgerRow>(pageRowIds.size)
         pageRowIds.forEachIndexed { index, entryId ->
             if (index % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
-            rows += requireNotNull(retainedEntities[entryId]).toDashboardRow(
-                native.categories,
-                native.partners,
-            )
+            rows += requireNotNull(retainedEntities[entryId])
         }
         preparationCheckpoint()
         val focusRows = ArrayList<FluviDashboardLedgerRow>(
@@ -443,10 +479,7 @@ class FluviLedgerReadService internal constructor(
             if (directionIndex % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
             ids.forEachIndexed { rowIndex, entryId ->
                 if (rowIndex % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
-                focusRows += requireNotNull(retainedEntities[entryId]).toDashboardRow(
-                    native.categories,
-                    native.partners,
-                )
+                focusRows += requireNotNull(retainedEntities[entryId])
             }
         }
         preparationCheckpoint()
@@ -457,9 +490,10 @@ class FluviLedgerReadService internal constructor(
         }
         preparationCheckpoint()
         val frames = ArrayList<FluviPreparedDashboardIndexFrame>()
-        native.aggregates.entries
-            .sortedWith(compareBy({ it.key.direction.name }, { it.key.timeScopeKey }))
-            .forEachIndexed { index, (bucket, aggregate) ->
+        (native.aggregates.keys + native.retained.presentationCounts.keys)
+            .distinct()
+            .sortedWith(compareBy({ it.direction.name }, { it.timeScopeKey }))
+            .forEachIndexed { index, bucket ->
                 if (index % CANCELLATION_CHECK_INTERVAL == 0) preparationCheckpoint()
                 val filter = directionalFilters.scopeFor(bucket.direction)
                 val queryKey = FluviDashboardScopeIdentity.forPreparedFrame(
@@ -472,16 +506,20 @@ class FluviLedgerReadService internal constructor(
                 ).queryKey
                 val retainedIds = native.retained.rowIdsByBucket[bucket].orEmpty()
                 val visibleIds = retainedIds.take(previewPageSize)
+                val aggregate = native.aggregates[bucket] ?: DashboardAggregateAccumulator()
+                val presentationEntryCount = native.retained.presentationCounts[bucket] ?: 0L
+                if (presentationEntryCount <= 0L) return@forEachIndexed
                 frames += FluviPreparedDashboardIndexFrame(
                     queryKey = queryKey,
                     direction = bucket.direction,
                     timeScopeKey = bucket.timeScopeKey,
                     totalMinor = aggregate.amountScaled100,
                     entryCount = aggregate.entryCount,
+                    presentationEntryCount = presentationEntryCount,
                     rowIndices = visibleIds.map { entryId ->
                         requireNotNull(rowIndexById[entryId])
                     },
-                    nextCursor = if (retainedIds.size > previewPageSize) {
+                    nextCursor = if (presentationEntryCount > previewPageSize) {
                         requireNotNull(retainedEntities[visibleIds.last()]).toCursor()
                     } else {
                         null
@@ -647,18 +685,10 @@ class FluviLedgerReadService internal constructor(
         return aggregates
     }
 
-    private suspend fun scanPreparedDashboardIndexRows(
+    private suspend fun scanPreparedLedgerRows(
         sqlWhere: SqlWhere,
-        requiredCounts: Map<DashboardIndexBucket, Int>,
-    ): PreparedDashboardIndexRetainedRows {
-        val rowIdsByBucket = requiredCounts.keys.associateWith {
-            mutableListOf<String>()
-        }
-        val rowsById = linkedMapOf<String, FluviLedgerEntryEntity>()
-        val focusRowIdsByDirection = LedgerDirection.entries.associateWith {
-            mutableListOf<String>()
-        }
-        var scannedRowCount = 0
+    ): List<FluviLedgerEntryEntity> {
+        val rows = mutableListOf<FluviLedgerEntryEntity>()
         val cursor = database.openHelper.readableDatabase.query(
             SimpleSQLiteQuery(
                 "SELECT * " + dashboardPreviewSource(sqlWhere) +
@@ -669,46 +699,89 @@ class FluviLedgerReadService internal constructor(
         )
         cursor.use {
             while (it.moveToNext()) {
-                scannedRowCount += 1
-                if (scannedRowCount % CANCELLATION_CHECK_INTERVAL == 0) {
+                if (rows.size % CANCELLATION_CHECK_INTERVAL == 0) {
                     preparationCheckpoint()
                 }
-                val direction = LedgerDirection.valueOf(it.string("direction"))
-                val date = LocalDate.ofEpochDay(it.long("booked_local_epoch_day"))
-                val year = "%04d".format(Locale.ROOT, date.year)
-                val month = "%04d-%02d".format(Locale.ROOT, date.year, date.monthValue)
-                val day = "%04d-%02d-%02d".format(
-                    Locale.ROOT,
-                    date.year,
-                    date.monthValue,
-                    date.dayOfMonth,
-                )
-                val buckets = listOf(
-                    DashboardIndexBucket(direction, "all"),
-                    DashboardIndexBucket(direction, "year:$year"),
-                    DashboardIndexBucket(direction, "month:$month"),
-                    DashboardIndexBucket(direction, "day:$day"),
-                )
-                val row = it.toLedgerEntry()
-                rowsById.putIfAbsent(row.id, row)
-                focusRowIdsByDirection.getValue(direction) += row.id
-                val neededBuckets = buckets.filter { bucket ->
-                    val retained = rowIdsByBucket[bucket]
-                    retained != null && retained.size < requireNotNull(requiredCounts[bucket])
-                }
-                if (neededBuckets.isEmpty()) continue
-                neededBuckets.forEach { bucket ->
-                    val retained = rowIdsByBucket.getValue(bucket)
-                    retained += row.id
+                rows += it.toLedgerEntry()
+            }
+        }
+        return rows
+    }
+
+    private fun retainPreparedRows(
+        rows: List<FluviDashboardLedgerRow>,
+        previewCapacity: Int,
+        yearWindow: FluviPreparedYearWindow,
+    ): PreparedDashboardIndexRetainedRows {
+        val rowIdsByBucket = linkedMapOf<DashboardIndexBucket, MutableList<String>>()
+        val rowsById = linkedMapOf<String, FluviDashboardLedgerRow>()
+        val focusRowIdsByDirection = LedgerDirection.entries.associateWith {
+            mutableListOf<String>()
+        }
+        val presentationCounts = linkedMapOf<DashboardIndexBucket, Long>()
+        val presentationDailyCounts = linkedMapOf<DashboardPresentationDayBucket, Long>()
+        rows.forEach { row ->
+            rowsById.putIfAbsent(row.entryId, row)
+            if (!row.isPendingGhost) {
+                focusRowIdsByDirection.getValue(row.direction) += row.entryId
+            }
+            val date = LocalDate.ofEpochDay(row.bookedLocalEpochDay)
+            val year = "%04d".format(Locale.ROOT, date.year)
+            val month = "%04d-%02d".format(Locale.ROOT, date.year, date.monthValue)
+            val day = "%04d-%02d-%02d".format(Locale.ROOT, date.year, date.monthValue, date.dayOfMonth)
+            val buckets = buildList {
+                add(DashboardIndexBucket(row.direction, "all"))
+                if (date.year in yearWindow.startYear..yearWindow.endYearInclusive) {
+                    add(DashboardIndexBucket(row.direction, "year:$year"))
+                    add(DashboardIndexBucket(row.direction, "month:$month"))
+                    add(DashboardIndexBucket(row.direction, "day:$day"))
                 }
             }
+            buckets.forEach { bucket ->
+                presentationCounts[bucket] = (presentationCounts[bucket] ?: 0L) + 1L
+                val retained = rowIdsByBucket.getOrPut(bucket) { mutableListOf() }
+                if (retained.size < previewCapacity) retained += row.entryId
+            }
+            val dayBucket = DashboardPresentationDayBucket(row.direction, row.bookedLocalEpochDay)
+            presentationDailyCounts[dayBucket] = (presentationDailyCounts[dayBucket] ?: 0L) + 1L
         }
         return PreparedDashboardIndexRetainedRows(
             rowsById = rowsById,
             rowIdsByBucket = rowIdsByBucket,
             focusRowIdsByDirection = focusRowIdsByDirection,
-            scannedRowCount = scannedRowCount,
+            presentationCounts = presentationCounts,
+            presentationDailyCounts = presentationDailyCounts,
+            scannedRowCount = rows.size,
         )
+    }
+
+    private fun FluviDashboardLedgerRow.matchesDashboardFilter(
+        scope: FluviQueryScope,
+        expandedPartnerIds: Set<String>,
+    ): Boolean {
+        if (direction != scope.direction) return false
+        if (scope.categoryIds.isNotEmpty() && categoryId !in scope.categoryIds) return false
+        if (expandedPartnerIds.isNotEmpty() && partnerId !in expandedPartnerIds) return false
+        if (!scope.periodGroups.all { group ->
+                group.selections.any { selection ->
+                    val range = selection.epochDayRange()
+                    bookedLocalEpochDay in range.startInclusive until range.endExclusive
+                }
+            }) return false
+        scope.refinements.minimumAmountScaled100?.let { minimum ->
+            if (amountIsUnknown || amountMinor < minimum) return false
+        }
+        scope.refinements.maximumAmountScaled100?.let { maximum ->
+            if (amountIsUnknown || amountMinor > maximum) return false
+        }
+        val needle = scope.refinements.noteContains?.trim()?.lowercase(Locale.ROOT)
+        if (!needle.isNullOrEmpty()) {
+            val haystack = listOf(partnerDisplayName, categoryDisplayName, note.orEmpty())
+                .joinToString(" ")
+                .lowercase(Locale.ROOT)
+            if (!haystack.contains(needle)) return false
+        }
+        return true
     }
 
     private fun dashboardIndexWhere(
@@ -788,13 +861,155 @@ class FluviLedgerReadService internal constructor(
                 sqlWhere.sql
             }
 
+    /**
+     * The committed LogBox uses one SQL-ordered timeline for booked entries
+     * and pending recurrence snapshots.  Financial aggregates are never read
+     * from this union; it is presentation data only.
+     */
+    private suspend fun mergedPresentationPage(
+        scope: FluviQueryScope,
+        after: FluviTimelineCursor?,
+        limit: Int,
+    ): List<FluviDashboardLedgerRow> {
+        require(limit in 1..MAX_PAGE_SIZE + 1)
+        val expandedPartners = expandedPartnerIds(scope.partnerIds)
+        val ledgerWhere = where(
+            scope = scope,
+            expandedPartnerIdsOverride = expandedPartners,
+            tableAlias = "ledger",
+        )
+        val ghostWhere = ghostPresentationWhere(scope, expandedPartners)
+        val arguments = ArrayList<Any>(ledgerWhere.arguments.size + ghostWhere.arguments.size + 7)
+        arguments.addAll(ledgerWhere.arguments)
+        arguments.addAll(ghostWhere.arguments)
+        val outerCursor = after?.let { cursor ->
+            arguments += cursor.bookedLocalEpochDay
+            arguments += cursor.bookedLocalEpochDay
+            arguments += cursor.bookedLocalTimeMinutes
+            arguments += cursor.bookedLocalEpochDay
+            arguments += cursor.bookedLocalTimeMinutes
+            arguments += cursor.entryId
+            " WHERE (booked_local_epoch_day < ? OR " +
+                "(booked_local_epoch_day = ? AND booked_local_time_minutes < ?) OR " +
+                "(booked_local_epoch_day = ? AND booked_local_time_minutes = ? AND timeline_id < ?))"
+        }.orEmpty()
+        arguments += limit
+        val sql = "SELECT * FROM (" +
+            "SELECT ledger.id AS timeline_id, ledger.direction AS direction, " +
+            "ledger.amount_scaled_100 AS amount_minor, " +
+            "ledger.booked_local_epoch_day AS booked_local_epoch_day, " +
+            "ledger.booked_local_time_minutes AS booked_local_time_minutes, " +
+            "ledger.occurred_at_utc_ms AS occurred_at_utc_ms, ledger.partner_id AS partner_id, " +
+            "COALESCE(partner.display_name_override, partner.original_name) AS partner_display_name, " +
+            "ledger.category_id AS category_id, category.name AS category_display_name, " +
+            "category.color_id AS category_color_id, category.icon_id AS category_icon_id, " +
+            "ledger.category_assignment_mode AS assignment_mode, ledger.origin_kind AS origin_kind, " +
+            "ledger.note AS note, 0 AS is_pending_ghost, " +
+            "ledger.recurrence_occurrence_id AS recurrence_occurrence_id, 0 AS amount_is_unknown " +
+            "FROM fluvi_ledger_entries AS ledger " +
+            "JOIN fluvi_partners AS partner ON partner.id = ledger.partner_id " +
+            "JOIN fluvi_categories AS category ON category.id = ledger.category_id " +
+            ledgerWhere.sql +
+            " UNION ALL " +
+            "SELECT 'ghost:' || occurrence.id AS timeline_id, occurrence.direction AS direction, " +
+            "COALESCE(occurrence.expected_amount_scaled_100, 0) AS amount_minor, " +
+            "occurrence.expected_local_epoch_day AS booked_local_epoch_day, " +
+            "occurrence.expected_local_time_minutes AS booked_local_time_minutes, " +
+            "occurrence.expected_at_utc_ms AS occurred_at_utc_ms, occurrence.partner_id AS partner_id, " +
+            "COALESCE(ghost_partner.display_name_override, ghost_partner.original_name) AS partner_display_name, " +
+            "occurrence.category_id AS category_id, ghost_category.name AS category_display_name, " +
+            "ghost_category.color_id AS category_color_id, ghost_category.icon_id AS category_icon_id, " +
+            "occurrence.category_assignment_mode AS assignment_mode, 'recurring' AS origin_kind, " +
+            "occurrence.note AS note, 1 AS is_pending_ghost, occurrence.id AS recurrence_occurrence_id, " +
+            "CASE WHEN occurrence.expected_amount_scaled_100 IS NULL THEN 1 ELSE 0 END AS amount_is_unknown " +
+            "FROM fluvi_recurrence_occurrences AS occurrence " +
+            "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
+            "JOIN fluvi_partners AS ghost_partner ON ghost_partner.id = occurrence.partner_id " +
+            "JOIN fluvi_categories AS ghost_category ON ghost_category.id = occurrence.category_id " +
+            ghostWhere.sql +
+            ")" + outerCursor +
+            " ORDER BY booked_local_epoch_day DESC, booked_local_time_minutes DESC, timeline_id DESC LIMIT ?"
+        val rows = mutableListOf<FluviDashboardLedgerRow>()
+        database.openHelper.readableDatabase.query(SimpleSQLiteQuery(sql, arguments.toTypedArray())).use { cursor ->
+            while (cursor.moveToNext()) rows += cursor.toPresentationRow()
+        }
+        return rows
+    }
+
+    private fun ghostPresentationWhere(
+        scope: FluviQueryScope,
+        expandedPartnerIds: Set<String>,
+    ): SqlWhere {
+        val clauses = mutableListOf(
+            "occurrence.status = 'pending'",
+            "rule.is_active = 1",
+            "rule.archived_at_utc_ms IS NULL",
+            "EXISTS (SELECT 1 FROM fluvi_app_settings AS settings " +
+                "WHERE settings.id = '${FluviSystemIds.APP_SETTINGS}' " +
+                "AND settings.show_pending_ghosts_in_ledger = 1)",
+            "occurrence.direction = ?",
+        )
+        val arguments = mutableListOf<Any>(scope.direction.name)
+        appendPeriodGroups(
+            clauses,
+            arguments,
+            scope.periodGroups,
+            epochDayColumn = "occurrence.expected_local_epoch_day",
+        )
+        scope.categoryIds.sorted().takeIf { it.isNotEmpty() }?.let { ids ->
+            clauses += "occurrence.category_id IN (" + ids.placeholders() + ")"
+            arguments.addAll(ids)
+        }
+        expandedPartnerIds.sorted().takeIf { it.isNotEmpty() }?.let { ids ->
+            clauses += "occurrence.partner_id IN (" + ids.placeholders() + ")"
+            arguments.addAll(ids)
+        }
+        scope.refinements.minimumAmountScaled100?.let { value ->
+            clauses += "occurrence.expected_amount_scaled_100 >= ?"
+            arguments += value
+        }
+        scope.refinements.maximumAmountScaled100?.let { value ->
+            clauses += "occurrence.expected_amount_scaled_100 <= ?"
+            arguments += value
+        }
+        scope.refinements.noteContains?.trim()?.takeIf { it.isNotEmpty() }?.let { needle ->
+            val pattern = "%" + needle.escapeForLike() + "%"
+            clauses += "(COALESCE(occurrence.note, '') LIKE ? ESCAPE '\\' OR " +
+                "COALESCE(ghost_partner.display_name_override, ghost_partner.original_name) LIKE ? ESCAPE '\\' OR " +
+                "ghost_category.name LIKE ? ESCAPE '\\')"
+            repeat(3) { arguments += pattern }
+        }
+        return SqlWhere("WHERE " + clauses.joinToString(" AND "), arguments)
+    }
+
+    /**
+     * Counts only projected pending occurrences. Financial count and amount
+     * remain Ledger-only; callers use this value solely to size the timeline.
+     */
+    private suspend fun pendingGhostPresentationCount(scope: FluviQueryScope): Long {
+        val ghostWhere = ghostPresentationWhere(scope, expandedPartnerIds(scope.partnerIds))
+        return ledger.queryAggregate(
+            SimpleSQLiteQuery(
+                "SELECT COUNT(*) AS entry_count, 0 AS amount_scaled_100 " +
+                    "FROM fluvi_recurrence_occurrences AS occurrence " +
+                    "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
+                    "JOIN fluvi_partners AS ghost_partner ON ghost_partner.id = occurrence.partner_id " +
+                    "JOIN fluvi_categories AS ghost_category ON ghost_category.id = occurrence.category_id " +
+                    ghostWhere.sql,
+                ghostWhere.arguments.toTypedArray(),
+            ),
+        ).entryCount
+    }
+
     private fun appendPeriodGroups(
         clauses: MutableList<String>,
         arguments: MutableList<Any>,
         periodGroups: List<FluviPeriodGroup>,
         tableAlias: String? = null,
+        epochDayColumn: String? = null,
     ) {
-        val epochDay = tableAlias?.let { "$it.booked_local_epoch_day" }
+        val epochDay = epochDayColumn
+            ?: tableAlias?.let { "$it.booked_local_epoch_day" }
             ?: "booked_local_epoch_day"
         val predicate = periodGroupEpochDayPredicate(periodGroups, epochDay)
             ?: return
@@ -843,6 +1058,7 @@ class FluviLedgerReadService internal constructor(
         occurredAtUtcMs = long("occurred_at_utc_ms"),
         originKind = LedgerOriginKind.valueOf(string("origin_kind")),
         notificationInboxId = nullableString("notification_inbox_id"),
+        recurrenceOccurrenceId = nullableString("recurrence_occurrence_id"),
         createdAtUtcMs = long("created_at_utc_ms"),
         updatedAtUtcMs = long("updated_at_utc_ms"),
         revision = long("revision"),
@@ -859,6 +1075,29 @@ class FluviLedgerReadService internal constructor(
     private fun Cursor.long(column: String): Long = getLong(getColumnIndexOrThrow(column))
 
     private fun Cursor.int(column: String): Int = getInt(getColumnIndexOrThrow(column))
+
+    private fun Cursor.boolean(column: String): Boolean = int(column) != 0
+
+    private fun Cursor.toPresentationRow(): FluviDashboardLedgerRow = FluviDashboardLedgerRow(
+        entryId = string("timeline_id"),
+        direction = LedgerDirection.valueOf(string("direction")),
+        amountMinor = long("amount_minor"),
+        bookedLocalEpochDay = long("booked_local_epoch_day"),
+        bookedLocalTimeMinutes = int("booked_local_time_minutes"),
+        occurredAtUtcMs = long("occurred_at_utc_ms"),
+        partnerId = string("partner_id"),
+        partnerDisplayName = string("partner_display_name"),
+        categoryId = string("category_id"),
+        categoryDisplayName = string("category_display_name"),
+        categoryColorId = string("category_color_id"),
+        categoryIconId = string("category_icon_id"),
+        assignmentMode = CategoryAssignmentMode.valueOf(string("assignment_mode")),
+        originKind = LedgerOriginKind.valueOf(string("origin_kind")),
+        note = nullableString("note"),
+        isPendingGhost = boolean("is_pending_ghost"),
+        recurrenceOccurrenceId = nullableString("recurrence_occurrence_id"),
+        amountIsUnknown = boolean("amount_is_unknown"),
+    )
 
 
     private suspend fun where(
@@ -983,6 +1222,7 @@ class FluviLedgerReadService internal constructor(
             assignmentMode = CategoryAssignmentMode.valueOf(row.assignmentMode),
             originKind = LedgerOriginKind.valueOf(row.originKind),
             note = row.note,
+            recurrenceOccurrenceId = row.recurrenceOccurrenceId,
         )
 
     private fun committedDashboardPageSql(whereSql: String): String =
@@ -997,7 +1237,8 @@ class FluviLedgerReadService internal constructor(
             "category.name AS category_display_name, " +
             "category.color_id AS category_color_id, category.icon_id AS category_icon_id, " +
             "ledger.category_assignment_mode AS assignment_mode, " +
-            "ledger.origin_kind AS origin_kind, ledger.note AS note " +
+            "ledger.origin_kind AS origin_kind, ledger.note AS note, " +
+            "ledger.recurrence_occurrence_id AS recurrence_occurrence_id " +
             "FROM fluvi_ledger_entries AS ledger " +
             "JOIN fluvi_partners AS partner ON partner.id = ledger.partner_id " +
             "JOIN fluvi_categories AS category ON category.id = ledger.category_id " +
@@ -1071,8 +1312,47 @@ class FluviLedgerReadService internal constructor(
             assignmentMode = categoryAssignmentMode,
             originKind = originKind,
             note = note,
+            recurrenceOccurrenceId = recurrenceOccurrenceId,
         )
     }
+
+    private fun com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity.toPendingGhostRow(
+        categories: Map<String, FluviCategoryEntity>,
+        partners: Map<String, FluviPartnerEntity>,
+    ): FluviDashboardLedgerRow {
+        val category = requireNotNull(categories[categoryId]) {
+            "Unknown category ID in recurrence occurrence: $categoryId"
+        }
+        val partner = requireNotNull(partners[partnerId]) {
+            "Unknown partner ID in recurrence occurrence: $partnerId"
+        }
+        return FluviDashboardLedgerRow(
+            entryId = "ghost:$id",
+            direction = direction,
+            amountMinor = expectedAmountScaled100 ?: 0L,
+            bookedLocalEpochDay = expectedLocalEpochDay,
+            bookedLocalTimeMinutes = expectedLocalTimeMinutes,
+            occurredAtUtcMs = expectedAtUtcMs,
+            partnerId = partnerId,
+            partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
+            categoryId = category.id,
+            categoryDisplayName = category.name,
+            categoryColorId = category.colorId,
+            categoryIconId = category.iconId,
+            assignmentMode = categoryAssignmentMode,
+            originKind = LedgerOriginKind.recurring,
+            note = note,
+            isPendingGhost = true,
+            recurrenceOccurrenceId = id,
+            amountIsUnknown = expectedAmountScaled100 == null,
+        )
+    }
+
+    private fun FluviDashboardLedgerRow.toCursor(): FluviTimelineCursor = FluviTimelineCursor(
+        bookedLocalEpochDay = bookedLocalEpochDay,
+        bookedLocalTimeMinutes = bookedLocalTimeMinutes,
+        entryId = entryId,
+    )
 
     private data class MaterializedTimelinePage(
         val page: FluviLedgerTimelinePage<FluviLedgerEntryEntity>,
@@ -1091,10 +1371,17 @@ class FluviLedgerReadService internal constructor(
     )
 
     private data class PreparedDashboardIndexRetainedRows(
-        val rowsById: Map<String, FluviLedgerEntryEntity>,
+        val rowsById: Map<String, FluviDashboardLedgerRow>,
         val rowIdsByBucket: Map<DashboardIndexBucket, List<String>>,
         val focusRowIdsByDirection: Map<LedgerDirection, List<String>>,
+        val presentationCounts: Map<DashboardIndexBucket, Long>,
+        val presentationDailyCounts: Map<DashboardPresentationDayBucket, Long>,
         val scannedRowCount: Int,
+    )
+
+    private data class DashboardPresentationDayBucket(
+        val direction: LedgerDirection,
+        val epochDay: Long,
     )
 
     private data class PreparedDashboardIndexNativeRead(
@@ -1135,7 +1422,7 @@ class FluviLedgerReadService internal constructor(
     private companion object {
         const val DEFAULT_PAGE_SIZE = 50
         const val MAX_PAGE_SIZE = 200
-        const val PREPARED_DASHBOARD_INDEX_SQL_CALL_COUNT = 5
+        const val PREPARED_DASHBOARD_INDEX_SQL_CALL_COUNT = 6
         const val CANCELLATION_CHECK_INTERVAL = 128
     }
 }

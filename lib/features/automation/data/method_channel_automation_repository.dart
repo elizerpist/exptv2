@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 import '../../dashboard/query/domain/ledger_direction.dart';
+import '../../manual_transactions/domain/manual_transaction_models.dart';
 import '../domain/automation_models.dart';
 import '../domain/automation_repository.dart';
 
@@ -146,6 +147,119 @@ final class MethodChannelAutomationRepository implements AutomationRepository {
   @override
   Future<void> ignoreReview(String id) =>
       _channel.invokeMethod<void>('ignoreReview', {'notificationId': id});
+  @override
+  Future<RecurrenceDashboardSnapshot> recurrenceDashboard() async =>
+      RecurrenceDashboardSnapshot.fromMap(
+        _map(await _channel.invokeMethod<Object?>('getRecurrenceDashboard')),
+      );
+  @override
+  Future<List<RecurrenceRule>> recurringRules() async => _maps(
+    await _channel.invokeMethod<List<Object?>>('listRecurringRules'),
+  ).map(RecurrenceRule.fromMap).toList(growable: false);
+  @override
+  Future<List<RecurrenceOccurrence>> recurrenceOccurrences({
+    RecurrenceOccurrenceStatus? status,
+    int limit = 100,
+    int offset = 0,
+  }) async => _maps(
+    await _channel.invokeMethod<List<Object?>>('listRecurrenceOccurrences', {
+      'status': status?.name,
+      'limit': limit,
+      'offset': offset,
+    }),
+  ).map(RecurrenceOccurrence.fromMap).toList(growable: false);
+  @override
+  Future<String?> realizedRecurrenceLedgerEntryId(String occurrenceId) async =>
+      _map(
+            await _channel.invokeMethod<Object?>(
+              'getRealizedRecurrenceLedgerEntryId',
+              {'occurrenceId': occurrenceId},
+            ),
+          )['ledgerEntryId']
+          as String?;
+  @override
+  Future<RecurrenceRule> createRecurringRule({
+    required String name,
+    required String partnerId,
+    required ManualCategorySelection categorySelection,
+    required LedgerDirection direction,
+    String? note,
+    required RecurrenceTriggerKind triggerKind,
+    required RecurrenceAmountPolicy amountPolicy,
+    int? amountScaled100,
+    required int dayOfMonth,
+    required int localTimeMinutes,
+    required int startLocalEpochDay,
+    int? endLocalEpochDay,
+    required String timezoneId,
+    String? pushProfileId,
+    String? pushRuleId,
+    int amountToleranceScaled100 = 0,
+    int dayWindow = 2,
+  }) async => RecurrenceRule.fromMap(
+    _map(
+      await _channel.invokeMethod<Object?>('createRecurringRule', {
+        'name': name,
+        'partnerId': partnerId,
+        'categorySelection': categorySelection.toMap(),
+        'direction': direction.name,
+        'note': note,
+        'triggerKind': triggerKind.name,
+        'amountPolicy': amountPolicy.name,
+        'amountScaled100': amountScaled100,
+        'dayOfMonth': dayOfMonth,
+        'localTimeMinutes': localTimeMinutes,
+        'startLocalEpochDay': startLocalEpochDay,
+        'endLocalEpochDay': endLocalEpochDay,
+        'timezoneId': timezoneId,
+        'pushProfileId': pushProfileId,
+        'pushRuleId': pushRuleId,
+        'amountToleranceScaled100': amountToleranceScaled100,
+        'dayWindow': dayWindow,
+      }),
+    ),
+  );
+  @override
+  Future<void> setRecurringRuleActive(String ruleId, bool isActive) =>
+      _channel.invokeMethod<void>('setRecurringRuleActive', {
+        'ruleId': ruleId,
+        'isActive': isActive,
+      });
+  @override
+  Future<void> archiveRecurringRule(String ruleId) =>
+      _channel.invokeMethod<void>('archiveRecurringRule', {'ruleId': ruleId});
+  @override
+  Future<void> setShowPendingGhosts(bool show) =>
+      _channel.invokeMethod<void>('setShowPendingGhosts', {'show': show});
+  @override
+  Future<void> skipRecurrenceOccurrence(String occurrenceId) =>
+      _channel.invokeMethod<void>('skipRecurrenceOccurrence', {
+        'occurrenceId': occurrenceId,
+      });
+  @override
+  Future<RecurrenceOccurrence> updateRecurrenceOccurrence({
+    required String occurrenceId,
+    int? expectedAmountScaled100,
+    int? expectedLocalEpochDay,
+    int? expectedLocalTimeMinutes,
+    String? partnerId,
+    ManualCategorySelection? categorySelection,
+    bool noteChanged = false,
+    String? note,
+  }) async => RecurrenceOccurrence.fromMap(
+    _map(
+      await _channel.invokeMethod<Object?>('updateRecurrenceOccurrence', {
+        'occurrenceId': occurrenceId,
+        'expectedAmountScaled100': expectedAmountScaled100,
+        'expectedLocalEpochDay': expectedLocalEpochDay,
+        'expectedLocalTimeMinutes': expectedLocalTimeMinutes,
+        'partnerId': partnerId,
+        'categorySelection': categorySelection?.toMap(),
+        'noteChanged': noteChanged,
+        'note': note,
+      }),
+    ),
+  );
 }
 
 final class MethodChannelAutomationPermissionRepository

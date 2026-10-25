@@ -23,6 +23,23 @@ enum class RecurrenceTriggerKind {
 
 enum class RecurrenceAmountPolicy {
     fixed,
+    estimated,
+    unknown,
+}
+
+enum class RecurrenceOccurrenceStatus {
+    pending,
+    review,
+    realized,
+    skipped,
+    cancelled,
+    voided,
+}
+
+enum class RecurrenceRealizationKind {
+    time,
+    push,
+    manual,
 }
 
 enum class NotificationParseStatus {

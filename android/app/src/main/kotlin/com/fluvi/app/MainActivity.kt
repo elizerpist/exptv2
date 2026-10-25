@@ -26,6 +26,11 @@ import com.fluvi.core.model.PushProfileState
 import com.fluvi.core.model.PushSampleKind
 import com.fluvi.core.model.PushTransactionDirection
 import com.fluvi.core.model.ApprovePushReviewCommand
+import com.fluvi.core.model.RecurrenceAmountPolicy
+import com.fluvi.core.model.RecurrenceOccurrenceStatus
+import com.fluvi.core.model.RecurrenceTriggerKind
+import com.fluvi.core.model.CreateRecurrenceRuleCommand
+import com.fluvi.core.model.UpdateOccurrenceOverrideCommand
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
@@ -82,6 +87,12 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         val fluviCore = FluviCoreFactory.create(applicationContext)
         core = fluviCore
+        // Reconcile a delayed one-shot alarm whenever the app becomes usable.
+        // This is independent from Flutter route construction and never runs on
+        // the UI thread.
+        scope.launch(Dispatchers.IO) {
+            FluviRecurrenceScheduler.scheduleNext(applicationContext, fluviCore)
+        }
         debugLog(
             "coreCreated instance=${System.identityHashCode(fluviCore)} " +
                 "dbPath=${applicationContext.getDatabasePath(DATABASE_FILE_NAME).absolutePath}",
@@ -665,6 +676,60 @@ class MainActivity : FlutterActivity() {
             ),
         ))
         "ignoreReview" -> fluviCore.automation.ignoreReview(requireArgument(call, "notificationId"))
+        "getRecurrenceDashboard" -> recurrenceDashboardMap(fluviCore.recurrences.dashboard())
+        "listRecurringRules" -> fluviCore.recurrences.rules().map(::recurrenceRuleMap)
+        "listRecurrenceOccurrences" -> fluviCore.recurrences.occurrences(
+            call.argument<String>("status")?.let(RecurrenceOccurrenceStatus::valueOf),
+            call.argument<Number>("limit")?.toInt() ?: 100,
+            call.argument<Number>("offset")?.toInt() ?: 0,
+        ).map(::recurrenceOccurrenceMap)
+        "getRealizedRecurrenceLedgerEntryId" -> mapOf(
+            "ledgerEntryId" to fluviCore.recurrences.realizedLedgerEntryId(
+                requireArgument(call, "occurrenceId"),
+            ),
+        )
+        "createRecurringRule" -> recurrenceRuleMap(fluviCore.recurrences.create(
+            CreateRecurrenceRuleCommand(
+                name = requireArgument(call, "name"), partnerId = requireArgument(call, "partnerId"),
+                categorySelection = categorySelection(requireArguments(call)),
+                direction = LedgerDirection.valueOf(requireArgument(call, "direction")),
+                note = call.argument<String>("note"),
+                triggerKind = RecurrenceTriggerKind.valueOf(requireArgument(call, "triggerKind")),
+                amountPolicy = RecurrenceAmountPolicy.valueOf(requireArgument(call, "amountPolicy")),
+                amountScaled100 = call.argument<Number>("amountScaled100")?.toLong(),
+                dayOfMonth = requireInt(call, "dayOfMonth"), localTimeMinutes = requireInt(call, "localTimeMinutes"),
+                startLocalEpochDay = requireLong(call, "startLocalEpochDay"), endLocalEpochDay = call.argument<Number>("endLocalEpochDay")?.toLong(),
+                timezoneId = requireArgument(call, "timezoneId"), pushProfileId = call.argument<String>("pushProfileId"),
+                pushRuleId = call.argument<String>("pushRuleId"),
+                amountToleranceScaled100 = call.argument<Number>("amountToleranceScaled100")?.toLong() ?: 0L,
+                dayWindow = call.argument<Number>("dayWindow")?.toInt() ?: 2,
+            ),
+        ).also { FluviRecurrenceScheduler.scheduleNext(applicationContext, fluviCore) })
+        "setRecurringRuleActive" -> fluviCore.recurrences.setRuleActive(requireArgument(call, "ruleId"), requireArgument(call, "isActive")).also {
+            FluviRecurrenceScheduler.scheduleNext(applicationContext, fluviCore)
+        }
+        "archiveRecurringRule" -> fluviCore.recurrences.archiveRule(requireArgument(call, "ruleId")).also {
+            FluviRecurrenceScheduler.scheduleNext(applicationContext, fluviCore)
+        }
+        "setShowPendingGhosts" -> fluviCore.recurrences.setShowPendingGhostsInLedger(requireArgument(call, "show"))
+        "skipRecurrenceOccurrence" -> fluviCore.recurrences.skip(requireArgument(call, "occurrenceId"))
+        "updateRecurrenceOccurrence" -> recurrenceOccurrenceMap(fluviCore.recurrences.updateOccurrence(
+            UpdateOccurrenceOverrideCommand(
+                occurrenceId = requireArgument(call, "occurrenceId"),
+                expectedAmountScaled100 = call.argument<Number>("expectedAmountScaled100")?.toLong(),
+                expectedLocalEpochDay = call.argument<Number>("expectedLocalEpochDay")?.toLong(),
+                expectedLocalTimeMinutes = call.argument<Number>("expectedLocalTimeMinutes")?.toInt(),
+                partnerId = call.argument<String>("partnerId"),
+                categorySelection = (call.argument<Map<String, Any?>>("categorySelection"))?.let { raw ->
+                    categorySelection(mapOf("categorySelection" to raw))
+                },
+                noteChanged = call.argument<Boolean>("noteChanged") ?: false,
+                note = call.argument<String>("note"),
+            ),
+        ))
+        "realizeDueRecurrences" -> fluviCore.recurrences.realizeDueTimeOccurrences().also {
+            FluviRecurrenceScheduler.scheduleNext(applicationContext, fluviCore)
+        }
         else -> throw IllegalArgumentException("Unknown automation method: ${call.method}")
     }
 
@@ -700,6 +765,32 @@ class MainActivity : FlutterActivity() {
     private fun automationDashboardMap(snapshot: com.fluvi.core.model.FluviPushDashboardSnapshot): Map<String, Any?> = mapOf(
         "profiles" to snapshot.profiles.map(::pushProfileMap), "pendingReviewCount" to snapshot.pendingReviewCount,
         "capturedLast30Days" to snapshot.capturedLast30Days, "recentInbox" to snapshot.recentInbox.map(::pushInboxMap),
+    )
+
+    private fun recurrenceRuleMap(rule: com.fluvi.core.model.FluviRecurrenceRule): Map<String, Any?> = mapOf(
+        "ruleId" to rule.ruleId, "name" to rule.name, "partnerId" to rule.partnerId, "categoryId" to rule.categoryId,
+        "categoryAssignmentMode" to rule.categoryAssignmentMode.name, "direction" to rule.direction.name,
+        "note" to rule.note, "triggerKind" to rule.triggerKind.name, "amountPolicy" to rule.amountPolicy.name,
+        "amountScaled100" to rule.amountScaled100, "dayOfMonth" to rule.dayOfMonth,
+        "localTimeMinutes" to rule.localTimeMinutes, "startLocalEpochDay" to rule.startLocalEpochDay,
+        "endLocalEpochDay" to rule.endLocalEpochDay, "timezoneId" to rule.timezoneId, "isActive" to rule.isActive,
+        "ruleVersion" to rule.ruleVersion,
+    )
+
+    private fun recurrenceOccurrenceMap(value: com.fluvi.core.model.FluviRecurrenceOccurrence): Map<String, Any?> = mapOf(
+        "occurrenceId" to value.occurrenceId, "ruleId" to value.ruleId, "occurrenceKey" to value.occurrenceKey,
+        "expectedLocalEpochDay" to value.expectedLocalEpochDay, "expectedLocalTimeMinutes" to value.expectedLocalTimeMinutes,
+        "expectedAtUtcMs" to value.expectedAtUtcMs, "timezoneId" to value.timezoneId, "partnerId" to value.partnerId,
+        "categoryId" to value.categoryId, "categoryAssignmentMode" to value.categoryAssignmentMode.name,
+        "direction" to value.direction.name, "expectedAmountScaled100" to value.expectedAmountScaled100,
+        "amountPolicy" to value.amountPolicy.name, "note" to value.note, "triggerKind" to value.triggerKind.name,
+        "status" to value.status.name, "realizationKind" to value.realizationKind?.name, "resolvedAtUtcMs" to value.resolvedAtUtcMs,
+    )
+
+    private fun recurrenceDashboardMap(value: com.fluvi.core.model.FluviRecurrenceDashboardSnapshot): Map<String, Any?> = mapOf(
+        "rules" to value.rules.map(::recurrenceRuleMap), "pendingCount" to value.pendingCount,
+        "dueCount" to value.dueCount, "realizedCount" to value.realizedCount,
+        "showPendingGhostsInLedger" to value.showPendingGhostsInLedger,
     )
 
     private fun requireArguments(call: MethodCall): Map<String, Any?> =
@@ -771,6 +862,7 @@ class MainActivity : FlutterActivity() {
         "note" to entry.note,
         "originKind" to entry.originKind.name,
         "notificationInboxId" to entry.notificationInboxId,
+        "recurrenceOccurrenceId" to entry.recurrenceOccurrenceId,
         "revision" to entry.revision,
     )
 
@@ -1257,6 +1349,10 @@ class MainActivity : FlutterActivity() {
                 authoritativeEntryCount = DashboardQueryArguments.requireLong(
                     arguments,
                     "authoritativeEntryCount",
+                ),
+                authoritativePresentationEntryCount = DashboardQueryArguments.requireLong(
+                    arguments,
+                    "authoritativePresentationEntryCount",
                 ),
             )
             val serializationStartedAtNanos = System.nanoTime()

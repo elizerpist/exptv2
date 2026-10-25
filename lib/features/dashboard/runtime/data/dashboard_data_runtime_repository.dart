@@ -140,12 +140,14 @@ final class DashboardCommittedPageRequest {
     required this.commitGeneration,
     required this.authoritativeTotalMinor,
     required this.authoritativeEntryCount,
+    int? authoritativePresentationEntryCount,
     required this.pageSize,
     required this.pageOrdinal,
     required this.startCursor,
     required this.previousStartCursor,
     required this.reason,
-  });
+  }) : authoritativePresentationEntryCount =
+           authoritativePresentationEntryCount ?? authoritativeEntryCount;
 
   final CurrentLedgerQueryScope scope;
   final LedgerQueryKey parentQueryKey;
@@ -157,6 +159,9 @@ final class DashboardCommittedPageRequest {
   /// cursor page must echo rather than recompute them under a later snapshot.
   final int authoritativeTotalMinor;
   final int authoritativeEntryCount;
+
+  /// Real count is retained for summaries; this count owns LogBox geometry.
+  final int authoritativePresentationEntryCount;
   final int pageSize;
   final int pageOrdinal;
   final Map<String, Object?>? startCursor;

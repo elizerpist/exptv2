@@ -28,6 +28,9 @@ class DashboardLogRowViewModel {
     required this.categoryColorId,
     required this.categoryIconId,
     required this.semanticLabel,
+    this.isPendingGhost = false,
+    this.hasGhostOrigin = false,
+    this.amountIsUnknown = false,
     this.categoryId = '',
     this.partnerId = '',
     this.partnerDisplayName = '',
@@ -46,17 +49,21 @@ class DashboardLogRowViewModel {
   /// exact LogBox projection, never by whole-index binary decoding.
   factory DashboardLogRowViewModel.fromLedgerEntry(DashboardLedgerEntry entry) {
     final isExpense = entry.direction == LedgerDirection.expense.name;
-    final amount = DashboardPreparedFormatter.amountMinor(
-      entry.amountMinor.abs(),
-    );
-    final formattedAmount = isExpense && entry.amountMinor != 0
+    final amount = entry.amountIsUnknown
+        ? 'Változó összeg'
+        : DashboardPreparedFormatter.amountMinor(entry.amountMinor.abs());
+    final formattedAmount =
+        !entry.amountIsUnknown && isExpense && entry.amountMinor != 0
         ? '-$amount'
         : amount;
     final displayName = _displayName(entry);
     final category = entry.categoryDisplayName?.trim();
-    final categoryDisplayName = category == null || category.isEmpty
+    final resolvedCategoryDisplayName = category == null || category.isEmpty
         ? 'Kategorizálatlan'
         : category;
+    final categoryDisplayName = entry.isPendingGhost
+        ? 'Várható · $resolvedCategoryDisplayName'
+        : resolvedCategoryDisplayName;
     return DashboardLogRowViewModel(
       entryId: entry.id,
       displayName: displayName,
@@ -70,8 +77,11 @@ class DashboardLogRowViewModel {
       partnerId: entry.partnerId,
       partnerDisplayName: entry.partnerDisplayName ?? displayName,
       semanticLabel:
-          '$displayName, $formattedAmount, '
+          '${entry.isPendingGhost ? 'Várható, ' : ''}$displayName, $formattedAmount, '
           '${isExpense ? 'kiadás' : 'bevétel'}, $categoryDisplayName',
+      isPendingGhost: entry.isPendingGhost,
+      hasGhostOrigin: entry.recurrenceOccurrenceId != null,
+      amountIsUnknown: entry.amountIsUnknown,
     );
   }
 
@@ -91,6 +101,9 @@ class DashboardLogRowViewModel {
   final String partnerDisplayName;
   final int categoryColorHandle;
   final int categoryIconHandle;
+  final bool isPendingGhost;
+  final bool hasGhostOrigin;
+  final bool amountIsUnknown;
 
   /// Prepared once with the immutable row so paint-time lookup is O(1).
   final int textLayoutId;

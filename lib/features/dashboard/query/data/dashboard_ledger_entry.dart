@@ -19,6 +19,9 @@ final class DashboardLedgerEntry {
     this.categoryIconId,
     this.assignmentMode,
     this.originKind,
+    this.isPendingGhost = false,
+    this.recurrenceOccurrenceId,
+    this.amountIsUnknown = false,
   });
 
   final String id;
@@ -36,4 +39,7 @@ final class DashboardLedgerEntry {
   final String? categoryIconId;
   final String? assignmentMode;
   final String? originKind;
+  final bool isPendingGhost;
+  final String? recurrenceOccurrenceId;
+  final bool amountIsUnknown;
 }

@@ -91,6 +91,9 @@ final class DashboardBinaryReader {
     bookedLocalTimeMinutes: readInt32('row.bookedLocalTimeMinutes'),
     note: readNullableString('row.note'),
     occurredAtUtcMs: readInt64('row.occurredAtUtcMs'),
+    isPendingGhost: readBool('row.isPendingGhost'),
+    recurrenceOccurrenceId: readNullableString('row.recurrenceOccurrenceId'),
+    amountIsUnknown: readBool('row.amountIsUnknown'),
   );
 
   Map<String, Object?>? readCursor(String label) => readBool('$label.present')

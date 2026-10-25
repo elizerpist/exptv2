@@ -47,6 +47,7 @@ import org.json.JSONObject
 class FluviPushAutomationUseCase internal constructor(
     private val database: FluviDatabase,
     private val ledger: FluviLedgerWriteUseCase,
+    private val recurrences: FluviRecurrenceUseCase,
     private val idGenerator: FluviIdGenerator,
     private val clock: FluviClock,
 ) {
@@ -173,7 +174,70 @@ class FluviPushAutomationUseCase internal constructor(
             updateReview(event.id, proposal, "validation_or_confidence_gate")
             return@withTransaction FluviPushCaptureResult.ReviewRequired(event.id)
         }
-        val entry = book(event.id, proposal, direction, notification.receivedAtUtcMs)
+        val recurrenceCandidates = recurrences.pushCandidates(
+            profileId = profile.id,
+            pushRuleId = rule.id,
+            merchantName = proposal.merchant,
+            direction = direction,
+            amountScaled100 = proposal.amountScaled100,
+            receivedAtUtcMs = notification.receivedAtUtcMs,
+        )
+        if (recurrenceCandidates.size > 1) {
+            recurrences.markPushCandidatesForReview(
+                recurrenceCandidates.map { it.occurrenceId },
+            )
+            updateReview(event.id, proposal, "ambiguous_recurrence_occurrence")
+            return@withTransaction FluviPushCaptureResult.ReviewRequired(event.id)
+        }
+        val entry = recurrenceCandidates.singleOrNull()?.let { occurrence ->
+            recurrences.realizePushOccurrence(
+                occurrenceId = occurrence.occurrenceId,
+                amountScaled100 = proposal.amountScaled100,
+                occurredAtUtcMs = notification.receivedAtUtcMs,
+                notificationInboxId = event.id,
+            ).let { entryId ->
+                requireNotNull(database.ledgerDao().findById(entryId))
+            }
+        } ?: run {
+            val priorEvidence = recurrences.realizedPushEvidenceEntryIds(
+                profileId = profile.id,
+                pushRuleId = rule.id,
+                merchantName = proposal.merchant,
+                direction = direction,
+                amountScaled100 = proposal.amountScaled100,
+                receivedAtUtcMs = notification.receivedAtUtcMs,
+            )
+            if (priorEvidence.size > 1) {
+                updateReview(event.id, proposal, "ambiguous_realized_recurrence_evidence")
+                return@withTransaction FluviPushCaptureResult.ReviewRequired(event.id)
+            }
+            val timeEvidence = recurrences.realizedTimeEvidence(
+                merchantName = proposal.merchant,
+                direction = direction,
+                amountScaled100 = proposal.amountScaled100,
+                receivedAtUtcMs = notification.receivedAtUtcMs,
+            )
+            val matchingTimeEvidence = timeEvidence.filter { it.amountMatchesExpected }
+            // A second, nearby time realization is meaningful ambiguity even
+            // when only one amount happens to match. Never silently pick one
+            // occurrence just because the other carries a different amount.
+            if (timeEvidence.size > 1 ||
+                (priorEvidence.isNotEmpty() && timeEvidence.isNotEmpty()) ||
+                matchingTimeEvidence.size > 1) {
+                updateReview(event.id, proposal, "ambiguous_realized_recurrence_evidence")
+                return@withTransaction FluviPushCaptureResult.ReviewRequired(event.id)
+            }
+            priorEvidence.singleOrNull()?.let { existingEntryId ->
+                requireNotNull(database.ledgerDao().findById(existingEntryId))
+            } ?: matchingTimeEvidence.singleOrNull()?.let { evidence ->
+                requireNotNull(database.ledgerDao().findById(evidence.entryId))
+            } ?: if (timeEvidence.isNotEmpty()) {
+                updateReview(event.id, proposal, "time_recurrence_amount_conflict")
+                return@withTransaction FluviPushCaptureResult.ReviewRequired(event.id)
+            } else {
+                book(event.id, proposal, direction, notification.receivedAtUtcMs)
+            }
+        }
         dao.updateInboxDecision(event.id, NotificationParseStatus.recognized, NotificationProcessingStatus.transaction_created,
             PushReviewStatus.approved, proposal.confidence, proposal.toJson(), null, entry.id, clock.nowUtcMs())
         FluviPushCaptureResult.Booked(event.id, entry.id)
@@ -262,7 +326,27 @@ class FluviPushAutomationUseCase internal constructor(
         val dao = database.pushAutomationDao()
         val event = requireNotNull(dao.inbox(command.notificationId)) { "Unknown notification ID." }
         require(event.ledgerEntryId == null) { "This notification was already booked." }
-        val entry = ledger.createPush(CreatePushLedgerEntryCommand(
+        val candidates = event.profileId?.let { profileId ->
+            recurrences.reviewPushCandidates(
+                profileId = profileId,
+                merchantName = command.merchantName,
+                direction = command.direction,
+                amountScaled100 = command.amountScaled100,
+                receivedAtUtcMs = event.receivedAtUtcMs,
+            )
+        }.orEmpty()
+        require(candidates.size <= 1) {
+            "Több ismétlődő előfordulás illeszkedik; az értesítés felülvizsgálatban marad."
+        }
+        val entry = candidates.singleOrNull()?.let { occurrence ->
+            val id = recurrences.realizePushOccurrence(
+                occurrenceId = occurrence.occurrenceId,
+                amountScaled100 = command.amountScaled100,
+                occurredAtUtcMs = command.occurredAtUtcMs,
+                notificationInboxId = event.id,
+            )
+            requireNotNull(database.ledgerDao().findById(id))
+        } ?: ledger.createPush(CreatePushLedgerEntryCommand(
             merchantName = command.merchantName, direction = command.direction, amountScaled100 = command.amountScaled100,
             bookedLocalEpochDay = command.bookedLocalEpochDay, bookedLocalTimeMinutes = command.bookedLocalTimeMinutes,
             occurredAtUtcMs = command.occurredAtUtcMs, notificationInboxId = event.id, note = command.note,

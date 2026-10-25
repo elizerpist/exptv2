@@ -95,6 +95,7 @@ Uint8List _payload(
     ..string(request.scope.direction.name)
     ..int64(1_560_000)
     ..int64(entryCount ?? request.authoritativeEntryCount)
+    ..int64(entryCount ?? request.authoritativePresentationEntryCount)
     ..int32(1)
     ..row()
     ..boolean(true)
@@ -149,6 +150,9 @@ final class _Writer {
     int32(600);
     nullableString(null);
     int64(1_700_000_000_000);
+    boolean(false);
+    nullableString(null);
+    boolean(false);
   }
 
   Uint8List takeBytes() => _bytes.takeBytes();

@@ -97,8 +97,8 @@ final class IsolateDashboardPreparedIndexDecodeWorker
 /// semantic catalogs and immutable presentation frames off the UI isolate.
 abstract final class DashboardPreparedIndexBinaryCodec {
   static const int magic = 0x464c4449;
-  static const int version = 5;
-  static const int expectedSqlCallCount = 5;
+  static const int version = 6;
+  static const int expectedSqlCallCount = 6;
   static const int maximumPayloadBytes = 128 * 1024 * 1024;
   static const int maximumRowCount = 200000;
   static const int maximumSparseFrameCount = 25000;
@@ -260,14 +260,17 @@ abstract final class DashboardPreparedIndexBinaryCodec {
       final direction = _direction(reader.readString('frame.direction'));
       final totalMinor = reader.readInt64('frame.totalMinor');
       final entryCount = reader.readInt64('frame.entryCount');
-      if (entryCount <= 0) {
+      final presentationEntryCount = reader.readInt64(
+        'frame.presentationEntryCount',
+      );
+      if (entryCount < 0 || presentationEntryCount <= 0) {
         throw const FormatException('Sparse prepared frame must be non-empty.');
       }
       final rowReferenceCount = reader.readBoundedCount(
         'frame.rowReferenceCount',
         maximum: pageSize,
       );
-      if (rowReferenceCount > entryCount) {
+      if (rowReferenceCount > presentationEntryCount) {
         throw const FormatException(
           'Prepared frame row count is inconsistent.',
         );
@@ -289,6 +292,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         direction: direction,
         totalMinor: totalMinor,
         entryCount: entryCount,
+        presentationEntryCount: presentationEntryCount,
         rowIndices: rowIndices,
         nextCursor: cursor,
       );
@@ -306,7 +310,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         0,
         (sum, bucket) => sum + bucket.entryCount,
       );
-      if (allFrame.single.entryCount != seedRows) {
+      if (allFrame.single.presentationEntryCount != seedRows) {
         throw const FormatException(
           'Geometry seed does not match the all-scope entry count.',
         );
@@ -389,6 +393,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
             frame.queryKey,
             frame.totalMinor,
             frame.entryCount,
+            frame.presentationEntryCount,
             Object.hashAll(frame.rowIndices),
           ),
         ),
@@ -466,7 +471,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
       rowTable: rowTable,
       rowProjectionCache: rowProjectionCache,
       rowIndices: raw.rowIndices,
-      entryCount: raw.entryCount,
+      entryCount: raw.presentationEntryCount,
       nextCursor: raw.nextCursor,
     );
     return DashboardPreparedFrame.complete(
@@ -476,6 +481,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
       totalMinor: raw.totalMinor,
       formattedAmount: DashboardPreparedFormatter.amountMinor(raw.totalMinor),
       entryCount: raw.entryCount,
+      presentationEntryCount: raw.presentationEntryCount,
       formattedEntryCount: raw.entryCount.toString(),
       logBox: logBox,
       presentationDigest: Object.hash(
@@ -483,6 +489,7 @@ abstract final class DashboardPreparedIndexBinaryCodec {
         revision,
         raw.totalMinor,
         raw.entryCount,
+        raw.presentationEntryCount,
         Object.hashAll(raw.rowIndices),
         raw.nextCursor?['entryId'],
       ),
@@ -505,6 +512,7 @@ final class _RawIndexFrame {
     required this.direction,
     required this.totalMinor,
     required this.entryCount,
+    required this.presentationEntryCount,
     required this.rowIndices,
     required this.nextCursor,
   });
@@ -514,6 +522,7 @@ final class _RawIndexFrame {
   final LedgerDirection direction;
   final int totalMinor;
   final int entryCount;
+  final int presentationEntryCount;
   final List<int> rowIndices;
   final Map<String, Object?>? nextCursor;
 }

@@ -17,6 +17,8 @@ import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.model.QueryRefinementKind
 import com.fluvi.core.model.RecurrenceAmountPolicy
 import com.fluvi.core.model.RecurrenceTriggerKind
+import com.fluvi.core.model.RecurrenceOccurrenceStatus
+import com.fluvi.core.model.RecurrenceRealizationKind
 import com.fluvi.core.model.PushFieldRole
 import com.fluvi.core.model.PushProfileState
 import com.fluvi.core.model.PushReviewStatus
@@ -71,6 +73,10 @@ internal class FluviRoomConverters {
     @TypeConverter
     fun storedToRecurrenceAmountPolicy(value: String?): RecurrenceAmountPolicy? =
         value?.let(RecurrenceAmountPolicy::valueOf)
+    @TypeConverter fun recurrenceOccurrenceStatusToStored(value: RecurrenceOccurrenceStatus?): String? = value?.name
+    @TypeConverter fun storedToRecurrenceOccurrenceStatus(value: String?): RecurrenceOccurrenceStatus? = value?.let(RecurrenceOccurrenceStatus::valueOf)
+    @TypeConverter fun recurrenceRealizationKindToStored(value: RecurrenceRealizationKind?): String? = value?.name
+    @TypeConverter fun storedToRecurrenceRealizationKind(value: String?): RecurrenceRealizationKind? = value?.let(RecurrenceRealizationKind::valueOf)
 
     @TypeConverter
     fun notificationParseStatusToStored(value: NotificationParseStatus?): String? = value?.name

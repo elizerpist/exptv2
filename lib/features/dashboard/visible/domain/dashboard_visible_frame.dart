@@ -123,6 +123,10 @@ final class DashboardVisibleFrame {
   final int logBoxPresentationId;
   final int visualDigest;
 
+  /// Financial count remains [count.entryCount]; this is the mixed real plus
+  /// pending-ghost timeline cardinality used exclusively by the LogBox pager.
+  int get presentationEntryCount => preparedFrame.presentationEntryCount;
+
   /// Promotes ownership without changing the prepared visual payload. A
   /// deferred temporal settle may advance canonical navigation exactly once;
   /// carry that new epoch into the already-painted frame so SummaryPill keeps

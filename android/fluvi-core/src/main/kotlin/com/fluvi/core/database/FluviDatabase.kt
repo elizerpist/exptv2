@@ -18,6 +18,7 @@ import com.fluvi.core.database.dao.FluviLedgerSyncWorkspaceDao
 import com.fluvi.core.database.dao.FluviPartnerDao
 import com.fluvi.core.database.dao.FluviQuerySnapshotDao
 import com.fluvi.core.database.dao.FluviPushAutomationDao
+import com.fluvi.core.database.dao.FluviRecurrenceDao
 import com.fluvi.core.database.entity.FluviAppSettingsEntity
 import com.fluvi.core.database.entity.FluviCategoryEntity
 import com.fluvi.core.database.entity.FluviFinancialLimitEntity
@@ -41,6 +42,7 @@ import com.fluvi.core.database.entity.FluviQuerySnapshotPartnerEntity
 import com.fluvi.core.database.entity.FluviQuerySnapshotPeriodEntity
 import com.fluvi.core.database.entity.FluviQuerySnapshotRefinementEntity
 import com.fluvi.core.database.entity.FluviRecurrenceRuleEntity
+import com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity
 import com.fluvi.core.database.entity.FluviTimeRecurringRuleConfigEntity
 import com.fluvi.core.model.FluviClock
 import com.fluvi.core.model.FluviSystemIds
@@ -58,6 +60,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviTimeRecurringRuleConfigEntity::class,
         FluviPushRecurringRuleConfigEntity::class,
         FluviOccurrenceOverrideEntity::class,
+        FluviRecurrenceOccurrenceEntity::class,
         FluviNotificationInboxEntity::class,
         FluviPushProfileEntity::class,
         FluviPushRuleEntity::class,
@@ -72,7 +75,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 8,
+    version = 11,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -98,6 +101,8 @@ internal abstract class FluviDatabase : RoomDatabase() {
     abstract fun futureReferenceDao(): FluviFutureReferenceDao
 
     abstract fun pushAutomationDao(): FluviPushAutomationDao
+
+    abstract fun recurrenceDao(): FluviRecurrenceDao
 
     abstract fun querySnapshotDao(): FluviQuerySnapshotDao
 
@@ -510,6 +515,94 @@ internal abstract class FluviDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds persisted occurrence snapshots and ghost provenance without changing financial totals. */
+        val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE fluvi_app_settings ADD COLUMN show_pending_ghosts_in_ledger INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE fluvi_ledger_entries ADD COLUMN recurrence_occurrence_id TEXT")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_ledger_entries_recurrence_occurrence_id ON fluvi_ledger_entries(recurrence_occurrence_id)")
+                db.execSQL("ALTER TABLE fluvi_recurrence_rules ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE fluvi_recurrence_rules ADD COLUMN day_of_month INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE fluvi_recurrence_rules ADD COLUMN local_time_minutes INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE fluvi_recurrence_rules ADD COLUMN start_local_epoch_day INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE fluvi_recurrence_rules ADD COLUMN end_local_epoch_day INTEGER")
+                db.execSQL("ALTER TABLE fluvi_recurrence_rules ADD COLUMN timezone_id TEXT NOT NULL DEFAULT 'Europe/Budapest'")
+                db.execSQL("ALTER TABLE fluvi_recurrence_rules ADD COLUMN rule_version INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE fluvi_recurrence_rules ADD COLUMN archived_at_utc_ms INTEGER")
+                db.execSQL("CREATE TABLE fluvi_recurrence_occurrences (id TEXT NOT NULL, rule_id TEXT NOT NULL, occurrence_key TEXT NOT NULL, rule_version INTEGER NOT NULL, expected_local_epoch_day INTEGER NOT NULL, expected_local_time_minutes INTEGER NOT NULL, expected_at_utc_ms INTEGER NOT NULL, timezone_id TEXT NOT NULL, partner_id TEXT NOT NULL, category_id TEXT NOT NULL, category_assignment_mode TEXT NOT NULL, direction TEXT NOT NULL, expected_amount_scaled_100 INTEGER, amount_policy TEXT NOT NULL, note TEXT, trigger_kind TEXT NOT NULL, status TEXT NOT NULL, realization_kind TEXT, resolved_at_utc_ms INTEGER, created_at_utc_ms INTEGER NOT NULL, updated_at_utc_ms INTEGER NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(id), FOREIGN KEY(rule_id) REFERENCES fluvi_recurrence_rules(id) ON DELETE NO ACTION, FOREIGN KEY(partner_id) REFERENCES fluvi_partners(id) ON DELETE NO ACTION, FOREIGN KEY(category_id) REFERENCES fluvi_categories(id) ON DELETE NO ACTION)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_recurrence_occurrences_rule_id_occurrence_key ON fluvi_recurrence_occurrences(rule_id, occurrence_key)")
+                db.execSQL("CREATE INDEX index_fluvi_recurrence_occurrences_status_expected_local_epoch_day ON fluvi_recurrence_occurrences(status, expected_local_epoch_day)")
+                db.execSQL("CREATE INDEX index_fluvi_recurrence_occurrences_direction_expected_local_epoch_day_expected_local_time_minutes_id ON fluvi_recurrence_occurrences(direction, expected_local_epoch_day, expected_local_time_minutes, id)")
+                db.execSQL("CREATE INDEX index_fluvi_recurrence_occurrences_partner_id_status ON fluvi_recurrence_occurrences(partner_id, status)")
+                db.execSQL("CREATE INDEX index_fluvi_recurrence_occurrences_category_id_status ON fluvi_recurrence_occurrences(category_id, status)")
+                db.execSQL("CREATE INDEX index_fluvi_recurrence_occurrences_expected_at_utc_ms_status ON fluvi_recurrence_occurrences(expected_at_utc_ms, status)")
+            }
+        }
+
+        /**
+         * Binds a recurring push trigger to the exact Parser v2 profile and
+         * recognition rule.  These deliberately remain nullable for legacy
+         * drafts, which must never become automatically matchable.
+         */
+        val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE fluvi_push_recurring_rule_config ADD COLUMN push_profile_id TEXT")
+                db.execSQL("ALTER TABLE fluvi_push_recurring_rule_config ADD COLUMN push_rule_id TEXT")
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_push_recurring_rule_config_push_profile_id_push_rule_id " +
+                        "ON fluvi_push_recurring_rule_config(push_profile_id, push_rule_id)",
+                )
+            }
+        }
+
+        /**
+         * SQLite cannot add a foreign key with ALTER TABLE. Rebuild only the
+         * Ledger table, preserving every existing entry and its unique
+         * recurrence relation while making the occurrence reference a genuine
+         * database invariant.
+         */
+        val MIGRATION_10_11: Migration = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Notification inbox rows may already reference Ledger rows.
+                // Deferring the graph check keeps that intact while the parent
+                // table is atomically replaced inside Room's migration txn.
+                db.execSQL("PRAGMA defer_foreign_keys = TRUE")
+                db.execSQL(
+                    "CREATE TABLE fluvi_ledger_entries_v11 (" +
+                        "id TEXT NOT NULL, partner_id TEXT NOT NULL, category_id TEXT NOT NULL, " +
+                        "category_assignment_mode TEXT NOT NULL, note TEXT, direction TEXT NOT NULL, " +
+                        "amount_scaled_100 INTEGER NOT NULL, booked_local_epoch_day INTEGER NOT NULL, " +
+                        "booked_local_time_minutes INTEGER NOT NULL, occurred_at_utc_ms INTEGER NOT NULL, " +
+                        "origin_kind TEXT NOT NULL, notification_inbox_id TEXT, recurrence_occurrence_id TEXT, " +
+                        "created_at_utc_ms INTEGER NOT NULL, updated_at_utc_ms INTEGER NOT NULL, revision INTEGER NOT NULL, " +
+                        "PRIMARY KEY(id), " +
+                        "FOREIGN KEY(partner_id) REFERENCES fluvi_partners(id) ON DELETE NO ACTION, " +
+                        "FOREIGN KEY(category_id) REFERENCES fluvi_categories(id) ON DELETE NO ACTION, " +
+                        "FOREIGN KEY(notification_inbox_id) REFERENCES fluvi_notification_inbox(id) ON DELETE SET NULL, " +
+                        "FOREIGN KEY(recurrence_occurrence_id) REFERENCES fluvi_recurrence_occurrences(id) ON DELETE NO ACTION)",
+                )
+                db.execSQL(
+                    "INSERT INTO fluvi_ledger_entries_v11 (" +
+                        "id, partner_id, category_id, category_assignment_mode, note, direction, amount_scaled_100, " +
+                        "booked_local_epoch_day, booked_local_time_minutes, occurred_at_utc_ms, origin_kind, " +
+                        "notification_inbox_id, recurrence_occurrence_id, created_at_utc_ms, updated_at_utc_ms, revision) " +
+                        "SELECT id, partner_id, category_id, category_assignment_mode, note, direction, amount_scaled_100, " +
+                        "booked_local_epoch_day, booked_local_time_minutes, occurred_at_utc_ms, origin_kind, " +
+                        "notification_inbox_id, recurrence_occurrence_id, created_at_utc_ms, updated_at_utc_ms, revision " +
+                        "FROM fluvi_ledger_entries",
+                )
+                db.execSQL("DROP TABLE fluvi_ledger_entries")
+                db.execSQL("ALTER TABLE fluvi_ledger_entries_v11 RENAME TO fluvi_ledger_entries")
+                db.execSQL("CREATE INDEX index_fluvi_ledger_entries_booked_local_epoch_day_booked_local_time_minutes_id ON fluvi_ledger_entries(booked_local_epoch_day, booked_local_time_minutes, id)")
+                db.execSQL("CREATE INDEX index_fluvi_ledger_entries_direction_booked_local_epoch_day_booked_local_time_minutes_id ON fluvi_ledger_entries(direction, booked_local_epoch_day, booked_local_time_minutes, id)")
+                db.execSQL("CREATE INDEX index_fluvi_ledger_entries_dashboard_preview ON fluvi_ledger_entries(direction ASC, booked_local_epoch_day DESC, booked_local_time_minutes DESC, id DESC)")
+                db.execSQL("CREATE INDEX index_fluvi_ledger_entries_category_id_booked_local_epoch_day_booked_local_time_minutes_id ON fluvi_ledger_entries(category_id, booked_local_epoch_day, booked_local_time_minutes, id)")
+                db.execSQL("CREATE INDEX index_fluvi_ledger_entries_partner_id_booked_local_epoch_day_booked_local_time_minutes_id ON fluvi_ledger_entries(partner_id, booked_local_epoch_day, booked_local_time_minutes, id)")
+                db.execSQL("CREATE INDEX index_fluvi_ledger_entries_notification_inbox_id ON fluvi_ledger_entries(notification_inbox_id)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_ledger_entries_recurrence_occurrence_id ON fluvi_ledger_entries(recurrence_occurrence_id)")
+            }
+        }
+
         fun seedCallback(clock: FluviClock): Callback = object : Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 val now = clock.nowUtcMs()
@@ -524,8 +617,9 @@ internal abstract class FluviDatabase : RoomDatabase() {
                         created_at_utc_ms,
                         updated_at_utc_ms,
                         demo_seed_version,
-                        demo_seed_completed_at_utc_ms
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        demo_seed_completed_at_utc_ms,
+                        show_pending_ghosts_in_ledger
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """.trimIndent(),
                     arrayOf<Any?>(
                         FluviSystemIds.APP_SETTINGS,
@@ -536,6 +630,7 @@ internal abstract class FluviDatabase : RoomDatabase() {
                         now,
                         null,
                         null,
+                        1,
                     ),
                 )
                 db.execSQL(

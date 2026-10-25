@@ -382,6 +382,8 @@ final class MethodChannelDashboardDataRuntimeRepository
         'commitGeneration': request.commitGeneration,
         'authoritativeTotalMinor': request.authoritativeTotalMinor,
         'authoritativeEntryCount': request.authoritativeEntryCount,
+        'authoritativePresentationEntryCount':
+            request.authoritativePresentationEntryCount,
         'pageSize': request.pageSize,
         'pageOrdinal': request.pageOrdinal,
         'after': request.startCursor,

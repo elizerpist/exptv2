@@ -129,6 +129,12 @@ data class FluviDashboardLedgerRow(
     val assignmentMode: CategoryAssignmentMode,
     val originKind: LedgerOriginKind,
     val note: String?,
+    /** A pending recurring occurrence is a presentation row, never a ledger entry. */
+    val isPendingGhost: Boolean = false,
+    /** Present both for a pending ghost and for a realized ledger entry of ghost origin. */
+    val recurrenceOccurrenceId: String? = null,
+    /** Unknown expected recurring amounts must never be rendered or aggregated as 0 Ft. */
+    val amountIsUnknown: Boolean = false,
 )
 
 data class FluviDashboardLedgerSlice(
@@ -138,6 +144,8 @@ data class FluviDashboardLedgerSlice(
     val timeScopeKey: String,
     val totalMinor: Long,
     val entryCount: Long,
+    /** Visual rows in the LogBox. Pending ghosts are intentionally included here only. */
+    val presentationEntryCount: Long = entryCount,
     val entries: List<FluviDashboardLedgerRow>,
     val nextCursor: FluviTimelineCursor?,
 )

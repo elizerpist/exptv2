@@ -21,8 +21,8 @@ object DashboardBinaryCodec {
     const val BUDGET_LIMIT_VERSION: Int = 6
     const val BUDGET_PARTNER_MAGIC: Int = 0x464C4250 // FLBP
     const val BUDGET_PARTNER_VERSION: Int = 4
-    const val INDEX_VERSION: Int = 5
-    const val VERSION: Int = 1
+    const val INDEX_VERSION: Int = 6
+    const val VERSION: Int = 2
 
     /**
      * Encodes the one session-wide sparse dashboard index. Rows are written
@@ -70,6 +70,7 @@ object DashboardBinaryCodec {
                 output.writeUtf8(frame.direction.name)
                 output.writeLong(frame.totalMinor)
                 output.writeLong(frame.entryCount)
+                output.writeLong(frame.presentationEntryCount)
                 output.writeInt(frame.rowIndices.size)
                 frame.rowIndices.forEach { rowIndex -> output.writeInt(rowIndex) }
                 output.writeCursor(frame.nextCursor)
@@ -237,6 +238,7 @@ object DashboardBinaryCodec {
         writeUtf8(slice.direction.name)
         writeLong(slice.totalMinor)
         writeLong(slice.entryCount)
+        writeLong(slice.presentationEntryCount)
         writeInt(slice.entries.size)
         slice.entries.forEach { row -> writeRow(row) }
         writeCursor(slice.nextCursor)
@@ -258,6 +260,9 @@ object DashboardBinaryCodec {
         writeInt(row.bookedLocalTimeMinutes)
         writeNullableUtf8(row.note)
         writeLong(row.occurredAtUtcMs)
+        writeBoolean(row.isPendingGhost)
+        writeNullableUtf8(row.recurrenceOccurrenceId)
+        writeBoolean(row.amountIsUnknown)
     }
 
     private fun DataOutputStream.writeCursor(cursor: FluviTimelineCursor?) {

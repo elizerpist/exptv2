@@ -335,6 +335,65 @@ class FluviDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationNineToTenAddsStableParserBindingToRecurringPushConfig() {
+        val name = "$DATABASE_NAME-recurrence-push-binding"
+        helper.createDatabase(name, 9).use { }
+
+        helper.runMigrationsAndValidate(
+            name,
+            10,
+            true,
+            FluviDatabase.MIGRATION_9_10,
+        ).use { database ->
+            val columns = database.query(
+                "PRAGMA table_info(fluvi_push_recurring_rule_config)",
+            ).use { cursor ->
+                buildSet {
+                    val nameIndex = cursor.getColumnIndexOrThrow("name")
+                    while (cursor.moveToNext()) add(cursor.getString(nameIndex))
+                }
+            }
+            val indexCount = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND " +
+                    "name='index_fluvi_push_recurring_rule_config_push_profile_id_push_rule_id'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+            assertTrue("push_profile_id" in columns)
+            assertTrue("push_rule_id" in columns)
+            assertEquals(1, indexCount)
+        }
+    }
+
+    @Test
+    fun migrationTenToElevenRetainsLedgerSchemaAndAddsOccurrenceForeignKey() {
+        val name = "$DATABASE_NAME-ledger-occurrence-foreign-key"
+        helper.createDatabase(name, 10).use { }
+
+        helper.runMigrationsAndValidate(
+            name,
+            11,
+            true,
+            FluviDatabase.MIGRATION_10_11,
+        ).use { database ->
+            val recurrenceForeignKey = database.query(
+                "PRAGMA foreign_key_list(fluvi_ledger_entries)",
+            ).use { cursor ->
+                val tableIndex = cursor.getColumnIndexOrThrow("table")
+                var found = false
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(tableIndex) == "fluvi_recurrence_occurrences") found = true
+                }
+                found
+            }
+            val uniqueIndex = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND " +
+                    "name='index_fluvi_ledger_entries_recurrence_occurrence_id'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+            assertTrue(recurrenceForeignKey)
+            assertEquals(1, uniqueIndex)
+        }
+    }
+
     private fun migrateLegacyFinancialLimits(
         name: String,
         rows: List<LegacyLimit>,

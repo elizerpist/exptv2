@@ -10,6 +10,7 @@ import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.CreateManualTransactionCommand
 import com.fluvi.core.model.CreateLedgerEntryCommand
 import com.fluvi.core.model.CreatePushLedgerEntryCommand
+import com.fluvi.core.model.CreateRecurringLedgerEntryCommand
 import com.fluvi.core.model.FluviClock
 import com.fluvi.core.model.FluviIdGenerator
 import com.fluvi.core.model.FluviLedgerEntryDetail
@@ -73,6 +74,7 @@ class FluviLedgerWriteUseCase internal constructor(
                 occurredAtUtcMs = command.occurredAtUtcMs,
                 originKind = com.fluvi.core.model.LedgerOriginKind.manual,
                 notificationInboxId = null,
+                recurrenceOccurrenceId = null,
                 createdAtUtcMs = now,
                 updatedAtUtcMs = now,
                 revision = 1L,
@@ -166,6 +168,7 @@ class FluviLedgerWriteUseCase internal constructor(
                 occurredAtUtcMs = command.occurredAtUtcMs,
                 originKind = command.originKind,
                 notificationInboxId = command.notificationInboxId,
+                recurrenceOccurrenceId = null,
                 createdAtUtcMs = now,
                 updatedAtUtcMs = now,
                 revision = 1L,
@@ -198,6 +201,31 @@ class FluviLedgerWriteUseCase internal constructor(
                 occurredAtUtcMs = command.occurredAtUtcMs,
                 originKind = com.fluvi.core.model.LedgerOriginKind.push,
                 notificationInboxId = command.notificationInboxId,
+                recurrenceOccurrenceId = null,
+                createdAtUtcMs = now, updatedAtUtcMs = now, revision = 1L,
+            )
+            ledgerRepository.insert(entry)
+            revisionRepository.advance(now)
+            changePublisher.publishUpsert(entry)
+            entry
+        }
+
+    /** Realizes exactly one occurrence. The unique ledger FK is the last database-level duplicate guard. */
+    suspend fun createRecurring(command: CreateRecurringLedgerEntryCommand): FluviLedgerEntryEntity =
+        database.withTransaction {
+            validateManual(command.amountScaled100, command.bookedLocalTimeMinutes)
+            val canonicalPartnerId = partnerRepository.resolveCanonicalPartnerId(command.partnerId)
+            val category = resolveCategory(canonicalPartnerId, command.categorySelection)
+            val now = clock.nowUtcMs()
+            val entry = FluviLedgerEntryEntity(
+                id = idGenerator.next(), partnerId = canonicalPartnerId, categoryId = category.id,
+                categoryAssignmentMode = category.mode, note = command.note?.trim()?.ifEmpty { null },
+                direction = command.direction, amountScaled100 = command.amountScaled100,
+                bookedLocalEpochDay = command.bookedLocalEpochDay,
+                bookedLocalTimeMinutes = command.bookedLocalTimeMinutes,
+                occurredAtUtcMs = command.occurredAtUtcMs, originKind = command.originKind,
+                notificationInboxId = command.notificationInboxId,
+                recurrenceOccurrenceId = command.occurrenceId,
                 createdAtUtcMs = now, updatedAtUtcMs = now, revision = 1L,
             )
             ledgerRepository.insert(entry)
@@ -362,6 +390,7 @@ class FluviLedgerWriteUseCase internal constructor(
         note = note,
         originKind = originKind,
         notificationInboxId = notificationInboxId,
+        recurrenceOccurrenceId = recurrenceOccurrenceId,
         revision = revision,
     )
 

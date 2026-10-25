@@ -139,6 +139,7 @@ final class DashboardPreparedFrame {
     required int totalMinor,
     required String formattedAmount,
     required int entryCount,
+    int? presentationEntryCount,
     required String formattedEntryCount,
     required DashboardLogViewportState logBox,
     required int presentationDigest,
@@ -150,10 +151,11 @@ final class DashboardPreparedFrame {
         'must be greater than zero',
       );
     }
+    final resolvedPresentationEntryCount = presentationEntryCount ?? entryCount;
     final queryKey = scope.key;
     if (logBox.queryKey != queryKey ||
         logBox.revision != coreRevision ||
-        logBox.entryCount != entryCount ||
+        logBox.entryCount != resolvedPresentationEntryCount ||
         logBox.direction != scope.direction) {
       throw ArgumentError(
         'Prepared LogBox identity must match its frame key, revision, count '
@@ -178,8 +180,10 @@ final class DashboardPreparedFrame {
       formattedEntryCount: formattedEntryCount,
     );
     final emptyState = DashboardEmptyStateViewModel(
-      isEmpty: entryCount == 0,
-      message: entryCount == 0 ? 'Nincs listázható tranzakció' : '',
+      isEmpty: resolvedPresentationEntryCount == 0,
+      message: resolvedPresentationEntryCount == 0
+          ? 'Nincs listázható tranzakció'
+          : '',
     );
     final amountPresentationId = Object.hash(
       queryKey,
@@ -249,6 +253,7 @@ final class DashboardPreparedFrame {
   int get logViewportId => logViewport.logViewportId;
   int get totalMinor => summary.totalMinor;
   int get entryCount => summary.entryCount;
+  int get presentationEntryCount => logBox.entryCount;
   bool get loading => false;
   bool get stale => false;
   Object? get error => null;

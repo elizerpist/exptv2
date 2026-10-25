@@ -1344,14 +1344,15 @@ final class PreparedDashboardIndex {
         queryKey: scope.key,
         coreRevision: coreRevision,
         pageSize: pageSize,
-        totalEntryCount: frame.count.entryCount,
+        totalEntryCount: frame.presentationEntryCount,
         dayBuckets: overlay.geometrySeedFor(scope),
         layoutProfile: layoutProfile,
       );
     }
     final frame = frameFor(scope);
     final partition = partitionFor(scope.direction);
-    if (partition.verticalGeometrySeed.isEmpty && frame.count.entryCount > 0) {
+    if (partition.verticalGeometrySeed.isEmpty &&
+        frame.presentationEntryCount > 0) {
       if (!buildMetrics.isSynthetic) {
         throw StateError(
           'A nonempty committed scope is missing its native geometry seed.',
@@ -1371,7 +1372,7 @@ final class PreparedDashboardIndex {
     return partition.committedVerticalGeometryFor(
       scope,
       pageSize: pageSize,
-      totalEntryCount: frame.count.entryCount,
+      totalEntryCount: frame.presentationEntryCount,
       coreRevision: coreRevision,
       layoutProfile: layoutProfile,
     );
@@ -1382,7 +1383,7 @@ final class PreparedDashboardIndex {
     DashboardPreparedFrame frame, {
     required DashboardLogBoxLayoutProfile layoutProfile,
   }) {
-    var remaining = frame.count.entryCount;
+    var remaining = frame.presentationEntryCount;
     var day = 2_000_000_000;
     final buckets = <CommittedVerticalGeometryDayBucket>[];
     for (final group in frame.logBox.groups) {
@@ -1412,7 +1413,7 @@ final class PreparedDashboardIndex {
       queryKey: scope.key,
       coreRevision: coreRevision,
       pageSize: pageSize,
-      totalEntryCount: frame.count.entryCount,
+      totalEntryCount: frame.presentationEntryCount,
       dayBuckets: buckets,
       layoutProfile: layoutProfile,
     );

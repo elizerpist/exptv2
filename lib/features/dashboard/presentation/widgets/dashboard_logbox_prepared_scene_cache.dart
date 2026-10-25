@@ -2910,6 +2910,7 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
     required this.timeText,
     required this.semanticLabel,
     required this.amountStyle,
+    required this.isPendingGhost,
     required this.categoryColorHandle,
     required this.categoryIconHandle,
     required this.textLayout,
@@ -2934,6 +2935,7 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
       timeText: row.displayTime,
       semanticLabel: row.semanticLabel,
       amountStyle: row.amountStyle,
+      isPendingGhost: row.isPendingGhost,
       categoryColorHandle: row.categoryColorHandle,
       categoryIconHandle: row.categoryIconHandle,
       textLayout: textLayout,
@@ -2948,6 +2950,7 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
   final String timeText;
   final String semanticLabel;
   final LogAmountStyle amountStyle;
+  final bool isPendingGhost;
   final int categoryColorHandle;
   final int categoryIconHandle;
   final DashboardPreparedLogBoxRowTextLayout textLayout;
@@ -2958,7 +2961,8 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
       identical(textLayout, other.textLayout) &&
       categoryColorHandle == other.categoryColorHandle &&
       categoryIconHandle == other.categoryIconHandle &&
-      amountStyle == other.amountStyle;
+      amountStyle == other.amountStyle &&
+      isPendingGhost == other.isPendingGhost;
 }
 
 /// One all-or-nothing renderer resource for a semantic Phase-A slot.

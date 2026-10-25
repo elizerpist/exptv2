@@ -250,6 +250,12 @@ internal interface FluviLedgerDao {
     @Query("SELECT * FROM fluvi_ledger_entries WHERE id = :entryId LIMIT 1")
     suspend fun findById(entryId: String): FluviLedgerEntryEntity?
 
+    @Query(
+        "SELECT * FROM fluvi_ledger_entries " +
+            "WHERE recurrence_occurrence_id = :occurrenceId LIMIT 1",
+    )
+    suspend fun findByRecurrenceOccurrenceId(occurrenceId: String): FluviLedgerEntryEntity?
+
     @Query("SELECT COUNT(*) FROM fluvi_ledger_entries")
     suspend fun queryEntriesCount(): Long
 
@@ -711,4 +717,241 @@ internal interface FluviQuerySnapshotDao {
         fromCategoryId: String,
         toCategoryId: String,
     ): Int
+}
+
+/** Persisted rules and occurrence snapshots. Kept outside Ledger DAO so previews cannot leak into aggregates. */
+@Dao
+internal interface FluviRecurrenceDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertRule(rule: com.fluvi.core.database.entity.FluviRecurrenceRuleEntity)
+
+    @Query("SELECT * FROM fluvi_recurrence_rules WHERE id = :ruleId LIMIT 1")
+    suspend fun rule(ruleId: String): com.fluvi.core.database.entity.FluviRecurrenceRuleEntity?
+
+    @Query("SELECT * FROM fluvi_recurrence_rules WHERE archived_at_utc_ms IS NULL ORDER BY is_active DESC, updated_at_utc_ms DESC, id ASC")
+    suspend fun rules(): List<com.fluvi.core.database.entity.FluviRecurrenceRuleEntity>
+
+    @Query(
+        "UPDATE fluvi_recurrence_rules SET is_active = :isActive, updated_at_utc_ms = :now " +
+            "WHERE id = :ruleId AND archived_at_utc_ms IS NULL",
+    )
+    suspend fun setRuleActive(ruleId: String, isActive: Boolean, now: Long): Int
+
+    /**
+     * Retains the rule, completed occurrences and their Ledger foreign keys
+     * for audit/restore, while removing it from active generation and lists.
+     */
+    @Query(
+        "UPDATE fluvi_recurrence_rules SET is_active = 0, archived_at_utc_ms = :now, " +
+            "updated_at_utc_ms = :now WHERE id = :ruleId AND archived_at_utc_ms IS NULL",
+    )
+    suspend fun archiveRule(ruleId: String, now: Long): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTimeConfig(
+        config: com.fluvi.core.database.entity.FluviTimeRecurringRuleConfigEntity,
+    )
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPushConfig(
+        config: com.fluvi.core.database.entity.FluviPushRecurringRuleConfigEntity,
+    )
+
+    @Query("SELECT * FROM fluvi_push_recurring_rule_config WHERE rule_id = :ruleId LIMIT 1")
+    suspend fun pushConfig(
+        ruleId: String,
+    ): com.fluvi.core.database.entity.FluviPushRecurringRuleConfigEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertOccurrence(occurrence: com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertOccurrenceOverride(
+        occurrenceOverride: com.fluvi.core.database.entity.FluviOccurrenceOverrideEntity,
+    )
+
+    @Query(
+        "SELECT * FROM fluvi_occurrence_overrides " +
+            "WHERE rule_id = :ruleId AND occurrence_key = :occurrenceKey LIMIT 1",
+    )
+    suspend fun occurrenceOverride(
+        ruleId: String,
+        occurrenceKey: String,
+    ): com.fluvi.core.database.entity.FluviOccurrenceOverrideEntity?
+
+    @Query("SELECT * FROM fluvi_recurrence_occurrences WHERE id = :occurrenceId LIMIT 1")
+    suspend fun occurrence(occurrenceId: String): com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity?
+
+    @Query("SELECT * FROM fluvi_recurrence_occurrences WHERE rule_id = :ruleId ORDER BY expected_at_utc_ms ASC, id ASC")
+    suspend fun occurrencesForRule(ruleId: String): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    @Query("SELECT * FROM fluvi_recurrence_occurrences WHERE status = :status ORDER BY expected_at_utc_ms ASC, id ASC LIMIT :limit OFFSET :offset")
+    suspend fun occurrencesByStatus(status: com.fluvi.core.model.RecurrenceOccurrenceStatus, limit: Int, offset: Int): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    /** Bounded rolling-window source for the dashboard's presentation-only ghost lane. */
+    @Query(
+        "SELECT occurrence.* FROM fluvi_recurrence_occurrences AS occurrence " +
+            "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
+            "WHERE occurrence.status = 'pending' AND rule.is_active = 1 AND rule.archived_at_utc_ms IS NULL " +
+            "AND EXISTS (SELECT 1 FROM fluvi_app_settings " +
+            "WHERE id = :settingsId AND show_pending_ghosts_in_ledger = 1) " +
+            "ORDER BY occurrence.direction ASC, occurrence.expected_local_epoch_day DESC, " +
+            "occurrence.expected_local_time_minutes DESC, occurrence.id DESC",
+    )
+    suspend fun activeVisiblePendingOccurrences(
+        settingsId: String,
+    ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    @Query("SELECT * FROM fluvi_recurrence_occurrences ORDER BY expected_at_utc_ms ASC, id ASC LIMIT :limit OFFSET :offset")
+    suspend fun occurrencePage(limit: Int, offset: Int): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    @Query("SELECT COUNT(*) FROM fluvi_recurrence_occurrences WHERE status = :status")
+    suspend fun countByStatus(status: com.fluvi.core.model.RecurrenceOccurrenceStatus): Long
+
+    @Query("SELECT COUNT(*) FROM fluvi_recurrence_occurrences WHERE status = 'pending' AND expected_at_utc_ms <= :now")
+    suspend fun dueCount(now: Long): Long
+
+    @Query("SELECT * FROM fluvi_recurrence_occurrences WHERE status = 'pending' AND expected_at_utc_ms <= :now ORDER BY expected_at_utc_ms ASC")
+    suspend fun duePending(now: Long): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    @Query(
+        "SELECT occurrence.* FROM fluvi_recurrence_occurrences AS occurrence " +
+            "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
+            "WHERE occurrence.status = 'pending' AND occurrence.trigger_kind = 'time' " +
+            "AND rule.is_active = 1 AND rule.archived_at_utc_ms IS NULL " +
+            "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC LIMIT 1",
+    )
+    suspend fun nextActiveTimeOccurrence(): com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity?
+
+    /**
+     * The parser has already extracted amount and merchant.  SQL narrows by
+     * profile/rule, direction, date window, amount tolerance and active rule;
+     * canonical partner identity is checked by the use case afterwards.
+     */
+    @Query(
+        "SELECT occurrence.* FROM fluvi_recurrence_occurrences AS occurrence " +
+            "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
+            "JOIN fluvi_push_recurring_rule_config AS config ON config.rule_id = rule.id " +
+            "WHERE occurrence.status = 'pending' AND rule.is_active = 1 AND rule.archived_at_utc_ms IS NULL " +
+            "AND occurrence.trigger_kind = 'push' " +
+            "AND config.push_profile_id = :profileId AND config.push_rule_id = :pushRuleId " +
+            "AND occurrence.direction = :direction " +
+            "AND ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= config.day_window * 86400000 " +
+            "AND (occurrence.expected_amount_scaled_100 IS NULL " +
+            "OR ABS(occurrence.expected_amount_scaled_100 - :amountScaled100) <= config.amount_tolerance_scaled_100) " +
+            "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC",
+    )
+    suspend fun pendingPushCandidates(
+        profileId: String,
+        pushRuleId: String,
+        direction: LedgerDirection,
+        amountScaled100: Long,
+        receivedAtUtcMs: Long,
+    ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    /**
+     * Human review has no need to re-run parser matching. It may resolve a
+     * single eligible pending/review occurrence for the notification's
+     * profile, while multiple candidates deliberately remain unresolved.
+     */
+    @Query(
+        "SELECT occurrence.* FROM fluvi_recurrence_occurrences AS occurrence " +
+            "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
+            "JOIN fluvi_push_recurring_rule_config AS config ON config.rule_id = rule.id " +
+            "WHERE occurrence.status IN ('pending', 'review') AND rule.is_active = 1 AND rule.archived_at_utc_ms IS NULL " +
+            "AND occurrence.trigger_kind = 'push' " +
+            "AND config.push_profile_id = :profileId AND config.push_rule_id IS NOT NULL " +
+            "AND occurrence.direction = :direction " +
+            "AND ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= config.day_window * 86400000 " +
+            "AND (occurrence.expected_amount_scaled_100 IS NULL " +
+            "OR ABS(occurrence.expected_amount_scaled_100 - :amountScaled100) <= config.amount_tolerance_scaled_100) " +
+            "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC",
+    )
+    suspend fun reviewPushCandidates(
+        profileId: String,
+        direction: LedgerDirection,
+        amountScaled100: Long,
+        receivedAtUtcMs: Long,
+    ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    @Query(
+        "SELECT occurrence.* FROM fluvi_recurrence_occurrences AS occurrence " +
+            "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
+            "JOIN fluvi_push_recurring_rule_config AS config ON config.rule_id = rule.id " +
+            "WHERE occurrence.status = 'realized' AND occurrence.trigger_kind = 'push' " +
+            "AND config.push_profile_id = :profileId AND config.push_rule_id = :pushRuleId " +
+            "AND occurrence.direction = :direction " +
+            "AND ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= config.day_window * 86400000 " +
+            "AND (occurrence.expected_amount_scaled_100 IS NULL " +
+            "OR ABS(occurrence.expected_amount_scaled_100 - :amountScaled100) <= config.amount_tolerance_scaled_100) " +
+            "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC",
+    )
+    suspend fun realizedPushEvidenceCandidates(
+        profileId: String,
+        pushRuleId: String,
+        direction: LedgerDirection,
+        amountScaled100: Long,
+        receivedAtUtcMs: Long,
+    ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    /**
+     * Time-triggered rules intentionally have no Push Parser binding.  This
+     * narrow date/direction candidate set lets a later bank notification act
+     * as evidence instead of manufacturing a second booked entry.
+     */
+    @Query(
+        "SELECT occurrence.* FROM fluvi_recurrence_occurrences AS occurrence " +
+            "WHERE occurrence.status = 'realized' AND occurrence.trigger_kind = 'time' " +
+            "AND occurrence.direction = :direction " +
+            "AND ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= :windowMs " +
+            "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC",
+    )
+    suspend fun realizedTimeEvidenceCandidates(
+        direction: LedgerDirection,
+        receivedAtUtcMs: Long,
+        windowMs: Long,
+    ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    @Query(
+        "UPDATE fluvi_recurrence_occurrences SET status = 'review', updated_at_utc_ms = :now, " +
+            "revision = revision + 1 WHERE id IN (:occurrenceIds) AND status = 'pending'",
+    )
+    suspend fun markReview(occurrenceIds: List<String>, now: Long): Int
+
+    @Query("UPDATE fluvi_recurrence_occurrences SET status = :status, realization_kind = :kind, resolved_at_utc_ms = :resolvedAt, updated_at_utc_ms = :now, revision = revision + 1 WHERE id = :occurrenceId AND status = :expected")
+    suspend fun transition(
+        occurrenceId: String,
+        expected: com.fluvi.core.model.RecurrenceOccurrenceStatus,
+        status: com.fluvi.core.model.RecurrenceOccurrenceStatus,
+        kind: com.fluvi.core.model.RecurrenceRealizationKind?,
+        resolvedAt: Long?,
+        now: Long,
+    ): Int
+
+    @Query(
+        "UPDATE fluvi_recurrence_occurrences SET status = 'cancelled', realization_kind = NULL, " +
+            "resolved_at_utc_ms = :now, updated_at_utc_ms = :now, revision = revision + 1 " +
+            "WHERE rule_id = :ruleId AND status IN ('pending', 'review')",
+    )
+    suspend fun cancelOpenOccurrencesForArchivedRule(ruleId: String, now: Long): Int
+
+    @Query("UPDATE fluvi_recurrence_occurrences SET expected_amount_scaled_100 = :amount, expected_local_epoch_day = :epochDay, expected_local_time_minutes = :minutes, expected_at_utc_ms = :atUtc, partner_id = :partnerId, category_id = :categoryId, category_assignment_mode = :mode, note = :note, updated_at_utc_ms = :now, revision = revision + 1 WHERE id = :occurrenceId AND status = 'pending'")
+    suspend fun updatePendingOccurrence(
+        occurrenceId: String,
+        amount: Long?,
+        epochDay: Long,
+        minutes: Int,
+        atUtc: Long,
+        partnerId: String,
+        categoryId: String,
+        mode: CategoryAssignmentMode,
+        note: String?,
+        now: Long,
+    ): Int
+
+    @Query("UPDATE fluvi_app_settings SET show_pending_ghosts_in_ledger = :show, updated_at_utc_ms = :now WHERE id = :settingsId")
+    suspend fun setShowPendingGhosts(settingsId: String, show: Boolean, now: Long): Int
+
+    @Query("SELECT show_pending_ghosts_in_ledger FROM fluvi_app_settings LIMIT 1")
+    suspend fun showPendingGhosts(): Boolean?
 }

@@ -37,6 +37,7 @@ class FluviPushNotificationListenerService : NotificationListenerService() {
                     packageName = packageName, appLabel = label, title = title, text = body,
                     notificationKey = sbn.key, receivedAtUtcMs = sbn.postTime,
                 ))
+                FluviRecurrenceScheduler.scheduleNext(applicationContext, core)
             } finally {
                 core.close()
             }

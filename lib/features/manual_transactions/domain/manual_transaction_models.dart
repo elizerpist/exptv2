@@ -53,6 +53,7 @@ final class LedgerEntryDetail {
     required this.note,
     required this.originKind,
     required this.notificationInboxId,
+    this.recurrenceOccurrenceId,
     required this.revision,
   });
 
@@ -68,6 +69,7 @@ final class LedgerEntryDetail {
   final String? note;
   final String originKind;
   final String? notificationInboxId;
+  final String? recurrenceOccurrenceId;
   final int revision;
 
   factory LedgerEntryDetail.fromMap(
@@ -93,6 +95,7 @@ final class LedgerEntryDetail {
     note: value['note'] as String?,
     originKind: _string(value, 'originKind'),
     notificationInboxId: value['notificationInboxId'] as String?,
+    recurrenceOccurrenceId: value['recurrenceOccurrenceId'] as String?,
     revision: _int(value, 'revision'),
   );
 }

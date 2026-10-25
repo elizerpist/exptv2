@@ -650,6 +650,7 @@ final class ExplicitCommittedPagingController {
       commitGeneration: _commitGeneration,
       authoritativeTotalMinor: template.amount.totalMinor,
       authoritativeEntryCount: template.count.entryCount,
+      authoritativePresentationEntryCount: template.presentationEntryCount,
       pageSize: pageSize,
       pageOrdinal: _nextPageOrdinal,
       startCursor: after,
@@ -688,6 +689,7 @@ final class ExplicitCommittedPagingController {
       commitGeneration: _commitGeneration,
       authoritativeTotalMinor: template.amount.totalMinor,
       authoritativeEntryCount: template.count.entryCount,
+      authoritativePresentationEntryCount: template.presentationEntryCount,
       pageSize: pageSize,
       pageOrdinal: targetOrdinal,
       startCursor: startCursor,
@@ -1054,9 +1056,9 @@ final class ExplicitCommittedPagingController {
   }
 
   int _lastPossibleOrdinal(DashboardVisibleFrame frame) =>
-      frame.count.entryCount == 0
+      frame.presentationEntryCount == 0
       ? 0
-      : (frame.count.entryCount - 1) ~/ pageSize;
+      : (frame.presentationEntryCount - 1) ~/ pageSize;
 
   String _requestIdentity(DashboardCommittedPageRequest request) =>
       '${request.scope.key.value}|r${request.coreRevision}|g'

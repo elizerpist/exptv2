@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../domain/automation_models.dart';
 import '../domain/automation_repository.dart';
+import '../../manual_transactions/domain/manual_transaction_repository.dart';
+import '../../../core/categories/domain/fluvi_category.dart';
+import '../../dashboard/query/domain/ledger_direction.dart';
+import 'recurring_transaction_wizard_page.dart';
+import 'recurring_rule_manager_page.dart';
 import 'notification_inbox_page.dart';
 import 'push_profile_details_page.dart';
 import 'push_profile_wizard_page.dart';
@@ -11,9 +16,17 @@ class AutomationDashboardPage extends StatefulWidget {
     super.key,
     required this.repository,
     required this.permissions,
+    this.manualRepository,
+    this.categories = const <FluviCategory>[],
+    this.direction = LedgerDirection.expense,
+    this.onOpenLedgerEntry,
   });
   final AutomationRepository repository;
   final AutomationPermissionRepository permissions;
+  final ManualTransactionRepository? manualRepository;
+  final List<FluviCategory> categories;
+  final LedgerDirection direction;
+  final Future<void> Function(String entryId)? onOpenLedgerEntry;
   @override
   State<AutomationDashboardPage> createState() =>
       _AutomationDashboardPageState();
@@ -104,6 +117,23 @@ class _AutomationDashboardPageState extends State<AutomationDashboardPage>
     if (mounted) {
       _refresh();
     }
+  }
+
+  Future<void> _newRecurring() async {
+    final manual = widget.manualRepository;
+    if (manual == null) return;
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        fullscreenDialog: true,
+        builder: (_) => RecurringTransactionWizardPage(
+          repository: widget.repository,
+          manualRepository: manual,
+          categories: widget.categories,
+          initialDirection: widget.direction,
+        ),
+      ),
+    );
+    if (mounted) _refresh();
   }
 
   @override
@@ -235,6 +265,59 @@ class _AutomationDashboardPageState extends State<AutomationDashboardPage>
                         .then((_) => _refresh()),
                   ),
                 ),
+              if (widget.manualRepository != null) ...[
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Ismétlődő tranzakciók',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _newRecurring,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Új ismétlődés'),
+                    ),
+                  ],
+                ),
+                FutureBuilder<RecurrenceDashboardSnapshot>(
+                  future: widget.repository.recurrenceDashboard(),
+                  builder: (context, state) {
+                    final recurring = state.data;
+                    return Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.repeat_rounded),
+                        title: Text(
+                          recurring == null
+                              ? 'Ismétlődések betöltése…'
+                              : '${recurring.rules.where((r) => r.isActive).length} aktív szabály · ${recurring.pendingCount} várható ghost',
+                        ),
+                        subtitle: const Text(
+                          'Szabályok és várható teljesülések kezelése',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(context)
+                            .push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => RecurringRuleManagerPage(
+                                  repository: widget.repository,
+                                  manualRepository: widget.manualRepository,
+                                  categories: widget.categories,
+                                  onOpenLedgerEntry: widget.onOpenLedgerEntry,
+                                ),
+                              ),
+                            )
+                            .then((_) => _refresh()),
+                      ),
+                    );
+                  },
+                ),
+              ],
               const SizedBox(height: 28),
               Row(
                 children: [

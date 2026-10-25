@@ -41,6 +41,8 @@ data class FluviAppSettingsEntity(
     val demoSeedVersion: Int?,
     @ColumnInfo(name = "demo_seed_completed_at_utc_ms")
     val demoSeedCompletedAtUtcMs: Long?,
+    @ColumnInfo(name = "show_pending_ghosts_in_ledger")
+    val showPendingGhostsInLedger: Boolean = true,
 )
 
 @Entity(
@@ -207,6 +209,12 @@ data class FluviPartnerAliasEntity(
             childColumns = ["notification_inbox_id"],
             onDelete = ForeignKey.SET_NULL,
         ),
+        ForeignKey(
+            entity = FluviRecurrenceOccurrenceEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["recurrence_occurrence_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
     ],
     indices = [
         Index(value = ["booked_local_epoch_day", "booked_local_time_minutes", "id"]),
@@ -251,6 +259,7 @@ data class FluviPartnerAliasEntity(
             ],
         ),
         Index(value = ["notification_inbox_id"]),
+        Index(value = ["recurrence_occurrence_id"], unique = true),
     ],
 )
 data class FluviLedgerEntryEntity(
@@ -279,6 +288,9 @@ data class FluviLedgerEntryEntity(
     val originKind: LedgerOriginKind,
     @ColumnInfo(name = "notification_inbox_id")
     val notificationInboxId: String?,
+    /** Non-null only for a realized recurring occurrence; independent of originKind. */
+    @ColumnInfo(name = "recurrence_occurrence_id")
+    val recurrenceOccurrenceId: String? = null,
     @ColumnInfo(name = "created_at_utc_ms")
     val createdAtUtcMs: Long,
     @ColumnInfo(name = "updated_at_utc_ms")

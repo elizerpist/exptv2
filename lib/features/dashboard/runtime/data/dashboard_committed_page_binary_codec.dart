@@ -40,7 +40,7 @@ final class IsolateDashboardCommittedPageDecodeWorker
 /// signal. Horizontal/rail navigation has no reference to this API.
 abstract final class DashboardCommittedPageBinaryCodec {
   static const int magic = 0x464c534c;
-  static const int version = 1;
+  static const int version = 2;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
 
   static CommittedLogPage decodePage(
@@ -71,12 +71,16 @@ abstract final class DashboardCommittedPageBinaryCodec {
     final direction = _direction(reader.readString('slice.direction'));
     final totalMinor = reader.readInt64('slice.totalMinor');
     final entryCount = reader.readInt64('slice.entryCount');
+    final presentationEntryCount = reader.readInt64(
+      'slice.presentationEntryCount',
+    );
     if (queryKey != request.scope.key.value ||
         timeScopeKey != request.scope.timeScope.canonicalKey ||
         direction != request.scope.direction ||
         entryCount < 0 ||
         totalMinor != request.authoritativeTotalMinor ||
-        entryCount != request.authoritativeEntryCount) {
+        entryCount != request.authoritativeEntryCount ||
+        presentationEntryCount != request.authoritativePresentationEntryCount) {
       throw const FormatException('Committed page scope identity mismatch.');
     }
     final rowCount = reader.readBoundedCount(
@@ -101,7 +105,7 @@ abstract final class DashboardCommittedPageBinaryCodec {
       scope: request.scope,
       revision: revision,
       entries: entries,
-      entryCount: entryCount,
+      entryCount: presentationEntryCount,
       nextCursor: nextCursor,
     );
     return CommittedLogPage(

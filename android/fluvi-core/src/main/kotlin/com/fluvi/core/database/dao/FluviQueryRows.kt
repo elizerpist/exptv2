@@ -78,4 +78,6 @@ internal data class FluviCommittedDashboardRow(
     val originKind: String,
     @ColumnInfo(name = "note")
     val note: String?,
+    @ColumnInfo(name = "recurrence_occurrence_id")
+    val recurrenceOccurrenceId: String?,
 )

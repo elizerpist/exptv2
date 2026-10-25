@@ -71,7 +71,10 @@ data class FluviPreparedDashboardIndexFrame(
     val direction: LedgerDirection,
     val timeScopeKey: String,
     val totalMinor: Long,
+    /** Financial count: real booked Ledger entries only. */
     val entryCount: Long,
+    /** LogBox count: real Ledger entries plus visible pending ghosts. */
+    val presentationEntryCount: Long = entryCount,
     val rowIndices: List<Int>,
     val nextCursor: FluviTimelineCursor?,
 )

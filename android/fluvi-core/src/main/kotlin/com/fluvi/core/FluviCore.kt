@@ -24,6 +24,7 @@ import com.fluvi.core.usecase.FluviFinancialLimitUseCase
 import com.fluvi.core.usecase.FluviPartnerUseCase
 import com.fluvi.core.usecase.FluviQuerySnapshotUseCase
 import com.fluvi.core.usecase.FluviPushAutomationUseCase
+import com.fluvi.core.usecase.FluviRecurrenceUseCase
 import com.fluvi.core.usecase.SeedFluviDemoDatasetUseCase
 
 /**
@@ -40,6 +41,7 @@ class FluviCore internal constructor(
     val budget: FluviBudgetReadService,
     val snapshots: FluviQuerySnapshotUseCase,
     val automation: FluviPushAutomationUseCase,
+    val recurrences: FluviRecurrenceUseCase,
     val checkpoints: LedgerCheckpointCoordinator,
     val demoSeed: SeedFluviDemoDatasetUseCase,
 ) : AutoCloseable {
@@ -115,6 +117,14 @@ object FluviCoreFactory {
             clock = clock,
         )
 
+        val recurrences = FluviRecurrenceUseCase(
+            database = database,
+            ledger = ledgerWriter,
+            partners = partners,
+            idGenerator = idGenerator,
+            clock = clock,
+        )
+
         return FluviCore(
             database = database,
             categories = FluviCategoryUseCase(
@@ -159,9 +169,11 @@ object FluviCoreFactory {
             automation = FluviPushAutomationUseCase(
                 database = database,
                 ledger = ledgerWriter,
+                recurrences = recurrences,
                 idGenerator = idGenerator,
                 clock = clock,
             ),
+            recurrences = recurrences,
             checkpoints = checkpoints,
             demoSeed = demoSeed,
         )

@@ -1,4 +1,5 @@
 import '../../dashboard/query/domain/ledger_direction.dart';
+import '../../manual_transactions/domain/manual_transaction_models.dart';
 
 enum PushProfileState {
   waitingForPermission,
@@ -270,3 +271,156 @@ List<Map<Object?, Object?>> _list(Object? value) =>
               : Map<Object?, Object?>.from(item as Map),
         )
         .toList(growable: false);
+
+enum RecurrenceTriggerKind { time, push }
+
+enum RecurrenceAmountPolicy { fixed, estimated, unknown }
+
+enum RecurrenceOccurrenceStatus {
+  pending,
+  review,
+  realized,
+  skipped,
+  cancelled,
+  voided,
+}
+
+final class RecurrenceRule {
+  const RecurrenceRule({
+    required this.ruleId,
+    required this.name,
+    required this.partnerId,
+    required this.categoryId,
+    required this.categoryAssignmentMode,
+    required this.direction,
+    required this.note,
+    required this.triggerKind,
+    required this.amountPolicy,
+    required this.amountScaled100,
+    required this.dayOfMonth,
+    required this.localTimeMinutes,
+    required this.startLocalEpochDay,
+    required this.endLocalEpochDay,
+    required this.timezoneId,
+    required this.isActive,
+    required this.ruleVersion,
+  });
+  factory RecurrenceRule.fromMap(Map<Object?, Object?> value) => RecurrenceRule(
+    ruleId: value['ruleId']! as String,
+    name: value['name']! as String,
+    partnerId: value['partnerId']! as String,
+    categoryId: value['categoryId']! as String,
+    categoryAssignmentMode: value['categoryAssignmentMode']! as String,
+    direction: LedgerDirection.values.byName(value['direction']! as String),
+    note: value['note'] as String?,
+    triggerKind: RecurrenceTriggerKind.values.byName(
+      value['triggerKind']! as String,
+    ),
+    amountPolicy: RecurrenceAmountPolicy.values.byName(
+      value['amountPolicy']! as String,
+    ),
+    amountScaled100: (value['amountScaled100'] as num?)?.toInt(),
+    dayOfMonth: (value['dayOfMonth'] as num).toInt(),
+    localTimeMinutes: (value['localTimeMinutes'] as num).toInt(),
+    startLocalEpochDay: (value['startLocalEpochDay'] as num).toInt(),
+    endLocalEpochDay: (value['endLocalEpochDay'] as num?)?.toInt(),
+    timezoneId: value['timezoneId']! as String,
+    isActive: value['isActive'] == true,
+    ruleVersion: (value['ruleVersion'] as num?)?.toInt() ?? 1,
+  );
+  final String ruleId,
+      name,
+      partnerId,
+      categoryId,
+      categoryAssignmentMode,
+      timezoneId;
+  final LedgerDirection direction;
+  final String? note;
+  final RecurrenceTriggerKind triggerKind;
+  final RecurrenceAmountPolicy amountPolicy;
+  final int? amountScaled100, endLocalEpochDay;
+  final int dayOfMonth, localTimeMinutes, startLocalEpochDay, ruleVersion;
+  final bool isActive;
+}
+
+final class RecurrenceOccurrence {
+  const RecurrenceOccurrence({
+    required this.occurrenceId,
+    required this.ruleId,
+    required this.occurrenceKey,
+    required this.expectedLocalEpochDay,
+    required this.expectedLocalTimeMinutes,
+    required this.expectedAtUtcMs,
+    required this.partnerId,
+    required this.categoryId,
+    required this.categoryAssignmentMode,
+    required this.direction,
+    required this.expectedAmountScaled100,
+    required this.note,
+    required this.triggerKind,
+    required this.status,
+    required this.realizationKind,
+  });
+  factory RecurrenceOccurrence.fromMap(Map<Object?, Object?> value) =>
+      RecurrenceOccurrence(
+        occurrenceId: value['occurrenceId']! as String,
+        ruleId: value['ruleId']! as String,
+        occurrenceKey: value['occurrenceKey']! as String,
+        expectedLocalEpochDay: (value['expectedLocalEpochDay'] as num).toInt(),
+        expectedLocalTimeMinutes: (value['expectedLocalTimeMinutes'] as num)
+            .toInt(),
+        expectedAtUtcMs: (value['expectedAtUtcMs'] as num).toInt(),
+        partnerId: value['partnerId']! as String,
+        categoryId: value['categoryId']! as String,
+        categoryAssignmentMode: switch (value['categoryAssignmentMode']!
+            as String) {
+          'partnerDefault' => ManualCategoryAssignmentMode.partnerDefault,
+          'entryOverride' => ManualCategoryAssignmentMode.entryOverride,
+          final mode => throw FormatException(
+            'Unknown recurrence category mode $mode.',
+          ),
+        },
+        direction: LedgerDirection.values.byName(value['direction']! as String),
+        expectedAmountScaled100: (value['expectedAmountScaled100'] as num?)
+            ?.toInt(),
+        note: value['note'] as String?,
+        triggerKind: RecurrenceTriggerKind.values.byName(
+          value['triggerKind']! as String,
+        ),
+        status: RecurrenceOccurrenceStatus.values.byName(
+          value['status']! as String,
+        ),
+        realizationKind: value['realizationKind'] as String?,
+      );
+  final String occurrenceId, ruleId, occurrenceKey, partnerId, categoryId;
+  final ManualCategoryAssignmentMode categoryAssignmentMode;
+  final int expectedLocalEpochDay, expectedLocalTimeMinutes, expectedAtUtcMs;
+  final LedgerDirection direction;
+  final int? expectedAmountScaled100;
+  final String? note, realizationKind;
+  final RecurrenceTriggerKind triggerKind;
+  final RecurrenceOccurrenceStatus status;
+}
+
+final class RecurrenceDashboardSnapshot {
+  const RecurrenceDashboardSnapshot({
+    required this.rules,
+    required this.pendingCount,
+    required this.dueCount,
+    required this.realizedCount,
+    required this.showPendingGhostsInLedger,
+  });
+  factory RecurrenceDashboardSnapshot.fromMap(Map<Object?, Object?> value) =>
+      RecurrenceDashboardSnapshot(
+        rules: _list(
+          value['rules'],
+        ).map(RecurrenceRule.fromMap).toList(growable: false),
+        pendingCount: (value['pendingCount'] as num?)?.toInt() ?? 0,
+        dueCount: (value['dueCount'] as num?)?.toInt() ?? 0,
+        realizedCount: (value['realizedCount'] as num?)?.toInt() ?? 0,
+        showPendingGhostsInLedger: value['showPendingGhostsInLedger'] != false,
+      );
+  final List<RecurrenceRule> rules;
+  final int pendingCount, dueCount, realizedCount;
+  final bool showPendingGhostsInLedger;
+}

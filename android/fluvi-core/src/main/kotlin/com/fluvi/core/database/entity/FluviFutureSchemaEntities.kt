@@ -13,6 +13,8 @@ import com.fluvi.core.model.NotificationTrainingStatus
 import com.fluvi.core.model.PushReviewStatus
 import com.fluvi.core.model.RecurrenceAmountPolicy
 import com.fluvi.core.model.RecurrenceTriggerKind
+import com.fluvi.core.model.RecurrenceOccurrenceStatus
+import com.fluvi.core.model.RecurrenceRealizationKind
 
 @Entity(
     tableName = "fluvi_recurrence_rules",
@@ -40,6 +42,8 @@ data class FluviRecurrenceRuleEntity(
     @PrimaryKey
     @ColumnInfo(name = "id")
     val id: String,
+    @ColumnInfo(name = "name")
+    val name: String,
     @ColumnInfo(name = "trigger_kind")
     val triggerKind: RecurrenceTriggerKind,
     @ColumnInfo(name = "partner_id")
@@ -54,8 +58,23 @@ data class FluviRecurrenceRuleEntity(
     val direction: LedgerDirection,
     @ColumnInfo(name = "amount_policy")
     val amountPolicy: RecurrenceAmountPolicy,
+    /** Zero is the legacy sentinel for UNKNOWN; occurrences keep a nullable expected amount. */
     @ColumnInfo(name = "amount_scaled_100")
     val amountScaled100: Long,
+    @ColumnInfo(name = "day_of_month")
+    val dayOfMonth: Int,
+    @ColumnInfo(name = "local_time_minutes")
+    val localTimeMinutes: Int,
+    @ColumnInfo(name = "start_local_epoch_day")
+    val startLocalEpochDay: Long,
+    @ColumnInfo(name = "end_local_epoch_day")
+    val endLocalEpochDay: Long?,
+    @ColumnInfo(name = "timezone_id")
+    val timezoneId: String,
+    @ColumnInfo(name = "rule_version")
+    val ruleVersion: Int,
+    @ColumnInfo(name = "archived_at_utc_ms")
+    val archivedAtUtcMs: Long?,
     @ColumnInfo(name = "is_active")
     val isActive: Boolean,
     @ColumnInfo(name = "created_at_utc_ms")
@@ -95,11 +114,17 @@ data class FluviTimeRecurringRuleConfigEntity(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
+    indices = [Index(value = ["push_profile_id", "push_rule_id"])],
 )
 data class FluviPushRecurringRuleConfigEntity(
     @PrimaryKey
     @ColumnInfo(name = "rule_id")
     val ruleId: String,
+    /** Stable Parser v2 source; both identifiers are nullable for imported legacy drafts. */
+    @ColumnInfo(name = "push_profile_id")
+    val pushProfileId: String?,
+    @ColumnInfo(name = "push_rule_id")
+    val pushRuleId: String?,
     @ColumnInfo(name = "expected_local_time_minutes")
     val expectedLocalTimeMinutes: Int,
     @ColumnInfo(name = "amount_tolerance_scaled_100")
@@ -169,6 +194,47 @@ data class FluviOccurrenceOverrideEntity(
     val createdAtUtcMs: Long,
     @ColumnInfo(name = "updated_at_utc_ms")
     val updatedAtUtcMs: Long,
+)
+
+@Entity(
+    tableName = "fluvi_recurrence_occurrences",
+    foreignKeys = [
+        ForeignKey(entity = FluviRecurrenceRuleEntity::class, parentColumns = ["id"], childColumns = ["rule_id"], onDelete = ForeignKey.NO_ACTION),
+        ForeignKey(entity = FluviPartnerEntity::class, parentColumns = ["id"], childColumns = ["partner_id"], onDelete = ForeignKey.NO_ACTION),
+        ForeignKey(entity = FluviCategoryEntity::class, parentColumns = ["id"], childColumns = ["category_id"], onDelete = ForeignKey.NO_ACTION),
+    ],
+    indices = [
+        Index(value = ["rule_id", "occurrence_key"], unique = true),
+        Index(value = ["status", "expected_local_epoch_day"]),
+        Index(value = ["direction", "expected_local_epoch_day", "expected_local_time_minutes", "id"]),
+        Index(value = ["partner_id", "status"]),
+        Index(value = ["category_id", "status"]),
+        Index(value = ["expected_at_utc_ms", "status"]),
+    ],
+)
+data class FluviRecurrenceOccurrenceEntity(
+    @PrimaryKey @ColumnInfo(name = "id") val id: String,
+    @ColumnInfo(name = "rule_id") val ruleId: String,
+    @ColumnInfo(name = "occurrence_key") val occurrenceKey: String,
+    @ColumnInfo(name = "rule_version") val ruleVersion: Int,
+    @ColumnInfo(name = "expected_local_epoch_day") val expectedLocalEpochDay: Long,
+    @ColumnInfo(name = "expected_local_time_minutes") val expectedLocalTimeMinutes: Int,
+    @ColumnInfo(name = "expected_at_utc_ms") val expectedAtUtcMs: Long,
+    @ColumnInfo(name = "timezone_id") val timezoneId: String,
+    @ColumnInfo(name = "partner_id") val partnerId: String,
+    @ColumnInfo(name = "category_id") val categoryId: String,
+    @ColumnInfo(name = "category_assignment_mode") val categoryAssignmentMode: CategoryAssignmentMode,
+    @ColumnInfo(name = "direction") val direction: LedgerDirection,
+    @ColumnInfo(name = "expected_amount_scaled_100") val expectedAmountScaled100: Long?,
+    @ColumnInfo(name = "amount_policy") val amountPolicy: RecurrenceAmountPolicy,
+    @ColumnInfo(name = "note") val note: String?,
+    @ColumnInfo(name = "trigger_kind") val triggerKind: RecurrenceTriggerKind,
+    @ColumnInfo(name = "status") val status: RecurrenceOccurrenceStatus,
+    @ColumnInfo(name = "realization_kind") val realizationKind: RecurrenceRealizationKind?,
+    @ColumnInfo(name = "resolved_at_utc_ms") val resolvedAtUtcMs: Long?,
+    @ColumnInfo(name = "created_at_utc_ms") val createdAtUtcMs: Long,
+    @ColumnInfo(name = "updated_at_utc_ms") val updatedAtUtcMs: Long,
+    @ColumnInfo(name = "revision") val revision: Long,
 )
 
 @Entity(

@@ -100,10 +100,9 @@ class FluviPreparedDashboardIndexTest {
 
         assertEquals(2L, index.coreRevision)
         assertEquals(9L, index.requestGeneration)
-        // Geometry is compact metadata from the already-counted daily
-        // aggregate rows. It must not add a sixth query or depend on the
-        // bounded preview row table.
-        assertEquals(5, index.buildMetrics.sqlCallCount)
+        // Pending occurrence snapshots join the real-row presentation lane in
+        // one bounded query; they remain absent from financial aggregates.
+        assertEquals(6, index.buildMetrics.sqlCallCount)
         assertEquals(4, index.buildMetrics.aggregateBucketCount)
 
         val incomeAll = index.frame(LedgerDirection.income, "all")
@@ -161,7 +160,7 @@ class FluviPreparedDashboardIndexTest {
             yearWindow = FluviPreparedYearWindow(2014, 2038),
         )
 
-        assertEquals(5, index.buildMetrics.sqlCallCount)
+        assertEquals(6, index.buildMetrics.sqlCallCount)
         assertEquals(2L, index.frame(LedgerDirection.expense, "all").entryCount)
         assertTrue(index.frames.none { it.timeScopeKey == "day:2026-03-15" })
         assertTrue(index.frames.none { it.direction == LedgerDirection.income })
@@ -211,7 +210,7 @@ class FluviPreparedDashboardIndexTest {
             yearWindow = FluviPreparedYearWindow(2025, 2027),
         )
 
-        assertEquals(5, index.buildMetrics.sqlCallCount)
+        assertEquals(6, index.buildMetrics.sqlCallCount)
         assertEquals(2L, index.frame(LedgerDirection.income, "all").entryCount)
         assertEquals(3L, index.frame(LedgerDirection.expense, "all").entryCount)
         assertTrue(index.frames.none {
@@ -312,7 +311,7 @@ class FluviPreparedDashboardIndexTest {
                 LocalDate.ofEpochDay(row.bookedLocalEpochDay).year == 2025
             },
         )
-        assertEquals(5, index.buildMetrics.sqlCallCount)
+        assertEquals(6, index.buildMetrics.sqlCallCount)
     }
 
     @Test

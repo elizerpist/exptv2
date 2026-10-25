@@ -1,4 +1,5 @@
 import '../../dashboard/query/domain/ledger_direction.dart';
+import '../../manual_transactions/domain/manual_transaction_models.dart';
 import '../domain/automation_models.dart';
 import '../domain/automation_repository.dart';
 
@@ -71,6 +72,61 @@ final class UnavailableAutomationRepository implements AutomationRepository {
   }) async => _unavailable();
   @override
   Future<void> ignoreReview(String notificationId) async => _unavailable();
+  @override
+  Future<RecurrenceDashboardSnapshot> recurrenceDashboard() async =>
+      _unavailable();
+  @override
+  Future<List<RecurrenceRule>> recurringRules() async => _unavailable();
+  @override
+  Future<List<RecurrenceOccurrence>> recurrenceOccurrences({
+    RecurrenceOccurrenceStatus? status,
+    int limit = 100,
+    int offset = 0,
+  }) async => _unavailable();
+  @override
+  Future<String?> realizedRecurrenceLedgerEntryId(String occurrenceId) async =>
+      _unavailable();
+  @override
+  Future<RecurrenceRule> createRecurringRule({
+    required String name,
+    required String partnerId,
+    required ManualCategorySelection categorySelection,
+    required LedgerDirection direction,
+    String? note,
+    required RecurrenceTriggerKind triggerKind,
+    required RecurrenceAmountPolicy amountPolicy,
+    int? amountScaled100,
+    required int dayOfMonth,
+    required int localTimeMinutes,
+    required int startLocalEpochDay,
+    int? endLocalEpochDay,
+    required String timezoneId,
+    String? pushProfileId,
+    String? pushRuleId,
+    int amountToleranceScaled100 = 0,
+    int dayWindow = 2,
+  }) async => _unavailable();
+  @override
+  Future<void> setRecurringRuleActive(String ruleId, bool isActive) async =>
+      _unavailable();
+  @override
+  Future<void> archiveRecurringRule(String ruleId) async => _unavailable();
+  @override
+  Future<void> setShowPendingGhosts(bool show) async => _unavailable();
+  @override
+  Future<void> skipRecurrenceOccurrence(String occurrenceId) async =>
+      _unavailable();
+  @override
+  Future<RecurrenceOccurrence> updateRecurrenceOccurrence({
+    required String occurrenceId,
+    int? expectedAmountScaled100,
+    int? expectedLocalEpochDay,
+    int? expectedLocalTimeMinutes,
+    String? partnerId,
+    ManualCategorySelection? categorySelection,
+    bool noteChanged = false,
+    String? note,
+  }) async => _unavailable();
 }
 
 final class UnavailableAutomationPermissionRepository
