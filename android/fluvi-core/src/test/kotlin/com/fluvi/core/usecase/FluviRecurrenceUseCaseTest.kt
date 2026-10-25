@@ -108,9 +108,9 @@ class FluviRecurrenceUseCaseTest {
         core.recurrences.setShowPendingGhostsInLedger(false)
         assertFalse(core.recurrences.dashboard().showPendingGhostsInLedger)
         assertEquals(
+            "Hiding pending previews must not hide realized ghost-origin ledger entries.",
             12L,
             core.query.readSlice(onlyGhostScope).presentationEntryCount,
-            "Hiding pending previews must not hide realized ghost-origin ledger entries.",
         )
         assertEquals(rule.ruleId, core.recurrences.rules().single().ruleId)
     }
