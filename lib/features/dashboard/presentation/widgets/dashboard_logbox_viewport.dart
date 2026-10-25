@@ -90,6 +90,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.onClearFocusSearch,
     this.onClearFocus,
     this.onSearchChanged,
+    this.onOpenQueryMenu,
   });
 
   final DashboardBounds bounds;
@@ -138,6 +139,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final VoidCallback? onClearFocusSearch;
   final VoidCallback? onClearFocus;
   final ValueChanged<String>? onSearchChanged;
+  final VoidCallback? onOpenQueryMenu;
 
   @override
   State<DashboardLogBoxViewport> createState() =>
@@ -631,6 +633,7 @@ final class _DashboardLogBoxViewportState
                 searchController: _searchController,
                 searchFocusNode: _searchFocusNode,
                 onSearchChanged: widget.onSearchChanged,
+                onOpenQueryMenu: widget.onOpenQueryMenu,
                 showExternalFacets: hasExternalFacets,
                 showInsideFacets:
                     _hasQueryFacets &&

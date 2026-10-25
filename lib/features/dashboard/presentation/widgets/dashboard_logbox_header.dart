@@ -46,6 +46,7 @@ final class DashboardLogBoxHeader extends StatelessWidget {
     this.searchController,
     this.searchFocusNode,
     this.onSearchChanged,
+    this.onOpenQueryMenu,
     this.showExternalFacets = true,
     this.showInsideFacets = false,
     this.queryFacetStyle = DashboardQueryFacetPillStyle.current,
@@ -68,6 +69,7 @@ final class DashboardLogBoxHeader extends StatelessWidget {
   final TextEditingController? searchController;
   final FocusNode? searchFocusNode;
   final ValueChanged<String>? onSearchChanged;
+  final VoidCallback? onOpenQueryMenu;
   final bool showExternalFacets;
   final bool showInsideFacets;
   final DashboardQueryFacetPillStyle queryFacetStyle;
@@ -94,6 +96,7 @@ final class DashboardLogBoxHeader extends StatelessWidget {
               searchController: searchController,
               searchFocusNode: searchFocusNode,
               onSearchChanged: onSearchChanged,
+              onOpenQueryMenu: onOpenQueryMenu,
               insideFacetChips:
                   showInsideFacets &&
                       currentQuery != null &&
@@ -155,6 +158,7 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
     this.searchController,
     this.searchFocusNode,
     this.onSearchChanged,
+    this.onOpenQueryMenu,
     this.insideFacetChips,
   });
 
@@ -166,6 +170,7 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
   final TextEditingController? searchController;
   final FocusNode? searchFocusNode;
   final ValueChanged<String>? onSearchChanged;
+  final VoidCallback? onOpenQueryMenu;
   final Widget? insideFacetChips;
 
   @override
@@ -190,25 +195,41 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
               SizedBox(
                 height: DashboardLogBoxTokens.ledgerCountHeight * scale,
                 width: double.infinity,
-                child: Semantics(
-                  label: '$count tranzakció listázva',
-                  child: ExcludeSemantics(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal:
-                            FluviVisualTokens.controlHorizontalInset * scale,
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          '$count tranzakció listázva',
-                          key: const ValueKey('dashboard-logbox-entry-count'),
-                          maxLines: 1,
-                          style: FluviVisualTokens.logBoxHeaderTextStyle,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Semantics(
+                        label: '$count tranzakció listázva',
+                        child: ExcludeSemantics(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal:
+                                  FluviVisualTokens.controlHorizontalInset *
+                                  scale,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '$count tranzakció listázva',
+                                key: const ValueKey(
+                                  'dashboard-logbox-entry-count',
+                                ),
+                                maxLines: 1,
+                                style: FluviVisualTokens.logBoxHeaderTextStyle,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    if (!showsSearchPill && onOpenQueryMenu != null)
+                      _DashboardLogBoxFilterButton(
+                        scale: scale,
+                        compact: true,
+                        onTap: onOpenQueryMenu!,
+                      ),
+                  ],
                 ),
               ),
               if (showsSearchPill) ...<Widget>[
@@ -218,12 +239,13 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
                 SizedBox(
                   height: DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
                   width: double.infinity,
-                  child: _DashboardLogBoxSearchPill(
+                  child: _DashboardLogBoxSearchAndFilterRow(
                     scale: scale,
                     bounds: bounds,
                     controller: searchController,
                     focusNode: searchFocusNode,
                     onChanged: onSearchChanged,
+                    onOpenQueryMenu: onOpenQueryMenu,
                     insideFacetChips: insideFacetChips,
                   ),
                 ),
@@ -242,6 +264,102 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
         }
         return result;
       },
+    );
+  }
+}
+
+final class _DashboardLogBoxSearchAndFilterRow extends StatelessWidget {
+  const _DashboardLogBoxSearchAndFilterRow({
+    required this.scale,
+    required this.bounds,
+    this.controller,
+    this.focusNode,
+    this.onChanged,
+    this.onOpenQueryMenu,
+    this.insideFacetChips,
+  });
+
+  final double scale;
+  final DashboardBounds bounds;
+  final TextEditingController? controller;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onOpenQueryMenu;
+  final Widget? insideFacetChips;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    // The fixed-height parent is the source of truth for both controls.  A
+    // centered Row would let the SearchPill choose its intrinsic height while
+    // the filter button fills the lane, making the controls look misaligned
+    // and leaving a phantom gap before the LogBox list.
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Expanded(
+        child: _DashboardLogBoxSearchPill(
+          scale: scale,
+          bounds: DashboardBounds(
+            left: bounds.left,
+            top: bounds.top,
+            width: (bounds.width - 56 * scale)
+                .clamp(0.0, bounds.width)
+                .toDouble(),
+            height: bounds.height,
+          ),
+          controller: controller,
+          focusNode: focusNode,
+          onChanged: onChanged,
+          insideFacetChips: insideFacetChips,
+        ),
+      ),
+      SizedBox(width: 8 * scale),
+      _DashboardLogBoxFilterButton(scale: scale, onTap: onOpenQueryMenu),
+    ],
+  );
+}
+
+final class _DashboardLogBoxFilterButton extends StatelessWidget {
+  const _DashboardLogBoxFilterButton({
+    required this.scale,
+    required this.onTap,
+    this.compact = false,
+  });
+  final double scale;
+  final VoidCallback? onTap;
+  final bool compact;
+  @override
+  Widget build(BuildContext context) {
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.searchPill);
+    final size = compact
+        ? DashboardLogBoxTokens.ledgerCountHeight * scale
+        : DashboardLogBoxTokens.ledgerSearchPillHeight * scale;
+    return Semantics(
+      button: true,
+      label: 'Tranzakciók szűrése',
+      child: SizedBox(
+        key: const ValueKey('dashboard-logbox-filter-button'),
+        width: compact ? size : 48 * scale,
+        height: size,
+        child: FluviRoundedBox(
+          color: depth.surfaceColor ?? FluviVisualTokens.surface,
+          border: DashboardBorderScope.profileOf(
+            context,
+          ).borderFor(DashboardBorderSurface.searchPill),
+          borderRadius: BorderRadius.circular(14 * scale),
+          boxShadow: depth.shadows,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(14 * scale),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14 * scale),
+              child: Icon(Icons.tune_rounded, size: 22 * scale),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

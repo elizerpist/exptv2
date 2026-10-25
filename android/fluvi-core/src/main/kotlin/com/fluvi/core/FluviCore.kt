@@ -23,6 +23,7 @@ import com.fluvi.core.usecase.FluviLedgerWriteUseCase
 import com.fluvi.core.usecase.FluviFinancialLimitUseCase
 import com.fluvi.core.usecase.FluviPartnerUseCase
 import com.fluvi.core.usecase.FluviQuerySnapshotUseCase
+import com.fluvi.core.usecase.FluviPushAutomationUseCase
 import com.fluvi.core.usecase.SeedFluviDemoDatasetUseCase
 
 /**
@@ -38,6 +39,7 @@ class FluviCore internal constructor(
     val query: FluviLedgerReadService,
     val budget: FluviBudgetReadService,
     val snapshots: FluviQuerySnapshotUseCase,
+    val automation: FluviPushAutomationUseCase,
     val checkpoints: LedgerCheckpointCoordinator,
     val demoSeed: SeedFluviDemoDatasetUseCase,
 ) : AutoCloseable {
@@ -101,6 +103,17 @@ object FluviCoreFactory {
             outbox = outbox,
             clock = clock,
         )
+        val ledgerWriter = FluviLedgerWriteUseCase(
+            database = database,
+            ledgerRepository = ledger,
+            archiveRepository = FluviLedgerDeletionArchiveRepository(database),
+            partnerRepository = partners,
+            categoryRepository = categories,
+            changePublisher = publisher,
+            checkpointCoordinator = checkpoints,
+            idGenerator = idGenerator,
+            clock = clock,
+        )
 
         return FluviCore(
             database = database,
@@ -121,17 +134,7 @@ object FluviCoreFactory {
                 idGenerator = idGenerator,
                 clock = clock,
             ),
-            ledger = FluviLedgerWriteUseCase(
-                database = database,
-                ledgerRepository = ledger,
-                archiveRepository = FluviLedgerDeletionArchiveRepository(database),
-                partnerRepository = partners,
-                categoryRepository = categories,
-                changePublisher = publisher,
-                checkpointCoordinator = checkpoints,
-                idGenerator = idGenerator,
-                clock = clock,
-            ),
+            ledger = ledgerWriter,
             financialLimits = FluviFinancialLimitUseCase(
                 database = database,
                 clock = clock,
@@ -150,6 +153,12 @@ object FluviCoreFactory {
             ),
             snapshots = FluviQuerySnapshotUseCase(
                 database = database,
+                idGenerator = idGenerator,
+                clock = clock,
+            ),
+            automation = FluviPushAutomationUseCase(
+                database = database,
+                ledger = ledgerWriter,
                 idGenerator = idGenerator,
                 clock = clock,
             ),

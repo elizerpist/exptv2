@@ -17,6 +17,15 @@ import com.fluvi.core.model.LedgerCategorySelection
 import com.fluvi.core.model.ManualTransactionPartnerSelection
 import com.fluvi.core.model.UpdateLedgerEntryCommand
 import com.fluvi.core.model.UpdatePartnerCommand
+import com.fluvi.core.model.CreatePushProfileCommand
+import com.fluvi.core.model.UpdatePushProfileCommand
+import com.fluvi.core.model.CreatePushRuleCommand
+import com.fluvi.core.model.PushFieldSpan
+import com.fluvi.core.model.PushFieldRole
+import com.fluvi.core.model.PushProfileState
+import com.fluvi.core.model.PushSampleKind
+import com.fluvi.core.model.PushTransactionDirection
+import com.fluvi.core.model.ApprovePushReviewCommand
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
@@ -55,6 +64,8 @@ class MainActivity : FlutterActivity() {
     private var core: FluviCore? = null
     private var categoryChannel: MethodChannel? = null
     private var manualTransactionChannel: MethodChannel? = null
+    private var automationChannel: MethodChannel? = null
+    private var automationPermissionChannel: MethodChannel? = null
     private var financialLimitChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
     private var queryTaskQueue: BinaryMessenger.TaskQueue? = null
@@ -147,6 +158,50 @@ class MainActivity : FlutterActivity() {
                         )
                     }
                 }
+            }
+        }
+        automationChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            AUTOMATION_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                scope.launch {
+                    runCatching { withContext(Dispatchers.IO) { handleAutomationCall(call, fluviCore) } }
+                        .onSuccess(result::success)
+                        .onFailure { error ->
+                            result.error(
+                                if (error is IllegalArgumentException) "validation" else "automation_error",
+                                error.message ?: "Automation operation failed.",
+                                null,
+                            )
+                        }
+                }
+            }
+        }
+        automationPermissionChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            AUTOMATION_PERMISSION_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                val platform = FluviAutomationPlatform(this)
+                val value = when (call.method) {
+                    "getPermissionStatus" -> platform.permissionStatus()
+                    "openNotificationAccessSettings" -> platform.openNotificationAccessSettings()
+                    "openAppNotificationSettings" -> platform.openAppNotificationSettings()
+                    "openAppInfoSettings" -> platform.openAppInfoSettings()
+                    "requestPostNotifications" -> platform.requestPostNotifications()
+                    "sendTestNotification" -> platform.sendTestNotification()
+                    "listInstalledApps" -> {
+                        scope.launch {
+                            runCatching { withContext(Dispatchers.IO) { platform.listInstalledApps() } }
+                                .onSuccess(result::success)
+                                .onFailure { result.error("installed_apps_error", it.message, null) }
+                        }
+                        null
+                    }
+                    else -> return@setMethodCallHandler result.notImplemented()
+                }
+                if (call.method != "listInstalledApps") result.success(value)
             }
         }
         financialLimitChannel = MethodChannel(
@@ -433,6 +488,10 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         categoryChannel?.setMethodCallHandler(null)
         manualTransactionChannel?.setMethodCallHandler(null)
+        automationChannel?.setMethodCallHandler(null)
+        automationPermissionChannel?.setMethodCallHandler(null)
+        automationChannel = null
+        automationPermissionChannel = null
         categoryChannel = null
         financialLimitChannel?.setMethodCallHandler(null)
         financialLimitChannel = null
@@ -546,6 +605,102 @@ class MainActivity : FlutterActivity() {
             ?.let(::partnerDirectoryMap)
         else -> throw IllegalArgumentException("Unknown manual transaction method: ${call.method}")
     }
+
+    private suspend fun handleAutomationCall(
+        call: MethodCall,
+        fluviCore: FluviCore,
+    ): Any? = when (call.method) {
+        "getDashboard" -> automationDashboardMap(fluviCore.automation.dashboard())
+        "listProfiles" -> fluviCore.automation.listProfiles().map(::pushProfileMap)
+        "getProfile" -> pushProfileMap(fluviCore.automation.profile(requireArgument(call, "profileId")))
+        "listRules" -> fluviCore.automation.rules(requireArgument(call, "profileId")).map(::pushRuleMap)
+        "listInbox" -> fluviCore.automation.inbox(
+            call.argument<String>("profileId"), requireInt(call, "limit"), requireInt(call, "offset"),
+        ).map(::pushInboxMap)
+        "createProfile" -> pushProfileMap(fluviCore.automation.createProfile(
+            CreatePushProfileCommand(
+                packageName = requireArgument(call, "packageName"), appLabel = requireArgument(call, "appLabel"),
+                displayName = requireArgument(call, "displayName"),
+                defaultDirection = PushTransactionDirection.valueOf(requireArgument(call, "defaultDirection")),
+                monitoringRequested = call.argument<Boolean>("monitoringRequested") ?: true,
+                notificationAccessGranted = call.argument<Boolean>("notificationAccessGranted") ?: false,
+            ),
+        ))
+        "updateProfile" -> pushProfileMap(fluviCore.automation.updateProfile(
+            UpdatePushProfileCommand(
+                profileId = requireArgument(call, "profileId"), displayName = requireArgument(call, "displayName"),
+                defaultDirection = PushTransactionDirection.valueOf(requireArgument(call, "defaultDirection")),
+                state = PushProfileState.valueOf(requireArgument(call, "state")),
+            ),
+        ))
+        "deleteProfile" -> fluviCore.automation.deleteProfile(requireArgument(call, "profileId"))
+        "addTrainingSample" -> fluviCore.automation.addTrainingSample(
+            requireArgument(call, "profileId"), requireArgument(call, "notificationId"),
+            PushSampleKind.valueOf(requireArgument(call, "sampleKind")), requireArgument(call, "spansJson"),
+        )
+        "createRule" -> pushRuleMap(fluviCore.automation.createRule(
+            CreatePushRuleCommand(
+                profileId = requireArgument(call, "profileId"), notificationId = requireArgument(call, "notificationId"),
+                name = requireArgument(call, "name"), direction = LedgerDirection.valueOf(requireArgument(call, "direction")),
+                priority = call.argument<Number>("priority")?.toInt() ?: 100,
+                autoAcceptThreshold = call.argument<Number>("autoAcceptThreshold")?.toDouble() ?: .90,
+                spans = requireArgument<List<Map<String, Any?>>>(call, "spans").map { span ->
+                    PushFieldSpan(
+                        start = (span["start"] as? Number)?.toInt() ?: throw IllegalArgumentException("Missing span start."),
+                        endExclusive = (span["endExclusive"] as? Number)?.toInt() ?: throw IllegalArgumentException("Missing span end."),
+                        role = PushFieldRole.valueOf(span["role"] as? String ?: throw IllegalArgumentException("Missing span role.")),
+                    )
+                },
+            ),
+        ))
+        "backtestRule" -> pushRuleTestMap(fluviCore.automation.backtest(requireArgument(call, "ruleId")))
+        "activateRule" -> pushRuleMap(fluviCore.automation.activateRule(requireArgument(call, "ruleId")))
+        "approveReview" -> mapOf("ledgerEntryId" to fluviCore.automation.approveReview(
+            ApprovePushReviewCommand(
+                notificationId = requireArgument(call, "notificationId"), merchantName = requireArgument(call, "merchantName"),
+                direction = LedgerDirection.valueOf(requireArgument(call, "direction")), amountScaled100 = requireLong(call, "amountScaled100"),
+                bookedLocalEpochDay = requireLong(call, "bookedLocalEpochDay"), bookedLocalTimeMinutes = requireInt(call, "bookedLocalTimeMinutes"),
+                occurredAtUtcMs = requireLong(call, "occurredAtUtcMs"), note = call.argument<String>("note"),
+                trainingCorrectionJson = call.argument<String>("trainingCorrectionJson"),
+            ),
+        ))
+        "ignoreReview" -> fluviCore.automation.ignoreReview(requireArgument(call, "notificationId"))
+        else -> throw IllegalArgumentException("Unknown automation method: ${call.method}")
+    }
+
+    private fun pushProfileMap(profile: com.fluvi.core.model.FluviPushProfile): Map<String, Any?> = mapOf(
+        "profileId" to profile.profileId, "packageName" to profile.packageName, "appLabel" to profile.appLabel,
+        "displayName" to profile.displayName, "defaultDirection" to profile.defaultDirection.name,
+        "state" to profile.state.name, "ruleCount" to profile.ruleCount, "inboxCount" to profile.inboxCount,
+        "revision" to profile.revision,
+    )
+
+    private fun pushRuleMap(rule: com.fluvi.core.model.FluviPushRule): Map<String, Any?> = mapOf(
+        "ruleId" to rule.ruleId, "profileId" to rule.profileId, "name" to rule.name, "direction" to rule.direction.name,
+        "state" to rule.state.name, "version" to rule.version, "priority" to rule.priority,
+        "autoAcceptThreshold" to rule.autoAcceptThreshold,
+    )
+
+    private fun pushInboxMap(item: com.fluvi.core.model.FluviNotificationInboxItem): Map<String, Any?> = mapOf(
+        "notificationId" to item.notificationId, "profileId" to item.profileId, "sourcePackageName" to item.sourcePackageName,
+        "sourceAppLabel" to item.sourceAppLabel, "title" to item.title, "rawText" to item.rawText,
+        "receivedAtUtcMs" to item.receivedAtUtcMs, "parseStatus" to item.parseStatus.name,
+        "processingStatus" to item.processingStatus.name, "trainingStatus" to item.trainingStatus.name,
+        "reviewStatus" to item.reviewStatus.name, "confidence" to item.confidence,
+        "suggestedPayloadJson" to item.suggestedPayloadJson, "diagnosticsJson" to item.diagnosticsJson,
+        "ledgerEntryId" to item.ledgerEntryId,
+    )
+
+    private fun pushRuleTestMap(report: com.fluvi.core.model.PushRuleTestReport): Map<String, Any?> = mapOf(
+        "ruleId" to report.ruleId, "matchedCount" to report.matchedCount, "reviewCount" to report.reviewCount,
+        "rejectedCount" to report.rejectedCount, "conflictedCount" to report.conflictedCount,
+        "activationReady" to report.activationReady,
+    )
+
+    private fun automationDashboardMap(snapshot: com.fluvi.core.model.FluviPushDashboardSnapshot): Map<String, Any?> = mapOf(
+        "profiles" to snapshot.profiles.map(::pushProfileMap), "pendingReviewCount" to snapshot.pendingReviewCount,
+        "capturedLast30Days" to snapshot.capturedLast30Days, "recentInbox" to snapshot.recentInbox.map(::pushInboxMap),
+    )
 
     private fun requireArguments(call: MethodCall): Map<String, Any?> =
         requireNotNull(call.arguments as? Map<String, Any?>) {
@@ -1309,6 +1464,8 @@ class MainActivity : FlutterActivity() {
     companion object {
         const val CATEGORY_CHANNEL = "com.fluvi/category_repository"
         const val MANUAL_TRANSACTION_CHANNEL = "com.fluvi/manual_transactions"
+        const val AUTOMATION_CHANNEL = "com.fluvi/automation"
+        const val AUTOMATION_PERMISSION_CHANNEL = "com.fluvi/automation_permissions"
         const val FINANCIAL_LIMIT_CHANNEL = "com.fluvi/financial_limits"
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
         const val QUERY_MENU_CHANNEL = "com.fluvi/query_menu"

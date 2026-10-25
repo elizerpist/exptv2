@@ -28,6 +28,12 @@ import '../../features/manual_transactions/data/unavailable_manual_transaction_r
 import '../../features/manual_transactions/domain/manual_transaction_repository.dart';
 import '../../features/manual_transactions/presentation/creation_selector_sheet.dart';
 import '../../features/manual_transactions/presentation/manual_transaction_editor.dart';
+import '../../features/automation/data/method_channel_automation_repository.dart';
+import '../../features/automation/data/unavailable_automation_repository.dart';
+import '../../features/automation/domain/automation_repository.dart';
+import '../../features/automation/presentation/automation_dashboard_page.dart';
+import '../../features/automation/presentation/push_profile_wizard_page.dart';
+import '../../features/settings/presentation/settings_page.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
 import '../../features/dashboard/application/transaction_direction_controller.dart';
@@ -91,6 +97,8 @@ class FluviAppShell extends StatefulWidget {
     this.financialLimitRepository,
     this.queryRepository,
     this.manualTransactionRepository,
+    this.automationRepository,
+    this.automationPermissionRepository,
     this.initialDate,
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
@@ -105,6 +113,8 @@ class FluviAppShell extends StatefulWidget {
   final FinancialLimitRepository? financialLimitRepository;
   final QueryMenuRepository? queryRepository;
   final ManualTransactionRepository? manualTransactionRepository;
+  final AutomationRepository? automationRepository;
+  final AutomationPermissionRepository? automationPermissionRepository;
   final DateTime? initialDate;
   final TimePlane initialPlane;
   final bool initialRailOpen;
@@ -183,6 +193,8 @@ class _FluviAppShellState extends State<FluviAppShell>
   late final bool _ownsShellPresentation;
   late final DashboardHeaderVisualController _headerVisualController;
   late final ManualTransactionRepository _manualTransactionRepository;
+  late final AutomationRepository _automationRepository;
+  late final AutomationPermissionRepository _automationPermissionRepository;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
   int _startupAttemptGeneration = 0;
@@ -232,6 +244,16 @@ class _FluviAppShellState extends State<FluviAppShell>
         (kIsWeb
             ? const UnavailableManualTransactionRepository()
             : MethodChannelManualTransactionRepository());
+    _automationRepository =
+        widget.automationRepository ??
+        (kIsWeb
+            ? const UnavailableAutomationRepository()
+            : MethodChannelAutomationRepository());
+    _automationPermissionRepository =
+        widget.automationPermissionRepository ??
+        (kIsWeb
+            ? const UnavailableAutomationPermissionRepository()
+            : MethodChannelAutomationPermissionRepository());
     _categoryCollection = CategoryCollectionController(
       repository: _categoryRepository,
       onDiagnostic: _recordCategoryCollectionDiagnostic,
@@ -334,6 +356,18 @@ class _FluviAppShellState extends State<FluviAppShell>
   Future<void> _openCreationSelector() async {
     final action = await showCreationSelectorSheet(context);
     if (!mounted || action == null) return;
+    if (action == CreationSelectorAction.pushProfile) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => PushProfileWizardPage(
+            repository: _automationRepository,
+            permissions: _automationPermissionRepository,
+          ),
+        ),
+      );
+      return;
+    }
     if (action != CreationSelectorAction.manualTransaction) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -808,7 +842,7 @@ class _FluviAppShellState extends State<FluviAppShell>
                         animation: _readiness,
                         builder: (context, _) {
                           final mountsDashboard = _readiness.mountsDashboard;
-                          return Stack(
+                          final dashboard = Stack(
                             fit: StackFit.expand,
                             children: [
                               if (mountsDashboard)
@@ -828,6 +862,7 @@ class _FluviAppShellState extends State<FluviAppShell>
                                     onBudgetCategoryInputUpdated:
                                         _recordBudgetCategoryRailInputUpdated,
                                     onEditEntry: _openEditTransaction,
+                                    onOpenQueryMenu: _openQueryMenu,
                                     preparedLogBoxRasters:
                                         _preparedLogBoxRasters!,
                                     shellPresentation: _shellPresentation,
@@ -873,6 +908,23 @@ class _FluviAppShellState extends State<FluviAppShell>
                                 const _DashboardBootstrapSurface(),
                             ],
                           );
+                          return IndexedStack(
+                            index: switch (_selectedNavigationItem) {
+                              Bnb03Item.search => 1,
+                              Bnb03Item.profile => 2,
+                              _ => 0,
+                            },
+                            children: [
+                              dashboard,
+                              AutomationDashboardPage(
+                                repository: _automationRepository,
+                                permissions: _automationPermissionRepository,
+                              ),
+                              SettingsPage(
+                                permissions: _automationPermissionRepository,
+                              ),
+                            ],
+                          );
                         },
                       ),
                       if (kFluviOnscreenDiagnosticsEnabled)
@@ -907,10 +959,6 @@ class _FluviAppShellState extends State<FluviAppShell>
                                   .globalAppearance
                                   .fabVectorHighlightArgb,
                               onChanged: (item) {
-                                if (item == Bnb03Item.search) {
-                                  _openQueryMenu();
-                                  return;
-                                }
                                 if (item == Bnb03Item.shop) {
                                   _openCreationSelector();
                                   return;

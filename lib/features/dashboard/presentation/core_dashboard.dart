@@ -95,6 +95,7 @@ class CoreDashboard extends StatefulWidget {
     this.financialLimitRepository,
     this.onBudgetCategoryInputUpdated,
     this.onEditEntry,
+    this.onOpenQueryMenu,
     this.preparedLogBoxRasters,
     this.onLogBoxWarmupSurfaceAttached,
     this.onLogBoxWarmupSurfaceLaidOut,
@@ -118,6 +119,7 @@ class CoreDashboard extends StatefulWidget {
   final FinancialLimitRepository? financialLimitRepository;
   final ValueChanged<int>? onBudgetCategoryInputUpdated;
   final ValueChanged<String>? onEditEntry;
+  final VoidCallback? onOpenQueryMenu;
 
   /// Shell-bootstrap-owned, exhaustive profile bank for the visible LogBox.
   /// CoreDashboard selects from it during appearance changes; it does not
@@ -1467,6 +1469,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               preparedSceneCache:
                                                   _preparedSceneCache,
                                               onEditEntry: widget.onEditEntry,
+                                              onOpenQueryMenu:
+                                                  widget.onOpenQueryMenu,
                                               onLoadNextPage:
                                                   (desiredLastReadyOrdinal) {
                                                     unawaited(

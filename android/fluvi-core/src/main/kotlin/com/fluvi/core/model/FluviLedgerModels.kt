@@ -20,3 +20,15 @@ data class CreateLedgerEntryCommand(
     val originKind: LedgerOriginKind,
     val notificationInboxId: String?,
 )
+
+/** Internal-domain import command: creates a canonical partner and a push entry atomically. */
+data class CreatePushLedgerEntryCommand(
+    val merchantName: String,
+    val direction: LedgerDirection,
+    val amountScaled100: Long,
+    val bookedLocalEpochDay: Long,
+    val bookedLocalTimeMinutes: Int,
+    val occurredAtUtcMs: Long,
+    val notificationInboxId: String,
+    val note: String? = null,
+)

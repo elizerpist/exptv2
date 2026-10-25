@@ -14,7 +14,7 @@ internal object FluviDatabaseFactory {
         context.applicationContext,
         FluviDatabase::class.java,
         FluviDatabase.DATABASE_FILE_NAME,
-    ).addCallback(
+    ).enableMultiInstanceInvalidation().addCallback(
         FluviDatabase.seedCallback(clock),
     ).addMigrations(
         FluviDatabase.MIGRATION_1_2,
@@ -23,6 +23,7 @@ internal object FluviDatabaseFactory {
         FluviDatabase.MIGRATION_4_5,
         FluviDatabase.MIGRATION_5_6,
         FluviDatabase.MIGRATION_6_7,
+        FluviDatabase.MIGRATION_7_8,
     ).build()
 
     @JvmOverloads
@@ -42,5 +43,6 @@ internal object FluviDatabaseFactory {
             FluviDatabase.MIGRATION_4_5,
             FluviDatabase.MIGRATION_5_6,
             FluviDatabase.MIGRATION_6_7,
+            FluviDatabase.MIGRATION_7_8,
         ).build()
 }

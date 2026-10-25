@@ -44,6 +44,54 @@ enum class NotificationTrainingStatus {
     incorporated,
 }
 
+/** Lifecycle is deliberately independent from the Android listener permission. */
+enum class PushProfileState {
+    waitingForPermission,
+    waitingForTraining,
+    testing,
+    active,
+    reviewRequired,
+    paused,
+}
+
+enum class PushTransactionDirection {
+    automatic,
+    expenseOnly,
+    incomeOnly,
+}
+
+enum class PushRuleState {
+    draft,
+    testing,
+    active,
+    paused,
+    failed,
+}
+
+enum class PushSampleKind {
+    transaction,
+    nonTransaction,
+    failedTransaction,
+    ignored,
+}
+
+enum class PushFieldRole {
+    amount,
+    merchant,
+    balance,
+    account,
+    currency,
+    ignore,
+}
+
+enum class PushReviewStatus {
+    none,
+    pending,
+    approved,
+    ignored,
+    rejected,
+}
+
 enum class QueryPeriodKind {
     month,
     year,

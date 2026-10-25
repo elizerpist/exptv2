@@ -10,6 +10,7 @@ import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.NotificationParseStatus
 import com.fluvi.core.model.NotificationProcessingStatus
 import com.fluvi.core.model.NotificationTrainingStatus
+import com.fluvi.core.model.PushReviewStatus
 import com.fluvi.core.model.RecurrenceAmountPolicy
 import com.fluvi.core.model.RecurrenceTriggerKind
 
@@ -179,11 +180,19 @@ data class FluviOccurrenceOverrideEntity(
             childColumns = ["ledger_entry_id"],
             onDelete = ForeignKey.SET_NULL,
         ),
+        ForeignKey(
+            entity = FluviPushProfileEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["profile_id"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index(value = ["ledger_entry_id"]),
         Index(value = ["received_at_utc_ms"]),
         Index(value = ["training_status", "received_at_utc_ms"]),
+        Index(value = ["profile_id", "received_at_utc_ms"]),
+        Index(value = ["fingerprint"], unique = true),
     ],
 )
 data class FluviNotificationInboxEntity(
@@ -196,6 +205,14 @@ data class FluviNotificationInboxEntity(
     val sourcePackageName: String?,
     @ColumnInfo(name = "source_app_label")
     val sourceAppLabel: String?,
+    @ColumnInfo(name = "profile_id")
+    val profileId: String?,
+    @ColumnInfo(name = "notification_key")
+    val notificationKey: String?,
+    @ColumnInfo(name = "fingerprint")
+    val fingerprint: String?,
+    @ColumnInfo(name = "title")
+    val title: String?,
     @ColumnInfo(name = "received_at_utc_ms")
     val receivedAtUtcMs: Long,
     @ColumnInfo(name = "parse_status")
@@ -204,6 +221,14 @@ data class FluviNotificationInboxEntity(
     val processingStatus: NotificationProcessingStatus,
     @ColumnInfo(name = "training_status")
     val trainingStatus: NotificationTrainingStatus,
+    @ColumnInfo(name = "review_status")
+    val reviewStatus: PushReviewStatus,
+    @ColumnInfo(name = "confidence")
+    val confidence: Double?,
+    @ColumnInfo(name = "suggested_payload_json")
+    val suggestedPayloadJson: String?,
+    @ColumnInfo(name = "diagnostics_json")
+    val diagnosticsJson: String?,
     @ColumnInfo(name = "ledger_entry_id")
     val ledgerEntryId: String?,
     @ColumnInfo(name = "created_at_utc_ms")

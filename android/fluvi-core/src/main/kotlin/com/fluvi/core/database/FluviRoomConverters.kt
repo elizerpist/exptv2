@@ -17,6 +17,12 @@ import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.model.QueryRefinementKind
 import com.fluvi.core.model.RecurrenceAmountPolicy
 import com.fluvi.core.model.RecurrenceTriggerKind
+import com.fluvi.core.model.PushFieldRole
+import com.fluvi.core.model.PushProfileState
+import com.fluvi.core.model.PushReviewStatus
+import com.fluvi.core.model.PushRuleState
+import com.fluvi.core.model.PushSampleKind
+import com.fluvi.core.model.PushTransactionDirection
 
 internal class FluviRoomConverters {
     @TypeConverter
@@ -86,6 +92,19 @@ internal class FluviRoomConverters {
     @TypeConverter
     fun storedToNotificationTrainingStatus(value: String?): NotificationTrainingStatus? =
         value?.let(NotificationTrainingStatus::valueOf)
+
+    @TypeConverter fun pushProfileStateToStored(value: PushProfileState?): String? = value?.name
+    @TypeConverter fun storedToPushProfileState(value: String?): PushProfileState? = value?.let(PushProfileState::valueOf)
+    @TypeConverter fun pushTransactionDirectionToStored(value: PushTransactionDirection?): String? = value?.name
+    @TypeConverter fun storedToPushTransactionDirection(value: String?): PushTransactionDirection? = value?.let(PushTransactionDirection::valueOf)
+    @TypeConverter fun pushRuleStateToStored(value: PushRuleState?): String? = value?.name
+    @TypeConverter fun storedToPushRuleState(value: String?): PushRuleState? = value?.let(PushRuleState::valueOf)
+    @TypeConverter fun pushSampleKindToStored(value: PushSampleKind?): String? = value?.name
+    @TypeConverter fun storedToPushSampleKind(value: String?): PushSampleKind? = value?.let(PushSampleKind::valueOf)
+    @TypeConverter fun pushFieldRoleToStored(value: PushFieldRole?): String? = value?.name
+    @TypeConverter fun storedToPushFieldRole(value: String?): PushFieldRole? = value?.let(PushFieldRole::valueOf)
+    @TypeConverter fun pushReviewStatusToStored(value: PushReviewStatus?): String? = value?.name
+    @TypeConverter fun storedToPushReviewStatus(value: String?): PushReviewStatus? = value?.let(PushReviewStatus::valueOf)
 
     @TypeConverter
     fun queryPeriodKindToStored(value: QueryPeriodKind?): String? = value?.name

@@ -16,6 +16,7 @@ import com.fluvi.core.model.ManualTransactionPartnerSelection
 import com.fluvi.core.model.NotificationParseStatus
 import com.fluvi.core.model.NotificationProcessingStatus
 import com.fluvi.core.model.NotificationTrainingStatus
+import com.fluvi.core.model.PushReviewStatus
 import com.fluvi.core.model.UpdateLedgerEntryCommand
 import com.fluvi.core.model.CreateLedgerEntryCommand
 import com.fluvi.core.repository.FluviCategoryRepository
@@ -299,10 +300,11 @@ class FluviLedgerWriteUseCaseTest {
                 parse_status,
                 processing_status,
                 training_status,
+                review_status,
                 ledger_entry_id,
                 created_at_utc_ms,
                 updated_at_utc_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             arrayOf(
                 id,
@@ -313,6 +315,7 @@ class FluviLedgerWriteUseCaseTest {
                 NotificationParseStatus.recognized.name,
                 NotificationProcessingStatus.transaction_created.name,
                 NotificationTrainingStatus.unused.name,
+                PushReviewStatus.none.name,
                 null,
                 1_700_000_000_000L,
                 1_700_000_000_000L,

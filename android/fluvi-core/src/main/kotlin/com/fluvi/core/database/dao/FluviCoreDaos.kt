@@ -23,6 +23,15 @@ import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerSyncOperation
 import com.fluvi.core.model.CheckpointStatus
+import com.fluvi.core.database.entity.FluviNotificationInboxEntity
+import com.fluvi.core.database.entity.FluviPushProfileEntity
+import com.fluvi.core.database.entity.FluviPushRuleEntity
+import com.fluvi.core.database.entity.FluviPushRuleTestResultEntity
+import com.fluvi.core.database.entity.FluviPushTrainingSampleEntity
+import com.fluvi.core.model.NotificationProcessingStatus
+import com.fluvi.core.model.PushProfileState
+import com.fluvi.core.model.PushReviewStatus
+import com.fluvi.core.model.PushRuleState
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -492,6 +501,92 @@ internal interface FluviFutureReferenceDao {
         toCategoryId: String,
         updatedAtUtcMs: Long,
     ): Int
+}
+
+/** The single persisted source for notification capture, profiles and parser state. */
+@Dao
+internal interface FluviPushAutomationDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertProfile(profile: FluviPushProfileEntity)
+
+    @Query("SELECT * FROM fluvi_push_profiles ORDER BY updated_at_utc_ms DESC, id ASC")
+    suspend fun allProfiles(): List<FluviPushProfileEntity>
+
+    @Query("SELECT * FROM fluvi_push_profiles WHERE id = :profileId LIMIT 1")
+    suspend fun profile(profileId: String): FluviPushProfileEntity?
+
+    @Query("SELECT * FROM fluvi_push_profiles WHERE package_name = :packageName LIMIT 1")
+    suspend fun profileForPackage(packageName: String): FluviPushProfileEntity?
+
+    @Query("UPDATE fluvi_push_profiles SET display_name = :name, default_direction = :direction, state = :state, updated_at_utc_ms = :updatedAtUtcMs, revision = revision + 1 WHERE id = :profileId")
+    suspend fun updateProfile(profileId: String, name: String, direction: com.fluvi.core.model.PushTransactionDirection, state: PushProfileState, updatedAtUtcMs: Long): Int
+
+    @Query("DELETE FROM fluvi_push_profiles WHERE id = :profileId")
+    suspend fun deleteProfile(profileId: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertRule(rule: FluviPushRuleEntity)
+
+    @Query("SELECT * FROM fluvi_push_rules WHERE profile_id = :profileId ORDER BY priority ASC, created_at_utc_ms ASC")
+    suspend fun rulesForProfile(profileId: String): List<FluviPushRuleEntity>
+
+    @Query("SELECT * FROM fluvi_push_rules WHERE profile_id = :profileId AND state = :state ORDER BY priority ASC, id ASC")
+    suspend fun rulesForProfileAndState(profileId: String, state: PushRuleState): List<FluviPushRuleEntity>
+
+    @Query("SELECT * FROM fluvi_push_rules WHERE id = :ruleId LIMIT 1")
+    suspend fun rule(ruleId: String): FluviPushRuleEntity?
+
+    @Query("UPDATE fluvi_push_rules SET state = :state, updated_at_utc_ms = :updatedAtUtcMs WHERE id = :ruleId")
+    suspend fun updateRuleState(ruleId: String, state: PushRuleState, updatedAtUtcMs: Long): Int
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSample(sample: FluviPushTrainingSampleEntity)
+
+    @Query("SELECT * FROM fluvi_push_training_samples WHERE rule_id = :ruleId ORDER BY created_at_utc_ms DESC")
+    suspend fun samplesForRule(ruleId: String): List<FluviPushTrainingSampleEntity>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertTestResult(result: FluviPushRuleTestResultEntity)
+
+    @Query("SELECT * FROM fluvi_push_rule_test_results WHERE rule_id = :ruleId ORDER BY created_at_utc_ms DESC LIMIT 1")
+    suspend fun latestTestResult(ruleId: String): FluviPushRuleTestResultEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertInbox(event: FluviNotificationInboxEntity): Long
+
+    @Query("SELECT * FROM fluvi_notification_inbox WHERE id = :eventId LIMIT 1")
+    suspend fun inbox(eventId: String): FluviNotificationInboxEntity?
+
+    @Query("SELECT * FROM fluvi_notification_inbox WHERE fingerprint = :fingerprint LIMIT 1")
+    suspend fun inboxByFingerprint(fingerprint: String): FluviNotificationInboxEntity?
+
+    @Query("SELECT * FROM fluvi_notification_inbox WHERE profile_id = :profileId ORDER BY received_at_utc_ms DESC, id DESC LIMIT :limit OFFSET :offset")
+    suspend fun inboxForProfile(profileId: String, limit: Int, offset: Int): List<FluviNotificationInboxEntity>
+
+    @Query("SELECT * FROM fluvi_notification_inbox ORDER BY received_at_utc_ms DESC, id DESC LIMIT :limit OFFSET :offset")
+    suspend fun inboxPage(limit: Int, offset: Int): List<FluviNotificationInboxEntity>
+
+    @Query("SELECT COUNT(*) FROM fluvi_notification_inbox WHERE review_status = :status")
+    suspend fun inboxCountByReviewStatus(status: PushReviewStatus): Long
+
+    @Query("SELECT COUNT(*) FROM fluvi_notification_inbox WHERE profile_id = :profileId")
+    suspend fun inboxCountForProfile(profileId: String): Long
+
+    @Query("UPDATE fluvi_notification_inbox SET parse_status = :parseStatus, processing_status = :processingStatus, review_status = :reviewStatus, confidence = :confidence, suggested_payload_json = :payload, diagnostics_json = :diagnostics, ledger_entry_id = :ledgerEntryId, updated_at_utc_ms = :updatedAtUtcMs WHERE id = :eventId")
+    suspend fun updateInboxDecision(
+        eventId: String,
+        parseStatus: com.fluvi.core.model.NotificationParseStatus,
+        processingStatus: NotificationProcessingStatus,
+        reviewStatus: PushReviewStatus,
+        confidence: Double?,
+        payload: String?,
+        diagnostics: String?,
+        ledgerEntryId: String?,
+        updatedAtUtcMs: Long,
+    ): Int
+
+    @Query("UPDATE fluvi_notification_inbox SET training_status = :status, updated_at_utc_ms = :updatedAtUtcMs WHERE id = :eventId")
+    suspend fun updateTrainingStatus(eventId: String, status: com.fluvi.core.model.NotificationTrainingStatus, updatedAtUtcMs: Long): Int
 }
 
 @Dao

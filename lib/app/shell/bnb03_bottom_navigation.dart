@@ -529,10 +529,11 @@ class Bnb03BottomNavigation extends StatelessWidget {
                     _NavItem(
                       scale: scale,
                       width: 70,
-                      label: 'Search',
+                      label: 'Automat.',
+                      semanticLabel: 'Automatizáció',
                       selected: selected == Bnb03Item.search,
-                      linearIcon: IconsaxPlusLinear.search_normal,
-                      boldIcon: IconsaxPlusBold.search_normal,
+                      linearIcon: Icons.tune_outlined,
+                      boldIcon: Icons.tune,
                       iconLeft: 23,
                       textLeft: 15,
                       fontFamily: fontFamily,
@@ -567,10 +568,11 @@ class Bnb03BottomNavigation extends StatelessWidget {
                     _NavItem(
                       scale: scale,
                       width: 67,
-                      label: 'Profile',
+                      label: 'Beáll.',
+                      semanticLabel: 'Beállítások',
                       selected: selected == Bnb03Item.profile,
-                      linearIcon: IconsaxPlusLinear.user,
-                      boldIcon: IconsaxPlusBold.user,
+                      linearIcon: Icons.settings_outlined,
+                      boldIcon: Icons.settings,
                       iconLeft: 21.5,
                       textLeft: 15,
                       fontFamily: fontFamily,
@@ -593,7 +595,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                   key: const ValueKey('bnb03-fab-hit-target'),
                   button: true,
                   selected: selected == Bnb03Item.shop,
-                  label: 'Shop',
+                  label: 'Új létrehozása',
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -751,6 +753,7 @@ class _NavItem extends StatelessWidget {
     required this.scale,
     required this.width,
     required this.label,
+    this.semanticLabel,
     required this.selected,
     required this.linearIcon,
     required this.boldIcon,
@@ -763,6 +766,7 @@ class _NavItem extends StatelessWidget {
   final double scale;
   final double width;
   final String label;
+  final String? semanticLabel;
   final bool selected;
   final IconData linearIcon;
   final IconData boldIcon;
@@ -786,7 +790,7 @@ class _NavItem extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: selected,
-        label: label,
+        label: semanticLabel ?? label,
         child: Material(
           color: Colors.transparent,
           child: InkWell(

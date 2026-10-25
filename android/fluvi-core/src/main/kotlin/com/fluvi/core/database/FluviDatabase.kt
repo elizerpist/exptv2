@@ -17,6 +17,7 @@ import com.fluvi.core.database.dao.FluviLedgerSyncOutboxDao
 import com.fluvi.core.database.dao.FluviLedgerSyncWorkspaceDao
 import com.fluvi.core.database.dao.FluviPartnerDao
 import com.fluvi.core.database.dao.FluviQuerySnapshotDao
+import com.fluvi.core.database.dao.FluviPushAutomationDao
 import com.fluvi.core.database.entity.FluviAppSettingsEntity
 import com.fluvi.core.database.entity.FluviCategoryEntity
 import com.fluvi.core.database.entity.FluviFinancialLimitEntity
@@ -30,6 +31,10 @@ import com.fluvi.core.database.entity.FluviOccurrenceOverrideEntity
 import com.fluvi.core.database.entity.FluviPartnerAliasEntity
 import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.database.entity.FluviPushRecurringRuleConfigEntity
+import com.fluvi.core.database.entity.FluviPushProfileEntity
+import com.fluvi.core.database.entity.FluviPushRuleEntity
+import com.fluvi.core.database.entity.FluviPushRuleTestResultEntity
+import com.fluvi.core.database.entity.FluviPushTrainingSampleEntity
 import com.fluvi.core.database.entity.FluviQuerySnapshotCategoryEntity
 import com.fluvi.core.database.entity.FluviQuerySnapshotEntity
 import com.fluvi.core.database.entity.FluviQuerySnapshotPartnerEntity
@@ -54,6 +59,10 @@ import com.fluvi.core.model.FluviSystemIds
         FluviPushRecurringRuleConfigEntity::class,
         FluviOccurrenceOverrideEntity::class,
         FluviNotificationInboxEntity::class,
+        FluviPushProfileEntity::class,
+        FluviPushRuleEntity::class,
+        FluviPushTrainingSampleEntity::class,
+        FluviPushRuleTestResultEntity::class,
         FluviQuerySnapshotEntity::class,
         FluviQuerySnapshotPeriodEntity::class,
         FluviQuerySnapshotCategoryEntity::class,
@@ -63,7 +72,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -87,6 +96,8 @@ internal abstract class FluviDatabase : RoomDatabase() {
     abstract fun ledgerBackupCheckpointDao(): FluviLedgerBackupCheckpointDao
 
     abstract fun futureReferenceDao(): FluviFutureReferenceDao
+
+    abstract fun pushAutomationDao(): FluviPushAutomationDao
 
     abstract fun querySnapshotDao(): FluviQuerySnapshotDao
 
@@ -426,6 +437,76 @@ internal abstract class FluviDatabase : RoomDatabase() {
                         "ON fluvi_financial_limits(direction, period_kind, year, month)",
                 )
                 createFinancialLimitIntegrityTriggers(db)
+            }
+        }
+
+        /** Adds the Parser v2 source of truth without touching existing ledger rows. */
+        val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE fluvi_push_profiles (id TEXT NOT NULL, package_name TEXT NOT NULL, " +
+                        "app_label TEXT NOT NULL, display_name TEXT NOT NULL, default_direction TEXT NOT NULL, " +
+                        "state TEXT NOT NULL, created_at_utc_ms INTEGER NOT NULL, updated_at_utc_ms INTEGER NOT NULL, " +
+                        "revision INTEGER NOT NULL, PRIMARY KEY(id))",
+                )
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_push_profiles_package_name ON fluvi_push_profiles(package_name)")
+                db.execSQL("CREATE INDEX index_fluvi_push_profiles_state_updated_at_utc_ms ON fluvi_push_profiles(state, updated_at_utc_ms)")
+                db.execSQL(
+                    "CREATE TABLE fluvi_push_rules (id TEXT NOT NULL, profile_id TEXT NOT NULL, name TEXT NOT NULL, " +
+                        "direction TEXT NOT NULL, state TEXT NOT NULL, compiled_representation TEXT NOT NULL, version INTEGER NOT NULL, " +
+                        "priority INTEGER NOT NULL, auto_accept_threshold REAL NOT NULL, created_at_utc_ms INTEGER NOT NULL, " +
+                        "updated_at_utc_ms INTEGER NOT NULL, PRIMARY KEY(id), FOREIGN KEY(profile_id) REFERENCES fluvi_push_profiles(id) ON DELETE CASCADE)",
+                )
+                db.execSQL("CREATE INDEX index_fluvi_push_rules_profile_id_state_priority ON fluvi_push_rules(profile_id, state, priority)")
+                // Inbox is recreated because the profile foreign key and uniqueness of fingerprints are part of capture safety.
+                // `fluvi_ledger_entries` points back to this table with
+                // ON DELETE SET NULL.  SQLite applies that action while the
+                // legacy parent table is dropped, so retain the links and
+                // restore them after the replacement table is in place.
+                db.execSQL(
+                    "CREATE TABLE fluvi_ledger_inbox_links_v8 AS " +
+                        "SELECT id AS ledger_entry_id, notification_inbox_id " +
+                        "FROM fluvi_ledger_entries WHERE notification_inbox_id IS NOT NULL",
+                )
+                db.execSQL(
+                    "CREATE TABLE fluvi_notification_inbox_v8 (id TEXT NOT NULL, raw_notification_text TEXT NOT NULL, " +
+                        "source_package_name TEXT, source_app_label TEXT, profile_id TEXT, notification_key TEXT, fingerprint TEXT, title TEXT, " +
+                        "received_at_utc_ms INTEGER NOT NULL, parse_status TEXT NOT NULL, processing_status TEXT NOT NULL, training_status TEXT NOT NULL, " +
+                        "review_status TEXT NOT NULL, confidence REAL, suggested_payload_json TEXT, diagnostics_json TEXT, ledger_entry_id TEXT, " +
+                        "created_at_utc_ms INTEGER NOT NULL, updated_at_utc_ms INTEGER NOT NULL, PRIMARY KEY(id), " +
+                        "FOREIGN KEY(ledger_entry_id) REFERENCES fluvi_ledger_entries(id) ON DELETE SET NULL, " +
+                        "FOREIGN KEY(profile_id) REFERENCES fluvi_push_profiles(id) ON DELETE SET NULL)",
+                )
+                db.execSQL(
+                    "INSERT INTO fluvi_notification_inbox_v8 (id,raw_notification_text,source_package_name,source_app_label,received_at_utc_ms,parse_status,processing_status,training_status,review_status,ledger_entry_id,created_at_utc_ms,updated_at_utc_ms) " +
+                        "SELECT id,raw_notification_text,source_package_name,source_app_label,received_at_utc_ms,parse_status,processing_status,training_status,'none',ledger_entry_id,created_at_utc_ms,updated_at_utc_ms FROM fluvi_notification_inbox",
+                )
+                db.execSQL("DROP TABLE fluvi_notification_inbox")
+                db.execSQL("ALTER TABLE fluvi_notification_inbox_v8 RENAME TO fluvi_notification_inbox")
+                db.execSQL("CREATE INDEX index_fluvi_notification_inbox_ledger_entry_id ON fluvi_notification_inbox(ledger_entry_id)")
+                db.execSQL("CREATE INDEX index_fluvi_notification_inbox_received_at_utc_ms ON fluvi_notification_inbox(received_at_utc_ms)")
+                db.execSQL("CREATE INDEX index_fluvi_notification_inbox_training_status_received_at_utc_ms ON fluvi_notification_inbox(training_status, received_at_utc_ms)")
+                db.execSQL("CREATE INDEX index_fluvi_notification_inbox_profile_id_received_at_utc_ms ON fluvi_notification_inbox(profile_id, received_at_utc_ms)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_notification_inbox_fingerprint ON fluvi_notification_inbox(fingerprint)")
+                db.execSQL(
+                    "UPDATE fluvi_ledger_entries SET notification_inbox_id = " +
+                        "(SELECT notification_inbox_id FROM fluvi_ledger_inbox_links_v8 " +
+                        "WHERE ledger_entry_id = fluvi_ledger_entries.id) " +
+                        "WHERE id IN (SELECT ledger_entry_id FROM fluvi_ledger_inbox_links_v8)",
+                )
+                db.execSQL("DROP TABLE fluvi_ledger_inbox_links_v8")
+                db.execSQL(
+                    "CREATE TABLE fluvi_push_training_samples (id TEXT NOT NULL, profile_id TEXT NOT NULL, notification_id TEXT NOT NULL, rule_id TEXT, sample_kind TEXT NOT NULL, spans_json TEXT NOT NULL, created_at_utc_ms INTEGER NOT NULL, PRIMARY KEY(id), " +
+                        "FOREIGN KEY(profile_id) REFERENCES fluvi_push_profiles(id) ON DELETE CASCADE, FOREIGN KEY(rule_id) REFERENCES fluvi_push_rules(id) ON DELETE SET NULL, " +
+                        "FOREIGN KEY(notification_id) REFERENCES fluvi_notification_inbox(id) ON DELETE CASCADE)",
+                )
+                db.execSQL("CREATE INDEX index_fluvi_push_training_samples_profile_id_created_at_utc_ms ON fluvi_push_training_samples(profile_id, created_at_utc_ms)")
+                db.execSQL("CREATE INDEX index_fluvi_push_training_samples_notification_id ON fluvi_push_training_samples(notification_id)")
+                db.execSQL("CREATE INDEX index_fluvi_push_training_samples_rule_id ON fluvi_push_training_samples(rule_id)")
+                db.execSQL(
+                    "CREATE TABLE fluvi_push_rule_test_results (id TEXT NOT NULL, rule_id TEXT NOT NULL, rule_version INTEGER NOT NULL, matched_count INTEGER NOT NULL, review_count INTEGER NOT NULL, rejected_count INTEGER NOT NULL, conflicted_count INTEGER NOT NULL, activation_ready INTEGER NOT NULL, created_at_utc_ms INTEGER NOT NULL, PRIMARY KEY(id), FOREIGN KEY(rule_id) REFERENCES fluvi_push_rules(id) ON DELETE CASCADE)",
+                )
+                db.execSQL("CREATE INDEX index_fluvi_push_rule_test_results_rule_id_rule_version_created_at_utc_ms ON fluvi_push_rule_test_results(rule_id, rule_version, created_at_utc_ms)")
             }
         }
 

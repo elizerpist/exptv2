@@ -287,6 +287,54 @@ class FluviDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationSevenToEightAddsParserV2TablesAndRetainsInboxRows() {
+        val name = "$DATABASE_NAME-parser-v2"
+        helper.createDatabase(name, 7).use { database ->
+            database.execSQL(
+                "INSERT INTO fluvi_categories (id,name,color_id,icon_id,is_system_uncategorized,created_at_utc_ms,updated_at_utc_ms) " +
+                    "VALUES ('category-1','Teszt','gray','category',0,1,1)",
+            )
+            database.execSQL(
+                "INSERT INTO fluvi_partners (id,original_name,display_name_override,default_category_id,merged_into_partner_id,created_at_utc_ms,updated_at_utc_ms) " +
+                    "VALUES ('partner-1','Teszt partner',NULL,'category-1',NULL,1,1)",
+            )
+            database.execSQL(
+                "INSERT INTO fluvi_notification_inbox (id,raw_notification_text,source_package_name," +
+                    "source_app_label,received_at_utc_ms,parse_status,processing_status,training_status," +
+                    "ledger_entry_id,created_at_utc_ms,updated_at_utc_ms) VALUES " +
+                    "('inbox-1','legacy message','com.bank',NULL,1,'unclassified','unprocessed','unused',NULL,1,1)",
+            )
+            database.execSQL(
+                "INSERT INTO fluvi_ledger_entries (id,partner_id,category_id,category_assignment_mode,note,direction,amount_scaled_100,booked_local_epoch_day,booked_local_time_minutes,occurred_at_utc_ms,origin_kind,notification_inbox_id,created_at_utc_ms,updated_at_utc_ms,revision) " +
+                    "VALUES ('entry-1','partner-1','category-1','partnerDefault',NULL,'expense',100,1,1,1,'push','inbox-1',1,1,1)",
+            )
+        }
+        helper.runMigrationsAndValidate(
+            name,
+            8,
+            true,
+            FluviDatabase.MIGRATION_7_8,
+        ).use { database ->
+            val profileTable = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='fluvi_push_profiles'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+            val inbox = database.query(
+                "SELECT raw_notification_text,review_status FROM fluvi_notification_inbox WHERE id='inbox-1'",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getString(0) to cursor.getString(1)
+            }
+            assertEquals(1, profileTable)
+            assertEquals("legacy message", inbox.first)
+            assertEquals("none", inbox.second)
+            val sourceLink = database.query(
+                "SELECT notification_inbox_id FROM fluvi_ledger_entries WHERE id='entry-1'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getString(0) }
+            assertEquals("inbox-1", sourceLink)
+        }
+    }
+
     private fun migrateLegacyFinancialLimits(
         name: String,
         rows: List<LegacyLimit>,
