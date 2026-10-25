@@ -888,10 +888,11 @@ class FluviLedgerReadService internal constructor(
         val presentationNow = System.currentTimeMillis()
         val arguments = ArrayList<Any>(ledgerWhere.arguments.size + ghostWhere.arguments.size + 20)
         arguments.addAll(ledgerWhere.arguments)
-        arguments.addAll(ghostWhere.arguments)
-        // The bucket is calculated once for this page so due/future ordering
-        // cannot drift while SQLite evaluates the union.
+        // This placeholder occurs in the ghost SELECT before its WHERE
+        // predicates. Keep bind order identical to the SQL text: swapping
+        // these would make a valid pending-ghost count render an empty page.
         arguments += presentationNow
+        arguments.addAll(ghostWhere.arguments)
         val outerCursor = after?.let { cursor ->
             require(cursor.timelineSegment in 0..1) { "Invalid presentation cursor segment." }
             arguments += cursor.timelineSegment
