@@ -38,6 +38,9 @@ import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.pulse.PulseDashboardSnapshot
 import com.fluvi.core.pulse.PulseIndicatorSnapshot
 import com.fluvi.core.pulse.PulseSignalInspectionSnapshot
+import com.fluvi.core.pulse.PulseSituationInspectionSnapshot
+import com.fluvi.core.pulse.PulseSituationSnapshot
+import com.fluvi.core.pulse.PulseTriageDashboardSnapshot
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
 import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
@@ -520,11 +523,11 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Signal state is derived data. Re-evaluate current measurements after a
+        // Signal and triage state are diagnostic data. Re-evaluate after a
         // lifecycle return without changing the financial Core revision.
         core?.let { fluviCore ->
             scope.launch(Dispatchers.IO) {
-                runCatching { fluviCore.pulseSignals.reevaluateCurrent() }
+                runCatching { fluviCore.pulseTriage.reevaluateCurrent() }
             }
         }
     }
@@ -929,8 +932,8 @@ class MainActivity : FlutterActivity() {
         call: MethodCall,
         fluviCore: FluviCore,
     ): Any? = when (call.method) {
-        "getDashboard" -> pulseDashboardMap(
-            fluviCore.pulseSignals.dashboard(
+        "getDashboard" -> pulseTriageDashboardMap(
+            fluviCore.pulseTriage.dashboard(
                 year = requireInt(call, "year"),
                 month = requireInt(call, "month"),
             ),
@@ -941,6 +944,21 @@ class MainActivity : FlutterActivity() {
                 month = requireInt(call, "month"),
                 indicatorId = requireArgument(call, "indicatorId"),
                 historyLimit = call.argument<Number>("historyLimit")?.toInt() ?: 30,
+            ),
+        )
+        "getSituations" -> mapOf(
+            "situations" to fluviCore.pulseTriage.history(
+                year = requireInt(call, "year"),
+                month = requireInt(call, "month"),
+            ).map(::pulseSituationMap),
+        )
+        "getTriageInspection" -> pulseTriageInspectionMap(
+            fluviCore.pulseTriage.inspection(
+                year = requireInt(call, "year"),
+                month = requireInt(call, "month"),
+                situationKey = requireArgument(call, "situationKey"),
+                historyLimit = call.argument<Number>("historyLimit")?.toInt() ?: 30,
+                historyOffset = call.argument<Number>("historyOffset")?.toInt() ?: 0,
             ),
         )
         "setThreshold" -> {
@@ -986,6 +1004,13 @@ class MainActivity : FlutterActivity() {
             )
         },
     )
+
+    private fun pulseTriageDashboardMap(snapshot: PulseTriageDashboardSnapshot): Map<String, Any?> =
+        pulseDashboardMap(snapshot.dashboard).toMutableMap().apply {
+            this["situations"] = snapshot.situations.map(::pulseSituationMap)
+            this["signalGeneration"] = snapshot.frame.signalGeneration
+            this["triageHistorical"] = snapshot.frame.evaluationMode.name == "historicalInspection"
+        }
 
     private fun pulseIndicatorMap(snapshot: PulseIndicatorSnapshot): Map<String, Any?> = mapOf(
         "id" to snapshot.id.stableId,
@@ -1094,6 +1119,18 @@ class MainActivity : FlutterActivity() {
                     "affectedBudgetMinor" to signal.evidence.affectedBudgetMinor,
                     "affectedObligationMinor" to signal.evidence.affectedObligationMinor,
                     "impactRatio" to signal.evidence.impactRatio,
+                    "provenance" to signal.evidence.provenance?.let { provenance ->
+                        mapOf(
+                            "evidenceKey" to provenance.evidenceKey,
+                            "sourceKind" to provenance.sourceKind.name,
+                            "sourceFactKeys" to provenance.sourceFactKeys.sorted(),
+                            "upstreamEvidenceKeys" to provenance.upstreamEvidenceKeys.sorted(),
+                            "calculationKey" to provenance.calculationKey,
+                            "observationWindowKey" to provenance.observationWindowKey,
+                            "scenarioKey" to provenance.scenarioKey,
+                            "sourceRevision" to provenance.sourceRevision,
+                        )
+                    },
                 ),
                 "events" to inspection.events.map { event ->
                     mapOf(
@@ -1118,6 +1155,102 @@ class MainActivity : FlutterActivity() {
                 },
             )
         },
+    )
+
+    private fun pulseTriageInspectionMap(snapshot: PulseSituationInspectionSnapshot): Map<String, Any?> = mapOf(
+        "situation" to pulseSituationMap(snapshot.situation),
+        "events" to snapshot.events.map { event ->
+            mapOf(
+                "eventId" to event.eventId,
+                "situationKey" to event.situationKey,
+                "kind" to event.kind.name,
+                "previousState" to event.previousState?.name,
+                "nextState" to event.nextState.name,
+                "previousFormationRule" to event.previousFormationRule,
+                "nextFormationRule" to event.nextFormationRule,
+                "previousEvidenceCount" to event.previousEvidenceCount,
+                "nextEvidenceCount" to event.nextEvidenceCount,
+                "causeCode" to event.causeCode,
+                "explanationHu" to event.explanationHu,
+                "sourceCoreRevision" to event.sourceCoreRevision,
+                "policyVersion" to event.policyVersion,
+                "transitionSequence" to event.transitionSequence,
+                "createdAtUtcMs" to event.createdAtUtcMs,
+            )
+        },
+    )
+
+    private fun pulseSituationMap(snapshot: PulseSituationSnapshot): Map<String, Any?> = mapOf(
+        "situationKey" to snapshot.situationKey,
+        "domain" to snapshot.domain.name,
+        "titleHu" to snapshot.domain.titleHu,
+        "targetKey" to snapshot.targetKey,
+        "periodKey" to snapshot.periodKey,
+        "state" to snapshot.state.name,
+        "formationRule" to snapshot.formationRule,
+        "relatedSignalKeys" to snapshot.relatedSignalKeys,
+        "leadingSignalKey" to snapshot.leadingSignalKey,
+        "supportingSignalKeys" to snapshot.supportingSignalKeys,
+        "independentEvidenceCount" to snapshot.independentEvidenceCount,
+        "sourceCoreRevision" to snapshot.sourceCoreRevision,
+        "sourceSignalGeneration" to snapshot.sourceSignalGeneration,
+        "policyVersion" to snapshot.policyVersion,
+        "firstObservedAtUtcMs" to snapshot.firstObservedAtUtcMs,
+        "lastEvaluatedAtUtcMs" to snapshot.lastEvaluatedAtUtcMs,
+        "lastMaterialChangeAtUtcMs" to snapshot.lastMaterialChangeAtUtcMs,
+        "historicalInspection" to snapshot.historicalInspection,
+        "evidenceUnits" to snapshot.evidenceUnits.map { unit ->
+            mapOf(
+                "evidenceKey" to unit.evidenceKey,
+                "sourceSignalKeys" to unit.sourceSignalKeys.sorted(),
+                "sourceFactKeys" to unit.sourceFactKeys.sorted(),
+                "evidenceFamily" to unit.evidenceFamily,
+                "strength" to unit.strength?.name,
+                "role" to unit.role.name,
+                "independence" to unit.independence.name,
+                "countableForFormation" to unit.countableForFormation,
+                "standaloneEligible" to unit.standaloneEligible,
+                "reasonCodes" to unit.reasonCodes,
+                "indicatorId" to unit.indicatorId,
+                "titleHu" to unit.titleHu,
+                "measuredValue" to unit.measuredValue,
+                "dataQuality" to unit.dataQuality.name,
+                "actualImpactMinor" to unit.actualImpactMinor,
+                "projectedImpactMinor" to unit.projectedImpactMinor,
+            )
+        },
+        "decisionTrace" to mapOf(
+            "situationKey" to snapshot.decisionTrace.situationKey,
+            "matchedRule" to snapshot.decisionTrace.matchedRule,
+            "relatedSignalCount" to snapshot.decisionTrace.relatedSignalCount,
+            "independentEvidenceCount" to snapshot.decisionTrace.independentEvidenceCount,
+            "countedEvidenceKeys" to snapshot.decisionTrace.countedEvidenceKeys,
+            "supportingEvidenceKeys" to snapshot.decisionTrace.supportingEvidenceKeys,
+            "missingRequirements" to snapshot.decisionTrace.missingRequirements,
+            "explanationHu" to snapshot.decisionTrace.explanationHu,
+            "policyVersion" to snapshot.decisionTrace.policyVersion,
+            "excludedEvidence" to snapshot.decisionTrace.excludedEvidence.map { exclusion ->
+                mapOf(
+                    "evidenceKey" to exclusion.evidenceKey,
+                    "signalKey" to exclusion.signalKey,
+                    "reasonCode" to exclusion.reasonCode,
+                    "explanationHu" to exclusion.explanationHu,
+                )
+            },
+            "evaluatedRules" to snapshot.decisionTrace.evaluatedRules.map { rule ->
+                mapOf(
+                    "ruleId" to rule.ruleId,
+                    "applicable" to rule.applicable,
+                    "passed" to rule.passed,
+                    "requiredEvidenceCount" to rule.requiredEvidenceCount,
+                    "actualEvidenceCount" to rule.actualEvidenceCount,
+                    "requiredStrength" to rule.requiredStrength?.name,
+                    "dataQualityPassed" to rule.dataQualityPassed,
+                    "materialImpactPassed" to rule.materialImpactPassed,
+                    "reasonCodes" to rule.reasonCodes,
+                )
+            },
+        ),
     )
 
     private fun financialLimitKey(call: MethodCall): FluviFinancialLimitKey {

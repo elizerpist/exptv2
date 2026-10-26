@@ -13,6 +13,14 @@ abstract interface class PulseRepository {
     int historyLimit = 30,
   });
 
+  Future<PulseSituationInspection> triageInspection({
+    required int year,
+    required int month,
+    required String situationKey,
+    int historyLimit = 30,
+    int historyOffset = 0,
+  });
+
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,

@@ -26,14 +26,45 @@ class FluviPulseSignalService internal constructor(
         month: Int,
         mode: PulseSignalEvaluationMode? = null,
     ): PulseDashboardSnapshot {
+        return dashboardFor(frame(year, month, mode))
+    }
+
+    /**
+     * Produces one revision-consistent generation.  Consumers which combine
+     * signals (the triage service) must use this method rather than collecting
+     * one indicator at a time, otherwise a Core update could mix data states.
+     */
+    suspend fun frame(
+        year: Int,
+        month: Int,
+        mode: PulseSignalEvaluationMode? = null,
+    ): PulseSignalFrame {
         val snapshot = measurements.dashboard(year, month)
-        val evaluations = evaluateDashboard(snapshot, mode ?: defaultMode(year, month))
-        val byIndicator = evaluations.groupBy { it.signal.indicatorId }
-        return snapshot.copy(
-            indicators = snapshot.indicators.map { indicator ->
+        val resolvedMode = mode ?: defaultMode(year, month)
+        val evaluations = evaluateDashboard(snapshot, resolvedMode)
+        val signals = evaluations.map { it.signal }
+        val configurationRevision = signals.maxOfOrNull { it.configRevision } ?: 0L
+        val generation = fingerprint(
+            signals.sortedBy(PulseRawSignal::signalKey)
+                .joinToString("|") { it.signalKey + ":" + it.evaluationFingerprint },
+        ).take(15).toLong(16)
+        return PulseSignalFrame(
+            dashboard = snapshot,
+            signals = signals,
+            coreRevision = snapshot.coreRevision,
+            signalGeneration = generation,
+            configurationRevision = configurationRevision,
+            evaluationMode = resolvedMode,
+            evaluatedAtUtcMs = snapshot.generatedAtUtcMs,
+        )
+    }
+
+    fun dashboardFor(frame: PulseSignalFrame): PulseDashboardSnapshot {
+        val byIndicator = frame.signals.groupBy { it.indicatorId }
+        return frame.dashboard.copy(
+            indicators = frame.dashboard.indicators.map { indicator ->
                 indicator.copy(
                     signalSummaries = byIndicator[indicator.id]
-                        ?.map { it.signal }
                         ?.let(::summaryFor)
                         ?.let(::listOf)
                         ?: emptyList(),
@@ -235,6 +266,13 @@ class FluviPulseSignalService internal constructor(
             affectedBudgetMinor = target.affectedBudgetMinor,
             affectedObligationMinor = target.affectedObligationMinor,
             impactRatio = target.impactRatio,
+            provenance = provenanceFor(
+                indicatorId = indicator.id,
+                targetKey = target.key,
+                periodKey = periodKey,
+                scenarioKey = scenarioKey,
+                coreRevision = dashboard.coreRevision,
+            ),
         )
         val fingerprint = fingerprint(
             listOf(
@@ -441,6 +479,137 @@ class FluviPulseSignalService internal constructor(
         -> "cashflow/" + period
         else -> id.stableId.lowercase() + "/" + target.ifBlank { "global" } + "/" + period
     }
+
+    /**
+     * This intentionally errs on the conservative side.  Aggregate
+     * measurements without an explicit fact boundary get an aggregate root;
+     * the triage engine then treats overlapping roots as derived instead of
+     * inventing independence from a different chart label.
+     */
+    private fun provenanceFor(
+        indicatorId: PulseIndicatorId,
+        targetKey: String,
+        periodKey: String,
+        scenarioKey: String,
+        coreRevision: Long,
+    ): PulseEvidenceProvenance {
+        val target = targetKey.ifBlank { "aggregate" }
+        val (kind, calculation, roots, upstream) = when (indicatorId) {
+            PulseIndicatorId.monthlyBudgetUtilization -> Quad(
+                PulseEvidenceSourceKind.bookedLedgerAggregate,
+                "monthly-budget-actual",
+                setOf("ledger-aggregate/$periodKey"),
+                emptySet(),
+            )
+            PulseIndicatorId.categoryBudgetUtilization -> Quad(
+                PulseEvidenceSourceKind.bookedLedgerAggregate,
+                "category-budget-actual",
+                setOf("ledger-category/$target/$periodKey", "budget-limit/$target/$periodKey"),
+                emptySet(),
+            )
+            PulseIndicatorId.spendingMomentum -> Quad(
+                PulseEvidenceSourceKind.spendingVelocity,
+                "spending-momentum",
+                setOf("ledger-variable-spend/$periodKey"),
+                emptySet(),
+            )
+            PulseIndicatorId.monthEndForecast -> Quad(
+                PulseEvidenceSourceKind.forecastProjection,
+                "month-end-forecast",
+                setOf("ledger-variable-spend/$periodKey", "pending-occurrences/$periodKey"),
+                setOf("PULSE-003/global/$periodKey/default"),
+            )
+            PulseIndicatorId.limitCrossing -> Quad(
+                PulseEvidenceSourceKind.forecastProjection,
+                "limit-crossing",
+                setOf("ledger-variable-spend/$periodKey", "pending-occurrences/$periodKey"),
+                setOf("PULSE-004/global/$periodKey/baseline"),
+            )
+            PulseIndicatorId.upcomingGhostLoad -> Quad(
+                PulseEvidenceSourceKind.pendingRecurrenceOccurrence,
+                "upcoming-obligations",
+                setOf("pending-occurrences/$periodKey/$target"),
+                emptySet(),
+            )
+            PulseIndicatorId.lateIncome -> Quad(
+                PulseEvidenceSourceKind.expectedIncome,
+                "expected-income-delay",
+                setOf("occurrence/$target"),
+                emptySet(),
+            )
+            PulseIndicatorId.uncertainPushRecognition -> Quad(
+                PulseEvidenceSourceKind.pushReviewState,
+                "push-review",
+                setOf("push-review/$periodKey"),
+                emptySet(),
+            )
+            PulseIndicatorId.processingBacklog -> Quad(
+                PulseEvidenceSourceKind.processingBacklogState,
+                "processing-backlog",
+                setOf("processing-backlog/$periodKey"),
+                emptySet(),
+            )
+            PulseIndicatorId.uncategorizedTransactions,
+            PulseIndicatorId.categoryOverrideAnomaly,
+            -> Quad(
+                PulseEvidenceSourceKind.categorizationAssignment,
+                "categorization-quality",
+                setOf("categorization/$target/$periodKey"),
+                emptySet(),
+            )
+            PulseIndicatorId.fixedBurdenCoverage,
+            PulseIndicatorId.reserveCoverDays,
+            PulseIndicatorId.negativeTrajectory,
+            -> Quad(
+                PulseEvidenceSourceKind.explicitBalanceSource,
+                "liquidity",
+                setOf("balance-source/$target/$periodKey"),
+                emptySet(),
+            )
+            PulseIndicatorId.incomeExpenseRatio,
+            PulseIndicatorId.netCashflowForecast,
+            PulseIndicatorId.cashflowStability,
+            -> Quad(
+                PulseEvidenceSourceKind.bookedLedgerAggregate,
+                "cashflow",
+                setOf("cashflow/$periodKey"),
+                emptySet(),
+            )
+            PulseIndicatorId.recurringBurden,
+            PulseIndicatorId.subscriptionLoad,
+            -> Quad(
+                PulseEvidenceSourceKind.pendingRecurrenceOccurrence,
+                "recurring-burden",
+                setOf("recurring/$target/$periodKey"),
+                emptySet(),
+            )
+            PulseIndicatorId.spendingOutlier,
+            PulseIndicatorId.spendingConcentration,
+            -> Quad(
+                PulseEvidenceSourceKind.historicalSpendingPattern,
+                "spending-behavior",
+                setOf("spending-behavior/$target/$periodKey"),
+                emptySet(),
+            )
+        }
+        return PulseEvidenceProvenance(
+            evidenceKey = listOf(indicatorId.stableId, target, periodKey, calculation).joinToString("/"),
+            sourceKind = kind,
+            sourceFactKeys = roots,
+            upstreamEvidenceKeys = upstream,
+            calculationKey = calculation,
+            observationWindowKey = periodKey,
+            scenarioKey = scenarioKey,
+            sourceRevision = coreRevision,
+        )
+    }
+
+    private data class Quad(
+        val kind: PulseEvidenceSourceKind,
+        val calculation: String,
+        val roots: Set<String>,
+        val upstream: Set<String>,
+    )
 
     private fun trendDirection(indicator: PulseIndicatorSnapshot): String = when {
         indicator.secondaryValue == null || indicator.value == null -> "ismeretlen"

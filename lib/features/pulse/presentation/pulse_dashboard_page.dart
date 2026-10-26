@@ -8,6 +8,7 @@ import '../application/pulse_dashboard_controller.dart';
 import '../domain/pulse_models.dart';
 import '../domain/pulse_repository.dart';
 import 'pulse_signal_detail_page.dart';
+import 'pulse_triage_inspector_page.dart';
 import 'widgets/pulse_charts.dart';
 import 'widgets/pulse_indicator_card.dart';
 
@@ -78,6 +79,36 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
     if (mounted) _controller.load();
   }
 
+  Future<void> _openSituation(PulseSituationSnapshot situation) async {
+    final snapshot = _controller.snapshot;
+    if (snapshot == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => PulseTriageInspectorPage(
+          repository: widget.repository,
+          scope: _controller.scope,
+          situation: situation,
+          indicators: snapshot.indicators,
+        ),
+      ),
+    );
+    if (mounted) _controller.load();
+  }
+
+  Future<void> _openSituations(PulseDashboardSnapshot snapshot) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => PulseSituationsPage(
+          repository: widget.repository,
+          scope: _controller.scope,
+          situations: snapshot.situations,
+          indicators: snapshot.indicators,
+        ),
+      ),
+    );
+    if (mounted) _controller.load();
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: _controller,
@@ -116,6 +147,13 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
                             final indicator = snapshot.byId('PULSE-004');
                             if (indicator != null) _openDetail(indicator);
                           },
+                        ),
+                        const SizedBox(height: 18),
+                        _SituationOverview(
+                          situations: snapshot.situations,
+                          historical: snapshot.triageHistorical,
+                          onOpen: _openSituation,
+                          onOpenAll: () => _openSituations(snapshot),
                         ),
                         const SizedBox(height: 18),
                         _GroupRail(
@@ -342,6 +380,202 @@ class _Legend extends StatelessWidget {
         ),
       ),
     ],
+  );
+}
+
+class _SituationOverview extends StatelessWidget {
+  const _SituationOverview({
+    required this.situations,
+    required this.historical,
+    required this.onOpen,
+    required this.onOpenAll,
+  });
+  final List<PulseSituationSnapshot> situations;
+  final bool historical;
+  final ValueChanged<PulseSituationSnapshot> onOpen;
+  final VoidCallback onOpenAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = situations
+        .where((item) => item.state == PulseSituationState.ready)
+        .toList(growable: false);
+    final forming = situations
+        .where((item) => item.state == PulseSituationState.forming)
+        .toList(growable: false);
+    final previews = [...ready, ...forming].take(2).toList(growable: false);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: FluviVisualTokens.border),
+        boxShadow: FluviVisualTokens.cardSurfaceShadows,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pénzügyi helyzetek',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                      ),
+                    ),
+                    SizedBox(height: 1),
+                    Text(
+                      'Triage áttekintés',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: FluviVisualTokens.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.account_tree_outlined,
+                color: FluviVisualTokens.textSecondary,
+              ),
+            ],
+          ),
+          if (historical)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Történeti kiértékelés',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: FluviVisualTokens.textSecondary,
+                ),
+              ),
+            ),
+          const SizedBox(height: 13),
+          Row(
+            children: [
+              _SituationCount(label: 'Kész helyzetek', value: ready.length),
+              const SizedBox(width: 10),
+              _SituationCount(
+                label: 'Alakuló helyzetek',
+                value: forming.length,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (previews.isEmpty)
+            const Text(
+              'Jelenleg nincs kialakuló vagy kész pénzügyi helyzet.',
+              style: TextStyle(
+                fontSize: 12,
+                color: FluviVisualTokens.textSecondary,
+              ),
+            )
+          else
+            ...previews.map(
+              (situation) => Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Material(
+                  color: const Color(0xFFF9F9FD),
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    key: ValueKey('pulse-situation-${situation.situationKey}'),
+                    onTap: () => onOpen(situation),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  situation.title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  '${situation.independentEvidenceCount} független bizonyíték · ${situation.formationRule ?? 'feltétel még nem teljesült'}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: FluviVisualTokens.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            situation.state == PulseSituationState.ready
+                                ? 'Kész'
+                                : 'Alakuló',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (situations.length > 2)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: onOpenAll,
+                child: const Text('Összes helyzet'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SituationCount extends StatelessWidget {
+  const _SituationCount({required this.label, required this.value});
+  final String label;
+  final int value;
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F4FC),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: FluviVisualTokens.textSecondary,
+            ),
+          ),
+          Text(
+            '$value',
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    ),
   );
 }
 

@@ -453,6 +453,56 @@ class FluviDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationThirteenToFourteenAddsTriageTablesWithoutDroppingPulseState() {
+        val name = "$DATABASE_NAME-pulse-triage"
+        helper.createDatabase(name, 13).use { database ->
+            database.execSQL(
+                "INSERT INTO fluvi_pulse_indicator_settings " +
+                    "(indicator_id,target_key,threshold_key,value,updated_at_utc_ms) " +
+                    "VALUES ('PULSE-003','','primary',1.30,5)",
+            )
+            database.execSQL(
+                "INSERT INTO fluvi_pulse_signal_states " +
+                    "(signal_key,indicator_id,target_key,period_key,scenario_key,activity_state," +
+                    "strength,previous_strength,data_quality,confirmation_count,measured_value," +
+                    "threshold_value,first_observed_at_utc_ms,last_evaluated_at_utc_ms," +
+                    "last_material_change_at_utc_ms,last_input_revision,last_config_revision," +
+                    "evaluation_fingerprint,situation_key,evidence_family,trace_payload,updated_at_utc_ms) " +
+                    "VALUES ('PULSE-003/global/2026-10/default','PULSE-003','','2026-10','default'," +
+                    "'active','medium',NULL,'sufficient',2,1.67,1.30,1,5,2,41,3,'signal-fingerprint'," +
+                    "'monthly-budget/2026-10','spending-velocity','v1|trace',5)",
+            )
+        }
+        helper.runMigrationsAndValidate(
+            name,
+            14,
+            true,
+            FluviDatabase.MIGRATION_13_14,
+        ).use { database ->
+            val situations = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' " +
+                    "AND name='fluvi_pulse_situations'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+            val events = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' " +
+                    "AND name='fluvi_pulse_situation_events'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+            val threshold = database.query(
+                "SELECT value FROM fluvi_pulse_indicator_settings " +
+                    "WHERE indicator_id='PULSE-003' AND target_key='' AND threshold_key='primary'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getDouble(0) }
+            val signalState = database.query(
+                "SELECT activity_state FROM fluvi_pulse_signal_states " +
+                    "WHERE signal_key='PULSE-003/global/2026-10/default'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getString(0) }
+            assertEquals(1, situations)
+            assertEquals(1, events)
+            assertEquals(1.30, threshold, .0001)
+            assertEquals("active", signalState)
+        }
+    }
+
     private fun migrateLegacyFinancialLimits(
         name: String,
         rows: List<LegacyLimit>,

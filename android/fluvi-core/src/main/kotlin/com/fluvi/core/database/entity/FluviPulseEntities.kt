@@ -135,3 +135,104 @@ data class FluviPulseSignalEventEntity(
     @ColumnInfo(name = "created_at_utc_ms")
     val createdAtUtcMs: Long,
 )
+
+/** Diagnostic triage state.  It never changes the financial Core revision. */
+@Entity(
+    tableName = "fluvi_pulse_situations",
+    indices = [
+        Index(value = ["state", "updated_at_utc_ms"]),
+        Index(value = ["domain", "period_key"]),
+        Index(value = ["period_key"]),
+    ],
+)
+data class FluviPulseSituationEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "situation_key")
+    val situationKey: String,
+    @ColumnInfo(name = "domain")
+    val domain: String,
+    @ColumnInfo(name = "target_key")
+    val targetKey: String,
+    @ColumnInfo(name = "period_key")
+    val periodKey: String,
+    @ColumnInfo(name = "state")
+    val state: String,
+    @ColumnInfo(name = "formation_rule")
+    val formationRule: String?,
+    @ColumnInfo(name = "related_signal_keys")
+    val relatedSignalKeys: String,
+    /** Versioned compact representation; Flutter receives the typed runtime snapshot. */
+    @ColumnInfo(name = "evidence_snapshot")
+    val evidenceSnapshot: String,
+    @ColumnInfo(name = "decision_trace")
+    val decisionTrace: String,
+    @ColumnInfo(name = "first_observed_at_utc_ms")
+    val firstObservedAtUtcMs: Long?,
+    @ColumnInfo(name = "last_evaluated_at_utc_ms")
+    val lastEvaluatedAtUtcMs: Long,
+    @ColumnInfo(name = "last_material_change_at_utc_ms")
+    val lastMaterialChangeAtUtcMs: Long?,
+    @ColumnInfo(name = "source_core_revision")
+    val sourceCoreRevision: Long,
+    @ColumnInfo(name = "source_signal_generation")
+    val sourceSignalGeneration: Long,
+    @ColumnInfo(name = "policy_version")
+    val policyVersion: Int,
+    @ColumnInfo(name = "semantic_fingerprint")
+    val semanticFingerprint: String,
+    @ColumnInfo(name = "state_version")
+    val stateVersion: Long,
+    @ColumnInfo(name = "updated_at_utc_ms")
+    val updatedAtUtcMs: Long,
+)
+
+@Entity(
+    tableName = "fluvi_pulse_situation_events",
+    indices = [
+        Index(value = ["situation_key", "created_at_utc_ms"]),
+        Index(value = ["next_state"]),
+        Index(value = ["domain", "period_key"]),
+        Index(value = ["situation_key", "transition_sequence"], unique = true),
+    ],
+)
+data class FluviPulseSituationEventEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "event_id")
+    val eventId: String,
+    @ColumnInfo(name = "situation_key")
+    val situationKey: String,
+    @ColumnInfo(name = "domain")
+    val domain: String,
+    @ColumnInfo(name = "period_key")
+    val periodKey: String,
+    @ColumnInfo(name = "event_kind")
+    val eventKind: String,
+    @ColumnInfo(name = "previous_state")
+    val previousState: String?,
+    @ColumnInfo(name = "next_state")
+    val nextState: String,
+    @ColumnInfo(name = "previous_formation_rule")
+    val previousFormationRule: String?,
+    @ColumnInfo(name = "next_formation_rule")
+    val nextFormationRule: String?,
+    @ColumnInfo(name = "previous_evidence_count")
+    val previousEvidenceCount: Int,
+    @ColumnInfo(name = "next_evidence_count")
+    val nextEvidenceCount: Int,
+    @ColumnInfo(name = "previous_fingerprint")
+    val previousFingerprint: String?,
+    @ColumnInfo(name = "next_fingerprint")
+    val nextFingerprint: String,
+    @ColumnInfo(name = "cause_code")
+    val causeCode: String,
+    @ColumnInfo(name = "explanation_payload")
+    val explanationPayload: String,
+    @ColumnInfo(name = "input_revision")
+    val inputRevision: Long,
+    @ColumnInfo(name = "policy_version")
+    val policyVersion: Int,
+    @ColumnInfo(name = "transition_sequence")
+    val transitionSequence: Long,
+    @ColumnInfo(name = "created_at_utc_ms")
+    val createdAtUtcMs: Long,
+)

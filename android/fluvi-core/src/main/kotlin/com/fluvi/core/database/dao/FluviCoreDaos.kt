@@ -18,6 +18,8 @@ import com.fluvi.core.database.entity.FluviFinancialLimitEntity
 import com.fluvi.core.database.entity.FluviPulseIndicatorSettingEntity
 import com.fluvi.core.database.entity.FluviPulseSignalEventEntity
 import com.fluvi.core.database.entity.FluviPulseSignalStateEntity
+import com.fluvi.core.database.entity.FluviPulseSituationEntity
+import com.fluvi.core.database.entity.FluviPulseSituationEventEntity
 import com.fluvi.core.model.FluviFinancialLimitPeriodKind
 import com.fluvi.core.model.FluviFinancialLimitTargetKind
 import com.fluvi.core.model.LedgerDirection
@@ -210,6 +212,31 @@ internal interface FluviPulseSignalDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertEvent(event: FluviPulseSignalEventEntity): Long
+}
+
+/** Situation persistence is triage-only and deliberately excluded from financial Core revision. */
+@Dao
+internal interface FluviPulseSituationDao {
+    @Query("SELECT * FROM fluvi_pulse_situations WHERE situation_key = :situationKey LIMIT 1")
+    suspend fun state(situationKey: String): FluviPulseSituationEntity?
+
+    @Query(
+        "SELECT * FROM fluvi_pulse_situations WHERE period_key = :periodKey " +
+            "ORDER BY domain ASC, target_key ASC, situation_key ASC",
+    )
+    suspend fun statesForPeriod(periodKey: String): List<FluviPulseSituationEntity>
+
+    @Query(
+        "SELECT * FROM fluvi_pulse_situation_events WHERE situation_key = :situationKey " +
+            "ORDER BY transition_sequence DESC LIMIT :limit OFFSET :offset",
+    )
+    suspend fun eventPage(situationKey: String, limit: Int, offset: Int = 0): List<FluviPulseSituationEventEntity>
+
+    @Upsert
+    suspend fun upsertState(state: FluviPulseSituationEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEvent(event: FluviPulseSituationEventEntity): Long
 }
 
 @Dao

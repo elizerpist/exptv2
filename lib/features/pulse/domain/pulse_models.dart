@@ -27,6 +27,19 @@ enum PulseSignalStrength { weak, medium, strong, critical }
 
 enum PulseSignalDataQuality { sufficient, limited, insufficient, notApplicable }
 
+enum PulseSituationState { forming, ready, improving, resolved, suspended }
+
+enum PulseEvidenceRole {
+  leading,
+  independentSupport,
+  derivedSupport,
+  overlappingSupport,
+  contextOnly,
+  excluded,
+}
+
+enum PulseEvidenceIndependence { independent, derived, overlapping, unresolved }
+
 @immutable
 final class PulseSignalSummary {
   const PulseSignalSummary({
@@ -410,6 +423,9 @@ final class PulseDashboardSnapshot {
     required this.generatedAtUtcMs,
     required this.indicators,
     this.subscriptionOptions = const [],
+    this.situations = const [],
+    this.signalGeneration = 0,
+    this.triageHistorical = false,
   });
 
   factory PulseDashboardSnapshot.fromMap(Map<Object?, Object?> map) =>
@@ -424,6 +440,11 @@ final class PulseDashboardSnapshot {
         subscriptionOptions: _list(
           map['subscriptionOptions'],
         ).map(PulseSourceOption.fromMap).toList(growable: false),
+        situations: _list(
+          map['situations'],
+        ).map(PulseSituationSnapshot.fromMap).toList(growable: false),
+        signalGeneration: (map['signalGeneration'] as num?)?.toInt() ?? 0,
+        triageHistorical: map['triageHistorical'] as bool? ?? false,
       );
 
   final int year;
@@ -432,6 +453,9 @@ final class PulseDashboardSnapshot {
   final int generatedAtUtcMs;
   final List<PulseIndicatorSnapshot> indicators;
   final List<PulseSourceOption> subscriptionOptions;
+  final List<PulseSituationSnapshot> situations;
+  final int signalGeneration;
+  final bool triageHistorical;
 
   PulseIndicatorSnapshot? byId(String id) =>
       indicators.where((indicator) => indicator.id == id).firstOrNull;
@@ -439,6 +463,274 @@ final class PulseDashboardSnapshot {
   List<PulseIndicatorSnapshot> inGroup(PulseGroup group) => indicators
       .where((indicator) => indicator.group == group)
       .toList(growable: false);
+}
+
+@immutable
+final class PulseEvidenceUnit {
+  const PulseEvidenceUnit({
+    required this.evidenceKey,
+    required this.sourceSignalKeys,
+    required this.sourceFactKeys,
+    required this.evidenceFamily,
+    required this.strength,
+    required this.role,
+    required this.independence,
+    required this.countableForFormation,
+    required this.standaloneEligible,
+    required this.reasonCodes,
+    required this.indicatorId,
+    required this.title,
+    required this.measuredValue,
+    required this.dataQuality,
+    required this.actualImpactMinor,
+    required this.projectedImpactMinor,
+  });
+
+  factory PulseEvidenceUnit.fromMap(Map<Object?, Object?> map) =>
+      PulseEvidenceUnit(
+        evidenceKey: map['evidenceKey']! as String,
+        sourceSignalKeys:
+            (map['sourceSignalKeys'] as List<Object?>? ?? const [])
+                .cast<String>(),
+        sourceFactKeys: (map['sourceFactKeys'] as List<Object?>? ?? const [])
+            .cast<String>(),
+        evidenceFamily: map['evidenceFamily']! as String,
+        strength: (map['strength'] as String?) == null
+            ? null
+            : PulseSignalStrength.values.byName(map['strength']! as String),
+        role: PulseEvidenceRole.values.byName(map['role']! as String),
+        independence: PulseEvidenceIndependence.values.byName(
+          map['independence']! as String,
+        ),
+        countableForFormation: map['countableForFormation'] as bool? ?? false,
+        standaloneEligible: map['standaloneEligible'] as bool? ?? false,
+        reasonCodes: (map['reasonCodes'] as List<Object?>? ?? const [])
+            .cast<String>(),
+        indicatorId: map['indicatorId']! as String,
+        title: map['titleHu']! as String,
+        measuredValue: (map['measuredValue'] as num?)?.toDouble(),
+        dataQuality: PulseSignalDataQuality.values.byName(
+          map['dataQuality']! as String,
+        ),
+        actualImpactMinor: (map['actualImpactMinor'] as num?)?.toInt(),
+        projectedImpactMinor: (map['projectedImpactMinor'] as num?)?.toInt(),
+      );
+
+  final String evidenceKey;
+  final List<String> sourceSignalKeys;
+  final List<String> sourceFactKeys;
+  final String evidenceFamily;
+  final PulseSignalStrength? strength;
+  final PulseEvidenceRole role;
+  final PulseEvidenceIndependence independence;
+  final bool countableForFormation;
+  final bool standaloneEligible;
+  final List<String> reasonCodes;
+  final String indicatorId;
+  final String title;
+  final double? measuredValue;
+  final PulseSignalDataQuality dataQuality;
+  final int? actualImpactMinor;
+  final int? projectedImpactMinor;
+}
+
+@immutable
+final class PulseTriageRuleResult {
+  const PulseTriageRuleResult({
+    required this.ruleId,
+    required this.applicable,
+    required this.passed,
+    required this.requiredEvidenceCount,
+    required this.actualEvidenceCount,
+    required this.requiredStrength,
+    required this.dataQualityPassed,
+    required this.materialImpactPassed,
+    required this.reasonCodes,
+  });
+
+  factory PulseTriageRuleResult.fromMap(
+    Map<Object?, Object?> map,
+  ) => PulseTriageRuleResult(
+    ruleId: map['ruleId']! as String,
+    applicable: map['applicable'] as bool? ?? false,
+    passed: map['passed'] as bool? ?? false,
+    requiredEvidenceCount: (map['requiredEvidenceCount'] as num?)?.toInt() ?? 0,
+    actualEvidenceCount: (map['actualEvidenceCount'] as num?)?.toInt() ?? 0,
+    requiredStrength: (map['requiredStrength'] as String?) == null
+        ? null
+        : PulseSignalStrength.values.byName(map['requiredStrength']! as String),
+    dataQualityPassed: map['dataQualityPassed'] as bool? ?? false,
+    materialImpactPassed: map['materialImpactPassed'] as bool?,
+    reasonCodes: (map['reasonCodes'] as List<Object?>? ?? const [])
+        .cast<String>(),
+  );
+
+  final String ruleId;
+  final bool applicable;
+  final bool passed;
+  final int requiredEvidenceCount;
+  final int actualEvidenceCount;
+  final PulseSignalStrength? requiredStrength;
+  final bool dataQualityPassed;
+  final bool? materialImpactPassed;
+  final List<String> reasonCodes;
+}
+
+@immutable
+final class PulseTriageTrace {
+  const PulseTriageTrace({
+    required this.matchedRule,
+    required this.relatedSignalCount,
+    required this.independentEvidenceCount,
+    required this.countedEvidenceKeys,
+    required this.supportingEvidenceKeys,
+    required this.missingRequirements,
+    required this.explanation,
+    required this.rules,
+  });
+
+  factory PulseTriageTrace.fromMap(Map<Object?, Object?> map) =>
+      PulseTriageTrace(
+        matchedRule: map['matchedRule'] as String?,
+        relatedSignalCount: (map['relatedSignalCount'] as num?)?.toInt() ?? 0,
+        independentEvidenceCount:
+            (map['independentEvidenceCount'] as num?)?.toInt() ?? 0,
+        countedEvidenceKeys:
+            (map['countedEvidenceKeys'] as List<Object?>? ?? const [])
+                .cast<String>(),
+        supportingEvidenceKeys:
+            (map['supportingEvidenceKeys'] as List<Object?>? ?? const [])
+                .cast<String>(),
+        missingRequirements:
+            (map['missingRequirements'] as List<Object?>? ?? const [])
+                .cast<String>(),
+        explanation: (map['explanationHu'] as List<Object?>? ?? const [])
+            .cast<String>(),
+        rules: _list(
+          map['evaluatedRules'],
+        ).map(PulseTriageRuleResult.fromMap).toList(growable: false),
+      );
+
+  final String? matchedRule;
+  final int relatedSignalCount;
+  final int independentEvidenceCount;
+  final List<String> countedEvidenceKeys;
+  final List<String> supportingEvidenceKeys;
+  final List<String> missingRequirements;
+  final List<String> explanation;
+  final List<PulseTriageRuleResult> rules;
+}
+
+@immutable
+final class PulseSituationSnapshot {
+  const PulseSituationSnapshot({
+    required this.situationKey,
+    required this.domain,
+    required this.title,
+    required this.targetKey,
+    required this.periodKey,
+    required this.state,
+    required this.formationRule,
+    required this.independentEvidenceCount,
+    required this.relatedSignalKeys,
+    required this.evidenceUnits,
+    required this.decisionTrace,
+    required this.lastMaterialChangeAtUtcMs,
+    required this.historicalInspection,
+  });
+
+  factory PulseSituationSnapshot.fromMap(Map<Object?, Object?> map) =>
+      PulseSituationSnapshot(
+        situationKey: map['situationKey']! as String,
+        domain: map['domain']! as String,
+        title: map['titleHu']! as String,
+        targetKey: map['targetKey']! as String,
+        periodKey: map['periodKey']! as String,
+        state: PulseSituationState.values.byName(map['state']! as String),
+        formationRule: map['formationRule'] as String?,
+        independentEvidenceCount:
+            (map['independentEvidenceCount'] as num?)?.toInt() ?? 0,
+        relatedSignalKeys:
+            (map['relatedSignalKeys'] as List<Object?>? ?? const [])
+                .cast<String>(),
+        evidenceUnits: _list(
+          map['evidenceUnits'],
+        ).map(PulseEvidenceUnit.fromMap).toList(growable: false),
+        decisionTrace: PulseTriageTrace.fromMap(_map(map['decisionTrace'])),
+        lastMaterialChangeAtUtcMs: (map['lastMaterialChangeAtUtcMs'] as num?)
+            ?.toInt(),
+        historicalInspection: map['historicalInspection'] as bool? ?? false,
+      );
+
+  final String situationKey;
+  final String domain;
+  final String title;
+  final String targetKey;
+  final String periodKey;
+  final PulseSituationState state;
+  final String? formationRule;
+  final int independentEvidenceCount;
+  final List<String> relatedSignalKeys;
+  final List<PulseEvidenceUnit> evidenceUnits;
+  final PulseTriageTrace decisionTrace;
+  final int? lastMaterialChangeAtUtcMs;
+  final bool historicalInspection;
+}
+
+@immutable
+final class PulseSituationEvent {
+  const PulseSituationEvent({
+    required this.eventId,
+    required this.kind,
+    required this.previousState,
+    required this.nextState,
+    required this.previousEvidenceCount,
+    required this.nextEvidenceCount,
+    required this.explanation,
+    required this.createdAtUtcMs,
+  });
+
+  factory PulseSituationEvent.fromMap(
+    Map<Object?, Object?> map,
+  ) => PulseSituationEvent(
+    eventId: map['eventId']! as String,
+    kind: map['kind']! as String,
+    previousState: (map['previousState'] as String?) == null
+        ? null
+        : PulseSituationState.values.byName(map['previousState']! as String),
+    nextState: PulseSituationState.values.byName(map['nextState']! as String),
+    previousEvidenceCount: (map['previousEvidenceCount'] as num?)?.toInt() ?? 0,
+    nextEvidenceCount: (map['nextEvidenceCount'] as num?)?.toInt() ?? 0,
+    explanation: (map['explanationHu'] as List<Object?>? ?? const [])
+        .cast<String>(),
+    createdAtUtcMs: (map['createdAtUtcMs'] as num).toInt(),
+  );
+
+  final String eventId;
+  final String kind;
+  final PulseSituationState? previousState;
+  final PulseSituationState nextState;
+  final int previousEvidenceCount;
+  final int nextEvidenceCount;
+  final List<String> explanation;
+  final int createdAtUtcMs;
+}
+
+@immutable
+final class PulseSituationInspection {
+  const PulseSituationInspection({
+    required this.situation,
+    required this.events,
+  });
+  factory PulseSituationInspection.fromMap(Map<Object?, Object?> map) =>
+      PulseSituationInspection(
+        situation: PulseSituationSnapshot.fromMap(_map(map['situation'])),
+        events: _list(
+          map['events'],
+        ).map(PulseSituationEvent.fromMap).toList(growable: false),
+      );
+  final PulseSituationSnapshot situation;
+  final List<PulseSituationEvent> events;
 }
 
 extension on Iterable<PulseIndicatorSnapshot> {

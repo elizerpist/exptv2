@@ -13,6 +13,7 @@ import com.fluvi.core.database.dao.FluviFutureReferenceDao
 import com.fluvi.core.database.dao.FluviFinancialLimitDao
 import com.fluvi.core.database.dao.FluviPulseIndicatorSettingsDao
 import com.fluvi.core.database.dao.FluviPulseSignalDao
+import com.fluvi.core.database.dao.FluviPulseSituationDao
 import com.fluvi.core.database.dao.FluviLedgerDeletionArchiveDao
 import com.fluvi.core.database.dao.FluviLedgerDao
 import com.fluvi.core.database.dao.FluviLedgerSyncOutboxDao
@@ -27,6 +28,8 @@ import com.fluvi.core.database.entity.FluviFinancialLimitEntity
 import com.fluvi.core.database.entity.FluviPulseIndicatorSettingEntity
 import com.fluvi.core.database.entity.FluviPulseSignalEventEntity
 import com.fluvi.core.database.entity.FluviPulseSignalStateEntity
+import com.fluvi.core.database.entity.FluviPulseSituationEntity
+import com.fluvi.core.database.entity.FluviPulseSituationEventEntity
 import com.fluvi.core.database.entity.FluviLedgerBackupCheckpointEntity
 import com.fluvi.core.database.entity.FluviLedgerDeletionArchiveEntity
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
@@ -60,6 +63,8 @@ import com.fluvi.core.model.FluviSystemIds
         FluviPulseIndicatorSettingEntity::class,
         FluviPulseSignalStateEntity::class,
         FluviPulseSignalEventEntity::class,
+        FluviPulseSituationEntity::class,
+        FluviPulseSituationEventEntity::class,
         FluviPartnerEntity::class,
         FluviPartnerAliasEntity::class,
         FluviLedgerEntryEntity::class,
@@ -83,7 +88,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -97,6 +102,8 @@ internal abstract class FluviDatabase : RoomDatabase() {
     abstract fun pulseIndicatorSettingsDao(): FluviPulseIndicatorSettingsDao
 
     abstract fun pulseSignalDao(): FluviPulseSignalDao
+
+    abstract fun pulseSituationDao(): FluviPulseSituationDao
 
     abstract fun partnerDao(): FluviPartnerDao
 
@@ -664,6 +671,40 @@ internal abstract class FluviDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX index_fluvi_pulse_signal_events_signal_key_created_at_utc_ms ON fluvi_pulse_signal_events(signal_key, created_at_utc_ms)")
                 db.execSQL("CREATE UNIQUE INDEX index_fluvi_pulse_signal_events_signal_key_evaluation_fingerprint_event_kind ON fluvi_pulse_signal_events(signal_key, evaluation_fingerprint, event_kind)")
                 db.execSQL("CREATE INDEX index_fluvi_pulse_signal_events_created_at_utc_ms ON fluvi_pulse_signal_events(created_at_utc_ms)")
+            }
+        }
+
+        /** B-phase triage state and bounded, idempotent situation history. */
+        val MIGRATION_13_14: Migration = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE fluvi_pulse_situations (" +
+                        "situation_key TEXT NOT NULL, domain TEXT NOT NULL, target_key TEXT NOT NULL, " +
+                        "period_key TEXT NOT NULL, state TEXT NOT NULL, formation_rule TEXT, " +
+                        "related_signal_keys TEXT NOT NULL, evidence_snapshot TEXT NOT NULL, decision_trace TEXT NOT NULL, " +
+                        "first_observed_at_utc_ms INTEGER, last_evaluated_at_utc_ms INTEGER NOT NULL, " +
+                        "last_material_change_at_utc_ms INTEGER, source_core_revision INTEGER NOT NULL, " +
+                        "source_signal_generation INTEGER NOT NULL, policy_version INTEGER NOT NULL, " +
+                        "semantic_fingerprint TEXT NOT NULL, state_version INTEGER NOT NULL, " +
+                        "updated_at_utc_ms INTEGER NOT NULL, PRIMARY KEY(situation_key))",
+                )
+                db.execSQL("CREATE INDEX index_fluvi_pulse_situations_state_updated_at_utc_ms ON fluvi_pulse_situations(state, updated_at_utc_ms)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_situations_domain_period_key ON fluvi_pulse_situations(domain, period_key)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_situations_period_key ON fluvi_pulse_situations(period_key)")
+                db.execSQL(
+                    "CREATE TABLE fluvi_pulse_situation_events (" +
+                        "event_id TEXT NOT NULL, situation_key TEXT NOT NULL, domain TEXT NOT NULL, period_key TEXT NOT NULL, " +
+                        "event_kind TEXT NOT NULL, previous_state TEXT, next_state TEXT NOT NULL, " +
+                        "previous_formation_rule TEXT, next_formation_rule TEXT, previous_evidence_count INTEGER NOT NULL, " +
+                        "next_evidence_count INTEGER NOT NULL, previous_fingerprint TEXT, next_fingerprint TEXT NOT NULL, " +
+                        "cause_code TEXT NOT NULL, explanation_payload TEXT NOT NULL, input_revision INTEGER NOT NULL, " +
+                        "policy_version INTEGER NOT NULL, transition_sequence INTEGER NOT NULL, created_at_utc_ms INTEGER NOT NULL, " +
+                        "PRIMARY KEY(event_id))",
+                )
+                db.execSQL("CREATE INDEX index_fluvi_pulse_situation_events_situation_key_created_at_utc_ms ON fluvi_pulse_situation_events(situation_key, created_at_utc_ms)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_situation_events_next_state ON fluvi_pulse_situation_events(next_state)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_situation_events_domain_period_key ON fluvi_pulse_situation_events(domain, period_key)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_pulse_situation_events_situation_key_transition_sequence ON fluvi_pulse_situation_events(situation_key, transition_sequence)")
             }
         }
 

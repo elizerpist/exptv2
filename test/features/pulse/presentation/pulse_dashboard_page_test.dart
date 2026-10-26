@@ -5,6 +5,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Pulse situation overview opens the typed Triage Inspector', (
+    tester,
+  ) async {
+    final situation = _situation();
+    final repository = _Repository(_snapshot(situations: [situation]));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PulseDashboardPage(
+          repository: repository,
+          coreRevisions: const Stream<Object?>.empty(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pénzügyi helyzetek'), findsOneWidget);
+    final situationCard = find.byKey(
+      const ValueKey('pulse-situation-monthly-budget/2026-10'),
+    );
+    await tester.ensureVisible(situationCard);
+    await tester.pumpAndSettle();
+    await tester.tap(situationCard);
+    await tester.pumpAndSettle();
+    expect(find.text('HELYZETKÉPZÉS'), findsOneWidget);
+    expect(find.text('Helyzetképzési szabályok'), findsOneWidget);
+  });
+
   testWidgets(
     'Pulse renders seven cards per group and persists a detail threshold only on save',
     (tester) async {
@@ -108,11 +135,14 @@ void main() {
   );
 }
 
-PulseDashboardSnapshot _snapshot() => PulseDashboardSnapshot(
+PulseDashboardSnapshot _snapshot({
+  List<PulseSituationSnapshot> situations = const [],
+}) => PulseDashboardSnapshot(
   year: 2026,
   month: 10,
   coreRevision: 42,
   generatedAtUtcMs: 1,
+  situations: situations,
   indicators: List<PulseIndicatorSnapshot>.generate(21, (index) {
     final number = index + 1;
     final group = switch (index ~/ 7) {
@@ -219,6 +249,20 @@ final class _Repository implements PulseRepository {
       : const [];
 
   @override
+  Future<PulseSituationInspection> triageInspection({
+    required int year,
+    required int month,
+    required String situationKey,
+    int historyLimit = 30,
+    int historyOffset = 0,
+  }) async {
+    final situation = snapshot.situations.firstWhere(
+      (item) => item.situationKey == situationKey,
+    );
+    return PulseSituationInspection(situation: situation, events: const []);
+  }
+
+  @override
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,
@@ -243,3 +287,28 @@ final class _Repository implements PulseRepository {
     saved.add(value);
   }
 }
+
+PulseSituationSnapshot _situation() => const PulseSituationSnapshot(
+  situationKey: 'monthly-budget/2026-10',
+  domain: 'monthlyBudget',
+  title: 'Havi kerethelyzet',
+  targetKey: 'aggregate',
+  periodKey: '2026-10',
+  state: PulseSituationState.ready,
+  formationRule: 'medium-pair',
+  independentEvidenceCount: 2,
+  relatedSignalKeys: ['PULSE-003/global/2026-10/default'],
+  evidenceUnits: [],
+  decisionTrace: PulseTriageTrace(
+    matchedRule: 'medium-pair',
+    relatedSignalCount: 2,
+    independentEvidenceCount: 2,
+    countedEvidenceKeys: [],
+    supportingEvidenceKeys: [],
+    missingRequirements: [],
+    explanation: ['Két független bizonyíték teljesült.'],
+    rules: [],
+  ),
+  lastMaterialChangeAtUtcMs: null,
+  historicalInspection: false,
+);

@@ -43,6 +43,25 @@ final class MethodChannelPulseRepository implements PulseRepository {
   }
 
   @override
+  Future<PulseSituationInspection> triageInspection({
+    required int year,
+    required int month,
+    required String situationKey,
+    int historyLimit = 30,
+    int historyOffset = 0,
+  }) async => PulseSituationInspection.fromMap(
+    _map(
+      await _channel.invokeMethod<Object?>('getTriageInspection', {
+        'year': year,
+        'month': month,
+        'situationKey': situationKey,
+        'historyLimit': historyLimit,
+        'historyOffset': historyOffset,
+      }),
+    ),
+  );
+
+  @override
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,

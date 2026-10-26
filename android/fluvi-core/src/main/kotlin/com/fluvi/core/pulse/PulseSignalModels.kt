@@ -55,6 +55,40 @@ enum class PulseSignalEvaluationMode {
     historicalInspection,
 }
 
+/**
+ * Provenance is intentionally explicit.  Evidence-family labels are useful for
+ * presentation, but they are not enough to prove that two measurements are
+ * independent.  The triage engine therefore receives the roots and the
+ * calculation chain that produced every raw signal.
+ */
+enum class PulseEvidenceSourceKind {
+    bookedLedgerActual,
+    bookedLedgerAggregate,
+    budgetLimit,
+    historicalSpendingPattern,
+    spendingVelocity,
+    forecastProjection,
+    pendingRecurrenceOccurrence,
+    realizedRecurrenceOccurrence,
+    expectedIncome,
+    explicitBalanceSource,
+    pushReviewState,
+    processingBacklogState,
+    categorizationAssignment,
+    unresolved,
+}
+
+data class PulseEvidenceProvenance(
+    val evidenceKey: String,
+    val sourceKind: PulseEvidenceSourceKind,
+    val sourceFactKeys: Set<String>,
+    val upstreamEvidenceKeys: Set<String> = emptySet(),
+    val calculationKey: String,
+    val observationWindowKey: String,
+    val scenarioKey: String? = null,
+    val sourceRevision: Long,
+)
+
 data class PulseSignalRuleDefinition(
     val indicatorId: PulseIndicatorId,
     val metricKey: String,
@@ -85,6 +119,7 @@ data class PulseSignalEvidence(
     val affectedBudgetMinor: Long? = null,
     val affectedObligationMinor: Long? = null,
     val impactRatio: Double? = null,
+    val provenance: PulseEvidenceProvenance? = null,
 )
 
 data class PulseSignalEvaluationTrace(
@@ -169,4 +204,15 @@ data class PulseSignalInspectionSnapshot(
     val signal: PulseRawSignal,
     val events: List<PulseSignalEvent>,
     val lastPersistedState: PulseSignalState?,
+)
+
+/** A signal generation is the single coherent input accepted by triage. */
+data class PulseSignalFrame(
+    val dashboard: PulseDashboardSnapshot,
+    val signals: List<PulseRawSignal>,
+    val coreRevision: Long,
+    val signalGeneration: Long,
+    val configurationRevision: Long,
+    val evaluationMode: PulseSignalEvaluationMode,
+    val evaluatedAtUtcMs: Long,
 )
