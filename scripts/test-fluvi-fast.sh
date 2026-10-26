@@ -96,6 +96,7 @@ flutter test \
   test/features/dashboard/motion/dashboard_semantic_catalog_test.dart \
   test/shared/presentation/fluvi_slide_up_sheet_test.dart \
   test/app/automation_bottom_navigation_test.dart \
+  test/features/pulse/presentation/pulse_dashboard_page_test.dart \
   test/features/manual_transactions/creation_selector_sheet_test.dart \
   test/features/automation/presentation/push_profile_wizard_page_test.dart \
   "$@"
