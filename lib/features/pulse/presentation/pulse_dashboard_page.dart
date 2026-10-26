@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/design/dashboard_mode_palette.dart';
 import '../application/pulse_dashboard_controller.dart';
@@ -9,8 +12,13 @@ import 'widgets/pulse_charts.dart';
 import 'widgets/pulse_indicator_card.dart';
 
 class PulseDashboardPage extends StatefulWidget {
-  const PulseDashboardPage({super.key, required this.repository});
+  const PulseDashboardPage({
+    super.key,
+    required this.repository,
+    this.coreRevisions,
+  });
   final PulseRepository repository;
+  final Stream<Object?>? coreRevisions;
 
   @override
   State<PulseDashboardPage> createState() => _PulseDashboardPageState();
@@ -19,6 +27,8 @@ class PulseDashboardPage extends StatefulWidget {
 class _PulseDashboardPageState extends State<PulseDashboardPage>
     with WidgetsBindingObserver {
   late final PulseDashboardController _controller;
+  StreamSubscription<Object?>? _coreRevisionSubscription;
+  Timer? _revisionDebounce;
 
   @override
   void initState() {
@@ -26,11 +36,24 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
     WidgetsBinding.instance.addObserver(this);
     _controller = PulseDashboardController(repository: widget.repository);
     _controller.load();
+    final revisions =
+        widget.coreRevisions ??
+        const EventChannel(
+          'com.fluvi/dashboard_core_revision_stream',
+        ).receiveBroadcastStream();
+    _coreRevisionSubscription = revisions.listen((_) {
+      _revisionDebounce?.cancel();
+      _revisionDebounce = Timer(const Duration(milliseconds: 180), () {
+        if (mounted) _controller.load();
+      });
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _revisionDebounce?.cancel();
+    _coreRevisionSubscription?.cancel();
     _controller.dispose();
     super.dispose();
   }

@@ -10,7 +10,12 @@ void main() {
     (tester) async {
       final repository = _Repository(_snapshot());
       await tester.pumpWidget(
-        MaterialApp(home: PulseDashboardPage(repository: repository)),
+        MaterialApp(
+          home: PulseDashboardPage(
+            repository: repository,
+            coreRevisions: const Stream<Object?>.empty(),
+          ),
+        ),
       );
       await tester.pumpAndSettle();
 
