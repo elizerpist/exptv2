@@ -35,6 +35,8 @@ import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
+import com.fluvi.core.pulse.PulseDashboardSnapshot
+import com.fluvi.core.pulse.PulseIndicatorSnapshot
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
 import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
@@ -72,6 +74,7 @@ class MainActivity : FlutterActivity() {
     private var automationChannel: MethodChannel? = null
     private var automationPermissionChannel: MethodChannel? = null
     private var financialLimitChannel: MethodChannel? = null
+    private var pulseChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
     private var queryTaskQueue: BinaryMessenger.TaskQueue? = null
     private var queryMenuChannel: MethodChannel? = null
@@ -227,6 +230,24 @@ class MainActivity : FlutterActivity() {
                         result.error(
                             if (error is IllegalArgumentException) "validation" else "financial_limit_error",
                             error.message ?: "Financial limit operation failed.",
+                            null,
+                        )
+                    }
+                }
+            }
+        }
+        pulseChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            PULSE_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) { handlePulseCall(call, fluviCore) }
+                    }.onSuccess(result::success).onFailure { error ->
+                        result.error(
+                            if (error is IllegalArgumentException) "validation" else "pulse_error",
+                            error.message ?: "Pulse operation failed.",
                             null,
                         )
                     }
@@ -506,6 +527,8 @@ class MainActivity : FlutterActivity() {
         categoryChannel = null
         financialLimitChannel?.setMethodCallHandler(null)
         financialLimitChannel = null
+        pulseChannel?.setMethodCallHandler(null)
+        pulseChannel = null
         queryChannel?.setMethodCallHandler(null)
         queryMenuChannel?.setMethodCallHandler(null)
         queryChannel = null
@@ -889,6 +912,92 @@ class MainActivity : FlutterActivity() {
         "deleteFinancialLimit" -> fluviCore.financialLimits.delete(financialLimitKey(call))
         else -> throw IllegalArgumentException("Unknown financial limit method: ${call.method}")
     }
+
+    private suspend fun handlePulseCall(
+        call: MethodCall,
+        fluviCore: FluviCore,
+    ): Any? = when (call.method) {
+        "getDashboard" -> pulseDashboardMap(
+            fluviCore.pulse.dashboard(
+                year = requireInt(call, "year"),
+                month = requireInt(call, "month"),
+            ),
+        )
+        "setThreshold" -> {
+            fluviCore.pulseThresholds.set(
+                indicatorId = requireArgument(call, "indicatorId"),
+                targetKey = call.argument<String>("targetKey") ?: "",
+                thresholdKey = requireArgument(call, "thresholdKey"),
+                value = (call.argument<Number>("value")
+                    ?: throw IllegalArgumentException("Missing Pulse threshold value.")).toDouble(),
+            )
+            null
+        }
+        "resetThreshold" -> {
+            fluviCore.pulseThresholds.reset(
+                indicatorId = requireArgument(call, "indicatorId"),
+                targetKey = call.argument<String>("targetKey") ?: "",
+                thresholdKey = requireArgument(call, "thresholdKey"),
+            )
+            null
+        }
+        else -> throw IllegalArgumentException("Unknown Pulse method: ${call.method}")
+    }
+
+    private fun pulseDashboardMap(snapshot: PulseDashboardSnapshot): Map<String, Any?> = mapOf(
+        "year" to snapshot.year,
+        "month" to snapshot.month,
+        "coreRevision" to snapshot.coreRevision,
+        "generatedAtUtcMs" to snapshot.generatedAtUtcMs,
+        "indicators" to snapshot.indicators.map(::pulseIndicatorMap),
+    )
+
+    private fun pulseIndicatorMap(snapshot: PulseIndicatorSnapshot): Map<String, Any?> = mapOf(
+        "id" to snapshot.id.stableId,
+        "group" to snapshot.id.group.name,
+        "titleHu" to snapshot.id.titleHu,
+        "descriptionHu" to snapshot.id.descriptionHu,
+        "unit" to snapshot.id.unit.name,
+        "chartKind" to snapshot.id.chartKind.name,
+        "availability" to snapshot.availability.name,
+        "value" to snapshot.value,
+        "secondaryValue" to snapshot.secondaryValue,
+        "summaryHu" to snapshot.summaryHu,
+        "missingReasonsHu" to snapshot.missingReasonsHu,
+        "sampleCount" to snapshot.sampleCount,
+        "sources" to snapshot.sources,
+        "thresholds" to snapshot.thresholds.map { threshold ->
+            mapOf(
+                "key" to threshold.key,
+                "value" to threshold.value,
+                "isUserDefined" to threshold.isUserDefined,
+                "definition" to mapOf(
+                    "key" to threshold.definition.key,
+                    "unit" to threshold.definition.unit.name,
+                    "defaultValue" to threshold.definition.defaultValue,
+                    "minimum" to threshold.definition.minimum,
+                    "maximum" to threshold.definition.maximum,
+                    "step" to threshold.definition.step,
+                ),
+            )
+        },
+        "series" to snapshot.series.map { series ->
+            mapOf(
+                "key" to series.key,
+                "labelHu" to series.labelHu,
+                "points" to series.points.map { point ->
+                    mapOf(
+                        "x" to point.x,
+                        "label" to point.label,
+                        "actual" to point.actual,
+                        "baseline" to point.baseline,
+                        "momentum" to point.momentum,
+                        "reference" to point.reference,
+                    )
+                },
+            )
+        },
+    )
 
     private fun financialLimitKey(call: MethodCall): FluviFinancialLimitKey {
         return financialLimitKey(requireNotNull(call.arguments as? Map<String, Any?>))
@@ -1568,6 +1677,7 @@ class MainActivity : FlutterActivity() {
         const val AUTOMATION_CHANNEL = "com.fluvi/automation"
         const val AUTOMATION_PERMISSION_CHANNEL = "com.fluvi/automation_permissions"
         const val FINANCIAL_LIMIT_CHANNEL = "com.fluvi/financial_limits"
+        const val PULSE_CHANNEL = "com.fluvi/pulse"
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
         const val QUERY_MENU_CHANNEL = "com.fluvi/query_menu"
         const val DEMO_CHANNEL = "com.fluvi/demo_data"

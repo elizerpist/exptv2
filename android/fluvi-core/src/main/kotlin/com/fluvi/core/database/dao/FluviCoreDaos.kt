@@ -15,6 +15,7 @@ import com.fluvi.core.database.entity.FluviLedgerEntryEntity
 import com.fluvi.core.database.entity.FluviLedgerSyncOutboxEntity
 import com.fluvi.core.database.entity.FluviLedgerSyncWorkspaceEntity
 import com.fluvi.core.database.entity.FluviFinancialLimitEntity
+import com.fluvi.core.database.entity.FluviPulseIndicatorSettingEntity
 import com.fluvi.core.model.FluviFinancialLimitPeriodKind
 import com.fluvi.core.model.FluviFinancialLimitTargetKind
 import com.fluvi.core.model.LedgerDirection
@@ -158,6 +159,36 @@ internal interface FluviFinancialLimitDao {
 
     @Query("SELECT COUNT(*) FROM fluvi_financial_limits")
     suspend fun count(): Long
+}
+
+/** Pulse settings are independent from financial limits and never alter them. */
+@Dao
+internal interface FluviPulseIndicatorSettingsDao {
+    @Query(
+        "SELECT * FROM fluvi_pulse_indicator_settings " +
+            "WHERE indicator_id = :indicatorId AND target_key = :targetKey " +
+            "ORDER BY threshold_key ASC",
+    )
+    suspend fun forIndicator(
+        indicatorId: String,
+        targetKey: String,
+    ): List<FluviPulseIndicatorSettingEntity>
+
+    @Query("SELECT * FROM fluvi_pulse_indicator_settings ORDER BY indicator_id, target_key, threshold_key")
+    suspend fun all(): List<FluviPulseIndicatorSettingEntity>
+
+    @androidx.room.Upsert
+    suspend fun upsert(setting: FluviPulseIndicatorSettingEntity)
+
+    @Query(
+        "DELETE FROM fluvi_pulse_indicator_settings " +
+            "WHERE indicator_id = :indicatorId AND target_key = :targetKey AND threshold_key = :thresholdKey",
+    )
+    suspend fun delete(
+        indicatorId: String,
+        targetKey: String,
+        thresholdKey: String,
+    ): Int
 }
 
 @Dao
@@ -800,6 +831,20 @@ internal interface FluviRecurrenceDao {
     )
     suspend fun activeVisiblePendingOccurrences(
         settingsId: String,
+    ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    /** Pulse uses pending occurrence truth independently from Ledger visibility. */
+    @Query(
+        "SELECT occurrence.* FROM fluvi_recurrence_occurrences AS occurrence " +
+            "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
+            "WHERE occurrence.status = 'pending' AND rule.is_active = 1 " +
+            "AND rule.archived_at_utc_ms IS NULL " +
+            "AND occurrence.expected_at_utc_ms BETWEEN :fromUtcMs AND :toUtcMs " +
+            "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC",
+    )
+    suspend fun activePendingBetween(
+        fromUtcMs: Long,
+        toUtcMs: Long,
     ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
 
     @Query("SELECT * FROM fluvi_recurrence_occurrences ORDER BY expected_at_utc_ms ASC, id ASC LIMIT :limit OFFSET :offset")

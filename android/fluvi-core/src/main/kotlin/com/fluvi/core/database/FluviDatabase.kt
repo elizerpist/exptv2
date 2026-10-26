@@ -11,6 +11,7 @@ import com.fluvi.core.database.dao.FluviAppSettingsDao
 import com.fluvi.core.database.dao.FluviLedgerBackupCheckpointDao
 import com.fluvi.core.database.dao.FluviFutureReferenceDao
 import com.fluvi.core.database.dao.FluviFinancialLimitDao
+import com.fluvi.core.database.dao.FluviPulseIndicatorSettingsDao
 import com.fluvi.core.database.dao.FluviLedgerDeletionArchiveDao
 import com.fluvi.core.database.dao.FluviLedgerDao
 import com.fluvi.core.database.dao.FluviLedgerSyncOutboxDao
@@ -22,6 +23,7 @@ import com.fluvi.core.database.dao.FluviRecurrenceDao
 import com.fluvi.core.database.entity.FluviAppSettingsEntity
 import com.fluvi.core.database.entity.FluviCategoryEntity
 import com.fluvi.core.database.entity.FluviFinancialLimitEntity
+import com.fluvi.core.database.entity.FluviPulseIndicatorSettingEntity
 import com.fluvi.core.database.entity.FluviLedgerBackupCheckpointEntity
 import com.fluvi.core.database.entity.FluviLedgerDeletionArchiveEntity
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
@@ -52,6 +54,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviAppSettingsEntity::class,
         FluviCategoryEntity::class,
         FluviFinancialLimitEntity::class,
+        FluviPulseIndicatorSettingEntity::class,
         FluviPartnerEntity::class,
         FluviPartnerAliasEntity::class,
         FluviLedgerEntryEntity::class,
@@ -75,7 +78,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -85,6 +88,8 @@ internal abstract class FluviDatabase : RoomDatabase() {
     abstract fun categoryDao(): FluviCategoryDao
 
     abstract fun financialLimitDao(): FluviFinancialLimitDao
+
+    abstract fun pulseIndicatorSettingsDao(): FluviPulseIndicatorSettingsDao
 
     abstract fun partnerDao(): FluviPartnerDao
 
@@ -600,6 +605,27 @@ internal abstract class FluviDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX index_fluvi_ledger_entries_partner_id_booked_local_epoch_day_booked_local_time_minutes_id ON fluvi_ledger_entries(partner_id, booked_local_epoch_day, booked_local_time_minutes, id)")
                 db.execSQL("CREATE INDEX index_fluvi_ledger_entries_notification_inbox_id ON fluvi_ledger_entries(notification_inbox_id)")
                 db.execSQL("CREATE UNIQUE INDEX index_fluvi_ledger_entries_recurrence_occurrence_id ON fluvi_ledger_entries(recurrence_occurrence_id)")
+            }
+        }
+
+        /** Pulse V1 persists only user-configured chart references. */
+        val MIGRATION_11_12: Migration = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE fluvi_pulse_indicator_settings (" +
+                        "indicator_id TEXT NOT NULL, target_key TEXT NOT NULL, " +
+                        "threshold_key TEXT NOT NULL, value REAL NOT NULL, " +
+                        "updated_at_utc_ms INTEGER NOT NULL, " +
+                        "PRIMARY KEY(indicator_id, target_key, threshold_key))",
+                )
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_pulse_indicator_settings_indicator_id_updated_at_utc_ms " +
+                        "ON fluvi_pulse_indicator_settings(indicator_id, updated_at_utc_ms)",
+                )
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_pulse_indicator_settings_target_key " +
+                        "ON fluvi_pulse_indicator_settings(target_key)",
+                )
             }
         }
 

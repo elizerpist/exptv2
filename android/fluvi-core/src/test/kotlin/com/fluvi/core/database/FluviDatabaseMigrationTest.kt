@@ -394,6 +394,30 @@ class FluviDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationElevenToTwelveAddsPulseThresholdSettings() {
+        val name = "$DATABASE_NAME-pulse-threshold-settings"
+        helper.createDatabase(name, 11).use { }
+
+        helper.runMigrationsAndValidate(
+            name,
+            12,
+            true,
+            FluviDatabase.MIGRATION_11_12,
+        ).use { database ->
+            database.execSQL(
+                "INSERT INTO fluvi_pulse_indicator_settings " +
+                    "(indicator_id,target_key,threshold_key,value,updated_at_utc_ms) " +
+                    "VALUES ('PULSE-003','','primary',1.25,4)",
+            )
+            val stored = database.query(
+                "SELECT value FROM fluvi_pulse_indicator_settings " +
+                    "WHERE indicator_id='PULSE-003' AND target_key='' AND threshold_key='primary'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getDouble(0) }
+            assertEquals(1.25, stored, .0001)
+        }
+    }
+
     private fun migrateLegacyFinancialLimits(
         name: String,
         rows: List<LegacyLimit>,

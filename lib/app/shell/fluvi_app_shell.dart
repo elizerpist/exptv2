@@ -36,6 +36,10 @@ import '../../features/automation/presentation/push_profile_wizard_page.dart';
 import '../../features/automation/presentation/recurring_transaction_wizard_page.dart';
 import '../../features/automation/presentation/ghost_manager_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
+import '../../features/pulse/data/method_channel_pulse_repository.dart';
+import '../../features/pulse/data/unavailable_pulse_repository.dart';
+import '../../features/pulse/domain/pulse_repository.dart';
+import '../../features/pulse/presentation/pulse_dashboard_page.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
 import '../../features/dashboard/application/transaction_direction_controller.dart';
@@ -101,6 +105,7 @@ class FluviAppShell extends StatefulWidget {
     this.manualTransactionRepository,
     this.automationRepository,
     this.automationPermissionRepository,
+    this.pulseRepository,
     this.initialDate,
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
@@ -117,6 +122,7 @@ class FluviAppShell extends StatefulWidget {
   final ManualTransactionRepository? manualTransactionRepository;
   final AutomationRepository? automationRepository;
   final AutomationPermissionRepository? automationPermissionRepository;
+  final PulseRepository? pulseRepository;
   final DateTime? initialDate;
   final TimePlane initialPlane;
   final bool initialRailOpen;
@@ -197,6 +203,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   late final ManualTransactionRepository _manualTransactionRepository;
   late final AutomationRepository _automationRepository;
   late final AutomationPermissionRepository _automationPermissionRepository;
+  late final PulseRepository _pulseRepository;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
   int _startupAttemptGeneration = 0;
@@ -209,6 +216,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   PreparedLogBoxRasterBank? _preparedLogBoxRasters;
   bool _queryMenuOpen = false;
   bool _queryApplying = false;
+  bool _pulseInitialized = false;
 
   @override
   void initState() {
@@ -246,6 +254,11 @@ class _FluviAppShellState extends State<FluviAppShell>
         (kIsWeb
             ? const UnavailableManualTransactionRepository()
             : MethodChannelManualTransactionRepository());
+    _pulseRepository =
+        widget.pulseRepository ??
+        (kIsWeb
+            ? const UnavailablePulseRepository()
+            : MethodChannelPulseRepository());
     _automationRepository =
         widget.automationRepository ??
         (kIsWeb
@@ -933,7 +946,8 @@ class _FluviAppShellState extends State<FluviAppShell>
                           return IndexedStack(
                             index: switch (_selectedNavigationItem) {
                               Bnb03Item.search => 1,
-                              Bnb03Item.profile => 2,
+                              Bnb03Item.cart => 2,
+                              Bnb03Item.profile => 3,
                               _ => 0,
                             },
                             children: [
@@ -952,6 +966,11 @@ class _FluviAppShellState extends State<FluviAppShell>
                                     : LedgerDirection.expense,
                                 onOpenLedgerEntry: _openEditTransaction,
                               ),
+                              _pulseInitialized
+                                  ? PulseDashboardPage(
+                                      repository: _pulseRepository,
+                                    )
+                                  : const SizedBox.shrink(),
                               SettingsPage(
                                 permissions: _automationPermissionRepository,
                               ),
@@ -994,6 +1013,9 @@ class _FluviAppShellState extends State<FluviAppShell>
                                 if (item == Bnb03Item.shop) {
                                   _openCreationSelector();
                                   return;
+                                }
+                                if (item == Bnb03Item.cart) {
+                                  _pulseInitialized = true;
                                 }
                                 setState(() => _selectedNavigationItem = item);
                               },
