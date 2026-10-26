@@ -72,9 +72,9 @@ class PulseSignalStateReducerTest {
         assertEquals(PulseSignalActivityState.active, active.next.activityState)
         assertEquals(PulseSignalEventKind.activated, active.event)
 
-        // 1.18 is below activation 1.30 but not below the 5% resolution
+        // 1.27 is below activation 1.30 but not below the 5% resolution
         // threshold (1.235); the active state is preserved instead of flapping.
-        val withinDeadBand = raw(value = 1.18, revision = 3, condition = false)
+        val withinDeadBand = raw(value = 1.27, revision = 3, condition = false)
         val stable = PulseSignalStateReducer.reduce(active.next, withinDeadBand, rule)
         assertEquals(PulseSignalActivityState.active, stable.next.activityState)
 
