@@ -40,9 +40,21 @@ enum PulseEvidenceRole {
 
 enum PulseEvidenceIndependence { independent, derived, overlapping, unresolved }
 
-enum PulseStoryCertainty { observed, scheduled, projected, estimated, unavailable }
+enum PulseStoryCertainty {
+  observed,
+  scheduled,
+  projected,
+  estimated,
+  unavailable,
+}
 
-enum PulseStoryFragmentRole { headline, evidence, timeCause, qualification, recovery }
+enum PulseStoryFragmentRole {
+  headline,
+  evidence,
+  timeCause,
+  qualification,
+  recovery,
+}
 
 @immutable
 final class PulseSignalSummary {
@@ -1017,7 +1029,8 @@ final class PulseStoryFact {
     sourceSignalKeys: (map['sourceSignalKeys'] as List<Object?>? ?? const [])
         .cast<String>(),
     sourceEvidenceKeys:
-        (map['sourceEvidenceKeys'] as List<Object?>? ?? const []).cast<String>(),
+        (map['sourceEvidenceKeys'] as List<Object?>? ?? const [])
+            .cast<String>(),
     sourceFactKeys: (map['sourceFactKeys'] as List<Object?>? ?? const [])
         .cast<String>(),
     certainty: PulseStoryCertainty.values.byName(map['certainty']! as String),
@@ -1057,20 +1070,21 @@ final class PulseStoryFragment {
     required this.certainty,
   });
 
-  factory PulseStoryFragment.fromMap(Map<Object?, Object?> map) =>
-      PulseStoryFragment(
-        role: PulseStoryFragmentRole.values.byName(map['role']! as String),
-        templateId: map['templateId']! as String,
-        renderedText: map['renderedText']! as String,
-        sourceSignalKeys:
-            (map['sourceSignalKeys'] as List<Object?>? ?? const []).cast<String>(),
-        sourceEvidenceKeys:
-            (map['sourceEvidenceKeys'] as List<Object?>? ?? const [])
-                .cast<String>(),
-        sourceFactKeys:
-            (map['sourceFactKeys'] as List<Object?>? ?? const []).cast<String>(),
-        certainty: PulseStoryCertainty.values.byName(map['certainty']! as String),
-      );
+  factory PulseStoryFragment.fromMap(
+    Map<Object?, Object?> map,
+  ) => PulseStoryFragment(
+    role: PulseStoryFragmentRole.values.byName(map['role']! as String),
+    templateId: map['templateId']! as String,
+    renderedText: map['renderedText']! as String,
+    sourceSignalKeys: (map['sourceSignalKeys'] as List<Object?>? ?? const [])
+        .cast<String>(),
+    sourceEvidenceKeys:
+        (map['sourceEvidenceKeys'] as List<Object?>? ?? const [])
+            .cast<String>(),
+    sourceFactKeys: (map['sourceFactKeys'] as List<Object?>? ?? const [])
+        .cast<String>(),
+    certainty: PulseStoryCertainty.values.byName(map['certainty']! as String),
+  );
 
   final PulseStoryFragmentRole role;
   final String templateId;
@@ -1134,12 +1148,12 @@ final class PulseStoryDraft {
     claimType: map['claimType']! as String,
     headline: map['headline']! as String,
     detail: map['detail'] as String?,
-    fragments: _list(map['fragments'])
-        .map(PulseStoryFragment.fromMap)
-        .toList(growable: false),
-    exclusions: _list(map['exclusions'])
-        .map(PulseStoryExclusion.fromMap)
-        .toList(growable: false),
+    fragments: _list(
+      map['fragments'],
+    ).map(PulseStoryFragment.fromMap).toList(growable: false),
+    exclusions: _list(
+      map['exclusions'],
+    ).map(PulseStoryExclusion.fromMap).toList(growable: false),
     priorityFrameId: map['priorityFrameId']! as String,
     sourceCoreRevision: (map['sourceCoreRevision'] as num).toInt(),
     templateVersion: (map['templateVersion'] as num).toInt(),
@@ -1204,9 +1218,9 @@ final class PulseStoryInspection {
   factory PulseStoryInspection.fromMap(Map<Object?, Object?> map) =>
       PulseStoryInspection(
         result: PulseStoryCompositionResult.fromMap(_map(map['result'])),
-        facts: _list(map['facts'])
-            .map(PulseStoryFact.fromMap)
-            .toList(growable: false),
+        facts: _list(
+          map['facts'],
+        ).map(PulseStoryFact.fromMap).toList(growable: false),
         priorityFrameId: map['priorityFrameId']! as String,
         sourceCoreRevision: (map['sourceCoreRevision'] as num).toInt(),
       );
@@ -1215,6 +1229,367 @@ final class PulseStoryInspection {
   final List<PulseStoryFact> facts;
   final String priorityFrameId;
   final int sourceCoreRevision;
+}
+
+/// E-phase types mirror the native delivery state. Flutter reports surface
+/// facts and renders a reservation; it never decides repeat suppression.
+enum PulseDeliveryEligibility {
+  eligible,
+  waitingForSurface,
+  waitingForInteractionIdle,
+  waitingForCooldown,
+  snoozed,
+  muted,
+  alreadyShown,
+  dismissed,
+  stale,
+  notComposable,
+  historicalOnly,
+  recoveryNotPreviouslyShown,
+  headerLayoutNotSupported,
+  automaticDisabled,
+}
+
+enum PulseDeliveryAttemptState {
+  reserved,
+  presenting,
+  presented,
+  ended,
+  cancelled,
+  expired,
+}
+
+@immutable
+final class PulseDeliverySurfaceContext {
+  const PulseDeliverySurfaceContext({
+    required this.appActive,
+    required this.ledgerVisible,
+    required this.headerVisible,
+    required this.unobstructed,
+    required this.interactionIdle,
+    required this.headerLayoutSupported,
+    required this.hostSessionId,
+    this.interactionIdleSinceUtcMs,
+  });
+
+  Map<String, Object?> toMap() => {
+    'appActive': appActive,
+    'ledgerVisible': ledgerVisible,
+    'headerVisible': headerVisible,
+    'unobstructed': unobstructed,
+    'interactionIdle': interactionIdle,
+    'headerLayoutSupported': headerLayoutSupported,
+    'hostSessionId': hostSessionId,
+    'interactionIdleSinceUtcMs': interactionIdleSinceUtcMs,
+  };
+
+  final bool appActive;
+  final bool ledgerVisible;
+  final bool headerVisible;
+  final bool unobstructed;
+  final bool interactionIdle;
+  final bool headerLayoutSupported;
+  final String hostSessionId;
+  final int? interactionIdleSinceUtcMs;
+}
+
+@immutable
+final class PulseDeliveryPreferences {
+  const PulseDeliveryPreferences({
+    required this.automaticEnabled,
+    required this.normalCooldownMillis,
+    required this.controlRevision,
+    required this.updatedAtUtcMs,
+  });
+
+  factory PulseDeliveryPreferences.fromMap(Map<Object?, Object?> map) =>
+      PulseDeliveryPreferences(
+        automaticEnabled: map['automaticEnabled'] as bool? ?? true,
+        normalCooldownMillis:
+            (map['normalCooldownMillis'] as num?)?.toInt() ?? 600000,
+        controlRevision: (map['controlRevision'] as num?)?.toInt() ?? 0,
+        updatedAtUtcMs: (map['updatedAtUtcMs'] as num?)?.toInt() ?? 0,
+      );
+
+  final bool automaticEnabled;
+  final int normalCooldownMillis;
+  final int controlRevision;
+  final int updatedAtUtcMs;
+}
+
+@immutable
+final class PulseDeliveryCandidate {
+  const PulseDeliveryCandidate({
+    required this.situationKey,
+    required this.situationEpisodeId,
+    required this.targetScope,
+    required this.priorityRank,
+    required this.priorityScore,
+    required this.story,
+    required this.materialSemanticKey,
+    required this.contentFingerprint,
+    required this.deliveryKey,
+    required this.presentationIntentId,
+    required this.eligibility,
+    required this.reasonCode,
+    required this.explanation,
+  });
+
+  factory PulseDeliveryCandidate.fromMap(Map<Object?, Object?> map) =>
+      PulseDeliveryCandidate(
+        situationKey: map['situationKey']! as String,
+        situationEpisodeId: map['situationEpisodeId']! as String,
+        targetScope: map['targetScope']! as String,
+        priorityRank: (map['priorityRank'] as num).toInt(),
+        priorityScore: (map['priorityScore'] as num).toInt(),
+        story: PulseStoryCompositionResult.fromMap(_map(map['story'])),
+        materialSemanticKey: map['materialSemanticKey'] as String?,
+        contentFingerprint: map['contentFingerprint'] as String?,
+        deliveryKey: map['deliveryKey'] as String?,
+        presentationIntentId: map['presentationIntentId']! as String,
+        eligibility: PulseDeliveryEligibility.values.byName(
+          map['eligibility']! as String,
+        ),
+        reasonCode: map['reasonCode']! as String,
+        explanation: map['explanationHu']! as String,
+      );
+
+  final String situationKey;
+  final String situationEpisodeId;
+  final String targetScope;
+  final int priorityRank;
+  final int priorityScore;
+  final PulseStoryCompositionResult story;
+  final String? materialSemanticKey;
+  final String? contentFingerprint;
+  final String? deliveryKey;
+  final String presentationIntentId;
+  final PulseDeliveryEligibility eligibility;
+  final String reasonCode;
+  final String explanation;
+}
+
+@immutable
+final class PulseDeliveryDecision {
+  const PulseDeliveryDecision({
+    required this.sourceCoreRevision,
+    required this.sourceTriageFrameId,
+    required this.evaluationMode,
+    required this.prioritySelectedSituationKey,
+    required this.deliverySelectedSituationKey,
+    required this.deliverySelectionReason,
+    required this.candidates,
+  });
+
+  factory PulseDeliveryDecision.fromMap(Map<Object?, Object?> map) {
+    final input = _map(map['input']);
+    return PulseDeliveryDecision(
+      sourceCoreRevision: (input['sourceCoreRevision'] as num?)?.toInt() ?? 0,
+      sourceTriageFrameId: input['sourceTriageFrameId'] as String? ?? '',
+      evaluationMode: input['evaluationMode'] as String? ?? 'live',
+      prioritySelectedSituationKey:
+          map['prioritySelectedSituationKey'] as String?,
+      deliverySelectedSituationKey:
+          map['deliverySelectedSituationKey'] as String?,
+      deliverySelectionReason: map['deliverySelectionReason'] as String? ?? '',
+      candidates: _list(
+        map['candidates'],
+      ).map(PulseDeliveryCandidate.fromMap).toList(growable: false),
+    );
+  }
+
+  final int sourceCoreRevision;
+  final String sourceTriageFrameId;
+  final String evaluationMode;
+  final String? prioritySelectedSituationKey;
+  final String? deliverySelectedSituationKey;
+  final String deliverySelectionReason;
+  final List<PulseDeliveryCandidate> candidates;
+
+  PulseDeliveryCandidate? get selected => deliverySelectedSituationKey == null
+      ? null
+      : candidates.cast<PulseDeliveryCandidate?>().firstWhere(
+          (candidate) =>
+              candidate?.situationKey == deliverySelectedSituationKey,
+          orElse: () => null,
+        );
+}
+
+@immutable
+final class PulseHeaderPresentationReservation {
+  const PulseHeaderPresentationReservation({
+    required this.attemptId,
+    required this.leaseToken,
+    required this.hostSessionId,
+    required this.deliveryKey,
+    required this.presentationIntentId,
+    required this.situationEpisodeId,
+    required this.targetScope,
+    required this.validUntilUtcMs,
+    required this.readableDurationMillis,
+    required this.sourceFrameId,
+    required this.controlRevision,
+    required this.story,
+  });
+
+  factory PulseHeaderPresentationReservation.fromMap(
+    Map<Object?, Object?> map,
+  ) => PulseHeaderPresentationReservation(
+    attemptId: map['attemptId']! as String,
+    leaseToken: map['leaseToken']! as String,
+    hostSessionId: map['hostSessionId']! as String,
+    deliveryKey: map['deliveryKey']! as String,
+    presentationIntentId: map['presentationIntentId']! as String,
+    situationEpisodeId: map['situationEpisodeId']! as String,
+    targetScope: map['targetScope']! as String,
+    validUntilUtcMs: (map['validUntilUtcMs'] as num).toInt(),
+    readableDurationMillis: (map['readableDurationMillis'] as num).toInt(),
+    sourceFrameId: map['sourceFrameId']! as String,
+    controlRevision: (map['controlRevision'] as num).toInt(),
+    story: PulseStoryDraft.fromMap(_map(map['story'])),
+  );
+
+  final String attemptId;
+  final String leaseToken;
+  final String hostSessionId;
+  final String deliveryKey;
+  final String presentationIntentId;
+  final String situationEpisodeId;
+  final String targetScope;
+  final int validUntilUtcMs;
+  final int readableDurationMillis;
+  final String sourceFrameId;
+  final int controlRevision;
+  final PulseStoryDraft story;
+}
+
+@immutable
+final class PulseDeliveryEvent {
+  const PulseDeliveryEvent({
+    required this.eventId,
+    required this.kind,
+    required this.attemptId,
+    required this.situationKey,
+    required this.deliveryKey,
+    required this.reasonCode,
+    required this.createdAtUtcMs,
+  });
+
+  factory PulseDeliveryEvent.fromMap(Map<Object?, Object?> map) =>
+      PulseDeliveryEvent(
+        eventId: map['eventId']! as String,
+        kind: map['kind']! as String,
+        attemptId: map['attemptId'] as String?,
+        situationKey: map['situationKey'] as String?,
+        deliveryKey: map['deliveryKey'] as String?,
+        reasonCode: map['reasonCode']! as String,
+        createdAtUtcMs: (map['createdAtUtcMs'] as num).toInt(),
+      );
+
+  final String eventId;
+  final String kind;
+  final String? attemptId;
+  final String? situationKey;
+  final String? deliveryKey;
+  final String reasonCode;
+  final int createdAtUtcMs;
+}
+
+@immutable
+final class PulseDeliveryAttempt {
+  const PulseDeliveryAttempt({
+    required this.attemptId,
+    required this.situationKey,
+    required this.deliveryKey,
+    required this.state,
+    required this.validUntilUtcMs,
+    required this.reservedAtUtcMs,
+    required this.presentedAtUtcMs,
+    required this.qualifiedExposureAtUtcMs,
+    required this.endReason,
+  });
+
+  factory PulseDeliveryAttempt.fromMap(Map<Object?, Object?> map) =>
+      PulseDeliveryAttempt(
+        attemptId: map['attemptId']! as String,
+        situationKey: map['situationKey']! as String,
+        deliveryKey: map['deliveryKey']! as String,
+        state: map['state']! as String,
+        validUntilUtcMs: (map['validUntilUtcMs'] as num).toInt(),
+        reservedAtUtcMs: (map['reservedAtUtcMs'] as num).toInt(),
+        presentedAtUtcMs: (map['presentedAtUtcMs'] as num?)?.toInt(),
+        qualifiedExposureAtUtcMs: (map['qualifiedExposureAtUtcMs'] as num?)
+            ?.toInt(),
+        endReason: map['endReason'] as String?,
+      );
+
+  final String attemptId;
+  final String situationKey;
+  final String deliveryKey;
+  final String state;
+  final int validUntilUtcMs;
+  final int reservedAtUtcMs;
+  final int? presentedAtUtcMs;
+  final int? qualifiedExposureAtUtcMs;
+  final String? endReason;
+}
+
+@immutable
+final class PulseDeliveryControl {
+  const PulseDeliveryControl({
+    required this.controlId,
+    required this.kind,
+    required this.targetScope,
+    required this.expiresAtUtcMs,
+    required this.consumedAtUtcMs,
+  });
+
+  factory PulseDeliveryControl.fromMap(Map<Object?, Object?> map) =>
+      PulseDeliveryControl(
+        controlId: map['controlId']! as String,
+        kind: map['kind']! as String,
+        targetScope: map['targetScope'] as String?,
+        expiresAtUtcMs: (map['expiresAtUtcMs'] as num?)?.toInt(),
+        consumedAtUtcMs: (map['consumedAtUtcMs'] as num?)?.toInt(),
+      );
+
+  final String controlId;
+  final String kind;
+  final String? targetScope;
+  final int? expiresAtUtcMs;
+  final int? consumedAtUtcMs;
+}
+
+@immutable
+final class PulseDeliveryInspection {
+  const PulseDeliveryInspection({
+    required this.decision,
+    required this.preferences,
+    required this.controls,
+    required this.activeAttempt,
+    required this.events,
+  });
+
+  factory PulseDeliveryInspection.fromMap(Map<Object?, Object?> map) =>
+      PulseDeliveryInspection(
+        decision: PulseDeliveryDecision.fromMap(_map(map['decision'])),
+        preferences: PulseDeliveryPreferences.fromMap(_map(map['preferences'])),
+        controls: _list(
+          map['controls'],
+        ).map(PulseDeliveryControl.fromMap).toList(growable: false),
+        activeAttempt: map['activeAttempt'] == null
+            ? null
+            : PulseDeliveryAttempt.fromMap(_map(map['activeAttempt'])),
+        events: _list(
+          map['events'],
+        ).map(PulseDeliveryEvent.fromMap).toList(growable: false),
+      );
+
+  final PulseDeliveryDecision decision;
+  final PulseDeliveryPreferences preferences;
+  final List<PulseDeliveryControl> controls;
+  final PulseDeliveryAttempt? activeAttempt;
+  final List<PulseDeliveryEvent> events;
 }
 
 extension on Iterable<PulseIndicatorSnapshot> {

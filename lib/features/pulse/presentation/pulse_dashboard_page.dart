@@ -10,6 +10,7 @@ import '../domain/pulse_repository.dart';
 import 'pulse_signal_detail_page.dart';
 import 'pulse_triage_inspector_page.dart';
 import 'pulse_priority_inspector_page.dart';
+import 'pulse_delivery_settings_page.dart';
 import 'widgets/pulse_charts.dart';
 import 'widgets/pulse_indicator_card.dart';
 
@@ -18,9 +19,18 @@ class PulseDashboardPage extends StatefulWidget {
     super.key,
     required this.repository,
     this.coreRevisions,
+    this.fullscreen = false,
+    this.headerStory,
+    this.headerDeliveryKey,
   });
   final PulseRepository repository;
   final Stream<Object?>? coreRevisions;
+  final bool fullscreen;
+
+  /// Immutable copy of the Story that was actually visible when the user
+  /// tapped the dashboard header. It is not replaced by a newer ranking.
+  final PulseStoryDraft? headerStory;
+  final String? headerDeliveryKey;
 
   @override
   State<PulseDashboardPage> createState() => _PulseDashboardPageState();
@@ -146,7 +156,20 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 104),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate.fixed([
-                      _PulseHeader(onInfo: _showAbout),
+                      _PulseHeader(
+                        onInfo: _showAbout,
+                        onSettings: _openSettings,
+                        onBack: widget.fullscreen
+                            ? () => Navigator.of(context).maybePop()
+                            : null,
+                      ),
+                      if (widget.headerStory case final story?) ...[
+                        const SizedBox(height: 12),
+                        _HeaderStoryContextCard(
+                          story: story,
+                          deliveryKey: widget.headerDeliveryKey,
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       _PeriodRow(
                         scope: _controller.scope,
@@ -210,14 +233,35 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
       ),
     ),
   );
+
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            PulseDeliverySettingsPage(repository: widget.repository),
+      ),
+    );
+  }
 }
 
 class _PulseHeader extends StatelessWidget {
-  const _PulseHeader({required this.onInfo});
+  const _PulseHeader({
+    required this.onInfo,
+    required this.onSettings,
+    this.onBack,
+  });
   final VoidCallback onInfo;
+  final VoidCallback onSettings;
+  final VoidCallback? onBack;
   @override
   Widget build(BuildContext context) => Row(
     children: [
+      if (onBack != null)
+        IconButton(
+          tooltip: 'Vissza a Ledgerhez',
+          onPressed: onBack,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
       const Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,10 +287,61 @@ class _PulseHeader extends StatelessWidget {
       ),
       IconButton(
         tooltip: 'Pulse beállításai és adatforrásai',
-        onPressed: onInfo,
+        onPressed: onSettings,
         icon: const Icon(Icons.tune_outlined),
       ),
+      IconButton(
+        tooltip: 'A Pulse működéséről',
+        onPressed: onInfo,
+        icon: const Icon(Icons.info_outline_rounded),
+      ),
     ],
+  );
+}
+
+class _HeaderStoryContextCard extends StatelessWidget {
+  const _HeaderStoryContextCard({required this.story, this.deliveryKey});
+
+  final PulseStoryDraft story;
+  final String? deliveryKey;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('pulse-header-story-context'),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF7F5FF),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: FluviVisualTokens.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'A fejlécben megnyitott történet',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          story.headline,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        if (story.detail case final detail?) ...[
+          const SizedBox(height: 4),
+          Text(detail, style: const TextStyle(fontSize: 13)),
+        ],
+        if (deliveryKey != null) ...[
+          const SizedBox(height: 5),
+          const Text(
+            'A történet azóta frissülhet; ez a megnyitáskori példány.',
+            style: TextStyle(
+              fontSize: 11,
+              color: FluviVisualTokens.textSecondary,
+            ),
+          ),
+        ],
+      ],
+    ),
   );
 }
 

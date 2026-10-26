@@ -29,6 +29,7 @@ final class DashboardHeaderModeSelector extends StatefulWidget {
     this.balanceVisualFrame,
     this.budgetVisualFrame,
     this.mindVisualFrame,
+    this.onInteractionChanged,
   });
 
   final DashboardCoreModeController controller;
@@ -36,6 +37,10 @@ final class DashboardHeaderModeSelector extends StatefulWidget {
   final ValueListenable<DashboardHeaderVisualFrame>? balanceVisualFrame;
   final ValueListenable<DashboardHeaderVisualFrame>? budgetVisualFrame;
   final ValueListenable<DashboardHeaderVisualFrame>? mindVisualFrame;
+
+  /// Lets the delivery surface wait until this existing carousel has released
+  /// its pointer; it does not change selector ownership or physics.
+  final ValueChanged<bool>? onInteractionChanged;
 
   @override
   State<DashboardHeaderModeSelector> createState() =>
@@ -258,6 +263,7 @@ final class _DashboardHeaderModeSelectorState
   void _beginDirectInput() {
     if (_directInputIsDown) return;
     _directInputIsDown = true;
+    widget.onInteractionChanged?.call(true);
     _carouselController.noteDirectPointerDown();
     _carouselController.interruptForDirectPointer();
   }
@@ -325,6 +331,7 @@ final class _DashboardHeaderModeSelectorState
     if (!_directInputIsDown) return;
     _directInputIsDown = false;
     _carouselController.noteDirectPointerEnded();
+    widget.onInteractionChanged?.call(false);
   }
 
   void _commitCrossing(int logicalIndex) {

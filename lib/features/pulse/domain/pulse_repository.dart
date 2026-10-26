@@ -45,6 +45,104 @@ abstract interface class PulseRepository {
     required String situationKey,
   });
 
+  Future<PulseDeliveryDecision> deliveryDecision({
+    required int year,
+    required int month,
+    required PulseDeliverySurfaceContext surface,
+  });
+
+  Future<PulseDeliveryInspection> deliveryInspection({
+    required int year,
+    required int month,
+    required PulseDeliverySurfaceContext surface,
+    int historyLimit = 30,
+    int historyOffset = 0,
+  });
+
+  Future<PulseDeliveryPreferences> deliveryPreferences();
+
+  Future<PulseHeaderPresentationReservation?> reserveHeaderPresentation({
+    required int year,
+    required int month,
+    required PulseDeliverySurfaceContext surface,
+    required String commandKey,
+  });
+
+  Future<bool> reportPresentationStarted({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+  });
+
+  Future<bool> reportPresented({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+  });
+
+  Future<bool> confirmQualifiedExposure({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+  });
+
+  Future<bool> finishPresentation({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+    String reason = 'readable-duration-ended',
+  });
+
+  Future<bool> cancelPresentation({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+    required String reason,
+  });
+
+  Future<bool> dismissStory({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+    required String commandKey,
+  });
+
+  Future<bool> snoozeSituation({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+    required int untilUtcMs,
+    required String commandKey,
+  });
+
+  Future<void> muteDeliveryTarget({
+    required String targetScope,
+    required String commandKey,
+  });
+
+  Future<bool> unmuteDeliveryTarget({
+    required String targetScope,
+    required String commandKey,
+  });
+
+  Future<bool> clearDeliveryControl({
+    required String controlId,
+    required String commandKey,
+  });
+
+  Future<PulseDeliveryPreferences> updateDeliveryPreferences({
+    required bool automaticEnabled,
+    required int normalCooldownMillis,
+    required String commandKey,
+  });
+
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,

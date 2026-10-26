@@ -42,6 +42,8 @@ import 'mind_dashboard_core_surface.dart';
 import '../budget_content_card_style.dart';
 import '../budget_section_order.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
+import '../../../pulse/application/pulse_delivery_coordinator.dart';
+import '../../../pulse/presentation/widgets/pulse_header_presentation_layer.dart';
 
 typedef DashboardCoreModePresentationLookup =
     DashboardCoreModePresentation Function(DashboardModeSpec mode);
@@ -106,6 +108,9 @@ class DashboardCoreModeHost extends StatefulWidget {
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
     this.upperVerticalGestures,
+    this.pulseDeliveryCoordinator,
+    this.onOpenPulse,
+    this.onHeaderInteractionChanged,
   });
 
   final DashboardDayRhythmNavigation? balanceDayRhythmNavigation;
@@ -168,6 +173,9 @@ class DashboardCoreModeHost extends StatefulWidget {
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
+  final PulseDeliveryCoordinator? pulseDeliveryCoordinator;
+  final VoidCallback? onOpenPulse;
+  final ValueChanged<bool>? onHeaderInteractionChanged;
 
   @override
   State<DashboardCoreModeHost> createState() => _DashboardCoreModeHostState();
@@ -214,6 +222,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     if (delta == 0) return;
     if (!_verticalExpansionStarted) {
       _verticalExpansionStarted = true;
+      widget.onHeaderInteractionChanged?.call(true);
       widget.onVerticalExpansionStart();
     }
     widget.onVerticalExpansionDragBy(delta);
@@ -244,6 +253,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
       widget.onVerticalExpansionEnd();
     }
     _verticalExpansionStarted = false;
+    widget.onHeaderInteractionChanged?.call(false);
   }
 
   @override
@@ -330,6 +340,15 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
                   onVerticalDragCancel: _finishPointerSequence,
                 ),
               ),
+              if (widget.pulseDeliveryCoordinator case final coordinator?)
+                PulseHeaderPresentationLayer(
+                  coordinator: coordinator,
+                  onOpenPulse: widget.onOpenPulse ?? () {},
+                  onVerticalDragStart: _onHeaderVerticalStart,
+                  onVerticalDragUpdate: _onHeaderVerticalUpdate,
+                  onVerticalDragEnd: _onHeaderVerticalEnd,
+                  onLayoutSupported: coordinator.reportHeaderLayout,
+                ),
               // This remains a sibling above the passive wave listener. Its
               // bounded carousel owns vertical mode input and never seeds the
               // decorative Header tap wave or the Header expansion lane.
@@ -342,6 +361,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
                   balanceVisualFrame: widget.balanceHeaderVisualFrame,
                   budgetVisualFrame: widget.budgetHeaderVisualFrame,
                   mindVisualFrame: widget.mindHeaderVisualFrame,
+                  onInteractionChanged: widget.onHeaderInteractionChanged,
                 ),
               ),
             ],

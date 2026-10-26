@@ -563,6 +563,40 @@ class FluviDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationFifteenToSixteenAddsDeliveryTablesWithoutTouchingPriorityState() {
+        val name = "$DATABASE_NAME-delivery"
+        helper.createDatabase(name, 15).use { database ->
+            database.execSQL(
+                "INSERT INTO fluvi_pulse_priority_state " +
+                    "(id,selected_situation_key,selected_score,source_core_revision,source_triage_frame_id," +
+                    "policy_version,selection_fingerprint,last_evaluated_at_utc_ms,last_selection_change_at_utc_ms,state_version) " +
+                    "VALUES ('current','monthly-budget/2026-10',85,9,'frame',1,'fingerprint',2,2,1)",
+            )
+        }
+        helper.runMigrationsAndValidate(
+            name,
+            16,
+            true,
+            FluviDatabase.MIGRATION_15_16,
+        ).use { database ->
+            val priority = database.query("SELECT selected_score FROM fluvi_pulse_priority_state WHERE id='current'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getInt(0)
+            }
+            val deliveryTables = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN " +
+                    "('fluvi_pulse_delivery_preferences','fluvi_pulse_delivery_controls'," +
+                    "'fluvi_pulse_delivery_attempts','fluvi_pulse_delivery_receipts','fluvi_pulse_delivery_events')",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getInt(0)
+            }
+            assertEquals(85, priority)
+            assertEquals(5, deliveryTables)
+        }
+    }
+
     private fun amount(
         database: androidx.sqlite.db.SupportSQLiteDatabase,
         periodKey: String,

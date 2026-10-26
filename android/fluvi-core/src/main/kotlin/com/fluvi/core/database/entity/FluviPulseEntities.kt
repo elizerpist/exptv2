@@ -298,3 +298,177 @@ data class FluviPulsePriorityEventEntity(
     @ColumnInfo(name = "created_at_utc_ms")
     val createdAtUtcMs: Long,
 )
+
+/** E-phase user configuration. It is deliberately separate from financial
+ * app settings so writing a delivery control never increments Core revision. */
+@Entity(tableName = "fluvi_pulse_delivery_preferences")
+data class FluviPulseDeliveryPreferencesEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String = "current",
+    @ColumnInfo(name = "automatic_enabled")
+    val automaticEnabled: Boolean,
+    @ColumnInfo(name = "normal_cooldown_ms")
+    val normalCooldownMs: Long,
+    @ColumnInfo(name = "control_revision")
+    val controlRevision: Long,
+    @ColumnInfo(name = "updated_at_utc_ms")
+    val updatedAtUtcMs: Long,
+)
+
+/** Dismiss, snooze, mute and the one-time explicit snooze grant are facts,
+ * not a second message queue. The IDs are deterministic control identities. */
+@Entity(
+    tableName = "fluvi_pulse_delivery_controls",
+    indices = [
+        Index(value = ["control_kind", "expires_at_utc_ms"]),
+        Index(value = ["situation_episode_id"]),
+        Index(value = ["target_scope"]),
+        Index(value = ["presentation_intent_id"]),
+    ],
+)
+data class FluviPulseDeliveryControlEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "control_id")
+    val controlId: String,
+    @ColumnInfo(name = "control_kind")
+    val controlKind: String,
+    @ColumnInfo(name = "situation_episode_id")
+    val situationEpisodeId: String?,
+    @ColumnInfo(name = "material_semantic_key")
+    val materialSemanticKey: String?,
+    @ColumnInfo(name = "target_scope")
+    val targetScope: String?,
+    @ColumnInfo(name = "presentation_intent_id")
+    val presentationIntentId: String?,
+    @ColumnInfo(name = "expires_at_utc_ms")
+    val expiresAtUtcMs: Long?,
+    @ColumnInfo(name = "consumed_at_utc_ms")
+    val consumedAtUtcMs: Long?,
+    @ColumnInfo(name = "created_at_utc_ms")
+    val createdAtUtcMs: Long,
+    @ColumnInfo(name = "updated_at_utc_ms")
+    val updatedAtUtcMs: Long,
+)
+
+/** A lease is never a shown receipt. It is short-lived and may safely expire
+ * after a process crash without claiming the user saw the Story. */
+@Entity(
+    tableName = "fluvi_pulse_delivery_attempts",
+    indices = [
+        Index(value = ["lease_token"], unique = true),
+        Index(value = ["request_key"], unique = true),
+        Index(value = ["state", "valid_until_utc_ms"]),
+        Index(value = ["delivery_key"]),
+        Index(value = ["situation_key", "reserved_at_utc_ms"]),
+    ],
+)
+data class FluviPulseDeliveryAttemptEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "attempt_id")
+    val attemptId: String,
+    @ColumnInfo(name = "lease_token")
+    val leaseToken: String,
+    @ColumnInfo(name = "request_key")
+    val requestKey: String,
+    @ColumnInfo(name = "host_session_id")
+    val hostSessionId: String,
+    @ColumnInfo(name = "delivery_key")
+    val deliveryKey: String,
+    @ColumnInfo(name = "presentation_intent_id")
+    val presentationIntentId: String,
+    @ColumnInfo(name = "situation_key")
+    val situationKey: String,
+    @ColumnInfo(name = "situation_episode_id")
+    val situationEpisodeId: String,
+    @ColumnInfo(name = "target_scope")
+    val targetScope: String,
+    @ColumnInfo(name = "story_key")
+    val storyKey: String,
+    @ColumnInfo(name = "content_fingerprint")
+    val contentFingerprint: String,
+    @ColumnInfo(name = "material_semantic_key")
+    val materialSemanticKey: String,
+    @ColumnInfo(name = "source_core_revision")
+    val sourceCoreRevision: Long,
+    @ColumnInfo(name = "source_frame_id")
+    val sourceFrameId: String,
+    @ColumnInfo(name = "control_revision")
+    val controlRevision: Long,
+    @ColumnInfo(name = "state")
+    val state: String,
+    @ColumnInfo(name = "valid_until_utc_ms")
+    val validUntilUtcMs: Long,
+    @ColumnInfo(name = "reserved_at_utc_ms")
+    val reservedAtUtcMs: Long,
+    @ColumnInfo(name = "started_at_utc_ms")
+    val startedAtUtcMs: Long?,
+    @ColumnInfo(name = "presented_at_utc_ms")
+    val presentedAtUtcMs: Long?,
+    @ColumnInfo(name = "qualified_exposure_at_utc_ms")
+    val qualifiedExposureAtUtcMs: Long?,
+    @ColumnInfo(name = "ended_at_utc_ms")
+    val endedAtUtcMs: Long?,
+    @ColumnInfo(name = "end_reason")
+    val endReason: String?,
+    @ColumnInfo(name = "transition_sequence")
+    val transitionSequence: Long,
+)
+
+/** Durable fact used by repeat suppression. Retention of diagnostic events
+ * must never make a previously shown automatic Story eligible again. */
+@Entity(
+    tableName = "fluvi_pulse_delivery_receipts",
+    indices = [
+        Index(value = ["delivery_key"], unique = true),
+        Index(value = ["situation_episode_id", "qualified_exposure_at_utc_ms"]),
+    ],
+)
+data class FluviPulseDeliveryReceiptEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "receipt_id")
+    val receiptId: String,
+    @ColumnInfo(name = "delivery_key")
+    val deliveryKey: String,
+    @ColumnInfo(name = "situation_episode_id")
+    val situationEpisodeId: String,
+    @ColumnInfo(name = "story_key")
+    val storyKey: String,
+    @ColumnInfo(name = "material_semantic_key")
+    val materialSemanticKey: String,
+    @ColumnInfo(name = "attempt_id")
+    val attemptId: String,
+    @ColumnInfo(name = "qualified_exposure_at_utc_ms")
+    val qualifiedExposureAtUtcMs: Long,
+)
+
+@Entity(
+    tableName = "fluvi_pulse_delivery_events",
+    indices = [
+        Index(value = ["attempt_id"]),
+        Index(value = ["situation_key", "created_at_utc_ms"]),
+        Index(value = ["created_at_utc_ms"]),
+        Index(value = ["transition_sequence"], unique = true),
+    ],
+)
+data class FluviPulseDeliveryEventEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "event_id")
+    val eventId: String,
+    @ColumnInfo(name = "event_kind")
+    val eventKind: String,
+    @ColumnInfo(name = "attempt_id")
+    val attemptId: String?,
+    @ColumnInfo(name = "situation_key")
+    val situationKey: String?,
+    @ColumnInfo(name = "delivery_key")
+    val deliveryKey: String?,
+    @ColumnInfo(name = "reason_code")
+    val reasonCode: String,
+    @ColumnInfo(name = "source_core_revision")
+    val sourceCoreRevision: Long?,
+    @ColumnInfo(name = "transition_sequence")
+    val transitionSequence: Long,
+    @ColumnInfo(name = "created_at_utc_ms")
+    val createdAtUtcMs: Long,
+)

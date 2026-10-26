@@ -46,6 +46,13 @@ import com.fluvi.core.pulse.PulsePriorityInspectionSnapshot
 import com.fluvi.core.pulse.PulsePriorityFrame
 import com.fluvi.core.pulse.PulsePriorityCandidate
 import com.fluvi.core.pulse.PulseStoryInspectionSnapshot
+import com.fluvi.core.pulse.PulseStoryCompositionResult
+import com.fluvi.core.pulse.PulseStoryDraft
+import com.fluvi.core.pulse.PulseDeliveryDecision
+import com.fluvi.core.pulse.PulseDeliveryInspectionSnapshot
+import com.fluvi.core.pulse.PulseDeliveryPreferences
+import com.fluvi.core.pulse.PulseDeliverySurfaceContext
+import com.fluvi.core.pulse.PulseHeaderPresentationReservation
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
 import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
@@ -988,6 +995,104 @@ class MainActivity : FlutterActivity() {
                 situationKey = requireArgument(call, "situationKey"),
             ),
         )
+        "getDeliveryDecision" -> pulseDeliveryDecisionMap(
+            fluviCore.pulseDelivery.decision(
+                year = requireInt(call, "year"),
+                month = requireInt(call, "month"),
+                surface = pulseDeliverySurface(call),
+            ),
+        )
+        "getDeliveryInspection" -> pulseDeliveryInspectionMap(
+            fluviCore.pulseDelivery.inspection(
+                year = requireInt(call, "year"),
+                month = requireInt(call, "month"),
+                surface = pulseDeliverySurface(call),
+                historyLimit = call.argument<Number>("historyLimit")?.toInt() ?: 30,
+                historyOffset = call.argument<Number>("historyOffset")?.toInt() ?: 0,
+            ),
+        )
+        "getDeliveryPreferences" -> pulseDeliveryPreferencesMap(fluviCore.pulseDelivery.preferences())
+        "reserveHeaderPresentation" -> fluviCore.pulseDelivery.reserveHeaderPresentation(
+            year = requireInt(call, "year"),
+            month = requireInt(call, "month"),
+            surface = pulseDeliverySurface(call),
+            commandKey = requireArgument(call, "commandKey"),
+        )?.let(::pulseDeliveryReservationMap)
+        "reportPresentationStarted" -> fluviCore.pulseDelivery.reportPresentationStarted(
+            attemptId = requireArgument(call, "attemptId"),
+            leaseToken = requireArgument(call, "leaseToken"),
+            hostSessionId = requireArgument(call, "hostSessionId"),
+            contentFingerprint = requireArgument(call, "contentFingerprint"),
+        )
+        "reportPresented" -> fluviCore.pulseDelivery.reportPresented(
+            attemptId = requireArgument(call, "attemptId"),
+            leaseToken = requireArgument(call, "leaseToken"),
+            hostSessionId = requireArgument(call, "hostSessionId"),
+            contentFingerprint = requireArgument(call, "contentFingerprint"),
+        )
+        "confirmQualifiedExposure" -> fluviCore.pulseDelivery.confirmQualifiedExposure(
+            attemptId = requireArgument(call, "attemptId"),
+            leaseToken = requireArgument(call, "leaseToken"),
+            hostSessionId = requireArgument(call, "hostSessionId"),
+            contentFingerprint = requireArgument(call, "contentFingerprint"),
+        )?.let { receipt ->
+            mapOf(
+                "receiptId" to receipt.receiptId,
+                "deliveryKey" to receipt.deliveryKey,
+                "qualifiedExposureAtUtcMs" to receipt.qualifiedExposureAtUtcMs,
+            )
+        }
+        "finishPresentation" -> fluviCore.pulseDelivery.finishPresentation(
+            attemptId = requireArgument(call, "attemptId"),
+            leaseToken = requireArgument(call, "leaseToken"),
+            hostSessionId = requireArgument(call, "hostSessionId"),
+            contentFingerprint = requireArgument(call, "contentFingerprint"),
+            reason = call.argument<String>("reason") ?: "readable-duration-ended",
+        )
+        "cancelPresentation" -> fluviCore.pulseDelivery.cancelPresentation(
+            attemptId = requireArgument(call, "attemptId"),
+            leaseToken = requireArgument(call, "leaseToken"),
+            hostSessionId = requireArgument(call, "hostSessionId"),
+            contentFingerprint = requireArgument(call, "contentFingerprint"),
+            reason = requireArgument(call, "reason"),
+        )
+        "dismissStory" -> fluviCore.pulseDelivery.dismissStory(
+            attemptId = requireArgument(call, "attemptId"),
+            leaseToken = requireArgument(call, "leaseToken"),
+            hostSessionId = requireArgument(call, "hostSessionId"),
+            contentFingerprint = requireArgument(call, "contentFingerprint"),
+            commandKey = requireArgument(call, "commandKey"),
+        )
+        "snoozeSituation" -> fluviCore.pulseDelivery.snoozeSituation(
+            attemptId = requireArgument(call, "attemptId"),
+            leaseToken = requireArgument(call, "leaseToken"),
+            hostSessionId = requireArgument(call, "hostSessionId"),
+            contentFingerprint = requireArgument(call, "contentFingerprint"),
+            untilUtcMs = requireArgument<Number>(call, "untilUtcMs").toLong(),
+            commandKey = requireArgument(call, "commandKey"),
+        )
+        "muteDeliveryTarget" -> {
+            fluviCore.pulseDelivery.muteTarget(
+                targetScope = requireArgument(call, "targetScope"),
+                commandKey = requireArgument(call, "commandKey"),
+            )
+            null
+        }
+        "unmuteDeliveryTarget" -> fluviCore.pulseDelivery.unmuteTarget(
+            targetScope = requireArgument(call, "targetScope"),
+            commandKey = requireArgument(call, "commandKey"),
+        )
+        "clearDeliveryControl" -> fluviCore.pulseDelivery.clearControl(
+            controlId = requireArgument(call, "controlId"),
+            commandKey = requireArgument(call, "commandKey"),
+        )
+        "updateDeliveryPreferences" -> pulseDeliveryPreferencesMap(
+            fluviCore.pulseDelivery.updatePreferences(
+                automaticEnabled = requireArgument(call, "automaticEnabled"),
+                normalCooldownMillis = requireArgument<Number>(call, "normalCooldownMillis").toLong(),
+                commandKey = requireArgument(call, "commandKey"),
+            ),
+        )
         "setThreshold" -> {
             fluviCore.pulseThresholds.set(
                 indicatorId = requireArgument(call, "indicatorId"),
@@ -1015,6 +1120,173 @@ class MainActivity : FlutterActivity() {
         }
         else -> throw IllegalArgumentException("Unknown Pulse method: ${call.method}")
     }
+
+    private fun pulseDeliverySurface(call: MethodCall): PulseDeliverySurfaceContext {
+        val surface = requireArgument<Map<String, Any?>>(call, "surface")
+        fun flag(name: String): Boolean = surface[name] as? Boolean ?: false
+        return PulseDeliverySurfaceContext(
+            appActive = flag("appActive"),
+            ledgerVisible = flag("ledgerVisible"),
+            headerVisible = flag("headerVisible"),
+            unobstructed = flag("unobstructed"),
+            interactionIdle = flag("interactionIdle"),
+            headerLayoutSupported = flag("headerLayoutSupported"),
+            hostSessionId = surface["hostSessionId"] as? String
+                ?: throw IllegalArgumentException("Missing delivery host session ID."),
+            interactionIdleSinceUtcMs = (surface["interactionIdleSinceUtcMs"] as? Number)?.toLong(),
+        )
+    }
+
+    private fun pulseDeliveryPreferencesMap(value: PulseDeliveryPreferences): Map<String, Any?> = mapOf(
+        "automaticEnabled" to value.automaticEnabled,
+        "normalCooldownMillis" to value.normalCooldownMillis,
+        "controlRevision" to value.controlRevision,
+        "updatedAtUtcMs" to value.updatedAtUtcMs,
+    )
+
+    private fun pulseDeliveryDecisionMap(value: PulseDeliveryDecision): Map<String, Any?> = mapOf(
+        "prioritySelectedSituationKey" to value.prioritySelectedSituationKey,
+        "deliverySelectedSituationKey" to value.deliverySelectedSituationKey,
+        "deliverySelectionReason" to value.deliverySelectionReason,
+        "input" to mapOf(
+            "sourceCoreRevision" to value.input.sourceCoreRevision,
+            "sourceTriageFrameId" to value.input.sourceTriageFrameId,
+            "priorityPolicyVersion" to value.input.priorityPolicyVersion,
+            "storyTemplateVersion" to value.input.storyTemplateVersion,
+            "deliveryPolicyVersion" to value.input.deliveryPolicyVersion,
+            "evaluationMode" to value.input.evaluationMode.name,
+            "evaluatedAtUtcMs" to value.input.evaluatedAtUtcMs,
+            "canonicalTimezone" to value.input.canonicalTimezone,
+            "userControlRevision" to value.input.userControlRevision,
+        ),
+        "candidates" to value.candidates.map { candidate ->
+            mapOf(
+                "situationKey" to candidate.situationKey,
+                "situationEpisodeId" to candidate.situationEpisodeId,
+                "targetScope" to candidate.targetScope,
+                "priorityRank" to candidate.priorityRank,
+                "priorityScore" to candidate.priorityScore,
+                "materialSemanticKey" to candidate.materialSemanticKey,
+                "contentFingerprint" to candidate.contentFingerprint,
+                "deliveryKey" to candidate.deliveryKey,
+                "presentationIntentId" to candidate.presentationIntentId,
+                "eligibility" to candidate.eligibility.name,
+                "reasonCode" to candidate.reasonCode,
+                "explanationHu" to candidate.explanationHu,
+                "story" to pulseStoryResultMap(candidate.story),
+            )
+        },
+    )
+
+    private fun pulseDeliveryInspectionMap(value: PulseDeliveryInspectionSnapshot): Map<String, Any?> = mapOf(
+        "decision" to pulseDeliveryDecisionMap(value.decision),
+        "preferences" to pulseDeliveryPreferencesMap(value.preferences),
+        "controls" to value.controls.map { control ->
+            mapOf(
+                "controlId" to control.controlId,
+                "kind" to control.kind.name,
+                "situationEpisodeId" to control.situationEpisodeId,
+                "materialSemanticKey" to control.materialSemanticKey,
+                "targetScope" to control.targetScope,
+                "presentationIntentId" to control.presentationIntentId,
+                "expiresAtUtcMs" to control.expiresAtUtcMs,
+                "consumedAtUtcMs" to control.consumedAtUtcMs,
+                "createdAtUtcMs" to control.createdAtUtcMs,
+            )
+        },
+        "activeAttempt" to value.activeAttempt?.let { attempt ->
+            mapOf(
+                "attemptId" to attempt.attemptId,
+                "leaseToken" to attempt.leaseToken,
+                "hostSessionId" to attempt.hostSessionId,
+                "deliveryKey" to attempt.deliveryKey,
+                "situationKey" to attempt.situationKey,
+                "situationEpisodeId" to attempt.situationEpisodeId,
+                "storyKey" to attempt.storyKey,
+                "contentFingerprint" to attempt.contentFingerprint,
+                "materialSemanticKey" to attempt.materialSemanticKey,
+                "state" to attempt.state.name,
+                "validUntilUtcMs" to attempt.validUntilUtcMs,
+                "reservedAtUtcMs" to attempt.reservedAtUtcMs,
+                "startedAtUtcMs" to attempt.startedAtUtcMs,
+                "presentedAtUtcMs" to attempt.presentedAtUtcMs,
+                "qualifiedExposureAtUtcMs" to attempt.qualifiedExposureAtUtcMs,
+                "endedAtUtcMs" to attempt.endedAtUtcMs,
+                "endReason" to attempt.endReason,
+            )
+        },
+        "events" to value.events.map { event ->
+            mapOf(
+                "eventId" to event.eventId,
+                "kind" to event.kind.name,
+                "attemptId" to event.attemptId,
+                "situationKey" to event.situationKey,
+                "deliveryKey" to event.deliveryKey,
+                "reasonCode" to event.reasonCode,
+                "sourceCoreRevision" to event.sourceCoreRevision,
+                "transitionSequence" to event.transitionSequence,
+                "createdAtUtcMs" to event.createdAtUtcMs,
+            )
+        },
+    )
+
+    private fun pulseDeliveryReservationMap(value: PulseHeaderPresentationReservation): Map<String, Any?> = mapOf(
+        "attemptId" to value.attemptId,
+        "leaseToken" to value.leaseToken,
+        "hostSessionId" to value.hostSessionId,
+        "deliveryKey" to value.deliveryKey,
+        "presentationIntentId" to value.presentationIntentId,
+        "situationEpisodeId" to value.situationEpisodeId,
+        "targetScope" to value.targetScope,
+        "validUntilUtcMs" to value.validUntilUtcMs,
+        "readableDurationMillis" to value.readableDurationMillis,
+        "sourceFrameId" to value.sourceFrameId,
+        "controlRevision" to value.controlRevision,
+        "story" to pulseStoryDraftMap(value.story),
+    )
+
+    private fun pulseStoryResultMap(result: PulseStoryCompositionResult): Map<String, Any?> = mapOf(
+        "status" to result.status.name,
+        "reasonCode" to result.reasonCode,
+        "explanationHu" to result.explanationHu,
+        "draft" to result.draft?.let(::pulseStoryDraftMap),
+    )
+
+    private fun pulseStoryDraftMap(draft: PulseStoryDraft): Map<String, Any?> = mapOf(
+        "storyKey" to draft.storyKey,
+        "situationKey" to draft.situationKey,
+        "candidateKind" to draft.candidateKind.name,
+        "claimType" to draft.claimType.name,
+        "headline" to draft.headline,
+        "detail" to draft.detail,
+        "priorityFrameId" to draft.priorityFrameId,
+        "sourceCoreRevision" to draft.sourceCoreRevision,
+        "templateVersion" to draft.templateVersion,
+        "contentFingerprint" to draft.contentFingerprint,
+        "materialFingerprint" to draft.materialFingerprint,
+        "evaluationMode" to draft.evaluationMode.name,
+        "generatedAtUtcMs" to draft.generatedAtUtcMs,
+        "fragments" to draft.fragments.map { fragment ->
+            mapOf(
+                "role" to fragment.role.name,
+                "templateId" to fragment.templateId,
+                "renderedText" to fragment.renderedText,
+                "sourceSignalKeys" to fragment.sourceSignalKeys,
+                "sourceEvidenceKeys" to fragment.sourceEvidenceKeys,
+                "sourceFactKeys" to fragment.sourceFactKeys,
+                "certainty" to fragment.certainty.name,
+            )
+        },
+        "exclusions" to draft.exclusions.map { exclusion ->
+            mapOf(
+                "factKey" to exclusion.factKey,
+                "sourceSignalKey" to exclusion.sourceSignalKey,
+                "sourceEvidenceKey" to exclusion.sourceEvidenceKey,
+                "reasonCode" to exclusion.reasonCode,
+                "explanationHu" to exclusion.explanationHu,
+            )
+        },
+    )
 
     private fun pulseDashboardMap(snapshot: PulseDashboardSnapshot): Map<String, Any?> = mapOf(
         "year" to snapshot.year,

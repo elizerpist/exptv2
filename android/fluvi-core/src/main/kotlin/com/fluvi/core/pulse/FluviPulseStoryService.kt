@@ -27,6 +27,18 @@ class FluviPulseStoryService internal constructor(
     suspend fun storyInspection(year: Int, month: Int, situationKey: String?): PulseStoryInspectionSnapshot =
         if (situationKey == null) selectedInspection(year, month) else candidateInspection(year, month, situationKey)
 
+    /**
+     * Composes from an already coherent C-phase inspection. Delivery uses
+     * this path for every ranked candidate, so a header lease never reruns
+     * the signal, triage, or priority engines candidate by candidate.
+     */
+    internal suspend fun composeFromPriorityInspection(
+        snapshot: PulsePriorityInspectionSnapshot,
+        situationKey: String,
+    ): PulseStoryInspectionSnapshot = mutex.withLock {
+        compose(snapshot, situationKey)
+    }
+
     private suspend fun selectedInspection(year: Int, month: Int): PulseStoryInspectionSnapshot = mutex.withLock {
         val snapshot = priority.inspection(year, month, historyLimit = 1)
         val key = snapshot.frame.selectedSituationKey

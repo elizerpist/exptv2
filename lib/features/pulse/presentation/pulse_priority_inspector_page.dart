@@ -5,6 +5,7 @@ import '../domain/pulse_models.dart';
 import '../domain/pulse_repository.dart';
 import 'pulse_triage_inspector_page.dart';
 import 'pulse_story_inspector_page.dart';
+import 'pulse_delivery_inspector_page.dart';
 
 /// Explains the native C-phase ranking. This screen deliberately does not
 /// offer delivery, dismiss, mute, or notification controls.
@@ -150,6 +151,17 @@ class _PulsePriorityInspectorPageState
                     onOpen: () => _openStory(selected),
                   ),
                   const SizedBox(height: 18),
+                  _DeliveryEntry(
+                    onOpen: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) => PulseDeliveryInspectorPage(
+                          repository: widget.repository,
+                          scope: widget.scope,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   _CandidateRanking(
                     candidates: priority.rankedCandidates,
                     situations: situations,
@@ -204,7 +216,10 @@ class _PulsePriorityInspectorPageState
   Future<void> _openStory(PulsePriorityCandidate candidate) async {
     PulseStoryInspection? preview;
     try {
-      preview = candidate.situationKey == (_inspection?.priority.selectedSituationKey ?? widget.initialPriority.selectedSituationKey)
+      preview =
+          candidate.situationKey ==
+              (_inspection?.priority.selectedSituationKey ??
+                  widget.initialPriority.selectedSituationKey)
           ? _story
           : await widget.repository.candidateStoryPreview(
               year: widget.scope.year,
@@ -235,6 +250,48 @@ PulseSituationSnapshot? _findSituation(
     if (situation.situationKey == key) return situation;
   }
   return null;
+}
+
+class _DeliveryEntry extends StatelessWidget {
+  const _DeliveryEntry({required this.onOpen});
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => _Panel(
+    child: InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(20),
+      child: const Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.view_carousel_outlined),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Megjelenítés a fejlécben',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Delivery kapuk, foglalás és megmutatási előzmények',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: FluviVisualTokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _Panel extends StatelessWidget {
@@ -406,7 +463,11 @@ class _ScoreLedger extends StatelessWidget {
 }
 
 class _StoryPreview extends StatelessWidget {
-  const _StoryPreview({required this.inspection, required this.loading, required this.onOpen});
+  const _StoryPreview({
+    required this.inspection,
+    required this.loading,
+    required this.onOpen,
+  });
   final PulseStoryInspection? inspection;
   final bool loading;
   final VoidCallback onOpen;
@@ -419,26 +480,84 @@ class _StoryPreview extends StatelessWidget {
       child: InkWell(
         onTap: onOpen,
         borderRadius: BorderRadius.circular(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Expanded(child: Text('Üzenet előnézete', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
-            Text(draft == null ? 'Nem összeállítható' : 'Előkészített', style: const TextStyle(fontSize: 11, color: FluviVisualTokens.textSecondary)),
-          ]),
-          const SizedBox(height: 9),
-          if (loading && inspection == null)
-            const LinearProgressIndicator(minHeight: 2)
-          else if (draft == null)
-            Text(result?.explanation ?? 'Az üzenet előnézete jelenleg nem állítható össze.', style: const TextStyle(fontSize: 13, color: FluviVisualTokens.textSecondary))
-          else ...[
-            if (draft.evaluationMode == 'historicalInspection') const Text('Történeti szöveg-előnézet', style: TextStyle(fontSize: 11, color: FluviVisualTokens.textSecondary)),
-            Text(draft.headline, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            if (draft.detail != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(draft.detail!, style: const TextStyle(fontSize: 13))),
-            const SizedBox(height: 8),
-            Text('${draft.fragments.length} felhasznált mondatrész', style: const TextStyle(fontSize: 11, color: FluviVisualTokens.textSecondary)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Üzenet előnézete',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Text(
+                  draft == null ? 'Nem összeállítható' : 'Előkészített',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: FluviVisualTokens.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 9),
+            if (loading && inspection == null)
+              const LinearProgressIndicator(minHeight: 2)
+            else if (draft == null)
+              Text(
+                result?.explanation ??
+                    'Az üzenet előnézete jelenleg nem állítható össze.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: FluviVisualTokens.textSecondary,
+                ),
+              )
+            else ...[
+              if (draft.evaluationMode == 'historicalInspection')
+                const Text(
+                  'Történeti szöveg-előnézet',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: FluviVisualTokens.textSecondary,
+                  ),
+                ),
+              Text(
+                draft.headline,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (draft.detail != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    draft.detail!,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Text(
+                '${draft.fragments.length} felhasznált mondatrész',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: FluviVisualTokens.textSecondary,
+                ),
+              ),
+            ],
+            const SizedBox(height: 5),
+            const Row(
+              children: [
+                Text(
+                  'Teljes Copy Map',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                Spacer(),
+                Icon(Icons.chevron_right, size: 18),
+              ],
+            ),
           ],
-          const SizedBox(height: 5),
-          const Row(children: [Text('Teljes Copy Map', style: TextStyle(fontWeight: FontWeight.w700)), Spacer(), Icon(Icons.chevron_right, size: 18)]),
-        ]),
+        ),
       ),
     );
   }

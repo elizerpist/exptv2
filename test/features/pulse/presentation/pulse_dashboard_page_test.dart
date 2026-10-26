@@ -1,6 +1,8 @@
 import 'package:fluvi/features/pulse/domain/pulse_models.dart';
 import 'package:fluvi/features/pulse/domain/pulse_repository.dart';
+import 'package:fluvi/features/pulse/application/pulse_delivery_coordinator.dart';
 import 'package:fluvi/features/pulse/presentation/pulse_dashboard_page.dart';
+import 'package:fluvi/features/pulse/presentation/widgets/pulse_header_presentation_layer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -58,17 +60,24 @@ void main() {
     expect(find.text('Pontszám részletezése'), findsOneWidget);
   });
 
-  testWidgets('native Story preview opens its Copy Map inspector', (tester) async {
+  testWidgets('native Story preview opens its Copy Map inspector', (
+    tester,
+  ) async {
     final situation = _situation();
     final repository = _Repository(
-      _snapshot(situations: [situation], priority: _priority(situation.situationKey)),
-    );
-    await tester.pumpWidget(MaterialApp(
-      home: PulseDashboardPage(
-        repository: repository,
-        coreRevisions: const Stream<Object?>.empty(),
+      _snapshot(
+        situations: [situation],
+        priority: _priority(situation.situationKey),
       ),
-    ));
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PulseDashboardPage(
+          repository: repository,
+          coreRevisions: const Stream<Object?>.empty(),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
     await tester.pumpAndSettle();
@@ -184,6 +193,60 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'header delivery renders native Story copy without changing its bounds',
+    (tester) async {
+      final repository = _Repository(_snapshot())..deliveryEnabled = true;
+      final coordinator = PulseDeliveryCoordinator(repository: repository);
+      addTearDown(coordinator.dispose);
+      var opened = false;
+      coordinator.updateSurface(
+        appActive: true,
+        ledgerVisible: true,
+        headerVisible: true,
+        unobstructed: true,
+        interactionIdle: true,
+        headerLayoutSupported: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox(
+              width: 360,
+              height: 112,
+              child: PulseHeaderPresentationLayer(
+                coordinator: coordinator,
+                onOpenPulse: () => opened = true,
+                onVerticalDragStart: (_) {},
+                onVerticalDragUpdate: (_) {},
+                onVerticalDragEnd: (_) {},
+                onLayoutSupported: coordinator.reportHeaderLayout,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.text('A hónap végére túllépheted a kereted.'),
+        findsOneWidget,
+      );
+      expect(
+        find.byType(SizedBox).evaluate().any((element) {
+          final render = element.renderObject;
+          return render is RenderBox && render.size == const Size(360, 112);
+        }),
+        isTrue,
+      );
+      await tester.tap(find.text('A hónap végére túllépheted a kereted.'));
+      await tester.pump();
+      expect(opened, isTrue);
+    },
+  );
 }
 
 PulseDashboardSnapshot _snapshot({
@@ -256,6 +319,7 @@ final class _Repository implements PulseRepository {
   final PulseDashboardSnapshot snapshot;
   final List<double> saved = [];
   int resetCalls = 0;
+  bool deliveryEnabled = false;
 
   @override
   Future<PulseDashboardSnapshot> dashboard({
@@ -359,6 +423,155 @@ final class _Repository implements PulseRepository {
   }) async => _storyInspection(situationKey: situationKey);
 
   @override
+  Future<PulseDeliveryDecision> deliveryDecision({
+    required int year,
+    required int month,
+    required PulseDeliverySurfaceContext surface,
+  }) async => deliveryEnabled
+      ? _deliveryDecision()
+      : const PulseDeliveryDecision(
+          sourceCoreRevision: 42,
+          sourceTriageFrameId: 'frame',
+          evaluationMode: 'live',
+          prioritySelectedSituationKey: null,
+          deliverySelectedSituationKey: null,
+          deliverySelectionReason: 'no-priority-candidate',
+          candidates: [],
+        );
+
+  @override
+  Future<PulseDeliveryInspection> deliveryInspection({
+    required int year,
+    required int month,
+    required PulseDeliverySurfaceContext surface,
+    int historyLimit = 30,
+    int historyOffset = 0,
+  }) async => PulseDeliveryInspection(
+    decision: await deliveryDecision(
+      year: year,
+      month: month,
+      surface: surface,
+    ),
+    preferences: const PulseDeliveryPreferences(
+      automaticEnabled: true,
+      normalCooldownMillis: 600000,
+      controlRevision: 0,
+      updatedAtUtcMs: 0,
+    ),
+    controls: const [],
+    activeAttempt: null,
+    events: const [],
+  );
+
+  @override
+  Future<PulseDeliveryPreferences> deliveryPreferences() async =>
+      const PulseDeliveryPreferences(
+        automaticEnabled: true,
+        normalCooldownMillis: 600000,
+        controlRevision: 0,
+        updatedAtUtcMs: 0,
+      );
+
+  @override
+  Future<PulseHeaderPresentationReservation?> reserveHeaderPresentation({
+    required int year,
+    required int month,
+    required PulseDeliverySurfaceContext surface,
+    required String commandKey,
+  }) async => deliveryEnabled ? _reservation() : null;
+
+  @override
+  Future<bool> reportPresentationStarted({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+  }) async => true;
+
+  @override
+  Future<bool> reportPresented({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+  }) async => true;
+
+  @override
+  Future<bool> confirmQualifiedExposure({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+  }) async => true;
+
+  @override
+  Future<bool> finishPresentation({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+    String reason = 'readable-duration-ended',
+  }) async => true;
+
+  @override
+  Future<bool> cancelPresentation({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+    required String reason,
+  }) async => true;
+
+  @override
+  Future<bool> dismissStory({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+    required String commandKey,
+  }) async => true;
+
+  @override
+  Future<bool> snoozeSituation({
+    required String attemptId,
+    required String leaseToken,
+    required String hostSessionId,
+    required String contentFingerprint,
+    required int untilUtcMs,
+    required String commandKey,
+  }) async => true;
+
+  @override
+  Future<void> muteDeliveryTarget({
+    required String targetScope,
+    required String commandKey,
+  }) async {}
+
+  @override
+  Future<bool> unmuteDeliveryTarget({
+    required String targetScope,
+    required String commandKey,
+  }) async => true;
+
+  @override
+  Future<bool> clearDeliveryControl({
+    required String controlId,
+    required String commandKey,
+  }) async => true;
+
+  @override
+  Future<PulseDeliveryPreferences> updateDeliveryPreferences({
+    required bool automaticEnabled,
+    required int normalCooldownMillis,
+    required String commandKey,
+  }) async => PulseDeliveryPreferences(
+    automaticEnabled: automaticEnabled,
+    normalCooldownMillis: normalCooldownMillis,
+    controlRevision: 1,
+    updatedAtUtcMs: 1,
+  );
+
+  @override
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,
@@ -384,43 +597,89 @@ final class _Repository implements PulseRepository {
   }
 }
 
-PulseStoryInspection _storyInspection({String situationKey = 'monthly-budget/2026-10'}) =>
-    PulseStoryInspection(
+PulseStoryInspection _storyInspection({
+  String situationKey = 'monthly-budget/2026-10',
+}) => PulseStoryInspection(
+  priorityFrameId: 'frame',
+  sourceCoreRevision: 42,
+  facts: const [],
+  result: PulseStoryCompositionResult(
+    status: 'composed',
+    reasonCode: null,
+    explanation: null,
+    draft: PulseStoryDraft(
+      storyKey: 'story/$situationKey/risk',
+      situationKey: situationKey,
+      candidateKind: 'ready',
+      claimType: 'projectedBreach',
+      headline: 'A hónap végére túllépheted a kereted.',
+      detail: 'Az előrejelzés 24 000 Ft-os kerettúllépést mutat.',
+      fragments: [
+        PulseStoryFragment(
+          role: PulseStoryFragmentRole.headline,
+          templateId: 'monthly-budget-projected-breach-v1',
+          renderedText: 'A hónap végére túllépheted a kereted.',
+          sourceSignalKeys: ['PULSE-004/global/2026-10/default'],
+          sourceEvidenceKeys: ['forecast'],
+          sourceFactKeys: ['forecast/overrun'],
+          certainty: PulseStoryCertainty.projected,
+        ),
+      ],
+      exclusions: [],
       priorityFrameId: 'frame',
       sourceCoreRevision: 42,
-      facts: const [],
-      result: PulseStoryCompositionResult(
-        status: 'composed',
-        reasonCode: null,
-        explanation: null,
-        draft: PulseStoryDraft(
-          storyKey: 'story/$situationKey/risk',
-          situationKey: situationKey,
-          candidateKind: 'ready',
-          claimType: 'projectedBreach',
-          headline: 'A hónap végére túllépheted a kereted.',
-          detail: 'Az előrejelzés 24 000 Ft-os kerettúllépést mutat.',
-          fragments: [
-            PulseStoryFragment(
-              role: PulseStoryFragmentRole.headline,
-              templateId: 'monthly-budget-projected-breach-v1',
-              renderedText: 'A hónap végére túllépheted a kereted.',
-              sourceSignalKeys: ['PULSE-004/global/2026-10/default'],
-              sourceEvidenceKeys: ['forecast'],
-              sourceFactKeys: ['forecast/overrun'],
-              certainty: PulseStoryCertainty.projected,
-            ),
-          ],
-          exclusions: [],
-          priorityFrameId: 'frame',
-          sourceCoreRevision: 42,
-          templateVersion: 1,
-          contentFingerprint: 'test',
-          materialFingerprint: 'material',
-          evaluationMode: 'live',
-          generatedAtUtcMs: 1,
-        ),
+      templateVersion: 1,
+      contentFingerprint: 'test',
+      materialFingerprint: 'material',
+      evaluationMode: 'live',
+      generatedAtUtcMs: 1,
+    ),
+  ),
+);
+
+PulseDeliveryDecision _deliveryDecision() {
+  final story = _storyInspection().result;
+  return PulseDeliveryDecision(
+    sourceCoreRevision: 42,
+    sourceTriageFrameId: 'frame',
+    evaluationMode: 'live',
+    prioritySelectedSituationKey: 'monthly-budget/2026-10',
+    deliverySelectedSituationKey: 'monthly-budget/2026-10',
+    deliverySelectionReason: 'first-eligible-priority-candidate',
+    candidates: [
+      PulseDeliveryCandidate(
+        situationKey: 'monthly-budget/2026-10',
+        situationEpisodeId: 'episode',
+        targetScope: 'monthlyBudget:aggregate',
+        priorityRank: 1,
+        priorityScore: 85,
+        story: story,
+        materialSemanticKey: 'material',
+        contentFingerprint: 'content',
+        deliveryKey: 'header|episode|story|material|automatic',
+        presentationIntentId: 'automatic',
+        eligibility: PulseDeliveryEligibility.eligible,
+        reasonCode: 'eligible',
+        explanation: 'Megjeleníthető.',
       ),
+    ],
+  );
+}
+
+PulseHeaderPresentationReservation _reservation() =>
+    PulseHeaderPresentationReservation(
+      attemptId: 'attempt',
+      leaseToken: 'lease',
+      hostSessionId: 'header-test',
+      deliveryKey: 'header|episode|story|material|automatic',
+      presentationIntentId: 'automatic',
+      situationEpisodeId: 'episode',
+      targetScope: 'monthlyBudget:aggregate',
+      validUntilUtcMs: 9999999999999,
+      readableDurationMillis: 8000,
+      sourceFrameId: 'frame',
+      controlRevision: 0,
+      story: _storyInspection().result.draft!,
     );
 
 PulseSituationSnapshot _situation() => const PulseSituationSnapshot(

@@ -22,6 +22,11 @@ import com.fluvi.core.database.entity.FluviPulseSituationEntity
 import com.fluvi.core.database.entity.FluviPulseSituationEventEntity
 import com.fluvi.core.database.entity.FluviPulsePriorityEventEntity
 import com.fluvi.core.database.entity.FluviPulsePriorityStateEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryAttemptEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryControlEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryEventEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryPreferencesEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryReceiptEntity
 import com.fluvi.core.model.FluviFinancialLimitPeriodKind
 import com.fluvi.core.model.FluviFinancialLimitTargetKind
 import com.fluvi.core.model.LedgerDirection
@@ -258,6 +263,73 @@ internal interface FluviPulsePriorityDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertEvent(event: FluviPulsePriorityEventEntity): Long
+}
+
+/** E-phase persistence intentionally never mutates app settings/core revision. */
+@Dao
+internal interface FluviPulseDeliveryDao {
+    @Query("SELECT * FROM fluvi_pulse_delivery_preferences WHERE id = 'current' LIMIT 1")
+    suspend fun preferences(): FluviPulseDeliveryPreferencesEntity?
+
+    @Upsert
+    suspend fun upsertPreferences(preferences: FluviPulseDeliveryPreferencesEntity)
+
+    @Query("SELECT * FROM fluvi_pulse_delivery_controls ORDER BY created_at_utc_ms ASC, control_id ASC")
+    suspend fun controls(): List<FluviPulseDeliveryControlEntity>
+
+    @Query("SELECT * FROM fluvi_pulse_delivery_controls WHERE control_id = :controlId LIMIT 1")
+    suspend fun control(controlId: String): FluviPulseDeliveryControlEntity?
+
+    @Upsert
+    suspend fun upsertControl(control: FluviPulseDeliveryControlEntity)
+
+    @Query("DELETE FROM fluvi_pulse_delivery_controls WHERE control_id = :controlId")
+    suspend fun deleteControl(controlId: String): Int
+
+    @Query("SELECT * FROM fluvi_pulse_delivery_attempts WHERE request_key = :requestKey LIMIT 1")
+    suspend fun attemptForRequest(requestKey: String): FluviPulseDeliveryAttemptEntity?
+
+    @Query("SELECT * FROM fluvi_pulse_delivery_attempts WHERE attempt_id = :attemptId LIMIT 1")
+    suspend fun attempt(attemptId: String): FluviPulseDeliveryAttemptEntity?
+
+    @Query(
+        "SELECT * FROM fluvi_pulse_delivery_attempts WHERE state IN ('reserved', 'presenting', 'presented') " +
+            "AND valid_until_utc_ms > :nowUtcMs ORDER BY reserved_at_utc_ms DESC LIMIT 1",
+    )
+    suspend fun activeAttempt(nowUtcMs: Long): FluviPulseDeliveryAttemptEntity?
+
+    @Query(
+        "SELECT * FROM fluvi_pulse_delivery_attempts WHERE state IN ('reserved', 'presenting', 'presented') " +
+            "AND valid_until_utc_ms <= :nowUtcMs",
+    )
+    suspend fun staleAttempts(nowUtcMs: Long): List<FluviPulseDeliveryAttemptEntity>
+
+    @Upsert
+    suspend fun upsertAttempt(attempt: FluviPulseDeliveryAttemptEntity)
+
+    @Query("SELECT * FROM fluvi_pulse_delivery_receipts WHERE delivery_key = :deliveryKey LIMIT 1")
+    suspend fun receiptForDeliveryKey(deliveryKey: String): FluviPulseDeliveryReceiptEntity?
+
+    @Query("SELECT * FROM fluvi_pulse_delivery_receipts WHERE situation_episode_id = :episodeId ORDER BY qualified_exposure_at_utc_ms DESC")
+    suspend fun receiptsForEpisode(episodeId: String): List<FluviPulseDeliveryReceiptEntity>
+
+    @Query("SELECT * FROM fluvi_pulse_delivery_receipts ORDER BY qualified_exposure_at_utc_ms DESC LIMIT 1")
+    suspend fun latestReceipt(): FluviPulseDeliveryReceiptEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertReceipt(receipt: FluviPulseDeliveryReceiptEntity): Long
+
+    @Query("SELECT COALESCE(MAX(transition_sequence), 0) FROM fluvi_pulse_delivery_events")
+    suspend fun latestEventSequence(): Long
+
+    @Query(
+        "SELECT * FROM fluvi_pulse_delivery_events ORDER BY transition_sequence DESC " +
+            "LIMIT :limit OFFSET :offset",
+    )
+    suspend fun eventPage(limit: Int, offset: Int = 0): List<FluviPulseDeliveryEventEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEvent(event: FluviPulseDeliveryEventEntity): Long
 }
 
 @Dao

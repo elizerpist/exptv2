@@ -15,6 +15,7 @@ import com.fluvi.core.database.dao.FluviPulseIndicatorSettingsDao
 import com.fluvi.core.database.dao.FluviPulseSignalDao
 import com.fluvi.core.database.dao.FluviPulseSituationDao
 import com.fluvi.core.database.dao.FluviPulsePriorityDao
+import com.fluvi.core.database.dao.FluviPulseDeliveryDao
 import com.fluvi.core.database.dao.FluviLedgerDeletionArchiveDao
 import com.fluvi.core.database.dao.FluviLedgerDao
 import com.fluvi.core.database.dao.FluviLedgerSyncOutboxDao
@@ -33,6 +34,11 @@ import com.fluvi.core.database.entity.FluviPulseSituationEntity
 import com.fluvi.core.database.entity.FluviPulseSituationEventEntity
 import com.fluvi.core.database.entity.FluviPulsePriorityEventEntity
 import com.fluvi.core.database.entity.FluviPulsePriorityStateEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryAttemptEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryControlEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryEventEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryPreferencesEntity
+import com.fluvi.core.database.entity.FluviPulseDeliveryReceiptEntity
 import com.fluvi.core.database.entity.FluviLedgerBackupCheckpointEntity
 import com.fluvi.core.database.entity.FluviLedgerDeletionArchiveEntity
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
@@ -70,6 +76,11 @@ import com.fluvi.core.model.FluviSystemIds
         FluviPulseSituationEventEntity::class,
         FluviPulsePriorityStateEntity::class,
         FluviPulsePriorityEventEntity::class,
+        FluviPulseDeliveryPreferencesEntity::class,
+        FluviPulseDeliveryControlEntity::class,
+        FluviPulseDeliveryAttemptEntity::class,
+        FluviPulseDeliveryReceiptEntity::class,
+        FluviPulseDeliveryEventEntity::class,
         FluviPartnerEntity::class,
         FluviPartnerAliasEntity::class,
         FluviLedgerEntryEntity::class,
@@ -93,7 +104,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -111,6 +122,8 @@ internal abstract class FluviDatabase : RoomDatabase() {
     abstract fun pulseSituationDao(): FluviPulseSituationDao
 
     abstract fun pulsePriorityDao(): FluviPulsePriorityDao
+
+    abstract fun pulseDeliveryDao(): FluviPulseDeliveryDao
 
     abstract fun partnerDao(): FluviPartnerDao
 
@@ -738,6 +751,62 @@ internal abstract class FluviDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX index_fluvi_pulse_priority_events_created_at_utc_ms ON fluvi_pulse_priority_events(created_at_utc_ms)")
                 db.execSQL("CREATE INDEX index_fluvi_pulse_priority_events_next_selected_situation_key ON fluvi_pulse_priority_events(next_selected_situation_key)")
                 db.execSQL("CREATE UNIQUE INDEX index_fluvi_pulse_priority_events_transition_sequence ON fluvi_pulse_priority_events(transition_sequence)")
+            }
+        }
+
+        /** E-phase delivery controls, short-lived header leases and durable shown receipts. */
+        val MIGRATION_15_16: Migration = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE fluvi_pulse_delivery_preferences (" +
+                        "id TEXT NOT NULL, automatic_enabled INTEGER NOT NULL, normal_cooldown_ms INTEGER NOT NULL, " +
+                        "control_revision INTEGER NOT NULL, updated_at_utc_ms INTEGER NOT NULL, PRIMARY KEY(id))",
+                )
+                db.execSQL(
+                    "CREATE TABLE fluvi_pulse_delivery_controls (" +
+                        "control_id TEXT NOT NULL, control_kind TEXT NOT NULL, situation_episode_id TEXT, " +
+                        "material_semantic_key TEXT, target_scope TEXT, presentation_intent_id TEXT, " +
+                        "expires_at_utc_ms INTEGER, consumed_at_utc_ms INTEGER, created_at_utc_ms INTEGER NOT NULL, " +
+                        "updated_at_utc_ms INTEGER NOT NULL, PRIMARY KEY(control_id))",
+                )
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_controls_control_kind_expires_at_utc_ms ON fluvi_pulse_delivery_controls(control_kind, expires_at_utc_ms)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_controls_situation_episode_id ON fluvi_pulse_delivery_controls(situation_episode_id)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_controls_target_scope ON fluvi_pulse_delivery_controls(target_scope)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_controls_presentation_intent_id ON fluvi_pulse_delivery_controls(presentation_intent_id)")
+                db.execSQL(
+                    "CREATE TABLE fluvi_pulse_delivery_attempts (" +
+                        "attempt_id TEXT NOT NULL, lease_token TEXT NOT NULL, request_key TEXT NOT NULL, " +
+                        "host_session_id TEXT NOT NULL, delivery_key TEXT NOT NULL, presentation_intent_id TEXT NOT NULL, " +
+                        "situation_key TEXT NOT NULL, situation_episode_id TEXT NOT NULL, target_scope TEXT NOT NULL, " +
+                        "story_key TEXT NOT NULL, content_fingerprint TEXT NOT NULL, material_semantic_key TEXT NOT NULL, " +
+                        "source_core_revision INTEGER NOT NULL, source_frame_id TEXT NOT NULL, control_revision INTEGER NOT NULL, " +
+                        "state TEXT NOT NULL, valid_until_utc_ms INTEGER NOT NULL, reserved_at_utc_ms INTEGER NOT NULL, " +
+                        "started_at_utc_ms INTEGER, presented_at_utc_ms INTEGER, qualified_exposure_at_utc_ms INTEGER, " +
+                        "ended_at_utc_ms INTEGER, end_reason TEXT, transition_sequence INTEGER NOT NULL, PRIMARY KEY(attempt_id))",
+                )
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_pulse_delivery_attempts_lease_token ON fluvi_pulse_delivery_attempts(lease_token)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_pulse_delivery_attempts_request_key ON fluvi_pulse_delivery_attempts(request_key)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_attempts_state_valid_until_utc_ms ON fluvi_pulse_delivery_attempts(state, valid_until_utc_ms)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_attempts_delivery_key ON fluvi_pulse_delivery_attempts(delivery_key)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_attempts_situation_key_reserved_at_utc_ms ON fluvi_pulse_delivery_attempts(situation_key, reserved_at_utc_ms)")
+                db.execSQL(
+                    "CREATE TABLE fluvi_pulse_delivery_receipts (" +
+                        "receipt_id TEXT NOT NULL, delivery_key TEXT NOT NULL, situation_episode_id TEXT NOT NULL, " +
+                        "story_key TEXT NOT NULL, material_semantic_key TEXT NOT NULL, attempt_id TEXT NOT NULL, " +
+                        "qualified_exposure_at_utc_ms INTEGER NOT NULL, PRIMARY KEY(receipt_id))",
+                )
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_pulse_delivery_receipts_delivery_key ON fluvi_pulse_delivery_receipts(delivery_key)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_receipts_situation_episode_id_qualified_exposure_at_utc_ms ON fluvi_pulse_delivery_receipts(situation_episode_id, qualified_exposure_at_utc_ms)")
+                db.execSQL(
+                    "CREATE TABLE fluvi_pulse_delivery_events (" +
+                        "event_id TEXT NOT NULL, event_kind TEXT NOT NULL, attempt_id TEXT, situation_key TEXT, " +
+                        "delivery_key TEXT, reason_code TEXT NOT NULL, source_core_revision INTEGER, " +
+                        "transition_sequence INTEGER NOT NULL, created_at_utc_ms INTEGER NOT NULL, PRIMARY KEY(event_id))",
+                )
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_events_attempt_id ON fluvi_pulse_delivery_events(attempt_id)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_events_situation_key_created_at_utc_ms ON fluvi_pulse_delivery_events(situation_key, created_at_utc_ms)")
+                db.execSQL("CREATE INDEX index_fluvi_pulse_delivery_events_created_at_utc_ms ON fluvi_pulse_delivery_events(created_at_utc_ms)")
+                db.execSQL("CREATE UNIQUE INDEX index_fluvi_pulse_delivery_events_transition_sequence ON fluvi_pulse_delivery_events(transition_sequence)")
             }
         }
 

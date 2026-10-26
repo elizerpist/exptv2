@@ -84,6 +84,7 @@ import 'widgets/summary_pill_experiments.dart';
 import 'widgets/fluvi_brand_lockup.dart';
 import 'widgets/summary_pill_text_transition.dart';
 import 'widgets/transaction_direction_toggle.dart';
+import '../../pulse/application/pulse_delivery_coordinator.dart';
 
 /// Shared dashboard composition with one bounded, separately-owned mode domain.
 class CoreDashboard extends StatefulWidget {
@@ -108,6 +109,9 @@ class CoreDashboard extends StatefulWidget {
     this.mindQueryFacetLoader,
     this.dashboardPresentationPreferences,
     this.initialSummaryPillVariant = SummaryPillVariant.segmented,
+    this.pulseDeliveryCoordinator,
+    this.onOpenPulse,
+    this.onHeaderInteractionChanged,
   });
 
   final DashboardCoreController controller;
@@ -141,6 +145,9 @@ class CoreDashboard extends StatefulWidget {
   final DashboardPresentationPreferencesController?
   dashboardPresentationPreferences;
   final SummaryPillVariant initialSummaryPillVariant;
+  final PulseDeliveryCoordinator? pulseDeliveryCoordinator;
+  final VoidCallback? onOpenPulse;
+  final ValueChanged<bool>? onHeaderInteractionChanged;
 
   @override
   State<CoreDashboard> createState() => _CoreDashboardState();
@@ -1299,6 +1306,11 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             _upperVerticalGestures.end,
                                         upperVerticalGestures:
                                             _upperVerticalGestures,
+                                        pulseDeliveryCoordinator:
+                                            widget.pulseDeliveryCoordinator,
+                                        onOpenPulse: widget.onOpenPulse,
+                                        onHeaderInteractionChanged:
+                                            widget.onHeaderInteractionChanged,
                                       ),
                                       _FramePosition(
                                         bounds: geometry.actionBounds,

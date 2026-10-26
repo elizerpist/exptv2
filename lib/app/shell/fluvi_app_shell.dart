@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../debug/demo_seed_coordinator.dart';
 import '../../core/assets/prepared_vector_asset_atlas.dart';
@@ -39,6 +40,7 @@ import '../../features/settings/presentation/settings_page.dart';
 import '../../features/pulse/data/method_channel_pulse_repository.dart';
 import '../../features/pulse/data/unavailable_pulse_repository.dart';
 import '../../features/pulse/domain/pulse_repository.dart';
+import '../../features/pulse/application/pulse_delivery_coordinator.dart';
 import '../../features/pulse/presentation/pulse_dashboard_page.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
@@ -186,7 +188,7 @@ class _DashboardBootstrapFailureSurface extends StatelessWidget {
 }
 
 class _FluviAppShellState extends State<FluviAppShell>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final DashboardCoreController _controller;
   late final DashboardCoreModeController _modeController;
   late final DashboardInteractionReadiness _readiness;
@@ -204,6 +206,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   late final AutomationRepository _automationRepository;
   late final AutomationPermissionRepository _automationPermissionRepository;
   late final PulseRepository _pulseRepository;
+  late final PulseDeliveryCoordinator _pulseDelivery;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
   int _startupAttemptGeneration = 0;
@@ -211,12 +214,16 @@ class _FluviAppShellState extends State<FluviAppShell>
   int? _lastStartupReadyAttemptGeneration;
   int? _lastStartupFailureAttemptGeneration;
   StreamSubscription? _diagnosticSubscription;
+  StreamSubscription<Object?>? _pulseCoreRevisionSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
   double? _devicePixelRatio;
   PreparedLogBoxRasterBank? _preparedLogBoxRasters;
   bool _queryMenuOpen = false;
   bool _queryApplying = false;
   bool _pulseInitialized = false;
+  bool _appActive = true;
+  bool _headerInteractionActive = false;
+  bool _routeObstructed = false;
 
   @override
   void initState() {
@@ -259,6 +266,8 @@ class _FluviAppShellState extends State<FluviAppShell>
         (kIsWeb
             ? const UnavailablePulseRepository()
             : MethodChannelPulseRepository());
+    _pulseDelivery = PulseDeliveryCoordinator(repository: _pulseRepository);
+    WidgetsBinding.instance.addObserver(this);
     _automationRepository =
         widget.automationRepository ??
         (kIsWeb
@@ -361,112 +370,145 @@ class _FluviAppShellState extends State<FluviAppShell>
       },
     );
     _readiness.addListener(_onReadinessChanged);
+    if (!kIsWeb) {
+      _pulseCoreRevisionSubscription =
+          const EventChannel(
+            'com.fluvi/dashboard_core_revision_stream',
+          ).receiveBroadcastStream().listen((_) {
+            // Delivery has no independent financial cache. A real financial Core
+            // revision is a fresh, generation-protected opportunity to inspect
+            // the current A–D frame; a delivery-table write never emits here.
+            _syncPulseDeliverySurface();
+            unawaited(_pulseDelivery.reconcile());
+          });
+    }
     if (kFluviOnscreenDiagnosticsEnabled && !kIsWeb) {
       _diagnosticSubscription = FluviDiagnosticBridge().watch().listen(
         FluviDiagnosticLogger.log,
       );
     }
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _syncPulseDeliverySurface(),
+    );
   }
 
   Future<void> _openCreationSelector() async {
-    final action = await showCreationSelectorSheet(context);
-    if (!mounted || action == null) return;
-    if (action == CreationSelectorAction.pushProfile) {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          fullscreenDialog: true,
-          builder: (_) => PushProfileWizardPage(
-            repository: _automationRepository,
-            permissions: _automationPermissionRepository,
+    _routeObstructed = true;
+    _syncPulseDeliverySurface();
+    try {
+      final action = await showCreationSelectorSheet(context);
+      if (!mounted || action == null) return;
+      if (action == CreationSelectorAction.pushProfile) {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            fullscreenDialog: true,
+            builder: (_) => PushProfileWizardPage(
+              repository: _automationRepository,
+              permissions: _automationPermissionRepository,
+            ),
           ),
-        ),
-      );
-      return;
-    }
-    final direction =
-        _controller.transactionDirection.direction ==
-            TransactionDirection.income
-        ? LedgerDirection.income
-        : LedgerDirection.expense;
-    if (action == CreationSelectorAction.recurringTransaction) {
-      await Navigator.of(context).push<bool>(
-        MaterialPageRoute<bool>(
-          fullscreenDialog: true,
-          builder: (_) => RecurringTransactionWizardPage(
-            repository: _automationRepository,
-            manualRepository: _manualTransactionRepository,
-            categories: _categoryCollection.value,
-            initialDirection: direction,
-          ),
-        ),
-      );
-      return;
-    }
-    await Navigator.of(context).push<bool>(
-      PageRouteBuilder<bool>(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            ManualTransactionEditor.create(
-              repository: _manualTransactionRepository,
+        );
+        return;
+      }
+      final direction =
+          _controller.transactionDirection.direction ==
+              TransactionDirection.income
+          ? LedgerDirection.income
+          : LedgerDirection.expense;
+      if (action == CreationSelectorAction.recurringTransaction) {
+        await Navigator.of(context).push<bool>(
+          MaterialPageRoute<bool>(
+            fullscreenDialog: true,
+            builder: (_) => RecurringTransactionWizardPage(
+              repository: _automationRepository,
+              manualRepository: _manualTransactionRepository,
               categories: _categoryCollection.value,
-              direction: direction,
+              initialDirection: direction,
             ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-            SlideTransition(
-              position:
-                  Tween<Offset>(
-                    begin: const Offset(0, 1),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
+          ),
+        );
+        return;
+      }
+      await Navigator.of(context).push<bool>(
+        PageRouteBuilder<bool>(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              ManualTransactionEditor.create(
+                repository: _manualTransactionRepository,
+                categories: _categoryCollection.value,
+                direction: direction,
+              ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              SlideTransition(
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(0, 1),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
                     ),
-                  ),
-              child: child,
-            ),
-      ),
-    );
+                child: child,
+              ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        _routeObstructed = false;
+        _syncPulseDeliverySurface();
+      }
+    }
   }
 
   Future<void> _openEditTransaction(String entryId) async {
-    if (entryId.startsWith('ghost:')) {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => GhostManagerPage(
-            repository: _automationRepository,
-            manualRepository: _manualTransactionRepository,
-            categories: _categoryCollection.value,
-            initialOccurrenceId: entryId.substring('ghost:'.length),
-            onOpenLedgerEntry: _openEditTransaction,
+    _routeObstructed = true;
+    _syncPulseDeliverySurface();
+    try {
+      if (entryId.startsWith('ghost:')) {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => GhostManagerPage(
+              repository: _automationRepository,
+              manualRepository: _manualTransactionRepository,
+              categories: _categoryCollection.value,
+              initialOccurrenceId: entryId.substring('ghost:'.length),
+              onOpenLedgerEntry: _openEditTransaction,
+            ),
           ),
+        );
+        return;
+      }
+      await Navigator.of(context).push<bool>(
+        PageRouteBuilder<bool>(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              ManualTransactionEditor.edit(
+                repository: _manualTransactionRepository,
+                categories: _categoryCollection.value,
+                entryId: entryId,
+              ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              SlideTransition(
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(0, 1),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ),
+                child: child,
+              ),
         ),
       );
-      return;
+    } finally {
+      if (mounted) {
+        _routeObstructed = false;
+        _syncPulseDeliverySurface();
+      }
     }
-    await Navigator.of(context).push<bool>(
-      PageRouteBuilder<bool>(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            ManualTransactionEditor.edit(
-              repository: _manualTransactionRepository,
-              categories: _categoryCollection.value,
-              entryId: entryId,
-            ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-            SlideTransition(
-              position:
-                  Tween<Offset>(
-                    begin: const Offset(0, 1),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
-                    ),
-                  ),
-              child: child,
-            ),
-      ),
-    );
   }
 
   @override
@@ -546,6 +588,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   }
 
   void _onReadinessChanged() {
+    _syncPulseDeliverySurface();
     if (_readiness.isReady) {
       _controller.renderReadinessDiagnostics.markReady();
       unawaited(_appliedQueryFacets.start());
@@ -692,8 +735,11 @@ class _FluviAppShellState extends State<FluviAppShell>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _diagnosticSubscription?.cancel();
     _diagnosticSubscription = null;
+    _pulseCoreRevisionSubscription?.cancel();
+    _pulseCoreRevisionSubscription = null;
     _readiness.removeListener(_onReadinessChanged);
     _readiness.dispose();
     _categoryCollection.dispose();
@@ -704,9 +750,63 @@ class _FluviAppShellState extends State<FluviAppShell>
       _shellPresentation.dispose();
     }
     _headerVisualController.dispose();
+    _pulseDelivery.dispose();
     _modeController.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appActive = state == AppLifecycleState.resumed;
+    _pulseDelivery.appLifecycleChanged(state);
+    _syncPulseDeliverySurface();
+  }
+
+  void _syncPulseDeliverySurface() {
+    if (!mounted) return;
+    final ledgerVisible =
+        _selectedNavigationItem == Bnb03Item.home && _readiness.isInteractive;
+    _pulseDelivery.updateSurface(
+      appActive: _appActive,
+      ledgerVisible: ledgerVisible,
+      headerVisible: ledgerVisible,
+      unobstructed: !_queryMenuOpen && !_queryApplying && !_routeObstructed,
+      interactionIdle: !_headerInteractionActive,
+      headerLayoutSupported: true,
+    );
+  }
+
+  void _onHeaderInteractionChanged(bool active) {
+    if (_headerInteractionActive == active) return;
+    _headerInteractionActive = active;
+    _syncPulseDeliverySurface();
+  }
+
+  Future<void> _openPulseFromHeader() async {
+    final presentation = _pulseDelivery.presentation;
+    await _pulseDelivery.confirmVisibleTap();
+    if (!mounted) return;
+    _routeObstructed = true;
+    _syncPulseDeliverySurface();
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => PulseDashboardPage(
+            repository: _pulseRepository,
+            fullscreen: true,
+            headerStory: presentation?.story,
+            headerDeliveryKey: presentation?.deliveryKey,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        _routeObstructed = false;
+        _syncPulseDeliverySurface();
+      }
+    }
   }
 
   void _openQueryMenu() {
@@ -743,6 +843,7 @@ class _FluviAppShellState extends State<FluviAppShell>
       _queryMenuOpen = true;
       _queryApplying = false;
     });
+    _syncPulseDeliverySurface();
   }
 
   void _closeQueryMenu() {
@@ -753,6 +854,7 @@ class _FluviAppShellState extends State<FluviAppShell>
       _queryMenuOpen = false;
       _queryApplying = false;
     });
+    _syncPulseDeliverySurface();
   }
 
   void _queryDraftChanged(CurrentLedgerQueryScope draft) {
@@ -843,6 +945,7 @@ class _FluviAppShellState extends State<FluviAppShell>
     } finally {
       if (mounted && _queryMenuOpen) {
         setState(() => _queryApplying = false);
+        _syncPulseDeliverySurface();
       }
     }
   }
@@ -903,6 +1006,10 @@ class _FluviAppShellState extends State<FluviAppShell>
                                     shellPresentation: _shellPresentation,
                                     headerVisualController:
                                         _headerVisualController,
+                                    pulseDeliveryCoordinator: _pulseDelivery,
+                                    onOpenPulse: _openPulseFromHeader,
+                                    onHeaderInteractionChanged:
+                                        _onHeaderInteractionChanged,
                                     mindQueryFacetLoader: _appliedQueryFacets,
                                     initialSummaryPillVariant:
                                         widget.initialSummaryPillVariant ??
@@ -1018,6 +1125,7 @@ class _FluviAppShellState extends State<FluviAppShell>
                                   _pulseInitialized = true;
                                 }
                                 setState(() => _selectedNavigationItem = item);
+                                _syncPulseDeliverySurface();
                               },
                             ),
                           ),
