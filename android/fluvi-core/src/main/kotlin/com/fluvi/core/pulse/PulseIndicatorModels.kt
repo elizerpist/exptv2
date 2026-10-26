@@ -74,6 +74,8 @@ data class PulseThresholdDefinition(
 data class PulsePoint(
     val x: Long,
     val label: String? = null,
+    /** Canonical category, partner or occurrence ID for target-aware signals. */
+    val targetKey: String? = null,
     val actual: Long? = null,
     val baseline: Long? = null,
     val momentum: Long? = null,
@@ -104,6 +106,11 @@ data class PulseIndicatorSnapshot(
     val series: List<PulseSeries> = emptyList(),
     val thresholds: List<PulseThresholdValue>,
     val sources: List<String>,
+    /** Measurement used by the raw-signal evaluator when it differs from card value. */
+    val signalMetricKey: String = "primary",
+    val signalMetricValue: Double? = value,
+    /** Compact raw-signal state; detailed trace is fetched on demand. */
+    val signalSummaries: List<PulseSignalSummary> = emptyList(),
 )
 
 data class PulseSourceOption(

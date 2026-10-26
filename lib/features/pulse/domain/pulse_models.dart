@@ -14,6 +14,51 @@ enum PulseAvailability {
   calculationError,
 }
 
+enum PulseSignalActivityState {
+  normal,
+  pendingConfirmation,
+  active,
+  recovering,
+  resolved,
+  evaluationSuspended,
+}
+
+enum PulseSignalStrength { weak, medium, strong, critical }
+
+enum PulseSignalDataQuality { sufficient, limited, insufficient, notApplicable }
+
+@immutable
+final class PulseSignalSummary {
+  const PulseSignalSummary({
+    required this.activityState,
+    required this.strength,
+    required this.dataQuality,
+    required this.activeSignalCount,
+    required this.totalSignalCount,
+  });
+
+  factory PulseSignalSummary.fromMap(Map<Object?, Object?> map) =>
+      PulseSignalSummary(
+        activityState: PulseSignalActivityState.values.byName(
+          map['activityState']! as String,
+        ),
+        strength: (map['strength'] as String?) == null
+            ? null
+            : PulseSignalStrength.values.byName(map['strength']! as String),
+        dataQuality: PulseSignalDataQuality.values.byName(
+          map['dataQuality']! as String,
+        ),
+        activeSignalCount: (map['activeSignalCount'] as num?)?.toInt() ?? 0,
+        totalSignalCount: (map['totalSignalCount'] as num?)?.toInt() ?? 0,
+      );
+
+  final PulseSignalActivityState activityState;
+  final PulseSignalStrength? strength;
+  final PulseSignalDataQuality dataQuality;
+  final int activeSignalCount;
+  final int totalSignalCount;
+}
+
 @immutable
 final class PulseThresholdDefinition {
   const PulseThresholdDefinition({
@@ -56,9 +101,7 @@ final class PulseThresholdValue {
       PulseThresholdValue(
         key: map['key']! as String,
         value: (map['value'] as num).toDouble(),
-        definition: PulseThresholdDefinition.fromMap(
-          _map(map['definition']),
-        ),
+        definition: PulseThresholdDefinition.fromMap(_map(map['definition'])),
         isUserDefined: map['isUserDefined'] as bool? ?? false,
       );
 
@@ -73,6 +116,7 @@ final class PulsePoint {
   const PulsePoint({
     required this.x,
     this.label,
+    this.targetKey,
     this.actual,
     this.baseline,
     this.momentum,
@@ -82,6 +126,7 @@ final class PulsePoint {
   factory PulsePoint.fromMap(Map<Object?, Object?> map) => PulsePoint(
     x: (map['x'] as num).toInt(),
     label: map['label'] as String?,
+    targetKey: map['targetKey'] as String?,
     actual: (map['actual'] as num?)?.toInt(),
     baseline: (map['baseline'] as num?)?.toInt(),
     momentum: (map['momentum'] as num?)?.toInt(),
@@ -90,6 +135,7 @@ final class PulsePoint {
 
   final int x;
   final String? label;
+  final String? targetKey;
   final int? actual;
   final int? baseline;
   final int? momentum;
@@ -107,7 +153,9 @@ final class PulseSeries {
   factory PulseSeries.fromMap(Map<Object?, Object?> map) => PulseSeries(
     key: map['key']! as String,
     label: map['labelHu']! as String,
-    points: _list(map['points']).map(PulsePoint.fromMap).toList(growable: false),
+    points: _list(
+      map['points'],
+    ).map(PulsePoint.fromMap).toList(growable: false),
   );
 
   final String key;
@@ -133,6 +181,9 @@ final class PulseIndicatorSnapshot {
     required this.series,
     required this.thresholds,
     required this.sources,
+    this.signalMetricKey = 'primary',
+    this.signalMetricValue,
+    this.signalSummaries = const [],
   });
 
   factory PulseIndicatorSnapshot.fromMap(Map<Object?, Object?> map) =>
@@ -152,13 +203,18 @@ final class PulseIndicatorSnapshot {
         missingReasons: (map['missingReasonsHu'] as List<Object?>? ?? const [])
             .cast<String>(),
         sampleCount: (map['sampleCount'] as num?)?.toInt() ?? 0,
-        series: _list(map['series']).map(PulseSeries.fromMap).toList(
-          growable: false,
-        ),
+        series: _list(
+          map['series'],
+        ).map(PulseSeries.fromMap).toList(growable: false),
         thresholds: _list(
           map['thresholds'],
         ).map(PulseThresholdValue.fromMap).toList(growable: false),
         sources: (map['sources'] as List<Object?>? ?? const []).cast<String>(),
+        signalMetricKey: map['signalMetricKey'] as String? ?? 'primary',
+        signalMetricValue: (map['signalMetricValue'] as num?)?.toDouble(),
+        signalSummaries: _list(
+          map['signalSummaries'],
+        ).map(PulseSignalSummary.fromMap).toList(growable: false),
       );
 
   final String id;
@@ -176,6 +232,9 @@ final class PulseIndicatorSnapshot {
   final List<PulseSeries> series;
   final List<PulseThresholdValue> thresholds;
   final List<String> sources;
+  final String signalMetricKey;
+  final double? signalMetricValue;
+  final List<PulseSignalSummary> signalSummaries;
 
   PulseIndicatorSnapshot withThreshold(double value) {
     if (thresholds.isEmpty) return this;
@@ -204,8 +263,119 @@ final class PulseIndicatorSnapshot {
         ...thresholds.skip(1),
       ],
       sources: sources,
+      signalMetricKey: signalMetricKey,
+      signalMetricValue: signalMetricValue,
+      signalSummaries: signalSummaries,
     );
   }
+}
+
+@immutable
+final class PulseSignalEvent {
+  const PulseSignalEvent({
+    required this.eventId,
+    required this.kind,
+    required this.previousState,
+    required this.nextState,
+    required this.previousStrength,
+    required this.nextStrength,
+    required this.measuredValue,
+    required this.thresholdValue,
+    required this.timestampUtcMs,
+    required this.cause,
+  });
+
+  factory PulseSignalEvent.fromMap(Map<Object?, Object?> map) =>
+      PulseSignalEvent(
+        eventId: map['eventId']! as String,
+        kind: map['kind']! as String,
+        previousState: map['previousState'] as String?,
+        nextState: map['nextState']! as String,
+        previousStrength: map['previousStrength'] as String?,
+        nextStrength: map['nextStrength'] as String?,
+        measuredValue: (map['measuredValue'] as num?)?.toDouble(),
+        thresholdValue: (map['thresholdValue'] as num?)?.toDouble(),
+        timestampUtcMs: (map['timestampUtcMs'] as num).toInt(),
+        cause: map['cause']! as String,
+      );
+  final String eventId;
+  final String kind;
+  final String? previousState;
+  final String nextState;
+  final String? previousStrength;
+  final String? nextStrength;
+  final double? measuredValue;
+  final double? thresholdValue;
+  final int timestampUtcMs;
+  final String cause;
+}
+
+@immutable
+final class PulseSignalInspection {
+  const PulseSignalInspection({
+    required this.signalKey,
+    required this.indicatorId,
+    required this.targetKey,
+    required this.measuredValue,
+    required this.metricKey,
+    required this.thresholdValue,
+    required this.comparisonOperator,
+    required this.activityState,
+    required this.strength,
+    required this.dataQuality,
+    required this.trendDirection,
+    required this.observedDuration,
+    required this.trace,
+    required this.evidence,
+    required this.events,
+    required this.lastPersistedState,
+  });
+
+  factory PulseSignalInspection.fromMap(Map<Object?, Object?> map) =>
+      PulseSignalInspection(
+        signalKey: map['signalKey']! as String,
+        indicatorId: map['indicatorId']! as String,
+        targetKey: map['targetKey'] as String? ?? '',
+        measuredValue: (map['measuredValue'] as num?)?.toDouble(),
+        metricKey: map['evaluatedMetricKey']! as String,
+        thresholdValue: (map['thresholdValue'] as num?)?.toDouble(),
+        comparisonOperator: map['comparisonOperator']! as String,
+        activityState: PulseSignalActivityState.values.byName(
+          map['activityState']! as String,
+        ),
+        strength: (map['strength'] as String?) == null
+            ? null
+            : PulseSignalStrength.values.byName(map['strength']! as String),
+        dataQuality: PulseSignalDataQuality.values.byName(
+          map['dataQuality']! as String,
+        ),
+        trendDirection: map['trendDirection']! as String,
+        observedDuration: (map['observedDuration'] as num?)?.toInt() ?? 0,
+        trace: _map(map['trace']),
+        evidence: _map(map['evidence']),
+        events: _list(
+          map['events'],
+        ).map(PulseSignalEvent.fromMap).toList(growable: false),
+        lastPersistedState: map['lastPersistedState'] == null
+            ? null
+            : _map(map['lastPersistedState']),
+      );
+  final String signalKey;
+  final String indicatorId;
+  final String targetKey;
+  final double? measuredValue;
+  final String metricKey;
+  final double? thresholdValue;
+  final String comparisonOperator;
+  final PulseSignalActivityState activityState;
+  final PulseSignalStrength? strength;
+  final PulseSignalDataQuality dataQuality;
+  final String trendDirection;
+  final int observedDuration;
+  final Map<Object?, Object?> trace;
+  final Map<Object?, Object?> evidence;
+  final List<PulseSignalEvent> events;
+  final Map<Object?, Object?>? lastPersistedState;
 }
 
 @immutable
@@ -217,12 +387,13 @@ final class PulseSourceOption {
     required this.isSelected,
   });
 
-  factory PulseSourceOption.fromMap(Map<Object?, Object?> map) => PulseSourceOption(
-    targetKey: map['targetKey']! as String,
-    label: map['labelHu']! as String,
-    kind: map['kind']! as String,
-    isSelected: map['isSelected'] as bool? ?? false,
-  );
+  factory PulseSourceOption.fromMap(Map<Object?, Object?> map) =>
+      PulseSourceOption(
+        targetKey: map['targetKey']! as String,
+        label: map['labelHu']! as String,
+        kind: map['kind']! as String,
+        isSelected: map['isSelected'] as bool? ?? false,
+      );
 
   final String targetKey;
   final String label;
@@ -265,10 +436,9 @@ final class PulseDashboardSnapshot {
   PulseIndicatorSnapshot? byId(String id) =>
       indicators.where((indicator) => indicator.id == id).firstOrNull;
 
-  List<PulseIndicatorSnapshot> inGroup(PulseGroup group) =>
-      indicators.where((indicator) => indicator.group == group).toList(
-        growable: false,
-      );
+  List<PulseIndicatorSnapshot> inGroup(PulseGroup group) => indicators
+      .where((indicator) => indicator.group == group)
+      .toList(growable: false);
 }
 
 extension on Iterable<PulseIndicatorSnapshot> {

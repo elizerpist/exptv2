@@ -16,6 +16,8 @@ import com.fluvi.core.database.entity.FluviLedgerSyncOutboxEntity
 import com.fluvi.core.database.entity.FluviLedgerSyncWorkspaceEntity
 import com.fluvi.core.database.entity.FluviFinancialLimitEntity
 import com.fluvi.core.database.entity.FluviPulseIndicatorSettingEntity
+import com.fluvi.core.database.entity.FluviPulseSignalEventEntity
+import com.fluvi.core.database.entity.FluviPulseSignalStateEntity
 import com.fluvi.core.model.FluviFinancialLimitPeriodKind
 import com.fluvi.core.model.FluviFinancialLimitTargetKind
 import com.fluvi.core.model.LedgerDirection
@@ -189,6 +191,25 @@ internal interface FluviPulseIndicatorSettingsDao {
         targetKey: String,
         thresholdKey: String,
     ): Int
+}
+
+/** Signal persistence is diagnostic-only and intentionally independent from Core revision. */
+@Dao
+internal interface FluviPulseSignalDao {
+    @Query("SELECT * FROM fluvi_pulse_signal_states WHERE signal_key = :signalKey LIMIT 1")
+    suspend fun state(signalKey: String): FluviPulseSignalStateEntity?
+
+    @Query(
+        "SELECT * FROM fluvi_pulse_signal_events WHERE signal_key = :signalKey " +
+            "ORDER BY created_at_utc_ms DESC, event_id DESC LIMIT :limit OFFSET :offset",
+    )
+    suspend fun eventPage(signalKey: String, limit: Int, offset: Int = 0): List<FluviPulseSignalEventEntity>
+
+    @Upsert
+    suspend fun upsertState(state: FluviPulseSignalStateEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEvent(event: FluviPulseSignalEventEntity): Long
 }
 
 @Dao

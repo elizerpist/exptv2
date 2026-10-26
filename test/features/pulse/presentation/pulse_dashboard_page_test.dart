@@ -87,6 +87,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.saved, isNotEmpty);
       expect(repository.resetCalls, 0);
+
+      await tester.scrollUntilVisible(
+        find.text('Signal Inspector'),
+        220,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Signal Inspector'), findsOneWidget);
+      expect(find.text('Megerősítésre vár'), findsOneWidget);
+      await expectLater(
+        find.byKey(const ValueKey('pulse-signal-detail-boundary')),
+        matchesGoldenFile('../../../goldens/pulse_signal_inspector.png'),
+      );
     },
   );
 }
@@ -162,6 +174,44 @@ final class _Repository implements PulseRepository {
     required int year,
     required int month,
   }) async => snapshot;
+
+  @override
+  Future<List<PulseSignalInspection>> signalInspection({
+    required int year,
+    required int month,
+    required String indicatorId,
+    int historyLimit = 30,
+  }) async => indicatorId == 'PULSE-003'
+      ? [
+          const PulseSignalInspection(
+            signalKey: 'PULSE-003/global/2026-10/default',
+            indicatorId: 'PULSE-003',
+            targetKey: '',
+            measuredValue: 1.67,
+            metricKey: 'paceRatio',
+            thresholdValue: 1.30,
+            comparisonOperator: 'greaterThanOrEqual',
+            activityState: PulseSignalActivityState.pendingConfirmation,
+            strength: PulseSignalStrength.medium,
+            dataQuality: PulseSignalDataQuality.sufficient,
+            trendDirection: 'erősödő',
+            observedDuration: 1,
+            trace: {
+              'thresholdConditionMet': true,
+              'confirmationCount': 1,
+              'confirmationRequired': 2,
+              'missingInputsHu': <Object?>[],
+            },
+            evidence: {
+              'situationKey': 'monthly-budget/2026-10',
+              'evidenceFamily': 'spending-velocity',
+              'affectedTarget': '',
+            },
+            events: [],
+            lastPersistedState: null,
+          ),
+        ]
+      : const [];
 
   @override
   Future<void> setSubscriptionSource({

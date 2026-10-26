@@ -14,11 +14,33 @@ final class MethodChannelPulseRepository implements PulseRepository {
     required int year,
     required int month,
   }) async => PulseDashboardSnapshot.fromMap(
-    _map(await _channel.invokeMethod<Object?>('getDashboard', {
-      'year': year,
-      'month': month,
-    })),
+    _map(
+      await _channel.invokeMethod<Object?>('getDashboard', {
+        'year': year,
+        'month': month,
+      }),
+    ),
   );
+
+  @override
+  Future<List<PulseSignalInspection>> signalInspection({
+    required int year,
+    required int month,
+    required String indicatorId,
+    int historyLimit = 30,
+  }) async {
+    final result = _map(
+      await _channel.invokeMethod<Object?>('getSignalInspection', {
+        'year': year,
+        'month': month,
+        'indicatorId': indicatorId,
+        'historyLimit': historyLimit,
+      }),
+    );
+    return (result['signals'] as List<Object?>? ?? const [])
+        .map((item) => PulseSignalInspection.fromMap(_map(item)))
+        .toList(growable: false);
+  }
 
   @override
   Future<void> setSubscriptionSource({

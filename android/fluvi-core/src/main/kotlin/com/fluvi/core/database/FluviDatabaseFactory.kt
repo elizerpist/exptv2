@@ -28,6 +28,7 @@ internal object FluviDatabaseFactory {
         FluviDatabase.MIGRATION_9_10,
         FluviDatabase.MIGRATION_10_11,
         FluviDatabase.MIGRATION_11_12,
+        FluviDatabase.MIGRATION_12_13,
     ).build()
 
     @JvmOverloads
@@ -37,7 +38,7 @@ internal object FluviDatabaseFactory {
     ): FluviDatabase = Room.inMemoryDatabaseBuilder(
         context.applicationContext,
         FluviDatabase::class.java,
-        ).allowMainThreadQueries()
+    ).allowMainThreadQueries()
         .addCallback(
             FluviDatabase.seedCallback(clock),
         ).addMigrations(
@@ -48,9 +49,10 @@ internal object FluviDatabaseFactory {
             FluviDatabase.MIGRATION_5_6,
             FluviDatabase.MIGRATION_6_7,
             FluviDatabase.MIGRATION_7_8,
-        FluviDatabase.MIGRATION_8_9,
-        FluviDatabase.MIGRATION_9_10,
-        FluviDatabase.MIGRATION_10_11,
-        FluviDatabase.MIGRATION_11_12,
+            FluviDatabase.MIGRATION_8_9,
+            FluviDatabase.MIGRATION_9_10,
+            FluviDatabase.MIGRATION_10_11,
+            FluviDatabase.MIGRATION_11_12,
+            FluviDatabase.MIGRATION_12_13,
         ).build()
 }

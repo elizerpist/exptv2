@@ -193,7 +193,13 @@ class FluviPulseReadService internal constructor(
                 } else {
                     val points = categoryLimits.map { (category, limit) ->
                         val spent = expense.filter { it.categoryId == category.id }.sumOf { it.amountScaled100 }
-                        PulsePoint(category.id.hashCode().toLong(), category.name, actual = spent, reference = limit)
+                        PulsePoint(
+                            category.id.hashCode().toLong(),
+                            category.name,
+                            targetKey = category.id,
+                            actual = spent,
+                            reference = limit,
+                        )
                     }
                     val highest = points.maxOf { (it.actual ?: 0L) * 100.0 / max(1L, it.reference ?: 1L) }
                     available(highest, "${points.size} kategóriakeret követhető", listOf(PulseSeries("categories", "Kategóriák", points)), sampleCount = points.size, sources = listOf("Kategóriák", "Budget limitek", "Könyvelt Ledger-kiadások"))
@@ -203,6 +209,7 @@ class FluviPulseReadService internal constructor(
                 val days = max(1, (minOf(input.today, input.monthEnd).toEpochDay() - input.monthStart.toEpochDay() + 1).toInt())
                 val short = dailyAmounts(input.entries, LedgerDirection.expense, input.today.minusDays(6), input.today, excludeRealizedRecurring = true)
                 val long = dailyAmounts(input.entries, LedgerDirection.expense, input.today.minusDays(27), input.today, excludeRealizedRecurring = true)
+                val longObservedDays = observedDayCount(input.entries, LedgerDirection.expense, input.today.minusDays(27), input.today, excludeRealizedRecurring = true)
                 val shortDaily = short.values.averageLongsOrZero()
                 val sustainable = when {
                     aggregateExpenseLimit != null && input.today in input.monthStart..input.monthEnd ->
@@ -214,14 +221,26 @@ class FluviPulseReadService internal constructor(
                     unavailable(PulseAvailability.waitingForData, "Nincs pozitív fenntartható referencia.", listOf("Érvényes keret vagy legalább egy 28 napos költési referencia szükséges."), listOf("Ledger tranzakciók", "Budget limit"))
                 } else {
                     val ratio = shortDaily / sustainable
-                    available(ratio, "${formatRatio(ratio)} a fenntartható ütemhez képest", listOf(dailyTrendSeries(short, sustainable.roundToLong())), secondary = (ratio - 1) * 100, sampleCount = long.size, early = long.size < 14)
+                    available(ratio, "${formatRatio(ratio)} a fenntartható ütemhez képest", listOf(dailyTrendSeries(short, sustainable.roundToLong())), secondary = (ratio - 1) * 100, sampleCount = longObservedDays, early = longObservedDays < 14)
                 }
             }
             PulseIndicatorId.monthEndForecast -> {
                 if (forecast == null) {
                     unavailable(PulseAvailability.waitingForData, "Nincs elég adat forecast készítéséhez.", listOf("Legalább néhány történeti költési nap szükséges."), listOf("Ledger tranzakciók", "Pending ghost occurrence-ok"))
                 } else {
-                    available(forecast.baselineEnd.toDouble(), "Baseline: ${forecast.baselineEnd}; momentum forgatókönyv is látható.", forecast.series(aggregateExpenseLimit), secondary = forecast.momentumEnd.toDouble(), sampleCount = forecast.historySampleCount, sources = listOf("Könyvelt Ledger-kiadások", "Pending ghost occurrence-ok", "Budget limit"), early = forecast.historySampleCount < 14)
+                    val overrun = aggregateExpenseLimit?.let { forecast.baselineEnd - it }
+                    available(
+                        forecast.baselineEnd.toDouble(),
+                        "Baseline: ${forecast.baselineEnd}; momentum forgatókönyv is látható.",
+                        forecast.series(aggregateExpenseLimit),
+                        secondary = forecast.momentumEnd.toDouble(),
+                        sampleCount = forecast.historySampleCount,
+                        sources = listOf("Könyvelt Ledger-kiadások", "Pending ghost occurrence-ok", "Budget limit"),
+                        early = forecast.historySampleCount < 14,
+                    ).copy(
+                        signalMetricKey = "forecastBudgetOverrun",
+                        signalMetricValue = overrun?.toDouble(),
+                    )
                 }
             }
             PulseIndicatorId.limitCrossing -> {
@@ -237,12 +256,13 @@ class FluviPulseReadService internal constructor(
             }
             PulseIndicatorId.spendingOutlier -> {
                 val daily = dailyAmounts(input.entries, LedgerDirection.expense, input.today.minusDays(27), input.today)
-                if (daily.size < 7) unavailable(PulseAvailability.waitingForData, "Nincs elég napi minta.", listOf("Legalább 7 nap költési adat szükséges."), listOf("Ledger tranzakciók"))
+                val observedDays = observedDayCount(input.entries, LedgerDirection.expense, input.today.minusDays(27), input.today)
+                if (observedDays < 7) unavailable(PulseAvailability.waitingForData, "Nincs elég napi minta.", listOf("Legalább 7 megfigyelt költési nap szükséges; a nulla költésű napokat külön kezeljük."), listOf("Ledger tranzakciók"))
                 else {
                     val median = daily.values.sorted().let { values -> values[values.size / 2] }
                     val peak = daily.maxByOrNull { it.value }!!
                     val difference = if (median == 0L) null else (peak.value - median) * 100.0 / median
-                    available(difference, "Legnagyobb napi eltérés: ${difference?.let(::formatPercent) ?: "nem értelmezhető"}", listOf(dailyTrendSeries(daily, median)), sampleCount = daily.size)
+                    available(difference, "Legnagyobb napi eltérés: ${difference?.let(::formatPercent) ?: "nem értelmezhető"}", listOf(dailyTrendSeries(daily, median)), sampleCount = observedDays)
                 }
             }
             PulseIndicatorId.spendingConcentration -> {
@@ -267,18 +287,24 @@ class FluviPulseReadService internal constructor(
                 if (forecast == null) unavailable(PulseAvailability.waitingForData, "Nincs elég adat a cashflow forecast-hoz.", listOf("Kiadási forecast bemenet hiányzik."), listOf("Ledger tranzakciók", "Pending ghost occurrence-ok"))
                 else {
                     val incomeHistory = dailyAmounts(input.entries, LedgerDirection.income, input.today.minusDays(27), input.today)
+                    val incomeObservedDays = observedDayCount(input.entries, LedgerDirection.income, input.today.minusDays(27), input.today)
                     val dailyIncome = incomeHistory.values.averageLongsOrZero().roundToLong()
                     val pendingIncome = input.pending.filter { it.direction == LedgerDirection.income && it.expectedAmountScaled100 != null && dateOf(it) in input.monthStart..input.monthEnd }.sumOf { it.expectedAmountScaled100!! }
                     val remaining = max(0, input.monthEnd.dayOfMonth - minOf(input.today, input.monthEnd).dayOfMonth)
                     val projectedIncome = actualIncome + dailyIncome * remaining + pendingIncome
                     val net = projectedIncome - forecast.baselineEnd
-                    available(net.toDouble(), "Várható nettó cashflow: $net", forecast.netSeries(projectedIncome), secondary = (projectedIncome - forecast.momentumEnd).toDouble(), sampleCount = incomeHistory.size, sources = listOf("Könyvelt Ledger-bevételek és -kiadások", "Pending ghost occurrence-ok"), early = incomeHistory.size < 7)
+                    available(net.toDouble(), "Várható nettó cashflow: $net", forecast.netSeries(projectedIncome), secondary = (projectedIncome - forecast.momentumEnd).toDouble(), sampleCount = incomeObservedDays, sources = listOf("Könyvelt Ledger-bevételek és -kiadások", "Pending ghost occurrence-ok"), early = incomeObservedDays < 7)
                 }
             }
             PulseIndicatorId.fixedBurdenCoverage -> unavailable(PulseAvailability.notApplicable, "Adatforrás szükséges a tényleges fedezethez.", listOf("A Fluvi Core-ban még nincs explicit pénzeszköz-egyenleg forrás."), listOf("Pending ghost occurrence-ok", "Pénzeszköz-egyenleg forrás"))
             PulseIndicatorId.lateIncome -> {
                 val overdue = input.pending.filter { it.direction == LedgerDirection.income && dateOf(it).isBefore(input.today) && it.expectedAmountScaled100 != null }
-                val points = overdue.map { occurrence -> PulsePoint(occurrence.expectedAtUtcMs, dateOf(occurrence).toString(), actual = occurrence.expectedAmountScaled100) }
+                val points = overdue.map { occurrence -> PulsePoint(
+                    occurrence.expectedLocalEpochDay,
+                    dateOf(occurrence).toString(),
+                    targetKey = occurrence.id,
+                    actual = occurrence.expectedAmountScaled100,
+                ) }
                 val age = overdue.maxOfOrNull { (input.today.toEpochDay() - dateOf(it).toEpochDay()).toDouble() }
                 available(age, if (overdue.isEmpty()) "Nincs késő bevétel." else "${overdue.size} késő bevétel vár teljesülésre.", listOf(PulseSeries("lateIncome", "Késő bevétel", points)), sampleCount = overdue.size, sources = listOf("Pending income occurrence-ok"))
             }
@@ -374,7 +400,13 @@ class FluviPulseReadService internal constructor(
                 val grouped = input.monthEntries.groupBy { it.partnerId }.mapNotNull { (partnerId, rows) ->
                     if (rows.size < 3) null else {
                         val overrides = rows.count { it.categoryAssignmentMode == CategoryAssignmentMode.entryOverride }
-                        PulsePoint(partnerId.hashCode().toLong(), input.partners[partnerId]?.displayNameOverride ?: input.partners[partnerId]?.originalName ?: partnerId, actual = overrides.toLong(), reference = rows.size.toLong())
+                        PulsePoint(
+                            partnerId.hashCode().toLong(),
+                            input.partners[partnerId]?.displayNameOverride ?: input.partners[partnerId]?.originalName ?: partnerId,
+                            targetKey = partnerId,
+                            actual = overrides.toLong(),
+                            reference = rows.size.toLong(),
+                        )
                     }
                 }.sortedByDescending { (it.actual ?: 0L).toDouble() / max(1L, it.reference ?: 1L) }.take(5)
                 if (grouped.isEmpty()) unavailable(PulseAvailability.waitingForData, "Nincs elegendő partneri minta.", listOf("Partnerenként legalább 3 tranzakció szükséges."), listOf("Ledger kategória-hozzárendelések", "Partner törzs"))
@@ -473,7 +505,9 @@ class FluviPulseReadService internal constructor(
         if (input.monthStart.year != input.today.year || input.monthStart.monthValue != input.today.monthValue) return null
         val historical = dailyAmounts(input.entries, LedgerDirection.expense, input.today.minusDays(28), input.today.minusDays(1), excludeRealizedRecurring = true)
         val actualDaily = dailyAmounts(input.monthEntries, LedgerDirection.expense, input.monthStart, minOf(input.today, input.monthEnd))
-        if (historical.size < 3 && actualDaily.isEmpty()) return null
+        val historicalObservedDays = observedDayCount(input.entries, LedgerDirection.expense, input.today.minusDays(28), input.today.minusDays(1), excludeRealizedRecurring = true)
+        val actualObservedDays = observedDayCount(input.monthEntries, LedgerDirection.expense, input.monthStart, minOf(input.today, input.monthEnd))
+        if (historicalObservedDays < 3 && actualObservedDays == 0) return null
         val baselineDaily = historical.values.averageLongsOrZero().takeIf { it > 0 } ?: actualDaily.values.averageLongsOrZero()
         if (baselineDaily <= 0) return null
         val momentumDaily = dailyAmounts(input.entries, LedgerDirection.expense, input.today.minusDays(6), input.today, excludeRealizedRecurring = true).values.averageLongsOrZero().let { short ->
@@ -501,7 +535,7 @@ class FluviPulseReadService internal constructor(
                 day = day.plusDays(1)
             }
         }
-        return Forecast(points, baselineEnd = baseline, momentumEnd = momentum, historySampleCount = historical.size)
+        return Forecast(points, baselineEnd = baseline, momentumEnd = momentum, historySampleCount = historicalObservedDays)
     }
 
     private fun dailyAmounts(
@@ -510,11 +544,36 @@ class FluviPulseReadService internal constructor(
         from: LocalDate,
         to: LocalDate,
         excludeRealizedRecurring: Boolean = false,
-    ): Map<LocalDate, Long> = entries.asSequence()
+    ): Map<LocalDate, Long> {
+        require(!to.isBefore(from)) { "Pulse daily range must be ordered." }
+        val observed = entries.asSequence()
+            .filter { it.direction == direction && it.bookedLocalEpochDay in from.toEpochDay()..to.toEpochDay() }
+            .filter { !excludeRealizedRecurring || it.recurrenceOccurrenceId == null }
+            .groupBy { LocalDate.ofEpochDay(it.bookedLocalEpochDay) }
+            .mapValues { (_, values) -> values.sumOf { it.amountScaled100 } }
+        // A calendar-day average must include explicit zero-spend days. Coverage
+        // remains separate: callers use observedDayCount for availability.
+        return buildMap {
+            var day = from
+            while (!day.isAfter(to)) {
+                put(day, observed[day] ?: 0L)
+                day = day.plusDays(1)
+            }
+        }
+    }
+
+    private fun observedDayCount(
+        entries: List<FluviLedgerEntryEntity>,
+        direction: LedgerDirection,
+        from: LocalDate,
+        to: LocalDate,
+        excludeRealizedRecurring: Boolean = false,
+    ): Int = entries.asSequence()
         .filter { it.direction == direction && it.bookedLocalEpochDay in from.toEpochDay()..to.toEpochDay() }
         .filter { !excludeRealizedRecurring || it.recurrenceOccurrenceId == null }
-        .groupBy { LocalDate.ofEpochDay(it.bookedLocalEpochDay) }
-        .mapValues { (_, values) -> values.sumOf { it.amountScaled100 } }
+        .map { it.bookedLocalEpochDay }
+        .distinct()
+        .count()
 
     private fun weeklyNet(entries: List<FluviLedgerEntryEntity>, from: LocalDate, to: LocalDate): Map<LocalDate, Long> = entries.asSequence()
         .filter { it.bookedLocalEpochDay in from.toEpochDay()..to.toEpochDay() }

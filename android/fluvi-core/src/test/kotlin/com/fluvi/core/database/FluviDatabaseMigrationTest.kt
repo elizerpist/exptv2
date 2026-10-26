@@ -418,6 +418,41 @@ class FluviDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationTwelveToThirteenAddsSignalAuditTablesWithoutChangingThresholds() {
+        val name = "$DATABASE_NAME-pulse-signal-audit"
+        helper.createDatabase(name, 12).use { database ->
+            database.execSQL(
+                "INSERT INTO fluvi_pulse_indicator_settings " +
+                    "(indicator_id,target_key,threshold_key,value,updated_at_utc_ms) " +
+                    "VALUES ('PULSE-003','','primary',1.25,4)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            name,
+            13,
+            true,
+            FluviDatabase.MIGRATION_12_13,
+        ).use { database ->
+            val stateTable = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' " +
+                    "AND name='fluvi_pulse_signal_states'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+            val eventFingerprintIndex = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND " +
+                    "name='index_fluvi_pulse_signal_events_signal_key_evaluation_fingerprint_event_kind'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+            val threshold = database.query(
+                "SELECT value FROM fluvi_pulse_indicator_settings " +
+                    "WHERE indicator_id='PULSE-003' AND target_key='' AND threshold_key='primary'",
+            ).use { cursor -> cursor.moveToFirst(); cursor.getDouble(0) }
+            assertEquals(1, stateTable)
+            assertEquals(1, eventFingerprintIndex)
+            assertEquals(1.25, threshold, .0001)
+        }
+    }
+
     private fun migrateLegacyFinancialLimits(
         name: String,
         rows: List<LegacyLimit>,

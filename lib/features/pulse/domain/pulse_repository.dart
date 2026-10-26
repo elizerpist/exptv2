@@ -1,7 +1,17 @@
 import 'pulse_models.dart';
 
 abstract interface class PulseRepository {
-  Future<PulseDashboardSnapshot> dashboard({required int year, required int month});
+  Future<PulseDashboardSnapshot> dashboard({
+    required int year,
+    required int month,
+  });
+
+  Future<List<PulseSignalInspection>> signalInspection({
+    required int year,
+    required int month,
+    required String indicatorId,
+    int historyLimit = 30,
+  });
 
   Future<void> setSubscriptionSource({
     required String targetKey,

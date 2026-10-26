@@ -37,6 +37,7 @@ import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
 import com.fluvi.core.pulse.PulseDashboardSnapshot
 import com.fluvi.core.pulse.PulseIndicatorSnapshot
+import com.fluvi.core.pulse.PulseSignalInspectionSnapshot
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
 import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
@@ -517,6 +518,17 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Signal state is derived data. Re-evaluate current measurements after a
+        // lifecycle return without changing the financial Core revision.
+        core?.let { fluviCore ->
+            scope.launch(Dispatchers.IO) {
+                runCatching { fluviCore.pulseSignals.reevaluateCurrent() }
+            }
+        }
+    }
+
     override fun onDestroy() {
         categoryChannel?.setMethodCallHandler(null)
         manualTransactionChannel?.setMethodCallHandler(null)
@@ -918,9 +930,17 @@ class MainActivity : FlutterActivity() {
         fluviCore: FluviCore,
     ): Any? = when (call.method) {
         "getDashboard" -> pulseDashboardMap(
-            fluviCore.pulse.dashboard(
+            fluviCore.pulseSignals.dashboard(
                 year = requireInt(call, "year"),
                 month = requireInt(call, "month"),
+            ),
+        )
+        "getSignalInspection" -> pulseSignalInspectionMap(
+            fluviCore.pulseSignals.inspect(
+                year = requireInt(call, "year"),
+                month = requireInt(call, "month"),
+                indicatorId = requireArgument(call, "indicatorId"),
+                historyLimit = call.argument<Number>("historyLimit")?.toInt() ?: 30,
             ),
         )
         "setThreshold" -> {
@@ -981,6 +1001,17 @@ class MainActivity : FlutterActivity() {
         "missingReasonsHu" to snapshot.missingReasonsHu,
         "sampleCount" to snapshot.sampleCount,
         "sources" to snapshot.sources,
+        "signalMetricKey" to snapshot.signalMetricKey,
+        "signalMetricValue" to snapshot.signalMetricValue,
+        "signalSummaries" to snapshot.signalSummaries.map { summary ->
+            mapOf(
+                "activityState" to summary.activityState.name,
+                "strength" to summary.strength?.name,
+                "dataQuality" to summary.dataQuality.name,
+                "activeSignalCount" to summary.activeSignalCount,
+                "totalSignalCount" to summary.totalSignalCount,
+            )
+        },
         "thresholds" to snapshot.thresholds.map { threshold ->
             mapOf(
                 "key" to threshold.key,
@@ -1004,10 +1035,85 @@ class MainActivity : FlutterActivity() {
                     mapOf(
                         "x" to point.x,
                         "label" to point.label,
+                        "targetKey" to point.targetKey,
                         "actual" to point.actual,
                         "baseline" to point.baseline,
                         "momentum" to point.momentum,
                         "reference" to point.reference,
+                    )
+                },
+            )
+        },
+    )
+
+    private fun pulseSignalInspectionMap(
+        inspections: List<PulseSignalInspectionSnapshot>,
+    ): Map<String, Any?> = mapOf(
+        "signals" to inspections.map { inspection ->
+            val signal = inspection.signal
+            mapOf(
+                "signalKey" to signal.signalKey,
+                "indicatorId" to signal.indicatorId.stableId,
+                "targetKey" to signal.targetKey,
+                "periodKey" to signal.periodKey,
+                "scenarioKey" to signal.scenarioKey,
+                "measuredValue" to signal.measuredValue,
+                "evaluatedMetricKey" to signal.evaluatedMetricKey,
+                "thresholdValue" to signal.thresholdValue,
+                "comparisonOperator" to signal.comparisonOperator.name,
+                "availability" to signal.availability.name,
+                "activityState" to signal.activityState.name,
+                "strength" to signal.strength?.name,
+                "dataQuality" to signal.dataQuality.name,
+                "observedDuration" to signal.observedDuration,
+                "trendDirection" to signal.trendDirection,
+                "firstObservedAtUtcMs" to signal.firstObservedAtUtcMs,
+                "lastEvaluatedAtUtcMs" to signal.lastEvaluatedAtUtcMs,
+                "lastMaterialChangeAtUtcMs" to signal.lastMaterialChangeAtUtcMs,
+                "sourceCoreRevision" to signal.sourceCoreRevision,
+                "configRevision" to signal.configRevision,
+                "evaluationFingerprint" to signal.evaluationFingerprint,
+                "trace" to mapOf(
+                    "measuredMetricKey" to signal.trace.measuredMetricKey,
+                    "measuredValue" to signal.trace.measuredValue,
+                    "thresholdValue" to signal.trace.thresholdValue,
+                    "comparisonOperator" to signal.trace.comparisonOperator.name,
+                    "thresholdConditionMet" to signal.trace.thresholdConditionMet,
+                    "confirmationRequired" to signal.trace.confirmationRequired,
+                    "confirmationCount" to signal.trace.confirmationCount,
+                    "missingInputsHu" to signal.trace.missingInputsHu,
+                    "explanationHu" to signal.trace.explanationHu,
+                ),
+                "evidence" to mapOf(
+                    "situationKey" to signal.evidence.situationKey,
+                    "evidenceFamily" to signal.evidence.evidenceFamily,
+                    "dependencyIds" to signal.evidence.dependencyIds,
+                    "affectedTarget" to signal.evidence.affectedTarget,
+                    "actualImpactMinor" to signal.evidence.actualImpactMinor,
+                    "projectedImpactMinor" to signal.evidence.projectedImpactMinor,
+                    "affectedBudgetMinor" to signal.evidence.affectedBudgetMinor,
+                    "affectedObligationMinor" to signal.evidence.affectedObligationMinor,
+                    "impactRatio" to signal.evidence.impactRatio,
+                ),
+                "events" to inspection.events.map { event ->
+                    mapOf(
+                        "eventId" to event.eventId,
+                        "kind" to event.kind.name,
+                        "previousState" to event.previousState?.name,
+                        "nextState" to event.nextState.name,
+                        "previousStrength" to event.previousStrength?.name,
+                        "nextStrength" to event.nextStrength?.name,
+                        "measuredValue" to event.measuredValue,
+                        "thresholdValue" to event.thresholdValue,
+                        "timestampUtcMs" to event.timestampUtcMs,
+                        "cause" to event.cause,
+                    )
+                },
+                "lastPersistedState" to inspection.lastPersistedState?.let { state ->
+                    mapOf(
+                        "activityState" to state.activityState.name,
+                        "strength" to state.strength?.name,
+                        "lastEvaluatedAtUtcMs" to state.lastEvaluatedAtUtcMs,
                     )
                 },
             )
