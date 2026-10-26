@@ -4,6 +4,7 @@ import '../../../core/design/dashboard_mode_palette.dart';
 import '../domain/pulse_models.dart';
 import '../domain/pulse_repository.dart';
 import 'pulse_triage_inspector_page.dart';
+import 'pulse_story_inspector_page.dart';
 
 /// Explains the native C-phase ranking. This screen deliberately does not
 /// offer delivery, dismiss, mute, or notification controls.
@@ -34,6 +35,8 @@ class _PulsePriorityInspectorPageState
   Object? _error;
   bool _loading = true;
   int _offset = 0;
+  PulseStoryInspection? _story;
+  bool _storyLoading = true;
 
   @override
   void initState() {
@@ -64,12 +67,32 @@ class _PulsePriorityInspectorPageState
         _offset = _inspection!.events.length;
         _loading = false;
       });
+      if (!append) await _loadSelectedStory();
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _error = error;
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _loadSelectedStory() async {
+    try {
+      final story = await widget.repository.selectedStoryPreview(
+        year: widget.scope.year,
+        month: widget.scope.month,
+      );
+      if (mounted) {
+        setState(() {
+          _story = story;
+          _storyLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _storyLoading = false);
+      }
     }
   }
 
@@ -121,10 +144,17 @@ class _PulsePriorityInspectorPageState
                   const SizedBox(height: 18),
                   _ScoreLedger(candidate: selected),
                   const SizedBox(height: 18),
+                  _StoryPreview(
+                    inspection: _story,
+                    loading: _storyLoading,
+                    onOpen: () => _openStory(selected),
+                  ),
+                  const SizedBox(height: 18),
                   _CandidateRanking(
                     candidates: priority.rankedCandidates,
                     situations: situations,
                     onOpen: _openSituation,
+                    onPreview: _openStory,
                   ),
                   const SizedBox(height: 18),
                   _Comparison(
@@ -166,6 +196,31 @@ class _PulsePriorityInspectorPageState
           scope: widget.scope,
           situation: situation,
           indicators: widget.indicators,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openStory(PulsePriorityCandidate candidate) async {
+    PulseStoryInspection? preview;
+    try {
+      preview = candidate.situationKey == (_inspection?.priority.selectedSituationKey ?? widget.initialPriority.selectedSituationKey)
+          ? _story
+          : await widget.repository.candidateStoryPreview(
+              year: widget.scope.year,
+              month: widget.scope.month,
+              situationKey: candidate.situationKey,
+            );
+    } catch (_) {}
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => PulseStoryInspectorPage(
+          repository: widget.repository,
+          scope: widget.scope,
+          situationKey: candidate.situationKey,
+          indicators: widget.indicators,
+          initial: preview,
         ),
       ),
     );
@@ -350,6 +405,45 @@ class _ScoreLedger extends StatelessWidget {
   );
 }
 
+class _StoryPreview extends StatelessWidget {
+  const _StoryPreview({required this.inspection, required this.loading, required this.onOpen});
+  final PulseStoryInspection? inspection;
+  final bool loading;
+  final VoidCallback onOpen;
+  @override
+  Widget build(BuildContext context) {
+    final result = inspection?.result;
+    final draft = result?.draft;
+    return _Panel(
+      color: const Color(0xFFF9F8FF),
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Expanded(child: Text('Üzenet előnézete', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+            Text(draft == null ? 'Nem összeállítható' : 'Előkészített', style: const TextStyle(fontSize: 11, color: FluviVisualTokens.textSecondary)),
+          ]),
+          const SizedBox(height: 9),
+          if (loading && inspection == null)
+            const LinearProgressIndicator(minHeight: 2)
+          else if (draft == null)
+            Text(result?.explanation ?? 'Az üzenet előnézete jelenleg nem állítható össze.', style: const TextStyle(fontSize: 13, color: FluviVisualTokens.textSecondary))
+          else ...[
+            if (draft.evaluationMode == 'historicalInspection') const Text('Történeti szöveg-előnézet', style: TextStyle(fontSize: 11, color: FluviVisualTokens.textSecondary)),
+            Text(draft.headline, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            if (draft.detail != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(draft.detail!, style: const TextStyle(fontSize: 13))),
+            const SizedBox(height: 8),
+            Text('${draft.fragments.length} felhasznált mondatrész', style: const TextStyle(fontSize: 11, color: FluviVisualTokens.textSecondary)),
+          ],
+          const SizedBox(height: 5),
+          const Row(children: [Text('Teljes Copy Map', style: TextStyle(fontWeight: FontWeight.w700)), Spacer(), Icon(Icons.chevron_right, size: 18)]),
+        ]),
+      ),
+    );
+  }
+}
+
 class _ScoreLine extends StatelessWidget {
   const _ScoreLine({
     required this.label,
@@ -411,10 +505,12 @@ class _CandidateRanking extends StatelessWidget {
     required this.candidates,
     required this.situations,
     required this.onOpen,
+    required this.onPreview,
   });
   final List<PulsePriorityCandidate> candidates;
   final List<PulseSituationSnapshot> situations;
   final ValueChanged<PulsePriorityCandidate> onOpen;
+  final ValueChanged<PulsePriorityCandidate> onPreview;
   @override
   Widget build(BuildContext context) => _Panel(
     child: Column(
@@ -453,6 +549,11 @@ class _CandidateRanking extends StatelessWidget {
                     Text(
                       '${candidate.finalScore}',
                       style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    IconButton(
+                      tooltip: 'Üzenet előnézete',
+                      onPressed: () => onPreview(candidate),
+                      icon: const Icon(Icons.article_outlined, size: 18),
                     ),
                     const Icon(Icons.chevron_right, size: 18),
                   ],

@@ -79,6 +79,43 @@ final class MethodChannelPulseRepository implements PulseRepository {
   );
 
   @override
+  Future<PulseStoryInspection> selectedStoryPreview({
+    required int year,
+    required int month,
+  }) async => PulseStoryInspection.fromMap(
+    _map(await _channel.invokeMethod<Object?>('getSelectedStoryPreview', {
+      'year': year,
+      'month': month,
+    })),
+  );
+
+  @override
+  Future<PulseStoryInspection> candidateStoryPreview({
+    required int year,
+    required int month,
+    required String situationKey,
+  }) async => PulseStoryInspection.fromMap(
+    _map(await _channel.invokeMethod<Object?>('getCandidateStoryPreview', {
+      'year': year,
+      'month': month,
+      'situationKey': situationKey,
+    })),
+  );
+
+  @override
+  Future<PulseStoryInspection> storyInspection({
+    required int year,
+    required int month,
+    required String situationKey,
+  }) async => PulseStoryInspection.fromMap(
+    _map(await _channel.invokeMethod<Object?>('getStoryInspection', {
+      'year': year,
+      'month': month,
+      'situationKey': situationKey,
+    })),
+  );
+
+  @override
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,

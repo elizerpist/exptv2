@@ -40,6 +40,10 @@ enum PulseEvidenceRole {
 
 enum PulseEvidenceIndependence { independent, derived, overlapping, unresolved }
 
+enum PulseStoryCertainty { observed, scheduled, projected, estimated, unavailable }
+
+enum PulseStoryFragmentRole { headline, evidence, timeCause, qualification, recovery }
+
 @immutable
 final class PulseSignalSummary {
   const PulseSignalSummary({
@@ -987,6 +991,230 @@ final class PulsePriorityInspection {
   final PulsePriorityFrame priority;
   final List<PulseSituationSnapshot> situations;
   final List<PulsePriorityEvent> events;
+}
+
+@immutable
+final class PulseStoryFact {
+  const PulseStoryFact({
+    required this.factKey,
+    required this.kind,
+    required this.sourceSignalKeys,
+    required this.sourceEvidenceKeys,
+    required this.sourceFactKeys,
+    required this.certainty,
+    required this.amountMinor,
+    required this.decimalValue,
+    required this.countValue,
+    required this.dueLocalEpochDay,
+    required this.periodKey,
+    required this.sourceCoreRevision,
+    required this.includedInForecast,
+  });
+
+  factory PulseStoryFact.fromMap(Map<Object?, Object?> map) => PulseStoryFact(
+    factKey: map['factKey']! as String,
+    kind: map['kind']! as String,
+    sourceSignalKeys: (map['sourceSignalKeys'] as List<Object?>? ?? const [])
+        .cast<String>(),
+    sourceEvidenceKeys:
+        (map['sourceEvidenceKeys'] as List<Object?>? ?? const []).cast<String>(),
+    sourceFactKeys: (map['sourceFactKeys'] as List<Object?>? ?? const [])
+        .cast<String>(),
+    certainty: PulseStoryCertainty.values.byName(map['certainty']! as String),
+    amountMinor: (map['amountMinor'] as num?)?.toInt(),
+    decimalValue: (map['decimalValue'] as num?)?.toDouble(),
+    countValue: (map['countValue'] as num?)?.toInt(),
+    dueLocalEpochDay: (map['dueLocalEpochDay'] as num?)?.toInt(),
+    periodKey: map['periodKey'] as String?,
+    sourceCoreRevision: (map['sourceCoreRevision'] as num?)?.toInt() ?? 0,
+    includedInForecast: map['includedInForecast'] as bool? ?? false,
+  );
+
+  final String factKey;
+  final String kind;
+  final List<String> sourceSignalKeys;
+  final List<String> sourceEvidenceKeys;
+  final List<String> sourceFactKeys;
+  final PulseStoryCertainty certainty;
+  final int? amountMinor;
+  final double? decimalValue;
+  final int? countValue;
+  final int? dueLocalEpochDay;
+  final String? periodKey;
+  final int sourceCoreRevision;
+  final bool includedInForecast;
+}
+
+@immutable
+final class PulseStoryFragment {
+  const PulseStoryFragment({
+    required this.role,
+    required this.templateId,
+    required this.renderedText,
+    required this.sourceSignalKeys,
+    required this.sourceEvidenceKeys,
+    required this.sourceFactKeys,
+    required this.certainty,
+  });
+
+  factory PulseStoryFragment.fromMap(Map<Object?, Object?> map) =>
+      PulseStoryFragment(
+        role: PulseStoryFragmentRole.values.byName(map['role']! as String),
+        templateId: map['templateId']! as String,
+        renderedText: map['renderedText']! as String,
+        sourceSignalKeys:
+            (map['sourceSignalKeys'] as List<Object?>? ?? const []).cast<String>(),
+        sourceEvidenceKeys:
+            (map['sourceEvidenceKeys'] as List<Object?>? ?? const [])
+                .cast<String>(),
+        sourceFactKeys:
+            (map['sourceFactKeys'] as List<Object?>? ?? const []).cast<String>(),
+        certainty: PulseStoryCertainty.values.byName(map['certainty']! as String),
+      );
+
+  final PulseStoryFragmentRole role;
+  final String templateId;
+  final String renderedText;
+  final List<String> sourceSignalKeys;
+  final List<String> sourceEvidenceKeys;
+  final List<String> sourceFactKeys;
+  final PulseStoryCertainty certainty;
+}
+
+@immutable
+final class PulseStoryExclusion {
+  const PulseStoryExclusion({
+    required this.factKey,
+    required this.sourceSignalKey,
+    required this.sourceEvidenceKey,
+    required this.reasonCode,
+    required this.explanation,
+  });
+
+  factory PulseStoryExclusion.fromMap(Map<Object?, Object?> map) =>
+      PulseStoryExclusion(
+        factKey: map['factKey']! as String,
+        sourceSignalKey: map['sourceSignalKey'] as String?,
+        sourceEvidenceKey: map['sourceEvidenceKey'] as String?,
+        reasonCode: map['reasonCode']! as String,
+        explanation: map['explanationHu']! as String,
+      );
+
+  final String factKey;
+  final String? sourceSignalKey;
+  final String? sourceEvidenceKey;
+  final String reasonCode;
+  final String explanation;
+}
+
+@immutable
+final class PulseStoryDraft {
+  const PulseStoryDraft({
+    required this.storyKey,
+    required this.situationKey,
+    required this.candidateKind,
+    required this.claimType,
+    required this.headline,
+    required this.detail,
+    required this.fragments,
+    required this.exclusions,
+    required this.priorityFrameId,
+    required this.sourceCoreRevision,
+    required this.templateVersion,
+    required this.contentFingerprint,
+    required this.materialFingerprint,
+    required this.evaluationMode,
+    required this.generatedAtUtcMs,
+  });
+
+  factory PulseStoryDraft.fromMap(Map<Object?, Object?> map) => PulseStoryDraft(
+    storyKey: map['storyKey']! as String,
+    situationKey: map['situationKey']! as String,
+    candidateKind: map['candidateKind']! as String,
+    claimType: map['claimType']! as String,
+    headline: map['headline']! as String,
+    detail: map['detail'] as String?,
+    fragments: _list(map['fragments'])
+        .map(PulseStoryFragment.fromMap)
+        .toList(growable: false),
+    exclusions: _list(map['exclusions'])
+        .map(PulseStoryExclusion.fromMap)
+        .toList(growable: false),
+    priorityFrameId: map['priorityFrameId']! as String,
+    sourceCoreRevision: (map['sourceCoreRevision'] as num).toInt(),
+    templateVersion: (map['templateVersion'] as num).toInt(),
+    contentFingerprint: map['contentFingerprint']! as String,
+    materialFingerprint: map['materialFingerprint']! as String,
+    evaluationMode: map['evaluationMode']! as String,
+    generatedAtUtcMs: (map['generatedAtUtcMs'] as num).toInt(),
+  );
+
+  final String storyKey;
+  final String situationKey;
+  final String candidateKind;
+  final String claimType;
+  final String headline;
+  final String? detail;
+  final List<PulseStoryFragment> fragments;
+  final List<PulseStoryExclusion> exclusions;
+  final String priorityFrameId;
+  final int sourceCoreRevision;
+  final int templateVersion;
+  final String contentFingerprint;
+  final String materialFingerprint;
+  final String evaluationMode;
+  final int generatedAtUtcMs;
+}
+
+@immutable
+final class PulseStoryCompositionResult {
+  const PulseStoryCompositionResult({
+    required this.status,
+    required this.draft,
+    required this.reasonCode,
+    required this.explanation,
+  });
+
+  factory PulseStoryCompositionResult.fromMap(Map<Object?, Object?> map) =>
+      PulseStoryCompositionResult(
+        status: map['status']! as String,
+        draft: map['draft'] == null
+            ? null
+            : PulseStoryDraft.fromMap(_map(map['draft'])),
+        reasonCode: map['reasonCode'] as String?,
+        explanation: map['explanationHu'] as String?,
+      );
+
+  final String status;
+  final PulseStoryDraft? draft;
+  final String? reasonCode;
+  final String? explanation;
+  bool get isComposed => status == 'composed' && draft != null;
+}
+
+@immutable
+final class PulseStoryInspection {
+  const PulseStoryInspection({
+    required this.result,
+    required this.facts,
+    required this.priorityFrameId,
+    required this.sourceCoreRevision,
+  });
+
+  factory PulseStoryInspection.fromMap(Map<Object?, Object?> map) =>
+      PulseStoryInspection(
+        result: PulseStoryCompositionResult.fromMap(_map(map['result'])),
+        facts: _list(map['facts'])
+            .map(PulseStoryFact.fromMap)
+            .toList(growable: false),
+        priorityFrameId: map['priorityFrameId']! as String,
+        sourceCoreRevision: (map['sourceCoreRevision'] as num).toInt(),
+      );
+
+  final PulseStoryCompositionResult result;
+  final List<PulseStoryFact> facts;
+  final String priorityFrameId;
+  final int sourceCoreRevision;
 }
 
 extension on Iterable<PulseIndicatorSnapshot> {

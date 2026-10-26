@@ -39,6 +39,26 @@ final class UnavailablePulseRepository implements PulseRepository {
   }) async => _unavailable();
 
   @override
+  Future<PulseStoryInspection> selectedStoryPreview({
+    required int year,
+    required int month,
+  }) async => _unavailable();
+
+  @override
+  Future<PulseStoryInspection> candidateStoryPreview({
+    required int year,
+    required int month,
+    required String situationKey,
+  }) async => _unavailable();
+
+  @override
+  Future<PulseStoryInspection> storyInspection({
+    required int year,
+    required int month,
+    required String situationKey,
+  }) async => _unavailable();
+
+  @override
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,

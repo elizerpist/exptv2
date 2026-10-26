@@ -45,6 +45,7 @@ import com.fluvi.core.pulse.PulsePriorityDashboardSnapshot
 import com.fluvi.core.pulse.PulsePriorityInspectionSnapshot
 import com.fluvi.core.pulse.PulsePriorityFrame
 import com.fluvi.core.pulse.PulsePriorityCandidate
+import com.fluvi.core.pulse.PulseStoryInspectionSnapshot
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
 import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
@@ -973,6 +974,20 @@ class MainActivity : FlutterActivity() {
                 historyOffset = call.argument<Number>("historyOffset")?.toInt() ?: 0,
             ),
         )
+        "getSelectedStoryPreview" -> pulseStoryInspectionMap(
+            fluviCore.pulseStory.storyInspection(
+                year = requireInt(call, "year"),
+                month = requireInt(call, "month"),
+                situationKey = null,
+            ),
+        )
+        "getCandidateStoryPreview", "getStoryInspection" -> pulseStoryInspectionMap(
+            fluviCore.pulseStory.storyInspection(
+                year = requireInt(call, "year"),
+                month = requireInt(call, "month"),
+                situationKey = requireArgument(call, "situationKey"),
+            ),
+        )
         "setThreshold" -> {
             fluviCore.pulseThresholds.set(
                 indicatorId = requireArgument(call, "indicatorId"),
@@ -1216,6 +1231,70 @@ class MainActivity : FlutterActivity() {
                 "createdAtUtcMs" to event.createdAtUtcMs,
             )
         },
+    )
+
+    private fun pulseStoryInspectionMap(snapshot: PulseStoryInspectionSnapshot): Map<String, Any?> = mapOf(
+        "priorityFrameId" to snapshot.priorityFrameId,
+        "sourceCoreRevision" to snapshot.sourceCoreRevision,
+        "facts" to (snapshot.facts?.facts?.map { fact ->
+            mapOf(
+                "factKey" to fact.factKey,
+                "kind" to fact.kind.name,
+                "sourceSignalKeys" to fact.sourceSignalKeys.sorted(),
+                "sourceEvidenceKeys" to fact.sourceEvidenceKeys.sorted(),
+                "sourceFactKeys" to fact.sourceFactKeys.sorted(),
+                "certainty" to fact.certainty.name,
+                "amountMinor" to fact.amountMinor,
+                "decimalValue" to fact.decimalValue,
+                "countValue" to fact.countValue,
+                "dueLocalEpochDay" to fact.dueLocalEpochDay,
+                "periodKey" to fact.periodKey,
+                "sourceCoreRevision" to fact.sourceCoreRevision,
+                "includedInForecast" to fact.includedInForecast,
+            )
+        } ?: emptyList<Map<String, Any?>>()),
+        "result" to mapOf(
+            "status" to snapshot.result.status.name,
+            "reasonCode" to snapshot.result.reasonCode,
+            "explanationHu" to snapshot.result.explanationHu,
+            "draft" to snapshot.result.draft?.let { draft ->
+                mapOf(
+                    "storyKey" to draft.storyKey,
+                    "situationKey" to draft.situationKey,
+                    "candidateKind" to draft.candidateKind.name,
+                    "claimType" to draft.claimType.name,
+                    "headline" to draft.headline,
+                    "detail" to draft.detail,
+                    "priorityFrameId" to draft.priorityFrameId,
+                    "sourceCoreRevision" to draft.sourceCoreRevision,
+                    "templateVersion" to draft.templateVersion,
+                    "contentFingerprint" to draft.contentFingerprint,
+                    "materialFingerprint" to draft.materialFingerprint,
+                    "evaluationMode" to draft.evaluationMode.name,
+                    "generatedAtUtcMs" to draft.generatedAtUtcMs,
+                    "fragments" to draft.fragments.map { fragment ->
+                        mapOf(
+                            "role" to fragment.role.name,
+                            "templateId" to fragment.templateId,
+                            "renderedText" to fragment.renderedText,
+                            "sourceSignalKeys" to fragment.sourceSignalKeys,
+                            "sourceEvidenceKeys" to fragment.sourceEvidenceKeys,
+                            "sourceFactKeys" to fragment.sourceFactKeys,
+                            "certainty" to fragment.certainty.name,
+                        )
+                    },
+                    "exclusions" to draft.exclusions.map { exclusion ->
+                        mapOf(
+                            "factKey" to exclusion.factKey,
+                            "sourceSignalKey" to exclusion.sourceSignalKey,
+                            "sourceEvidenceKey" to exclusion.sourceEvidenceKey,
+                            "reasonCode" to exclusion.reasonCode,
+                            "explanationHu" to exclusion.explanationHu,
+                        )
+                    },
+                )
+            },
+        ),
     )
 
     private fun pulsePriorityFrameMap(frame: PulsePriorityFrame): Map<String, Any?> = mapOf(

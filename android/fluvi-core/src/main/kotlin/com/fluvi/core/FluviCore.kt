@@ -15,6 +15,7 @@ import com.fluvi.core.pulse.FluviPulseSourceUseCase
 import com.fluvi.core.pulse.FluviPulseSignalService
 import com.fluvi.core.pulse.FluviPulseTriageService
 import com.fluvi.core.pulse.FluviPulsePriorityService
+import com.fluvi.core.pulse.FluviPulseStoryService
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviLedgerDeletionArchiveRepository
 import com.fluvi.core.repository.FluviLedgerRepository
@@ -54,6 +55,7 @@ class FluviCore internal constructor(
     val pulseSignals: FluviPulseSignalService,
     val pulseTriage: FluviPulseTriageService,
     val pulsePriority: FluviPulsePriorityService,
+    val pulseStory: FluviPulseStoryService,
     val checkpoints: LedgerCheckpointCoordinator,
     val demoSeed: SeedFluviDemoDatasetUseCase,
 ) : AutoCloseable {
@@ -152,6 +154,11 @@ object FluviCoreFactory {
             signals = pulseSignals,
             clock = clock,
         )
+        val pulsePriority = FluviPulsePriorityService(
+            database = database,
+            triage = pulseTriage,
+            clock = clock,
+        )
         return FluviCore(
             database = database,
             categories = FluviCategoryUseCase(
@@ -212,11 +219,8 @@ object FluviCoreFactory {
             ),
             pulseSignals = pulseSignals,
             pulseTriage = pulseTriage,
-            pulsePriority = FluviPulsePriorityService(
-                database = database,
-                triage = pulseTriage,
-                clock = clock,
-            ),
+            pulsePriority = pulsePriority,
+            pulseStory = FluviPulseStoryService(priority = pulsePriority),
             checkpoints = checkpoints,
             demoSeed = demoSeed,
         )

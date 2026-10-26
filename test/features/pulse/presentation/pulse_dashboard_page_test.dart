@@ -58,6 +58,31 @@ void main() {
     expect(find.text('Pontszám részletezése'), findsOneWidget);
   });
 
+  testWidgets('native Story preview opens its Copy Map inspector', (tester) async {
+    final situation = _situation();
+    final repository = _Repository(
+      _snapshot(situations: [situation], priority: _priority(situation.situationKey)),
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: PulseDashboardPage(
+        repository: repository,
+        coreRevisions: const Stream<Object?>.empty(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pulse-priority-focus')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Üzenet előnézete'), findsOneWidget);
+    expect(find.text('A hónap végére túllépheted a kereted.'), findsOneWidget);
+    await tester.tap(find.text('Üzenet előnézete'));
+    await tester.pumpAndSettle();
+    expect(find.text('Story Inspector'), findsOneWidget);
+    expect(find.text('Mondatrészek és források'), findsOneWidget);
+  });
+
   testWidgets(
     'Pulse renders seven cards per group and persists a detail threshold only on save',
     (tester) async {
@@ -314,6 +339,26 @@ final class _Repository implements PulseRepository {
   );
 
   @override
+  Future<PulseStoryInspection> selectedStoryPreview({
+    required int year,
+    required int month,
+  }) async => _storyInspection();
+
+  @override
+  Future<PulseStoryInspection> candidateStoryPreview({
+    required int year,
+    required int month,
+    required String situationKey,
+  }) async => _storyInspection(situationKey: situationKey);
+
+  @override
+  Future<PulseStoryInspection> storyInspection({
+    required int year,
+    required int month,
+    required String situationKey,
+  }) async => _storyInspection(situationKey: situationKey);
+
+  @override
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,
@@ -338,6 +383,45 @@ final class _Repository implements PulseRepository {
     saved.add(value);
   }
 }
+
+PulseStoryInspection _storyInspection({String situationKey = 'monthly-budget/2026-10'}) =>
+    PulseStoryInspection(
+      priorityFrameId: 'frame',
+      sourceCoreRevision: 42,
+      facts: const [],
+      result: PulseStoryCompositionResult(
+        status: 'composed',
+        reasonCode: null,
+        explanation: null,
+        draft: PulseStoryDraft(
+          storyKey: 'story/$situationKey/risk',
+          situationKey: situationKey,
+          candidateKind: 'ready',
+          claimType: 'projectedBreach',
+          headline: 'A hónap végére túllépheted a kereted.',
+          detail: 'Az előrejelzés 24 000 Ft-os kerettúllépést mutat.',
+          fragments: [
+            PulseStoryFragment(
+              role: PulseStoryFragmentRole.headline,
+              templateId: 'monthly-budget-projected-breach-v1',
+              renderedText: 'A hónap végére túllépheted a kereted.',
+              sourceSignalKeys: ['PULSE-004/global/2026-10/default'],
+              sourceEvidenceKeys: ['forecast'],
+              sourceFactKeys: ['forecast/overrun'],
+              certainty: PulseStoryCertainty.projected,
+            ),
+          ],
+          exclusions: [],
+          priorityFrameId: 'frame',
+          sourceCoreRevision: 42,
+          templateVersion: 1,
+          contentFingerprint: 'test',
+          materialFingerprint: 'material',
+          evaluationMode: 'live',
+          generatedAtUtcMs: 1,
+        ),
+      ),
+    );
 
 PulseSituationSnapshot _situation() => const PulseSituationSnapshot(
   situationKey: 'monthly-budget/2026-10',

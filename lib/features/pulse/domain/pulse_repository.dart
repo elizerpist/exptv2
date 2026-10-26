@@ -28,6 +28,23 @@ abstract interface class PulseRepository {
     int historyOffset = 0,
   });
 
+  Future<PulseStoryInspection> selectedStoryPreview({
+    required int year,
+    required int month,
+  });
+
+  Future<PulseStoryInspection> candidateStoryPreview({
+    required int year,
+    required int month,
+    required String situationKey,
+  });
+
+  Future<PulseStoryInspection> storyInspection({
+    required int year,
+    required int month,
+    required String situationKey,
+  });
+
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,
