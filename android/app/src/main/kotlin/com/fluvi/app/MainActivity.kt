@@ -941,6 +941,13 @@ class MainActivity : FlutterActivity() {
             )
             null
         }
+        "setSubscriptionSource" -> {
+            fluviCore.pulseSources.setSubscriptionSource(
+                targetKey = requireArgument(call, "targetKey"),
+                selected = requireArgument<Boolean>(call, "selected"),
+            )
+            null
+        }
         else -> throw IllegalArgumentException("Unknown Pulse method: ${call.method}")
     }
 
@@ -950,6 +957,14 @@ class MainActivity : FlutterActivity() {
         "coreRevision" to snapshot.coreRevision,
         "generatedAtUtcMs" to snapshot.generatedAtUtcMs,
         "indicators" to snapshot.indicators.map(::pulseIndicatorMap),
+        "subscriptionOptions" to snapshot.subscriptionOptions.map { option ->
+            mapOf(
+                "targetKey" to option.targetKey,
+                "labelHu" to option.labelHu,
+                "kind" to option.kind,
+                "isSelected" to option.isSelected,
+            )
+        },
     )
 
     private fun pulseIndicatorMap(snapshot: PulseIndicatorSnapshot): Map<String, Any?> = mapOf(

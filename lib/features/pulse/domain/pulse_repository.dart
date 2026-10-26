@@ -3,6 +3,11 @@ import 'pulse_models.dart';
 abstract interface class PulseRepository {
   Future<PulseDashboardSnapshot> dashboard({required int year, required int month});
 
+  Future<void> setSubscriptionSource({
+    required String targetKey,
+    required bool selected,
+  });
+
   Future<void> setThreshold({
     required String indicatorId,
     required String thresholdKey,

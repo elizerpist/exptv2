@@ -7,9 +7,17 @@ import 'widgets/pulse_charts.dart';
 import 'widgets/pulse_indicator_card.dart';
 
 class PulseSignalDetailPage extends StatefulWidget {
-  const PulseSignalDetailPage({super.key, required this.indicator, required this.repository});
+  const PulseSignalDetailPage({
+    super.key,
+    required this.indicator,
+    required this.repository,
+    required this.scope,
+    this.subscriptionOptions = const [],
+  });
   final PulseIndicatorSnapshot indicator;
   final PulseRepository repository;
+  final DateTime scope;
+  final List<PulseSourceOption> subscriptionOptions;
   @override
   State<PulseSignalDetailPage> createState() => _PulseSignalDetailPageState();
 }
@@ -20,6 +28,8 @@ class _PulseSignalDetailPageState extends State<PulseSignalDetailPage> {
   late final TextEditingController _input;
   bool _saving = false;
   bool _dirty = false;
+  bool _changingSources = false;
+  late List<PulseSourceOption> _subscriptionOptions;
 
   @override
   void initState() {
@@ -27,6 +37,7 @@ class _PulseSignalDetailPageState extends State<PulseSignalDetailPage> {
     _indicator = widget.indicator;
     _draft = _indicator.thresholds.firstOrNull?.value ?? 0;
     _input = TextEditingController(text: _draft.toStringAsFixed(_digits));
+    _subscriptionOptions = widget.subscriptionOptions;
   }
 
   int get _digits => (_indicator.thresholds.firstOrNull?.definition.step ?? 1) < 1 ? 2 : 0;
@@ -55,6 +66,28 @@ class _PulseSignalDetailPageState extends State<PulseSignalDetailPage> {
       if (mounted) setState(() => _dirty = false);
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _setSubscriptionSource(PulseSourceOption option, bool selected) async {
+    if (_changingSources) return;
+    setState(() => _changingSources = true);
+    try {
+      await widget.repository.setSubscriptionSource(targetKey: option.targetKey, selected: selected);
+      final snapshot = await widget.repository.dashboard(year: widget.scope.year, month: widget.scope.month);
+      if (!mounted) return;
+      setState(() {
+        _subscriptionOptions = snapshot.subscriptionOptions;
+        _indicator = snapshot.byId(_indicator.id) ?? _indicator;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Az előfizetés-forrás mentése nem sikerült.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _changingSources = false);
     }
   }
 
@@ -104,6 +137,14 @@ class _PulseSignalDetailPageState extends State<PulseSignalDetailPage> {
                   controller: _input,
                   onChanged: _setDraft,
                   onReset: _reset,
+                ),
+              ],
+              if (_indicator.id == 'PULSE-016') ...[
+                const SizedBox(height: 18),
+                _SubscriptionSourceEditor(
+                  options: _subscriptionOptions,
+                  changing: _changingSources,
+                  onChanged: _setSubscriptionSource,
                 ),
               ],
               const SizedBox(height: 18),
@@ -162,6 +203,29 @@ class _ThresholdEditor extends StatelessWidget {
       ]),
     );
   }
+}
+
+class _SubscriptionSourceEditor extends StatelessWidget {
+  const _SubscriptionSourceEditor({required this.options, required this.changing, required this.onChanged});
+  final List<PulseSourceOption> options;
+  final bool changing;
+  final Future<void> Function(PulseSourceOption option, bool selected) onChanged;
+
+  @override
+  Widget build(BuildContext context) => _InfoPanel(
+    title: 'Előfizetésnek jelölt források',
+    bodyWidget: options.isEmpty
+        ? const Text('Nincs aktív recurring szabály vagy választható kategória.', style: TextStyle(color: FluviVisualTokens.textSecondary))
+        : Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: options.map((option) => FilterChip(
+              label: Text('${option.kind == 'rule' ? 'Szabály' : 'Kategória'} · ${option.label}'),
+              selected: option.isSelected,
+              onSelected: changing ? null : (selected) => onChanged(option, selected),
+            )).toList(growable: false),
+          ),
+  );
 }
 
 class _InfoPanel extends StatelessWidget {

@@ -209,6 +209,28 @@ final class PulseIndicatorSnapshot {
 }
 
 @immutable
+final class PulseSourceOption {
+  const PulseSourceOption({
+    required this.targetKey,
+    required this.label,
+    required this.kind,
+    required this.isSelected,
+  });
+
+  factory PulseSourceOption.fromMap(Map<Object?, Object?> map) => PulseSourceOption(
+    targetKey: map['targetKey']! as String,
+    label: map['labelHu']! as String,
+    kind: map['kind']! as String,
+    isSelected: map['isSelected'] as bool? ?? false,
+  );
+
+  final String targetKey;
+  final String label;
+  final String kind;
+  final bool isSelected;
+}
+
+@immutable
 final class PulseDashboardSnapshot {
   const PulseDashboardSnapshot({
     required this.year,
@@ -216,6 +238,7 @@ final class PulseDashboardSnapshot {
     required this.coreRevision,
     required this.generatedAtUtcMs,
     required this.indicators,
+    this.subscriptionOptions = const [],
   });
 
   factory PulseDashboardSnapshot.fromMap(Map<Object?, Object?> map) =>
@@ -227,6 +250,9 @@ final class PulseDashboardSnapshot {
         indicators: _list(
           map['indicators'],
         ).map(PulseIndicatorSnapshot.fromMap).toList(growable: false),
+        subscriptionOptions: _list(
+          map['subscriptionOptions'],
+        ).map(PulseSourceOption.fromMap).toList(growable: false),
       );
 
   final int year;
@@ -234,6 +260,7 @@ final class PulseDashboardSnapshot {
   final int coreRevision;
   final int generatedAtUtcMs;
   final List<PulseIndicatorSnapshot> indicators;
+  final List<PulseSourceOption> subscriptionOptions;
 
   PulseIndicatorSnapshot? byId(String id) =>
       indicators.where((indicator) => indicator.id == id).firstOrNull;

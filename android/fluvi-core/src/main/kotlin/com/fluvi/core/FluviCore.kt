@@ -11,6 +11,7 @@ import com.fluvi.core.query.FluviLedgerReadService
 import com.fluvi.core.query.FluviBudgetReadService
 import com.fluvi.core.pulse.FluviPulseReadService
 import com.fluvi.core.pulse.FluviPulseThresholdUseCase
+import com.fluvi.core.pulse.FluviPulseSourceUseCase
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviLedgerDeletionArchiveRepository
 import com.fluvi.core.repository.FluviLedgerRepository
@@ -46,6 +47,7 @@ class FluviCore internal constructor(
     val recurrences: FluviRecurrenceUseCase,
     val pulse: FluviPulseReadService,
     val pulseThresholds: FluviPulseThresholdUseCase,
+    val pulseSources: FluviPulseSourceUseCase,
     val checkpoints: LedgerCheckpointCoordinator,
     val demoSeed: SeedFluviDemoDatasetUseCase,
 ) : AutoCloseable {
@@ -184,6 +186,10 @@ object FluviCoreFactory {
                 clock = clock,
             ),
             pulseThresholds = FluviPulseThresholdUseCase(
+                database = database,
+                clock = clock,
+            ),
+            pulseSources = FluviPulseSourceUseCase(
                 database = database,
                 clock = clock,
             ),

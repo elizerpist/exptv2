@@ -4,7 +4,13 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.fluvi.core.FluviCore
 import com.fluvi.core.FluviCoreFactory
+import com.fluvi.core.model.CreateRecurrenceRuleCommand
 import com.fluvi.core.model.FluviClock
+import com.fluvi.core.model.FluviSystemIds
+import com.fluvi.core.model.LedgerCategorySelection
+import com.fluvi.core.model.LedgerDirection
+import com.fluvi.core.model.RecurrenceAmountPolicy
+import com.fluvi.core.model.RecurrenceTriggerKind
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -46,6 +52,53 @@ class FluviPulseReadServiceTest {
         PulseIndicatorGroup.entries.forEach { group ->
             assertEquals(7, PulseIndicatorId.entries.count { it.group == group })
         }
+    }
+
+    @Test
+    fun subscriptionLoadUsesOnlyExplicitStableSourceSelections() = runBlocking {
+        val partnerId = core.partners.findOrCreate(
+            "Streaming provider",
+            FluviSystemIds.UNCATEGORIZED_CATEGORY,
+        )
+        val rule = core.recurrences.create(
+            CreateRecurrenceRuleCommand(
+                name = "Streaming subscription",
+                partnerId = partnerId,
+                categorySelection = LedgerCategorySelection.PartnerDefault,
+                direction = LedgerDirection.expense,
+                note = null,
+                triggerKind = RecurrenceTriggerKind.time,
+                amountPolicy = RecurrenceAmountPolicy.fixed,
+                amountScaled100 = 449_000L,
+                dayOfMonth = 20,
+                localTimeMinutes = 8 * 60,
+                startLocalEpochDay = LocalDate.of(2025, 7, 1).toEpochDay(),
+                endLocalEpochDay = null,
+                timezoneId = "Europe/Budapest",
+            ),
+        )
+
+        val beforeSelection = core.pulse.dashboard(2025, 7)
+        assertEquals(
+            PulseAvailability.notApplicable,
+            beforeSelection.indicators.single { it.id == PulseIndicatorId.subscriptionLoad }.availability,
+        )
+
+        core.pulseSources.setSubscriptionSource("rule:${rule.ruleId}", selected = true)
+        val selected = core.pulse.dashboard(2025, 7)
+        val load = selected.indicators.single { it.id == PulseIndicatorId.subscriptionLoad }
+        assertEquals(PulseAvailability.available, load.availability)
+        assertEquals(449_000.0, load.value!!, .0001)
+        assertTrue(
+            selected.subscriptionOptions.single { it.targetKey == "rule:${rule.ruleId}" }.isSelected,
+        )
+
+        core.pulseSources.setSubscriptionSource("rule:${rule.ruleId}", selected = false)
+        val reset = core.pulse.dashboard(2025, 7)
+        assertEquals(
+            PulseAvailability.notApplicable,
+            reset.indicators.single { it.id == PulseIndicatorId.subscriptionLoad }.availability,
+        )
     }
 
     @Test

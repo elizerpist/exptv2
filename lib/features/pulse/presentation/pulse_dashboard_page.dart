@@ -46,6 +46,9 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
         builder: (_) => PulseSignalDetailPage(
           indicator: indicator,
           repository: widget.repository,
+          scope: _controller.scope,
+          subscriptionOptions:
+              _controller.snapshot?.subscriptionOptions ?? const [],
         ),
       ),
     );

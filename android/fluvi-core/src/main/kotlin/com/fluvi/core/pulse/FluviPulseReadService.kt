@@ -16,6 +16,7 @@ import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.NotificationParseStatus
 import com.fluvi.core.model.NotificationProcessingStatus
 import com.fluvi.core.model.PushReviewStatus
+import com.fluvi.core.model.RecurrenceOccurrenceStatus
 import com.fluvi.core.repository.FluviFinancialLimitRepository
 import java.time.Instant
 import java.time.LocalDate
@@ -44,7 +45,9 @@ class FluviPulseReadService internal constructor(
         val today = Instant.ofEpochMilli(nowUtcMs).atZone(zone).toLocalDate()
         val monthStart = LocalDate.of(year, month, 1)
         val monthEnd = monthStart.plusMonths(1).minusDays(1)
-        val historyStart = monthStart.minusDays(90)
+        // Keeps the four displayed PULSE-016 calendar months intact while
+        // retaining at least the 90-day history required by momentum/forecast.
+        val historyStart = minOf(monthStart.minusDays(90), monthStart.minusMonths(3))
         val entries = database.ledgerDao().queryEntries(
             SimpleSQLiteQuery(
                 "SELECT * FROM fluvi_ledger_entries WHERE booked_local_epoch_day BETWEEN ? AND ? " +
@@ -55,10 +58,16 @@ class FluviPulseReadService internal constructor(
         val monthEntries = entries.filter { it.bookedLocalEpochDay in monthStart.toEpochDay()..monthEnd.toEpochDay() }
         val pendingStart = minOf(monthStart, today.minusDays(7))
         val pendingEnd = maxOf(monthEnd, today.plusDays(30))
-        val pending = database.recurrenceDao().activePendingBetween(
+        val recurrenceDao = database.recurrenceDao()
+        val pending = recurrenceDao.activePendingBetween(
             atStartUtc(pendingStart, zone),
             atEndUtc(pendingEnd, zone),
         )
+        val allOccurrences = recurrenceDao.occurrencesBetweenDays(
+            historyStart.toEpochDay(),
+            monthEnd.toEpochDay(),
+        )
+        val recurrenceRules = recurrenceDao.rules()
         val categories = database.categoryDao().allCategories()
         val partners = database.partnerDao().allPartners()
         val inbox = database.pushAutomationDao().inboxPage(limit = 500, offset = 0)
@@ -73,6 +82,12 @@ class FluviPulseReadService internal constructor(
             entries = entries,
             monthEntries = monthEntries,
             pending = pending,
+            occurrences = allOccurrences,
+            recurrenceRules = recurrenceRules.associateBy { it.id },
+            subscriptionTargetKeys = userSettings.asSequence()
+                .filter { (key, setting) -> key.first == PulseIndicatorId.subscriptionLoad.stableId && key.third == subscriptionSourceKey && setting.value > 0.0 }
+                .map { it.key.second }
+                .toSet(),
             categories = categories.associateBy { it.id },
             partners = partners.associateBy { it.id },
             inbox = inbox,
@@ -86,6 +101,7 @@ class FluviPulseReadService internal constructor(
             coreRevision = app.coreRevision,
             generatedAtUtcMs = nowUtcMs,
             indicators = indicators,
+            subscriptionOptions = subscriptionOptions(recurrenceRules, categories, input.subscriptionTargetKeys),
         )
     }
 
@@ -97,6 +113,9 @@ class FluviPulseReadService internal constructor(
         val entries: List<FluviLedgerEntryEntity>,
         val monthEntries: List<FluviLedgerEntryEntity>,
         val pending: List<FluviRecurrenceOccurrenceEntity>,
+        val occurrences: List<FluviRecurrenceOccurrenceEntity>,
+        val recurrenceRules: Map<String, com.fluvi.core.database.entity.FluviRecurrenceRuleEntity>,
+        val subscriptionTargetKeys: Set<String>,
         val categories: Map<String, com.fluvi.core.database.entity.FluviCategoryEntity>,
         val partners: Map<String, com.fluvi.core.database.entity.FluviPartnerEntity>,
         val inbox: List<FluviNotificationInboxEntity>,
@@ -286,7 +305,54 @@ class FluviPulseReadService internal constructor(
                     available(percent, "Ismert recurring teher: $recurring", listOf(gaugeSeries(recurring, referenceIncome)), sources = listOf("Realized recurring Ledger-tételek", "Pending ghost occurrence-ok", "Ledger bevételek"))
                 }
             }
-            PulseIndicatorId.subscriptionLoad -> unavailable(PulseAvailability.notApplicable, "Előfizetés-jelölés szükséges.", listOf("A Pulse V1 nem minősít szöveg alapján előfizetést; még nincs kijelölt recurring szabály vagy kategória."), listOf("Felhasználói előfizetés-jelölések", "Recurring szabályok"))
+            PulseIndicatorId.subscriptionLoad -> {
+                val selectedRules = input.subscriptionTargetKeys
+                    .filter { it.startsWith(subscriptionRulePrefix) }
+                    .map { it.removePrefix(subscriptionRulePrefix) }
+                    .toSet()
+                val selectedCategories = input.subscriptionTargetKeys
+                    .filter { it.startsWith(subscriptionCategoryPrefix) }
+                    .map { it.removePrefix(subscriptionCategoryPrefix) }
+                    .toSet()
+                if (selectedRules.isEmpty() && selectedCategories.isEmpty()) {
+                    unavailable(PulseAvailability.notApplicable, "Előfizetés-jelölés szükséges.", listOf("Válassz recurring szabályt vagy kategóriát az indikátor részletezőjében."), listOf("Felhasználói előfizetés-jelölések", "Recurring szabályok", "Kategóriák"))
+                } else {
+                    val selectedOccurrences = input.occurrences.filter { occurrence ->
+                        occurrence.ruleId in selectedRules || occurrence.categoryId in selectedCategories
+                    }
+                    val selectedOccurrenceIds = selectedOccurrences.map { it.id }.toSet()
+                    // A category designation includes all booked expenses in that stable
+                    // category; a rule designation includes only its realized occurrences.
+                    // The OR keeps a rule/category overlap from double-counting an entry.
+                    val realized = input.entries.filter { entry ->
+                        entry.direction == LedgerDirection.expense && (
+                            entry.categoryId in selectedCategories ||
+                                entry.recurrenceOccurrenceId in selectedOccurrenceIds
+                            )
+                    }
+                    val pendingSelected = selectedOccurrences.filter {
+                        it.status == RecurrenceOccurrenceStatus.pending &&
+                            it.direction == LedgerDirection.expense &&
+                            it.expectedAmountScaled100 != null
+                    }
+                    fun amountFor(start: LocalDate, end: LocalDate): Long {
+                        val booked = realized
+                            .filter { it.bookedLocalEpochDay in start.toEpochDay()..end.toEpochDay() }
+                            .sumOf { it.amountScaled100 }
+                        val pendingAmount = pendingSelected
+                            .filter { dateOf(it) in start..end }
+                            .sumOf { it.expectedAmountScaled100!! }
+                        return booked + pendingAmount
+                    }
+                    val total = amountFor(input.monthStart, input.monthEnd)
+                    val series = (0..3).map { offset ->
+                        val start = input.monthStart.minusMonths(offset.toLong())
+                        val end = start.plusMonths(1).minusDays(1)
+                        PulsePoint(start.toEpochDay(), "${start.year}.${start.monthValue}", actual = amountFor(start, end))
+                    }.reversed()
+                    available(total.toDouble(), "Kijelölt előfizetések ebben a hónapban: $total", listOf(PulseSeries("subscriptions", "Havi előfizetés-terhelés", series)), sampleCount = selectedOccurrences.size + realized.size, sources = listOf("Kijelölt recurring szabályok/kategóriák", "Recurring occurrence-ok", "Kategóriához rendelt Ledger-tételek", "Pending ghost occurrence-ok"))
+                }
+            }
             PulseIndicatorId.upcomingGhostLoad -> {
                 val future = input.pending.filter { it.direction == LedgerDirection.expense && it.expectedAmountScaled100 != null && !dateOf(it).isBefore(input.today) }
                 val next7 = future.filter { !dateOf(it).isAfter(input.today.plusDays(7)) }.sumOf { it.expectedAmountScaled100!! }
@@ -332,6 +398,22 @@ class FluviPulseReadService internal constructor(
             }
         }
     }
+
+    private fun subscriptionOptions(
+        rules: List<com.fluvi.core.database.entity.FluviRecurrenceRuleEntity>,
+        categories: List<com.fluvi.core.database.entity.FluviCategoryEntity>,
+        selected: Set<String>,
+    ): List<PulseSourceOption> = buildList {
+        rules.forEach { rule ->
+            val target = "$subscriptionRulePrefix${rule.id}"
+            val label = if (rule.isActive) rule.name else "${rule.name} · szüneteltetett"
+            add(PulseSourceOption(target, label, "rule", target in selected))
+        }
+        categories.filter { !it.isSystemUncategorized }.forEach { category ->
+            val target = "$subscriptionCategoryPrefix${category.id}"
+            add(PulseSourceOption(target, category.name, "category", target in selected))
+        }
+    }.sortedWith(compareBy<PulseSourceOption>({ it.kind }, { it.labelHu.lowercase() }, { it.targetKey }))
 
     private fun thresholdsFor(id: PulseIndicatorId, input: PulseInput): List<PulseThresholdValue> {
         val definition = id.threshold
@@ -457,6 +539,12 @@ class FluviPulseReadService internal constructor(
     private fun Iterable<Long>.averageLongsOrZero(): Double = if (none()) 0.0 else average()
     private fun Iterable<Double>.averageDoublesOrZero(): Double = if (none()) 0.0 else average()
     private fun Iterable<Double>.averageDoublesOrNull(): Double? = if (none()) null else average()
+    private companion object {
+        const val subscriptionSourceKey = "subscriptionSource"
+        const val subscriptionRulePrefix = "rule:"
+        const val subscriptionCategoryPrefix = "category:"
+    }
+
     private fun formatPercent(value: Double): String = "%.0f%%".format(java.util.Locale.ROOT, value)
     private fun formatRatio(value: Double): String = "%.2f×".format(java.util.Locale.ROOT, value)
 }
@@ -494,6 +582,39 @@ class FluviPulseThresholdUseCase internal constructor(
     ) = database.withTransaction {
         PulseIndicatorId.fromStableId(indicatorId)
         database.pulseIndicatorSettingsDao().delete(indicatorId, targetKey, thresholdKey)
+        database.appSettingsDao().incrementCoreRevision(FluviSystemIds.APP_SETTINGS, clock.nowUtcMs())
+    }
+}
+
+
+/** Stable-ID subscription designations for PULSE-016; no name-based classification. */
+class FluviPulseSourceUseCase internal constructor(
+    private val database: FluviDatabase,
+    private val clock: FluviClock,
+) {
+    suspend fun setSubscriptionSource(targetKey: String, selected: Boolean) = database.withTransaction {
+        require(targetKey.startsWith("rule:") || targetKey.startsWith("category:")) { "Unsupported Pulse source target." }
+        val id = targetKey.substringAfter(':')
+        val exists = if (targetKey.startsWith("rule:")) database.recurrenceDao().rule(id) != null
+        else database.categoryDao().findById(id) != null
+        require(exists) { "Pulse source target no longer exists." }
+        if (selected) {
+            database.pulseIndicatorSettingsDao().upsert(
+                com.fluvi.core.database.entity.FluviPulseIndicatorSettingEntity(
+                    indicatorId = PulseIndicatorId.subscriptionLoad.stableId,
+                    targetKey = targetKey,
+                    thresholdKey = "subscriptionSource",
+                    value = 1.0,
+                    updatedAtUtcMs = clock.nowUtcMs(),
+                ),
+            )
+        } else {
+            database.pulseIndicatorSettingsDao().delete(
+                PulseIndicatorId.subscriptionLoad.stableId,
+                targetKey,
+                "subscriptionSource",
+            )
+        }
         database.appSettingsDao().incrementCoreRevision(FluviSystemIds.APP_SETTINGS, clock.nowUtcMs())
     }
 }

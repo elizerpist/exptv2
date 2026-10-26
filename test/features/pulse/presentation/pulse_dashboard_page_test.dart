@@ -164,6 +164,12 @@ final class _Repository implements PulseRepository {
   }) async => snapshot;
 
   @override
+  Future<void> setSubscriptionSource({
+    required String targetKey,
+    required bool selected,
+  }) async {}
+
+  @override
   Future<void> resetThreshold({
     required String indicatorId,
     required String thresholdKey,

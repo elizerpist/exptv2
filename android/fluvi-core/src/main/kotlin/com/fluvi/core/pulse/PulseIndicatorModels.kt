@@ -106,10 +106,18 @@ data class PulseIndicatorSnapshot(
     val sources: List<String>,
 )
 
+data class PulseSourceOption(
+    val targetKey: String,
+    val labelHu: String,
+    val kind: String,
+    val isSelected: Boolean,
+)
+
 data class PulseDashboardSnapshot(
     val year: Int,
     val month: Int,
     val coreRevision: Long,
     val generatedAtUtcMs: Long,
     val indicators: List<PulseIndicatorSnapshot>,
+    val subscriptionOptions: List<PulseSourceOption> = emptyList(),
 )

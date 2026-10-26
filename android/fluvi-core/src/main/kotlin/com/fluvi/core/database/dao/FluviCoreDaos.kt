@@ -816,6 +816,16 @@ internal interface FluviRecurrenceDao {
     @Query("SELECT * FROM fluvi_recurrence_occurrences WHERE rule_id = :ruleId ORDER BY expected_at_utc_ms ASC, id ASC")
     suspend fun occurrencesForRule(ruleId: String): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
 
+    @Query(
+        "SELECT * FROM fluvi_recurrence_occurrences " +
+            "WHERE expected_local_epoch_day BETWEEN :fromEpochDay AND :toEpochDay " +
+            "ORDER BY expected_local_epoch_day ASC, expected_local_time_minutes ASC, id ASC",
+    )
+    suspend fun occurrencesBetweenDays(
+        fromEpochDay: Long,
+        toEpochDay: Long,
+    ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
     @Query("SELECT * FROM fluvi_recurrence_occurrences WHERE status = :status ORDER BY expected_at_utc_ms ASC, id ASC LIMIT :limit OFFSET :offset")
     suspend fun occurrencesByStatus(status: com.fluvi.core.model.RecurrenceOccurrenceStatus, limit: Int, offset: Int): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
 

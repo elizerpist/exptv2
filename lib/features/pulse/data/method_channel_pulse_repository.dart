@@ -21,6 +21,15 @@ final class MethodChannelPulseRepository implements PulseRepository {
   );
 
   @override
+  Future<void> setSubscriptionSource({
+    required String targetKey,
+    required bool selected,
+  }) => _channel.invokeMethod<void>('setSubscriptionSource', {
+    'targetKey': targetKey,
+    'selected': selected,
+  });
+
+  @override
   Future<void> setThreshold({
     required String indicatorId,
     required String thresholdKey,

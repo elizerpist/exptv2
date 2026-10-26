@@ -10,6 +10,9 @@ final class UnavailablePulseRepository implements PulseRepository {
   Future<PulseDashboardSnapshot> dashboard({required int year, required int month}) async => _unavailable();
 
   @override
+  Future<void> setSubscriptionSource({required String targetKey, required bool selected}) async => _unavailable();
+
+  @override
   Future<void> resetThreshold({required String indicatorId, required String thresholdKey, String targetKey = ''}) async => _unavailable();
 
   @override
