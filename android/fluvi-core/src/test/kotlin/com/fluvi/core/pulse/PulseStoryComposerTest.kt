@@ -1,5 +1,6 @@
 package com.fluvi.core.pulse
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -62,9 +63,28 @@ class PulseStoryComposerTest {
         assertEquals("két nap múlva", PulseHungarianFormatter.relativeDate(20_002L, 20_000L * 86_400_000L, "Europe/Budapest"))
     }
 
+    @Test
+    fun timeCauseUsesTheCanonicalApplicationZoneFromStoryContext() {
+        val result = PulseStoryComposer.compose(context(
+            facts = listOf(
+                fact(PulseStoryFactKind.projectedBudgetOverrun, PulseStoryCertainty.projected, amount = 2_400_000L),
+                fact(PulseStoryFactKind.knownDueDate, PulseStoryCertainty.scheduled).copy(
+                    dueLocalEpochDay = LocalDate.of(2023, 12, 31).toEpochDay(),
+                ),
+            ),
+            generatedAtUtcMs = 1_704_069_000_000L,
+            localZoneId = "Pacific/Pago_Pago",
+        ))
+
+        assertEquals(PulseStoryCompositionStatus.composed, result.status)
+        assertTrue(result.draft!!.detail!!.contains("Esedékessége ma."))
+    }
+
     private fun context(
         leadingIndicator: String = "PULSE-004",
         facts: List<PulseStoryFact>,
+        generatedAtUtcMs: Long = 1_700_000_000_000L,
+        localZoneId: String = "Europe/Budapest",
     ): PulseStoryContext {
         val leading = PulseEvidenceUnit(
             evidenceKey = "evidence/$leadingIndicator", situationKey = "monthly-budget/2026-10",
@@ -86,7 +106,7 @@ class PulseStoryComposerTest {
         )
         val candidate = PulsePriorityCandidate(situation, PulsePriorityCandidateKind.ready, leading.evidenceKey, leading.sourceSignalKeys.first(), leadingIndicator,
             85, emptyList(), 85, 85, PulsePriorityTieBreakFacts(null, null, 3, 2_400_000L, 2), "s", 1, 1)
-        return PulseStoryContext("frame", situation, candidate, PulseStoryFactBundle(situation.situationKey, 7, facts), PulseSignalEvaluationMode.live, 1_700_000_000_000L)
+        return PulseStoryContext("frame", situation, candidate, PulseStoryFactBundle(situation.situationKey, 7, facts), PulseSignalEvaluationMode.live, generatedAtUtcMs, localZoneId)
     }
 
     private fun fact(kind: PulseStoryFactKind, certainty: PulseStoryCertainty, amount: Long? = null, included: Boolean = false) = PulseStoryFact(

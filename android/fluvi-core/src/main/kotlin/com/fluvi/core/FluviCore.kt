@@ -220,7 +220,7 @@ object FluviCoreFactory {
             pulseSignals = pulseSignals,
             pulseTriage = pulseTriage,
             pulsePriority = pulsePriority,
-            pulseStory = FluviPulseStoryService(priority = pulsePriority),
+            pulseStory = FluviPulseStoryService(database = database, priority = pulsePriority),
             checkpoints = checkpoints,
             demoSeed = demoSeed,
         )

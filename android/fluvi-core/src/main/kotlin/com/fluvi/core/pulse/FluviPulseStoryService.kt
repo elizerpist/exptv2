@@ -1,5 +1,6 @@
 package com.fluvi.core.pulse
 
+import com.fluvi.core.database.FluviDatabase
 import java.util.LinkedHashMap
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -9,6 +10,7 @@ import kotlinx.coroutines.sync.withLock
  * Priority inspection snapshot; opening a preview never mutates persistence.
  */
 class FluviPulseStoryService internal constructor(
+    private val database: FluviDatabase,
     private val priority: FluviPulsePriorityService,
 ) {
     private val mutex = Mutex()
@@ -37,7 +39,7 @@ class FluviPulseStoryService internal constructor(
         compose(snapshot, situationKey)
     }
 
-    private fun compose(snapshot: PulsePriorityInspectionSnapshot, situationKey: String): PulseStoryInspectionSnapshot {
+    private suspend fun compose(snapshot: PulsePriorityInspectionSnapshot, situationKey: String): PulseStoryInspectionSnapshot {
         val candidate = snapshot.frame.rankedCandidates.firstOrNull { it.situation.situationKey == situationKey }
             ?: return empty(snapshot.frame, "candidate-not-ready", "Ehhez a helyzethez nincs rangsorolható, kész Story-jelölt.")
         val situation = snapshot.situations.firstOrNull { it.situationKey == situationKey }
@@ -45,12 +47,13 @@ class FluviPulseStoryService internal constructor(
         if (situation.sourceCoreRevision != snapshot.frame.sourceCoreRevision || candidate.situation.sourceCoreRevision != snapshot.frame.sourceCoreRevision) {
             return empty(snapshot.frame, "stale-snapshot", "A Story forrásai közben megváltoztak; az előnézetet újra kell tölteni.", PulseStoryCompositionStatus.staleSnapshot)
         }
+        val localZoneId = requireNotNull(database.appSettingsDao().current()).localZoneId
         val cacheKey = listOf(snapshot.frame.sourceTriageFrameId, situationKey, snapshot.frame.sourceCoreRevision,
-            PulseStoryTemplateCatalog.version, snapshot.frame.evaluationMode).joinToString("|")
+            PulseStoryTemplateCatalog.version, snapshot.frame.evaluationMode, localZoneId).joinToString("|")
         cache[cacheKey]?.let { return it }
         val facts = PulseStoryFactResolver.resolve(situation, candidate)
         val context = PulseStoryContext(snapshot.frame.sourceTriageFrameId, situation, candidate, facts,
-            snapshot.frame.evaluationMode, snapshot.frame.evaluatedAtUtcMs)
+            snapshot.frame.evaluationMode, snapshot.frame.evaluatedAtUtcMs, localZoneId)
         return PulseStoryInspectionSnapshot(PulseStoryComposer.compose(context), facts, snapshot.frame.sourceTriageFrameId, snapshot.frame.sourceCoreRevision)
             .also { cache[cacheKey] = it }
     }

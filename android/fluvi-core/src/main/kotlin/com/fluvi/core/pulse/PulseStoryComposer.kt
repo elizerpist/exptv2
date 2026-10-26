@@ -205,7 +205,7 @@ object PulseStoryTimeCauseResolver {
             ?: context.facts.facts.firstOrNull { it.kind == PulseStoryFactKind.expectedIncomeDueDate && it.certainty == PulseStoryCertainty.scheduled }
             ?: return null
         val date = fact.dueLocalEpochDay ?: return null
-        return PulseStoryFragment(PulseStoryFragmentRole.timeCause, "known-due-date-v1", "Esedékessége ${PulseHungarianFormatter.relativeDate(date, context.generatedAtUtcMs, "Europe/Budapest")}.", fact.sourceSignalKeys.sorted(), fact.sourceEvidenceKeys.sorted(), fact.sourceFactKeys.sorted(), fact.certainty)
+        return PulseStoryFragment(PulseStoryFragmentRole.timeCause, "known-due-date-v1", "Esedékessége ${PulseHungarianFormatter.relativeDate(date, context.generatedAtUtcMs, context.localZoneId)}.", fact.sourceSignalKeys.sorted(), fact.sourceEvidenceKeys.sorted(), fact.sourceFactKeys.sorted(), fact.certainty)
     }
 }
 

@@ -96,6 +96,8 @@ data class PulseStoryContext(
     val facts: PulseStoryFactBundle,
     val evaluationMode: PulseSignalEvaluationMode,
     val generatedAtUtcMs: Long,
+    /** Canonical application zone used for date-only Story facts and copy. */
+    val localZoneId: String = "Europe/Budapest",
 )
 
 data class PulseStoryTemplateDefinition(
