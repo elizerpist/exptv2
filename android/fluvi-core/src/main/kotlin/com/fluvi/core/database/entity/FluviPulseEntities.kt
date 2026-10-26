@@ -236,3 +236,65 @@ data class FluviPulseSituationEventEntity(
     @ColumnInfo(name = "created_at_utc_ms")
     val createdAtUtcMs: Long,
 )
+
+/** Single current selection; it is diagnostic state and never increments financial Core revision. */
+@Entity(tableName = "fluvi_pulse_priority_state")
+data class FluviPulsePriorityStateEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String = "current",
+    @ColumnInfo(name = "selected_situation_key")
+    val selectedSituationKey: String?,
+    @ColumnInfo(name = "selected_score")
+    val selectedScore: Int?,
+    @ColumnInfo(name = "source_core_revision")
+    val sourceCoreRevision: Long,
+    @ColumnInfo(name = "source_triage_frame_id")
+    val sourceTriageFrameId: String,
+    @ColumnInfo(name = "policy_version")
+    val policyVersion: Int,
+    @ColumnInfo(name = "selection_fingerprint")
+    val selectionFingerprint: String,
+    @ColumnInfo(name = "last_evaluated_at_utc_ms")
+    val lastEvaluatedAtUtcMs: Long,
+    @ColumnInfo(name = "last_selection_change_at_utc_ms")
+    val lastSelectionChangeAtUtcMs: Long?,
+    @ColumnInfo(name = "state_version")
+    val stateVersion: Long,
+)
+
+@Entity(
+    tableName = "fluvi_pulse_priority_events",
+    indices = [
+        Index(value = ["created_at_utc_ms"]),
+        Index(value = ["next_selected_situation_key"]),
+        Index(value = ["transition_sequence"], unique = true),
+    ],
+)
+data class FluviPulsePriorityEventEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "event_id")
+    val eventId: String,
+    @ColumnInfo(name = "event_kind")
+    val eventKind: String,
+    @ColumnInfo(name = "previous_selected_situation_key")
+    val previousSelectedSituationKey: String?,
+    @ColumnInfo(name = "next_selected_situation_key")
+    val nextSelectedSituationKey: String?,
+    @ColumnInfo(name = "previous_score")
+    val previousScore: Int?,
+    @ColumnInfo(name = "next_score")
+    val nextScore: Int?,
+    @ColumnInfo(name = "selection_reason")
+    val selectionReason: String,
+    @ColumnInfo(name = "source_core_revision")
+    val sourceCoreRevision: Long,
+    @ColumnInfo(name = "source_triage_frame_id")
+    val sourceTriageFrameId: String,
+    @ColumnInfo(name = "policy_version")
+    val policyVersion: Int,
+    @ColumnInfo(name = "transition_sequence")
+    val transitionSequence: Long,
+    @ColumnInfo(name = "created_at_utc_ms")
+    val createdAtUtcMs: Long,
+)

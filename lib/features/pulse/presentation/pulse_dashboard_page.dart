@@ -9,6 +9,7 @@ import '../domain/pulse_models.dart';
 import '../domain/pulse_repository.dart';
 import 'pulse_signal_detail_page.dart';
 import 'pulse_triage_inspector_page.dart';
+import 'pulse_priority_inspector_page.dart';
 import 'widgets/pulse_charts.dart';
 import 'widgets/pulse_indicator_card.dart';
 
@@ -109,6 +110,23 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
     if (mounted) _controller.load();
   }
 
+  Future<void> _openPriority(PulseDashboardSnapshot snapshot) async {
+    final priority = snapshot.priority;
+    if (priority == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => PulsePriorityInspectorPage(
+          repository: widget.repository,
+          scope: _controller.scope,
+          initialPriority: priority,
+          initialSituations: snapshot.situations,
+          indicators: snapshot.indicators,
+        ),
+      ),
+    );
+    if (mounted) _controller.load();
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: _controller,
@@ -152,8 +170,10 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
                         _SituationOverview(
                           situations: snapshot.situations,
                           historical: snapshot.triageHistorical,
+                          priority: snapshot.priority,
                           onOpen: _openSituation,
                           onOpenAll: () => _openSituations(snapshot),
+                          onOpenPriority: () => _openPriority(snapshot),
                         ),
                         const SizedBox(height: 18),
                         _GroupRail(
@@ -387,13 +407,17 @@ class _SituationOverview extends StatelessWidget {
   const _SituationOverview({
     required this.situations,
     required this.historical,
+    required this.priority,
     required this.onOpen,
     required this.onOpenAll,
+    required this.onOpenPriority,
   });
   final List<PulseSituationSnapshot> situations;
   final bool historical;
+  final PulsePriorityFrame? priority;
   final ValueChanged<PulseSituationSnapshot> onOpen;
   final VoidCallback onOpenAll;
+  final VoidCallback onOpenPriority;
 
   @override
   Widget build(BuildContext context) {
@@ -403,7 +427,17 @@ class _SituationOverview extends StatelessWidget {
     final forming = situations
         .where((item) => item.state == PulseSituationState.forming)
         .toList(growable: false);
-    final previews = [...ready, ...forming].take(2).toList(growable: false);
+    final selected = priority?.selected;
+    final previews = [
+      ...ready.where((item) => item.situationKey != selected?.situationKey),
+      ...forming,
+    ].take(2).toList(growable: false);
+    final otherReady =
+        priority?.rankedCandidates
+            .where((candidate) => candidate.rank > 1)
+            .take(2)
+            .toList(growable: false) ??
+        const <PulsePriorityCandidate>[];
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -468,6 +502,39 @@ class _SituationOverview extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          if (selected != null) ...[
+            _PriorityFocusCard(
+              candidate: selected,
+              situation: _situationByKey(situations, selected.situationKey),
+              onTap: onOpenPriority,
+            ),
+            if (otherReady.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              const Text(
+                'További helyzetek',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+              ...otherReady.map(
+                (candidate) => _PriorityCompactRow(
+                  candidate: candidate,
+                  situation: _situationByKey(
+                    situations,
+                    candidate.situationKey,
+                  ),
+                  onTap: () {
+                    final situation = situations.firstWhere(
+                      (item) => item.situationKey == candidate.situationKey,
+                    );
+                    onOpen(situation);
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+          ] else if (!historical) ...[
+            const _PriorityEmptyState(),
+            const SizedBox(height: 12),
+          ],
           if (previews.isEmpty)
             const Text(
               'Jelenleg nincs kialakuló vagy kész pénzügyi helyzet.',
@@ -546,6 +613,221 @@ class _SituationOverview extends StatelessWidget {
     );
   }
 }
+
+PulseSituationSnapshot? _situationByKey(
+  List<PulseSituationSnapshot> situations,
+  String key,
+) {
+  for (final situation in situations) {
+    if (situation.situationKey == key) return situation;
+  }
+  return null;
+}
+
+class _PriorityFocusCard extends StatelessWidget {
+  const _PriorityFocusCard({
+    required this.candidate,
+    required this.situation,
+    required this.onTap,
+  });
+  final PulsePriorityCandidate candidate;
+  final PulseSituationSnapshot? situation;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: const Color(0xFFF7F6FD),
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      key: const ValueKey('pulse-priority-focus'),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Aktuális fókusz',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Text(
+                  '1. hely',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: FluviVisualTokens.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    situation?.title ?? candidate.situationKey,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${candidate.finalScore}',
+                  style: const TextStyle(
+                    fontSize: 29,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              '/ 100 pont',
+              style: const TextStyle(
+                fontSize: 11,
+                color: FluviVisualTokens.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 7),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: LinearProgressIndicator(
+                value: candidate.finalScore / 100,
+                minHeight: 7,
+                color: const Color(0xFF8B85B5),
+                backgroundColor: const Color(0xFFE7E5F0),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 5,
+              children: [
+                _PriorityPill('Alap ${candidate.basePriority}'),
+                ...candidate.modifiers
+                    .where((item) => item.applied)
+                    .map(
+                      (item) => _PriorityPill(
+                        '${_priorityModifierLabel(item.id)} +${item.value}',
+                      ),
+                    ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Miért ez az első?',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Icon(Icons.chevron_right, size: 18),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _PriorityPill extends StatelessWidget {
+  const _PriorityPill(this.label);
+  final String label;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Text(
+      label,
+      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+    ),
+  );
+}
+
+class _PriorityCompactRow extends StatelessWidget {
+  const _PriorityCompactRow({
+    required this.candidate,
+    required this.situation,
+    required this.onTap,
+  });
+  final PulsePriorityCandidate candidate;
+  final PulseSituationSnapshot? situation;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          children: [
+            Text(
+              '${candidate.rank}.',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                situation?.title ?? candidate.situationKey,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            Text(
+              '${candidate.finalScore}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+            const Icon(Icons.chevron_right, size: 17),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _PriorityEmptyState extends StatelessWidget {
+  const _PriorityEmptyState();
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 4),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Nincs kiválasztott fókuszhelyzet.',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+        SizedBox(height: 3),
+        Text(
+          'Jelenleg nincs olyan kész pénzügyi helyzet, amelyet a Priority Engine rangsorolhatna.',
+          style: TextStyle(
+            fontSize: 11,
+            color: FluviVisualTokens.textSecondary,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+String _priorityModifierLabel(String id) => switch (id) {
+  'material-impact' => 'Hatás',
+  'due-soon' => 'Esedékesség',
+  'independent-evidence' => 'Bizonyíték',
+  _ => id,
+};
 
 class _SituationCount extends StatelessWidget {
   const _SituationCount({required this.label, required this.value});

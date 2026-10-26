@@ -426,6 +426,7 @@ final class PulseDashboardSnapshot {
     this.situations = const [],
     this.signalGeneration = 0,
     this.triageHistorical = false,
+    this.priority,
   });
 
   factory PulseDashboardSnapshot.fromMap(Map<Object?, Object?> map) =>
@@ -445,6 +446,9 @@ final class PulseDashboardSnapshot {
         ).map(PulseSituationSnapshot.fromMap).toList(growable: false),
         signalGeneration: (map['signalGeneration'] as num?)?.toInt() ?? 0,
         triageHistorical: map['triageHistorical'] as bool? ?? false,
+        priority: map['priority'] == null
+            ? null
+            : PulsePriorityFrame.fromMap(_map(map['priority'])),
       );
 
   final int year;
@@ -456,6 +460,7 @@ final class PulseDashboardSnapshot {
   final List<PulseSituationSnapshot> situations;
   final int signalGeneration;
   final bool triageHistorical;
+  final PulsePriorityFrame? priority;
 
   PulseIndicatorSnapshot? byId(String id) =>
       indicators.where((indicator) => indicator.id == id).firstOrNull;
@@ -484,37 +489,45 @@ final class PulseEvidenceUnit {
     required this.dataQuality,
     required this.actualImpactMinor,
     required this.projectedImpactMinor,
+    required this.affectedBudgetMinor,
+    required this.affectedObligationMinor,
+    required this.impactRatio,
+    required this.dueLocalEpochDay,
   });
 
-  factory PulseEvidenceUnit.fromMap(Map<Object?, Object?> map) =>
-      PulseEvidenceUnit(
-        evidenceKey: map['evidenceKey']! as String,
-        sourceSignalKeys:
-            (map['sourceSignalKeys'] as List<Object?>? ?? const [])
-                .cast<String>(),
-        sourceFactKeys: (map['sourceFactKeys'] as List<Object?>? ?? const [])
-            .cast<String>(),
-        evidenceFamily: map['evidenceFamily']! as String,
-        strength: (map['strength'] as String?) == null
-            ? null
-            : PulseSignalStrength.values.byName(map['strength']! as String),
-        role: PulseEvidenceRole.values.byName(map['role']! as String),
-        independence: PulseEvidenceIndependence.values.byName(
-          map['independence']! as String,
-        ),
-        countableForFormation: map['countableForFormation'] as bool? ?? false,
-        standaloneEligible: map['standaloneEligible'] as bool? ?? false,
-        reasonCodes: (map['reasonCodes'] as List<Object?>? ?? const [])
-            .cast<String>(),
-        indicatorId: map['indicatorId']! as String,
-        title: map['titleHu']! as String,
-        measuredValue: (map['measuredValue'] as num?)?.toDouble(),
-        dataQuality: PulseSignalDataQuality.values.byName(
-          map['dataQuality']! as String,
-        ),
-        actualImpactMinor: (map['actualImpactMinor'] as num?)?.toInt(),
-        projectedImpactMinor: (map['projectedImpactMinor'] as num?)?.toInt(),
-      );
+  factory PulseEvidenceUnit.fromMap(
+    Map<Object?, Object?> map,
+  ) => PulseEvidenceUnit(
+    evidenceKey: map['evidenceKey']! as String,
+    sourceSignalKeys: (map['sourceSignalKeys'] as List<Object?>? ?? const [])
+        .cast<String>(),
+    sourceFactKeys: (map['sourceFactKeys'] as List<Object?>? ?? const [])
+        .cast<String>(),
+    evidenceFamily: map['evidenceFamily']! as String,
+    strength: (map['strength'] as String?) == null
+        ? null
+        : PulseSignalStrength.values.byName(map['strength']! as String),
+    role: PulseEvidenceRole.values.byName(map['role']! as String),
+    independence: PulseEvidenceIndependence.values.byName(
+      map['independence']! as String,
+    ),
+    countableForFormation: map['countableForFormation'] as bool? ?? false,
+    standaloneEligible: map['standaloneEligible'] as bool? ?? false,
+    reasonCodes: (map['reasonCodes'] as List<Object?>? ?? const [])
+        .cast<String>(),
+    indicatorId: map['indicatorId']! as String,
+    title: map['titleHu']! as String,
+    measuredValue: (map['measuredValue'] as num?)?.toDouble(),
+    dataQuality: PulseSignalDataQuality.values.byName(
+      map['dataQuality']! as String,
+    ),
+    actualImpactMinor: (map['actualImpactMinor'] as num?)?.toInt(),
+    projectedImpactMinor: (map['projectedImpactMinor'] as num?)?.toInt(),
+    affectedBudgetMinor: (map['affectedBudgetMinor'] as num?)?.toInt(),
+    affectedObligationMinor: (map['affectedObligationMinor'] as num?)?.toInt(),
+    impactRatio: (map['impactRatio'] as num?)?.toDouble(),
+    dueLocalEpochDay: (map['dueLocalEpochDay'] as num?)?.toInt(),
+  );
 
   final String evidenceKey;
   final List<String> sourceSignalKeys;
@@ -532,6 +545,10 @@ final class PulseEvidenceUnit {
   final PulseSignalDataQuality dataQuality;
   final int? actualImpactMinor;
   final int? projectedImpactMinor;
+  final int? affectedBudgetMinor;
+  final int? affectedObligationMinor;
+  final double? impactRatio;
+  final int? dueLocalEpochDay;
 }
 
 @immutable
@@ -731,6 +748,245 @@ final class PulseSituationInspection {
       );
   final PulseSituationSnapshot situation;
   final List<PulseSituationEvent> events;
+}
+
+@immutable
+final class PulsePriorityModifier {
+  const PulsePriorityModifier({
+    required this.id,
+    required this.value,
+    required this.applied,
+    required this.reasonCode,
+    required this.explanation,
+    required this.observedImpactMinor,
+  });
+
+  factory PulsePriorityModifier.fromMap(Map<Object?, Object?> map) =>
+      PulsePriorityModifier(
+        id: map['id']! as String,
+        value: (map['value'] as num?)?.toInt() ?? 0,
+        applied: map['applied'] as bool? ?? false,
+        reasonCode: map['reasonCode']! as String,
+        explanation: map['explanationHu']! as String,
+        observedImpactMinor: (map['observedImpactMinor'] as num?)?.toInt(),
+      );
+
+  final String id;
+  final int value;
+  final bool applied;
+  final String reasonCode;
+  final String explanation;
+  final int? observedImpactMinor;
+}
+
+@immutable
+final class PulsePriorityTieBreakFacts {
+  const PulsePriorityTieBreakFacts({
+    required this.dueLocalEpochDay,
+    required this.dueDistanceDays,
+    required this.severityRank,
+    required this.comparableImpactMinor,
+    required this.lastMaterialChangeAtUtcMs,
+  });
+
+  factory PulsePriorityTieBreakFacts.fromMap(Map<Object?, Object?> map) =>
+      PulsePriorityTieBreakFacts(
+        dueLocalEpochDay: (map['dueLocalEpochDay'] as num?)?.toInt(),
+        dueDistanceDays: (map['dueDistanceDays'] as num?)?.toInt(),
+        severityRank: (map['severityRank'] as num?)?.toInt() ?? 0,
+        comparableImpactMinor: (map['comparableImpactMinor'] as num?)?.toInt(),
+        lastMaterialChangeAtUtcMs: (map['lastMaterialChangeAtUtcMs'] as num?)
+            ?.toInt(),
+      );
+
+  final int? dueLocalEpochDay;
+  final int? dueDistanceDays;
+  final int severityRank;
+  final int? comparableImpactMinor;
+  final int? lastMaterialChangeAtUtcMs;
+}
+
+@immutable
+final class PulsePriorityCandidate {
+  const PulsePriorityCandidate({
+    required this.situationKey,
+    required this.kind,
+    required this.leadingEvidenceKey,
+    required this.leadingSignalKey,
+    required this.leadingIndicatorId,
+    required this.basePriority,
+    required this.modifiers,
+    required this.rawTotal,
+    required this.finalScore,
+    required this.rank,
+    required this.tieBreakFacts,
+  });
+
+  factory PulsePriorityCandidate.fromMap(Map<Object?, Object?> map) =>
+      PulsePriorityCandidate(
+        situationKey: map['situationKey']! as String,
+        kind: map['kind']! as String,
+        leadingEvidenceKey: map['leadingEvidenceKey']! as String,
+        leadingSignalKey: map['leadingSignalKey']! as String,
+        leadingIndicatorId: map['leadingIndicatorId']! as String,
+        basePriority: (map['basePriority'] as num).toInt(),
+        modifiers: _list(
+          map['modifiers'],
+        ).map(PulsePriorityModifier.fromMap).toList(growable: false),
+        rawTotal: (map['rawTotal'] as num).toInt(),
+        finalScore: (map['finalScore'] as num).toInt(),
+        rank: (map['rank'] as num).toInt(),
+        tieBreakFacts: PulsePriorityTieBreakFacts.fromMap(
+          _map(map['tieBreakFacts']),
+        ),
+      );
+
+  final String situationKey;
+  final String kind;
+  final String leadingEvidenceKey;
+  final String leadingSignalKey;
+  final String leadingIndicatorId;
+  final int basePriority;
+  final List<PulsePriorityModifier> modifiers;
+  final int rawTotal;
+  final int finalScore;
+  final int rank;
+  final PulsePriorityTieBreakFacts tieBreakFacts;
+}
+
+@immutable
+final class PulsePrioritySelectionReason {
+  const PulsePrioritySelectionReason({
+    required this.reasonCode,
+    required this.explanation,
+    required this.tieBreakApplied,
+    required this.tieBreakExplanation,
+  });
+
+  factory PulsePrioritySelectionReason.fromMap(Map<Object?, Object?> map) =>
+      PulsePrioritySelectionReason(
+        reasonCode: map['reasonCode']! as String,
+        explanation: map['explanationHu']! as String,
+        tieBreakApplied: map['tieBreakApplied'] as bool? ?? false,
+        tieBreakExplanation: map['tieBreakExplanationHu'] as String?,
+      );
+
+  final String reasonCode;
+  final String explanation;
+  final bool tieBreakApplied;
+  final String? tieBreakExplanation;
+}
+
+@immutable
+final class PulsePriorityFrame {
+  const PulsePriorityFrame({
+    required this.sourceCoreRevision,
+    required this.sourceTriageFrameId,
+    required this.policyVersion,
+    required this.evaluationMode,
+    required this.evaluatedAtUtcMs,
+    required this.rankedCandidates,
+    required this.selectedSituationKey,
+    required this.selectionReason,
+  });
+
+  factory PulsePriorityFrame.fromMap(Map<Object?, Object?> map) =>
+      PulsePriorityFrame(
+        sourceCoreRevision: (map['sourceCoreRevision'] as num).toInt(),
+        sourceTriageFrameId: map['sourceTriageFrameId']! as String,
+        policyVersion: (map['policyVersion'] as num).toInt(),
+        evaluationMode: map['evaluationMode']! as String,
+        evaluatedAtUtcMs: (map['evaluatedAtUtcMs'] as num).toInt(),
+        rankedCandidates: _list(
+          map['rankedCandidates'],
+        ).map(PulsePriorityCandidate.fromMap).toList(growable: false),
+        selectedSituationKey: map['selectedSituationKey'] as String?,
+        selectionReason: map['selectionReason'] == null
+            ? null
+            : PulsePrioritySelectionReason.fromMap(
+                _map(map['selectionReason']),
+              ),
+      );
+
+  final int sourceCoreRevision;
+  final String sourceTriageFrameId;
+  final int policyVersion;
+  final String evaluationMode;
+  final int evaluatedAtUtcMs;
+  final List<PulsePriorityCandidate> rankedCandidates;
+  final String? selectedSituationKey;
+  final PulsePrioritySelectionReason? selectionReason;
+
+  PulsePriorityCandidate? get selected => selectedSituationKey == null
+      ? null
+      : () {
+          for (final candidate in rankedCandidates) {
+            if (candidate.situationKey == selectedSituationKey) {
+              return candidate;
+            }
+          }
+          return null;
+        }();
+}
+
+@immutable
+final class PulsePriorityEvent {
+  const PulsePriorityEvent({
+    required this.eventId,
+    required this.kind,
+    required this.previousSelectedSituationKey,
+    required this.nextSelectedSituationKey,
+    required this.previousScore,
+    required this.nextScore,
+    required this.selectionReason,
+    required this.createdAtUtcMs,
+  });
+
+  factory PulsePriorityEvent.fromMap(Map<Object?, Object?> map) =>
+      PulsePriorityEvent(
+        eventId: map['eventId']! as String,
+        kind: map['kind']! as String,
+        previousSelectedSituationKey:
+            map['previousSelectedSituationKey'] as String?,
+        nextSelectedSituationKey: map['nextSelectedSituationKey'] as String?,
+        previousScore: (map['previousScore'] as num?)?.toInt(),
+        nextScore: (map['nextScore'] as num?)?.toInt(),
+        selectionReason: map['selectionReason']! as String,
+        createdAtUtcMs: (map['createdAtUtcMs'] as num).toInt(),
+      );
+
+  final String eventId;
+  final String kind;
+  final String? previousSelectedSituationKey;
+  final String? nextSelectedSituationKey;
+  final int? previousScore;
+  final int? nextScore;
+  final String selectionReason;
+  final int createdAtUtcMs;
+}
+
+@immutable
+final class PulsePriorityInspection {
+  const PulsePriorityInspection({
+    required this.priority,
+    required this.situations,
+    required this.events,
+  });
+
+  factory PulsePriorityInspection.fromMap(Map<Object?, Object?> map) =>
+      PulsePriorityInspection(
+        priority: PulsePriorityFrame.fromMap(_map(map['priority'])),
+        situations: _list(
+          map['situations'],
+        ).map(PulseSituationSnapshot.fromMap).toList(growable: false),
+        events: _list(
+          map['events'],
+        ).map(PulsePriorityEvent.fromMap).toList(growable: false),
+      );
+
+  final PulsePriorityFrame priority;
+  final List<PulseSituationSnapshot> situations;
+  final List<PulsePriorityEvent> events;
 }
 
 extension on Iterable<PulseIndicatorSnapshot> {

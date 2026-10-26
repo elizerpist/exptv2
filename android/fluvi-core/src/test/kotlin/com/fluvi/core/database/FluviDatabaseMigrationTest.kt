@@ -527,6 +527,42 @@ class FluviDatabaseMigrationTest {
         ).use(verify)
     }
 
+    @Test
+    fun migrationFourteenToFifteenAddsPriorityTablesWithoutTouchingSituationRows() {
+        val name = "$DATABASE_NAME-priority"
+        helper.createDatabase(name, 14).use { database ->
+            database.execSQL(
+                "INSERT INTO fluvi_pulse_situations (" +
+                    "situation_key,domain,target_key,period_key,state,formation_rule,related_signal_keys," +
+                    "evidence_snapshot,decision_trace,first_observed_at_utc_ms,last_evaluated_at_utc_ms," +
+                    "last_material_change_at_utc_ms,source_core_revision,source_signal_generation,policy_version," +
+                    "semantic_fingerprint,state_version,updated_at_utc_ms) VALUES " +
+                    "('monthly-budget/2026-10','monthlyBudget','aggregate','2026-10','ready',NULL,'v1|'," +
+                    "'v1|','v1|',1,2,2,9,10,1,'fingerprint',1,2)",
+            )
+        }
+        helper.runMigrationsAndValidate(
+            name,
+            15,
+            true,
+            FluviDatabase.MIGRATION_14_15,
+        ).use { database ->
+            val situationCount = database.query("SELECT COUNT(*) FROM fluvi_pulse_situations").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getInt(0)
+            }
+            val priorityTables = database.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN " +
+                    "('fluvi_pulse_priority_state','fluvi_pulse_priority_events')",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getInt(0)
+            }
+            assertEquals(1, situationCount)
+            assertEquals(2, priorityTables)
+        }
+    }
+
     private fun amount(
         database: androidx.sqlite.db.SupportSQLiteDatabase,
         periodKey: String,

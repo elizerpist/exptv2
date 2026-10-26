@@ -62,6 +62,23 @@ final class MethodChannelPulseRepository implements PulseRepository {
   );
 
   @override
+  Future<PulsePriorityInspection> priorityInspection({
+    required int year,
+    required int month,
+    int historyLimit = 30,
+    int historyOffset = 0,
+  }) async => PulsePriorityInspection.fromMap(
+    _map(
+      await _channel.invokeMethod<Object?>('getPriorityInspection', {
+        'year': year,
+        'month': month,
+        'historyLimit': historyLimit,
+        'historyOffset': historyOffset,
+      }),
+    ),
+  );
+
+  @override
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,

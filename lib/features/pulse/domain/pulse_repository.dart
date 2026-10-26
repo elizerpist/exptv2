@@ -21,6 +21,13 @@ abstract interface class PulseRepository {
     int historyOffset = 0,
   });
 
+  Future<PulsePriorityInspection> priorityInspection({
+    required int year,
+    required int month,
+    int historyLimit = 30,
+    int historyOffset = 0,
+  });
+
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,

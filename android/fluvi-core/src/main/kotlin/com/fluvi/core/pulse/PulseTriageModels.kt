@@ -86,6 +86,10 @@ data class PulseEvidenceUnit(
     val dataQuality: PulseSignalDataQuality,
     val actualImpactMinor: Long?,
     val projectedImpactMinor: Long?,
+    val affectedBudgetMinor: Long?,
+    val affectedObligationMinor: Long?,
+    val impactRatio: Double?,
+    val dueLocalEpochDay: Long?,
 )
 
 data class PulseEvidenceExclusion(

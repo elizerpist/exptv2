@@ -104,6 +104,10 @@ object PulseEvidenceIndependenceEvaluator {
                     dataQuality = signal.dataQuality,
                     actualImpactMinor = evidence.actualImpactMinor,
                     projectedImpactMinor = evidence.projectedImpactMinor,
+                    affectedBudgetMinor = evidence.affectedBudgetMinor,
+                    affectedObligationMinor = evidence.affectedObligationMinor,
+                    impactRatio = evidence.impactRatio,
+                    dueLocalEpochDay = evidence.dueLocalEpochDay,
                 )
                 units += unit
                 if (!countable) {

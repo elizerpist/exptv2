@@ -41,6 +41,10 @@ import com.fluvi.core.pulse.PulseSignalInspectionSnapshot
 import com.fluvi.core.pulse.PulseSituationInspectionSnapshot
 import com.fluvi.core.pulse.PulseSituationSnapshot
 import com.fluvi.core.pulse.PulseTriageDashboardSnapshot
+import com.fluvi.core.pulse.PulsePriorityDashboardSnapshot
+import com.fluvi.core.pulse.PulsePriorityInspectionSnapshot
+import com.fluvi.core.pulse.PulsePriorityFrame
+import com.fluvi.core.pulse.PulsePriorityCandidate
 import com.fluvi.app.dashboard.DashboardBinaryCodec
 import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
 import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
@@ -527,7 +531,7 @@ class MainActivity : FlutterActivity() {
         // lifecycle return without changing the financial Core revision.
         core?.let { fluviCore ->
             scope.launch(Dispatchers.IO) {
-                runCatching { fluviCore.pulseTriage.reevaluateCurrent() }
+                runCatching { fluviCore.pulsePriority.reevaluateCurrent() }
             }
         }
     }
@@ -932,8 +936,8 @@ class MainActivity : FlutterActivity() {
         call: MethodCall,
         fluviCore: FluviCore,
     ): Any? = when (call.method) {
-        "getDashboard" -> pulseTriageDashboardMap(
-            fluviCore.pulseTriage.dashboard(
+        "getDashboard" -> pulsePriorityDashboardMap(
+            fluviCore.pulsePriority.dashboard(
                 year = requireInt(call, "year"),
                 month = requireInt(call, "month"),
             ),
@@ -957,6 +961,14 @@ class MainActivity : FlutterActivity() {
                 year = requireInt(call, "year"),
                 month = requireInt(call, "month"),
                 situationKey = requireArgument(call, "situationKey"),
+                historyLimit = call.argument<Number>("historyLimit")?.toInt() ?: 30,
+                historyOffset = call.argument<Number>("historyOffset")?.toInt() ?: 0,
+            ),
+        )
+        "getPriorityInspection" -> pulsePriorityInspectionMap(
+            fluviCore.pulsePriority.inspection(
+                year = requireInt(call, "year"),
+                month = requireInt(call, "month"),
                 historyLimit = call.argument<Number>("historyLimit")?.toInt() ?: 30,
                 historyOffset = call.argument<Number>("historyOffset")?.toInt() ?: 0,
             ),
@@ -1010,6 +1022,11 @@ class MainActivity : FlutterActivity() {
             this["situations"] = snapshot.situations.map(::pulseSituationMap)
             this["signalGeneration"] = snapshot.frame.signalGeneration
             this["triageHistorical"] = snapshot.frame.evaluationMode.name == "historicalInspection"
+        }
+
+    private fun pulsePriorityDashboardMap(snapshot: PulsePriorityDashboardSnapshot): Map<String, Any?> =
+        pulseTriageDashboardMap(snapshot.triage).toMutableMap().apply {
+            this["priority"] = pulsePriorityFrameMap(snapshot.priority)
         }
 
     private fun pulseIndicatorMap(snapshot: PulseIndicatorSnapshot): Map<String, Any?> = mapOf(
@@ -1180,6 +1197,76 @@ class MainActivity : FlutterActivity() {
         },
     )
 
+    private fun pulsePriorityInspectionMap(snapshot: PulsePriorityInspectionSnapshot): Map<String, Any?> = mapOf(
+        "priority" to pulsePriorityFrameMap(snapshot.frame),
+        "situations" to snapshot.situations.map(::pulseSituationMap),
+        "events" to snapshot.events.map { event ->
+            mapOf(
+                "eventId" to event.eventId,
+                "kind" to event.kind.name,
+                "previousSelectedSituationKey" to event.previousSelectedSituationKey,
+                "nextSelectedSituationKey" to event.nextSelectedSituationKey,
+                "previousScore" to event.previousScore,
+                "nextScore" to event.nextScore,
+                "selectionReason" to event.selectionReason,
+                "sourceCoreRevision" to event.sourceCoreRevision,
+                "sourceTriageFrameId" to event.sourceTriageFrameId,
+                "policyVersion" to event.policyVersion,
+                "transitionSequence" to event.transitionSequence,
+                "createdAtUtcMs" to event.createdAtUtcMs,
+            )
+        },
+    )
+
+    private fun pulsePriorityFrameMap(frame: PulsePriorityFrame): Map<String, Any?> = mapOf(
+        "sourceCoreRevision" to frame.sourceCoreRevision,
+        "sourceTriageFrameId" to frame.sourceTriageFrameId,
+        "policyVersion" to frame.policyVersion,
+        "evaluationMode" to frame.evaluationMode.name,
+        "evaluatedAtUtcMs" to frame.evaluatedAtUtcMs,
+        "selectedSituationKey" to frame.selectedSituationKey,
+        "selectionReason" to frame.selectionReason?.let { reason ->
+            mapOf(
+                "reasonCode" to reason.reasonCode,
+                "explanationHu" to reason.explanationHu,
+                "tieBreakApplied" to reason.tieBreakApplied,
+                "tieBreakExplanationHu" to reason.tieBreakExplanationHu,
+            )
+        },
+        "rankedCandidates" to frame.rankedCandidates.map(::pulsePriorityCandidateMap),
+    )
+
+    private fun pulsePriorityCandidateMap(candidate: PulsePriorityCandidate): Map<String, Any?> = mapOf(
+        "situationKey" to candidate.situation.situationKey,
+        "kind" to candidate.kind.name,
+        "leadingEvidenceKey" to candidate.leadingEvidenceKey,
+        "leadingSignalKey" to candidate.leadingSignalKey,
+        "leadingIndicatorId" to candidate.leadingIndicatorId,
+        "basePriority" to candidate.basePriority,
+        "rawTotal" to candidate.rawTotal,
+        "finalScore" to candidate.finalScore,
+        "rank" to candidate.rank,
+        "sourceSituationVersion" to candidate.sourceSituationVersion,
+        "policyVersion" to candidate.policyVersion,
+        "modifiers" to candidate.modifiers.map { modifier ->
+            mapOf(
+                "id" to modifier.id,
+                "value" to modifier.value,
+                "applied" to modifier.applied,
+                "reasonCode" to modifier.reasonCode,
+                "explanationHu" to modifier.explanationHu,
+                "observedImpactMinor" to modifier.observedImpactMinor,
+            )
+        },
+        "tieBreakFacts" to mapOf(
+            "dueLocalEpochDay" to candidate.tieBreakFacts.dueLocalEpochDay,
+            "dueDistanceDays" to candidate.tieBreakFacts.dueDistanceDays,
+            "severityRank" to candidate.tieBreakFacts.severityRank,
+            "comparableImpactMinor" to candidate.tieBreakFacts.comparableImpactMinor,
+            "lastMaterialChangeAtUtcMs" to candidate.tieBreakFacts.lastMaterialChangeAtUtcMs,
+        ),
+    )
+
     private fun pulseSituationMap(snapshot: PulseSituationSnapshot): Map<String, Any?> = mapOf(
         "situationKey" to snapshot.situationKey,
         "domain" to snapshot.domain.name,
@@ -1217,6 +1304,10 @@ class MainActivity : FlutterActivity() {
                 "dataQuality" to unit.dataQuality.name,
                 "actualImpactMinor" to unit.actualImpactMinor,
                 "projectedImpactMinor" to unit.projectedImpactMinor,
+                "affectedBudgetMinor" to unit.affectedBudgetMinor,
+                "affectedObligationMinor" to unit.affectedObligationMinor,
+                "impactRatio" to unit.impactRatio,
+                "dueLocalEpochDay" to unit.dueLocalEpochDay,
             )
         },
         "decisionTrace" to mapOf(

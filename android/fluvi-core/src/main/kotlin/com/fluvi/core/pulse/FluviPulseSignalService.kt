@@ -108,6 +108,7 @@ class FluviPulseSignalService internal constructor(
         val affectedBudgetMinor: Long? = null,
         val affectedObligationMinor: Long? = null,
         val impactRatio: Double? = null,
+        val dueLocalEpochDay: Long? = null,
     )
 
     private data class Evaluation(val signal: PulseRawSignal)
@@ -191,6 +192,7 @@ class FluviPulseSignalService internal constructor(
                         value = (today.toEpochDay() - point.x).toDouble(),
                         actualImpactMinor = point.actual,
                         affectedObligationMinor = point.actual,
+                        dueLocalEpochDay = point.x,
                     )
                 }
             }.orEmpty()
@@ -208,7 +210,7 @@ class FluviPulseSignalService internal constructor(
             PulseIndicatorId.monthEndForecast -> value?.roundToLong()?.coerceAtLeast(0L)
             PulseIndicatorId.netCashflowForecast -> value?.roundToLong()?.let { (-it).coerceAtLeast(0L) }
             PulseIndicatorId.lateIncome -> indicator.series.firstOrNull()?.points?.sumOf { it.actual ?: 0L }
-            PulseIndicatorId.recurringBurden,
+            PulseIndicatorId.recurringBurden -> gauge?.actual ?: value?.roundToLong()
             PulseIndicatorId.subscriptionLoad,
             PulseIndicatorId.upcomingGhostLoad,
             -> value?.roundToLong()
@@ -229,6 +231,9 @@ class FluviPulseSignalService internal constructor(
             affectedBudgetMinor = reference,
             affectedObligationMinor = if (indicator.id == PulseIndicatorId.lateIncome) impact else null,
             impactRatio = if (actual != null && reference != null) actual.toDouble() / max(1L, reference) else null,
+            dueLocalEpochDay = if (indicator.id == PulseIndicatorId.upcomingGhostLoad) {
+                indicator.series.firstOrNull { it.key == "ghostLoad" }?.points?.minOfOrNull { it.x }
+            } else null,
         )
     }
 
@@ -266,6 +271,7 @@ class FluviPulseSignalService internal constructor(
             affectedBudgetMinor = target.affectedBudgetMinor,
             affectedObligationMinor = target.affectedObligationMinor,
             impactRatio = target.impactRatio,
+            dueLocalEpochDay = target.dueLocalEpochDay,
             provenance = provenanceFor(
                 indicatorId = indicator.id,
                 targetKey = target.key,

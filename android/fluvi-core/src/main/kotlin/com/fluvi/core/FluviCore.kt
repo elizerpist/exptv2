@@ -14,6 +14,7 @@ import com.fluvi.core.pulse.FluviPulseThresholdUseCase
 import com.fluvi.core.pulse.FluviPulseSourceUseCase
 import com.fluvi.core.pulse.FluviPulseSignalService
 import com.fluvi.core.pulse.FluviPulseTriageService
+import com.fluvi.core.pulse.FluviPulsePriorityService
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviLedgerDeletionArchiveRepository
 import com.fluvi.core.repository.FluviLedgerRepository
@@ -52,6 +53,7 @@ class FluviCore internal constructor(
     val pulseSources: FluviPulseSourceUseCase,
     val pulseSignals: FluviPulseSignalService,
     val pulseTriage: FluviPulseTriageService,
+    val pulsePriority: FluviPulsePriorityService,
     val checkpoints: LedgerCheckpointCoordinator,
     val demoSeed: SeedFluviDemoDatasetUseCase,
 ) : AutoCloseable {
@@ -145,6 +147,11 @@ object FluviCoreFactory {
             measurements = pulseRead,
             clock = clock,
         )
+        val pulseTriage = FluviPulseTriageService(
+            database = database,
+            signals = pulseSignals,
+            clock = clock,
+        )
         return FluviCore(
             database = database,
             categories = FluviCategoryUseCase(
@@ -204,9 +211,10 @@ object FluviCoreFactory {
                 clock = clock,
             ),
             pulseSignals = pulseSignals,
-            pulseTriage = FluviPulseTriageService(
+            pulseTriage = pulseTriage,
+            pulsePriority = FluviPulsePriorityService(
                 database = database,
-                signals = pulseSignals,
+                triage = pulseTriage,
                 clock = clock,
             ),
             checkpoints = checkpoints,

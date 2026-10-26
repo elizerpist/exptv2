@@ -32,6 +32,32 @@ void main() {
     expect(find.text('Helyzetképzési szabályok'), findsOneWidget);
   });
 
+  testWidgets('native Priority focus opens the Priority Inspector', (
+    tester,
+  ) async {
+    final situation = _situation();
+    final priority = _priority(situation.situationKey);
+    final repository = _Repository(
+      _snapshot(situations: [situation], priority: priority),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PulseDashboardPage(
+          repository: repository,
+          coreRevisions: const Stream<Object?>.empty(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final focus = find.byKey(const ValueKey('pulse-priority-focus'));
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
+    await tester.pumpAndSettle();
+    await tester.tap(focus);
+    await tester.pumpAndSettle();
+    expect(find.text('Fontossági sorrend'), findsOneWidget);
+    expect(find.text('Pontszám részletezése'), findsOneWidget);
+  });
+
   testWidgets(
     'Pulse renders seven cards per group and persists a detail threshold only on save',
     (tester) async {
@@ -137,12 +163,14 @@ void main() {
 
 PulseDashboardSnapshot _snapshot({
   List<PulseSituationSnapshot> situations = const [],
+  PulsePriorityFrame? priority,
 }) => PulseDashboardSnapshot(
   year: 2026,
   month: 10,
   coreRevision: 42,
   generatedAtUtcMs: 1,
   situations: situations,
+  priority: priority,
   indicators: List<PulseIndicatorSnapshot>.generate(21, (index) {
     final number = index + 1;
     final group = switch (index ~/ 7) {
@@ -263,6 +291,29 @@ final class _Repository implements PulseRepository {
   }
 
   @override
+  Future<PulsePriorityInspection> priorityInspection({
+    required int year,
+    required int month,
+    int historyLimit = 30,
+    int historyOffset = 0,
+  }) async => PulsePriorityInspection(
+    priority:
+        snapshot.priority ??
+        const PulsePriorityFrame(
+          sourceCoreRevision: 42,
+          sourceTriageFrameId: 'test',
+          policyVersion: 1,
+          evaluationMode: 'live',
+          evaluatedAtUtcMs: 1,
+          rankedCandidates: [],
+          selectedSituationKey: null,
+          selectionReason: null,
+        ),
+    situations: snapshot.situations,
+    events: const [],
+  );
+
+  @override
   Future<void> setSubscriptionSource({
     required String targetKey,
     required bool selected,
@@ -311,4 +362,65 @@ PulseSituationSnapshot _situation() => const PulseSituationSnapshot(
   ),
   lastMaterialChangeAtUtcMs: null,
   historicalInspection: false,
+);
+
+PulsePriorityFrame _priority(String situationKey) => PulsePriorityFrame(
+  sourceCoreRevision: 42,
+  sourceTriageFrameId: 'frame',
+  policyVersion: 1,
+  evaluationMode: 'live',
+  evaluatedAtUtcMs: 1,
+  selectedSituationKey: situationKey,
+  selectionReason: const PulsePrioritySelectionReason(
+    reasonCode: 'higher-priority-score',
+    explanation: 'A kiválasztott helyzet pontszáma magasabb.',
+    tieBreakApplied: false,
+    tieBreakExplanation: null,
+  ),
+  rankedCandidates: const [
+    PulsePriorityCandidate(
+      situationKey: 'monthly-budget/2026-10',
+      kind: 'ready',
+      leadingEvidenceKey: 'evidence',
+      leadingSignalKey: 'PULSE-001/global/2026-10/default',
+      leadingIndicatorId: 'PULSE-001',
+      basePriority: 65,
+      modifiers: [
+        PulsePriorityModifier(
+          id: 'material-impact',
+          value: 15,
+          applied: true,
+          reasonCode: 'material-impact-material',
+          explanation: 'Valós hatás.',
+          observedImpactMinor: 1500000,
+        ),
+        PulsePriorityModifier(
+          id: 'due-soon',
+          value: 0,
+          applied: false,
+          reasonCode: 'due-soon-not-applicable',
+          explanation: 'Nincs konkrét esedékesség.',
+          observedImpactMinor: null,
+        ),
+        PulsePriorityModifier(
+          id: 'independent-evidence',
+          value: 10,
+          applied: true,
+          reasonCode: 'independent-evidence-confirmed',
+          explanation: 'Független bizonyíték.',
+          observedImpactMinor: null,
+        ),
+      ],
+      rawTotal: 90,
+      finalScore: 90,
+      rank: 1,
+      tieBreakFacts: PulsePriorityTieBreakFacts(
+        dueLocalEpochDay: null,
+        dueDistanceDays: null,
+        severityRank: 2,
+        comparableImpactMinor: 1500000,
+        lastMaterialChangeAtUtcMs: 1,
+      ),
+    ),
+  ],
 );

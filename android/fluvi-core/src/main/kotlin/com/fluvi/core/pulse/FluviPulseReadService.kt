@@ -383,7 +383,7 @@ class FluviPulseReadService internal constructor(
                 val future = input.pending.filter { it.direction == LedgerDirection.expense && it.expectedAmountScaled100 != null && !dateOf(it).isBefore(input.today) }
                 val next7 = future.filter { !dateOf(it).isAfter(input.today.plusDays(7)) }.sumOf { it.expectedAmountScaled100!! }
                 val next30 = future.filter { !dateOf(it).isAfter(input.today.plusDays(30)) }.sumOf { it.expectedAmountScaled100!! }
-                val points = future.filter { !dateOf(it).isAfter(input.today.plusDays(30)) }.map { PulsePoint(it.expectedAtUtcMs, dateOf(it).toString(), actual = it.expectedAmountScaled100) }
+                val points = future.filter { !dateOf(it).isAfter(input.today.plusDays(30)) }.map { PulsePoint(it.expectedLocalEpochDay, dateOf(it).toString(), actual = it.expectedAmountScaled100) }
                 available(next7.toDouble(), "7 nap: $next7 · 30 nap: $next30", listOf(PulseSeries("ghostLoad", "Várható ghost terhek", points)), secondary = next30.toDouble(), sampleCount = points.size, sources = listOf("Pending ghost occurrence-ok"))
             }
             PulseIndicatorId.uncategorizedTransactions -> {

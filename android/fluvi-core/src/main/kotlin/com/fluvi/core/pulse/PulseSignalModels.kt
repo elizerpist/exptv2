@@ -119,6 +119,8 @@ data class PulseSignalEvidence(
     val affectedBudgetMinor: Long? = null,
     val affectedObligationMinor: Long? = null,
     val impactRatio: Double? = null,
+    /** Canonical local calendar day for a real occurrence, never a forecast crossing. */
+    val dueLocalEpochDay: Long? = null,
     val provenance: PulseEvidenceProvenance? = null,
 )
 

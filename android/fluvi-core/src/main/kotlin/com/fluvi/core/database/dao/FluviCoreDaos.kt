@@ -20,6 +20,8 @@ import com.fluvi.core.database.entity.FluviPulseSignalEventEntity
 import com.fluvi.core.database.entity.FluviPulseSignalStateEntity
 import com.fluvi.core.database.entity.FluviPulseSituationEntity
 import com.fluvi.core.database.entity.FluviPulseSituationEventEntity
+import com.fluvi.core.database.entity.FluviPulsePriorityEventEntity
+import com.fluvi.core.database.entity.FluviPulsePriorityStateEntity
 import com.fluvi.core.model.FluviFinancialLimitPeriodKind
 import com.fluvi.core.model.FluviFinancialLimitTargetKind
 import com.fluvi.core.model.LedgerDirection
@@ -237,6 +239,25 @@ internal interface FluviPulseSituationDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertEvent(event: FluviPulseSituationEventEntity): Long
+}
+
+/** Priority persistence is isolated from all financial and triage revisions. */
+@Dao
+internal interface FluviPulsePriorityDao {
+    @Query("SELECT * FROM fluvi_pulse_priority_state WHERE id = 'current' LIMIT 1")
+    suspend fun current(): FluviPulsePriorityStateEntity?
+
+    @Query(
+        "SELECT * FROM fluvi_pulse_priority_events ORDER BY transition_sequence DESC " +
+            "LIMIT :limit OFFSET :offset",
+    )
+    suspend fun eventPage(limit: Int, offset: Int = 0): List<FluviPulsePriorityEventEntity>
+
+    @Upsert
+    suspend fun upsertState(state: FluviPulsePriorityStateEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEvent(event: FluviPulsePriorityEventEntity): Long
 }
 
 @Dao
