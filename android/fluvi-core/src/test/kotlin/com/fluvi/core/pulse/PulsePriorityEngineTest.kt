@@ -143,7 +143,6 @@ class PulsePriorityEngineTest {
             affectedObligationMinor = null,
             impactRatio = null,
             dueLocalEpochDay = dueDay,
-            dueDistanceDays = dueDay?.let { kotlin.math.abs(it - 20L) },
         )
         val support = if (!withIndependentSupport) emptyList() else listOf(
             leading.copy(
