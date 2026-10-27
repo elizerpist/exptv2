@@ -7,6 +7,8 @@ import com.fluvi.core.database.FluviDatabaseFactory
 import com.fluvi.core.database.entity.FluviCategoryEntity
 import com.fluvi.core.database.entity.FluviLedgerEntryEntity
 import com.fluvi.core.database.entity.FluviPartnerEntity
+import com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity
+import com.fluvi.core.database.entity.FluviRecurrenceRuleEntity
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.FluviClock
 import com.fluvi.core.model.FluviFinancialLimitKey
@@ -14,6 +16,9 @@ import com.fluvi.core.model.FluviFinancialLimitPeriod
 import com.fluvi.core.model.FluviFinancialLimitTarget
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
+import com.fluvi.core.model.RecurrenceAmountPolicy
+import com.fluvi.core.model.RecurrenceOccurrenceStatus
+import com.fluvi.core.model.RecurrenceTriggerKind
 import com.fluvi.core.repository.FluviCategoryRepository
 import com.fluvi.core.repository.FluviCoreRevisionRepository
 import com.fluvi.core.repository.FluviFinancialLimitRepository
@@ -179,6 +184,23 @@ class FluviBudgetPartnerDistributionReadServiceTest {
 
     @Test
     fun preparesFinancialBudgetBanksForTheExactBookedGhostMembership() = runBlocking {
+        database.recurrenceDao().insertRule(
+            recurrenceRule(
+                id = "realized-rule",
+                partnerId = SHOP,
+                categoryId = FOOD,
+            ),
+        )
+        database.recurrenceDao().insertOccurrence(
+            realizedOccurrence(
+                id = "realized-occurrence",
+                ruleId = "realized-rule",
+                partnerId = SHOP,
+                categoryId = FOOD,
+                date = LocalDate.of(2026, 1, 12),
+                amount = 700,
+            ),
+        )
         database.ledgerDao().insert(
             entry(
                 ordinal = 5,
@@ -284,6 +306,65 @@ class FluviBudgetPartnerDistributionReadServiceTest {
         mergedIntoPartnerId = null,
         createdAtUtcMs = NOW,
         updatedAtUtcMs = NOW,
+    )
+
+    private fun recurrenceRule(
+        id: String,
+        partnerId: String,
+        categoryId: String,
+    ) = FluviRecurrenceRuleEntity(
+        id = id,
+        name = "Test recurrence",
+        triggerKind = RecurrenceTriggerKind.time,
+        partnerId = partnerId,
+        categoryId = categoryId,
+        categoryAssignmentMode = CategoryAssignmentMode.partnerDefault,
+        note = null,
+        direction = LedgerDirection.expense,
+        amountPolicy = RecurrenceAmountPolicy.fixed,
+        amountScaled100 = 700,
+        dayOfMonth = 12,
+        localTimeMinutes = 600,
+        startLocalEpochDay = LocalDate.of(2026, 1, 1).toEpochDay(),
+        endLocalEpochDay = null,
+        timezoneId = "Europe/Budapest",
+        ruleVersion = 1,
+        archivedAtUtcMs = null,
+        isActive = true,
+        createdAtUtcMs = NOW,
+        updatedAtUtcMs = NOW,
+    )
+
+    private fun realizedOccurrence(
+        id: String,
+        ruleId: String,
+        partnerId: String,
+        categoryId: String,
+        date: LocalDate,
+        amount: Long,
+    ) = FluviRecurrenceOccurrenceEntity(
+        id = id,
+        ruleId = ruleId,
+        occurrenceKey = "${date.year}-${date.monthValue}",
+        ruleVersion = 1,
+        expectedLocalEpochDay = date.toEpochDay(),
+        expectedLocalTimeMinutes = 600,
+        expectedAtUtcMs = NOW,
+        timezoneId = "Europe/Budapest",
+        partnerId = partnerId,
+        categoryId = categoryId,
+        categoryAssignmentMode = CategoryAssignmentMode.partnerDefault,
+        direction = LedgerDirection.expense,
+        expectedAmountScaled100 = amount,
+        amountPolicy = RecurrenceAmountPolicy.fixed,
+        note = null,
+        triggerKind = RecurrenceTriggerKind.time,
+        status = RecurrenceOccurrenceStatus.realized,
+        realizationKind = null,
+        resolvedAtUtcMs = NOW,
+        createdAtUtcMs = NOW,
+        updatedAtUtcMs = NOW,
+        revision = 1L,
     )
 
     private fun entry(
