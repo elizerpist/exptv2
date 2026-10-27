@@ -313,7 +313,12 @@ class _CoreDashboardState extends State<CoreDashboard>
     _dashboardPresentationPreferences.addListener(
       _applyDashboardPresentationPreferences,
     );
-    unawaited(_dashboardPresentationPreferences.restore());
+    // Shell-owned settings are restored once for both the Dashboard and the
+    // Settings route.  A standalone CoreDashboard still owns and restores its
+    // local controller, which keeps the embedded/test host behaviour intact.
+    if (_ownsDashboardPresentationPreferences) {
+      unawaited(_dashboardPresentationPreferences.restore());
+    }
     _applyDashboardPresentationPreferences();
     _balanceHeaderColorPolicy = DashboardBalanceHeaderColorPolicy(
       tuning: _headerVisualController.tuning,
@@ -647,6 +652,8 @@ class _CoreDashboardState extends State<CoreDashboard>
             .value
             .headerGlassConfiguration
             .encode(),
+        ghostQuickFilterIconPack:
+            _dashboardPresentationPreferences.value.ghostQuickFilterIconPack,
       ),
     );
   }
@@ -1708,29 +1715,35 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             zOrder:
                                                 'modeContent<logBoxViewport<collapseHandle<ghostQuickFilter',
                                             child: AnimatedBuilder(
-                                              animation:
-                                                  controller.currentQuery,
-                                              builder: (context, _) =>
-                                                  DashboardGhostQuickFilter(
-                                                    mode: controller
-                                                        .currentQuery
-                                                        .scopeFor(
-                                                          controller
-                                                                      .transactionDirection
-                                                                      .direction ==
-                                                                  TransactionDirection
-                                                                      .income
-                                                              ? LedgerDirection
-                                                                    .income
-                                                              : LedgerDirection
-                                                                    .expense,
-                                                        )
-                                                        .ghostFilterMode,
-                                                    onTap: () => unawaited(
+                                              animation: Listenable.merge(<
+                                                Listenable
+                                              >[
+                                                controller.currentQuery,
+                                                _dashboardPresentationPreferences,
+                                              ]),
+                                              builder: (context, _) => DashboardGhostQuickFilter(
+                                                mode: controller.currentQuery
+                                                    .scopeFor(
                                                       controller
-                                                          .cycleGhostFilterMode(),
-                                                    ),
-                                                  ),
+                                                                  .transactionDirection
+                                                                  .direction ==
+                                                              TransactionDirection
+                                                                  .income
+                                                          ? LedgerDirection
+                                                                .income
+                                                          : LedgerDirection
+                                                                .expense,
+                                                    )
+                                                    .ghostFilterMode,
+                                                iconPack:
+                                                    _dashboardPresentationPreferences
+                                                        .value
+                                                        .ghostQuickFilterIconPack,
+                                                onTap: () => unawaited(
+                                                  controller
+                                                      .cycleGhostFilterMode(),
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),

@@ -44,6 +44,8 @@ import '../../features/pulse/domain/pulse_repository.dart';
 import '../../features/pulse/application/pulse_delivery_coordinator.dart';
 import '../../features/pulse/presentation/pulse_dashboard_page.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
+import '../../features/dashboard/application/dashboard_presentation_preferences.dart';
+import '../../core/preferences/data/method_channel_dashboard_presentation_preferences_store.dart';
 import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
 import '../../features/dashboard/application/transaction_direction_controller.dart';
 import '../../features/dashboard/application/dashboard_interaction_readiness.dart';
@@ -193,6 +195,8 @@ class _FluviAppShellState extends State<FluviAppShell>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   late final DashboardCoreController _controller;
   late final DashboardCoreModeController _modeController;
+  late final DashboardPresentationPreferencesController
+  _dashboardPresentationPreferences;
   late final DashboardInteractionReadiness _readiness;
   late final QueryMenuRepository _queryRepository;
   late final CategoryRepository _categoryRepository;
@@ -231,6 +235,11 @@ class _FluviAppShellState extends State<FluviAppShell>
   void initState() {
     super.initState();
     _headerVisualController = DashboardHeaderVisualController(vsync: this);
+    _dashboardPresentationPreferences =
+        DashboardPresentationPreferencesController(
+          store: MethodChannelDashboardPresentationPreferencesStore(),
+        );
+    unawaited(_dashboardPresentationPreferences.restore());
     _seedDemo = !kIsWeb && const bool.fromEnvironment('FLUVI_SEED_DEMO');
     final repository = kIsWeb
         ? const EmptyDashboardDataRuntimeRepository()
@@ -518,13 +527,15 @@ class _FluviAppShellState extends State<FluviAppShell>
     }
   }
 
-  void _acceptManualTransactionSave(ManualTransactionSaveResult? saved) {
-    final coreRevision = saved?.globalCoreRevision;
+  Future<void> _acceptManualTransactionSave(
+    ManualTransactionSaveResult saved,
+  ) async {
+    final coreRevision = saved.globalCoreRevision;
     if (coreRevision == null || coreRevision <= 0) return;
-    final category = saved?.effectiveCategory;
-    final entry = saved?.entry;
-    final partner = saved?.partner;
-    final patch = category == null || entry == null || partner == null
+    final category = saved.effectiveCategory;
+    final entry = saved.entry;
+    final partner = saved.partner;
+    final patch = category == null
         ? null
         : DashboardLedgerVisualPatch(
             entryId: entry.entryId,
@@ -544,7 +555,7 @@ class _FluviAppShellState extends State<FluviAppShell>
             assignmentMode: entry.categoryAssignmentMode.name,
             entryRevision: entry.revision,
           );
-    _controller.acceptKnownCoreRevision(coreRevision, visualPatch: patch);
+    await _controller.acceptKnownCoreRevision(coreRevision, visualPatch: patch);
   }
 
   @override
@@ -785,6 +796,7 @@ class _FluviAppShellState extends State<FluviAppShell>
     if (_ownsShellPresentation) {
       _shellPresentation.dispose();
     }
+    _dashboardPresentationPreferences.dispose();
     _headerVisualController.dispose();
     _pulseDelivery.dispose();
     _modeController.dispose();
@@ -1042,6 +1054,8 @@ class _FluviAppShellState extends State<FluviAppShell>
                                     shellPresentation: _shellPresentation,
                                     headerVisualController:
                                         _headerVisualController,
+                                    dashboardPresentationPreferences:
+                                        _dashboardPresentationPreferences,
                                     pulseDeliveryCoordinator: _pulseDelivery,
                                     onOpenPulse: _openPulseFromHeader,
                                     onHeaderInteractionChanged:
@@ -1116,6 +1130,8 @@ class _FluviAppShellState extends State<FluviAppShell>
                                   : const SizedBox.shrink(),
                               SettingsPage(
                                 permissions: _automationPermissionRepository,
+                                dashboardPresentationPreferences:
+                                    _dashboardPresentationPreferences,
                               ),
                             ],
                           );

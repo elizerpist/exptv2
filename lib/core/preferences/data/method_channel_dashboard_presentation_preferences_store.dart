@@ -140,6 +140,11 @@ final class MethodChannelDashboardPresentationPreferencesStore
         ),
         balanceHeaderGlassConfigurationJson:
             values['balanceHeaderGlassConfigurationJson'] as String? ?? '',
+        ghostQuickFilterIconPack: _enumValue(
+          DashboardGhostQuickFilterIconPack.values,
+          values['ghostQuickFilterIconPack'] as int?,
+          DashboardGhostQuickFilterIconPack.current,
+        ),
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -194,6 +199,7 @@ final class MethodChannelDashboardPresentationPreferencesStore
             preferences.balanceMonthCombinedCardPresentation.index,
         'balanceHeaderGlassConfigurationJson':
             preferences.balanceHeaderGlassConfigurationJson,
+        'ghostQuickFilterIconPack': preferences.ghostQuickFilterIconPack.index,
       });
 }
 

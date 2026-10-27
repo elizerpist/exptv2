@@ -4,6 +4,7 @@ import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/presentation/category_icon_view.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../application/dashboard_presentation_preferences.dart';
 import '../../query/domain/ghost_filter_mode.dart';
 
 /// A compact cycle control for the dashboard-wide ghost query dimension.
@@ -16,10 +17,12 @@ final class DashboardGhostQuickFilter extends StatelessWidget {
     super.key,
     required this.mode,
     required this.onTap,
+    this.iconPack = DashboardGhostQuickFilterIconPack.current,
   });
 
   final GhostFilterMode mode;
   final VoidCallback onTap;
+  final DashboardGhostQuickFilterIconPack iconPack;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +48,10 @@ final class DashboardGhostQuickFilter extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    _GhostQuickFilterIcon(mode: mode),
+                    DashboardGhostQuickFilterIcon(
+                      mode: mode,
+                      iconPack: iconPack,
+                    ),
                     const SizedBox(height: 3),
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -75,46 +81,138 @@ final class DashboardGhostQuickFilter extends StatelessWidget {
   }
 }
 
-/// One stable ghost silhouette occupies the complete 24px icon field in every
-/// state.  The slash and plus are overlays, so neither state relies on colour
-/// alone and the button never changes height while it cycles.
-final class _GhostQuickFilterIcon extends StatelessWidget {
-  const _GhostQuickFilterIcon({required this.mode});
+/// Public shared preview for the persisted ghost-filter appearance choice.
+/// It has no query/state side effects, so it is safe in Settings as well as
+/// inside the live quick filter.
+final class DashboardGhostQuickFilterIcon extends StatelessWidget {
+  const DashboardGhostQuickFilterIcon({
+    super.key,
+    required this.mode,
+    this.iconPack = DashboardGhostQuickFilterIconPack.current,
+  });
 
   final GhostFilterMode mode;
+  final DashboardGhostQuickFilterIconPack iconPack;
 
   @override
   Widget build(BuildContext context) {
     final color = FluviVisualTokens.textSecondary;
+    return switch (iconPack) {
+      DashboardGhostQuickFilterIconPack.current => _CurrentGhostIcon(
+        mode: mode,
+        color: color,
+      ),
+      DashboardGhostQuickFilterIconPack.receiptGhost => _ReceiptGhostIcon(
+        mode: mode,
+        color: color,
+      ),
+    };
+  }
+}
+
+/// The existing ghost-only design. It retains the same 26px field as the
+/// alternate package so a preference change never moves the dots or hit area.
+final class _CurrentGhostIcon extends StatelessWidget {
+  const _CurrentGhostIcon({required this.mode, required this.color});
+
+  final GhostFilterMode mode;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 26,
+    height: 26,
+    child: Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        Positioned(
+          left: 1,
+          top: 1,
+          child: _GhostSilhouette(size: 24, color: color),
+        ),
+        if (mode == GhostFilterMode.nonGhost)
+          Positioned.fill(
+            child: CustomPaint(painter: _GhostSlashPainter(color)),
+          ),
+        if (mode == GhostFilterMode.both)
+          Positioned(
+            right: -1,
+            bottom: -1,
+            child: _GhostPlusMark(color: color),
+          ),
+      ],
+    ),
+  );
+}
+
+/// Alternate package: the ordinary ledger universe is a receipt, while the
+/// shared universe adds one recognisable ghost source marker.
+final class _ReceiptGhostIcon extends StatelessWidget {
+  const _ReceiptGhostIcon({required this.mode, required this.color});
+
+  final GhostFilterMode mode;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    if (mode == GhostFilterMode.onlyGhost) {
+      return SizedBox(
+        width: 26,
+        height: 26,
+        child: Center(child: _GhostSilhouette(size: 24, color: color)),
+      );
+    }
     return SizedBox(
-      width: 24,
-      height: 24,
+      width: 26,
+      height: 26,
       child: Stack(
         clipBehavior: Clip.none,
         children: <Widget>[
-          Positioned.fill(
-            child: CategoryIconView(
-              picture: PreparedVectorAssetAtlas.instance.categoryIcon(
-                CategoryIconCatalog.handleOf('icon_28'),
-              ),
-              size: 24,
-              color: color,
+          const Positioned(
+            left: 1,
+            top: 1,
+            child: Icon(
+              Icons.receipt_long_outlined,
+              size: 22,
+              color: FluviVisualTokens.textSecondary,
             ),
           ),
-          if (mode == GhostFilterMode.nonGhost)
-            Positioned.fill(
-              child: CustomPaint(painter: _GhostSlashPainter(color)),
-            ),
           if (mode == GhostFilterMode.both)
             Positioned(
               right: -1,
               bottom: -1,
-              child: _GhostPlusMark(color: color),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color.withValues(alpha: .3)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(1),
+                  child: _GhostSilhouette(size: 12, color: color),
+                ),
+              ),
             ),
         ],
       ),
     );
   }
+}
+
+final class _GhostSilhouette extends StatelessWidget {
+  const _GhostSilhouette({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => CategoryIconView(
+    picture: PreparedVectorAssetAtlas.instance.categoryIcon(
+      CategoryIconCatalog.handleOf('icon_28'),
+    ),
+    size: size,
+    color: color,
+  );
 }
 
 final class _GhostSlashPainter extends CustomPainter {

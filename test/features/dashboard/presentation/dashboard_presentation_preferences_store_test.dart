@@ -463,6 +463,8 @@ void main() {
       'balanceMonthCombinedCardPresentation':
           BalanceMonthCombinedCardPresentation.spendingRhythm.index,
       'balanceHeaderGlassConfigurationJson': '{"renderer":"glassKit"}',
+      'ghostQuickFilterIconPack':
+          DashboardGhostQuickFilterIconPack.current.index,
     });
   });
 
@@ -488,6 +490,37 @@ void main() {
           await MethodChannelDashboardPresentationPreferencesStore().read();
 
       expect(preferences.sumVisualStyle, MindSumVisualStyle.sumA);
+    },
+  );
+
+  test(
+    'ghost quick-filter icon pack persists and unknown values use current',
+    () async {
+      Map<String, Object?> stored = <String, Object?>{
+        'ghostQuickFilterIconPack': 99,
+      };
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      expect(
+        (await store.read()).ghostQuickFilterIconPack,
+        DashboardGhostQuickFilterIconPack.current,
+      );
+      final receipt = DashboardPresentationPreferences.defaults
+          .withGhostQuickFilterIconPack(
+            DashboardGhostQuickFilterIconPack.receiptGhost,
+          );
+      await store.write(receipt);
+      expect(stored['ghostQuickFilterIconPack'], 1);
+      expect(
+        (await store.read()).ghostQuickFilterIconPack,
+        DashboardGhostQuickFilterIconPack.receiptGhost,
+      );
     },
   );
 }

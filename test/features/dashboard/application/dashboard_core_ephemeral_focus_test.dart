@@ -228,6 +228,95 @@ void main() {
   );
 
   test(
+    'ghost visible publication keeps summary, LogBox and Balance on one effective prepared frame',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: const <DashboardLedgerEntry>[
+          DashboardLedgerEntry(
+            id: 'N',
+            partnerId: 'ordinary-partner',
+            categoryId: 'expense-category',
+            direction: 'expense',
+            amountMinor: 1000,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 600,
+          ),
+          DashboardLedgerEntry(
+            id: 'G',
+            partnerId: 'recurring-partner',
+            categoryId: 'expense-category',
+            direction: 'expense',
+            amountMinor: 500,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 610,
+            recurrenceOccurrenceId: 'occurrence-realized',
+          ),
+          DashboardLedgerEntry(
+            id: 'P',
+            partnerId: 'recurring-partner',
+            categoryId: 'expense-category',
+            direction: 'expense',
+            amountMinor: 700,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 620,
+            isPendingGhost: true,
+            recurrenceOccurrenceId: 'occurrence-pending',
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      Future<void> expectPublished(
+        GhostFilterMode mode, {
+        required int amount,
+        required List<String> ids,
+      }) async {
+        expect(await core.applyGhostFilterMode(mode), isTrue);
+        final frame = core.visibleFrames.value!;
+        final amountLane = core.visibleFrames.amountLane.value!;
+        expect(frame.scope.ghostFilterMode, mode);
+        expect(frame.amount.totalMinor, amount);
+        expect(amountLane.queryKey, frame.queryKey);
+        expect(amountLane.amount.totalMinor, amount);
+        expect(frame.presentationEntryCount, ids.length);
+        expect(<String>[
+          for (var index = 0; index < frame.logBox.previewRowCount; index += 1)
+            frame.logBox.semanticPreviewRowIdentityAt(index)!,
+        ], ids);
+        final balance = core.balancePresentation.value!;
+        expect(balance.incomeTotalMinor, 0);
+        expect(balance.expenseTotalMinor, amount);
+        expect(balance.netTotalMinor, -amount);
+      }
+
+      await expectPublished(
+        GhostFilterMode.nonGhost,
+        amount: 1000,
+        ids: const <String>['N'],
+      );
+      await expectPublished(
+        GhostFilterMode.onlyGhost,
+        amount: 500,
+        ids: const <String>['P', 'G'],
+      );
+      await expectPublished(
+        GhostFilterMode.both,
+        amount: 1500,
+        ids: const <String>['P', 'G', 'N'],
+      );
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
     'measurement: prepared 10k-row ghost switch performs no acquisition or index build',
     () async {
       final rows = List<DashboardLedgerEntry>.generate(10000, (ordinal) {

@@ -86,7 +86,12 @@ void main() {
     );
     expect(surface, findsOneWidget);
     final renderObject = tester.renderObject<RenderBox>(surface);
-    final scrollableState = tester.state(find.byType(Scrollable));
+    final scrollable = find.ancestor(
+      of: surface,
+      matching: find.byType(Scrollable),
+    );
+    expect(scrollable, findsOneWidget);
+    final scrollableState = tester.state(scrollable);
 
     store.publish(_visible(groups: _groups(24), epoch: 2));
     await tester.pump();
@@ -95,10 +100,7 @@ void main() {
       identical(tester.renderObject<RenderBox>(surface), renderObject),
       isTrue,
     );
-    expect(
-      identical(tester.state(find.byType(Scrollable)), scrollableState),
-      isTrue,
-    );
+    expect(identical(tester.state(scrollable), scrollableState), isTrue);
     expect(find.byType(SliverList), findsNothing);
     expect(find.byType(SliverFillRemaining), findsNothing);
     expect(

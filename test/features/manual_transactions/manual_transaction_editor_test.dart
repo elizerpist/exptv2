@@ -27,7 +27,7 @@ void main() {
             repository: repository,
             categories: categories,
             direction: LedgerDirection.expense,
-            onSaved: (result) => savedResult = result,
+            onSaved: (result) async => savedResult = result,
           ),
         ),
       );

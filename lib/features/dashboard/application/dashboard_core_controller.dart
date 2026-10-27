@@ -1422,46 +1422,22 @@ final class DashboardCoreController {
         )) {
       return existing;
     }
-    final hasEphemeralFocus =
-        categoryFocusId != null ||
-        partnerFocusId != null ||
-        normalizedSearch != null ||
-        minimumAmountScaled100 != null ||
-        maximumAmountScaled100 != null;
     final projections = <GhostFilterMode, DashboardEphemeralFocusDerivation>{
       for (final mode in GhostFilterMode.values)
-        mode: !hasEphemeralFocus && mode == GhostFilterMode.both
-            ? DashboardEphemeralFocusDerivation(
-                index: base,
-                membershipOrdinalCount: 0,
-                membershipLookupMicros: 0,
-                intersectionMicros: 0,
-                semanticUniverseBuildMicros: 0,
-                currentRootProjectionMicros: 0,
-                publicationCriticalFrameCount: 0,
-                publicationCriticalRowCount: 0,
-                eagerFocusedFrameCount: 0,
-                lazyFocusedFrameCacheCount: 0,
-                focusedOrdinalsVisitedBeforePublication: 0,
-                focusedOrdinalsVisitedAfterPublication: 0,
-                reusedBaseCatalogCount: 0,
-                newFocusedCatalogCount: 0,
-                reusedPreparedRows: 0,
-              )
-            : DashboardEphemeralFocusDeriver.deriveGhostFilterMode(
-                base: base,
-                effectiveQueries: effectiveQueries.withGhostFilterMode(mode),
-                activeDirection: activeDirection,
-                categoryFocusId: categoryFocusId,
-                partnerFocusId: partnerFocusId,
-                normalizedSearch: normalizedSearch,
-                minimumAmountScaled100: minimumAmountScaled100,
-                maximumAmountScaled100: maximumAmountScaled100,
-                initialYear: initialYear,
-                generation: base.generation,
-                activeParentTimeScope: activeParentTimeScope,
-                activeSelectedChildTimeScope: activeSelectedChildTimeScope,
-              ),
+        mode: DashboardEphemeralFocusDeriver.deriveGhostFilterMode(
+          base: base,
+          effectiveQueries: effectiveQueries.withGhostFilterMode(mode),
+          activeDirection: activeDirection,
+          categoryFocusId: categoryFocusId,
+          partnerFocusId: partnerFocusId,
+          normalizedSearch: normalizedSearch,
+          minimumAmountScaled100: minimumAmountScaled100,
+          maximumAmountScaled100: maximumAmountScaled100,
+          initialYear: initialYear,
+          generation: base.generation,
+          activeParentTimeScope: activeParentTimeScope,
+          activeSelectedChildTimeScope: activeSelectedChildTimeScope,
+        ),
     };
     final hotset = _GhostFilterProjectionHotset(
       base: base,
@@ -1959,51 +1935,52 @@ final class DashboardCoreController {
   }
 
   /// Receives the global Core revision returned by a successful manual save.
-  /// The runtime owns the ensuing generation-guarded publication; this method
-  /// never patches widget state or confuses the transaction row revision with
-  /// the financial Core revision.
-  void acceptKnownCoreRevision(
+  /// The runtime owns the ensuing generation-guarded financial publication.
+  /// Before it arrives, this method may admit the Core-confirmed visual row
+  /// into the currently visible immutable LogBox frame; it never treats the
+  /// transaction row revision as a financial Core revision.
+  Future<void> acceptKnownCoreRevision(
     int coreRevision, {
     DashboardLedgerVisualPatch? visualPatch,
-  }) {
+  }) async {
     if (_disposed || coreRevision <= 0) return;
+    // The persisted result is the only visual input accepted before the next
+    // revision-owned aggregation arrives. Complete the bounded visible-row
+    // admission before the editor route closes; the data runtime then merges
+    // the same or a newer authoritative revision normally.
     if (visualPatch != null) {
       _publishSaveResultVisualPatch(visualPatch);
     }
     dataRuntime.acceptKnownCoreRevision(coreRevision);
   }
 
-  /// Publishes only a currently visible category/avatar correction from a
-  /// confirmed save response.  This deliberately refuses membership-changing
-  /// edits (amount, time, direction, partner, active category/search focus),
-  /// which remain owned by the following complete Core revision.  Therefore
-  /// the route can close with the correct override badge without pretending
-  /// that old aggregates or an old category membership are authoritative.
-  void _publishSaveResultVisualPatch(DashboardLedgerVisualPatch patch) {
+  /// Admits one Core-confirmed visual row into the active LogBox projection.
+  /// This is intentionally bounded to the currently visible page: financial
+  /// membership and aggregates remain revision-owned. The same patch is
+  /// guarded by the saved row identity, so an older response cannot repaint
+  /// a different row as if it were current.
+  bool _publishSaveResultVisualPatch(DashboardLedgerVisualPatch patch) {
     final visible = visibleFrames.value;
-    if (visible == null ||
-        visible.scope.categoryIds.isNotEmpty ||
-        visible.scope.normalizedSearch != null) {
-      return;
-    }
+    if (visible == null) return false;
     final previous = visible.logBox.semanticPreviewLedgerEntryForId(
       patch.entryId,
     );
     if (previous == null ||
-        previous.partnerId != patch.partnerId ||
-        previous.direction != patch.direction ||
-        previous.amountMinor != patch.amountMinor ||
-        previous.bookedLocalEpochDay != patch.bookedLocalEpochDay ||
-        previous.bookedLocalTimeMinutes != patch.bookedLocalTimeMinutes) {
-      return;
+        (previous.amountMinor != 0 &&
+            previous.amountMinor != patch.amountMinor) ||
+        (previous.bookedLocalEpochDay != 0 &&
+            previous.bookedLocalEpochDay != patch.bookedLocalEpochDay) ||
+        (previous.bookedLocalTimeMinutes != 0 &&
+            previous.bookedLocalTimeMinutes != patch.bookedLocalTimeMinutes)) {
+      return false;
     }
     final logBox = visible.logBox.withVisualPatch(patch);
-    if (logBox == null) return;
+    if (logBox == null) return false;
     final patched = visible.withVisualLogBox(
       logBox,
       frameGeneration: visibleFrames.nextFrameGeneration(),
     );
-    if (!visibleFrames.publish(patched)) return;
+    if (!visibleFrames.publish(patched)) return false;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'MANUAL_SAVE_VISIBLE_ROW_PATCHED',
@@ -2015,6 +1992,7 @@ final class DashboardCoreController {
             'category=${patch.categoryId}',
       ),
     );
+    return true;
   }
 
   /// Installs a revision publication from its ghost-neutral runtime source.
@@ -2047,18 +2025,47 @@ final class DashboardCoreController {
           ? publicationState.retainedChildScope
           : null,
     );
-    final visible = activeScope.ghostFilterMode == GhostFilterMode.both
+    // Retain the canonical source on its exact initial `both` query so
+    // focus-clear and temporal identity contracts preserve its instance.
+    // The hotset still prewarms a distinct `both` projection for a later
+    // quick-filter selection: some compact native sources have sparse root
+    // frames, for which that projection is the only exact list payload.
+    // A source can otherwise be used only when its key proves it already owns
+    // the active query; it is never a silent fallback for a different mode.
+    final sourceOwnsActiveScope = source.key.matchesScope(activeScope);
+    final visible =
+        (activeScope.ghostFilterMode == GhostFilterMode.both &&
+            sourceOwnsActiveScope)
         ? source
         : ghostHotset?.derivationFor(activeScope.ghostFilterMode)?.index ??
-              source;
+              (sourceOwnsActiveScope ? source : null);
+    if (visible == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'GHOST_PROJECTION_PUBLICATION_DEFERRED',
+          queryKey: activeScope.key.value,
+          coreRevision: source.coreRevision,
+          scope:
+              'mode=${activeScope.ghostFilterMode.name} '
+              'reason=missingExactPreparedProjection',
+        ),
+      );
+      return;
+    }
+    // Preserve bootstrap's synchronous no-Budget path. When a Budget source
+    // exists its ghost-specific snapshot is still acquired before the exact
+    // frame publishes; without one, awaiting a completed null Future would
+    // unnecessarily let bootstrap observe an empty visible frame.
     final budgetLimitSnapshot = visible == source
         ? publication.budgetLimitSnapshot
-        : await dataRuntime.prepareBudgetLimitSnapshotFor(visible);
+        : dataRuntime.hasBudgetLimitSnapshotRepository
+        ? await dataRuntime.prepareBudgetLimitSnapshotFor(visible)
+        : null;
     final partnerDistributionSnapshot = visible == source
         ? publication.partnerDistributionSnapshot
-        : await dataRuntime.prepareBudgetPartnerDistributionSnapshotFor(
-            visible,
-          );
+        : dataRuntime.hasBudgetPartnerDistributionSnapshotRepository
+        ? await dataRuntime.prepareBudgetPartnerDistributionSnapshotFor(visible)
+        : null;
     final published = await installPreparedIndex(
       visible,
       budgetLimitSnapshot: budgetLimitSnapshot,
@@ -9532,7 +9539,8 @@ final class DashboardCoreController {
       return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
     }
     try {
-      final exactEmpty = index.frameForKey(queryKey).entryCount == 0;
+      final exactEmpty =
+          index.frameForKey(queryKey).presentationEntryCount == 0;
       final interactionOrder =
           presentation.queuedPreparedExperimentalTemporalInteractionOrder ??
           visibleFrames.interactionPreviewOrder;

@@ -2,10 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../../automation/domain/automation_models.dart';
 import '../../automation/domain/automation_repository.dart';
+import '../../dashboard/application/dashboard_presentation_preferences.dart';
+import '../../dashboard/presentation/widgets/dashboard_ghost_quick_filter.dart';
+import '../../dashboard/query/domain/ghost_filter_mode.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, required this.permissions});
+  const SettingsPage({
+    super.key,
+    required this.permissions,
+    required this.dashboardPresentationPreferences,
+  });
+
   final AutomationPermissionRepository permissions;
+  final DashboardPresentationPreferencesController
+  dashboardPresentationPreferences;
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -144,6 +154,54 @@ class _SettingsPageState extends State<SettingsPage>
           ),
           const SizedBox(height: 22),
           const Text(
+            'Megjelenés',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          ValueListenableBuilder<DashboardPresentationPreferences>(
+            valueListenable: widget.dashboardPresentationPreferences,
+            builder: (context, preferences, _) => Card(
+              child: ExpansionTile(
+                key: const ValueKey('settings-ghost-filter-icon-pack'),
+                leading: const Icon(Icons.visibility_outlined),
+                title: const Text('Ghost szűrő ikonjai'),
+                subtitle: const Text('A gyorsszűrő megjelenése'),
+                children: DashboardGhostQuickFilterIconPack.values
+                    .map((pack) {
+                      final selected =
+                          preferences.ghostQuickFilterIconPack == pack;
+                      return ListTile(
+                        key: ValueKey(
+                          'settings-ghost-filter-icon-${pack.name}',
+                        ),
+                        leading: Semantics(
+                          selected: selected,
+                          child: Icon(
+                            selected
+                                ? Icons.radio_button_checked_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                          ),
+                        ),
+                        onTap: () {
+                          widget.dashboardPresentationPreferences
+                              .setPreferences(
+                                preferences.withGhostQuickFilterIconPack(pack),
+                              );
+                        },
+                        title: Text(
+                          pack == DashboardGhostQuickFilterIconPack.current
+                              ? 'Jelenlegi'
+                              : 'Bizonylat + szellem',
+                        ),
+                        subtitle: _GhostIconPackPreview(pack: pack),
+                      );
+                    })
+                    .toList(growable: false),
+              ),
+            ),
+          ),
+          const SizedBox(height: 22),
+          const Text(
             'Adatkezelés',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
@@ -193,5 +251,25 @@ class _PermissionTile extends StatelessWidget {
               const Icon(Icons.chevron_right, size: 18),
             ],
           ),
+  );
+}
+
+final class _GhostIconPackPreview extends StatelessWidget {
+  const _GhostIconPackPreview({required this.pack});
+
+  final DashboardGhostQuickFilterIconPack pack;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 4),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (final mode in GhostFilterMode.values) ...<Widget>[
+          DashboardGhostQuickFilterIcon(mode: mode, iconPack: pack),
+          if (mode != GhostFilterMode.values.last) const SizedBox(width: 8),
+        ],
+      ],
+    ),
   );
 }

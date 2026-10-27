@@ -6,6 +6,10 @@ import 'balance_daily_calculation_mode.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../presentation/core_modes/balance_presentation_settings.dart';
 
+/// Visual-only package for the three-state ghost quick filter. It is
+/// deliberately separate from the query mode and never changes membership.
+enum DashboardGhostQuickFilterIconPack { current, receiptGhost }
+
 /// Persisted presentation-only choices. Financial membership, query state,
 /// selected time and prepared data are deliberately outside this value.
 final class DashboardPresentationPreferences {
@@ -39,6 +43,7 @@ final class DashboardPresentationPreferences {
     required this.balanceHeaderPartitionHeightPercent,
     required this.balanceMonthCombinedCardPresentation,
     this.balanceHeaderGlassConfigurationJson = '',
+    this.ghostQuickFilterIconPack = DashboardGhostQuickFilterIconPack.current,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -67,6 +72,7 @@ final class DashboardPresentationPreferences {
   final BalanceMonthCombinedCardPresentation
   balanceMonthCombinedCardPresentation;
   final String balanceHeaderGlassConfigurationJson;
+  final DashboardGhostQuickFilterIconPack ghostQuickFilterIconPack;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.sumA,
@@ -83,6 +89,7 @@ final class DashboardPresentationPreferences {
     balanceMonthCombinedCardPresentation:
         BalanceMonthCombinedCardPresentation.incomeExpense,
     balanceHeaderGlassConfigurationJson: '',
+    ghostQuickFilterIconPack: DashboardGhostQuickFilterIconPack.current,
   );
 
   @override
@@ -117,7 +124,8 @@ final class DashboardPresentationPreferences {
       other.balanceMonthCombinedCardPresentation ==
           balanceMonthCombinedCardPresentation &&
       other.balanceHeaderGlassConfigurationJson ==
-          balanceHeaderGlassConfigurationJson;
+          balanceHeaderGlassConfigurationJson &&
+      other.ghostQuickFilterIconPack == ghostQuickFilterIconPack;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -144,7 +152,40 @@ final class DashboardPresentationPreferences {
     balanceHeaderPartitionHeightPercent,
     balanceMonthCombinedCardPresentation,
     balanceHeaderGlassConfigurationJson,
+    ghostQuickFilterIconPack,
   ]);
+
+  DashboardPresentationPreferences withGhostQuickFilterIconPack(
+    DashboardGhostQuickFilterIconPack next,
+  ) => DashboardPresentationPreferences(
+    sumVisualStyle: sumVisualStyle,
+    showSumLayoutChooser: showSumLayoutChooser,
+    yearGridLayout: yearGridLayout,
+    yearMonthlyAmountPresentation: yearMonthlyAmountPresentation,
+    showDayContentViewChooser: showDayContentViewChooser,
+    balanceUsesChildCards: balanceUsesChildCards,
+    balanceHeaderGraphPresentation: balanceHeaderGraphPresentation,
+    balanceDayLayoutPresentation: balanceDayLayoutPresentation,
+    balanceDayFocusedPresentation: balanceDayFocusedPresentation,
+    balanceDayPerformanceVisualPresentation:
+        balanceDayPerformanceVisualPresentation,
+    balanceDayRatioViewPresentation: balanceDayRatioViewPresentation,
+    balanceDayRatioPresentation: balanceDayRatioPresentation,
+    balanceShowFocusedDayImpact: balanceShowFocusedDayImpact,
+    balanceSumLayoutPresentation: balanceSumLayoutPresentation,
+    balanceSumFocusedPresentation: balanceSumFocusedPresentation,
+    balanceShowSumFocusedSupplementaryStats:
+        balanceShowSumFocusedSupplementaryStats,
+    balanceMonthLayoutPresentation: balanceMonthLayoutPresentation,
+    balanceYearLayoutPresentation: balanceYearLayoutPresentation,
+    balanceDailyCalculationMode: balanceDailyCalculationMode,
+    balanceMonthlySpendingChartPresentation:
+        balanceMonthlySpendingChartPresentation,
+    balanceHeaderPartitionHeightPercent: balanceHeaderPartitionHeightPercent,
+    balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
+    balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
+    ghostQuickFilterIconPack: next,
+  );
 }
 
 abstract interface class DashboardPresentationPreferencesStore {

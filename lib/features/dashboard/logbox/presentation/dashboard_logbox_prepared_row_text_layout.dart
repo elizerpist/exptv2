@@ -212,9 +212,12 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
   TextPainter? _title;
   TextPainter? _secondary;
 
-  Color get _defaultAmountColor => row.amountStyle == LogAmountStyle.expense
-      ? FluviVisualTokens.logBoxExpenseAmount
-      : FluviVisualTokens.logBoxIncomeAmount;
+  Color get _defaultAmountColor {
+    if (row.isPendingGhost) return FluviVisualTokens.textSecondary;
+    return row.amountStyle == LogAmountStyle.expense
+        ? FluviVisualTokens.logBoxExpenseAmount
+        : FluviVisualTokens.logBoxIncomeAmount;
+  }
 
   double get _rightColumnMaxWidth =>
       math.max(0.0, (rightEdge - contentLeft) * .44 - _ghostOriginReserve);

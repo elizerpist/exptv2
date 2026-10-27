@@ -415,6 +415,7 @@ class MainActivity : FlutterActivity() {
                             "balanceHeaderPartitionHeightPercent" to preferences.getInt("balanceHeaderPartitionHeightPercent", 50),
                             "balanceMonthCombinedCardPresentation" to preferences.getInt("balanceMonthCombinedCardPresentation", 0),
                             "balanceHeaderGlassConfigurationJson" to preferences.getString("balanceHeaderGlassConfigurationJson", ""),
+                            "ghostQuickFilterIconPack" to ((preferences.all["ghostQuickFilterIconPack"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                         ),
                     )
                     "writeDashboardPresentationSettings" -> {
@@ -468,6 +469,8 @@ class MainActivity : FlutterActivity() {
                         val balanceHeaderGlassConfigurationJson = values["balanceHeaderGlassConfigurationJson"] as? String
                             ?: throw IllegalArgumentException("Missing Balance Header glass configuration.")
                         require(balanceHeaderGlassConfigurationJson.length <= 32768) { "Balance Header glass configuration is too large." }
+                        val ghostQuickFilterIconPack = ((values["ghostQuickFilterIconPack"] as? Number)?.toInt() ?: 0)
+                        require(ghostQuickFilterIconPack in 0..1) { "Invalid Ghost quick-filter icon pack." }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
@@ -492,6 +495,7 @@ class MainActivity : FlutterActivity() {
                             .putInt("balanceHeaderPartitionHeightPercent", balanceHeaderPartitionHeightPercent)
                             .putInt("balanceMonthCombinedCardPresentation", balanceMonthCombinedCardPresentation)
                             .putString("balanceHeaderGlassConfigurationJson", balanceHeaderGlassConfigurationJson)
+                            .putInt("ghostQuickFilterIconPack", ghostQuickFilterIconPack)
                             .apply()
                         result.success(null)
                     }

@@ -1943,34 +1943,23 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       DashboardLogBoxTokens.avatarSize,
       DashboardLogBoxTokens.avatarSize,
     );
-    _drawPreparedVectorBadge(
-      canvas,
-      rasters.badge(readable.partnerAvatarColorHandle),
-      badgeRect,
-    );
-    _drawPreparedVectorGlyph(
-      canvas,
-      rasters.glyph(readable.partnerAvatarIconHandle),
-      Rect.fromCenter(
-        center: badgeRect.center,
-        width: DashboardLogBoxTokens.avatarIconSize,
-        height: DashboardLogBoxTokens.avatarIconSize,
-      ),
-    );
-    _paintCategoryOverrideBadge(
+    _paintAvatarComposition(
       canvas,
       avatarRect: badgeRect,
+      partnerAvatarColorHandle: readable.partnerAvatarColorHandle,
+      partnerAvatarIconHandle: readable.partnerAvatarIconHandle,
       categoryColorHandle: readable.categoryColorHandle,
       categoryIconHandle: readable.categoryIconHandle,
-      isOverride: readable.hasCategoryOverride,
+      hasCategoryOverride: readable.hasCategoryOverride,
     );
     readable.textLayout.paint(
       canvas,
       rowTop,
       rowHeight: rowHeight,
-      amountForeground: readable.amountStyle == LogAmountStyle.expense
-          ? expenseAmountColor
-          : incomeAmountColor,
+      amountForeground: _amountForeground(
+        amountStyle: readable.amountStyle,
+        isPendingGhost: readable.isPendingGhost,
+      ),
     );
     _paintGhostOriginBadge(
       canvas,
@@ -2157,27 +2146,14 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       DashboardLogBoxTokens.avatarSize,
       DashboardLogBoxTokens.avatarSize,
     );
-    _drawPreparedVectorBadge(
-      canvas,
-      rasters.badge(row.partnerAvatarColorHandle),
-      badgeRect,
-    );
-    final iconRect = Rect.fromCenter(
-      center: badgeRect.center,
-      width: DashboardLogBoxTokens.avatarIconSize,
-      height: DashboardLogBoxTokens.avatarIconSize,
-    );
-    _drawPreparedVectorGlyph(
-      canvas,
-      rasters.glyph(row.partnerAvatarIconHandle),
-      iconRect,
-    );
-    _paintCategoryOverrideBadge(
+    _paintAvatarComposition(
       canvas,
       avatarRect: badgeRect,
+      partnerAvatarColorHandle: row.partnerAvatarColorHandle,
+      partnerAvatarIconHandle: row.partnerAvatarIconHandle,
       categoryColorHandle: row.categoryColorHandle,
       categoryIconHandle: row.categoryIconHandle,
-      isOverride: row.hasCategoryOverride,
+      hasCategoryOverride: row.hasCategoryOverride,
     );
     preparedText.paint(
       canvas,
@@ -2662,26 +2638,14 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       DashboardLogBoxTokens.avatarSize,
       DashboardLogBoxTokens.avatarSize,
     );
-    _drawPreparedVectorBadge(
-      canvas,
-      rasters.badge(row.partnerAvatarColorHandle),
-      badgeRect,
-    );
-    _drawPreparedVectorGlyph(
-      canvas,
-      rasters.glyph(row.partnerAvatarIconHandle),
-      Rect.fromCenter(
-        center: badgeRect.center,
-        width: DashboardLogBoxTokens.avatarIconSize,
-        height: DashboardLogBoxTokens.avatarIconSize,
-      ),
-    );
-    _paintCategoryOverrideBadge(
+    _paintAvatarComposition(
       canvas,
       avatarRect: badgeRect,
+      partnerAvatarColorHandle: row.partnerAvatarColorHandle,
+      partnerAvatarIconHandle: row.partnerAvatarIconHandle,
       categoryColorHandle: row.categoryColorHandle,
       categoryIconHandle: row.categoryIconHandle,
-      isOverride: row.hasCategoryOverride,
+      hasCategoryOverride: row.hasCategoryOverride,
     );
     preparedText.paint(
       canvas,
@@ -2703,10 +2667,55 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       !item.row.isPendingGhost &&
       partnerSwipe?.activeEntryId == item.row.entryId;
 
-  Color _amountForegroundFor(DashboardLogRowViewModel row) =>
-      row.amountStyle == LogAmountStyle.expense
-      ? expenseAmountColor
-      : incomeAmountColor;
+  Color _amountForegroundFor(DashboardLogRowViewModel row) => _amountForeground(
+    amountStyle: row.amountStyle,
+    isPendingGhost: row.isPendingGhost,
+  );
+
+  Color _amountForeground({
+    required LogAmountStyle amountStyle,
+    required bool isPendingGhost,
+  }) {
+    if (isPendingGhost) return FluviVisualTokens.textSecondary;
+    return amountStyle == LogAmountStyle.expense
+        ? expenseAmountColor
+        : incomeAmountColor;
+  }
+
+  /// Every painter route shares one avatar composition. The partner owns the
+  /// large avatar; an entry-level category assignment adds the compact badge
+  /// without ever replacing that partner visual.
+  void _paintAvatarComposition(
+    Canvas canvas, {
+    required Rect avatarRect,
+    required int partnerAvatarColorHandle,
+    required int partnerAvatarIconHandle,
+    required int categoryColorHandle,
+    required int categoryIconHandle,
+    required bool hasCategoryOverride,
+  }) {
+    _drawPreparedVectorBadge(
+      canvas,
+      rasters.badge(partnerAvatarColorHandle),
+      avatarRect,
+    );
+    _drawPreparedVectorGlyph(
+      canvas,
+      rasters.glyph(partnerAvatarIconHandle),
+      Rect.fromCenter(
+        center: avatarRect.center,
+        width: DashboardLogBoxTokens.avatarIconSize,
+        height: DashboardLogBoxTokens.avatarIconSize,
+      ),
+    );
+    _paintCategoryOverrideBadge(
+      canvas,
+      avatarRect: avatarRect,
+      categoryColorHandle: categoryColorHandle,
+      categoryIconHandle: categoryIconHandle,
+      isOverride: hasCategoryOverride,
+    );
+  }
 
   bool _beginGhostVisualLayer(
     Canvas canvas, {
@@ -2789,27 +2798,14 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       DashboardLogBoxTokens.avatarSize,
       DashboardLogBoxTokens.avatarSize,
     );
-    _drawPreparedVectorBadge(
-      canvas,
-      rasters.badge(row.categoryColorHandle),
-      badgeRect,
-    );
-    final iconRect = Rect.fromCenter(
-      center: badgeRect.center,
-      width: DashboardLogBoxTokens.avatarIconSize,
-      height: DashboardLogBoxTokens.avatarIconSize,
-    );
-    _drawPreparedVectorGlyph(
-      canvas,
-      rasters.glyph(row.categoryIconHandle),
-      iconRect,
-    );
-    _paintCategoryOverrideBadge(
+    _paintAvatarComposition(
       canvas,
       avatarRect: badgeRect,
+      partnerAvatarColorHandle: row.partnerAvatarColorHandle,
+      partnerAvatarIconHandle: row.partnerAvatarIconHandle,
       categoryColorHandle: row.categoryColorHandle,
       categoryIconHandle: row.categoryIconHandle,
-      isOverride: row.hasCategoryOverride,
+      hasCategoryOverride: row.hasCategoryOverride,
     );
 
     preparedText.paint(

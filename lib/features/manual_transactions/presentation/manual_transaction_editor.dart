@@ -34,7 +34,7 @@ final class ManualTransactionEditor extends StatefulWidget {
   final ManualTransactionEditorMode mode;
   final String? entryId;
   final LedgerDirection? direction;
-  final ValueChanged<ManualTransactionSaveResult>? onSaved;
+  final Future<void> Function(ManualTransactionSaveResult)? onSaved;
 
   @override
   State<ManualTransactionEditor> createState() =>
@@ -282,7 +282,7 @@ final class _ManualTransactionEditorState
           note: _note.text,
         );
         final result = _saveResult(saved);
-        widget.onSaved?.call(result);
+        if (widget.onSaved case final onSaved?) await onSaved(result);
         if (mounted) Navigator.of(context).pop(result);
         return;
       }
@@ -299,7 +299,8 @@ final class _ManualTransactionEditorState
       if (!mounted) return;
       if (!keepOpen) {
         final result = _saveResult(saved);
-        widget.onSaved?.call(result);
+        if (widget.onSaved case final onSaved?) await onSaved(result);
+        if (!mounted) return;
         Navigator.of(context).pop(result);
         return;
       }

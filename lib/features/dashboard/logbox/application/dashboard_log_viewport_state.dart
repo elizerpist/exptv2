@@ -55,6 +55,10 @@ class DashboardLogRowViewModel {
          isPendingGhost,
          hasGhostOrigin,
          hasCategoryOverride,
+         categoryId,
+         partnerId,
+         categoryColorId,
+         categoryIconId,
          partnerAvatarColorId,
          partnerAvatarIconId,
        );
@@ -206,8 +210,15 @@ final class DashboardLogRowProjectionCache {
 
   final List<DashboardLedgerEntry> _rows;
   final int maximumEntries;
+  late final Map<String, int> _rowIndexById = <String, int>{
+    for (var index = 0; index < _rows.length; index += 1)
+      _rows[index].id: index,
+  };
+  final Map<int, DashboardLedgerEntry> _visualOverlays =
+      <int, DashboardLedgerEntry>{};
   final Map<int, DashboardLogRowViewModel> _projected =
       <int, DashboardLogRowViewModel>{};
+  int _visualGeneration = 0;
   int _newProjectionCount = 0;
   int _reusedProjectionCount = 0;
   int _projectionMicros = 0;
@@ -216,12 +227,40 @@ final class DashboardLogRowProjectionCache {
   int get newProjectionCount => _newProjectionCount;
   int get reusedProjectionCount => _reusedProjectionCount;
   int get projectionMicros => _projectionMicros;
+  int get visualGeneration => _visualGeneration;
 
   DashboardLedgerEntry entryAt(int index) {
     if (index < 0 || index >= _rows.length) {
       throw const FormatException('Prepared row reference is out of range.');
     }
-    return _rows[index];
+    return _visualOverlays[index] ?? _rows[index];
+  }
+
+  /// Admits the resolved, persisted visual state once for every resident
+  /// ghost-mode projection that shares this row table. It intentionally does
+  /// not edit financial membership, ordering or amounts: the following Core
+  /// revision still owns those values.
+  bool acceptVisualPatch(DashboardLedgerVisualPatch patch) {
+    final index = _rowIndexById[patch.entryId];
+    if (index == null) return false;
+    final current = entryAt(index);
+    if (current.direction != patch.direction ||
+        current.amountMinor != patch.amountMinor ||
+        current.bookedLocalEpochDay != patch.bookedLocalEpochDay ||
+        current.bookedLocalTimeMinutes != patch.bookedLocalTimeMinutes) {
+      return false;
+    }
+    final patched = current.withVisualPatch(patch);
+    if (identical(patched, current)) return false;
+    _visualOverlays[index] = patched;
+    // A pre-projected row may already be used by another prepared ghost
+    // mode. Replace only that single row; no icon/paragraph work for its
+    // unaffected neighbours is repeated.
+    if (_projected.containsKey(index)) {
+      _projected[index] = DashboardLogRowViewModel.fromLedgerEntry(patched);
+    }
+    _visualGeneration += 1;
+    return true;
   }
 
   DashboardLogRowViewModel projectAt(int index) {
@@ -671,13 +710,38 @@ class DashboardLogViewportState {
     return _deferred?.entryAt(ordinal);
   }
 
-  /// Bounded lookup used only for a save-result visual patch.  The active
+  /// Bounded lookup used only for a save-result visual patch. The active
   /// preview contains at most one viewport page, so this never scans the
-  /// prepared index or queries the repository.
+  /// prepared index or queries the repository. It works before and after the
+  /// rich scene has been materialized.
   DashboardLedgerEntry? semanticPreviewLedgerEntryForId(String entryId) {
     final deferred = _deferred;
-    if (deferred == null) return null;
-    return deferred.entryForId(entryId);
+    if (deferred != null) return deferred.entryForId(entryId);
+    for (final item in _resolvedProjection.flatItems) {
+      final row = item.row;
+      if (row.entryId != entryId) continue;
+      return DashboardLedgerEntry(
+        id: row.entryId,
+        partnerId: row.partnerId,
+        categoryId: row.categoryId,
+        direction: row.amountStyle == LogAmountStyle.expense
+            ? 'expense'
+            : 'income',
+        amountMinor: 0,
+        bookedLocalEpochDay: 0,
+        bookedLocalTimeMinutes: 0,
+        partnerDisplayName: row.partnerDisplayName,
+        partnerAvatarColorId: row.partnerAvatarColorId,
+        partnerAvatarIconId: row.partnerAvatarIconId,
+        categoryDisplayName: row.categoryDisplayName,
+        categoryColorId: row.categoryColorId,
+        categoryIconId: row.categoryIconId,
+        assignmentMode: row.hasCategoryOverride
+            ? 'entryOverride'
+            : 'partnerDefault',
+      );
+    }
+    return null;
   }
 
   int get groupCount => prepareSemanticPreviewGeometry().groupCount;
@@ -836,44 +900,47 @@ final class _DeferredViewportProjection {
         rowProjectionCache: _rowProjectionCache,
         rowIndices: _rowIndices,
       );
-  late final List<String> stableRowIdentities = List<String>.unmodifiable(
-    _rowIndices.map((index) => _entryAt(index).id),
-  );
-  late final List<String> stableAssetIdentities =
-      List<String>.unmodifiable(<String>{
-        for (final index in _rowIndices)
-          '${_entryAt(index).categoryColorId ?? 'fallback'}|'
-              '${_entryAt(index).categoryIconId ?? 'fallback'}|'
-              '${_entryAt(index).partnerAvatarColorId ?? 'fallback'}|'
-              '${_entryAt(index).partnerAvatarIconId ?? 'fallback'}',
-      });
+  List<String>? _stableRowIdentities;
+  List<String>? _stableAssetIdentities;
+  int _observedVisualGeneration = -1;
   bool _isProjected = false;
   int _richProjectedRowCount = 0;
   int _richProjectionMicros = 0;
   _DeferredRichProjectionBuilder? _builder;
   _DashboardLogViewportProjection? _rich;
 
-  bool get isProjected => _isProjected;
+  bool get isProjected {
+    _refreshSharedVisualProjectionIfNeeded();
+    return _isProjected;
+  }
+
   int get richProjectedRowCount => _richProjectedRowCount;
-  Object get richProjectionOwner =>
-      _entryOverrides.isEmpty ? _rowProjectionCache : this;
-  DashboardLogRichProjectionMetrics get richProjectionMetrics =>
-      DashboardLogRichProjectionMetrics(
-        richRowProjectionMicros: _rowProjectionCache.projectionMicros,
-        richFrameProjectionMicros: _richProjectionMicros,
-        projectedUniqueRowCount: _rowProjectionCache.newProjectionCount,
-        projectedFrameCount: _isProjected ? 1 : 0,
-        reusedProjectedRowCount: _rowProjectionCache.reusedProjectionCount,
-        reusedProjectedFrameCount: 0,
-      );
+  Object get richProjectionOwner {
+    _refreshSharedVisualProjectionIfNeeded();
+    return _entryOverrides.isEmpty ? _rowProjectionCache : this;
+  }
+
+  DashboardLogRichProjectionMetrics get richProjectionMetrics {
+    _refreshSharedVisualProjectionIfNeeded();
+    return DashboardLogRichProjectionMetrics(
+      richRowProjectionMicros: _rowProjectionCache.projectionMicros,
+      richFrameProjectionMicros: _richProjectionMicros,
+      projectedUniqueRowCount: _rowProjectionCache.newProjectionCount,
+      projectedFrameCount: _isProjected ? 1 : 0,
+      reusedProjectedRowCount: _rowProjectionCache.reusedProjectionCount,
+      reusedProjectedFrameCount: 0,
+    );
+  }
+
   int get previewRowCount => _rowIndices.length;
 
   DashboardLogSemanticPreviewGeometry prepareSemanticPreviewGeometry() =>
       _semanticPreviewGeometry;
 
-  late final int _groupContentIdentity = _rawGroupContentIdentity();
+  int get _groupContentIdentity => _rawGroupContentIdentity();
 
   _DashboardLogViewportProjection project() {
+    _refreshSharedVisualProjectionIfNeeded();
     while (!isProjected) {
       prepareNextWorkUnit();
     }
@@ -884,6 +951,7 @@ final class _DeferredViewportProjection {
   /// partially built collections private. The scene cache owns scheduling and
   /// calls this between its existing cooperative checkpoints.
   bool prepareNextWorkUnit() {
+    _refreshSharedVisualProjectionIfNeeded();
     if (_isProjected) return true;
     final started = Stopwatch()..start();
     final builder = _builder ??= _DeferredRichProjectionBuilder(this);
@@ -898,12 +966,14 @@ final class _DeferredViewportProjection {
   }
 
   void forEachStableRowIdentity(void Function(String identity) visitor) {
+    _refreshSharedVisualProjectionIfNeeded();
     for (final index in _rowIndices) {
       visitor(_entryAt(index).id);
     }
   }
 
   String rowIdentityAt(int ordinal) {
+    _refreshSharedVisualProjectionIfNeeded();
     if (ordinal < 0 || ordinal >= _rowIndices.length) {
       throw RangeError.index(ordinal, _rowIndices, 'ordinal');
     }
@@ -911,6 +981,7 @@ final class _DeferredViewportProjection {
   }
 
   DashboardLedgerEntry entryAt(int ordinal) {
+    _refreshSharedVisualProjectionIfNeeded();
     if (ordinal < 0 || ordinal >= _rowIndices.length) {
       throw RangeError.index(ordinal, _rowIndices, 'ordinal');
     }
@@ -918,6 +989,7 @@ final class _DeferredViewportProjection {
   }
 
   DashboardLedgerEntry? entryForId(String entryId) {
+    _refreshSharedVisualProjectionIfNeeded();
     for (final index in _rowIndices) {
       final entry = _entryAt(index);
       if (entry.id == entryId) return entry;
@@ -936,12 +1008,10 @@ final class _DeferredViewportProjection {
       }
     }
     if (rowIndex == null) return null;
-    final overrides = Map<int, DashboardLedgerEntry>.of(_entryOverrides);
-    overrides[rowIndex] = _entryAt(rowIndex).withVisualPatch(patch);
+    if (!_rowProjectionCache.acceptVisualPatch(patch)) return null;
     return _DeferredViewportProjection(
       rowProjectionCache: _rowProjectionCache,
       rowIndices: _rowIndices,
-      entryOverrides: overrides,
     );
   }
 
@@ -951,14 +1021,56 @@ final class _DeferredViewportProjection {
     required int entryCount,
     required LedgerDirection direction,
     required Map<String, Object?>? nextCursor,
-  }) => Object.hash(
-    queryKey,
-    revision,
-    entryCount,
-    direction,
-    _groupContentIdentity,
-    nextCursor?['entryId'],
-  );
+  }) {
+    _refreshSharedVisualProjectionIfNeeded();
+    return Object.hash(
+      queryKey,
+      revision,
+      entryCount,
+      direction,
+      _groupContentIdentity,
+      nextCursor?['entryId'],
+    );
+  }
+
+  List<String> get stableRowIdentities {
+    _refreshSharedVisualProjectionIfNeeded();
+    return _stableRowIdentities ??= List<String>.unmodifiable(
+      _rowIndices.map((index) => _entryAt(index).id),
+    );
+  }
+
+  List<String> get stableAssetIdentities {
+    _refreshSharedVisualProjectionIfNeeded();
+    return _stableAssetIdentities ??= List<String>.unmodifiable(<String>{
+      for (final index in _rowIndices)
+        '${_entryAt(index).categoryColorId ?? 'fallback'}|'
+            '${_entryAt(index).categoryIconId ?? 'fallback'}|'
+            '${_entryAt(index).partnerAvatarColorId ?? 'fallback'}|'
+            '${_entryAt(index).partnerAvatarIconId ?? 'fallback'}',
+    });
+  }
+
+  void _refreshSharedVisualProjectionIfNeeded() {
+    // Local overrides already describe a one-off immutable overlay. Shared
+    // cache updates are used only by the normal prepared ghost variants.
+    if (_entryOverrides.isNotEmpty) return;
+    final nextGeneration = _rowProjectionCache.visualGeneration;
+    if (_observedVisualGeneration == nextGeneration) return;
+    _observedVisualGeneration = nextGeneration;
+    _stableRowIdentities = null;
+    _stableAssetIdentities = null;
+    if (!_isProjected) return;
+    // A previously visited ghost mode may own a rich scene assembled before
+    // an editor save. Drop that bounded derivation so its next presentation
+    // obtains the same accepted row as every other mode, without rebuilding
+    // the prepared financial index or reading the repository.
+    _isProjected = false;
+    _builder = null;
+    _rich = null;
+    _richProjectedRowCount = 0;
+    _richProjectionMicros = 0;
+  }
 
   int _rawGroupContentIdentity() {
     // A frame identity needs only exact compact row ordering. Day labels and
@@ -966,6 +1078,7 @@ final class _DeferredViewportProjection {
     // scene window consumes this payload.
     return Object.hashAll(<Object?>[
       ..._rowIndices,
+      _rowProjectionCache.visualGeneration,
       for (final entry in _entryOverrides.entries)
         Object.hash(
           entry.key,
