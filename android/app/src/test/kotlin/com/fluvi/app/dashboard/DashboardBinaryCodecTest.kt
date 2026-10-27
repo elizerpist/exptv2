@@ -418,7 +418,10 @@ class DashboardBinaryCodecTest {
     }
 
     private fun DataInputStream.skipDashboardRow() {
-        repeat(10) { readLengthPrefixedUtf8() }
+        // The row stores the partner's stable avatar visual separately from
+        // the effective transaction category. Keep this structural assertion
+        // aligned with DashboardBinaryCodec.writeRow(): 13 UTF-8 fields.
+        repeat(13) { readLengthPrefixedUtf8() }
         readLong()
         readLong()
         readInt()
