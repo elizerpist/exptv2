@@ -1782,6 +1782,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             .mindYearHeatmapPresentation,
                                         balancePresentationSettings:
                                             _balancePresentationSettings,
+                                        dashboardPresentationPreferences:
+                                            _dashboardPresentationPreferences,
                                         headerBounds: geometry.headerBounds,
                                       ),
                                     ],
@@ -2577,6 +2579,7 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
     this.mindHeaderScoreChartPresentation,
     this.mindYearHeatmapPresentation,
     this.balancePresentationSettings,
+    required this.dashboardPresentationPreferences,
     required this.headerBounds,
   });
 
@@ -2600,6 +2603,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   mindHeaderScoreChartPresentation;
   final MindYearHeatmapPresentationController? mindYearHeatmapPresentation;
   final BalancePresentationController? balancePresentationSettings;
+  final DashboardPresentationPreferencesController
+  dashboardPresentationPreferences;
   final DashboardBounds headerBounds;
 
   @override
@@ -2677,6 +2682,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
                               mindYearHeatmapPresentation,
                           balancePresentationSettings:
                               balancePresentationSettings,
+                          dashboardPresentationPreferences:
+                              dashboardPresentationPreferences,
                         ),
                       ),
                     ),

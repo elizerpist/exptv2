@@ -170,7 +170,9 @@ final class _ManualTransactionEditorState
       return;
     }
     if (selected case ExistingManualPartner(:final partnerId)) {
-      final partner = await widget.repository.getPartnerById(partnerId);
+      final partner =
+          selected.directoryEntry ??
+          await widget.repository.getPartnerById(partnerId);
       if (!mounted) return;
       setState(() {
         _partnerSelection = selected;
@@ -436,6 +438,9 @@ final class _ManualTransactionEditorState
                       title: Text(
                         _partner?.displayName ?? 'Partner kiválasztása',
                       ),
+                      leading: _partner == null
+                          ? null
+                          : PartnerCategoryAvatar(partner: _partner!),
                       subtitle: _partner == null
                           ? null
                           : Text(_partner!.defaultCategoryName),

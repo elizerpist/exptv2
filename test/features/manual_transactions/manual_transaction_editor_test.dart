@@ -4,6 +4,7 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_models.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_repository.dart';
 import 'package:fluvi/features/manual_transactions/presentation/manual_transaction_editor.dart';
+import 'package:fluvi/features/manual_transactions/presentation/partner_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -40,11 +41,33 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('manual-partner-field')));
       await tester.pumpAndSettle();
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is PartnerCategoryAvatar &&
+              widget.partner.categoryIconId == 'icon_02' &&
+              widget.partner.categoryColorId == 'color_02',
+        ),
+        findsOneWidget,
+        reason: 'The normal picker resolves the real catalog avatar.',
+      );
       await tester.tap(find.text('Tesco'));
       await tester.pumpAndSettle();
 
       expect(find.text('Partner alapértelmezése'), findsOneWidget);
       expect(find.text('Élelmiszer'), findsWidgets);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is PartnerCategoryAvatar &&
+              widget.partner.categoryIconId == 'icon_02' &&
+              widget.partner.categoryColorId == 'color_02',
+        ),
+        findsOneWidget,
+        reason:
+            'The selected field retains the partner-default catalog icon, '
+            'not the old fixed storefront glyph.',
+      );
       await tester.tap(
         find.byKey(const ValueKey('manual-category-dropdown-anchor')),
       );

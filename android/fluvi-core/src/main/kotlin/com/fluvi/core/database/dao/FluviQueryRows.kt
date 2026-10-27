@@ -50,6 +50,8 @@ internal data class FluviStringIdRow(
 internal data class FluviCommittedDashboardRow(
     @ColumnInfo(name = "entry_id")
     val entryId: String,
+    @ColumnInfo(name = "entry_revision")
+    val entryRevision: Long,
     @ColumnInfo(name = "direction")
     val direction: String,
     @ColumnInfo(name = "amount_minor")

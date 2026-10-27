@@ -176,6 +176,10 @@ void main() {
         nextCursor: null,
       );
 
+      // Materialize this sibling before the save. Its private outer holder
+      // used to keep returning these old rows after the shared cache changed.
+      expect(second.flatItems.single.row.categoryDisplayName, 'Élelmiszer');
+
       final patched = first.withVisualPatch(
         const DashboardLedgerVisualPatch(
           entryId: 'entry-1',

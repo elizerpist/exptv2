@@ -926,7 +926,7 @@ class FluviLedgerReadService internal constructor(
         }.orEmpty()
         arguments += limit
         val sql = "SELECT * FROM (" +
-            "SELECT ledger.id AS timeline_id, ledger.direction AS direction, " +
+            "SELECT ledger.id AS timeline_id, ledger.revision AS entry_revision, ledger.direction AS direction, " +
             "ledger.amount_scaled_100 AS amount_minor, " +
             "ledger.booked_local_epoch_day AS booked_local_epoch_day, " +
             "ledger.booked_local_time_minutes AS booked_local_time_minutes, " +
@@ -948,7 +948,7 @@ class FluviLedgerReadService internal constructor(
             "JOIN fluvi_categories AS category ON category.id = ledger.category_id " +
             ledgerWhere.sql +
             " UNION ALL " +
-            "SELECT 'ghost:' || occurrence.id AS timeline_id, occurrence.direction AS direction, " +
+            "SELECT 'ghost:' || occurrence.id AS timeline_id, occurrence.revision AS entry_revision, occurrence.direction AS direction, " +
             "COALESCE(occurrence.expected_amount_scaled_100, 0) AS amount_minor, " +
             "occurrence.expected_local_epoch_day AS booked_local_epoch_day, " +
             "occurrence.expected_local_time_minutes AS booked_local_time_minutes, " +
@@ -1133,6 +1133,7 @@ class FluviLedgerReadService internal constructor(
 
     private fun Cursor.toPresentationRow(): FluviDashboardLedgerRow = FluviDashboardLedgerRow(
         entryId = string("timeline_id"),
+        entryRevision = long("entry_revision"),
         direction = LedgerDirection.valueOf(string("direction")),
         amountMinor = long("amount_minor"),
         bookedLocalEpochDay = long("booked_local_epoch_day"),
@@ -1269,6 +1270,7 @@ class FluviLedgerReadService internal constructor(
     private fun toDashboardRow(row: FluviCommittedDashboardRow): FluviDashboardLedgerRow =
         FluviDashboardLedgerRow(
             entryId = row.entryId,
+            entryRevision = row.entryRevision,
             direction = LedgerDirection.valueOf(row.direction),
             amountMinor = row.amountMinor,
             bookedLocalEpochDay = row.bookedLocalEpochDay,
@@ -1290,7 +1292,7 @@ class FluviLedgerReadService internal constructor(
         )
 
     private fun committedDashboardPageSql(whereSql: String): String =
-        "SELECT ledger.id AS entry_id, ledger.direction AS direction, " +
+        "SELECT ledger.id AS entry_id, ledger.revision AS entry_revision, ledger.direction AS direction, " +
             "ledger.amount_scaled_100 AS amount_minor, " +
             "ledger.booked_local_epoch_day AS booked_local_epoch_day, " +
             "ledger.booked_local_time_minutes AS booked_local_time_minutes, " +
@@ -1368,6 +1370,7 @@ class FluviLedgerReadService internal constructor(
         val partnerAvatarCategory = categories[partner.defaultCategoryId]
         return FluviDashboardLedgerRow(
             entryId = id,
+            entryRevision = revision,
             direction = direction,
             amountMinor = amountScaled100,
             bookedLocalEpochDay = bookedLocalEpochDay,
@@ -1402,6 +1405,7 @@ class FluviLedgerReadService internal constructor(
         val partnerAvatarCategory = categories[partner.defaultCategoryId]
         return FluviDashboardLedgerRow(
             entryId = "ghost:$id",
+            entryRevision = revision,
             direction = direction,
             amountMinor = expectedAmountScaled100 ?: 0L,
             bookedLocalEpochDay = expectedLocalEpochDay,

@@ -37,6 +37,8 @@ class DashboardLogRowViewModel {
     this.categoryId = '',
     this.partnerId = '',
     this.partnerDisplayName = '',
+    this.visualIdentity = 0,
+    this.entryRevision = 0,
   }) : categoryColorHandle = CategoryColorCatalog.handleOf(categoryColorId),
        categoryIconHandle = CategoryIconCatalog.handleOf(categoryIconId),
        partnerAvatarColorHandle = CategoryColorCatalog.handleOf(
@@ -61,6 +63,7 @@ class DashboardLogRowViewModel {
          categoryIconId,
          partnerAvatarColorId,
          partnerAvatarIconId,
+         visualIdentity,
        );
 
   /// Rich per-row presentation is intentionally created only by a bounded
@@ -96,6 +99,8 @@ class DashboardLogRowViewModel {
       categoryId: entry.categoryId,
       partnerId: entry.partnerId,
       partnerDisplayName: entry.partnerDisplayName ?? displayName,
+      visualIdentity: entry.visualIdentity,
+      entryRevision: entry.visualRevision,
       semanticLabel:
           '${entry.isPendingGhost ? 'Várható, ' : ''}$displayName, $formattedAmount, '
           '${isExpense ? 'kiadás' : 'bevétel'}, $categoryDisplayName',
@@ -122,6 +127,8 @@ class DashboardLogRowViewModel {
   final String categoryId;
   final String partnerId;
   final String partnerDisplayName;
+  final int visualIdentity;
+  final int entryRevision;
   final int categoryColorHandle;
   final int categoryIconHandle;
   final int partnerAvatarColorHandle;
@@ -180,6 +187,8 @@ class DashboardLogRowViewModel {
       categoryId: patch.categoryId,
       partnerId: partnerId,
       partnerDisplayName: patch.partnerDisplayName,
+      visualIdentity: patch.visualIdentity,
+      entryRevision: patch.entryRevision,
       semanticLabel:
           '${isPendingGhost ? 'Várható, ' : ''}${patch.partnerDisplayName}, '
           '$formattedAmount, $directionLabel, $categoryDisplay',
@@ -198,6 +207,14 @@ class DashboardLogRowViewModel {
 /// scopes share one immutable row presentation without making every sparse
 /// frame eager. Eviction only drops the pool's lookup reference; any active
 /// viewport/scene still owns its immutable row object directly.
+enum DashboardLogVisualPatchResult {
+  applied,
+  alreadyCurrent,
+  staleEntryRevision,
+  rowNotFound,
+  financialIdentityMismatch,
+}
+
 final class DashboardLogRowProjectionCache {
   DashboardLogRowProjectionCache(
     List<DashboardLedgerEntry> rows, {
@@ -218,6 +235,7 @@ final class DashboardLogRowProjectionCache {
       <int, DashboardLedgerEntry>{};
   final Map<int, DashboardLogRowViewModel> _projected =
       <int, DashboardLogRowViewModel>{};
+  final Map<String, int> _acceptedVisualRevisions = <String, int>{};
   int _visualGeneration = 0;
   int _newProjectionCount = 0;
   int _reusedProjectionCount = 0;
@@ -240,19 +258,30 @@ final class DashboardLogRowProjectionCache {
   /// ghost-mode projection that shares this row table. It intentionally does
   /// not edit financial membership, ordering or amounts: the following Core
   /// revision still owns those values.
-  bool acceptVisualPatch(DashboardLedgerVisualPatch patch) {
+  DashboardLogVisualPatchResult acceptVisualPatch(
+    DashboardLedgerVisualPatch patch,
+  ) {
     final index = _rowIndexById[patch.entryId];
-    if (index == null) return false;
+    if (index == null) return DashboardLogVisualPatchResult.rowNotFound;
     final current = entryAt(index);
+    final acceptedRevision =
+        _acceptedVisualRevisions[patch.entryId] ?? current.visualRevision;
+    if (patch.entryRevision < acceptedRevision) {
+      return DashboardLogVisualPatchResult.staleEntryRevision;
+    }
+    if (patch.entryRevision == acceptedRevision &&
+        current.visualIdentity == patch.visualIdentity) {
+      return DashboardLogVisualPatchResult.alreadyCurrent;
+    }
     if (current.direction != patch.direction ||
         current.amountMinor != patch.amountMinor ||
         current.bookedLocalEpochDay != patch.bookedLocalEpochDay ||
         current.bookedLocalTimeMinutes != patch.bookedLocalTimeMinutes) {
-      return false;
+      return DashboardLogVisualPatchResult.financialIdentityMismatch;
     }
     final patched = current.withVisualPatch(patch);
-    if (identical(patched, current)) return false;
     _visualOverlays[index] = patched;
+    _acceptedVisualRevisions[patch.entryId] = patch.entryRevision;
     // A pre-projected row may already be used by another prepared ghost
     // mode. Replace only that single row; no icon/paragraph work for its
     // unaffected neighbours is repeated.
@@ -260,7 +289,7 @@ final class DashboardLogRowProjectionCache {
       _projected[index] = DashboardLogRowViewModel.fromLedgerEntry(patched);
     }
     _visualGeneration += 1;
-    return true;
+    return DashboardLogVisualPatchResult.applied;
   }
 
   DashboardLogRowViewModel projectAt(int index) {
@@ -671,10 +700,19 @@ class DashboardLogViewportState {
   final _DashboardLogViewportProjectionHolder _projectionHolder =
       _DashboardLogViewportProjectionHolder();
 
-  _DashboardLogViewportProjection get _resolvedProjection =>
-      _projectionHolder.value ??= _eagerGroups == null
-      ? _deferred!.project()
-      : _DashboardLogViewportProjection.fromGroups(_eagerGroups);
+  _DashboardLogViewportProjection get _resolvedProjection {
+    final deferred = _deferred;
+    if (deferred != null) {
+      // A materialized holder cannot bypass the shared row-cache generation.
+      // `project()` refreshes/deletes an obsolete rich projection first, then
+      // this holder follows that exact accepted result.
+      final projection = deferred.project();
+      _projectionHolder.value = projection;
+      return projection;
+    }
+    return _projectionHolder.value ??=
+        _DashboardLogViewportProjection.fromGroups(_eagerGroups!);
+  }
 
   List<DashboardDayLogGroupViewModel> get groups => _resolvedProjection.groups;
   List<DashboardLogViewportItemViewModel> get flatItems =>
@@ -739,6 +777,7 @@ class DashboardLogViewportState {
         assignmentMode: row.hasCategoryOverride
             ? 'entryOverride'
             : 'partnerDefault',
+        visualRevision: row.entryRevision,
       );
     }
     return null;
@@ -820,7 +859,8 @@ class DashboardLogViewportState {
     if (deferred != null) {
       final patched = deferred.withVisualPatch(patch);
       if (patched == null) return null;
-      return DashboardLogViewportState._deferred(
+      if (identical(patched, deferred)) return this;
+      final replacement = DashboardLogViewportState._deferred(
         queryKey: queryKey,
         revision: revision,
         entryCount: entryCount,
@@ -828,13 +868,30 @@ class DashboardLogViewportState {
         direction: direction,
         deferred: patched,
       );
+      // Row text changes do not alter slot geometry. Preserve the explicit
+      // Phase-A readiness contract when this payload had already entered a
+      // renderer/resource bank, without materializing its rich projection.
+      if (_semanticPreviewGeometryHolder.value != null) {
+        replacement.prepareSemanticPreviewGeometry();
+      }
+      return replacement;
     }
+    var matched = false;
     var changed = false;
     final groups = <DashboardDayLogGroupViewModel>[];
     for (final group in _eagerGroups!) {
       final rows = <DashboardLogRowViewModel>[];
       for (final row in group.rows) {
         if (row.entryId == patch.entryId) {
+          matched = true;
+          if (patch.entryRevision < row.entryRevision) {
+            return null;
+          }
+          if (patch.entryRevision == row.entryRevision &&
+              patch.visualIdentity == row.visualIdentity) {
+            rows.add(row);
+            continue;
+          }
           changed = true;
           rows.add(row.withVisualPatch(patch));
         } else {
@@ -849,7 +906,8 @@ class DashboardLogViewportState {
         ),
       );
     }
-    if (!changed) return null;
+    if (!matched) return null;
+    if (!changed) return this;
     return DashboardLogViewportState(
       queryKey: queryKey,
       revision: revision,
@@ -858,6 +916,18 @@ class DashboardLogViewportState {
       nextCursor: nextCursor,
       direction: direction,
     );
+  }
+
+  /// Compact, no-rich-projection visual identity for the Phase-A lookup.
+  /// It lets the prepared bank reject a stale paragraph resource even when a
+  /// save keeps the global Core revision unchanged.
+  int? semanticPreviewVisualIdentityForId(String entryId) {
+    final deferred = _deferred;
+    if (deferred != null) return deferred.entryForId(entryId)?.visualIdentity;
+    for (final item in _resolvedProjection.flatItems) {
+      if (item.row.entryId == entryId) return item.row.visualIdentity;
+    }
+    return null;
   }
 
   bool hasSameVisualValue(DashboardLogViewportState other) =>
@@ -1008,7 +1078,13 @@ final class _DeferredViewportProjection {
       }
     }
     if (rowIndex == null) return null;
-    if (!_rowProjectionCache.acceptVisualPatch(patch)) return null;
+    final result = _rowProjectionCache.acceptVisualPatch(patch);
+    if (result == DashboardLogVisualPatchResult.alreadyCurrent) return this;
+    if (result == DashboardLogVisualPatchResult.rowNotFound ||
+        result == DashboardLogVisualPatchResult.financialIdentityMismatch ||
+        result == DashboardLogVisualPatchResult.staleEntryRevision) {
+      return null;
+    }
     return _DeferredViewportProjection(
       rowProjectionCache: _rowProjectionCache,
       rowIndices: _rowIndices,
@@ -1090,6 +1166,7 @@ final class _DeferredViewportProjection {
           entry.value.categoryColorId,
           entry.value.categoryIconId,
           entry.value.assignmentMode,
+          entry.value.visualRevision,
         ),
     ]);
   }
@@ -1304,7 +1381,7 @@ final class _DashboardLogViewportProjection {
         (group) => Object.hash(
           group.dateKey,
           group.dayLabel,
-          Object.hashAll(group.rows.map((row) => row.entryId)),
+          Object.hashAll(group.rows.map((row) => row.textLayoutId)),
         ),
       ),
     ),

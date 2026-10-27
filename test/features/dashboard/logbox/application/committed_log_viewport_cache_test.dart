@@ -6,6 +6,7 @@ import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -738,6 +739,99 @@ void main() {
     expect(cache.queryKey, nextScope.key);
     expect(cache.pageForOrdinal(1), isNull);
   });
+
+  testWidgets(
+    'saved visual patch replaces a prepared later committed page without moving geometry',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      cache.seed(
+        _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+        generation: 1,
+        geometryManifest: _manifest(scope, total: 48),
+      );
+      cache.configureSurfaceWidth(378);
+      expect(cache.activateVerticalRendering(hasExactRailScene: true), isTrue);
+      expect(
+        cache.commit(_page(scope, ordinal: 1, total: 48, nextCursor: null)),
+        isTrue,
+      );
+      await tester.pump();
+
+      final geometry = cache.drawableExtent;
+      final before = cache.pageForOrdinal(1)!;
+      final beforePrepared = cache.preparedPageForOrdinal(1)!;
+      expect(beforePrepared.rowLayoutCount, 24);
+
+      final result = cache.applyVisualPatch(
+        const DashboardLedgerVisualPatch(
+          entryId: 'row-24',
+          partnerId: 'partner-24',
+          direction: 'expense',
+          amountMinor: 100000,
+          bookedLocalEpochDay: 20000,
+          bookedLocalTimeMinutes: 600,
+          partnerDisplayName: 'Név 24',
+          partnerAvatarCategoryId: 'fallback',
+          partnerAvatarColorId: 'fallback',
+          partnerAvatarIconId: 'fallback',
+          categoryId: 'clothes',
+          categoryDisplayName: 'Ruházat',
+          categoryColorId: 'orange',
+          categoryIconId: 'hanger',
+          assignmentMode: 'entryOverride',
+          entryRevision: 1,
+        ),
+      );
+
+      expect(result, CommittedLogVisualPatchResult.installed);
+      final after = cache.pageForOrdinal(1)!;
+      final item = after.payload.flatItems.singleWhere(
+        (candidate) => candidate.row.entryId == 'row-24',
+      );
+      expect(after, isNot(same(before)));
+      expect(item.row.categoryDisplayName, 'Ruházat');
+      expect(item.row.hasCategoryOverride, isTrue);
+      expect(cache.drawableExtent, geometry);
+      expect(cache.preparedPageForOrdinal(1)!.rowFor(item), isNotNull);
+      expect(cache.preparedPageForOrdinal(1)!.rowLayoutCount, 24);
+
+      expect(
+        cache.applyVisualPatch(
+          const DashboardLedgerVisualPatch(
+            entryId: 'row-24',
+            partnerId: 'partner-24',
+            direction: 'expense',
+            amountMinor: 100000,
+            bookedLocalEpochDay: 20000,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Név 24',
+            partnerAvatarCategoryId: 'fallback',
+            partnerAvatarColorId: 'fallback',
+            partnerAvatarIconId: 'fallback',
+            categoryId: 'food',
+            categoryDisplayName: 'Élelmiszer',
+            categoryColorId: 'blue',
+            categoryIconId: 'basket',
+            assignmentMode: 'partnerDefault',
+            entryRevision: 0,
+          ),
+        ),
+        CommittedLogVisualPatchResult.staleEntryRevision,
+      );
+      expect(
+        cache
+            .pageForOrdinal(1)!
+            .payload
+            .flatItems
+            .singleWhere((candidate) => candidate.row.entryId == 'row-24')
+            .row
+            .categoryDisplayName,
+        'Ruházat',
+        reason: 'A late pre-save result may not restore the old badge.',
+      );
+    },
+  );
 }
 
 CommittedLogPage _page(

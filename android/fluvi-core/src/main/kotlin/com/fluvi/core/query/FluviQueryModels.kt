@@ -152,6 +152,8 @@ data class FluviDashboardLedgerRow(
     val recurrenceOccurrenceId: String? = null,
     /** Unknown expected recurring amounts must never be rendered or aggregated as 0 Ft. */
     val amountIsUnknown: Boolean = false,
+    /** Entry-local ordering for a visual patch; independent from Core revision. */
+    val entryRevision: Long = 0L,
 )
 
 data class FluviDashboardLedgerSlice(

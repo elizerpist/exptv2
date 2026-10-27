@@ -1400,6 +1400,46 @@ void main() {
       expect(first.timeText, '10:00');
       expect(first.textLayout.title.debugDisposed, isFalse);
 
+      final patched = payload.withVisualPatch(
+        const DashboardLedgerVisualPatch(
+          entryId: 'deferred-7-0',
+          partnerId: 'partner-0',
+          direction: 'income',
+          amountMinor: 1,
+          bookedLocalEpochDay: 20_000,
+          bookedLocalTimeMinutes: 600,
+          partnerDisplayName: 'Partner 0',
+          partnerAvatarCategoryId: 'fallback',
+          partnerAvatarColorId: 'fallback',
+          partnerAvatarIconId: 'fallback',
+          categoryId: 'patched-category',
+          categoryDisplayName: 'Patched category',
+          categoryColorId: 'orange',
+          categoryIconId: 'hanger',
+          assignmentMode: 'entryOverride',
+          entryRevision: 1,
+        ),
+      );
+      expect(patched, isNotNull);
+      expect(
+        cache.readablePhaseARowFor(patched!, ordinal: 0),
+        isNull,
+        reason:
+            'A same-Core-revision Phase-A row must still be rejected when '
+            'its effective visual content changed.',
+      );
+
+      final patchedWindow = DashboardLogBoxSceneWindow(
+        identity: 'readable-phase-a-after-category-save',
+        payloads: <DashboardLogViewportState>[patched],
+      );
+      await cache.prepareWindow(window: patchedWindow, surfaceWidth: 378);
+      cache.activateWindow(patchedWindow);
+      expect(
+        cache.readablePhaseARowFor(patched, ordinal: 0)!.secondaryText,
+        'Patched category',
+      );
+
       final wrongRevision = DashboardLogViewportState.deferredPreparedOrdered(
         scope: CurrentLedgerQueryScope(
           direction: LedgerDirection.income,

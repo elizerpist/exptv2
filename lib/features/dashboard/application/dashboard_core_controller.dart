@@ -89,6 +89,19 @@ enum DashboardMotionLane {
   budgetAvatar,
 }
 
+/// Completion state for the editor's bounded, renderer-ready save handoff.
+/// These values intentionally distinguish a harmless no-op from a stale save
+/// or a category membership change that must wait for the authoritative
+/// revision-owned query publication.
+enum DashboardSaveVisualPatchOutcome {
+  installed,
+  alreadyCurrent,
+  rowNotInCurrentView,
+  staleEntryRevision,
+  categoryMembershipChanged,
+  renderResourcePreparationRejected,
+}
+
 /// The producer that owns the current direct-manipulation foreground lease.
 ///
 /// This coordinates existing controller, cache and visible-frame owners; it
@@ -1243,6 +1256,8 @@ final class DashboardCoreController {
   bool _budgetDistributionWarmupDrainScheduled = false;
   DashboardPreparedRevisionBundle? _activePreparedRevisionBundle;
   DashboardLogBoxSceneWindow? _activeSceneWindow;
+  final Map<String, DashboardLedgerVisualPatch> _acceptedSaveVisualPatches =
+      <String, DashboardLedgerVisualPatch>{};
   // Records only a scene synchronously promoted from immutable active
   // resources for the current Avatar Phase-A target. It is intentionally
   // narrower than the revision-scoped rail-bank coverage identity: canonical
@@ -1939,19 +1954,49 @@ final class DashboardCoreController {
   /// Before it arrives, this method may admit the Core-confirmed visual row
   /// into the currently visible immutable LogBox frame; it never treats the
   /// transaction row revision as a financial Core revision.
-  Future<void> acceptKnownCoreRevision(
+  Future<DashboardSaveVisualPatchOutcome> acceptKnownCoreRevision(
     int coreRevision, {
     DashboardLedgerVisualPatch? visualPatch,
   }) async {
-    if (_disposed || coreRevision <= 0) return;
+    if (_disposed || coreRevision <= 0) {
+      return DashboardSaveVisualPatchOutcome.rowNotInCurrentView;
+    }
     // The persisted result is the only visual input accepted before the next
     // revision-owned aggregation arrives. Complete the bounded visible-row
     // admission before the editor route closes; the data runtime then merges
     // the same or a newer authoritative revision normally.
-    if (visualPatch != null) {
-      _publishSaveResultVisualPatch(visualPatch);
-    }
+    final outcome = visualPatch == null
+        ? DashboardSaveVisualPatchOutcome.rowNotInCurrentView
+        : await _publishSaveResultVisualPatch(visualPatch);
     dataRuntime.acceptKnownCoreRevision(coreRevision);
+    if (outcome == DashboardSaveVisualPatchOutcome.categoryMembershipChanged) {
+      // A category predicate changes list membership rather than only a row's
+      // decoration. A paint overlay must not leave that row in the filtered
+      // result, so this exceptional path waits for the normal immutable query
+      // publication that owns its new geometry and cursors.
+      await _awaitVisibleCoreRevision(coreRevision);
+    }
+    return outcome;
+  }
+
+  Future<void> _awaitVisibleCoreRevision(int minimumCoreRevision) {
+    final current = visibleFrames.value;
+    if (current != null && current.coreRevision >= minimumCoreRevision) {
+      return Future<void>.value();
+    }
+    final ready = Completer<void>();
+    void listener() {
+      final frame = visibleFrames.value;
+      if (frame == null || frame.coreRevision < minimumCoreRevision) return;
+      visibleFrames.removeListener(listener);
+      if (!ready.isCompleted) ready.complete();
+    }
+
+    visibleFrames.addListener(listener);
+    // The frame could have arrived between the initial read and listener
+    // installation; close that race without a polling/timer fallback.
+    listener();
+    return ready.future;
   }
 
   /// Admits one Core-confirmed visual row into the active LogBox projection.
@@ -1959,9 +2004,29 @@ final class DashboardCoreController {
   /// membership and aggregates remain revision-owned. The same patch is
   /// guarded by the saved row identity, so an older response cannot repaint
   /// a different row as if it were current.
-  bool _publishSaveResultVisualPatch(DashboardLedgerVisualPatch patch) {
+  Future<DashboardSaveVisualPatchOutcome> _publishSaveResultVisualPatch(
+    DashboardLedgerVisualPatch patch,
+  ) async {
+    final accepted = _acceptedSaveVisualPatches[patch.entryId];
+    if (accepted != null && patch.entryRevision < accepted.entryRevision) {
+      return DashboardSaveVisualPatchOutcome.staleEntryRevision;
+    }
+    if (accepted != null &&
+        patch.entryRevision == accepted.entryRevision &&
+        patch.visualIdentity == accepted.visualIdentity) {
+      return DashboardSaveVisualPatchOutcome.alreadyCurrent;
+    }
     final visible = visibleFrames.value;
-    if (visible == null) return false;
+    if (visible == null) {
+      return DashboardSaveVisualPatchOutcome.rowNotInCurrentView;
+    }
+    final activeScope = currentQuery.queries.scopeFor(visible.direction);
+    if (activeScope.categoryIds.isNotEmpty &&
+        !activeScope.categoryIds.contains(patch.categoryId)) {
+      // A visual overlay must never keep a row inside a category-filtered
+      // result after the persisted category moved outside that membership.
+      return DashboardSaveVisualPatchOutcome.categoryMembershipChanged;
+    }
     final previous = visible.logBox.semanticPreviewLedgerEntryForId(
       patch.entryId,
     );
@@ -1972,15 +2037,55 @@ final class DashboardCoreController {
             previous.bookedLocalEpochDay != patch.bookedLocalEpochDay) ||
         (previous.bookedLocalTimeMinutes != 0 &&
             previous.bookedLocalTimeMinutes != patch.bookedLocalTimeMinutes)) {
-      return false;
+      return DashboardSaveVisualPatchOutcome.rowNotInCurrentView;
+    }
+    if (patch.entryRevision < previous.visualRevision) {
+      return DashboardSaveVisualPatchOutcome.staleEntryRevision;
+    }
+    if (patch.entryRevision == previous.visualRevision &&
+        patch.visualIdentity == previous.visualIdentity) {
+      return DashboardSaveVisualPatchOutcome.alreadyCurrent;
     }
     final logBox = visible.logBox.withVisualPatch(patch);
-    if (logBox == null) return false;
+    if (logBox == null) {
+      return DashboardSaveVisualPatchOutcome.staleEntryRevision;
+    }
+    final sceneWindow = _patchedActiveSceneWindow(
+      patch: patch,
+      oldPayload: visible.logBox,
+      patchedPayload: logBox,
+    );
+    final prepare = _sceneWindowPreparer;
+    final activate = _sceneWindowActivator;
+    if (sceneWindow != null && prepare != null && activate != null) {
+      try {
+        await prepare(sceneWindow, retainViewportId: logBox.viewportId);
+        if (_disposed || !identical(visibleFrames.value, visible)) {
+          return DashboardSaveVisualPatchOutcome
+              .renderResourcePreparationRejected;
+        }
+        _activateSceneWindow(sceneWindow, activate: activate);
+      } on Object {
+        return DashboardSaveVisualPatchOutcome
+            .renderResourcePreparationRejected;
+      }
+    }
+    final committedResult = committedLogViewport.applyVisualPatch(patch);
+    if (committedResult == CommittedLogVisualPatchResult.staleEntryRevision) {
+      return DashboardSaveVisualPatchOutcome.staleEntryRevision;
+    }
+    if (committedResult ==
+        CommittedLogVisualPatchResult.financialIdentityMismatch) {
+      return DashboardSaveVisualPatchOutcome.rowNotInCurrentView;
+    }
     final patched = visible.withVisualLogBox(
       logBox,
       frameGeneration: visibleFrames.nextFrameGeneration(),
     );
-    if (!visibleFrames.publish(patched)) return false;
+    if (!visibleFrames.publish(patched)) {
+      return DashboardSaveVisualPatchOutcome.renderResourcePreparationRejected;
+    }
+    _recordAcceptedVisualPatch(patch);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'MANUAL_SAVE_VISIBLE_ROW_PATCHED',
@@ -1992,7 +2097,72 @@ final class DashboardCoreController {
             'category=${patch.categoryId}',
       ),
     );
-    return true;
+    return DashboardSaveVisualPatchOutcome.installed;
+  }
+
+  /// Replaces one payload in the current immutable scene window while keeping
+  /// the same resource-bank/coverage identity. The scene preparer reuses all
+  /// unchanged layouts and shapes only the changed row before activation.
+  DashboardLogBoxSceneWindow? _patchedActiveSceneWindow({
+    required DashboardLedgerVisualPatch patch,
+    required DashboardLogViewportState oldPayload,
+    required DashboardLogViewportState patchedPayload,
+  }) {
+    final active = _activeSceneWindow;
+    if (active == null) return null;
+    var replaced = false;
+    final payloads = active.payloads
+        .map((payload) {
+          if (payload.queryKey == oldPayload.queryKey) {
+            replaced = true;
+            return patchedPayload;
+          }
+          // A rail-critical window can retain another ghost mode or an adjacent
+          // temporal scope. Give every resident occurrence of this entry the
+          // same accepted row version before its bank is activated; each payload
+          // still owns its own membership and geometry.
+          if (payload.semanticPreviewLedgerEntryForId(patch.entryId) == null) {
+            return payload;
+          }
+          final replacement = payload.withVisualPatch(patch);
+          if (replacement == null) return payload;
+          replaced = true;
+          return replacement;
+        })
+        .toList(growable: false);
+    if (!replaced) return null;
+    return DashboardLogBoxSceneWindow(
+      identity: active.identity,
+      coverageIdentity: active.coverageIdentity,
+      payloads: payloads,
+    );
+  }
+
+  void _recordAcceptedVisualPatch(DashboardLedgerVisualPatch patch) {
+    _acceptedSaveVisualPatches[patch.entryId] = patch;
+    // This is a hand-off ledger for independently-owned, already prepared
+    // projections, not another dashboard store. Keep it bounded while a
+    // normal Core publication is in flight.
+    while (_acceptedSaveVisualPatches.length > 128) {
+      _acceptedSaveVisualPatches.remove(_acceptedSaveVisualPatches.keys.first);
+    }
+  }
+
+  void _admitAcceptedVisualPatchesInto(
+    Iterable<DashboardLogViewportState> payloads,
+  ) {
+    if (_acceptedSaveVisualPatches.isEmpty) return;
+    for (final payload in payloads) {
+      for (final patch in _acceptedSaveVisualPatches.values) {
+        final resident = payload.semanticPreviewLedgerEntryForId(patch.entryId);
+        if (resident == null || resident.visualRevision > patch.entryRevision) {
+          continue;
+        }
+        // Deferred projections own their row cache. Calling this bounded
+        // admission updates that owner; no new query/index is created.
+        payload.withVisualPatch(patch);
+      }
+    }
   }
 
   /// Installs a revision publication from its ghost-neutral runtime source.
@@ -2641,22 +2811,28 @@ final class DashboardCoreController {
             partnerSnapshot.yearWindowStart == index.key.yearWindowStart &&
             partnerSnapshot.yearWindowEndInclusive ==
                 index.key.yearWindowEndInclusive);
+    final DashboardPreparedRevisionBundle bundle;
     if (!snapshotMatchesIndex || !partnerSnapshotMatchesIndex) {
       // Fail closed: Budget never borrows dense cells from a different
       // physical prepared-year window, even when a Time rebase keeps the same
       // Core revision. The header renders its explicit unavailable state until
       // the exact window snapshot reaches this publication boundary.
-      return DashboardPreparedRevisionBundle.forIndex(
+      bundle = DashboardPreparedRevisionBundle.forIndex(
         index,
         publicationState: publicationState,
       );
+    } else {
+      bundle = DashboardPreparedRevisionBundle.forIndex(
+        index,
+        publicationState: publicationState,
+        budgetLimitSnapshot: snapshot,
+        partnerDistributionSnapshot: partnerSnapshot,
+      );
     }
-    return DashboardPreparedRevisionBundle.forIndex(
-      index,
-      publicationState: publicationState,
-      budgetLimitSnapshot: snapshot,
-      partnerDistributionSnapshot: partnerSnapshot,
+    _admitAcceptedVisualPatchesInto(
+      bundle.structuralPublicationSceneWindow.payloads,
     );
+    return bundle;
   }
 
   /// Starts the invisible half of a Query edit.  Facets/counts are owned by

@@ -24,10 +24,12 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentat
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_glass_configuration.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_history_projection.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 
 Future<void> _openTunerTopics(
   WidgetTester tester,
@@ -43,6 +45,72 @@ Future<void> _openTunerTopics(
 }
 
 void main() {
+  setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
+
+  testWidgets(
+    'ghost filter icon packs live in the dashboard tuner and switch presentation only',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final preferences = DashboardPresentationPreferencesController(
+        store: InMemoryDashboardPresentationPreferencesStore(),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 4000,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              dashboardPresentationPreferences: preferences,
+            ),
+          ),
+        ),
+      );
+      expect(
+        tester
+            .widget<DashboardHeaderVisualTuner>(
+              find.byType(DashboardHeaderVisualTuner),
+            )
+            .dashboardPresentationPreferences,
+        same(preferences),
+      );
+      await tester.tap(find.text('MEGJELENÉS'));
+      await tester.pump();
+      expect(
+        controller.isTunerSectionExpanded(
+          DashboardHeaderTunerSection.appearance,
+        ),
+        isTrue,
+      );
+
+      expect(find.text('Ghost szűrő ikonjai'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-ghost-filter-icon-current'),
+        ),
+        findsOneWidget,
+      );
+      final receipt = find.byKey(
+        const ValueKey<String>('dashboard-ghost-filter-icon-receiptGhost'),
+      );
+      await tester.ensureVisible(receipt);
+      expect(receipt, findsOneWidget);
+
+      await tester.tap(receipt);
+      await tester.pump();
+      expect(
+        preferences.value.ghostQuickFilterIconPack,
+        DashboardGhostQuickFilterIconPack.receiptGhost,
+        reason:
+            'The dashboard-owned presentation preference changes in place; '
+            'the tuner does not own a query, transaction, or row-cache state.',
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      preferences.dispose();
+    },
+  );
+
   testWidgets(
     'MY-SETTINGS-RED-01: Year amount presentation and Day selector visibility live only in Mind Settings',
     (tester) async {

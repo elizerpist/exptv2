@@ -434,5 +434,6 @@ class DashboardBinaryCodecTest {
             skipBytes(recurrenceOccurrenceIdBytes)
         }
         readBoolean()
+        readLong()
     }
 }

@@ -7,6 +7,7 @@ import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
+import '../../query/data/dashboard_ledger_entry.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../presentation/dashboard_logbox_prepared_row_text_layout.dart';
 import 'committed_vertical_geometry_manifest.dart';
@@ -24,6 +25,16 @@ enum CommittedLogPageCommitRejection {
   nonContiguousOrdinal,
   geometryMismatch,
   prepareFailure,
+}
+
+/// Bounded result of applying one Core-confirmed visual mutation to already
+/// resident vertical pages. It never changes membership or geometry.
+enum CommittedLogVisualPatchResult {
+  installed,
+  alreadyCurrent,
+  staleEntryRevision,
+  rowNotInCommittedPages,
+  financialIdentityMismatch,
 }
 
 /// Injectable cooperative-work policy for private committed page text
@@ -335,6 +346,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       <int, CommittedLogPageCursorAnchor>{};
   final Map<int, CommittedPreparedLogPage> _preparedPages =
       <int, CommittedPreparedLogPage>{};
+  final Map<String, int> _acceptedVisualRevisions = <String, int>{};
   // Full scope geometry is immutable and independent from the bounded page
   // resource hotset. A page becoming paint-ready must never change Flutter's
   // content dimensions.
@@ -510,6 +522,85 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       _largestPagePreparationUiSliceMicros;
   int get pagePreparationYieldCount => _pagePreparationYieldCount;
   bool get isPagePreparationActive => _pagePreparationActive;
+
+  /// Replaces only the resident page(s) that contain [patch.entryId]. The
+  /// unchanged row layouts and day headers transfer to the next immutable
+  /// page; exactly one replacement row layout is prepared before notifying a
+  /// renderer. Scroll geometry, cursors and retained page ownership stay put.
+  CommittedLogVisualPatchResult applyVisualPatch(
+    DashboardLedgerVisualPatch patch,
+  ) {
+    _ensureUsable();
+    final accepted = _acceptedVisualRevisions[patch.entryId];
+    if (accepted != null && patch.entryRevision < accepted) {
+      return CommittedLogVisualPatchResult.staleEntryRevision;
+    }
+
+    final candidates = <int, CommittedLogPage>{..._pages};
+    final root = _rootPage;
+    if (root != null) candidates[root.ordinal] = root;
+    var sawRow = false;
+    var changed = false;
+    for (final candidate in candidates.entries) {
+      final ordinal = candidate.key;
+      final page = candidate.value;
+      final current = page.payload.semanticPreviewLedgerEntryForId(
+        patch.entryId,
+      );
+      if (current == null) continue;
+      sawRow = true;
+      if (current.direction != patch.direction ||
+          (current.amountMinor != 0 &&
+              current.amountMinor != patch.amountMinor) ||
+          (current.bookedLocalEpochDay != 0 &&
+              current.bookedLocalEpochDay != patch.bookedLocalEpochDay) ||
+          (current.bookedLocalTimeMinutes != 0 &&
+              current.bookedLocalTimeMinutes != patch.bookedLocalTimeMinutes)) {
+        return CommittedLogVisualPatchResult.financialIdentityMismatch;
+      }
+      if (current.visualRevision > patch.entryRevision) {
+        return CommittedLogVisualPatchResult.staleEntryRevision;
+      }
+      final patchedPayload = page.payload.withVisualPatch(patch);
+      if (patchedPayload == null) continue;
+      if (identical(patchedPayload, page.payload)) continue;
+      final replacement = CommittedLogPage(
+        queryKey: page.queryKey,
+        coreRevision: page.coreRevision,
+        generation: page.generation,
+        ordinal: page.ordinal,
+        startCursor: page.startCursor,
+        previousStartCursor: page.previousStartCursor,
+        payload: patchedPayload,
+      );
+      final prepared = _preparedPages[ordinal];
+      final replacementPrepared = prepared?.transferWithVisualPatch(
+        replacement,
+        entryId: patch.entryId,
+        typography: _typography,
+      );
+      if (ordinal == 0) {
+        _rootPage = replacement;
+      } else {
+        _pages[ordinal] = replacement;
+      }
+      _cursorAnchors[ordinal] = CommittedLogPageCursorAnchor(replacement);
+      if (replacementPrepared != null) {
+        _preparedPages[ordinal] = replacementPrepared;
+      }
+      changed = true;
+    }
+    if (!sawRow) return CommittedLogVisualPatchResult.rowNotInCommittedPages;
+    if (!changed) return CommittedLogVisualPatchResult.alreadyCurrent;
+    _acceptedVisualRevisions[patch.entryId] = patch.entryRevision;
+    _recalculateRetainedPageEstimatedBytes();
+    _refreshEstimatedBytes();
+    _presentationGeneration += 1;
+    _renderGeneration += 1;
+    notifyListeners();
+    _notifyResourceChanges();
+    return CommittedLogVisualPatchResult.installed;
+  }
 
   /// Replaces a complete immutable manifest for the same committed scope.
   ///
@@ -2620,6 +2711,7 @@ final class CommittedPreparedLogPage {
   final double surfaceWidth;
   final Map<String, DashboardPreparedLogBoxRowTextLayout> _rowLayouts;
   final Map<String, TextPainter> _dayHeaders;
+  bool _transferred = false;
 
   int get rowLayoutCount => _rowLayouts.length;
   int get dayHeaderCount => _dayHeaders.length;
@@ -2644,7 +2736,49 @@ final class CommittedPreparedLogPage {
         dayHeaders: _dayHeaders,
       );
 
+  /// Transfers every unchanged resource to [page] and prepares exactly the
+  /// replaced row before the new page becomes observable. The former holder
+  /// relinquishes disposal ownership, so shared rows cannot be disposed while
+  /// the replacement page is painting.
+  CommittedPreparedLogPage transferWithVisualPatch(
+    CommittedLogPage page, {
+    required String entryId,
+    required FluviTypographyProfile typography,
+  }) {
+    if (_transferred) {
+      throw StateError('A prepared committed page was already transferred.');
+    }
+    DashboardLogViewportItemViewModel? item;
+    for (final candidate in page.payload.flatItems) {
+      if (candidate.row.entryId == entryId) {
+        item = candidate;
+        break;
+      }
+    }
+    if (item == null) {
+      throw StateError('A patched committed page lost its resident row.');
+    }
+    final rows = Map<String, DashboardPreparedLogBoxRowTextLayout>.of(
+      _rowLayouts,
+    );
+    rows[entryId] = DashboardPreparedLogBoxRowTextLayout.prepare(
+      row: item.row,
+      surfaceWidth: surfaceWidth,
+      contentIdentity: item.row.textLayoutId,
+      typography: typography,
+    );
+    _transferred = true;
+    return CommittedPreparedLogPage._(
+      page: page,
+      surfaceWidth: surfaceWidth,
+      rowLayouts: rows,
+      dayHeaders: _dayHeaders,
+    );
+  }
+
   void dispose() {
+    if (_transferred) return;
+    _transferred = true;
     for (final layout in _rowLayouts.values) {
       layout.dispose();
     }

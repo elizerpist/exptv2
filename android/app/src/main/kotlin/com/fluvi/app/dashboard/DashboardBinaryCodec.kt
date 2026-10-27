@@ -268,6 +268,7 @@ object DashboardBinaryCodec {
         writeBoolean(row.isPendingGhost)
         writeNullableUtf8(row.recurrenceOccurrenceId)
         writeBoolean(row.amountIsUnknown)
+        writeLong(row.entryRevision)
     }
 
     private fun DataOutputStream.writeCursor(cursor: FluviTimelineCursor?) {

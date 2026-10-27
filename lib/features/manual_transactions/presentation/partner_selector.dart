@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/categories/catalog/category_visual_resolver.dart';
+import '../../../core/assets/prepared_vector_asset_atlas.dart';
+import '../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/categories/presentation/category_avatar_palette_scope.dart';
+import '../../../core/categories/presentation/category_icon_view.dart';
 import '../domain/manual_transaction_models.dart';
 import '../domain/manual_transaction_repository.dart';
 import 'partner_editor_popup.dart';
@@ -137,12 +141,15 @@ final class _PartnerSelectorState extends State<PartnerSelector> {
                         final partner = partners[index];
                         return ListTile(
                           key: ValueKey('manual-partner-${partner.partnerId}'),
-                          leading: _PartnerAvatar(partner: partner),
+                          leading: PartnerCategoryAvatar(partner: partner),
                           title: Text(partner.displayName),
                           subtitle: Text(partner.defaultCategoryName),
-                          onTap: () => Navigator.of(
-                            context,
-                          ).pop(ExistingManualPartner(partner.partnerId)),
+                          onTap: () => Navigator.of(context).pop(
+                            ExistingManualPartner(
+                              partner.partnerId,
+                              directoryEntry: partner,
+                            ),
+                          ),
                           trailing: IconButton(
                             tooltip: 'Partner szerkesztése',
                             icon: const Icon(Icons.edit_outlined),
@@ -173,23 +180,49 @@ final class _PartnerSelectorState extends State<PartnerSelector> {
   }
 }
 
-final class _PartnerAvatar extends StatelessWidget {
-  const _PartnerAvatar({required this.partner});
+/// The one partner-default avatar used by both picker rows and selected
+/// partner fields. Transaction category overrides intentionally never reach
+/// this component.
+final class PartnerCategoryAvatar extends StatelessWidget {
+  const PartnerCategoryAvatar({
+    super.key,
+    required this.partner,
+    this.size = 40,
+    this.iconSize = 20,
+  });
+
   final PartnerDirectoryEntry partner;
+  final double size;
+  final double iconSize;
+
   @override
   Widget build(BuildContext context) {
-    final visual = CategoryVisualResolver.resolve(
-      colorId: partner.categoryColorId,
-      iconId: partner.categoryIconId,
-    );
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        gradient: visual.gradient.gradient,
-        shape: BoxShape.circle,
+    final colorHandle = CategoryColorCatalog.handleOf(partner.categoryColorId);
+    final iconHandle = CategoryIconCatalog.handleOf(partner.categoryIconId);
+    final atlas = PreparedVectorAssetAtlas.instance;
+    final semanticName = CategoryIconCatalog.tokenForHandle(
+      iconHandle,
+    ).semanticName;
+    return Semantics(
+      label: '$semanticName · ${partner.defaultCategoryName}',
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          gradient: atlas.categoryGradient(
+            colorHandle,
+            profile: CategoryAvatarColorProfileScope.profileOf(context),
+          ),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: CategoryIconView(
+          picture: atlas.categoryIcon(iconHandle),
+          size: iconSize,
+          color: Colors.white,
+          semanticsLabel: semanticName,
+        ),
       ),
-      child: const Icon(Icons.storefront_rounded, color: Colors.white),
     );
   }
 }

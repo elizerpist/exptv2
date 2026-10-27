@@ -131,8 +131,13 @@ sealed class ManualPartnerSelection {
 }
 
 final class ExistingManualPartner extends ManualPartnerSelection {
-  const ExistingManualPartner(this.partnerId);
+  const ExistingManualPartner(this.partnerId, {this.directoryEntry});
   final String partnerId;
+
+  /// The selector already owns this immutable visual snapshot. Retaining it
+  /// lets normal and recurring editors render the selected partner without a
+  /// second directory read on every selection.
+  final PartnerDirectoryEntry? directoryEntry;
   @override
   Map<String, Object?> toMap() => <String, Object?>{
     'kind': 'existing',

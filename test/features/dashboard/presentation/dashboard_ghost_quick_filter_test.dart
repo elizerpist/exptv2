@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
+import 'package:fluvi/core/categories/presentation/category_icon_view.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_ghost_quick_filter.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
@@ -61,26 +62,37 @@ void main() {
   testWidgets('receipt and ghost pack changes only the control composition', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: DashboardGhostQuickFilter(
-            mode: GhostFilterMode.both,
-            iconPack: DashboardGhostQuickFilterIconPack.receiptGhost,
-            onTap: _noop,
+    for (final mode in GhostFilterMode.values) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardGhostQuickFilter(
+              mode: mode,
+              iconPack: DashboardGhostQuickFilterIconPack.receiptGhost,
+              onTap: _noop,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.byIcon(Icons.receipt_long_outlined), findsOneWidget);
-    expect(
-      tester.getSize(
-        find.byKey(const ValueKey('dashboard-ghost-quick-filter')),
-      ),
-      const Size(48, 48),
-    );
-    expect(find.byTooltip('Minden tranzakció és ghost'), findsOneWidget);
+      expect(
+        find.byIcon(Icons.receipt_long_outlined),
+        mode == GhostFilterMode.onlyGhost ? findsNothing : findsOneWidget,
+      );
+      expect(
+        find.byType(CategoryIconView),
+        mode == GhostFilterMode.nonGhost ? findsNothing : findsOneWidget,
+        reason:
+            'The receipt package keeps the existing ghost silhouette for '
+            'only-ghost and renders it as the both-state badge.',
+      );
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey('dashboard-ghost-quick-filter')),
+        ),
+        const Size(48, 48),
+      );
+    }
   });
 }
 

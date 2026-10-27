@@ -34,9 +34,7 @@ class _RecurringTransactionWizardPageState
   final _amount = TextEditingController();
   final _tolerance = TextEditingController(text: '0');
   int _step = 0;
-  String? _partnerId;
-  String? _partnerName;
-  String? _partnerDefaultCategory;
+  PartnerDirectoryEntry? _partner;
   String? _overrideCategory;
   late LedgerDirection _direction;
   var _policy = RecurrenceAmountPolicy.fixed;
@@ -118,7 +116,7 @@ class _RecurringTransactionWizardPageState
   }
 
   bool get _canAdvance {
-    if (_step == 0) return _name.text.trim().isNotEmpty && _partnerId != null;
+    if (_step == 0) return _name.text.trim().isNotEmpty && _partner != null;
     if (_step == 1) {
       return _policy == RecurrenceAmountPolicy.unknown ||
           (_scaledAmount ?? 0) > 0;
@@ -149,14 +147,10 @@ class _RecurringTransactionWizardPageState
       }
       return;
     }
-    final partner = await widget.manualRepository.getPartnerById(
-      selected.partnerId,
-    );
+    final partner = selected.directoryEntry;
     if (!mounted || partner == null) return;
     setState(() {
-      _partnerId = partner.partnerId;
-      _partnerName = partner.displayName;
-      _partnerDefaultCategory = partner.defaultCategoryId;
+      _partner = partner;
       _overrideCategory = null;
     });
   }
@@ -182,7 +176,7 @@ class _RecurringTransactionWizardPageState
     try {
       final rule = await widget.repository.createRecurringRule(
         name: _name.text.trim(),
-        partnerId: _partnerId!,
+        partnerId: _partner!.partnerId,
         categorySelection: _overrideCategory == null
             ? const ManualCategorySelection.partnerDefault()
             : ManualCategorySelection.entryOverride(_overrideCategory),
@@ -314,14 +308,18 @@ class _RecurringTransactionWizardPageState
                 borderRadius: BorderRadius.circular(16),
                 side: const BorderSide(color: Color(0xffc8ced7)),
               ),
-              title: Text(_partnerName ?? 'Partner kiválasztása'),
+              leading: _partner == null
+                  ? null
+                  : PartnerCategoryAvatar(partner: _partner!),
+              title: Text(_partner?.displayName ?? 'Partner kiválasztása'),
               trailing: const Icon(Icons.chevron_right),
               onTap: _pickPartner,
             ),
             const SizedBox(height: 14),
             CategoryDropdown(
               categories: widget.categories,
-              selectedCategoryId: _overrideCategory ?? _partnerDefaultCategory,
+              selectedCategoryId:
+                  _overrideCategory ?? _partner?.defaultCategoryId,
               onSelected: (id) => setState(() => _overrideCategory = id),
               label: _overrideCategory == null
                   ? 'Kategória · Partner alapértelmezése'

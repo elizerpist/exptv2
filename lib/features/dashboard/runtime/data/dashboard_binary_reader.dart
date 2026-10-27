@@ -97,6 +97,7 @@ final class DashboardBinaryReader {
     isPendingGhost: readBool('row.isPendingGhost'),
     recurrenceOccurrenceId: readNullableString('row.recurrenceOccurrenceId'),
     amountIsUnknown: readBool('row.amountIsUnknown'),
+    visualRevision: readInt64('row.entryRevision'),
   );
 
   Map<String, Object?>? readCursor(String label) => readBool('$label.present')

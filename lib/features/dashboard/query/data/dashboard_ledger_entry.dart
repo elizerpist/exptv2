@@ -25,6 +25,7 @@ final class DashboardLedgerEntry {
     this.isPendingGhost = false,
     this.recurrenceOccurrenceId,
     this.amountIsUnknown = false,
+    this.visualRevision = 0,
   });
 
   final String id;
@@ -51,6 +52,30 @@ final class DashboardLedgerEntry {
   final bool isPendingGhost;
   final String? recurrenceOccurrenceId;
   final bool amountIsUnknown;
+
+  /// Per-entry visual ordering is independent from the global Core revision.
+  /// A quick save may advance this while the normal aggregate/index refresh is
+  /// still in flight.
+  final int visualRevision;
+
+  int get visualIdentity => Object.hash(
+    id,
+    partnerId,
+    direction,
+    amountMinor,
+    bookedLocalEpochDay,
+    bookedLocalTimeMinutes,
+    partnerDisplayName,
+    partnerAvatarCategoryId,
+    partnerAvatarColorId,
+    partnerAvatarIconId,
+    categoryId,
+    categoryDisplayName,
+    categoryColorId,
+    categoryIconId,
+    assignmentMode,
+    visualRevision,
+  );
 
   /// Returns the same financial transport row with only its resolved visual
   /// metadata replaced.  A successful editor mutation uses this narrow
@@ -82,6 +107,7 @@ final class DashboardLedgerEntry {
       isPendingGhost: isPendingGhost,
       recurrenceOccurrenceId: recurrenceOccurrenceId,
       amountIsUnknown: amountIsUnknown,
+      visualRevision: patch.entryRevision,
     );
   }
 }

@@ -27,6 +27,8 @@ import '../../mind/domain/mind_behavioral_score_settings.dart';
 import '../../mind/domain/mind_header_score_chart_presentation.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../application/dashboard_balance_history_projection.dart';
+import '../../application/dashboard_presentation_preferences.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import 'balance_header_glass_configuration.dart';
 import 'balance_presentation_settings.dart';
 import 'dashboard_partition_lane_geometry.dart';
@@ -36,6 +38,7 @@ import 'dashboard_header_balance_color_scale.dart';
 import 'dashboard_header_mind_score_color.dart';
 import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_engine.dart';
+import '../widgets/dashboard_ghost_quick_filter.dart';
 
 /// Pure bounded placement contract for the tuner.  The Header's expansion
 /// geometry remains owned by [DashboardExpansionController]; this only uses
@@ -3019,6 +3022,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     this.mindHeaderScoreChartPresentation,
     this.mindYearHeatmapPresentation,
     this.balancePresentationSettings,
+    this.dashboardPresentationPreferences,
   });
 
   final DashboardHeaderVisualController controller;
@@ -3041,6 +3045,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   mindHeaderScoreChartPresentation;
   final MindYearHeatmapPresentationController? mindYearHeatmapPresentation;
   final BalancePresentationController? balancePresentationSettings;
+  final DashboardPresentationPreferencesController?
+  dashboardPresentationPreferences;
 
   @override
   Widget build(
@@ -3048,6 +3054,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   ) => ValueListenableBuilder<DashboardHeaderVisualTuning>(
     valueListenable: controller.tuning,
     builder: (context, tuning, child) {
+      final presentationPreferences = dashboardPresentationPreferences;
       final effect = DashboardHeaderEffectCatalog.effectFor(tuning.effect);
       final familyEffects = DashboardHeaderEffectCatalog.effectsForFamily(
         tuning.animationFamily,
@@ -3095,6 +3102,12 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              if (presentationPreferences != null) ...<Widget>[
+                _DashboardGhostQuickFilterIconPackSection(
+                  controller: presentationPreferences,
+                ),
+                const SizedBox(height: 14),
+              ],
               _DashboardHeaderTunerTopic(
                 key: const ValueKey<String>(
                   'dashboard-header-tuner-section-appearance',
@@ -5084,4 +5097,70 @@ final class _CollapsibleTunerSection extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Presentation-only selector for the dashboard's three-state ghost filter.
+/// It deliberately writes the shell-owned preference controller directly: no
+/// query, prepared index, or transaction-row state participates in this
+/// choice.
+final class _DashboardGhostQuickFilterIconPackSection extends StatelessWidget {
+  const _DashboardGhostQuickFilterIconPackSection({required this.controller});
+
+  final DashboardPresentationPreferencesController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardPresentationPreferences>(
+        valueListenable: controller,
+        builder: (context, preferences, _) => _TunerSection(
+          title: 'Ghost szűrő ikonjai',
+          children: <Widget>[
+            const Text('A dashboard gyorsszűrő három állapotának megjelenése.'),
+            const SizedBox(height: 8),
+            RadioGroup<DashboardGhostQuickFilterIconPack>(
+              groupValue: preferences.ghostQuickFilterIconPack,
+              onChanged: (next) {
+                if (next == null) return;
+                controller.setPreferences(
+                  preferences.withGhostQuickFilterIconPack(next),
+                );
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final pack in DashboardGhostQuickFilterIconPack.values)
+                    RadioListTile<DashboardGhostQuickFilterIconPack>(
+                      key: ValueKey<String>(
+                        'dashboard-ghost-filter-icon-${pack.name}',
+                      ),
+                      value: pack,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        pack == DashboardGhostQuickFilterIconPack.current
+                            ? 'Jelenlegi'
+                            : 'Bizonylat + szellem',
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            for (final mode
+                                in GhostFilterMode.values) ...<Widget>[
+                              DashboardGhostQuickFilterIcon(
+                                mode: mode,
+                                iconPack: pack,
+                              ),
+                              if (mode != GhostFilterMode.values.last)
+                                const SizedBox(width: 10),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
 }

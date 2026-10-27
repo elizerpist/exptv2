@@ -555,7 +555,18 @@ class _FluviAppShellState extends State<FluviAppShell>
             assignmentMode: entry.categoryAssignmentMode.name,
             entryRevision: entry.revision,
           );
-    await _controller.acceptKnownCoreRevision(coreRevision, visualPatch: patch);
+    final outcome = await _controller.acceptKnownCoreRevision(
+      coreRevision,
+      visualPatch: patch,
+    );
+    if (outcome ==
+        DashboardSaveVisualPatchOutcome.renderResourcePreparationRejected) {
+      // The write is already durable, but the editor must not dismiss over a
+      // frame that still owns the stale row. The normal revision observer is
+      // still running; keeping this route open makes the readiness failure
+      // explicit instead of falsely acknowledging a visual hand-off.
+      throw StateError('A dashboard sor frissített képe még nem kész.');
+    }
   }
 
   @override
@@ -1130,8 +1141,6 @@ class _FluviAppShellState extends State<FluviAppShell>
                                   : const SizedBox.shrink(),
                               SettingsPage(
                                 permissions: _automationPermissionRepository,
-                                dashboardPresentationPreferences:
-                                    _dashboardPresentationPreferences,
                               ),
                             ],
                           );

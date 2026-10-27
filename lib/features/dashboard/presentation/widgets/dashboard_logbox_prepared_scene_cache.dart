@@ -2904,6 +2904,7 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
   const DashboardPreparedLogBoxReadablePhaseARow._({
     required this.entryId,
     required this.contentIdentity,
+    required this.visualIdentity,
     required this.titleText,
     required this.secondaryText,
     required this.amountText,
@@ -2933,6 +2934,7 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
     return DashboardPreparedLogBoxReadablePhaseARow._(
       entryId: row.entryId,
       contentIdentity: row.textLayoutId,
+      visualIdentity: row.visualIdentity,
       titleText: row.displayName,
       secondaryText: row.categoryDisplayName,
       amountText: row.formattedAmount,
@@ -2952,6 +2954,7 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
 
   final String entryId;
   final int contentIdentity;
+  final int visualIdentity;
   final String titleText;
   final String secondaryText;
   final String amountText;
@@ -2970,6 +2973,7 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
   bool hasSameVisualContent(DashboardPreparedLogBoxReadablePhaseARow other) =>
       entryId == other.entryId &&
       contentIdentity == other.contentIdentity &&
+      visualIdentity == other.visualIdentity &&
       identical(textLayout, other.textLayout) &&
       categoryColorHandle == other.categoryColorHandle &&
       categoryIconHandle == other.categoryIconHandle &&
@@ -3118,7 +3122,11 @@ final class RailCriticalSceneBank {
     String entryId,
   ) {
     if (manifest?.coreRevision != payload.revision) return null;
-    return readablePhaseARows[entryId];
+    final row = readablePhaseARows[entryId];
+    return row?.visualIdentity ==
+            payload.semanticPreviewVisualIdentityForId(entryId)
+        ? row
+        : null;
   }
 
   DashboardPreparedLogBoxReadablePhaseASlot? readablePhaseAResourceFor(
@@ -3218,7 +3226,11 @@ final class _DashboardLogBoxStagedSceneBank {
     String entryId,
   ) {
     if (manifest.coreRevision != payload.revision) return null;
-    return readablePhaseARows[entryId];
+    final row = readablePhaseARows[entryId];
+    return row?.visualIdentity ==
+            payload.semanticPreviewVisualIdentityForId(entryId)
+        ? row
+        : null;
   }
 
   DashboardPreparedLogBoxReadablePhaseASlot? readablePhaseAResourceFor(
