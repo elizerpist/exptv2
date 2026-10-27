@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
+import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
@@ -1944,12 +1945,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
     _drawPreparedVectorBadge(
       canvas,
-      rasters.badge(readable.categoryColorHandle),
+      rasters.badge(readable.partnerAvatarColorHandle),
       badgeRect,
     );
     _drawPreparedVectorGlyph(
       canvas,
-      rasters.glyph(readable.categoryIconHandle),
+      rasters.glyph(readable.partnerAvatarIconHandle),
       Rect.fromCenter(
         center: badgeRect.center,
         width: DashboardLogBoxTokens.avatarIconSize,
@@ -2158,7 +2159,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
     _drawPreparedVectorBadge(
       canvas,
-      rasters.badge(row.categoryColorHandle),
+      rasters.badge(row.partnerAvatarColorHandle),
       badgeRect,
     );
     final iconRect = Rect.fromCenter(
@@ -2168,7 +2169,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
     _drawPreparedVectorGlyph(
       canvas,
-      rasters.glyph(row.categoryIconHandle),
+      rasters.glyph(row.partnerAvatarIconHandle),
       iconRect,
     );
     _paintCategoryOverrideBadge(
@@ -2663,12 +2664,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
     _drawPreparedVectorBadge(
       canvas,
-      rasters.badge(row.categoryColorHandle),
+      rasters.badge(row.partnerAvatarColorHandle),
       badgeRect,
     );
     _drawPreparedVectorGlyph(
       canvas,
-      rasters.glyph(row.categoryIconHandle),
+      rasters.glyph(row.partnerAvatarIconHandle),
       Rect.fromCenter(
         center: badgeRect.center,
         width: DashboardLogBoxTokens.avatarIconSize,
@@ -2919,21 +2920,32 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required bool isOverride,
   }) {
     if (!isOverride) return;
+    // The badge intentionally uses a circular gradient fill instead of the
+    // square main-avatar resource.  An entry override is a separate compact
+    // category marker, while the large avatar stays bound to the partner.
     final outer = Rect.fromCircle(
-      center: Offset(avatarRect.right - 1, avatarRect.bottom - 1),
-      radius: 8,
+      center: Offset(avatarRect.right - 2, avatarRect.bottom - 2),
+      radius: 9,
     );
     canvas.drawCircle(
       outer.center,
       outer.width / 2,
       Paint()..color = Colors.white,
     );
-    final inner = Rect.fromCircle(center: outer.center, radius: 6.5);
-    _drawPreparedVectorBadge(canvas, rasters.badge(categoryColorHandle), inner);
-    _drawPreparedVectorGlyph(
+    final inner = Rect.fromCircle(center: outer.center, radius: 7.5);
+    final gradient = PreparedVectorAssetAtlas.instance.categoryGradient(
+      categoryColorHandle,
+      profile: rasters.profile,
+    );
+    canvas.drawCircle(
+      inner.center,
+      inner.width / 2,
+      Paint()..shader = gradient.createShader(inner),
+    );
+    _drawPreparedVectorResourceContained(
       canvas,
       rasters.glyph(categoryIconHandle),
-      Rect.fromCenter(center: inner.center, width: 7.5, height: 7.5),
+      Rect.fromCenter(center: inner.center, width: 10, height: 10),
     );
   }
 
@@ -2948,36 +2960,17 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   }) {
     if (!hasGhostOrigin) return;
     final timeBounds = textLayout.timeBounds(rowTop, rowHeight: rowHeight);
-    final size = (timeBounds.height * .78).clamp(8.0, 13.0).toDouble();
-    final center = Offset(timeBounds.left - 4 - size / 2, timeBounds.center.dy);
-    final paint = Paint()
-      ..color = FluviVisualTokens.textSecondary.withValues(alpha: .72)
-      ..style = PaintingStyle.fill;
-    final body = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: center, width: size, height: size * .82),
-      Radius.circular(size * .34),
+    const size = 14.0;
+    final target = Rect.fromCenter(
+      center: Offset(timeBounds.left - 4 - size / 2, timeBounds.center.dy),
+      width: size,
+      height: size,
     );
-    canvas.drawRRect(body, paint);
-    final eye = Paint()..color = Colors.white.withValues(alpha: .86);
-    final eyeRadius = size * .075;
-    canvas.drawCircle(
-      Offset(center.dx - size * .19, center.dy - size * .08),
-      eyeRadius,
-      eye,
+    _drawPreparedVectorResourceContained(
+      canvas,
+      rasters.glyph(CategoryIconCatalog.handleOf('icon_28')),
+      target,
     );
-    canvas.drawCircle(
-      Offset(center.dx + size * .19, center.dy - size * .08),
-      eyeRadius,
-      eye,
-    );
-    final tail = Path()
-      ..moveTo(center.dx - size * .28, center.dy + size * .3)
-      ..lineTo(center.dx - size * .42, center.dy + size * .52)
-      ..lineTo(center.dx - size * .06, center.dy + size * .36)
-      ..lineTo(center.dx + size * .18, center.dy + size * .52)
-      ..lineTo(center.dx + size * .3, center.dy + size * .29)
-      ..close();
-    canvas.drawPath(tail, paint);
   }
 
   void _drawPreparedVectorResource(
@@ -2993,6 +2986,27 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       target.width / logicalSize.width,
       target.height / logicalSize.height,
     );
+    canvas.drawPicture(resource.picture);
+    canvas.restore();
+  }
+
+  void _drawPreparedVectorResourceContained(
+    Canvas canvas,
+    PreparedLogBoxVectorResource resource,
+    Rect target,
+  ) {
+    final logicalSize = resource.logicalSize;
+    if (logicalSize.isEmpty || target.isEmpty) return;
+    final scale = math.min(
+      target.width / logicalSize.width,
+      target.height / logicalSize.height,
+    );
+    final painted = Size(logicalSize.width * scale, logicalSize.height * scale);
+    final left = target.center.dx - painted.width / 2;
+    final top = target.center.dy - painted.height / 2;
+    canvas.save();
+    canvas.translate(left, top);
+    canvas.scale(scale, scale);
     canvas.drawPicture(resource.picture);
     canvas.restore();
   }

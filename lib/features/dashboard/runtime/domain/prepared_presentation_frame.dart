@@ -257,4 +257,34 @@ final class DashboardPreparedFrame {
   bool get loading => false;
   bool get stale => false;
   Object? get error => null;
+
+  /// Replaces just one already-resident LogBox visual payload.  The caller
+  /// keeps this as a short-lived editor overlay; financial scalar values,
+  /// query identity and Core revision continue to describe the authoritative
+  /// snapshot that is being rebuilt in parallel.
+  DashboardPreparedFrame withVisualLogBox(
+    DashboardLogViewportState visualLogBox,
+  ) {
+    if (visualLogBox.queryKey != queryKey ||
+        visualLogBox.revision != coreRevision ||
+        visualLogBox.direction != scope.direction ||
+        visualLogBox.entryCount != presentationEntryCount) {
+      throw ArgumentError('Visual LogBox overlay does not match its frame.');
+    }
+    return DashboardPreparedFrame.complete(
+      scope: scope,
+      parentQueryKey: parentQueryKey,
+      coreRevision: coreRevision,
+      totalMinor: totalMinor,
+      formattedAmount: amount.formattedAmount,
+      entryCount: entryCount,
+      presentationEntryCount: presentationEntryCount,
+      formattedEntryCount: count.formattedEntryCount,
+      logBox: visualLogBox,
+      presentationDigest: Object.hash(
+        presentationDigest,
+        visualLogBox.viewportId,
+      ),
+    );
+  }
 }

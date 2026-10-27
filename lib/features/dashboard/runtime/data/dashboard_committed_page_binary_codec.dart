@@ -40,7 +40,7 @@ final class IsolateDashboardCommittedPageDecodeWorker
 /// signal. Horizontal/rail navigation has no reference to this API.
 abstract final class DashboardCommittedPageBinaryCodec {
   static const int magic = 0x464c534c;
-  static const int version = 3;
+  static const int version = 4;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
 
   static CommittedLogPage decodePage(

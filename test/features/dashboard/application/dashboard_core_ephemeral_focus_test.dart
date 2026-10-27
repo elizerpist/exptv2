@@ -772,6 +772,75 @@ void main() {
   );
 
   test(
+    'Balance uses the effective ghost membership: realized ghosts are financial and pending ghosts are display-only',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: const <DashboardLedgerEntry>[
+          DashboardLedgerEntry(
+            id: 'expense-realized-ghost',
+            partnerId: 'partner-recurring',
+            categoryId: 'utilities',
+            direction: 'expense',
+            amountMinor: 50000,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 600,
+            recurrenceOccurrenceId: 'occurrence-realized',
+          ),
+          DashboardLedgerEntry(
+            id: 'ghost:pending-newer',
+            partnerId: 'partner-recurring',
+            categoryId: 'utilities',
+            direction: 'expense',
+            amountMinor: 90000,
+            bookedLocalEpochDay: 20637,
+            bookedLocalTimeMinutes: 700,
+            isPendingGhost: true,
+            recurrenceOccurrenceId: 'occurrence-pending',
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      expect(
+        await core.applyGhostFilterMode(GhostFilterMode.onlyGhost),
+        isTrue,
+      );
+      final onlyGhost = core.balancePresentation.value;
+      expect(onlyGhost, isNotNull);
+      expect(onlyGhost!.incomeTotalMinor, 0);
+      expect(onlyGhost.expenseTotalMinor, 50000);
+      expect(onlyGhost.netTotalMinor, -50000);
+      expect(onlyGhost.latestTransaction?.entryId, 'expense-realized-ghost');
+
+      expect(await core.applyGhostFilterMode(GhostFilterMode.nonGhost), isTrue);
+      final nonGhost = core.balancePresentation.value;
+      expect(
+        nonGhost,
+        isNotNull,
+        reason: 'zero income is still financial data',
+      );
+      expect(nonGhost!.incomeTotalMinor, 0);
+      expect(nonGhost.expenseTotalMinor, 0);
+      expect(nonGhost.netTotalMinor, 0);
+
+      expect(await core.applyGhostFilterMode(GhostFilterMode.both), isTrue);
+      final both = core.balancePresentation.value;
+      expect(both, isNotNull);
+      expect(both!.expenseTotalMinor, 50000);
+      expect(both.latestTransaction?.entryId, 'expense-realized-ghost');
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
     'L1-NEXT-FRAME RED: a visible Summary target synchronously publishes the resident linked Balance payload without source work',
     () async {
       final repository = _BalancePreparedRepository();

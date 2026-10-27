@@ -158,4 +158,26 @@ final class DashboardVisibleFrame {
       visualDigest: visualDigest,
     );
   }
+
+  /// A narrowly-scoped visual overlay for a Core-confirmed editor result.
+  /// It retains this frame's scalar financial snapshot and navigation while a
+  /// newer authoritative revision rebuilds the complete index.
+  DashboardVisibleFrame withVisualLogBox(
+    DashboardLogViewportState visualLogBox, {
+    required int frameGeneration,
+  }) {
+    final prepared = preparedFrame.withVisualLogBox(visualLogBox);
+    return DashboardVisibleFrame.fromPrepared(
+      prepared,
+      parentQueryKey: parentQueryKey,
+      plane: plane,
+      railOpen: railOpen,
+      semanticIndex: semanticChildIndex,
+      childLabel: childLabel,
+      navigationEpoch: navigationEpoch,
+      presentationEpoch: presentationEpoch,
+      frameGeneration: frameGeneration,
+      mode: mode,
+    );
+  }
 }

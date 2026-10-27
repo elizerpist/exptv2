@@ -64,6 +64,12 @@ internal data class FluviCommittedDashboardRow(
     val partnerId: String,
     @ColumnInfo(name = "partner_display_name")
     val partnerDisplayName: String,
+    @ColumnInfo(name = "partner_avatar_category_id")
+    val partnerAvatarCategoryId: String,
+    @ColumnInfo(name = "partner_avatar_color_id")
+    val partnerAvatarColorId: String,
+    @ColumnInfo(name = "partner_avatar_icon_id")
+    val partnerAvatarIconId: String,
     @ColumnInfo(name = "category_id")
     val categoryId: String,
     @ColumnInfo(name = "category_display_name")

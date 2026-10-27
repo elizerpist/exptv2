@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../dashboard/query/domain/ledger_direction.dart';
+
 enum CreationSelectorAction {
   manualTransaction,
   recurringTransaction,
@@ -9,17 +11,20 @@ enum CreationSelectorAction {
 /// Compact, content-height selector. It intentionally does not reuse the
 /// query sheet's Expanded body contract.
 Future<CreationSelectorAction?> showCreationSelectorSheet(
-  BuildContext context,
-) => showModalBottomSheet<CreationSelectorAction>(
+  BuildContext context, {
+  required LedgerDirection direction,
+}) => showModalBottomSheet<CreationSelectorAction>(
   context: context,
   useSafeArea: true,
   isScrollControlled: false,
   backgroundColor: Colors.transparent,
-  builder: (context) => const _CreationSelectorSheet(),
+  builder: (context) => _CreationSelectorSheet(direction: direction),
 );
 
 final class _CreationSelectorSheet extends StatelessWidget {
-  const _CreationSelectorSheet();
+  const _CreationSelectorSheet({required this.direction});
+
+  final LedgerDirection direction;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -45,7 +50,9 @@ final class _CreationSelectorSheet extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              'Új létrehozása',
+              direction == LedgerDirection.income
+                  ? 'Új bevételi tranzakció létrehozása'
+                  : 'Új kiadási tranzakció létrehozása',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 10),

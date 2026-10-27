@@ -2915,6 +2915,8 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
     required this.hasCategoryOverride,
     required this.categoryColorHandle,
     required this.categoryIconHandle,
+    required this.partnerAvatarColorHandle,
+    required this.partnerAvatarIconHandle,
     required this.textLayout,
   });
 
@@ -2942,6 +2944,8 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
       hasCategoryOverride: row.hasCategoryOverride,
       categoryColorHandle: row.categoryColorHandle,
       categoryIconHandle: row.categoryIconHandle,
+      partnerAvatarColorHandle: row.partnerAvatarColorHandle,
+      partnerAvatarIconHandle: row.partnerAvatarIconHandle,
       textLayout: textLayout,
     );
   }
@@ -2959,6 +2963,8 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
   final bool hasCategoryOverride;
   final int categoryColorHandle;
   final int categoryIconHandle;
+  final int partnerAvatarColorHandle;
+  final int partnerAvatarIconHandle;
   final DashboardPreparedLogBoxRowTextLayout textLayout;
 
   bool hasSameVisualContent(DashboardPreparedLogBoxReadablePhaseARow other) =>
@@ -2967,6 +2973,8 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
       identical(textLayout, other.textLayout) &&
       categoryColorHandle == other.categoryColorHandle &&
       categoryIconHandle == other.categoryIconHandle &&
+      partnerAvatarColorHandle == other.partnerAvatarColorHandle &&
+      partnerAvatarIconHandle == other.partnerAvatarIconHandle &&
       amountStyle == other.amountStyle &&
       isPendingGhost == other.isPendingGhost &&
       hasGhostOrigin == other.hasGhostOrigin &&

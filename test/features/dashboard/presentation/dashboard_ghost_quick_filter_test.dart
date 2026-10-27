@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_ghost_quick_filter.dart';
 import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 
 void main() {
+  setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
+
   testWidgets(
     'quick filter cycles every ghost membership state with one control',
     (tester) async {
@@ -32,7 +35,7 @@ void main() {
         const Size(48, 48),
         reason: 'the whole icon-and-dots control retains its 48dp hit target',
       );
-      expect(find.byTooltip('Nem ismétlődő tranzakciók'), findsOneWidget);
+      expect(find.byTooltip('Nem ghost eredetű tranzakciók'), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey('dashboard-ghost-quick-filter')),

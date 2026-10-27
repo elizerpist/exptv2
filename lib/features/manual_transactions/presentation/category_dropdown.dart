@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/categories/presentation/category_visual_badge.dart';
 
 /// A route-local anchored category picker. It returns only an ID; each caller
 /// owns whether that means a partner default or an entry override.
@@ -101,13 +104,10 @@ final class _CategoryAvatar extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      gradient: category.visual.gradient.gradient,
-      borderRadius: BorderRadius.circular(size * .3),
-    ),
-    child: const Icon(Icons.category_rounded, color: Colors.white, size: 17),
+  Widget build(BuildContext context) => CategoryVisualBadge(
+    colorHandle: CategoryColorCatalog.handleOf(category.colorId),
+    iconHandle: CategoryIconCatalog.handleOf(category.iconId),
+    size: size,
+    iconSize: 17,
   );
 }

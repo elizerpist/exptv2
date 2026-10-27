@@ -25,6 +25,11 @@ void main() {
     expect(page.payload.nextCursor, isNotNull);
     expect(page.payload.nextCursor!['timelineSegment'], 1);
     expect(page.payload.nextCursor!['pendingSortBucket'], 2);
+    final entry = page.payload.semanticPreviewLedgerEntryAt(0);
+    expect(entry?.partnerAvatarCategoryId, 'category-partner-default');
+    expect(entry?.partnerAvatarColorId, 'color_02');
+    expect(entry?.partnerAvatarIconId, 'icon_02');
+    expect(entry?.categoryId, 'category-1');
   });
 
   test('rejects a navigation transport key as a structural time identity', () {
@@ -143,6 +148,9 @@ final class _Writer {
     string('entry-1');
     string('partner-1');
     string('Tesco');
+    string('category-partner-default');
+    string('color_02');
+    string('icon_02');
     string('category-1');
     string('Étel');
     string('color_02');

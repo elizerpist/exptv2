@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
 void main() {
   test(
@@ -35,13 +38,16 @@ void main() {
   );
 
   test(
-    'explicit category assignments retain their override identity for painter badges',
+    'entry override keeps the partner avatar while exposing the effective category badge',
     () {
       final row = DashboardLogRowViewModel.fromLedgerEntry(
         const DashboardLedgerEntry(
           id: 'ghost:override-1',
           partnerId: 'partner-1',
           partnerDisplayName: 'Netflix',
+          partnerAvatarCategoryId: 'category-subscription',
+          partnerAvatarColorId: 'blue',
+          partnerAvatarIconId: 'subscription',
           categoryId: 'category-entertainment',
           categoryDisplayName: 'Szórakozás',
           categoryColorId: 'orange',
@@ -60,6 +66,66 @@ void main() {
       expect(row.hasCategoryOverride, isTrue);
       expect(row.categoryColorId, 'orange');
       expect(row.categoryIconId, 'gamepad');
+      expect(row.partnerAvatarColorId, 'blue');
+      expect(row.partnerAvatarIconId, 'subscription');
     },
   );
+
+  test('saved category visual patch replaces one resident row only', () {
+    const entry = DashboardLedgerEntry(
+      id: 'entry-1',
+      partnerId: 'partner-1',
+      partnerDisplayName: 'Tesco',
+      partnerAvatarCategoryId: 'food',
+      partnerAvatarColorId: 'blue',
+      partnerAvatarIconId: 'basket',
+      categoryId: 'food',
+      categoryDisplayName: 'Élelmiszer',
+      categoryColorId: 'blue',
+      categoryIconId: 'basket',
+      assignmentMode: 'partnerDefault',
+      direction: 'expense',
+      amountMinor: 50000,
+      bookedLocalEpochDay: 20500,
+      bookedLocalTimeMinutes: 600,
+    );
+    final viewport = DashboardLogViewportState.deferredPreparedOrdered(
+      scope: CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      ),
+      revision: 7,
+      entries: const <DashboardLedgerEntry>[entry],
+      entryCount: 1,
+      nextCursor: null,
+    );
+    final patched = viewport.withVisualPatch(
+      const DashboardLedgerVisualPatch(
+        entryId: 'entry-1',
+        partnerId: 'partner-1',
+        direction: 'expense',
+        amountMinor: 50000,
+        bookedLocalEpochDay: 20500,
+        bookedLocalTimeMinutes: 600,
+        partnerDisplayName: 'Tesco',
+        partnerAvatarCategoryId: 'food',
+        partnerAvatarColorId: 'blue',
+        partnerAvatarIconId: 'basket',
+        categoryId: 'clothes',
+        categoryDisplayName: 'Ruházat',
+        categoryColorId: 'orange',
+        categoryIconId: 'hanger',
+        assignmentMode: 'entryOverride',
+        entryRevision: 8,
+      ),
+    );
+
+    expect(patched, isNotNull);
+    expect(patched!.viewportId, isNot(viewport.viewportId));
+    final row = patched.flatItems.single.row;
+    expect(row.categoryDisplayName, 'Ruházat');
+    expect(row.hasCategoryOverride, isTrue);
+    expect(row.partnerAvatarColorId, 'blue');
+    expect(row.partnerAvatarIconId, 'basket');
+  });
 }

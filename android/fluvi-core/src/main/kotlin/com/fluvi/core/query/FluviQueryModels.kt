@@ -135,6 +135,10 @@ data class FluviDashboardLedgerRow(
     val occurredAtUtcMs: Long,
     val partnerId: String,
     val partnerDisplayName: String,
+    /** Partner default-category visual. It intentionally never follows an entry override. */
+    val partnerAvatarCategoryId: String = "fallback",
+    val partnerAvatarColorId: String = "fallback",
+    val partnerAvatarIconId: String = "fallback",
     val categoryId: String,
     val categoryDisplayName: String,
     val categoryColorId: String,

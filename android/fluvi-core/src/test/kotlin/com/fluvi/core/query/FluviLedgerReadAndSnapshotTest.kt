@@ -385,6 +385,36 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun committedPageKeepsPartnerAvatarSeparateFromEntryOverrideCategory() = runBlocking {
+        val overrideEntryId = insertEntry(
+            categoryId = clothesId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2026, 8, 2).toEpochDay(),
+            amount = 250L,
+            assignmentMode = CategoryAssignmentMode.entryOverride,
+        )
+        val scope = FluviQueryScope(direction = LedgerDirection.expense)
+        val total = readService.total(scope)
+
+        val row = readService.readCommittedPage(
+            scope = scope,
+            pageSize = 24,
+            after = null,
+            expectedRevision = readService.currentCoreRevision(),
+            authoritativeTotalMinor = total.amountScaled100,
+            authoritativeEntryCount = total.entryCount,
+        ).slice.entries.single { it.entryId == overrideEntryId }
+
+        assertEquals(foodId, row.partnerAvatarCategoryId)
+        assertEquals("color_02", row.partnerAvatarColorId)
+        assertEquals("icon_02", row.partnerAvatarIconId)
+        assertEquals(clothesId, row.categoryId)
+        assertEquals("color_03", row.categoryColorId)
+        assertEquals("icon_03", row.categoryIconId)
+        assertEquals(CategoryAssignmentMode.entryOverride, row.assignmentMode)
+    }
+
+    @Test
     fun queryMenuFacetsUseTemporalSqlAggregatesAndCategoryVisualMetadata() = runBlocking {
         insertEntry(
             categoryId = foodId,
@@ -820,6 +850,7 @@ class FluviLedgerReadAndSnapshotTest {
         note: String? = null,
         partnerId: String = tescoId,
         direction: LedgerDirection = LedgerDirection.expense,
+        assignmentMode: CategoryAssignmentMode = CategoryAssignmentMode.partnerDefault,
     ): String {
         val id = idGenerator.next()
         database.ledgerDao().insert(
@@ -827,7 +858,7 @@ class FluviLedgerReadAndSnapshotTest {
                 id = id,
                 partnerId = partnerId,
                 categoryId = categoryId,
-                categoryAssignmentMode = CategoryAssignmentMode.partnerDefault,
+                categoryAssignmentMode = assignmentMode,
                 note = note,
                 direction = direction,
                 amountScaled100 = amount,

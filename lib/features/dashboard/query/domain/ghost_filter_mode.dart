@@ -16,8 +16,8 @@ enum GhostFilterMode {
   };
 
   String get semanticLabel => switch (this) {
-    GhostFilterMode.nonGhost => 'Nem ismétlődő tranzakciók',
-    GhostFilterMode.onlyGhost => 'Ghost eredetű tranzakciók',
+    GhostFilterMode.nonGhost => 'Nem ghost eredetű tranzakciók',
+    GhostFilterMode.onlyGhost => 'Csak ghost eredetű tranzakciók',
     GhostFilterMode.both => 'Minden tranzakció és ghost',
   };
 }

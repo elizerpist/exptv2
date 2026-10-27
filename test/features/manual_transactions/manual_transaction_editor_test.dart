@@ -1,4 +1,5 @@
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_models.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_repository.dart';
@@ -7,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
+
   final categories = <FluviCategory>[
     _category('uncategorized', 'Kategorizálatlan', uncategorized: true),
     _category('food', 'Élelmiszer'),
@@ -17,12 +20,14 @@ void main() {
     'create editor inherits selected partner category and saves an entry override',
     (tester) async {
       final repository = _FakeManualRepository();
+      ManualTransactionSaveResult? savedResult;
       await tester.pumpWidget(
         MaterialApp(
           home: ManualTransactionEditor.create(
             repository: repository,
             categories: categories,
             direction: LedgerDirection.expense,
+            onSaved: (result) => savedResult = result,
           ),
         ),
       );
@@ -59,6 +64,9 @@ void main() {
       expect(repository.lastCategorySelection?.categoryId, 'shopping');
       expect(repository.lastAmount, 1245000);
       expect(repository.lastDirection, LedgerDirection.expense);
+      expect(savedResult?.entry.entryId, 'entry-1');
+      expect(savedResult?.globalCoreRevision, 42);
+      expect(savedResult?.effectiveCategory?.id, 'shopping');
     },
   );
 
@@ -145,7 +153,12 @@ final class _FakeManualRepository implements ManualTransactionRepository {
     lastAmount = amountScaled100;
     lastDirection = direction;
     lastCategorySelection = categorySelection;
-    return _entry(amountScaled100: amountScaled100);
+    return _entry(
+      amountScaled100: amountScaled100,
+      categoryId:
+          categorySelection.categoryId ?? this.partner.defaultCategoryId,
+      categoryAssignmentMode: categorySelection.mode,
+    );
   }
 
   @override
@@ -179,7 +192,12 @@ final class _FakeManualRepository implements ManualTransactionRepository {
     lastUpdatedEntryId = entryId;
     lastAmount = amountScaled100;
     lastCategorySelection = categorySelection;
-    return _entry(amountScaled100: amountScaled100);
+    return _entry(
+      amountScaled100: amountScaled100,
+      categoryId:
+          categorySelection.categoryId ?? this.partner.defaultCategoryId,
+      categoryAssignmentMode: categorySelection.mode,
+    );
   }
 
   @override
@@ -189,11 +207,16 @@ final class _FakeManualRepository implements ManualTransactionRepository {
     required String defaultCategoryId,
   }) async => partner;
 
-  LedgerEntryDetail _entry({int amountScaled100 = 100000}) => LedgerEntryDetail(
+  LedgerEntryDetail _entry({
+    int amountScaled100 = 100000,
+    String? categoryId,
+    ManualCategoryAssignmentMode categoryAssignmentMode =
+        ManualCategoryAssignmentMode.partnerDefault,
+  }) => LedgerEntryDetail(
     entryId: 'entry-1',
     partnerId: partner.partnerId,
-    categoryId: partner.defaultCategoryId,
-    categoryAssignmentMode: ManualCategoryAssignmentMode.partnerDefault,
+    categoryId: categoryId ?? partner.defaultCategoryId,
+    categoryAssignmentMode: categoryAssignmentMode,
     direction: LedgerDirection.expense,
     amountScaled100: amountScaled100,
     bookedLocalEpochDay: 20000,
@@ -202,6 +225,7 @@ final class _FakeManualRepository implements ManualTransactionRepository {
     note: 'Existing note',
     originKind: 'manual',
     notificationInboxId: null,
+    coreRevision: 42,
     revision: 1,
   );
 }

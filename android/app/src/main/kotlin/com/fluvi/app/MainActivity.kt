@@ -623,8 +623,8 @@ class MainActivity : FlutterActivity() {
         "getLedgerEntryById" -> ledgerEntryDetailMap(
             fluviCore.ledger.getLedgerEntryById(requireArgument(call, "entryId")),
         )
-        "createManualTransaction" -> ledgerEntryDetailMap(
-            fluviCore.ledger.createManual(
+        "createManualTransaction" -> {
+            val entry = fluviCore.ledger.createManual(
                 CreateManualTransactionCommand(
                     partner = manualPartnerSelection(requireArguments(call)),
                     categorySelection = categorySelection(requireArguments(call)),
@@ -635,10 +635,11 @@ class MainActivity : FlutterActivity() {
                     occurredAtUtcMs = requireLong(call, "occurredAtUtcMs"),
                     note = call.argument<String>("note"),
                 ),
-            ).let { created -> fluviCore.ledger.getLedgerEntryById(created.id) },
-        )
-        "updateTransaction" -> ledgerEntryDetailMap(
-            fluviCore.ledger.updateEntry(
+            ).let { created -> fluviCore.ledger.getLedgerEntryById(created.id) }
+            ledgerEntrySaveResultMap(entry, fluviCore.query.currentCoreRevision())
+        }
+        "updateTransaction" -> {
+            val entry = fluviCore.ledger.updateEntry(
                 UpdateLedgerEntryCommand(
                     entryId = requireArgument(call, "entryId"),
                     expectedRevision = requireLong(call, "expectedRevision"),
@@ -650,8 +651,9 @@ class MainActivity : FlutterActivity() {
                     occurredAtUtcMs = requireLong(call, "occurredAtUtcMs"),
                     note = call.argument<String>("note"),
                 ),
-            ).let { updated -> fluviCore.ledger.getLedgerEntryById(updated.id) },
-        )
+            ).let { updated -> fluviCore.ledger.getLedgerEntryById(updated.id) }
+            ledgerEntrySaveResultMap(entry, fluviCore.query.currentCoreRevision())
+        }
         "updatePartner" -> partnerDirectoryMap(
             fluviCore.partners.updatePartner(
                 UpdatePartnerCommand(
@@ -914,6 +916,19 @@ class MainActivity : FlutterActivity() {
         "notificationInboxId" to entry.notificationInboxId,
         "recurrenceOccurrenceId" to entry.recurrenceOccurrenceId,
         "revision" to entry.revision,
+    )
+
+    /**
+     * A ledger-entry revision belongs to one row; the dashboard publishes from
+     * the global Core revision.  Returning both after a successful mutation
+     * lets Flutter ask the existing Core-owned runtime for the exact new
+     * publication without treating the two revision domains as interchangeable.
+     */
+    private fun ledgerEntrySaveResultMap(
+        entry: FluviLedgerEntryDetail,
+        coreRevision: Long,
+    ): Map<String, Any?> = ledgerEntryDetailMap(entry) + mapOf(
+        "coreRevision" to coreRevision,
     )
 
     private suspend fun handleFinancialLimitCall(

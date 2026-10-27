@@ -217,7 +217,12 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
       : FluviVisualTokens.logBoxIncomeAmount;
 
   double get _rightColumnMaxWidth =>
-      math.max(0.0, (rightEdge - contentLeft) * .44);
+      math.max(0.0, (rightEdge - contentLeft) * .44 - _ghostOriginReserve);
+
+  /// The ghost-origin mark occupies a real, prepared part of the right text
+  /// column. Painting it outside the time paragraph would overlap long left
+  /// content on narrow layouts.
+  double get _ghostOriginReserve => row.hasGhostOrigin ? 18.0 : 0.0;
 
   double get _leftColumnWidth {
     final amount = _amount;
@@ -225,7 +230,8 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
     if (amount == null || time == null) {
       throw StateError('Right LogBox paragraphs must be prepared first.');
     }
-    final rightLeft = rightEdge - math.max(amount.width, time.width);
+    final rightLeft =
+        rightEdge - math.max(amount.width, time.width) - _ghostOriginReserve;
     return math.max(
       0.0,
       rightLeft - DashboardLogBoxTokens.rowGap - contentLeft,

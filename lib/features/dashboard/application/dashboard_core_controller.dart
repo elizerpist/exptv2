@@ -51,7 +51,6 @@ import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
 import '../runtime/domain/dashboard_ephemeral_focus_deriver.dart';
 import '../runtime/domain/dashboard_focus_membership_seed.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
-import '../runtime/domain/prepared_presentation_frame.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
@@ -1957,6 +1956,65 @@ final class DashboardCoreController {
     }
     _bootstrapped = true;
     return frame;
+  }
+
+  /// Receives the global Core revision returned by a successful manual save.
+  /// The runtime owns the ensuing generation-guarded publication; this method
+  /// never patches widget state or confuses the transaction row revision with
+  /// the financial Core revision.
+  void acceptKnownCoreRevision(
+    int coreRevision, {
+    DashboardLedgerVisualPatch? visualPatch,
+  }) {
+    if (_disposed || coreRevision <= 0) return;
+    if (visualPatch != null) {
+      _publishSaveResultVisualPatch(visualPatch);
+    }
+    dataRuntime.acceptKnownCoreRevision(coreRevision);
+  }
+
+  /// Publishes only a currently visible category/avatar correction from a
+  /// confirmed save response.  This deliberately refuses membership-changing
+  /// edits (amount, time, direction, partner, active category/search focus),
+  /// which remain owned by the following complete Core revision.  Therefore
+  /// the route can close with the correct override badge without pretending
+  /// that old aggregates or an old category membership are authoritative.
+  void _publishSaveResultVisualPatch(DashboardLedgerVisualPatch patch) {
+    final visible = visibleFrames.value;
+    if (visible == null ||
+        visible.scope.categoryIds.isNotEmpty ||
+        visible.scope.normalizedSearch != null) {
+      return;
+    }
+    final previous = visible.logBox.semanticPreviewLedgerEntryForId(
+      patch.entryId,
+    );
+    if (previous == null ||
+        previous.partnerId != patch.partnerId ||
+        previous.direction != patch.direction ||
+        previous.amountMinor != patch.amountMinor ||
+        previous.bookedLocalEpochDay != patch.bookedLocalEpochDay ||
+        previous.bookedLocalTimeMinutes != patch.bookedLocalTimeMinutes) {
+      return;
+    }
+    final logBox = visible.logBox.withVisualPatch(patch);
+    if (logBox == null) return;
+    final patched = visible.withVisualLogBox(
+      logBox,
+      frameGeneration: visibleFrames.nextFrameGeneration(),
+    );
+    if (!visibleFrames.publish(patched)) return;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MANUAL_SAVE_VISIBLE_ROW_PATCHED',
+        queryKey: patched.queryKey.value,
+        coreRevision: patched.coreRevision,
+        entryCount: patched.presentationEntryCount,
+        scope:
+            'entryId=${patch.entryId} entryRevision=${patch.entryRevision} '
+            'category=${patch.categoryId}',
+      ),
+    );
   }
 
   /// Installs a revision publication from its ghost-neutral runtime source.
@@ -16336,70 +16394,40 @@ final class DashboardCoreController {
   }
 
   void _publishBalancePresentationForVisibleFrame(DashboardVisibleFrame frame) {
-    final index = _balanceSourceIndexFor(coreRevision: frame.coreRevision);
+    final financialView = _balanceFinancialViewFor(
+      coreRevision: frame.coreRevision,
+    );
     // A revision may contain several prepared Query identities. Keep both
     // directional lanes on the committed filters; transient LogBox focus is
     // intentionally isolated by _balanceSourceIndexFor.
-    if (index == null ||
-        index.coreRevision != frame.coreRevision ||
-        !index.key.matchesScope(
-          currentQuery.scopeFor(LedgerDirection.income),
-        ) ||
-        !index.key.matchesScope(
-          currentQuery.scopeFor(LedgerDirection.expense),
-        )) {
+    if (financialView == null) {
       _setBalancePresentation(null);
       return;
     }
-    DashboardPreparedFrame? preparedAllTimeFor(LedgerDirection direction) {
-      // Balance has one Core-owned all-time financial universe per exact
-      // directional Query partition.  A visible frame supplies the
-      // rendering/navigation acknowledgement only; its Summary time scope
-      // must never become Balance data provenance.
-      final catalog = index.catalogForIdentity(
-        direction: direction,
-        timeScope: const AllTimeScope(),
-      );
-      final scope = catalog?.parentScope;
-      if (scope == null || !index.hasMaterializedFrameForKey(scope.key)) {
-        return null;
-      }
-      final prepared = index.frameForKey(scope.key);
-      return prepared.coreRevision == frame.coreRevision ? prepared : null;
-    }
-
-    final income = preparedAllTimeFor(LedgerDirection.income);
-    final expense = preparedAllTimeFor(LedgerDirection.expense);
-    if (income == null || expense == null) {
-      _setBalancePresentation(null);
-      return;
-    }
-    final latest = _balanceLatestTransactionFor(<DashboardPreparedFrame>[
-      income,
-      expense,
-    ]);
-    final history = _balanceHistoryFor(
-      index: index,
-      income: income,
-      expense: expense,
+    final latest = _balanceLatestTransactionForEntries(
+      <Iterable<DashboardLedgerEntry>>[
+        financialView.incomeEntries,
+        financialView.expenseEntries,
+      ],
     );
-    final net = income.totalMinor - expense.totalMinor;
+    final history = _balanceHistoryFor(view: financialView);
+    final net =
+        financialView.incomeTotalMinor - financialView.expenseTotalMinor;
     _setBalancePresentation(
       DashboardBalancePresentation(
-        scopeKey: '${income.scope.key.value}|${expense.scope.key.value}',
+        scopeKey: financialView.identity,
         coreRevision: frame.coreRevision,
         // Publish renderer-accepted navigation with its financial source.
         // Pending navigation must never reinterpret an older publication.
         headerTimeScope: frame.scope.timeScope,
-        incomeTotalMinor: income.totalMinor,
-        expenseTotalMinor: expense.totalMinor,
+        incomeTotalMinor: financialView.incomeTotalMinor,
+        expenseTotalMinor: financialView.expenseTotalMinor,
         netTotalMinor: net,
         formattedNetTotal: DashboardPreparedFormatter.amountMinor(net),
         presentationId: Object.hash(
           frame.coreRevision,
           frame.scope.timeScope.canonicalKey,
-          income.frameId,
-          expense.frameId,
+          financialView.identity,
           latest?.entryId,
         ),
         latestTransaction: latest,
@@ -16414,29 +16442,17 @@ final class DashboardCoreController {
   void _publishBalanceLinkedPresentationForVisibleFrame(
     DashboardVisibleFrame frame,
   ) {
-    final index = _balanceSourceIndexFor(coreRevision: frame.coreRevision);
-    if (index == null || index.coreRevision != frame.coreRevision) {
-      _setBalanceLinkedPresentation(null);
-      return;
-    }
-    final incomeCatalog = index.catalogForIdentity(
-      direction: LedgerDirection.income,
-      timeScope: const AllTimeScope(),
+    final financialView = _balanceFinancialViewFor(
+      coreRevision: frame.coreRevision,
     );
-    final expenseCatalog = index.catalogForIdentity(
-      direction: LedgerDirection.expense,
-      timeScope: const AllTimeScope(),
-    );
-    if (incomeCatalog == null || expenseCatalog == null) {
+    if (financialView == null) {
       _setBalanceLinkedPresentation(null);
       return;
     }
     final identity = DashboardBalancePrimaryIdentity(
-      upstreamScopeKey:
-          '${incomeCatalog.parentScope.key.value}|'
-          '${expenseCatalog.parentScope.key.value}',
-      indexGeneration: index.generation,
-      coreRevision: index.coreRevision,
+      upstreamScopeKey: financialView.identity,
+      indexGeneration: financialView.sourceIndex.generation,
+      coreRevision: financialView.sourceIndex.coreRevision,
     );
     final timeScope = frame.scope.timeScope;
     final cacheKey =
@@ -16457,11 +16473,11 @@ final class DashboardCoreController {
       logicalAsOfDate: logicalAsOfDate,
       logicalAsOfLocalTimeMinutes: logicalAsOfLocalTimeMinutes,
       incomeEntries: _balancePrimaryEntriesFor(
-        index: index,
+        view: financialView,
         direction: LedgerDirection.income,
       ),
       expenseEntries: _balancePrimaryEntriesFor(
-        index: index,
+        view: financialView,
         direction: LedgerDirection.expense,
       ),
     );
@@ -16496,16 +16512,74 @@ final class DashboardCoreController {
   /// content card. Prefer the resident pre-focus base through every focus
   /// phase, then fall back to the current prepared revision only when no
   /// focus transaction is active.
+  /// Resolves the ghost-neutral resident source that owns both committed
+  /// directional queries.  The source deliberately remains neutral so the
+  /// quick filter never rebuilds it; the returned financial view applies the
+  /// selected ghost memberships as its own exact identity.
   PreparedDashboardIndex? _balanceSourceIndexFor({required int coreRevision}) {
+    final neutralQueries = currentQuery.queries.withGhostFilterMode(
+      GhostFilterMode.both,
+    );
     for (final candidate in <PreparedDashboardIndex?>[
+      // DashboardDataRuntime publishes the immutable ghost-neutral source
+      // before Core has finished installing its first visible projection.
+      // Keep that source in this lookup so the first visible Balance frame,
+      // and a rapid first ghost tap, cannot see an otherwise valid source as
+      // "no financial data" merely because [_focusBaseIndex] has not yet
+      // been assigned after the async publication boundary.
+      dataRuntime.currentIndex,
       _focusBaseIndex,
       _provisionalFocusBaseIndex,
       _activePreparedRevisionBundle?.index,
       presentation.index,
     ]) {
-      if (candidate?.coreRevision == coreRevision) return candidate;
+      if (candidate?.coreRevision == coreRevision &&
+          candidate!.key.matchesScope(
+            neutralQueries.scopeFor(LedgerDirection.income),
+          ) &&
+          candidate.key.matchesScope(
+            neutralQueries.scopeFor(LedgerDirection.expense),
+          )) {
+        return candidate;
+      }
     }
     return null;
+  }
+
+  _DashboardBalanceFinancialView? _balanceFinancialViewFor({
+    required int coreRevision,
+  }) {
+    final index = _balanceSourceIndexFor(coreRevision: coreRevision);
+    if (index == null) return null;
+    final queries = currentQuery.queries;
+
+    List<DashboardLedgerEntry> entriesFor(LedgerDirection direction) {
+      final seed = index.partitionFor(direction).focusMembershipSeed;
+      if (seed == null) return const <DashboardLedgerEntry>[];
+      // The financial membership is intentionally distinct from the LogBox
+      // presentation membership: it includes booked realized ghosts and
+      // excludes pending rows for every ghost mode.
+      return List<DashboardLedgerEntry>.unmodifiable(
+        seed
+            .select(
+              ghostFilterMode: queries.scopeFor(direction).ghostFilterMode,
+            )
+            .entries
+            .where((entry) => !entry.isPendingGhost),
+      );
+    }
+
+    return _DashboardBalanceFinancialView(
+      sourceIndex: index,
+      incomeQueryKey: queries.scopeFor(LedgerDirection.income).key.value,
+      expenseQueryKey: queries.scopeFor(LedgerDirection.expense).key.value,
+      incomeGhostMode: queries.scopeFor(LedgerDirection.income).ghostFilterMode,
+      expenseGhostMode: queries
+          .scopeFor(LedgerDirection.expense)
+          .ghostFilterMode,
+      incomeEntries: entriesFor(LedgerDirection.income),
+      expenseEntries: entriesFor(LedgerDirection.expense),
+    );
   }
 
   /// Resolves one direction's complete resident Balance membership. The
@@ -16513,12 +16587,11 @@ final class DashboardCoreController {
   /// this renderer-adjacent projection must not reapply transaction-list
   /// focus to either directional lane.
   Iterable<DashboardLedgerEntry> _balancePrimaryEntriesFor({
-    required PreparedDashboardIndex index,
+    required _DashboardBalanceFinancialView view,
     required LedgerDirection direction,
-  }) {
-    return index.partitionFor(direction).focusMembershipSeed?.entries ??
-        const <DashboardLedgerEntry>[];
-  }
+  }) => direction == LedgerDirection.income
+      ? view.incomeEntries
+      : view.expenseEntries;
 
   void _setBalanceLinkedPresentation(DashboardBalanceLinkedPresentation? next) {
     final current = balanceLinkedPresentation.value;
@@ -16527,34 +16600,19 @@ final class DashboardCoreController {
   }
 
   DashboardBalanceHistorySeries? _balanceHistoryFor({
-    required PreparedDashboardIndex index,
-    required DashboardPreparedFrame income,
-    required DashboardPreparedFrame expense,
+    required _DashboardBalanceFinancialView view,
   }) {
     final identity = Object.hash(
-      index.generation,
-      index.coreRevision,
-      income.frameId,
-      expense.frameId,
-      income.scope.key,
-      expense.scope.key,
+      view.identity,
+      view.sourceIndex.generation,
+      view.sourceIndex.coreRevision,
     );
     final cached = _balanceHistoryCache;
     if (cached?.identity == identity) return cached!.history;
 
     final history = DashboardBalanceHistoryProjection.build(
-      incomeEntries:
-          index
-              .partitionFor(LedgerDirection.income)
-              .focusMembershipSeed
-              ?.entries ??
-          const <DashboardLedgerEntry>[],
-      expenseEntries:
-          index
-              .partitionFor(LedgerDirection.expense)
-              .focusMembershipSeed
-              ?.entries ??
-          const <DashboardLedgerEntry>[],
+      incomeEntries: view.incomeEntries,
+      expenseEntries: view.expenseEntries,
     );
     // The transport membership is accepted only when it proves it belongs to
     // exactly the same all-time directional prepared frames that own the
@@ -16563,8 +16621,8 @@ final class DashboardCoreController {
     final last = history?.points.last;
     final exact =
         last != null &&
-        last.incomeTotalMinor == income.totalMinor &&
-        last.expenseTotalMinor == expense.totalMinor;
+        last.incomeTotalMinor == view.incomeTotalMinor &&
+        last.expenseTotalMinor == view.expenseTotalMinor;
     final resolved = exact ? history : null;
     _balanceHistoryCache = _DashboardBalanceHistoryCache(
       identity: identity,
@@ -16573,20 +16631,18 @@ final class DashboardCoreController {
     return resolved;
   }
 
-  DashboardBalanceLatestTransactionPresentation? _balanceLatestTransactionFor(
-    Iterable<DashboardPreparedFrame> frames,
+  DashboardBalanceLatestTransactionPresentation?
+  _balanceLatestTransactionForEntries(
+    Iterable<Iterable<DashboardLedgerEntry>> entryGroups,
   ) {
     DashboardLedgerEntry? latest;
-    for (final frame in frames) {
-      // The prepared LogBox's first preview row is the bounded, already
-      // ordered current-scope latest transaction. This Core read cannot
-      // materialize the rich row projection or acquire repository data.
-      final candidate = frame.logBox.semanticPreviewLedgerEntryAt(0);
-      if (candidate == null ||
-          (latest != null && !_isBalanceEntryNewer(candidate, latest))) {
-        continue;
+    for (final entries in entryGroups) {
+      for (final candidate in entries) {
+        if (latest != null && !_isBalanceEntryNewer(candidate, latest)) {
+          continue;
+        }
+        latest = candidate;
       }
-      latest = candidate;
     }
     if (latest == null) return null;
     final direction = latest.direction == LedgerDirection.expense.name
@@ -17064,6 +17120,41 @@ final class _DashboardBalanceHistoryCache {
 
   final int identity;
   final DashboardBalanceHistorySeries? history;
+}
+
+/// Core-owned Balance financial membership.  It is derived from the resident
+/// ghost-neutral prepared index but is identified by both effective direction
+/// queries, so a nonGhost/onlyGhost switch cannot borrow a semantically
+/// incompatible all-time frame.  Pending ghost presentation rows never enter
+/// this model.
+final class _DashboardBalanceFinancialView {
+  const _DashboardBalanceFinancialView({
+    required this.sourceIndex,
+    required this.incomeQueryKey,
+    required this.expenseQueryKey,
+    required this.incomeGhostMode,
+    required this.expenseGhostMode,
+    required this.incomeEntries,
+    required this.expenseEntries,
+  });
+
+  final PreparedDashboardIndex sourceIndex;
+  final String incomeQueryKey;
+  final String expenseQueryKey;
+  final GhostFilterMode incomeGhostMode;
+  final GhostFilterMode expenseGhostMode;
+  final List<DashboardLedgerEntry> incomeEntries;
+  final List<DashboardLedgerEntry> expenseEntries;
+
+  String get identity =>
+      '${sourceIndex.coreRevision}|$incomeQueryKey|$expenseQueryKey|'
+      '${incomeGhostMode.name}|${expenseGhostMode.name}';
+
+  int get incomeTotalMinor =>
+      incomeEntries.fold<int>(0, (total, entry) => total + entry.amountMinor);
+
+  int get expenseTotalMinor =>
+      expenseEntries.fold<int>(0, (total, entry) => total + entry.amountMinor);
 }
 
 final class _AvatarLiveRenderTarget {

@@ -21,8 +21,8 @@ object DashboardBinaryCodec {
     const val BUDGET_LIMIT_VERSION: Int = 7
     const val BUDGET_PARTNER_MAGIC: Int = 0x464C4250 // FLBP
     const val BUDGET_PARTNER_VERSION: Int = 5
-    const val INDEX_VERSION: Int = 7
-    const val VERSION: Int = 3
+    const val INDEX_VERSION: Int = 8
+    const val VERSION: Int = 4
 
     /**
      * Encodes the one session-wide sparse dashboard index. Rows are written
@@ -250,6 +250,9 @@ object DashboardBinaryCodec {
         writeUtf8(row.entryId)
         writeUtf8(row.partnerId)
         writeUtf8(row.partnerDisplayName)
+        writeUtf8(row.partnerAvatarCategoryId)
+        writeUtf8(row.partnerAvatarColorId)
+        writeUtf8(row.partnerAvatarIconId)
         writeUtf8(row.categoryId)
         writeUtf8(row.categoryDisplayName)
         writeUtf8(row.categoryColorId)

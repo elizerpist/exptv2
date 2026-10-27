@@ -160,18 +160,26 @@ final class GlobalCoreRevisionObserver {
     if (_subscription != null) return;
     subscribeCount += 1;
     _subscription = _repository.watchCoreRevision().listen(
-      (revision) {
-        if (revision <= 0 || revision == _lastRevision) return;
-        _lastRevision = revision;
-        if (!_firstPositive.isCompleted) _firstPositive.complete(revision);
-        _onRevision?.call(revision);
-      },
+      acceptKnownRevision,
       onError: (Object error, StackTrace stackTrace) {
         if (!_firstPositive.isCompleted) {
           _firstPositive.completeError(error, stackTrace);
         }
       },
     );
+  }
+
+  /// Accepts an authoritative mutation revision that arrived together with a
+  /// successful write response.  The Room stream remains the source of truth;
+  /// this only closes the short race between a save result and its later stream
+  /// notification, and never treats an entry revision as a Core revision.
+  void acceptKnownRevision(int revision) {
+    if (_disposed || revision <= 0 || revision <= (_lastRevision ?? 0)) {
+      return;
+    }
+    _lastRevision = revision;
+    if (!_firstPositive.isCompleted) _firstPositive.complete(revision);
+    _onRevision?.call(revision);
   }
 
   Future<void> dispose() async {
@@ -487,6 +495,14 @@ final class DashboardDataRuntime {
   DashboardIndexRequestTemplate get requestTemplate => _requestTemplate;
   int get globalRevisionSubscribeCount => _revisionObserver.subscribeCount;
   int get globalRevisionCancelCount => _revisionObserver.cancelCount;
+
+  /// Starts the normal revision-aware rebuild path immediately after an
+  /// authoritative mutation response.  It deliberately reuses [_onRevision]
+  /// so index, Budget and presentation publication retain their normal
+  /// atomicity guarantees.
+  void acceptKnownCoreRevision(int revision) {
+    _revisionObserver.acceptKnownRevision(revision);
+  }
 
   /// Builds a complete next query index without publishing it. The dashboard
   /// coordinator owns the later single presentation commit, so no frame can

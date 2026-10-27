@@ -27,6 +27,8 @@ class DashboardLogRowViewModel {
     required this.amountStyle,
     required this.categoryColorId,
     required this.categoryIconId,
+    this.partnerAvatarColorId = 'fallback',
+    this.partnerAvatarIconId = 'fallback',
     required this.semanticLabel,
     this.isPendingGhost = false,
     this.hasGhostOrigin = false,
@@ -37,6 +39,12 @@ class DashboardLogRowViewModel {
     this.partnerDisplayName = '',
   }) : categoryColorHandle = CategoryColorCatalog.handleOf(categoryColorId),
        categoryIconHandle = CategoryIconCatalog.handleOf(categoryIconId),
+       partnerAvatarColorHandle = CategoryColorCatalog.handleOf(
+         partnerAvatarColorId,
+       ),
+       partnerAvatarIconHandle = CategoryIconCatalog.handleOf(
+         partnerAvatarIconId,
+       ),
        textLayoutId = Object.hash(
          entryId,
          displayName,
@@ -47,6 +55,8 @@ class DashboardLogRowViewModel {
          isPendingGhost,
          hasGhostOrigin,
          hasCategoryOverride,
+         partnerAvatarColorId,
+         partnerAvatarIconId,
        );
 
   /// Rich per-row presentation is intentionally created only by a bounded
@@ -77,6 +87,8 @@ class DashboardLogRowViewModel {
       amountStyle: isExpense ? LogAmountStyle.expense : LogAmountStyle.income,
       categoryColorId: entry.categoryColorId ?? 'fallback',
       categoryIconId: entry.categoryIconId ?? 'fallback',
+      partnerAvatarColorId: entry.partnerAvatarColorId ?? 'fallback',
+      partnerAvatarIconId: entry.partnerAvatarIconId ?? 'fallback',
       categoryId: entry.categoryId,
       partnerId: entry.partnerId,
       partnerDisplayName: entry.partnerDisplayName ?? displayName,
@@ -98,6 +110,8 @@ class DashboardLogRowViewModel {
   final LogAmountStyle amountStyle;
   final String categoryColorId;
   final String categoryIconId;
+  final String partnerAvatarColorId;
+  final String partnerAvatarIconId;
 
   /// Semantic source identities are retained with the prepared row so an
   /// interaction can request transient focus without an entry-id lookup.
@@ -106,6 +120,8 @@ class DashboardLogRowViewModel {
   final String partnerDisplayName;
   final int categoryColorHandle;
   final int categoryIconHandle;
+  final int partnerAvatarColorHandle;
+  final int partnerAvatarIconHandle;
   final bool isPendingGhost;
   final bool hasGhostOrigin;
   final bool hasCategoryOverride;
@@ -130,6 +146,44 @@ class DashboardLogRowViewModel {
     final hour = normalized ~/ 60;
     final minute = normalized % 60;
     return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Reuses every formatted financial field while replacing the Core-resolved
+  /// visual metadata of one persisted entry.  This is intentionally a row
+  /// paint projection, not a substitute for the following revision-owned
+  /// index and aggregate publication.
+  DashboardLogRowViewModel withVisualPatch(DashboardLedgerVisualPatch patch) {
+    if (patch.entryId != entryId) {
+      throw ArgumentError.value(patch.entryId, 'patch.entryId');
+    }
+    final categoryDisplay = isPendingGhost
+        ? 'Várható · ${patch.categoryDisplayName}'
+        : patch.categoryDisplayName;
+    final directionLabel = amountStyle == LogAmountStyle.expense
+        ? 'kiadás'
+        : 'bevétel';
+    return DashboardLogRowViewModel(
+      entryId: entryId,
+      displayName: patch.partnerDisplayName,
+      categoryDisplayName: categoryDisplay,
+      formattedAmount: formattedAmount,
+      displayTime: displayTime,
+      amountStyle: amountStyle,
+      categoryColorId: patch.categoryColorId,
+      categoryIconId: patch.categoryIconId,
+      partnerAvatarColorId: patch.partnerAvatarColorId,
+      partnerAvatarIconId: patch.partnerAvatarIconId,
+      categoryId: patch.categoryId,
+      partnerId: partnerId,
+      partnerDisplayName: patch.partnerDisplayName,
+      semanticLabel:
+          '${isPendingGhost ? 'Várható, ' : ''}${patch.partnerDisplayName}, '
+          '$formattedAmount, $directionLabel, $categoryDisplay',
+      isPendingGhost: isPendingGhost,
+      hasGhostOrigin: hasGhostOrigin,
+      hasCategoryOverride: patch.assignmentMode == 'entryOverride',
+      amountIsUnknown: amountIsUnknown,
+    );
   }
 }
 
@@ -617,6 +671,15 @@ class DashboardLogViewportState {
     return _deferred?.entryAt(ordinal);
   }
 
+  /// Bounded lookup used only for a save-result visual patch.  The active
+  /// preview contains at most one viewport page, so this never scans the
+  /// prepared index or queries the repository.
+  DashboardLedgerEntry? semanticPreviewLedgerEntryForId(String entryId) {
+    final deferred = _deferred;
+    if (deferred == null) return null;
+    return deferred.entryForId(entryId);
+  }
+
   int get groupCount => prepareSemanticPreviewGeometry().groupCount;
   int get viewportId =>
       _deferred?.viewportId(
@@ -685,6 +748,54 @@ class DashboardLogViewportState {
     direction: direction ?? this.direction,
   );
 
+  /// Applies a Core-confirmed editor visual patch to an already resident row.
+  /// Financial membership, ordering, cursors and counts remain unchanged
+  /// until the authoritative revision publication arrives.
+  DashboardLogViewportState? withVisualPatch(DashboardLedgerVisualPatch patch) {
+    final deferred = _deferred;
+    if (deferred != null) {
+      final patched = deferred.withVisualPatch(patch);
+      if (patched == null) return null;
+      return DashboardLogViewportState._deferred(
+        queryKey: queryKey,
+        revision: revision,
+        entryCount: entryCount,
+        nextCursor: nextCursor,
+        direction: direction,
+        deferred: patched,
+      );
+    }
+    var changed = false;
+    final groups = <DashboardDayLogGroupViewModel>[];
+    for (final group in _eagerGroups!) {
+      final rows = <DashboardLogRowViewModel>[];
+      for (final row in group.rows) {
+        if (row.entryId == patch.entryId) {
+          changed = true;
+          rows.add(row.withVisualPatch(patch));
+        } else {
+          rows.add(row);
+        }
+      }
+      groups.add(
+        DashboardDayLogGroupViewModel(
+          dateKey: group.dateKey,
+          dayLabel: group.dayLabel,
+          rows: rows,
+        ),
+      );
+    }
+    if (!changed) return null;
+    return DashboardLogViewportState(
+      queryKey: queryKey,
+      revision: revision,
+      groups: groups,
+      entryCount: entryCount,
+      nextCursor: nextCursor,
+      direction: direction,
+    );
+  }
+
   bool hasSameVisualValue(DashboardLogViewportState other) =>
       viewportId == other.viewportId;
 }
@@ -709,11 +820,17 @@ final class _DeferredViewportProjection {
   _DeferredViewportProjection({
     required DashboardLogRowProjectionCache rowProjectionCache,
     required List<int> rowIndices,
+    Map<int, DashboardLedgerEntry> entryOverrides =
+        const <int, DashboardLedgerEntry>{},
   }) : _rowProjectionCache = rowProjectionCache,
-       _rowIndices = List<int>.unmodifiable(rowIndices);
+       _rowIndices = List<int>.unmodifiable(rowIndices),
+       _entryOverrides = Map<int, DashboardLedgerEntry>.unmodifiable(
+         entryOverrides,
+       );
 
   final DashboardLogRowProjectionCache _rowProjectionCache;
   final List<int> _rowIndices;
+  final Map<int, DashboardLedgerEntry> _entryOverrides;
   late final DashboardLogSemanticPreviewGeometry _semanticPreviewGeometry =
       DashboardLogSemanticPreviewGeometry.fromPreparedReferences(
         rowProjectionCache: _rowProjectionCache,
@@ -726,7 +843,9 @@ final class _DeferredViewportProjection {
       List<String>.unmodifiable(<String>{
         for (final index in _rowIndices)
           '${_entryAt(index).categoryColorId ?? 'fallback'}|'
-              '${_entryAt(index).categoryIconId ?? 'fallback'}',
+              '${_entryAt(index).categoryIconId ?? 'fallback'}|'
+              '${_entryAt(index).partnerAvatarColorId ?? 'fallback'}|'
+              '${_entryAt(index).partnerAvatarIconId ?? 'fallback'}',
       });
   bool _isProjected = false;
   int _richProjectedRowCount = 0;
@@ -736,7 +855,8 @@ final class _DeferredViewportProjection {
 
   bool get isProjected => _isProjected;
   int get richProjectedRowCount => _richProjectedRowCount;
-  Object get richProjectionOwner => _rowProjectionCache;
+  Object get richProjectionOwner =>
+      _entryOverrides.isEmpty ? _rowProjectionCache : this;
   DashboardLogRichProjectionMetrics get richProjectionMetrics =>
       DashboardLogRichProjectionMetrics(
         richRowProjectionMicros: _rowProjectionCache.projectionMicros,
@@ -797,6 +917,34 @@ final class _DeferredViewportProjection {
     return _entryAt(_rowIndices[ordinal]);
   }
 
+  DashboardLedgerEntry? entryForId(String entryId) {
+    for (final index in _rowIndices) {
+      final entry = _entryAt(index);
+      if (entry.id == entryId) return entry;
+    }
+    return null;
+  }
+
+  _DeferredViewportProjection? withVisualPatch(
+    DashboardLedgerVisualPatch patch,
+  ) {
+    int? rowIndex;
+    for (final candidate in _rowIndices) {
+      if (_entryAt(candidate).id == patch.entryId) {
+        rowIndex = candidate;
+        break;
+      }
+    }
+    if (rowIndex == null) return null;
+    final overrides = Map<int, DashboardLedgerEntry>.of(_entryOverrides);
+    overrides[rowIndex] = _entryAt(rowIndex).withVisualPatch(patch);
+    return _DeferredViewportProjection(
+      rowProjectionCache: _rowProjectionCache,
+      rowIndices: _rowIndices,
+      entryOverrides: overrides,
+    );
+  }
+
   int viewportId({
     required LedgerQueryKey queryKey,
     required int? revision,
@@ -816,12 +964,31 @@ final class _DeferredViewportProjection {
     // A frame identity needs only exact compact row ordering. Day labels and
     // all rich group/view-model objects are intentionally deferred until the
     // scene window consumes this payload.
-    return Object.hashAll(_rowIndices);
+    return Object.hashAll(<Object?>[
+      ..._rowIndices,
+      for (final entry in _entryOverrides.entries)
+        Object.hash(
+          entry.key,
+          entry.value.partnerDisplayName,
+          entry.value.partnerAvatarColorId,
+          entry.value.partnerAvatarIconId,
+          entry.value.categoryId,
+          entry.value.categoryDisplayName,
+          entry.value.categoryColorId,
+          entry.value.categoryIconId,
+          entry.value.assignmentMode,
+        ),
+    ]);
   }
 
   DashboardLedgerEntry _entryAt(int index) {
-    return _rowProjectionCache.entryAt(index);
+    return _entryOverrides[index] ?? _rowProjectionCache.entryAt(index);
   }
+
+  DashboardLogRowViewModel _projectRow(int index, DashboardLedgerEntry entry) =>
+      _entryOverrides.containsKey(index)
+      ? DashboardLogRowViewModel.fromLedgerEntry(entry)
+      : _rowProjectionCache.projectAt(index);
 }
 
 /// Private resumable rich projection. It performs at most one source-row or
@@ -884,7 +1051,7 @@ final class _DeferredRichProjectionBuilder {
       _currentDate = date;
       _currentRows = <DashboardLogRowViewModel>[];
     }
-    final row = _owner._rowProjectionCache.projectAt(rowIndex);
+    final row = _owner._projectRow(rowIndex, entry);
     final groupIndex = _groups.length;
     final rowIndexInGroup = _currentRows.length;
     _currentRows.add(row);
@@ -905,7 +1072,10 @@ final class _DeferredRichProjectionBuilder {
     );
     _flatRowIndex += 1;
     _stableRowIdentities.add(row.entryId);
-    _stableAssetIdentities.add('${row.categoryColorId}|${row.categoryIconId}');
+    _stableAssetIdentities.add(
+      '${row.categoryColorId}|${row.categoryIconId}|'
+      '${row.partnerAvatarColorId}|${row.partnerAvatarIconId}',
+    );
     _owner._richProjectedRowCount += 1;
   }
 
@@ -1083,7 +1253,8 @@ final class _DashboardLogViewportProjection {
   ) => List<String>.unmodifiable(<String>{
     for (final group in groups)
       for (final row in group.rows)
-        '${row.categoryColorId}|${row.categoryIconId}',
+        '${row.categoryColorId}|${row.categoryIconId}|'
+            '${row.partnerAvatarColorId}|${row.partnerAvatarIconId}',
   });
 }
 

@@ -932,6 +932,9 @@ class FluviLedgerReadService internal constructor(
             "ledger.booked_local_time_minutes AS booked_local_time_minutes, " +
             "ledger.occurred_at_utc_ms AS occurred_at_utc_ms, ledger.partner_id AS partner_id, " +
             "COALESCE(partner.display_name_override, partner.original_name) AS partner_display_name, " +
+            "partner.default_category_id AS partner_avatar_category_id, " +
+            "COALESCE(partner_avatar_category.color_id, 'fallback') AS partner_avatar_color_id, " +
+            "COALESCE(partner_avatar_category.icon_id, 'fallback') AS partner_avatar_icon_id, " +
             "ledger.category_id AS category_id, category.name AS category_display_name, " +
             "category.color_id AS category_color_id, category.icon_id AS category_icon_id, " +
             "ledger.category_assignment_mode AS assignment_mode, ledger.origin_kind AS origin_kind, " +
@@ -940,6 +943,8 @@ class FluviLedgerReadService internal constructor(
             "1 AS timeline_segment, 2 AS pending_sort_bucket, 0 AS pending_expected_at_utc_ms " +
             "FROM fluvi_ledger_entries AS ledger " +
             "JOIN fluvi_partners AS partner ON partner.id = ledger.partner_id " +
+            "LEFT JOIN fluvi_categories AS partner_avatar_category " +
+            "ON partner_avatar_category.id = partner.default_category_id " +
             "JOIN fluvi_categories AS category ON category.id = ledger.category_id " +
             ledgerWhere.sql +
             " UNION ALL " +
@@ -949,6 +954,9 @@ class FluviLedgerReadService internal constructor(
             "occurrence.expected_local_time_minutes AS booked_local_time_minutes, " +
             "occurrence.expected_at_utc_ms AS occurred_at_utc_ms, occurrence.partner_id AS partner_id, " +
             "COALESCE(ghost_partner.display_name_override, ghost_partner.original_name) AS partner_display_name, " +
+            "ghost_partner.default_category_id AS partner_avatar_category_id, " +
+            "COALESCE(ghost_partner_avatar_category.color_id, 'fallback') AS partner_avatar_color_id, " +
+            "COALESCE(ghost_partner_avatar_category.icon_id, 'fallback') AS partner_avatar_icon_id, " +
             "occurrence.category_id AS category_id, ghost_category.name AS category_display_name, " +
             "ghost_category.color_id AS category_color_id, ghost_category.icon_id AS category_icon_id, " +
             "occurrence.category_assignment_mode AS assignment_mode, 'recurring' AS origin_kind, " +
@@ -959,6 +967,8 @@ class FluviLedgerReadService internal constructor(
             "FROM fluvi_recurrence_occurrences AS occurrence " +
             "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
             "JOIN fluvi_partners AS ghost_partner ON ghost_partner.id = occurrence.partner_id " +
+            "LEFT JOIN fluvi_categories AS ghost_partner_avatar_category " +
+            "ON ghost_partner_avatar_category.id = ghost_partner.default_category_id " +
             "JOIN fluvi_categories AS ghost_category ON ghost_category.id = occurrence.category_id " +
             ghostWhere.sql +
             ")" + outerCursor +
@@ -1130,6 +1140,9 @@ class FluviLedgerReadService internal constructor(
         occurredAtUtcMs = long("occurred_at_utc_ms"),
         partnerId = string("partner_id"),
         partnerDisplayName = string("partner_display_name"),
+        partnerAvatarCategoryId = string("partner_avatar_category_id"),
+        partnerAvatarColorId = string("partner_avatar_color_id"),
+        partnerAvatarIconId = string("partner_avatar_icon_id"),
         categoryId = string("category_id"),
         categoryDisplayName = string("category_display_name"),
         categoryColorId = string("category_color_id"),
@@ -1263,6 +1276,9 @@ class FluviLedgerReadService internal constructor(
             occurredAtUtcMs = row.occurredAtUtcMs,
             partnerId = row.partnerId,
             partnerDisplayName = row.partnerDisplayName,
+            partnerAvatarCategoryId = row.partnerAvatarCategoryId,
+            partnerAvatarColorId = row.partnerAvatarColorId,
+            partnerAvatarIconId = row.partnerAvatarIconId,
             categoryId = row.categoryId,
             categoryDisplayName = row.categoryDisplayName,
             categoryColorId = row.categoryColorId,
@@ -1281,7 +1297,10 @@ class FluviLedgerReadService internal constructor(
             "ledger.occurred_at_utc_ms AS occurred_at_utc_ms, " +
             "ledger.partner_id AS partner_id, " +
             "COALESCE(partner.display_name_override, partner.original_name) " +
-            "AS partner_display_name, ledger.category_id AS category_id, " +
+            "AS partner_display_name, partner.default_category_id AS partner_avatar_category_id, " +
+            "COALESCE(partner_category.color_id, 'fallback') AS partner_avatar_color_id, " +
+            "COALESCE(partner_category.icon_id, 'fallback') AS partner_avatar_icon_id, " +
+            "ledger.category_id AS category_id, " +
             "category.name AS category_display_name, " +
             "category.color_id AS category_color_id, category.icon_id AS category_icon_id, " +
             "ledger.category_assignment_mode AS assignment_mode, " +
@@ -1289,6 +1308,8 @@ class FluviLedgerReadService internal constructor(
             "ledger.recurrence_occurrence_id AS recurrence_occurrence_id " +
             "FROM fluvi_ledger_entries AS ledger " +
             "JOIN fluvi_partners AS partner ON partner.id = ledger.partner_id " +
+            "LEFT JOIN fluvi_categories AS partner_category " +
+            "ON partner_category.id = partner.default_category_id " +
             "JOIN fluvi_categories AS category ON category.id = ledger.category_id " +
             whereSql +
             " ORDER BY ledger.booked_local_epoch_day DESC, " +
@@ -1344,6 +1365,7 @@ class FluviLedgerReadService internal constructor(
         val partner = requireNotNull(partners[partnerId]) {
             "Unknown partner ID in dashboard row: $partnerId"
         }
+        val partnerAvatarCategory = categories[partner.defaultCategoryId]
         return FluviDashboardLedgerRow(
             entryId = id,
             direction = direction,
@@ -1353,6 +1375,9 @@ class FluviLedgerReadService internal constructor(
             occurredAtUtcMs = occurredAtUtcMs,
             partnerId = partnerId,
             partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
+            partnerAvatarCategoryId = partnerAvatarCategory?.id ?: "fallback",
+            partnerAvatarColorId = partnerAvatarCategory?.colorId ?: "fallback",
+            partnerAvatarIconId = partnerAvatarCategory?.iconId ?: "fallback",
             categoryId = category.id,
             categoryDisplayName = category.name,
             categoryColorId = category.colorId,
@@ -1374,6 +1399,7 @@ class FluviLedgerReadService internal constructor(
         val partner = requireNotNull(partners[partnerId]) {
             "Unknown partner ID in recurrence occurrence: $partnerId"
         }
+        val partnerAvatarCategory = categories[partner.defaultCategoryId]
         return FluviDashboardLedgerRow(
             entryId = "ghost:$id",
             direction = direction,
@@ -1383,6 +1409,9 @@ class FluviLedgerReadService internal constructor(
             occurredAtUtcMs = expectedAtUtcMs,
             partnerId = partnerId,
             partnerDisplayName = partner.displayNameOverride ?: partner.originalName,
+            partnerAvatarCategoryId = partnerAvatarCategory?.id ?: "fallback",
+            partnerAvatarColorId = partnerAvatarCategory?.colorId ?: "fallback",
+            partnerAvatarIconId = partnerAvatarCategory?.iconId ?: "fallback",
             categoryId = category.id,
             categoryDisplayName = category.name,
             categoryColorId = category.colorId,

@@ -27,6 +27,7 @@ import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/manual_transactions/data/method_channel_manual_transaction_repository.dart';
 import '../../features/manual_transactions/data/unavailable_manual_transaction_repository.dart';
 import '../../features/manual_transactions/domain/manual_transaction_repository.dart';
+import '../../features/manual_transactions/domain/manual_transaction_models.dart';
 import '../../features/manual_transactions/presentation/creation_selector_sheet.dart';
 import '../../features/manual_transactions/presentation/manual_transaction_editor.dart';
 import '../../features/automation/data/method_channel_automation_repository.dart';
@@ -55,6 +56,7 @@ import '../../features/dashboard/presentation/summary_pill_variant.dart';
 import '../../features/dashboard/query/application/query_menu_data_controller.dart';
 import '../../features/dashboard/query/application/dashboard_applied_query_facet_loader.dart';
 import '../../features/dashboard/query/application/saved_query_controller.dart';
+import '../../features/dashboard/query/data/dashboard_ledger_entry.dart';
 import '../../features/dashboard/query/data/method_channel_query_menu_repository.dart';
 import '../../features/dashboard/query/data/query_menu_repository.dart';
 import '../../features/dashboard/query/domain/ledger_direction.dart';
@@ -396,7 +398,15 @@ class _FluviAppShellState extends State<FluviAppShell>
     _routeObstructed = true;
     _syncPulseDeliverySurface();
     try {
-      final action = await showCreationSelectorSheet(context);
+      final direction =
+          _controller.transactionDirection.direction ==
+              TransactionDirection.income
+          ? LedgerDirection.income
+          : LedgerDirection.expense;
+      final action = await showCreationSelectorSheet(
+        context,
+        direction: direction,
+      );
       if (!mounted || action == null) return;
       if (action == CreationSelectorAction.pushProfile) {
         await Navigator.of(context).push<void>(
@@ -410,11 +420,6 @@ class _FluviAppShellState extends State<FluviAppShell>
         );
         return;
       }
-      final direction =
-          _controller.transactionDirection.direction ==
-              TransactionDirection.income
-          ? LedgerDirection.income
-          : LedgerDirection.expense;
       if (action == CreationSelectorAction.recurringTransaction) {
         await Navigator.of(context).push<bool>(
           MaterialPageRoute<bool>(
@@ -429,13 +434,14 @@ class _FluviAppShellState extends State<FluviAppShell>
         );
         return;
       }
-      await Navigator.of(context).push<bool>(
-        PageRouteBuilder<bool>(
+      await Navigator.of(context).push<ManualTransactionSaveResult>(
+        PageRouteBuilder<ManualTransactionSaveResult>(
           pageBuilder: (context, animation, secondaryAnimation) =>
               ManualTransactionEditor.create(
                 repository: _manualTransactionRepository,
                 categories: _categoryCollection.value,
                 direction: direction,
+                onSaved: _acceptManualTransactionSave,
               ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
               SlideTransition(
@@ -479,13 +485,14 @@ class _FluviAppShellState extends State<FluviAppShell>
         );
         return;
       }
-      await Navigator.of(context).push<bool>(
-        PageRouteBuilder<bool>(
+      await Navigator.of(context).push<ManualTransactionSaveResult>(
+        PageRouteBuilder<ManualTransactionSaveResult>(
           pageBuilder: (context, animation, secondaryAnimation) =>
               ManualTransactionEditor.edit(
                 repository: _manualTransactionRepository,
                 categories: _categoryCollection.value,
                 entryId: entryId,
+                onSaved: _acceptManualTransactionSave,
               ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
               SlideTransition(
@@ -509,6 +516,35 @@ class _FluviAppShellState extends State<FluviAppShell>
         _syncPulseDeliverySurface();
       }
     }
+  }
+
+  void _acceptManualTransactionSave(ManualTransactionSaveResult? saved) {
+    final coreRevision = saved?.globalCoreRevision;
+    if (coreRevision == null || coreRevision <= 0) return;
+    final category = saved?.effectiveCategory;
+    final entry = saved?.entry;
+    final partner = saved?.partner;
+    final patch = category == null || entry == null || partner == null
+        ? null
+        : DashboardLedgerVisualPatch(
+            entryId: entry.entryId,
+            partnerId: entry.partnerId,
+            direction: entry.direction.name,
+            amountMinor: entry.amountScaled100,
+            bookedLocalEpochDay: entry.bookedLocalEpochDay,
+            bookedLocalTimeMinutes: entry.bookedLocalTimeMinutes,
+            partnerDisplayName: partner.displayName,
+            partnerAvatarCategoryId: partner.defaultCategoryId,
+            partnerAvatarColorId: partner.categoryColorId,
+            partnerAvatarIconId: partner.categoryIconId,
+            categoryId: category.id,
+            categoryDisplayName: category.name,
+            categoryColorId: category.colorId,
+            categoryIconId: category.iconId,
+            assignmentMode: entry.categoryAssignmentMode.name,
+            entryRevision: entry.revision,
+          );
+    _controller.acceptKnownCoreRevision(coreRevision, visualPatch: patch);
   }
 
   @override

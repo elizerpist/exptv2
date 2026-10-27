@@ -1,4 +1,5 @@
 import '../../dashboard/query/domain/ledger_direction.dart';
+import '../../../core/categories/domain/fluvi_category.dart';
 
 enum ManualCategoryAssignmentMode { partnerDefault, entryOverride }
 
@@ -54,6 +55,7 @@ final class LedgerEntryDetail {
     required this.originKind,
     required this.notificationInboxId,
     this.recurrenceOccurrenceId,
+    this.coreRevision,
     required this.revision,
   });
 
@@ -70,6 +72,10 @@ final class LedgerEntryDetail {
   final String originKind;
   final String? notificationInboxId;
   final String? recurrenceOccurrenceId;
+
+  /// Global financial-Core revision returned only by successful save commands.
+  /// This is intentionally distinct from the per-entry [revision].
+  final int? coreRevision;
   final int revision;
 
   factory LedgerEntryDetail.fromMap(
@@ -96,8 +102,26 @@ final class LedgerEntryDetail {
     originKind: _string(value, 'originKind'),
     notificationInboxId: value['notificationInboxId'] as String?,
     recurrenceOccurrenceId: value['recurrenceOccurrenceId'] as String?,
+    coreRevision: _optionalInt(value['coreRevision']),
     revision: _int(value, 'revision'),
   );
+}
+
+/// The typed hand-off from the editor to the Core-owned dashboard runtime.
+/// It carries the persisted entry, its independently versioned Core mutation,
+/// and the already-resolved display inputs needed by a receiving surface.
+final class ManualTransactionSaveResult {
+  const ManualTransactionSaveResult({
+    required this.entry,
+    required this.partner,
+    required this.effectiveCategory,
+    required this.globalCoreRevision,
+  });
+
+  final LedgerEntryDetail entry;
+  final PartnerDirectoryEntry partner;
+  final FluviCategory? effectiveCategory;
+  final int? globalCoreRevision;
 }
 
 sealed class ManualPartnerSelection {
@@ -159,6 +183,12 @@ int _int(Map<Object?, Object?> value, String key) {
   if (result is num) return result.toInt();
   throw FormatException('Missing $key in manual transaction payload.');
 }
+
+int? _optionalInt(Object? value) => switch (value) {
+  int value => value,
+  num value => value.toInt(),
+  _ => null,
+};
 
 List<String> _strings(Object? value) {
   if (value is! Iterable) return const <String>[];

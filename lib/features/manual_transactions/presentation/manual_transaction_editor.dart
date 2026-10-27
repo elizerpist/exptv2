@@ -16,6 +16,7 @@ final class ManualTransactionEditor extends StatefulWidget {
     required this.repository,
     required this.categories,
     required this.direction,
+    this.onSaved,
   }) : mode = ManualTransactionEditorMode.create,
        entryId = null;
 
@@ -24,6 +25,7 @@ final class ManualTransactionEditor extends StatefulWidget {
     required this.repository,
     required this.categories,
     required String this.entryId,
+    this.onSaved,
   }) : mode = ManualTransactionEditorMode.edit,
        direction = null;
 
@@ -32,6 +34,7 @@ final class ManualTransactionEditor extends StatefulWidget {
   final ManualTransactionEditorMode mode;
   final String? entryId;
   final LedgerDirection? direction;
+  final ValueChanged<ManualTransactionSaveResult>? onSaved;
 
   @override
   State<ManualTransactionEditor> createState() =>
@@ -265,7 +268,7 @@ final class _ManualTransactionEditorState
       ).millisecondsSinceEpoch;
       if (_editing) {
         final existing = _entry!;
-        await widget.repository.updateTransaction(
+        final saved = await widget.repository.updateTransaction(
           entryId: existing.entryId,
           expectedRevision: existing.revision,
           partner: partner,
@@ -278,10 +281,12 @@ final class _ManualTransactionEditorState
               : existing.occurredAtUtcMs,
           note: _note.text,
         );
-        if (mounted) Navigator.of(context).pop(true);
+        final result = _saveResult(saved);
+        widget.onSaved?.call(result);
+        if (mounted) Navigator.of(context).pop(result);
         return;
       }
-      await widget.repository.createManualTransaction(
+      final saved = await widget.repository.createManualTransaction(
         partner: partner,
         categorySelection: _categorySelection,
         direction: direction,
@@ -293,7 +298,9 @@ final class _ManualTransactionEditorState
       );
       if (!mounted) return;
       if (!keepOpen) {
-        Navigator.of(context).pop(true);
+        final result = _saveResult(saved);
+        widget.onSaved?.call(result);
+        Navigator.of(context).pop(result);
         return;
       }
       final now = DateTime.now();
@@ -322,6 +329,22 @@ final class _ManualTransactionEditorState
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  ManualTransactionSaveResult _saveResult(LedgerEntryDetail entry) {
+    FluviCategory? category;
+    for (final candidate in widget.categories) {
+      if (candidate.id == entry.categoryId) {
+        category = candidate;
+        break;
+      }
+    }
+    return ManualTransactionSaveResult(
+      entry: entry,
+      partner: _partner!,
+      effectiveCategory: category,
+      globalCoreRevision: entry.coreRevision,
+    );
   }
 
   FluviCategory? _category(String? id) {
