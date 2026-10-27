@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
+import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
@@ -42,6 +43,83 @@ void main() {
         seed.select(categoryId: 'utilities', partnerId: 'market').entryIds,
         <String>['c'],
       );
+    },
+  );
+
+  test(
+    'ghost memberships keep pending rows visual-only and compose with facets',
+    () {
+      final seed = DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+        row('ordinary', category: 'food', partner: 'market', amount: 100),
+        DashboardLedgerEntry(
+          id: 'booked-ghost',
+          categoryId: 'food',
+          partnerId: 'market',
+          direction: 'expense',
+          amountMinor: 200,
+          bookedLocalEpochDay: 20,
+          bookedLocalTimeMinutes: 610,
+          partnerDisplayName: 'Market ghost',
+          recurrenceOccurrenceId: 'occurrence-booked',
+        ),
+        DashboardLedgerEntry(
+          id: 'pending-ghost',
+          categoryId: 'food',
+          partnerId: 'market',
+          direction: 'expense',
+          amountMinor: 300,
+          bookedLocalEpochDay: 21,
+          bookedLocalTimeMinutes: 620,
+          isPendingGhost: true,
+          recurrenceOccurrenceId: 'occurrence-pending',
+        ),
+      ]);
+
+      final nonGhost = seed.select(
+        categoryId: 'food',
+        ghostFilterMode: GhostFilterMode.nonGhost,
+      );
+      expect(nonGhost.entryIds, <String>['ordinary']);
+      expect(nonGhost.presentationEntries.map((entry) => entry.id), <String>[
+        'ordinary',
+      ]);
+
+      final onlyGhost = seed.select(
+        categoryId: 'food',
+        ghostFilterMode: GhostFilterMode.onlyGhost,
+      );
+      expect(onlyGhost.entryIds, <String>['booked-ghost']);
+      expect(onlyGhost.presentationEntries.map((entry) => entry.id), <String>[
+        'booked-ghost',
+        'pending-ghost',
+      ]);
+
+      final both = seed.select(
+        categoryId: 'food',
+        ghostFilterMode: GhostFilterMode.both,
+      );
+      expect(both.entryIds, <String>['ordinary', 'booked-ghost']);
+      expect(both.presentationEntries.map((entry) => entry.id), <String>[
+        'ordinary',
+        'booked-ghost',
+        'pending-ghost',
+      ]);
+
+      // Ghost membership is one more exact intersection; it does not erase
+      // category, partner, text, or amount constraints already represented by
+      // the prepared seed.
+      final composed = seed.select(
+        categoryId: 'food',
+        partnerId: 'market',
+        normalizedSearch: 'market ghost',
+        minimumAmountScaled100: 150,
+        maximumAmountScaled100: 250,
+        ghostFilterMode: GhostFilterMode.onlyGhost,
+      );
+      expect(composed.entryIds, <String>['booked-ghost']);
+      expect(composed.presentationEntries.map((entry) => entry.id), <String>[
+        'booked-ghost',
+      ]);
     },
   );
 

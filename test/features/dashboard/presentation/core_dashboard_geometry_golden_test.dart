@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -11,6 +11,54 @@ import '../../../support/test_pump.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
+
+  for (final mode in DashboardModeSpec.values) {
+    testWidgets(
+      'real ${mode.mode.name} dashboard ghost control centers and remains tappable',
+      (tester) async {
+        final harness = await _pumpMode(tester, mode);
+        addTearDown(harness.dispose);
+
+        for (final collapsed in <bool>[false, true]) {
+          harness.controller.expansion.setProgress(
+            collapsed ? harness.controller.metrics.collapseTravel : 0,
+          );
+          await tester.pump();
+
+          final summary = tester.getRect(
+            find.byKey(const ValueKey('summary-pill-experiment-segmented')),
+          );
+          final ghost = tester.getRect(
+            find.byKey(const ValueKey('dashboard-ghost-quick-filter')),
+          );
+          final filter = tester.getRect(
+            find.byKey(const ValueKey('dashboard-logbox-filter-button')),
+          );
+
+          expect(ghost.size, const Size(48, 48));
+          expect(
+            ghost.top - summary.bottom,
+            closeTo(filter.top - ghost.bottom, 1),
+            reason:
+                'the rendered bounds must preserve the shared geometry '
+                'equation in ${collapsed ? 'collapsed' : 'expanded'} mode',
+          );
+
+          await tester.tap(
+            find.byKey(const ValueKey('dashboard-ghost-quick-filter')),
+          );
+          await tester.pump();
+          expect(
+            tester.takeException(),
+            isNull,
+            reason:
+                'the independently positioned 48dp target remains live '
+                'without owning the collapse gesture',
+          );
+        }
+      },
+    );
+  }
 
   for (final mode in DashboardModeSpec.values) {
     testWidgets('${mode.mode.name} expanded core geometry matches golden', (

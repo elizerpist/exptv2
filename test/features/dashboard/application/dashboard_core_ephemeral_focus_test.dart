@@ -107,6 +107,265 @@ void main() {
   );
 
   test(
+    'ghost quick filter derives all memberships from the retained universe without a repository read',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          const DashboardLedgerEntry(
+            id: 'income-ordinary',
+            partnerId: 'income-partner',
+            categoryId: 'income-category',
+            direction: 'income',
+            amountMinor: 100,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 600,
+          ),
+          const DashboardLedgerEntry(
+            id: 'income-booked-ghost',
+            partnerId: 'income-partner',
+            categoryId: 'income-category',
+            direction: 'income',
+            amountMinor: 200,
+            bookedLocalEpochDay: 20635,
+            bookedLocalTimeMinutes: 600,
+            recurrenceOccurrenceId: 'income-occurrence',
+          ),
+          const DashboardLedgerEntry(
+            id: 'income-pending-ghost',
+            partnerId: 'income-partner',
+            categoryId: 'income-category',
+            direction: 'income',
+            amountMinor: 300,
+            bookedLocalEpochDay: 20635,
+            bookedLocalTimeMinutes: 600,
+            isPendingGhost: true,
+            recurrenceOccurrenceId: 'income-pending-occurrence',
+          ),
+          const DashboardLedgerEntry(
+            id: 'expense-ordinary',
+            partnerId: 'expense-partner',
+            categoryId: 'expense-category',
+            direction: 'expense',
+            amountMinor: 400,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 600,
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      FluviDiagnosticLogger.clear();
+      final applied = await core.applyGhostFilterMode(
+        GhostFilterMode.onlyGhost,
+      );
+      expect(
+        applied,
+        isTrue,
+        reason: FluviDiagnosticLogger.entries
+            .map((entry) => '${entry.stage}:${entry.error}')
+            .join('\n'),
+      );
+      final onlyGhost = core.preparedIndex!.frameFor(
+        core.navigation.state.parentQueryScope,
+      );
+      expect(repository.prepareCalls, 1);
+      expect(onlyGhost.totalMinor, 200);
+      expect(onlyGhost.entryCount, 1);
+      expect(onlyGhost.presentationEntryCount, 2);
+      final pagedGhostIds = <String>[];
+      Map<String, Object?>? cursor;
+      do {
+        final page = core.preparedIndex!.preparedLogPageFor(
+          core.navigation.state.parentQueryScope,
+          after: cursor,
+          pageSize: 1,
+        );
+        expect(page, isNotNull);
+        pagedGhostIds.add(page!.payload.semanticPreviewRowIdentityAt(0)!);
+        cursor = page.nextCursor;
+      } while (cursor != null);
+      expect(pagedGhostIds.toSet(), <String>{
+        'income-booked-ghost',
+        'income-pending-ghost',
+      });
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.income).ghostFilterMode,
+        GhostFilterMode.onlyGhost,
+      );
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.expense).ghostFilterMode,
+        GhostFilterMode.onlyGhost,
+      );
+
+      await Future.wait<bool>(<Future<bool>>[
+        core.cycleGhostFilterMode(),
+        core.cycleGhostFilterMode(),
+        core.cycleGhostFilterMode(),
+      ]);
+      expect(repository.prepareCalls, 1);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.income).ghostFilterMode,
+        GhostFilterMode.onlyGhost,
+        reason:
+            'three accepted taps preserve every nonGhost→onlyGhost→both step',
+      );
+      expect(
+        FluviDiagnosticLogger.entries
+            .where(
+              (entry) => entry.stage == 'GHOST_QUICK_FILTER_PREPARED_APPLIED',
+            )
+            .every((entry) => entry.scope?.contains('hotsetHit=true') ?? false),
+        isTrue,
+        reason: 'all three modes are exact residents before the first tap',
+      );
+    },
+  );
+
+  test(
+    'measurement: prepared 10k-row ghost switch performs no acquisition or index build',
+    () async {
+      final rows = List<DashboardLedgerEntry>.generate(10000, (ordinal) {
+        final direction = ordinal.isEven ? 'income' : 'expense';
+        final pending = ordinal % 17 == 0;
+        final bookedGhost = !pending && ordinal % 3 == 0;
+        return DashboardLedgerEntry(
+          id: 'benchmark-$ordinal',
+          partnerId: 'partner-${ordinal % 29}',
+          categoryId: 'category-${ordinal % 13}',
+          direction: direction,
+          amountMinor: 100 + ordinal,
+          bookedLocalEpochDay: 20636 - ordinal % 28,
+          bookedLocalTimeMinutes: ordinal % 1440,
+          isPendingGhost: pending,
+          recurrenceOccurrenceId: pending || bookedGhost
+              ? 'occurrence-$ordinal'
+              : null,
+        );
+      });
+      final repository = _FocusSeedRepository(rows: rows);
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      FluviDiagnosticLogger.clear();
+      final stopwatch = Stopwatch()..start();
+      expect(
+        await core.applyGhostFilterMode(GhostFilterMode.onlyGhost),
+        isTrue,
+      );
+      stopwatch.stop();
+
+      final event = FluviDiagnosticLogger.entries.singleWhere(
+        (entry) => entry.stage == 'GHOST_QUICK_FILTER_PREPARED_APPLIED',
+      );
+      expect(repository.prepareCalls, 1);
+      expect(event.scope, contains('repositoryRequests=0 indexBuilds=0'));
+      expect(
+        event.scope,
+        contains('hotsetHit=true'),
+        reason: 'the tap selects a prebuilt current-scope projection',
+      );
+      // This is an observation rather than a timing threshold: CI/device load
+      // varies, but the emitted value records just the prepared projection.
+      // ignore: avoid_print
+      print(
+        'GHOST_FILTER_BENCHMARK rows=10000 '
+        'wallMicros=${stopwatch.elapsedMicroseconds} ${event.scope}',
+      );
+    },
+  );
+
+  test(
+    'ghost projection preserves and clears category focus without resetting the shared mode',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: const <DashboardLedgerEntry>[
+          DashboardLedgerEntry(
+            id: 'food-booked-ghost',
+            partnerId: 'food-partner',
+            categoryId: 'food',
+            direction: 'income',
+            amountMinor: 200,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 600,
+            recurrenceOccurrenceId: 'food-occurrence',
+          ),
+          DashboardLedgerEntry(
+            id: 'food-ordinary',
+            partnerId: 'food-partner',
+            categoryId: 'food',
+            direction: 'income',
+            amountMinor: 100,
+            bookedLocalEpochDay: 20635,
+            bookedLocalTimeMinutes: 600,
+          ),
+          DashboardLedgerEntry(
+            id: 'utilities-ordinary',
+            partnerId: 'utilities-partner',
+            categoryId: 'utilities',
+            direction: 'income',
+            amountMinor: 400,
+            bookedLocalEpochDay: 20634,
+            bookedLocalTimeMinutes: 600,
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'food', displayName: 'Food'),
+        ),
+        isTrue,
+      );
+      expect(
+        await core.applyGhostFilterMode(GhostFilterMode.onlyGhost),
+        isTrue,
+      );
+      expect(core.focus.state?.category?.id, 'food');
+      expect(
+        core.preparedIndex!
+            .frameFor(core.navigation.state.parentQueryScope)
+            .totalMinor,
+        200,
+      );
+
+      expect(await core.clearAllEphemeralFocus(), isTrue);
+      expect(core.focus.state, isNull);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.income).ghostFilterMode,
+        GhostFilterMode.onlyGhost,
+      );
+      expect(
+        core.preparedIndex!
+            .frameFor(core.navigation.state.parentQueryScope)
+            .totalMinor,
+        200,
+        reason: 'clearing Food restores all ghost-origin rows, not `both`',
+      );
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
     'RED: a prepared membership hit reports a no-worker no-base-scan fast path',
     () async {
       final repository = _FocusSeedRepository();
@@ -11057,6 +11316,7 @@ final class _MindFooterRepository extends _FocusSeedRepository
       coreRevision: coreRevision,
       yearWindowStart: yearWindowStart,
       yearWindowEndInclusive: yearWindowEndInclusive,
+      ghostFilterMode: ghostFilterMode,
       incomeBank: bankFor(LedgerDirection.income),
       expenseBank: bankFor(LedgerDirection.expense),
     );

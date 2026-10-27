@@ -36,6 +36,7 @@ data class FluviPreparedBudgetLimitSnapshot(
     val yearWindow: FluviPreparedYearWindow,
     val incomeBank: FluviPreparedBudgetDirectionBank,
     val expenseBank: FluviPreparedBudgetDirectionBank,
+    val ghostFilterMode: FluviGhostFilterMode = FluviGhostFilterMode.both,
     val spendingRhythmSnapshot: FluviPreparedSpendingRhythmSnapshot,
     val sqlCallCount: Int,
     val sqlDurationNanos: Long,

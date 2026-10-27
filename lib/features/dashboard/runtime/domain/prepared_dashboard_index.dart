@@ -777,14 +777,17 @@ final class DashboardPreparedCompactZeroFrame {
 /// the prepared-index boundary so render/navigation consumers retain their
 /// normal index contract without reaching into gesture or controller state.
 abstract interface class DashboardFocusedTemporalOverlay {
-  LedgerDirection get direction;
+  bool supportsDirection(LedgerDirection direction);
 
   bool matchesScope(CurrentLedgerQueryScope scope);
 
   /// Returns a focused scope only when that parent exists in the retained
   /// base temporal topology. A focused overlay must not invent a structural
   /// rail parent that the exact committed base Query never exposed.
-  CurrentLedgerQueryScope? scopeForTimeScope(LedgerTimeScope timeScope);
+  CurrentLedgerQueryScope? scopeForTimeScope({
+    required LedgerDirection direction,
+    required LedgerTimeScope timeScope,
+  });
 
   CurrentLedgerQueryScope? scopeForKey(LedgerQueryKey queryKey);
 
@@ -818,6 +821,100 @@ abstract interface class DashboardFocusedTemporalOverlay {
   int get materializedCatalogCount;
 
   Iterable<DashboardPreparedFrame> get materializedFrames;
+}
+
+/// A transparent union of directional ephemeral projections. Ghost filtering
+/// changes one dashboard-wide dimension, so both directions must expose the
+/// same effective mode even when only one direction is visible right now.
+final class DashboardMultiFocusedTemporalOverlay
+    implements DashboardFocusedTemporalOverlay {
+  DashboardMultiFocusedTemporalOverlay(
+    Map<LedgerDirection, DashboardFocusedTemporalOverlay> overlays,
+  ) : _overlays =
+          Map<LedgerDirection, DashboardFocusedTemporalOverlay>.unmodifiable(
+            overlays,
+          );
+
+  final Map<LedgerDirection, DashboardFocusedTemporalOverlay> _overlays;
+
+  DashboardFocusedTemporalOverlay? _forScope(CurrentLedgerQueryScope scope) =>
+      _overlays[scope.direction];
+
+  @override
+  bool supportsDirection(LedgerDirection direction) =>
+      _overlays.containsKey(direction);
+
+  @override
+  bool matchesScope(CurrentLedgerQueryScope scope) =>
+      _forScope(scope)?.matchesScope(scope) ?? false;
+
+  @override
+  CurrentLedgerQueryScope? scopeForTimeScope({
+    required LedgerDirection direction,
+    required LedgerTimeScope timeScope,
+  }) => _overlays[direction]?.scopeForTimeScope(
+    direction: direction,
+    timeScope: timeScope,
+  );
+
+  @override
+  CurrentLedgerQueryScope? scopeForKey(LedgerQueryKey queryKey) {
+    for (final overlay in _overlays.values) {
+      final scope = overlay.scopeForKey(queryKey);
+      if (scope != null) return scope;
+    }
+    return null;
+  }
+
+  @override
+  DashboardPreparedFrame materializeFrame(CurrentLedgerQueryScope scope) =>
+      _forScope(scope)!.materializeFrame(scope);
+
+  @override
+  DashboardPreparedLogPage materializeLogPage(
+    CurrentLedgerQueryScope scope, {
+    required Map<String, Object?>? after,
+    required int pageSize,
+  }) => _forScope(
+    scope,
+  )!.materializeLogPage(scope, after: after, pageSize: pageSize);
+
+  @override
+  DashboardSemanticCatalog materializeCatalog(
+    CurrentLedgerQueryScope parentScope,
+  ) => _forScope(parentScope)!.materializeCatalog(parentScope);
+
+  @override
+  bool hasCatalogForScope(CurrentLedgerQueryScope parentScope) =>
+      _forScope(parentScope)?.hasCatalogForScope(parentScope) ?? false;
+
+  @override
+  List<CommittedVerticalGeometryDayBucket> geometrySeedFor(
+    CurrentLedgerQueryScope scope,
+  ) => _forScope(scope)!.geometrySeedFor(scope);
+
+  @override
+  bool hasMaterializedFrameForKey(LedgerQueryKey queryKey) => _overlays.values
+      .any((overlay) => overlay.hasMaterializedFrameForKey(queryKey));
+
+  @override
+  int get materializedFrameCount => _overlays.values.fold(
+    0,
+    (sum, overlay) => sum + overlay.materializedFrameCount,
+  );
+
+  @override
+  int get materializedCatalogCount => _overlays.values.fold(
+    0,
+    (sum, overlay) => sum + overlay.materializedCatalogCount,
+  );
+
+  @override
+  Iterable<DashboardPreparedFrame> get materializedFrames sync* {
+    for (final overlay in _overlays.values) {
+      yield* overlay.materializedFrames;
+    }
+  }
 }
 
 /// One cursor-sized page projected from an immutable prepared interaction
@@ -1097,11 +1194,16 @@ final class PreparedDashboardIndex {
     required int contentDigest,
     required DateTime preparedAt,
     required PreparedDashboardIndexBuildMetrics buildMetrics,
+    // A dual ghost projection briefly uses the neutral source partition in
+    // the opposite direction while it compiles the other direction. That
+    // partition is replaced before the combined index is published, so this
+    // narrow exception never exposes a mixed-mode index to consumers.
+    bool allowInactiveGhostFilterMismatch = false,
   }) {
     if (key.coreRevision != base.coreRevision ||
         key.pageSize != base.pageSize ||
         generation <= 0 ||
-        focusedTemporalOverlay.direction != focusedDirection) {
+        !focusedTemporalOverlay.supportsDirection(focusedDirection)) {
       throw ArgumentError('Focused directional overlay identity is invalid.');
     }
     final inactiveDirection = switch (focusedDirection) {
@@ -1114,7 +1216,8 @@ final class PreparedDashboardIndex {
       LedgerDirection.expense => key.expenseFilterKey,
     };
     if (inactive.coreRevision != key.coreRevision ||
-        inactive.filterKey != expectedInactiveFilter) {
+        (inactive.filterKey != expectedInactiveFilter &&
+            !allowInactiveGhostFilterMismatch)) {
       throw ArgumentError(
         'Focused overlay may reuse only the exact inactive base partition.',
       );
@@ -1219,6 +1322,91 @@ final class PreparedDashboardIndex {
       preparedAt: preparedAt.toUtc(),
       buildMetrics: buildMetrics,
       focusedTemporalOverlay: focusedTemporalOverlay,
+    );
+  }
+
+  /// Combines two independently derived directional membership projections.
+  /// The maps stay as immutable overlays over their compact directional
+  /// partitions; this is deliberately not three complete dashboard copies.
+  factory PreparedDashboardIndex.dualDirectionalOverlay({
+    required PreparedDashboardIndex base,
+    required PreparedDashboardIndex incomeProjection,
+    required PreparedDashboardIndex expenseProjection,
+    required PreparedDashboardIndexKey key,
+    required int generation,
+    required int contentDigest,
+    required DateTime preparedAt,
+    required PreparedDashboardIndexBuildMetrics buildMetrics,
+  }) {
+    final income = incomeProjection.partitionFor(LedgerDirection.income);
+    final expense = expenseProjection.partitionFor(LedgerDirection.expense);
+    final incomeOverlay = incomeProjection.focusedTemporalOverlay;
+    final expenseOverlay = expenseProjection.focusedTemporalOverlay;
+    if (key.coreRevision != base.coreRevision ||
+        income.coreRevision != key.coreRevision ||
+        expense.coreRevision != key.coreRevision ||
+        income.filterKey != key.incomeFilterKey ||
+        expense.filterKey != key.expenseFilterKey ||
+        incomeOverlay == null ||
+        expenseOverlay == null ||
+        !incomeOverlay.supportsDirection(LedgerDirection.income) ||
+        !expenseOverlay.supportsDirection(LedgerDirection.expense)) {
+      throw ArgumentError('Dual directional overlay identity is invalid.');
+    }
+    return PreparedDashboardIndex._(
+      key: key,
+      frames: _PreparedIndexOverlayMap(income.frames, expense.frames),
+      compactZeroFrames: _PreparedIndexOverlayMap(
+        income.compactZeroFrames,
+        expense.compactZeroFrames,
+      ),
+      catalogs: _PreparedIndexOverlayMap(income.catalogs, expense.catalogs),
+      catalogsByDirectionAndScope:
+          Map<
+            LedgerDirection,
+            Map<LedgerTimeScope, DashboardSemanticCatalog>
+          >.unmodifiable(
+            <LedgerDirection, Map<LedgerTimeScope, DashboardSemanticCatalog>>{
+              LedgerDirection.income:
+                  Map<LedgerTimeScope, DashboardSemanticCatalog>.unmodifiable(
+                    <LedgerTimeScope, DashboardSemanticCatalog>{
+                      for (final catalog in income.catalogs.values)
+                        catalog.parentScope.timeScope: catalog,
+                    },
+                  ),
+              LedgerDirection.expense:
+                  Map<LedgerTimeScope, DashboardSemanticCatalog>.unmodifiable(
+                    <LedgerTimeScope, DashboardSemanticCatalog>{
+                      for (final catalog in expense.catalogs.values)
+                        catalog.parentScope.timeScope: catalog,
+                    },
+                  ),
+            },
+          ),
+      origins: _PreparedIndexOverlayMap(income.origins, expense.origins),
+      partitions:
+          Map<
+            LedgerDirection,
+            PreparedDashboardDirectionalPartition
+          >.unmodifiable(
+            <LedgerDirection, PreparedDashboardDirectionalPartition>{
+              LedgerDirection.income: income,
+              LedgerDirection.expense: expense,
+            },
+          ),
+      builtDirection: null,
+      reusedDirection: null,
+      reusedPreparedRowCount: 0,
+      generation: generation,
+      contentDigest: contentDigest,
+      preparedAt: preparedAt,
+      buildMetrics: buildMetrics,
+      focusedTemporalOverlay: DashboardMultiFocusedTemporalOverlay(
+        <LedgerDirection, DashboardFocusedTemporalOverlay>{
+          LedgerDirection.income: incomeOverlay,
+          LedgerDirection.expense: expenseOverlay,
+        },
+      ),
     );
   }
 
@@ -1592,8 +1780,11 @@ final class PreparedDashboardIndex {
     required LedgerTimeScope timeScope,
   }) {
     final overlay = focusedTemporalOverlay;
-    if (overlay != null && overlay.direction == direction) {
-      final scope = overlay.scopeForTimeScope(timeScope);
+    if (overlay != null && overlay.supportsDirection(direction)) {
+      final scope = overlay.scopeForTimeScope(
+        direction: direction,
+        timeScope: timeScope,
+      );
       return scope == null ? null : overlay.materializeCatalog(scope);
     }
     return catalogsByDirectionAndScope[direction]?[timeScope];

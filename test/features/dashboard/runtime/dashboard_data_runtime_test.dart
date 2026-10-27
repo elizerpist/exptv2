@@ -146,7 +146,7 @@ void main() {
   );
 
   test(
-    'reuses one exact prepared Budget bank for same-revision query work',
+    'warms and reuses every exact ghost Budget bank before interaction',
     () async {
       final repository = _BudgetRuntimeRepository();
       final scheduler = _StableFrameScheduler();
@@ -162,16 +162,17 @@ void main() {
       final first = runtime.activeBudgetSnapshot;
       expect(first, isNotNull);
       expect(first!.coreRevision, 7);
-      expect(repository.budgetSnapshotCalls, 1);
+      expect(repository.budgetSnapshotCalls, GhostFilterMode.values.length);
 
       final reused = await runtime.prepareBudgetLimitSnapshotFor(index);
       expect(reused, same(first));
-      expect(repository.budgetSnapshotCalls, 1);
+      expect(repository.budgetSnapshotCalls, GhostFilterMode.values.length);
+      expect(repository.budgetGhostFilterModes, GhostFilterMode.values);
     },
   );
 
   test(
-    'reuses one exact prepared partner bank for same-revision query work',
+    'warms and reuses every exact ghost partner bank before interaction',
     () async {
       final repository = _BudgetRuntimeRepository();
       final scheduler = _StableFrameScheduler();
@@ -187,13 +188,20 @@ void main() {
       final first = runtime.activePartnerDistributionSnapshot;
       expect(first, isNotNull);
       expect(first!.coreRevision, 7);
-      expect(repository.partnerDistributionSnapshotCalls, 1);
+      expect(
+        repository.partnerDistributionSnapshotCalls,
+        GhostFilterMode.values.length,
+      );
 
       final reused = await runtime.prepareBudgetPartnerDistributionSnapshotFor(
         index,
       );
       expect(reused, same(first));
-      expect(repository.partnerDistributionSnapshotCalls, 1);
+      expect(
+        repository.partnerDistributionSnapshotCalls,
+        GhostFilterMode.values.length,
+      );
+      expect(repository.partnerGhostFilterModes, GhostFilterMode.values);
     },
   );
 
@@ -223,16 +231,15 @@ void main() {
       await runtime.prepareBudgetLimitSnapshotFor(onlyGhostIndex);
       await runtime.prepareBudgetPartnerDistributionSnapshotFor(onlyGhostIndex);
 
-      expect(repository.budgetSnapshotCalls, 2);
-      expect(repository.partnerDistributionSnapshotCalls, 2);
-      expect(repository.budgetGhostFilterModes, <GhostFilterMode>[
-        GhostFilterMode.both,
-        GhostFilterMode.onlyGhost,
-      ]);
-      expect(repository.partnerGhostFilterModes, <GhostFilterMode>[
-        GhostFilterMode.both,
-        GhostFilterMode.onlyGhost,
-      ]);
+      // Bootstrap prewarms all three exact memberships. Asking for an
+      // already-warmed onlyGhost view must stay entirely in the cache.
+      expect(repository.budgetSnapshotCalls, GhostFilterMode.values.length);
+      expect(
+        repository.partnerDistributionSnapshotCalls,
+        GhostFilterMode.values.length,
+      );
+      expect(repository.budgetGhostFilterModes, GhostFilterMode.values);
+      expect(repository.partnerGhostFilterModes, GhostFilterMode.values);
     },
   );
 
@@ -251,7 +258,10 @@ void main() {
 
       await expectLater(bootstrap, throwsStateError);
       expect(published, isEmpty);
-      expect(repository.partnerDistributionSnapshotCalls, 1);
+      expect(
+        repository.partnerDistributionSnapshotCalls,
+        GhostFilterMode.values.length,
+      );
     },
   );
 
@@ -752,6 +762,7 @@ final class _BudgetRuntimeRepository extends _RuntimeRepository
       coreRevision: coreRevision,
       yearWindowStart: yearWindowStart,
       yearWindowEndInclusive: yearWindowEndInclusive,
+      ghostFilterMode: ghostFilterMode,
       incomeBank: PreparedBudgetLimitDirectionBank(
         orderedCategoryIds: const <String>[],
         cells: cells(),
@@ -791,6 +802,7 @@ final class _BudgetRuntimeRepository extends _RuntimeRepository
       coreRevision: coreRevision + partnerRevisionOffset,
       yearWindowStart: yearWindowStart,
       yearWindowEndInclusive: yearWindowEndInclusive,
+      ghostFilterMode: ghostFilterMode,
       incomeBank: bank(),
       expenseBank: bank(),
     );

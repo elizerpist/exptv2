@@ -171,6 +171,7 @@ data class FluviPreparedBudgetPartnerDistributionSnapshot(
     val yearWindow: FluviPreparedYearWindow,
     val incomeBank: FluviPreparedBudgetPartnerDistributionDirectionBank,
     val expenseBank: FluviPreparedBudgetPartnerDistributionDirectionBank,
+    val ghostFilterMode: FluviGhostFilterMode = FluviGhostFilterMode.both,
     val sqlCallCount: Int,
     val sqlDurationNanos: Long,
 ) {

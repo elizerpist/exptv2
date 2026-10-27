@@ -7,6 +7,7 @@ import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../query/data/dashboard_ledger_entry.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 import '../../query/domain/dashboard_directional_query_set.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import '../../query/domain/ledger_direction.dart';
 import '../../time_navigation/domain/dashboard_temporal_availability.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
@@ -36,6 +37,10 @@ abstract final class DashboardEphemeralFocusDeriver {
     String? normalizedSearch,
     int? minimumAmountScaled100,
     int? maximumAmountScaled100,
+    GhostFilterMode? ghostFilterMode,
+    bool allowGhostProjection = false,
+    bool allowInactiveGhostSourceReuse = false,
+    bool eagerInitialScope = true,
     required int initialYear,
     required int generation,
     CurrentLedgerQueryScope? initialParentScope,
@@ -49,6 +54,10 @@ abstract final class DashboardEphemeralFocusDeriver {
     normalizedSearch: normalizedSearch,
     minimumAmountScaled100: minimumAmountScaled100,
     maximumAmountScaled100: maximumAmountScaled100,
+    ghostFilterMode: ghostFilterMode,
+    allowGhostProjection: allowGhostProjection,
+    allowInactiveGhostSourceReuse: allowInactiveGhostSourceReuse,
+    eagerInitialScope: eagerInitialScope,
     initialYear: initialYear,
     generation: generation,
     initialParentScope: initialParentScope,
@@ -68,6 +77,10 @@ abstract final class DashboardEphemeralFocusDeriver {
     String? normalizedSearch,
     int? minimumAmountScaled100,
     int? maximumAmountScaled100,
+    GhostFilterMode? ghostFilterMode,
+    bool allowGhostProjection = false,
+    bool allowInactiveGhostSourceReuse = false,
+    bool eagerInitialScope = true,
     required int initialYear,
     required int generation,
     CurrentLedgerQueryScope? initialParentScope,
@@ -77,7 +90,11 @@ abstract final class DashboardEphemeralFocusDeriver {
     if (generation <= 0) {
       throw ArgumentError.value(generation, 'generation', 'must be positive');
     }
-    if (categoryFocusId == null &&
+    final selectedGhostMode =
+        ghostFilterMode ??
+        effectiveQueries.scopeFor(focusedDirection).ghostFilterMode;
+    if (!allowGhostProjection &&
+        categoryFocusId == null &&
         partnerFocusId == null &&
         normalizedSearch == null &&
         minimumAmountScaled100 == null &&
@@ -98,6 +115,7 @@ abstract final class DashboardEphemeralFocusDeriver {
       normalizedSearch: normalizedSearch,
       minimumAmountScaled100: minimumAmountScaled100,
       maximumAmountScaled100: maximumAmountScaled100,
+      ghostFilterMode: selectedGhostMode,
     );
 
     final key = PreparedDashboardIndexKey.fromDirectionalQuerySet(
@@ -116,24 +134,34 @@ abstract final class DashboardEphemeralFocusDeriver {
       base: base,
       template: focusedScope,
       seed: seed,
-      selectedOrdinals: selected.entryIndices,
+      financialOrdinals: selected.financialEntryIndices,
+      presentationOrdinals: selected.presentationEntryIndices,
       initialYear: initialYear,
     );
     final requestedParent =
         initialParentScope?.timeScope ?? focusedScope.timeScope;
-    final parentScope = overlay.scopeForTimeScope(requestedParent);
+    final parentScope = overlay.scopeForTimeScope(
+      direction: focusedDirection,
+      timeScope: requestedParent,
+    );
     if (parentScope == null) {
       throw StateError(
         'Focused publication has no retained temporal parent for '
         '${requestedParent.canonicalKey}.',
       );
     }
-    overlay.materializeCatalog(parentScope);
-    final rootFrame = overlay.materializeFrame(parentScope);
-    final requestedChild = initialSelectedChildScope?.timeScope;
-    if (requestedChild != null) {
-      final childScope = overlay.scopeForTimeScope(requestedChild);
-      if (childScope != null) overlay.materializeFrame(childScope);
+    DashboardPreparedFrame? rootFrame;
+    if (eagerInitialScope) {
+      overlay.materializeCatalog(parentScope);
+      rootFrame = overlay.materializeFrame(parentScope);
+      final requestedChild = initialSelectedChildScope?.timeScope;
+      if (requestedChild != null) {
+        final childScope = overlay.scopeForTimeScope(
+          direction: focusedDirection,
+          timeScope: requestedChild,
+        );
+        if (childScope != null) overlay.materializeFrame(childScope);
+      }
     }
     stopwatch.stop();
     final currentRootProjectionMicros = stopwatch.elapsedMicroseconds;
@@ -145,7 +173,9 @@ abstract final class DashboardEphemeralFocusDeriver {
       LedgerDirection.expense => LedgerDirection.income,
     };
     final inactive = base.partitionFor(inactiveDirection);
-    final geometrySeed = overlay.geometrySeedFor(parentScope);
+    final geometrySeed = eagerInitialScope
+        ? overlay.geometrySeedFor(parentScope)
+        : const <CommittedVerticalGeometryDayBucket>[];
     // The focused direction owns only the compact derived frames/catalogs.
     // The untouched directional partition remains a reference to [base], so
     // a focus interaction never reconstructs or copies the other universe.
@@ -175,6 +205,8 @@ abstract final class DashboardEphemeralFocusDeriver {
         // determine compact membership. Do not walk every selected all-time
         // ordinal merely to create a digest before the root can publish.
         selected.entryCount,
+        selected.presentationEntryCount,
+        selectedGhostMode,
       ),
       preparedAt: DateTime.now().toUtc(),
       buildMetrics: base.buildMetrics.copyWith(
@@ -183,6 +215,7 @@ abstract final class DashboardEphemeralFocusDeriver {
         estimatedIndexBytes:
             base.buildMetrics.estimatedIndexBytes + selected.entryCount * 4,
       ),
+      allowInactiveGhostFilterMismatch: allowInactiveGhostSourceReuse,
     );
     final index = focused.withBuildMetrics(
       focused.buildMetrics.copyWith(
@@ -197,7 +230,7 @@ abstract final class DashboardEphemeralFocusDeriver {
       semanticUniverseBuildMicros: 0,
       currentRootProjectionMicros: currentRootProjectionMicros,
       publicationCriticalFrameCount: overlay.materializedFrameCount,
-      publicationCriticalRowCount: rootFrame.entryCount,
+      publicationCriticalRowCount: rootFrame?.entryCount ?? 0,
       eagerFocusedFrameCount: overlay.materializedFrameCount,
       lazyFocusedFrameCacheCount: overlay.materializedFrameCount,
       focusedOrdinalsVisitedBeforePublication: overlay.ordinalsVisited,
@@ -205,6 +238,135 @@ abstract final class DashboardEphemeralFocusDeriver {
       reusedBaseCatalogCount: 1,
       newFocusedCatalogCount: overlay.materializedCatalogCount,
       reusedPreparedRows: selected.entryCount,
+    );
+  }
+
+  /// Projects the shared ghost dimension for both directions from the same
+  /// ghost-neutral prepared universe. No repository, channel, isolate or
+  /// raw-row reclassification is involved on this path.
+  static DashboardEphemeralFocusDerivation deriveGhostFilterMode({
+    required PreparedDashboardIndex base,
+    required DashboardDirectionalQuerySet effectiveQueries,
+    required LedgerDirection activeDirection,
+    String? categoryFocusId,
+    String? partnerFocusId,
+    String? normalizedSearch,
+    int? minimumAmountScaled100,
+    int? maximumAmountScaled100,
+    required int initialYear,
+    required int generation,
+    required LedgerTimeScope activeParentTimeScope,
+    LedgerTimeScope? activeSelectedChildTimeScope,
+  }) {
+    final incomeParent = effectiveQueries.income.copyWith(
+      timeScope: activeDirection == LedgerDirection.income
+          ? activeParentTimeScope
+          : const AllTimeScope(),
+    );
+    final expenseParent = effectiveQueries.expense.copyWith(
+      timeScope: activeDirection == LedgerDirection.expense
+          ? activeParentTimeScope
+          : const AllTimeScope(),
+    );
+    DashboardEphemeralFocusDerivation deriveDirection(
+      LedgerDirection direction,
+      CurrentLedgerQueryScope parent,
+    ) => deriveFast(
+      base: base,
+      effectiveQueries: effectiveQueries,
+      focusedDirection: direction,
+      categoryFocusId: direction == activeDirection ? categoryFocusId : null,
+      partnerFocusId: direction == activeDirection ? partnerFocusId : null,
+      normalizedSearch: direction == activeDirection ? normalizedSearch : null,
+      minimumAmountScaled100: direction == activeDirection
+          ? minimumAmountScaled100
+          : null,
+      maximumAmountScaled100: direction == activeDirection
+          ? maximumAmountScaled100
+          : null,
+      ghostFilterMode: effectiveQueries.scopeFor(direction).ghostFilterMode,
+      allowGhostProjection: true,
+      eagerInitialScope: direction == activeDirection,
+      initialYear: initialYear,
+      generation: generation,
+      initialParentScope: parent,
+      initialSelectedChildScope:
+          direction != activeDirection || activeSelectedChildTimeScope == null
+          ? null
+          : effectiveQueries
+                .scopeFor(direction)
+                .copyWith(timeScope: activeSelectedChildTimeScope),
+      allowInactiveGhostSourceReuse: true,
+    );
+    final income = deriveDirection(LedgerDirection.income, incomeParent);
+    final expense = deriveDirection(LedgerDirection.expense, expenseParent);
+    final key = PreparedDashboardIndexKey.fromDirectionalQuerySet(
+      queries: effectiveQueries,
+      coreRevision: base.coreRevision,
+      pageSize: base.pageSize,
+      yearWindowStart: base.key.yearWindowStart,
+      yearWindowEndInclusive: base.key.yearWindowEndInclusive,
+      modelVersion: base.key.modelVersion,
+    );
+    final index = PreparedDashboardIndex.dualDirectionalOverlay(
+      base: base,
+      incomeProjection: income.index,
+      expenseProjection: expense.index,
+      key: key,
+      generation: generation,
+      contentDigest: Object.hash(
+        base.contentDigest,
+        effectiveQueries.canonicalKey,
+        categoryFocusId,
+        partnerFocusId,
+        normalizedSearch,
+        minimumAmountScaled100,
+        maximumAmountScaled100,
+      ),
+      preparedAt: DateTime.now().toUtc(),
+      buildMetrics: base.buildMetrics.copyWith(
+        dartProjectionDurationMicros:
+            income.currentRootProjectionMicros +
+            expense.currentRootProjectionMicros,
+        estimatedIndexBytes:
+            base.buildMetrics.estimatedIndexBytes +
+            (income.membershipOrdinalCount + expense.membershipOrdinalCount) *
+                4,
+      ),
+    );
+    return DashboardEphemeralFocusDerivation(
+      index: index,
+      membershipOrdinalCount:
+          income.membershipOrdinalCount + expense.membershipOrdinalCount,
+      membershipLookupMicros:
+          income.membershipLookupMicros + expense.membershipLookupMicros,
+      intersectionMicros:
+          income.intersectionMicros + expense.intersectionMicros,
+      semanticUniverseBuildMicros: 0,
+      currentRootProjectionMicros:
+          income.currentRootProjectionMicros +
+          expense.currentRootProjectionMicros,
+      publicationCriticalFrameCount:
+          income.publicationCriticalFrameCount +
+          expense.publicationCriticalFrameCount,
+      publicationCriticalRowCount:
+          income.publicationCriticalRowCount +
+          expense.publicationCriticalRowCount,
+      eagerFocusedFrameCount:
+          income.eagerFocusedFrameCount + expense.eagerFocusedFrameCount,
+      lazyFocusedFrameCacheCount:
+          income.lazyFocusedFrameCacheCount +
+          expense.lazyFocusedFrameCacheCount,
+      focusedOrdinalsVisitedBeforePublication:
+          income.focusedOrdinalsVisitedBeforePublication +
+          expense.focusedOrdinalsVisitedBeforePublication,
+      focusedOrdinalsVisitedAfterPublication: 0,
+      reusedBaseCatalogCount:
+          income.reusedBaseCatalogCount + expense.reusedBaseCatalogCount,
+      newFocusedCatalogCount:
+          income.newFocusedCatalogCount + expense.newFocusedCatalogCount,
+      reusedPreparedRows:
+          income.reusedPreparedRows + expense.reusedPreparedRows,
     );
   }
 }
@@ -263,7 +425,8 @@ final class _DashboardEphemeralFocusedOverlay
     required this.base,
     required this.template,
     required this.seed,
-    required this.selectedOrdinals,
+    required this.financialOrdinals,
+    required this.presentationOrdinals,
     required this.initialYear,
   }) : availability = DashboardTemporalAvailability.fromTemporalFilter(
          template.temporalFilter,
@@ -272,7 +435,8 @@ final class _DashboardEphemeralFocusedOverlay
   final PreparedDashboardIndex base;
   final CurrentLedgerQueryScope template;
   final DashboardFocusMembershipSeed seed;
-  final DashboardFocusOrdinalSet selectedOrdinals;
+  final DashboardFocusOrdinalSet financialOrdinals;
+  final DashboardFocusOrdinalSet presentationOrdinals;
   final int initialYear;
   final DashboardTemporalAvailability availability;
 
@@ -289,6 +453,8 @@ final class _DashboardEphemeralFocusedOverlay
   int _ordinalsVisited = 0;
 
   @override
+  bool supportsDirection(LedgerDirection candidate) => candidate == direction;
+
   LedgerDirection get direction => template.direction;
 
   Map<LedgerQueryKey, CurrentLedgerQueryScope> get knownScopes =>
@@ -317,7 +483,11 @@ final class _DashboardEphemeralFocusedOverlay
       _hasBaseScope(scope.timeScope);
 
   @override
-  CurrentLedgerQueryScope? scopeForTimeScope(LedgerTimeScope timeScope) {
+  CurrentLedgerQueryScope? scopeForTimeScope({
+    required LedgerDirection direction,
+    required LedgerTimeScope timeScope,
+  }) {
+    if (direction != this.direction) return null;
     if (!_hasBaseScope(timeScope)) return null;
     return _register(template.copyWith(timeScope: timeScope));
   }
@@ -373,22 +543,26 @@ final class _DashboardEphemeralFocusedOverlay
     final canonical = _register(scope);
     final existing = _frames[canonical.key];
     if (existing != null) return existing;
-    final entries = _entriesFor(canonical);
-    final totalMinor = entries.fold<int>(
+    final financialEntries = _financialEntriesFor(canonical);
+    final presentationEntries = _presentationEntriesFor(canonical);
+    final totalMinor = financialEntries.fold<int>(
       0,
       (total, entry) => total + entry.amountMinor,
     );
-    final entryCount = entries.length;
+    final entryCount = financialEntries.length;
     final dayCounts = <int, int>{};
-    for (final entry in entries) {
+    for (final entry in presentationEntries) {
       dayCounts.update(
         entry.bookedLocalEpochDay,
         (count) => count + 1,
         ifAbsent: () => 1,
       );
     }
-    final preview = entries.take(base.pageSize).toList(growable: false);
-    final cursor = entryCount > base.pageSize && preview.isNotEmpty
+    final preview = presentationEntries
+        .take(base.pageSize)
+        .toList(growable: false);
+    final cursor =
+        presentationEntries.length > base.pageSize && preview.isNotEmpty
         ? _cursorFor(preview.last)
         : null;
     final frame = DashboardPreparedFrame.complete(
@@ -398,12 +572,13 @@ final class _DashboardEphemeralFocusedOverlay
       totalMinor: totalMinor,
       formattedAmount: DashboardPreparedFormatter.amountMinor(totalMinor),
       entryCount: entryCount,
+      presentationEntryCount: presentationEntries.length,
       formattedEntryCount: DashboardPreparedFormatter.entryCount(entryCount),
       logBox: DashboardLogViewModelProjector.presentPreparedOrdered(
         scope: canonical,
         revision: base.coreRevision,
         entries: preview,
-        entryCount: entryCount,
+        entryCount: presentationEntries.length,
         nextCursor: cursor,
       ),
       presentationDigest: Object.hash(
@@ -411,6 +586,7 @@ final class _DashboardEphemeralFocusedOverlay
         base.coreRevision,
         totalMinor,
         entryCount,
+        presentationEntries.length,
         Object.hashAll(preview.map((entry) => entry.id)),
         cursor?['entryId'],
       ),
@@ -433,7 +609,7 @@ final class _DashboardEphemeralFocusedOverlay
       throw StateError('Focused page scope does not match its base overlay.');
     }
     final canonical = _register(scope);
-    final entries = _entriesFor(canonical);
+    final entries = _presentationEntriesFor(canonical);
     final start = after == null ? 0 : _firstEntryAfter(entries, after);
     if (start < 0) {
       throw StateError(
@@ -498,8 +674,21 @@ final class _DashboardEphemeralFocusedOverlay
     return scope;
   }
 
-  List<DashboardLedgerEntry> _entriesFor(CurrentLedgerQueryScope scope) {
-    final existing = _entriesByScope[scope.key];
+  List<DashboardLedgerEntry> _financialEntriesFor(
+    CurrentLedgerQueryScope scope,
+  ) => _entriesFor(scope, financialOrdinals, suffix: 'financial');
+
+  List<DashboardLedgerEntry> _presentationEntriesFor(
+    CurrentLedgerQueryScope scope,
+  ) => _entriesFor(scope, presentationOrdinals, suffix: 'presentation');
+
+  List<DashboardLedgerEntry> _entriesFor(
+    CurrentLedgerQueryScope scope,
+    DashboardFocusOrdinalSet ordinals, {
+    required String suffix,
+  }) {
+    final cacheKey = LedgerQueryKey('${scope.key.value}|$suffix');
+    final existing = _entriesByScope[cacheKey];
     if (existing != null) return existing;
     final bounds = scope.timeScope.boundaries;
     final startEpochDay = bounds == null
@@ -507,7 +696,7 @@ final class _DashboardEphemeralFocusedOverlay
         : _epochDay(bounds.startInclusive);
     final endEpochDay = bounds == null ? null : _epochDay(bounds.endExclusive);
     final entries = <DashboardLedgerEntry>[];
-    for (final ordinal in selectedOrdinals) {
+    for (final ordinal in ordinals) {
       _ordinalsVisited += 1;
       final entry = seed.entryAt(ordinal);
       if (entry.direction != direction.name ||
@@ -518,8 +707,11 @@ final class _DashboardEphemeralFocusedOverlay
       }
       entries.add(entry);
     }
-    entries.sort(_descendingTimelineOrder);
-    return _entriesByScope[scope.key] = List<DashboardLedgerEntry>.unmodifiable(
+    // The native prepared seed is already in the exact Ledger presentation
+    // order, including pending-ghost buckets and unknown-amount placement.
+    // Retaining ordinal order here is essential: re-sorting only by booked
+    // timestamp would silently change the established pending/booked contract.
+    return _entriesByScope[cacheKey] = List<DashboardLedgerEntry>.unmodifiable(
       entries,
     );
   }
@@ -550,19 +742,6 @@ final class _DashboardEphemeralFocusedOverlay
     if (value is int) return value;
     if (value is num) return value.toInt();
     throw FormatException('Focused page cursor $key must be numeric.');
-  }
-
-  static int _descendingTimelineOrder(
-    DashboardLedgerEntry left,
-    DashboardLedgerEntry right,
-  ) {
-    final day = right.bookedLocalEpochDay.compareTo(left.bookedLocalEpochDay);
-    if (day != 0) return day;
-    final time = right.bookedLocalTimeMinutes.compareTo(
-      left.bookedLocalTimeMinutes,
-    );
-    if (time != 0) return time;
-    return right.id.compareTo(left.id);
   }
 
   static List<CommittedVerticalGeometryDayBucket> _geometryFrom(

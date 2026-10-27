@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/prepared_budget_limit_snapshot_binary_codec.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -35,6 +36,7 @@ void main() {
       );
 
       expect(snapshot.coreRevision, 41);
+      expect(snapshot.ghostFilterMode, GhostFilterMode.both);
       expect(snapshot.incomeBank.orderedCategoryIds, const <String>['food']);
       expect(snapshot.expenseBank.orderedCategoryIds, const <String>['rent']);
       expect(snapshot.nativeSqlCallCount, 4);
@@ -189,6 +191,7 @@ Uint8List _encode({
   required List<PreparedBudgetLimitCell> incomeCells,
   required List<String> expenseCategoryIds,
   required List<PreparedBudgetLimitCell> expenseCells,
+  GhostFilterMode ghostFilterMode = GhostFilterMode.both,
   List<(int, int, List<int>)> expenseRhythmPoints =
       const <(int, int, List<int>)>[],
   int version = DashboardPreparedBudgetLimitSnapshotBinaryCodec.version,
@@ -215,6 +218,7 @@ Uint8List _encode({
   int64(revision);
   int32(startYear);
   int32(endYear);
+  int32(ghostFilterMode.index);
   int32(4); // bounded native SQL call count
   int64(1000); // native duration
   void bank(List<String> categoryIds, List<PreparedBudgetLimitCell> cells) {

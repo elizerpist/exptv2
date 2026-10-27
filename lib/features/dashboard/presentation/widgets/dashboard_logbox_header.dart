@@ -184,7 +184,11 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
         final scale =
             layoutScale ??
             bounds.height / DashboardLogBoxTokens.summaryHeaderHeight;
-        final count = frame?.count.formattedEntryCount ?? '0';
+        // Pending ghosts are deliberately excluded from the financial count,
+        // but they are real rows in this LogBox projection. The header says
+        // "listázva", so it must reflect the display cardinality rather than
+        // the booked-only summary count.
+        final count = frame?.presentationEntryCount.toString() ?? '0';
         final result = SizedBox(
           height: bounds.height,
           child: Column(

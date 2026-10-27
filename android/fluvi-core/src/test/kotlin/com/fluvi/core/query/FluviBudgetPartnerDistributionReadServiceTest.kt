@@ -178,6 +178,62 @@ class FluviBudgetPartnerDistributionReadServiceTest {
     }
 
     @Test
+    fun preparesFinancialBudgetBanksForTheExactBookedGhostMembership() = runBlocking {
+        database.ledgerDao().insert(
+            entry(
+                ordinal = 5,
+                direction = LedgerDirection.expense,
+                partnerId = SHOP,
+                categoryId = FOOD,
+                date = LocalDate.of(2026, 1, 12),
+                amount = 700,
+                recurrenceOccurrenceId = "realized-occurrence",
+            ),
+        )
+        revisions.advance(NOW + 1L)
+        val revision = revisions.current()
+
+        val nonGhost = budget.preparedLimitSnapshot(
+            expectedRevision = revision,
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+            ghostFilterMode = FluviGhostFilterMode.nonGhost,
+        )
+        val onlyGhost = budget.preparedLimitSnapshot(
+            expectedRevision = revision,
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+            ghostFilterMode = FluviGhostFilterMode.onlyGhost,
+        )
+        val both = budget.preparedLimitSnapshot(
+            expectedRevision = revision,
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+            ghostFilterMode = FluviGhostFilterMode.both,
+        )
+        val januarySlice = 2
+
+        fun aggregateActual(snapshot: FluviPreparedBudgetLimitSnapshot): Long =
+            snapshot.expenseBank.actualScaled100[
+                januarySlice * snapshot.expenseBank.targetCount
+            ]
+
+        assertEquals(FluviGhostFilterMode.nonGhost, nonGhost.ghostFilterMode)
+        assertEquals(FluviGhostFilterMode.onlyGhost, onlyGhost.ghostFilterMode)
+        assertEquals(FluviGhostFilterMode.both, both.ghostFilterMode)
+        assertEquals(600L, aggregateActual(nonGhost))
+        assertEquals(700L, aggregateActual(onlyGhost))
+        assertEquals(1_300L, aggregateActual(both))
+
+        val onlyGhostPartners = budget.preparedPartnerDistributionSnapshot(
+            expectedRevision = revision,
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+            ghostFilterMode = FluviGhostFilterMode.onlyGhost,
+        )
+        assertEquals(FluviGhostFilterMode.onlyGhost, onlyGhostPartners.ghostFilterMode)
+        assertEquals(700L, onlyGhostPartners.expenseBank.cells[
+            januarySlice * onlyGhostPartners.expenseBank.orderedPartnerIds.size
+        ].actualScaled100)
+    }
+
+    @Test
     fun resolvesEffectiveDatedBaseHistoryBeforeConcreteMonthOverrides() = runBlocking {
         val limits = FluviFinancialLimitUseCase(database, FluviClock { NOW })
         fun key(period: FluviFinancialLimitPeriod) = FluviFinancialLimitKey(
@@ -237,6 +293,7 @@ class FluviBudgetPartnerDistributionReadServiceTest {
         categoryId: String,
         date: LocalDate,
         amount: Long,
+        recurrenceOccurrenceId: String? = null,
     ) = FluviLedgerEntryEntity(
         id = ordinal.toString().padStart(26, '0'),
         partnerId = partnerId,
@@ -250,6 +307,7 @@ class FluviBudgetPartnerDistributionReadServiceTest {
         occurredAtUtcMs = NOW + ordinal,
         originKind = LedgerOriginKind.manual,
         notificationInboxId = null,
+        recurrenceOccurrenceId = recurrenceOccurrenceId,
         createdAtUtcMs = NOW,
         updatedAtUtcMs = NOW,
         revision = 1L,

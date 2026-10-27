@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import '../domain/prepared_budget_limit_snapshot.dart';
 import '../domain/prepared_spending_rhythm_snapshot.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 
 typedef DashboardPreparedBudgetLimitSnapshotDecodeWorker =
     Future<PreparedBudgetLimitSnapshot> Function(Uint8List bytes);
@@ -25,7 +26,7 @@ final class IsolateDashboardPreparedBudgetLimitSnapshotDecodeWorker {
 /// Compact versioned transport for query-independent dense Budget values.
 abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
   static const int magic = 0x464c424c;
-  static const int version = 6;
+  static const int version = 7;
   static const int missingLimitSentinel = -1;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumCategoryCount = 512;
@@ -50,6 +51,7 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
     final revision = reader.readInt64();
     final startYear = reader.readInt32();
     final endYear = reader.readInt32();
+    final ghostMode = _ghostFilterMode(reader.readInt32());
     final nativeSqlCallCount = reader.readInt32();
     final nativeSqlDurationNanos = reader.readInt64();
     if (nativeSqlCallCount < 0 || nativeSqlDurationNanos < 0) {
@@ -75,10 +77,18 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
       yearWindowEndInclusive: endYear,
       incomeBank: incomeBank,
       expenseBank: expenseBank,
+      ghostFilterMode: ghostMode,
       spendingRhythmSnapshot: rhythm,
       nativeSqlCallCount: nativeSqlCallCount,
       nativeSqlDurationMicros: nativeSqlDurationNanos ~/ 1000,
     );
+  }
+
+  static GhostFilterMode _ghostFilterMode(int ordinal) {
+    if (ordinal < 0 || ordinal >= GhostFilterMode.values.length) {
+      throw FormatException('Invalid Budget ghost filter mode.');
+    }
+    return GhostFilterMode.values[ordinal];
   }
 
   static PreparedSpendingRhythmDirectionBank _readRhythmBank(

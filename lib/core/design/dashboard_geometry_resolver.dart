@@ -16,6 +16,7 @@ abstract final class DashboardGeometryResolver {
     DashboardBodyOrder? bodyOrder,
     bool hasPhysicalRail = true,
     bool hasStandaloneCollapseHandle = true,
+    bool showsLogBoxSearchPill = true,
     bool seamlessHeaderContent = false,
     double modeContentExtraHeight = 0,
     double principalModeContentExtraHeight = 0,
@@ -228,6 +229,31 @@ abstract final class DashboardGeometryResolver {
     final upperCardMotion = isSplitMode ? cascade.upper : null;
     final lowerCardMotion = isSplitMode ? cascade.lower : null;
 
+    final logBoxHeaderTop =
+        collapseHandleTop +
+        (hasStandaloneCollapseHandle ? metrics.handleHeight : 0);
+    // The filter's physical lane is authored by DashboardLogBoxHeader. Keep
+    // the same tokens here rather than treating the collapse handle as its
+    // reference. This leaves the search/list geometry untouched.
+    final logBoxScale =
+        metrics.logBoxHeaderHeight / DashboardLogBoxTokens.summaryHeaderHeight;
+    final filterTop =
+        logBoxHeaderTop +
+        (showsLogBoxSearchPill
+            ? (DashboardLogBoxTokens.ledgerHeaderTopInset +
+                      DashboardLogBoxTokens.ledgerCountHeight +
+                      DashboardLogBoxTokens.ledgerCountToSearchGap) *
+                  logBoxScale
+            : DashboardLogBoxTokens.ledgerHeaderTopInset * logBoxScale);
+    const ghostSize = 48.0;
+    final summaryBottom = summaryTop + metrics.summaryHeight;
+    final availableGap = filterTop - summaryBottom;
+    // Normal layouts use the exact equal-gap equation. The compact fallback
+    // keeps the mandatory 48×48 hit target intact and pins it to the filter
+    // anchor; it never creates negative padding or an un-hittable control.
+    final ghostTop = availableGap >= ghostSize
+        ? (summaryBottom + filterTop - ghostSize) / 2
+        : filterTop - ghostSize;
     return DashboardLayoutFrame(
       mode: mode,
       collapseProgress: collapseProgress
@@ -264,10 +290,12 @@ abstract final class DashboardGeometryResolver {
         hasStandaloneCollapseHandle ? metrics.handleHeight : 0,
       ),
       headerCollapseHandleBounds: headerCollapseHandleBounds,
-      logBoxHeaderBounds: bounds(
-        collapseHandleTop +
-            (hasStandaloneCollapseHandle ? metrics.handleHeight : 0),
-        metrics.logBoxHeaderHeight,
+      logBoxHeaderBounds: bounds(logBoxHeaderTop, metrics.logBoxHeaderHeight),
+      ghostQuickFilterBounds: DashboardBounds(
+        left: left + metrics.contentWidth - ghostSize,
+        top: ghostTop,
+        width: ghostSize,
+        height: ghostSize,
       ),
       subheaderOneOpacity: isSplitMode
           ? cascade.upper.opacity

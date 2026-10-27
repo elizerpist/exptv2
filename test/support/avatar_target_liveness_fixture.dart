@@ -249,6 +249,7 @@ final class AvatarTargetLivenessRepository
       coreRevision: coreRevision,
       yearWindowStart: yearWindowStart,
       yearWindowEndInclusive: yearWindowEndInclusive,
+      ghostFilterMode: ghostFilterMode,
       incomeBank: bank(false),
       expenseBank: bank(true),
       spendingRhythmSnapshot: PreparedSpendingRhythmSnapshot(

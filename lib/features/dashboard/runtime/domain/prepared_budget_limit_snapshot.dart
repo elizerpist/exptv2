@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../query/domain/ledger_direction.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import 'prepared_spending_rhythm_snapshot.dart';
 
 /// One typed financial-limit period. It has no string allocation on the hot
@@ -145,6 +146,7 @@ final class PreparedBudgetLimitSnapshot {
     required this.yearWindowEndInclusive,
     required this.incomeBank,
     required this.expenseBank,
+    this.ghostFilterMode = GhostFilterMode.both,
     this.spendingRhythmSnapshot,
     this.nativeSqlCallCount = 0,
     this.nativeSqlDurationMicros = 0,
@@ -171,6 +173,10 @@ final class PreparedBudgetLimitSnapshot {
   final int yearWindowEndInclusive;
   final PreparedBudgetLimitDirectionBank incomeBank;
   final PreparedBudgetLimitDirectionBank expenseBank;
+
+  /// The exact booked-ledger membership used for every aggregate in this
+  /// bank. Pending ghosts are never part of this financial snapshot.
+  final GhostFilterMode ghostFilterMode;
 
   /// Timestamp-faithful, target-indexed Spending Rhythm facts retained from
   /// the same native acquisition as this dense SUM/YEAR/MONTH bank. It is

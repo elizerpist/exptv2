@@ -5,9 +5,9 @@ import '../../query/domain/ghost_filter_mode.dart';
 
 /// A compact cycle control for the dashboard-wide ghost query dimension.
 ///
-/// It intentionally owns no filter state. Its parent commits an exact native
-/// query before publishing a new [mode], so this control can give immediate
-/// pressed feedback without manufacturing a second filter implementation.
+/// It intentionally owns no filter state. Its parent atomically publishes a
+/// prepared ghost-membership projection, so this control can react on the
+/// next frame without creating a widget-local filtering implementation.
 final class DashboardGhostQuickFilter extends StatelessWidget {
   const DashboardGhostQuickFilter({
     super.key,

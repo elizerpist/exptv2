@@ -206,6 +206,47 @@ void main() {
     });
 
     test(
+      'centers the complete ghost control between the summary and actual filter lane',
+      () {
+        const metrics = DashboardLayoutMetrics.reference;
+        for (final searchVisible in <bool>[true, false]) {
+          for (final railOpen in <bool>[true, false]) {
+            final frame = DashboardGeometryResolver.resolve(
+              metrics: metrics,
+              mode: DashboardModeSpec.balance,
+              collapseProgress: 0,
+              isRailExpanded: railOpen,
+              bodyOrder: DashboardBodyOrder(const <DashboardBodyComponent>[
+                DashboardBodyComponent.direction,
+                DashboardBodyComponent.summary,
+                DashboardBodyComponent.modeContent,
+              ]),
+              showsLogBoxSearchPill: searchVisible,
+            );
+            final scale =
+                metrics.logBoxHeaderHeight /
+                DashboardLogBoxTokens.summaryHeaderHeight;
+            final filterTop =
+                frame.logBoxHeaderBounds.top +
+                (searchVisible
+                    ? (DashboardLogBoxTokens.ledgerHeaderTopInset +
+                              DashboardLogBoxTokens.ledgerCountHeight +
+                              DashboardLogBoxTokens.ledgerCountToSearchGap) *
+                          scale
+                    : DashboardLogBoxTokens.ledgerHeaderTopInset * scale);
+            final above =
+                frame.ghostQuickFilterBounds.top - frame.summaryBounds.bottom;
+            final below = filterTop - frame.ghostQuickFilterBounds.bottom;
+
+            expect(frame.ghostQuickFilterBounds.width, 48);
+            expect(frame.ghostQuickFilterBounds.height, 48);
+            expect(above, closeTo(below, .001));
+          }
+        }
+      },
+    );
+
+    test(
       'derives upstream metric positions instead of independent anchors',
       () {
         const metrics = DashboardLayoutMetrics.reference;

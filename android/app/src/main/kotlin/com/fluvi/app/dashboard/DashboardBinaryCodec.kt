@@ -18,9 +18,9 @@ object DashboardBinaryCodec {
     const val PAGE_MAGIC: Int = 0x464C534C // FLSL
     const val INDEX_MAGIC: Int = 0x464C4449 // FLDI
     const val BUDGET_LIMIT_MAGIC: Int = 0x464C424C // FLBL
-    const val BUDGET_LIMIT_VERSION: Int = 6
+    const val BUDGET_LIMIT_VERSION: Int = 7
     const val BUDGET_PARTNER_MAGIC: Int = 0x464C4250 // FLBP
-    const val BUDGET_PARTNER_VERSION: Int = 4
+    const val BUDGET_PARTNER_VERSION: Int = 5
     const val INDEX_VERSION: Int = 7
     const val VERSION: Int = 3
 
@@ -95,6 +95,7 @@ object DashboardBinaryCodec {
             output.writeLong(snapshot.coreRevision)
             output.writeInt(snapshot.yearWindow.startYear)
             output.writeInt(snapshot.yearWindow.endYearInclusive)
+            output.writeInt(snapshot.ghostFilterMode.ordinal)
             output.writeInt(snapshot.sqlCallCount)
             output.writeLong(snapshot.sqlDurationNanos)
             output.writeBudgetDirectionBank(snapshot.incomeBank)
@@ -146,6 +147,7 @@ object DashboardBinaryCodec {
             output.writeLong(snapshot.coreRevision)
             output.writeInt(snapshot.yearWindow.startYear)
             output.writeInt(snapshot.yearWindow.endYearInclusive)
+            output.writeInt(snapshot.ghostFilterMode.ordinal)
             output.writeInt(snapshot.sqlCallCount)
             output.writeLong(snapshot.sqlDurationNanos)
             output.writeBudgetPartnerDirectionBank(snapshot.incomeBank)

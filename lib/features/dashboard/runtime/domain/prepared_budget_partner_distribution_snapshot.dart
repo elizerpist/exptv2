@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../query/domain/ledger_direction.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import 'prepared_budget_limit_snapshot.dart';
 
 /// One exact prepared partner amount with its deterministic category-colour
@@ -381,6 +382,7 @@ final class PreparedBudgetPartnerDistributionSnapshot {
     required this.yearWindowEndInclusive,
     required this.incomeBank,
     required this.expenseBank,
+    this.ghostFilterMode = GhostFilterMode.both,
     this.nativeSqlCallCount = 0,
     this.nativeSqlDurationMicros = 0,
   }) : assert(coreRevision > 0),
@@ -397,6 +399,7 @@ final class PreparedBudgetPartnerDistributionSnapshot {
   final int yearWindowEndInclusive;
   final PreparedBudgetPartnerDistributionDirectionBank incomeBank;
   final PreparedBudgetPartnerDistributionDirectionBank expenseBank;
+  final GhostFilterMode ghostFilterMode;
   final int nativeSqlCallCount;
   final int nativeSqlDurationMicros;
 

@@ -88,6 +88,7 @@ final class PreparedQueryCandidateData {
     required this.cacheKey,
     required this.directionalQueries,
     required this.index,
+    required this.sourceIndex,
     required this.budgetLimitSnapshot,
     required this.partnerDistributionSnapshot,
   });
@@ -95,6 +96,12 @@ final class PreparedQueryCandidateData {
   final String cacheKey;
   final DashboardDirectionalQuerySet directionalQueries;
   final PreparedDashboardIndex index;
+
+  /// Ghost-neutral source retained by [DashboardDataRuntime].  [index] may
+  /// be the compact selected ghost projection shown to the user; retaining
+  /// this complete source keeps a later nonGhost → onlyGhost transition from
+  /// attempting to recover rows that were never fetched.
+  final PreparedDashboardIndex sourceIndex;
   final PreparedBudgetLimitSnapshot? budgetLimitSnapshot;
   final PreparedBudgetPartnerDistributionSnapshot? partnerDistributionSnapshot;
 }

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 import '../../query/data/dashboard_ledger_entry.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 
 /// Immutable, exact base-scope row membership prepared before a focus gesture.
@@ -20,7 +21,21 @@ final class DashboardFocusMembershipSeed {
       _partnerIndices = _index(entries, (entry) => entry.partnerId),
       _amountIndex = _DashboardPreparedAmountIndex(entries),
       _searchIndex = DashboardPreparedLedgerSearchIndex(entries),
-      _allOrdinals = DashboardFocusOrdinalSet.range(entries.length) {
+      _allOrdinals = DashboardFocusOrdinalSet.range(entries.length),
+      _bookedNonGhostOrdinals = _membership(
+        entries,
+        (entry) =>
+            !entry.isPendingGhost && entry.recurrenceOccurrenceId == null,
+      ),
+      _bookedGhostOrdinals = _membership(
+        entries,
+        (entry) =>
+            !entry.isPendingGhost && entry.recurrenceOccurrenceId != null,
+      ),
+      _pendingPresentationOrdinals = _membership(
+        entries,
+        (entry) => entry.isPendingGhost,
+      ) {
     final ids = entries.map((entry) => entry.id).toSet();
     if (ids.length != entries.length) {
       throw ArgumentError('Focus membership rows must have unique IDs.');
@@ -33,6 +48,9 @@ final class DashboardFocusMembershipSeed {
   final _DashboardPreparedAmountIndex _amountIndex;
   final DashboardPreparedLedgerSearchIndex _searchIndex;
   final DashboardFocusOrdinalSet _allOrdinals;
+  final DashboardFocusOrdinalSet _bookedNonGhostOrdinals;
+  final DashboardFocusOrdinalSet _bookedGhostOrdinals;
+  final DashboardFocusOrdinalSet _pendingPresentationOrdinals;
 
   int get entryCount => entries.length;
 
@@ -55,6 +73,7 @@ final class DashboardFocusMembershipSeed {
     String? normalizedSearch,
     int? minimumAmountScaled100,
     int? maximumAmountScaled100,
+    GhostFilterMode ghostFilterMode = GhostFilterMode.both,
   }) {
     final lookup = Stopwatch()..start();
     if (categoryId == null &&
@@ -63,9 +82,8 @@ final class DashboardFocusMembershipSeed {
         minimumAmountScaled100 == null &&
         maximumAmountScaled100 == null) {
       lookup.stop();
-      return DashboardFocusMembershipProjection._(
-        seed: this,
-        entryIndices: _allOrdinals,
+      return _projectionForGhostMode(
+        ghostFilterMode,
         membershipLookupMicros: lookup.elapsedMicroseconds,
       );
     }
@@ -81,9 +99,9 @@ final class DashboardFocusMembershipSeed {
     if ((categoryId != null && category == null) ||
         (partnerId != null && partner == null)) {
       lookup.stop();
-      return DashboardFocusMembershipProjection._(
-        seed: this,
-        entryIndices: DashboardFocusOrdinalSet.empty,
+      return _projectionForGhostMode(
+        ghostFilterMode,
+        selected: DashboardFocusOrdinalSet.empty,
         membershipLookupMicros: lookup.elapsedMicroseconds,
       );
     }
@@ -109,10 +127,67 @@ final class DashboardFocusMembershipSeed {
       search.stop();
       intersectionMicros += search.elapsedMicroseconds;
     }
+    return _projectionForGhostMode(
+      ghostFilterMode,
+      selected: selected,
+      membershipLookupMicros: lookup.elapsedMicroseconds,
+      intersectionMicros: intersectionMicros,
+    );
+  }
+
+  /// Builds the two orthogonal memberships used by the dashboard: booked
+  /// rows drive money/count summaries, while presentation membership also
+  /// contains eligible pending ghost rows.  Keeping this distinction here
+  /// makes every focus/ghost intersection use the same packed ordinals.
+  DashboardFocusMembershipProjection _projectionForGhostMode(
+    GhostFilterMode mode, {
+    DashboardFocusOrdinalSet? selected,
+    required int membershipLookupMicros,
+    int intersectionMicros = 0,
+  }) {
+    final base = selected ?? _allOrdinals;
+    // Preserve the established identity fast path for the overwhelmingly
+    // common all-booked universe. Category/partner clearing relies on this
+    // avoiding a second packed ordinal allocation.
+    if (mode == GhostFilterMode.both && _pendingPresentationOrdinals.isEmpty) {
+      return DashboardFocusMembershipProjection._(
+        seed: this,
+        financialEntryIndices: base,
+        presentationEntryIndices: base,
+        membershipLookupMicros: membershipLookupMicros,
+        intersectionMicros: intersectionMicros,
+      );
+    }
+    final bookedUniverse = switch (mode) {
+      GhostFilterMode.nonGhost => _bookedNonGhostOrdinals,
+      GhostFilterMode.onlyGhost => _bookedGhostOrdinals,
+      GhostFilterMode.both => DashboardFocusOrdinalSet.union(
+        _bookedNonGhostOrdinals,
+        _bookedGhostOrdinals,
+      ),
+    };
+    final presentationUniverse = switch (mode) {
+      GhostFilterMode.nonGhost => _bookedNonGhostOrdinals,
+      GhostFilterMode.onlyGhost => DashboardFocusOrdinalSet.union(
+        _bookedGhostOrdinals,
+        _pendingPresentationOrdinals,
+      ),
+      GhostFilterMode.both => DashboardFocusOrdinalSet.union(
+        bookedUniverse,
+        _pendingPresentationOrdinals,
+      ),
+    };
     return DashboardFocusMembershipProjection._(
       seed: this,
-      entryIndices: selected,
-      membershipLookupMicros: lookup.elapsedMicroseconds,
+      financialEntryIndices: DashboardFocusOrdinalSet.intersection(
+        base,
+        bookedUniverse,
+      ),
+      presentationEntryIndices: DashboardFocusOrdinalSet.intersection(
+        base,
+        presentationUniverse,
+      ),
+      membershipLookupMicros: membershipLookupMicros,
       intersectionMicros: intersectionMicros,
     );
   }
@@ -187,6 +262,14 @@ final class DashboardFocusMembershipSeed {
       ),
     );
   }
+
+  static DashboardFocusOrdinalSet _membership(
+    List<DashboardLedgerEntry> entries,
+    bool Function(DashboardLedgerEntry entry) matches,
+  ) => DashboardFocusOrdinalSet.fromSorted(<int>[
+    for (var ordinal = 0; ordinal < entries.length; ordinal += 1)
+      if (matches(entries[ordinal])) ordinal,
+  ]);
 }
 
 /// Amount-sorted immutable membership. Boundary lookup is logarithmic and
@@ -477,6 +560,31 @@ final class DashboardFocusOrdinalSet extends IterableBase<int> {
         ? empty
         : DashboardFocusOrdinalSet.fromSorted(matches);
   }
+
+  /// Merges two sorted packed memberships without materialising a Set.
+  static DashboardFocusOrdinalSet union(
+    DashboardFocusOrdinalSet first,
+    DashboardFocusOrdinalSet second,
+  ) {
+    if (first.isEmpty) return second;
+    if (second.isEmpty) return first;
+    final values = <int>[];
+    var left = 0;
+    var right = 0;
+    while (left < first.length || right < second.length) {
+      if (right >= second.length ||
+          (left < first.length && first[left] < second[right])) {
+        values.add(first[left++]);
+      } else if (left >= first.length || second[right] < first[left]) {
+        values.add(second[right++]);
+      } else {
+        values.add(first[left]);
+        left += 1;
+        right += 1;
+      }
+    }
+    return DashboardFocusOrdinalSet.fromSorted(values);
+  }
 }
 
 /// Compact semantic aggregate derived from resident prepared membership.
@@ -501,18 +609,27 @@ final class DashboardPreparedAmountDomain {
 final class DashboardFocusMembershipProjection {
   const DashboardFocusMembershipProjection._({
     required this.seed,
-    required this.entryIndices,
+    required this.financialEntryIndices,
+    required this.presentationEntryIndices,
     required this.membershipLookupMicros,
     this.intersectionMicros = 0,
   });
 
   final DashboardFocusMembershipSeed seed;
-  final DashboardFocusOrdinalSet entryIndices;
+  final DashboardFocusOrdinalSet financialEntryIndices;
+  final DashboardFocusOrdinalSet presentationEntryIndices;
+
+  /// Compatibility alias for financial consumers such as Mind amount domains.
+  DashboardFocusOrdinalSet get entryIndices => financialEntryIndices;
   final int membershipLookupMicros;
   final int intersectionMicros;
 
-  int get entryCount => entryIndices.length;
-  Iterable<DashboardLedgerEntry> get entries => entryIndices.map(seed.entryAt);
+  int get entryCount => financialEntryIndices.length;
+  int get presentationEntryCount => presentationEntryIndices.length;
+  Iterable<DashboardLedgerEntry> get entries =>
+      financialEntryIndices.map(seed.entryAt);
+  Iterable<DashboardLedgerEntry> get presentationEntries =>
+      presentationEntryIndices.map(seed.entryAt);
   List<String> get entryIds =>
       List<String>.unmodifiable(entries.map((entry) => entry.id));
 }

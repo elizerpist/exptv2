@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import '../domain/prepared_budget_partner_distribution_snapshot.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 
 typedef DashboardPreparedBudgetPartnerDistributionSnapshotDecodeWorker =
     Future<PreparedBudgetPartnerDistributionSnapshot> Function(Uint8List bytes);
@@ -25,7 +26,7 @@ final class IsolateDashboardPreparedBudgetPartnerDistributionSnapshotDecodeWorke
 /// Compact versioned transport for exact, query-independent partner amounts.
 abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCodec {
   static const int magic = 0x464c4250; // FLBP
-  static const int version = 4;
+  static const int version = 5;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumPartnerCount = 2048;
   static const int maximumDenseCellCount =
@@ -49,6 +50,7 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
     final revision = reader.readInt64();
     final startYear = reader.readInt32();
     final endYear = reader.readInt32();
+    final ghostMode = _ghostFilterMode(reader.readInt32());
     final sqlCalls = reader.readInt32();
     final sqlNanos = reader.readInt64();
     if (revision <= 0 ||
@@ -67,9 +69,17 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
       yearWindowEndInclusive: endYear,
       incomeBank: incomeBank,
       expenseBank: expenseBank,
+      ghostFilterMode: ghostMode,
       nativeSqlCallCount: sqlCalls,
       nativeSqlDurationMicros: sqlNanos ~/ 1000,
     );
+  }
+
+  static GhostFilterMode _ghostFilterMode(int ordinal) {
+    if (ordinal < 0 || ordinal >= GhostFilterMode.values.length) {
+      throw FormatException('Invalid Budget partner ghost filter mode.');
+    }
+    return GhostFilterMode.values[ordinal];
   }
 
   static PreparedBudgetPartnerDistributionDirectionBank _readDirectionBank(

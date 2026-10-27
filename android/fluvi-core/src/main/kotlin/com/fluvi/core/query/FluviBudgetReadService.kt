@@ -136,6 +136,7 @@ class FluviBudgetReadService internal constructor(
             yearWindow = yearWindow,
             incomeBank = banks.getValue(LedgerDirection.income).freeze(),
             expenseBank = banks.getValue(LedgerDirection.expense).freeze(),
+            ghostFilterMode = ghostFilterMode,
             sqlCallCount = sqlCalls,
             sqlDurationNanos = System.nanoTime() - startedAt,
         )
@@ -340,6 +341,7 @@ class FluviBudgetReadService internal constructor(
             yearWindow = yearWindow,
             incomeBank = banks.getValue(LedgerDirection.income).freeze(),
             expenseBank = banks.getValue(LedgerDirection.expense).freeze(),
+            ghostFilterMode = ghostFilterMode,
             spendingRhythmSnapshot = FluviPreparedSpendingRhythmSnapshot(
                 coreRevision = revision,
                 incomeBank = banks.getValue(LedgerDirection.income).freezeSpendingRhythm(),

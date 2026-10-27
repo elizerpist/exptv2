@@ -92,6 +92,7 @@ class DashboardMotionHost extends StatefulWidget {
     this.bodyOrderResolver,
     this.hasPhysicalRail = true,
     this.hasStandaloneCollapseHandle = true,
+    this.showsLogBoxSearchPill = true,
     this.seamlessHeaderContentResolver,
     this.modeContentExtraHeight = 0,
     this.modeContentExtraHeightResolver,
@@ -110,6 +111,7 @@ class DashboardMotionHost extends StatefulWidget {
   final DashboardBodyOrderResolver? bodyOrderResolver;
   final bool hasPhysicalRail;
   final bool hasStandaloneCollapseHandle;
+  final bool showsLogBoxSearchPill;
   final DashboardSeamlessHeaderContentResolver? seamlessHeaderContentResolver;
   final double modeContentExtraHeight;
   final DashboardModeContentExtraHeightResolver? modeContentExtraHeightResolver;
@@ -425,6 +427,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
               bodyOrder: bodyOrder,
               hasPhysicalRail: widget.hasPhysicalRail,
               hasStandaloneCollapseHandle: widget.hasStandaloneCollapseHandle,
+              showsLogBoxSearchPill: widget.showsLogBoxSearchPill,
               seamlessHeaderContent: seamlessHeaderContent,
               modeContentExtraHeight: modeContentExtraHeight,
               principalModeContentExtraHeight: principalModeContentExtraHeight,

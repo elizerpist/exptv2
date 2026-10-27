@@ -965,7 +965,12 @@ final class DashboardCoreController {
     );
     paging = pagingOwner;
     final requestTemplate = DashboardIndexRequestTemplate(
-      filterScope: presentation.navigation.state.parentQueryScope,
+      // Native acquisition retains the complete ghost universe. The visible
+      // ghost mode is an immutable projection over that source, so changing
+      // nonGhost → onlyGhost can never need a second ledger query.
+      filterScope: presentation.navigation.state.parentQueryScope.copyWith(
+        ghostFilterMode: GhostFilterMode.both,
+      ),
       pageSize: pageSize,
       initialYear: presentation.navigation.state.retainedChildYear,
       yearWindowRadius: yearWindowRadius,
@@ -1057,14 +1062,7 @@ final class DashboardCoreController {
         );
       },
       onIndexPublished: (publication) {
-        unawaited(
-          installPreparedIndex(
-            publication.index,
-            budgetLimitSnapshot: publication.budgetLimitSnapshot,
-            partnerDistributionSnapshot:
-                publication.partnerDistributionSnapshot,
-          ),
-        );
+        unawaited(_installRuntimePublication(publication));
       },
       stableFrameScheduler: stableFrameScheduler,
     );
@@ -1362,6 +1360,161 @@ final class DashboardCoreController {
   bool _segmentedPaintRejectedForLatestTarget = false;
   bool _segmentedPaintIdentityRejectionReportedForLatestTarget = false;
   PreparedDashboardIndex? _focusBaseIndex;
+  // Bounded, currently-visible ghost projections. Each projection owns only
+  // its active parent/child frames and ordinal views; all transport rows,
+  // catalogs outside that viewport and native Budget banks remain shared by
+  // [_focusBaseIndex]. This makes every three-state tap a selection of an
+  // already publishable result rather than an on-tap projection build.
+  _GhostFilterProjectionHotset? _ghostFilterProjectionHotset;
+  // The ghost quick filter is a direct, prepared-membership interaction. Its
+  // intent advances synchronously so a burst of taps never derives the next
+  // state from a stale committed query while a previous publication settles.
+  GhostFilterMode? _acceptedGhostFilterIntent;
+  int _ghostFilterIntentGeneration = 0;
+
+  /// Retires any in-flight quick-filter intent whenever another structural
+  /// publication becomes authoritative.  A query-sheet apply or a revision
+  /// rebase may carry a different ghost mode; leaving the last tap intent in
+  /// place would make the next cycle skip or repeat a mode, and would let an
+  /// older prepared ghost projection overwrite the newer base query.
+  void _synchronizeGhostFilterIntent(DashboardDirectionalQuerySet queries) {
+    _acceptedGhostFilterIntent = queries
+        .scopeFor(LedgerDirection.expense)
+        .ghostFilterMode;
+    _ghostFilterIntentGeneration += 1;
+  }
+
+  _GhostFilterProjectionHotset? _primeGhostFilterProjectionHotset({
+    required PreparedDashboardIndex base,
+    required DashboardDirectionalQuerySet effectiveQueries,
+    required LedgerDirection activeDirection,
+    String? categoryFocusId,
+    String? partnerFocusId,
+    String? normalizedSearch,
+    int? minimumAmountScaled100,
+    int? maximumAmountScaled100,
+    required int initialYear,
+    required LedgerTimeScope activeParentTimeScope,
+    LedgerTimeScope? activeSelectedChildTimeScope,
+  }) {
+    // Some lightweight visual/test repositories intentionally omit the
+    // membership seed because their initial mode is the already-complete
+    // `both` source. They remain valid dashboard sources; simply do not arm
+    // an unavailable quick-filter hotset for them.
+    if (base.partitionFor(LedgerDirection.income).focusMembershipSeed == null ||
+        base.partitionFor(LedgerDirection.expense).focusMembershipSeed ==
+            null) {
+      return null;
+    }
+    final existing = _ghostFilterProjectionHotset;
+    if (existing != null &&
+        existing.matches(
+          base: base,
+          effectiveQueries: effectiveQueries,
+          activeDirection: activeDirection,
+          categoryFocusId: categoryFocusId,
+          partnerFocusId: partnerFocusId,
+          normalizedSearch: normalizedSearch,
+          minimumAmountScaled100: minimumAmountScaled100,
+          maximumAmountScaled100: maximumAmountScaled100,
+          initialYear: initialYear,
+          activeParentTimeScope: activeParentTimeScope,
+          activeSelectedChildTimeScope: activeSelectedChildTimeScope,
+        )) {
+      return existing;
+    }
+    final hasEphemeralFocus =
+        categoryFocusId != null ||
+        partnerFocusId != null ||
+        normalizedSearch != null ||
+        minimumAmountScaled100 != null ||
+        maximumAmountScaled100 != null;
+    final projections = <GhostFilterMode, DashboardEphemeralFocusDerivation>{
+      for (final mode in GhostFilterMode.values)
+        mode: !hasEphemeralFocus && mode == GhostFilterMode.both
+            ? DashboardEphemeralFocusDerivation(
+                index: base,
+                membershipOrdinalCount: 0,
+                membershipLookupMicros: 0,
+                intersectionMicros: 0,
+                semanticUniverseBuildMicros: 0,
+                currentRootProjectionMicros: 0,
+                publicationCriticalFrameCount: 0,
+                publicationCriticalRowCount: 0,
+                eagerFocusedFrameCount: 0,
+                lazyFocusedFrameCacheCount: 0,
+                focusedOrdinalsVisitedBeforePublication: 0,
+                focusedOrdinalsVisitedAfterPublication: 0,
+                reusedBaseCatalogCount: 0,
+                newFocusedCatalogCount: 0,
+                reusedPreparedRows: 0,
+              )
+            : DashboardEphemeralFocusDeriver.deriveGhostFilterMode(
+                base: base,
+                effectiveQueries: effectiveQueries.withGhostFilterMode(mode),
+                activeDirection: activeDirection,
+                categoryFocusId: categoryFocusId,
+                partnerFocusId: partnerFocusId,
+                normalizedSearch: normalizedSearch,
+                minimumAmountScaled100: minimumAmountScaled100,
+                maximumAmountScaled100: maximumAmountScaled100,
+                initialYear: initialYear,
+                generation: base.generation,
+                activeParentTimeScope: activeParentTimeScope,
+                activeSelectedChildTimeScope: activeSelectedChildTimeScope,
+              ),
+    };
+    final hotset = _GhostFilterProjectionHotset(
+      base: base,
+      neutralQueryKey: effectiveQueries
+          .withGhostFilterMode(GhostFilterMode.both)
+          .canonicalKey,
+      activeDirection: activeDirection,
+      categoryFocusId: categoryFocusId,
+      partnerFocusId: partnerFocusId,
+      normalizedSearch: normalizedSearch,
+      minimumAmountScaled100: minimumAmountScaled100,
+      maximumAmountScaled100: maximumAmountScaled100,
+      initialYear: initialYear,
+      activeParentTimeScopeKey: activeParentTimeScope.canonicalKey,
+      activeSelectedChildTimeScopeKey:
+          activeSelectedChildTimeScope?.canonicalKey,
+      derivations: projections,
+    );
+    _ghostFilterProjectionHotset = hotset;
+    return hotset;
+  }
+
+  DashboardEphemeralFocusDerivation? _preparedGhostProjection({
+    required PreparedDashboardIndex base,
+    required DashboardDirectionalQuerySet effectiveQueries,
+    required LedgerDirection activeDirection,
+    String? categoryFocusId,
+    String? partnerFocusId,
+    String? normalizedSearch,
+    int? minimumAmountScaled100,
+    int? maximumAmountScaled100,
+    required int initialYear,
+    required LedgerTimeScope activeParentTimeScope,
+    LedgerTimeScope? activeSelectedChildTimeScope,
+  }) => _ghostFilterProjectionHotset?.lookup(
+    base: base,
+    effectiveQueries: effectiveQueries,
+    activeDirection: activeDirection,
+    categoryFocusId: categoryFocusId,
+    partnerFocusId: partnerFocusId,
+    normalizedSearch: normalizedSearch,
+    minimumAmountScaled100: minimumAmountScaled100,
+    maximumAmountScaled100: maximumAmountScaled100,
+    initialYear: initialYear,
+    activeParentTimeScope: activeParentTimeScope,
+    activeSelectedChildTimeScope: activeSelectedChildTimeScope,
+  );
+
+  void _clearGhostFilterProjectionHotset() {
+    _ghostFilterProjectionHotset = null;
+  }
+
   // A live facet publishes its prepared first viewport before rich LogBox
   // scene augmentation. Retain the base identity separately so aggregate,
   // close and base-query changes can supersede that background work without
@@ -1804,6 +1957,60 @@ final class DashboardCoreController {
     }
     _bootstrapped = true;
     return frame;
+  }
+
+  /// Installs a revision publication from its ghost-neutral runtime source.
+  /// Runtime ownership deliberately stays with that complete source while the
+  /// presentation may use a compact shared-mode projection.
+  Future<void> _installRuntimePublication(
+    DashboardPreparedIndexPublication publication,
+  ) async {
+    final source = publication.index;
+    final queries = currentQuery.queries;
+    _synchronizeGhostFilterIntent(queries);
+    final activeDirection = navigation.state.parentQueryScope.direction;
+    final activeScope = queries.scopeFor(activeDirection);
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      activeScope.temporalFilter,
+    );
+    final publicationState = navigation.appliedQueryCandidate(
+      activeScope,
+      availability: availability,
+      coreRevision: source.coreRevision,
+    );
+    _clearGhostFilterProjectionHotset();
+    final ghostHotset = _primeGhostFilterProjectionHotset(
+      base: source,
+      effectiveQueries: queries,
+      activeDirection: activeDirection,
+      initialYear: navigation.state.yearCursor,
+      activeParentTimeScope: publicationState.parentQueryScope.timeScope,
+      activeSelectedChildTimeScope: publicationState.isRailOpen
+          ? publicationState.retainedChildScope
+          : null,
+    );
+    final visible = activeScope.ghostFilterMode == GhostFilterMode.both
+        ? source
+        : ghostHotset?.derivationFor(activeScope.ghostFilterMode)?.index ??
+              source;
+    final budgetLimitSnapshot = visible == source
+        ? publication.budgetLimitSnapshot
+        : await dataRuntime.prepareBudgetLimitSnapshotFor(visible);
+    final partnerDistributionSnapshot = visible == source
+        ? publication.partnerDistributionSnapshot
+        : await dataRuntime.prepareBudgetPartnerDistributionSnapshotFor(
+            visible,
+          );
+    final published = await installPreparedIndex(
+      visible,
+      budgetLimitSnapshot: budgetLimitSnapshot,
+      partnerDistributionSnapshot: partnerDistributionSnapshot,
+      publicationState: publicationState,
+      shouldPublish: () =>
+          !_disposed &&
+          source.coreRevision == dataRuntime.currentIndex?.coreRevision,
+    );
+    if (published) _focusBaseIndex = source;
   }
 
   /// Installs an idle-time immutable index only after its publication-critical
@@ -2566,15 +2773,49 @@ final class DashboardCoreController {
               facetPresentation: preparation.facetPresentation,
             );
       final candidateCacheHit = cached != null;
+      final sourceDirectionalQueries = directionalQueries.withGhostFilterMode(
+        GhostFilterMode.both,
+      );
+      final sourceTemplate =
+          DashboardIndexRequestTemplate.forPreparedYearWindow(
+            directionalQueries: sourceDirectionalQueries,
+            pageSize: pageSize,
+            yearWindow: physicalWindow,
+          );
+      final sourceIndex =
+          cached?.data.sourceIndex ??
+          await dataRuntime.prepareQuery(sourceTemplate);
+      final sourceDraft = draft.copyWith(ghostFilterMode: GhostFilterMode.both);
+      if (!_isCurrentPreparedQueryCandidate(preparation) ||
+          sourceIndex.coreRevision != coreRevision ||
+          !sourceIndex.key.matchesScope(sourceDraft)) {
+        _completePreparedQueryCandidate(preparation, null);
+        return;
+      }
+      final availability = DashboardTemporalAvailability.fromTemporalFilter(
+        draft.temporalFilter,
+      );
+      final publicationState = navigation.appliedQueryCandidate(
+        draft,
+        availability: availability,
+        coreRevision: sourceIndex.coreRevision,
+      );
       final index =
           cached?.index ??
-          await dataRuntime.prepareQuery(
-            DashboardIndexRequestTemplate.forPreparedYearWindow(
-              directionalQueries: directionalQueries,
-              pageSize: pageSize,
-              yearWindow: physicalWindow,
-            ),
-          );
+          (directionalQueries.income.ghostFilterMode == GhostFilterMode.both
+              ? sourceIndex
+              : DashboardEphemeralFocusDeriver.deriveGhostFilterMode(
+                  base: sourceIndex,
+                  effectiveQueries: directionalQueries,
+                  activeDirection: draft.direction,
+                  initialYear: physicalWindow.centerYear,
+                  generation: sourceIndex.generation,
+                  activeParentTimeScope:
+                      publicationState.parentQueryScope.timeScope,
+                  activeSelectedChildTimeScope: publicationState.isRailOpen
+                      ? publicationState.retainedChildScope
+                      : null,
+                ).index);
       if (!_isCurrentPreparedQueryCandidate(preparation) ||
           index.coreRevision != coreRevision ||
           !index.key.matchesScope(draft)) {
@@ -2585,6 +2826,7 @@ final class DashboardCoreController {
       // later in this operation is Phase-B decoration, not a Mind-base
       // readiness dependency.
       preparation.completeIndex(index);
+      await dataRuntime.warmGhostBudgetSnapshotsFor(sourceIndex);
       final budgetLimitSnapshot =
           cached?.data.budgetLimitSnapshot ??
           await dataRuntime.prepareBudgetLimitSnapshotFor(index);
@@ -2650,14 +2892,6 @@ final class DashboardCoreController {
           ),
         );
       }
-      final availability = DashboardTemporalAvailability.fromTemporalFilter(
-        draft.temporalFilter,
-      );
-      final publicationState = navigation.appliedQueryCandidate(
-        draft,
-        availability: availability,
-        coreRevision: index.coreRevision,
-      );
       final bundle = _preparedRevisionBundleFor(
         index,
         publicationState: publicationState,
@@ -2721,17 +2955,13 @@ final class DashboardCoreController {
           ),
         );
       }
-      final requestTemplate =
-          DashboardIndexRequestTemplate.forPreparedYearWindow(
-            directionalQueries: directionalQueries,
-            pageSize: pageSize,
-            yearWindow: physicalWindow,
-          );
+      final requestTemplate = sourceTemplate;
       final candidate = PreparedQueryCandidate(
         data: PreparedQueryCandidateData(
           cacheKey: preparation.cacheKey,
           directionalQueries: directionalQueries,
           index: index,
+          sourceIndex: sourceIndex,
           budgetLimitSnapshot: budgetLimitSnapshot,
           partnerDistributionSnapshot: partnerDistributionSnapshot,
         ),
@@ -7148,6 +7378,11 @@ final class DashboardCoreController {
             );
       return Future<bool>.value(completed);
     }
+    // A structural Query apply supersedes a pending direct ghost projection
+    // before it starts preparing its new base. The committed mode is retained
+    // here; the requested query's mode becomes authoritative only at the
+    // atomic publication boundary below.
+    _synchronizeGhostFilterIntent(currentQuery.queries);
     final physicalWindow = _activePreparedQueryYearWindow();
     final applyCacheKey = physicalWindow == null
         ? 'unprepared:${template.direction.name}:${template.key.value}'
@@ -7206,19 +7441,24 @@ final class DashboardCoreController {
     return operation;
   }
 
-  /// Commits one shared ghost-membership change for both directional query
-  /// templates.  The old complete dashboard remains visible while a matching
-  /// native index is prepared, then navigation, index and filter owner are
-  /// replaced at the same publication boundary.
+  /// Advances from the most recently accepted user intent, rather than the
+  /// last asynchronously committed query. This preserves every accepted tap
+  /// in a same-frame triple cycle.
   Future<bool> cycleGhostFilterMode() => applyGhostFilterMode(
-    currentQuery.scopeFor(LedgerDirection.expense).ghostFilterMode.next,
+    (_acceptedGhostFilterIntent ??
+            currentQuery.scopeFor(LedgerDirection.expense).ghostFilterMode)
+        .next,
   );
 
   Future<bool> applyGhostFilterMode(GhostFilterMode mode) {
     final desiredQueries = currentQuery.queries.withGhostFilterMode(mode);
-    if (desiredQueries == currentQuery.queries) return Future<bool>.value(true);
+    if (desiredQueries == currentQuery.queries &&
+        _acceptedGhostFilterIntent == mode) {
+      return Future<bool>.value(true);
+    }
+    _acceptedGhostFilterIntent = mode;
     _cancelActiveComposerApply(reason: 'ghostQuickFilter');
-    final generation = ++_queryApplyGeneration;
+    final generation = ++_ghostFilterIntentGeneration;
     late final Future<bool> operation;
     operation =
         _applyGhostFilterMode(
@@ -7234,7 +7474,7 @@ final class DashboardCoreController {
           }
         });
     _activeComposerApplyIdentity = null;
-    _activeQueryApplyCacheKey = 'ghost:${mode.name}';
+    _activeQueryApplyCacheKey = 'ghostPrepared:${mode.name}';
     _activeMindAmountInteractionGeneration = null;
     _activeInteractionPublicationOrder = null;
     _queryApplyInFlight = operation;
@@ -7245,23 +7485,20 @@ final class DashboardCoreController {
     required DashboardDirectionalQuerySet desiredQueries,
     required int generation,
   }) async {
-    final window = _activePreparedQueryYearWindow();
-    if (window == null || _disposed || generation != _queryApplyGeneration) {
+    if (_disposed || generation != _ghostFilterIntentGeneration) {
       return false;
     }
-    final template = DashboardIndexRequestTemplate.forPreparedYearWindow(
-      directionalQueries: desiredQueries,
-      pageSize: pageSize,
-      yearWindow: window,
-    );
+    // The runtime keeps the ghost-neutral (both) source index resident. A
+    // ghost transition must never derive onlyGhost from a former nonGhost
+    // projection, nor wait for Room/MethodChannel/Budget work.
+    final base = _focusBaseIndex ?? dataRuntime.currentIndex;
+    if (base == null || base.coreRevision != coreRevision) return false;
+    if (base.partitionFor(LedgerDirection.income).focusMembershipSeed == null ||
+        base.partitionFor(LedgerDirection.expense).focusMembershipSeed ==
+            null) {
+      return false;
+    }
     try {
-      final index = await dataRuntime.prepareQuery(template);
-      if (_disposed || generation != _queryApplyGeneration) return false;
-      final snapshots = await Future.wait<Object?>(<Future<Object?>>[
-        dataRuntime.prepareBudgetLimitSnapshotFor(index),
-        dataRuntime.prepareBudgetPartnerDistributionSnapshotFor(index),
-      ]);
-      if (_disposed || generation != _queryApplyGeneration) return false;
       final activeDirection = navigation.state.parentQueryScope.direction;
       final activeScope = desiredQueries.scopeFor(activeDirection);
       final availability = DashboardTemporalAvailability.fromTemporalFilter(
@@ -7270,35 +7507,107 @@ final class DashboardCoreController {
       final publicationState = navigation.appliedQueryCandidate(
         activeScope,
         availability: availability,
-        coreRevision: index.coreRevision,
+        coreRevision: base.coreRevision,
       );
+      final activeFocus = focus.state;
+      final prepared = _preparedGhostProjection(
+        base: base,
+        effectiveQueries: desiredQueries,
+        activeDirection: activeDirection,
+        categoryFocusId: activeFocus?.category?.id,
+        partnerFocusId: activeFocus?.partner?.id,
+        normalizedSearch: activeFocus?.normalizedSearch,
+        initialYear: navigation.state.yearCursor,
+        activeParentTimeScope: publicationState.parentQueryScope.timeScope,
+        activeSelectedChildTimeScope: publicationState.isRailOpen
+            ? publicationState.retainedChildScope
+            : null,
+      );
+      // Focus changes can arrive immediately before its bounded three-mode
+      // prewarm completes. That rare fallback is still a compact ordinal
+      // projection (never a repository/index build); normal live use selects
+      // the resident projection above.
+      final derivation =
+          prepared ??
+          DashboardEphemeralFocusDeriver.deriveGhostFilterMode(
+            base: base,
+            effectiveQueries: desiredQueries,
+            activeDirection: activeDirection,
+            categoryFocusId: activeFocus?.category?.id,
+            partnerFocusId: activeFocus?.partner?.id,
+            normalizedSearch: activeFocus?.normalizedSearch,
+            initialYear: navigation.state.yearCursor,
+            generation: generation,
+            activeParentTimeScope: publicationState.parentQueryScope.timeScope,
+            activeSelectedChildTimeScope: publicationState.isRailOpen
+                ? publicationState.retainedChildScope
+                : null,
+          );
+      if (_disposed || generation != _ghostFilterIntentGeneration) return false;
+      // These exact banks were warmed with the ghost-neutral source before
+      // this control became interactive. Deliberately use cache-only lookup:
+      // a missing bank is a publication failure, never a tap-path native read.
+      final budgetLimitSnapshot = dataRuntime.cachedBudgetLimitSnapshotFor(
+        derivation.index,
+      );
+      final partnerDistributionSnapshot = dataRuntime
+          .cachedBudgetPartnerDistributionSnapshotFor(derivation.index);
+      if ((dataRuntime.hasBudgetLimitSnapshotRepository &&
+              budgetLimitSnapshot == null) ||
+          (dataRuntime.hasBudgetPartnerDistributionSnapshotRepository &&
+              partnerDistributionSnapshot == null)) {
+        return false;
+      }
       final published = await installPreparedIndex(
-        index,
-        budgetLimitSnapshot: snapshots[0] as PreparedBudgetLimitSnapshot?,
-        partnerDistributionSnapshot:
-            snapshots[1] as PreparedBudgetPartnerDistributionSnapshot?,
+        derivation.index,
+        budgetLimitSnapshot: budgetLimitSnapshot,
+        partnerDistributionSnapshot: partnerDistributionSnapshot,
         publicationState: publicationState,
-        shouldPublish: () => !_disposed && generation == _queryApplyGeneration,
+        isEphemeralFocusPublication: true,
+        shouldPublish: () =>
+            !_disposed && generation == _ghostFilterIntentGeneration,
         beforePublish: () {
           navigation.replaceAppliedQuery(
             activeScope,
             availability: availability,
-            coreRevision: index.coreRevision,
+            coreRevision: base.coreRevision,
           );
           currentQuery.replaceGhostFilterMode(activeScope.ghostFilterMode);
+          // A ghost mode changes no semantic focus. Re-anchor it to the new
+          // effective query identity so clearing category/partner/search can
+          // never silently reset the shared ghost dimension.
+          if (activeFocus != null) {
+            focus.replace(
+              baseScope: activeScope,
+              coreRevision: base.coreRevision,
+              category: activeFocus.category,
+              partner: activeFocus.partner,
+              normalizedSearch: activeFocus.normalizedSearch,
+            );
+          }
         },
       );
-      if (!published || _disposed || generation != _queryApplyGeneration) {
+      if (!published ||
+          _disposed ||
+          generation != _ghostFilterIntentGeneration) {
         return false;
       }
-      dataRuntime.commitPreparedQuery(index, template);
+      _focusBaseIndex = base;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'GHOST_QUICK_FILTER_APPLIED',
+          stage: 'GHOST_QUICK_FILTER_PREPARED_APPLIED',
           queryKey: activeScope.key.value,
           direction: activeDirection.name,
-          coreRevision: index.coreRevision,
-          scope: 'mode=${activeScope.ghostFilterMode.name}',
+          coreRevision: base.coreRevision,
+          scope:
+              'mode=${activeScope.ghostFilterMode.name} '
+              'repositoryRequests=0 indexBuilds=0 '
+              'membershipOrdinals=${derivation.membershipOrdinalCount} '
+              'tapProjectionMicros='
+              '${prepared == null ? derivation.currentRootProjectionMicros : 0} '
+              'prewarmedProjectionMicros='
+              '${prepared?.currentRootProjectionMicros ?? 0} '
+              'hotsetHit=${prepared != null}',
         ),
       );
       return true;
@@ -7678,15 +7987,32 @@ final class DashboardCoreController {
         return false;
       }
       dataRuntime.commitPreparedQuery(
-        candidate.index,
+        candidate.data.sourceIndex,
         candidate.requestTemplate,
       );
+      // Keep the exact ghost-neutral source behind the newly visible compact
+      // projection. Subsequent quick-filter taps must never start from the
+      // currently selected (possibly onlyGhost) membership.
+      _focusBaseIndex = candidate.data.sourceIndex;
       final appliedFacetPresentation =
           facetPresentation ?? candidate.facetPresentation;
       currentQuery.replaceDirection(
         candidate.editedScope.direction,
         candidate.editedScope,
         facetPresentation: appliedFacetPresentation,
+      );
+      _synchronizeGhostFilterIntent(currentQuery.queries);
+      _clearGhostFilterProjectionHotset();
+      _primeGhostFilterProjectionHotset(
+        base: candidate.data.sourceIndex,
+        effectiveQueries: currentQuery.queries,
+        activeDirection: candidate.editedScope.direction,
+        initialYear: navigation.state.yearCursor,
+        activeParentTimeScope:
+            candidate.publicationState.parentQueryScope.timeScope,
+        activeSelectedChildTimeScope: candidate.publicationState.isRailOpen
+            ? candidate.publicationState.retainedChildScope
+            : null,
       );
       if (composerApplyIdentity != null) {
         FluviDiagnosticLogger.log(
@@ -9276,7 +9602,13 @@ final class DashboardCoreController {
       centerYear: targetYear,
     );
     return DashboardIndexRequestTemplate.forPreparedYearWindow(
-      directionalQueries: currentQuery.queries,
+      // Keep every time-window source ghost-neutral.  The selected mode is a
+      // compact membership projection below, never a data-acquisition
+      // restriction; otherwise a later nonGhost -> onlyGhost switch could
+      // not recover the booked-ghost rows for this newly rebased window.
+      directionalQueries: currentQuery.queries.withGhostFilterMode(
+        GhostFilterMode.both,
+      ),
       pageSize: pageSize,
       yearWindow: targetWindow,
     );
@@ -9449,13 +9781,33 @@ final class DashboardCoreController {
     _PendingSegmentedTimePreparedWindowCandidate pending,
   ) async {
     try {
-      final index = await dataRuntime.prepareQuery(pending.requestTemplate);
+      final sourceIndex = await dataRuntime.prepareQuery(
+        pending.requestTemplate,
+      );
       if (!_isPendingSegmentedTimePreparedWindowCandidateCurrent(pending)) {
         _supersedePendingSegmentedTimePreparedWindowCandidate(
           reason: 'staleRejected',
         );
         return;
       }
+      final effectiveQueries = currentQuery.queries;
+      final activeDirection = pending.candidate.parentQueryScope.direction;
+      final index =
+          effectiveQueries.scopeFor(activeDirection).ghostFilterMode ==
+              GhostFilterMode.both
+          ? sourceIndex
+          : DashboardEphemeralFocusDeriver.deriveGhostFilterMode(
+              base: sourceIndex,
+              effectiveQueries: effectiveQueries,
+              activeDirection: activeDirection,
+              initialYear: pending.candidate.yearCursor,
+              generation: sourceIndex.generation,
+              activeParentTimeScope:
+                  pending.candidate.parentQueryScope.timeScope,
+              activeSelectedChildTimeScope: pending.candidate.isRailOpen
+                  ? pending.candidate.retainedChildScope
+                  : null,
+            ).index;
       final queryKey = _segmentedTargetQueryKey(pending.candidate);
       try {
         // The next immutable index is built off the direct-motion callback,
@@ -9480,6 +9832,7 @@ final class DashboardCoreController {
         );
         return;
       }
+      await dataRuntime.warmGhostBudgetSnapshotsFor(sourceIndex);
       final budgetLimitSnapshot = await dataRuntime
           .prepareBudgetLimitSnapshotFor(index);
       if (!_isPendingSegmentedTimePreparedWindowCandidateCurrent(pending)) {
@@ -9531,6 +9884,7 @@ final class DashboardCoreController {
         interactionOrder: pending.interactionOrder,
         replayingPendingCandidate: true,
         replacementIndex: index,
+        replacementSourceIndex: sourceIndex,
         replacementBundle: bundle,
         replacementRequestTemplate: pending.requestTemplate,
       );
@@ -9801,11 +10155,17 @@ final class DashboardCoreController {
     DashboardInteractionPreviewOrder? interactionOrder,
     bool replayingPendingCandidate = false,
     PreparedDashboardIndex? replacementIndex,
+    PreparedDashboardIndex? replacementSourceIndex,
     DashboardPreparedRevisionBundle? replacementBundle,
     DashboardIndexRequestTemplate? replacementRequestTemplate,
   }) {
+    // A new temporal target changes the visible parent/child scope. An older
+    // ghost projection must not be allowed to publish against that retiring
+    // navigation state while an out-of-window rebase is in flight.
+    _synchronizeGhostFilterIntent(currentQuery.queries);
     _supersedeAcceptedQueryApplyForDashboardNavigation();
-    if ((replacementIndex == null) != (replacementBundle == null) ||
+    if ((replacementIndex == null) != (replacementSourceIndex == null) ||
+        (replacementIndex == null) != (replacementBundle == null) ||
         (replacementIndex == null) != (replacementRequestTemplate == null)) {
       throw ArgumentError(
         'A direct Time window replacement requires its exact index, bundle '
@@ -10026,14 +10386,26 @@ final class DashboardCoreController {
       _activePreparedRevisionBundle = bundle;
       _activeRailCriticalBankIdentity = bundle.railCriticalSceneBankIdentity;
       dataRuntime.commitPreparedQuery(
-        replacementIndex,
+        replacementSourceIndex!,
         replacementRequestTemplate!,
       );
       // A focus base is index-local even when the Core revision does not
       // change.  Keep the user's facet state, but force the next Avatar
       // derivation to start from the exact rebased temporal index instead of
       // accepting a category against the retired year-window.
-      _focusBaseIndex = null;
+      _focusBaseIndex = replacementSourceIndex;
+      _synchronizeGhostFilterIntent(currentQuery.queries);
+      _clearGhostFilterProjectionHotset();
+      _primeGhostFilterProjectionHotset(
+        base: replacementSourceIndex,
+        effectiveQueries: currentQuery.queries,
+        activeDirection: candidate.parentQueryScope.direction,
+        initialYear: candidate.yearCursor,
+        activeParentTimeScope: candidate.parentQueryScope.timeScope,
+        activeSelectedChildTimeScope: candidate.isRailOpen
+            ? candidate.retainedChildScope
+            : null,
+      );
       _provisionalFocusBaseIndex = null;
       _provisionalFocusBaseScope = null;
       _clearBudgetAvatarFocusHotset();
@@ -12169,6 +12541,10 @@ final class DashboardCoreController {
     VoidCallback? onVisibleSemanticCommit,
   }) async {
     if (_disposed || queryComposer.isOpen) return false;
+    // Focus owns a new presentation identity even though it does not mutate
+    // the committed query. Retire a previous ghost intent so its completed
+    // projection cannot erase this category/partner/search choice.
+    _synchronizeGhostFilterIntent(currentQuery.queries);
     if (source == DashboardLiveInteractionSource.budgetAvatar &&
         publishDuringMotion) {
       _cancelAvatarLivePaintWaiter(retainCurrentExactPaintedTarget: true);
@@ -12951,24 +13327,53 @@ final class DashboardCoreController {
         publishDuringMotion;
     final direction =
         state?.anchor.direction ?? navigation.state.parentQueryScope.direction;
-    final baseIndex =
+    final retainedBaseIndex =
         _focusBaseIndex ??
         (completeAvatarLivePublication ? dataRuntime.currentIndex : null);
-    if (baseIndex == null ||
+    if (retainedBaseIndex == null ||
         (state == null && !completeAvatarLivePublication)) {
       return false;
     }
+    _synchronizeGhostFilterIntent(currentQuery.queries);
     final baseScope = currentQuery.scopeFor(direction);
     if (state != null &&
         !state.anchor.matches(
           baseScope: baseScope,
-          revision: baseIndex.coreRevision,
+          revision: retainedBaseIndex.coreRevision,
         )) {
       _clearFocusWithoutRestoration(reason: 'baseIdentityChanged');
       return false;
     }
     final generation = replayGeneration ?? ++_focusPublicationGeneration;
     if (replayGeneration != null && generation != _focusPublicationGeneration) {
+      return false;
+    }
+    // The retained base deliberately owns the all-ghost source. Clearing a
+    // category/partner/search focus must therefore restore the current ghost
+    // projection, not publish that source as `both` and silently reset the
+    // quick filter.
+    final baseIndex = baseScope.ghostFilterMode == GhostFilterMode.both
+        ? retainedBaseIndex
+        : DashboardEphemeralFocusDeriver.deriveGhostFilterMode(
+            base: retainedBaseIndex,
+            effectiveQueries: currentQuery.queries,
+            activeDirection: direction,
+            initialYear: navigation.state.yearCursor,
+            generation: generation,
+            activeParentTimeScope: navigation.state.parentQueryScope.timeScope,
+            activeSelectedChildTimeScope: navigation.state.isRailOpen
+                ? navigation.state.retainedChildScope
+                : null,
+          ).index;
+    final budgetLimitSnapshot = dataRuntime.cachedBudgetLimitSnapshotFor(
+      baseIndex,
+    );
+    final partnerDistributionSnapshot = dataRuntime
+        .cachedBudgetPartnerDistributionSnapshotFor(baseIndex);
+    if ((dataRuntime.hasBudgetLimitSnapshotRepository &&
+            budgetLimitSnapshot == null) ||
+        (dataRuntime.hasBudgetPartnerDistributionSnapshotRepository &&
+            partnerDistributionSnapshot == null)) {
       return false;
     }
     final interactionOrder = completeAvatarLivePublication
@@ -13178,6 +13583,8 @@ final class DashboardCoreController {
       install: () async {
         final published = await installPreparedIndex(
           baseIndex,
+          budgetLimitSnapshot: budgetLimitSnapshot,
+          partnerDistributionSnapshot: partnerDistributionSnapshot,
           publicationState: publicationState,
           shouldPublish: () =>
               !_disposed &&
@@ -16540,6 +16947,109 @@ final class DashboardCoreController {
     presentation.dispose();
     transactionDirection.dispose();
     expansion.dispose();
+  }
+}
+
+/// Bounded three-state projections for the currently visible scope. This
+/// keeps source rows and offscreen temporal data in the ghost-neutral base;
+/// only the compact ordinal overlays plus their first renderable frames are
+/// retained here.
+final class _GhostFilterProjectionHotset {
+  _GhostFilterProjectionHotset({
+    required this.base,
+    required this.neutralQueryKey,
+    required this.activeDirection,
+    required this.categoryFocusId,
+    required this.partnerFocusId,
+    required this.normalizedSearch,
+    required this.minimumAmountScaled100,
+    required this.maximumAmountScaled100,
+    required this.initialYear,
+    required this.activeParentTimeScopeKey,
+    required this.activeSelectedChildTimeScopeKey,
+    required Map<GhostFilterMode, DashboardEphemeralFocusDerivation>
+    derivations,
+  }) : _derivations =
+           Map<GhostFilterMode, DashboardEphemeralFocusDerivation>.unmodifiable(
+             derivations,
+           );
+
+  final PreparedDashboardIndex base;
+  final String neutralQueryKey;
+  final LedgerDirection activeDirection;
+  final String? categoryFocusId;
+  final String? partnerFocusId;
+  final String? normalizedSearch;
+  final int? minimumAmountScaled100;
+  final int? maximumAmountScaled100;
+  final int initialYear;
+  final String activeParentTimeScopeKey;
+  final String? activeSelectedChildTimeScopeKey;
+  final Map<GhostFilterMode, DashboardEphemeralFocusDerivation> _derivations;
+
+  DashboardEphemeralFocusDerivation? derivationFor(GhostFilterMode mode) =>
+      _derivations[mode];
+
+  bool matches({
+    required PreparedDashboardIndex base,
+    required DashboardDirectionalQuerySet effectiveQueries,
+    required LedgerDirection activeDirection,
+    required String? categoryFocusId,
+    required String? partnerFocusId,
+    required String? normalizedSearch,
+    required int? minimumAmountScaled100,
+    required int? maximumAmountScaled100,
+    required int initialYear,
+    required LedgerTimeScope activeParentTimeScope,
+    LedgerTimeScope? activeSelectedChildTimeScope,
+  }) =>
+      identical(this.base, base) &&
+      neutralQueryKey ==
+          effectiveQueries
+              .withGhostFilterMode(GhostFilterMode.both)
+              .canonicalKey &&
+      this.activeDirection == activeDirection &&
+      this.categoryFocusId == categoryFocusId &&
+      this.partnerFocusId == partnerFocusId &&
+      this.normalizedSearch == normalizedSearch &&
+      this.minimumAmountScaled100 == minimumAmountScaled100 &&
+      this.maximumAmountScaled100 == maximumAmountScaled100 &&
+      this.initialYear == initialYear &&
+      activeParentTimeScopeKey == activeParentTimeScope.canonicalKey &&
+      activeSelectedChildTimeScopeKey ==
+          activeSelectedChildTimeScope?.canonicalKey;
+
+  DashboardEphemeralFocusDerivation? lookup({
+    required PreparedDashboardIndex base,
+    required DashboardDirectionalQuerySet effectiveQueries,
+    required LedgerDirection activeDirection,
+    required String? categoryFocusId,
+    required String? partnerFocusId,
+    required String? normalizedSearch,
+    required int? minimumAmountScaled100,
+    required int? maximumAmountScaled100,
+    required int initialYear,
+    required LedgerTimeScope activeParentTimeScope,
+    LedgerTimeScope? activeSelectedChildTimeScope,
+  }) {
+    if (!matches(
+      base: base,
+      effectiveQueries: effectiveQueries,
+      activeDirection: activeDirection,
+      categoryFocusId: categoryFocusId,
+      partnerFocusId: partnerFocusId,
+      normalizedSearch: normalizedSearch,
+      minimumAmountScaled100: minimumAmountScaled100,
+      maximumAmountScaled100: maximumAmountScaled100,
+      initialYear: initialYear,
+      activeParentTimeScope: activeParentTimeScope,
+      activeSelectedChildTimeScope: activeSelectedChildTimeScope,
+    )) {
+      return null;
+    }
+    return derivationFor(
+      effectiveQueries.scopeFor(activeDirection).ghostFilterMode,
+    );
   }
 }
 

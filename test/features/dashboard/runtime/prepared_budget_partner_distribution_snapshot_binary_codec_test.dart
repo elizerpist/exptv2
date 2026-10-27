@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/prepared_budget_partner_distribution_snapshot_binary_codec.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -16,6 +17,7 @@ void main() {
     expect(snapshot.coreRevision, 41);
     expect(snapshot.yearWindowStart, 2026);
     expect(snapshot.yearWindowEndInclusive, 2026);
+    expect(snapshot.ghostFilterMode, GhostFilterMode.both);
     expect(
       snapshot.directionBank(LedgerDirection.expense).orderedPartnerIds,
       const <String>['shop', 'rent'],
@@ -101,6 +103,7 @@ void main() {
 Uint8List _encode({
   int version =
       DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCodec.version,
+  GhostFilterMode ghostFilterMode = GhostFilterMode.both,
 }) {
   final bytes = BytesBuilder(copy: false);
   void int32(int value) {
@@ -124,6 +127,7 @@ Uint8List _encode({
   int64(41);
   int32(2026);
   int32(2026);
+  int32(ghostFilterMode.index);
   int32(3);
   int64(1000);
   void bank(

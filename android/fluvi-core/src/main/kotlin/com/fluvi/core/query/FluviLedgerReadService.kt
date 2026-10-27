@@ -720,9 +720,13 @@ class FluviLedgerReadService internal constructor(
         val presentationDailyCounts = linkedMapOf<DashboardPresentationDayBucket, Long>()
         rows.forEach { row ->
             rowsById.putIfAbsent(row.entryId, row)
-            if (!row.isPendingGhost) {
-                focusRowIdsByDirection.getValue(row.direction) += row.entryId
-            }
+            // The retained focus universe is intentionally ghost-neutral.
+            // Pending occurrences are presentation-only rows, but they must
+            // still be retained here so a Dart-side membership projection can
+            // switch between non-ghost, ghost-only and both without a second
+            // Room query. Financial aggregation continues to use the booked
+            // ledger aggregate path above and never consumes these rows.
+            focusRowIdsByDirection.getValue(row.direction) += row.entryId
             val date = LocalDate.ofEpochDay(row.bookedLocalEpochDay)
             val year = "%04d".format(Locale.ROOT, date.year)
             val month = "%04d-%02d".format(Locale.ROOT, date.year, date.monthValue)

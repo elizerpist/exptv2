@@ -25,6 +25,13 @@ void main() {
         find.byKey(const ValueKey('dashboard-ghost-quick-filter')),
         findsOneWidget,
       );
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey('dashboard-ghost-quick-filter')),
+        ),
+        const Size(48, 48),
+        reason: 'the whole icon-and-dots control retains its 48dp hit target',
+      );
       expect(find.byTooltip('Nem ismétlődő tranzakciók'), findsOneWidget);
 
       await tester.tap(

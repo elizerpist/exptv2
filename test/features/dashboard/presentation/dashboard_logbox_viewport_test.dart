@@ -371,6 +371,38 @@ void main() {
   });
 
   testWidgets(
+    'Ledger count uses presentation rows while the financial summary stays booked-only',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final frame = _frame(totalRows: 2, financialRows: 1);
+      expect(frame.count.entryCount, 1);
+      expect(frame.presentationEntryCount, 2);
+      expect(store.publish(frame), isTrue);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            child: DashboardLogBoxHeader(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 0,
+                width: 378,
+                height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
+              ),
+              visibleFrames: store,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('2 tranzakció listázva'), findsOneWidget);
+      expect(find.text('1 tranzakció listázva'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'Ledger count follows the accepted live count lane instead of the committed payload',
     (tester) async {
       final store = DashboardVisibleFrameStore();
@@ -1987,6 +2019,7 @@ Future<void> _prepareRailScene(
 
 DashboardVisibleFrame _frame({
   required int totalRows,
+  int? financialRows,
   CurrentLedgerQueryScope? scope,
   int coreRevision = 1,
   int presentationEpoch = 1,
@@ -2024,8 +2057,9 @@ DashboardVisibleFrame _frame({
     coreRevision: coreRevision,
     totalMinor: totalMinor,
     formattedAmount: formattedAmount,
-    entryCount: totalRows,
-    formattedEntryCount: '$totalRows',
+    entryCount: financialRows ?? totalRows,
+    presentationEntryCount: totalRows,
+    formattedEntryCount: '${financialRows ?? totalRows}',
     logBox: logBox,
     presentationDigest: totalRows,
   );

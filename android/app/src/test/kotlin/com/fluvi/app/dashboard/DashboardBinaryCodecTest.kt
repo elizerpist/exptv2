@@ -11,6 +11,7 @@ import com.fluvi.core.query.FluviPreparedDashboardIndexFrame
 import com.fluvi.core.query.FluviPreparedDashboardGeometryDayBucket
 import com.fluvi.core.query.FluviPreparedBudgetDirectionBank
 import com.fluvi.core.query.FluviPreparedBudgetLimitSnapshot
+import com.fluvi.core.query.FluviGhostFilterMode
 import com.fluvi.core.query.FluviPreparedSpendingRhythmDirectionBank
 import com.fluvi.core.query.FluviPreparedSpendingRhythmPoint
 import com.fluvi.core.query.FluviPreparedSpendingRhythmSnapshot
@@ -95,6 +96,7 @@ class DashboardBinaryCodecTest {
         assertEquals(9L, input.readLong())
         assertEquals(2026, input.readInt())
         assertEquals(2026, input.readInt())
+        assertEquals(FluviGhostFilterMode.both.ordinal, input.readInt())
         assertEquals(4, input.readInt())
         assertEquals(2_000L, input.readLong())
         assertPartnerBank(input, "employer", "Employer")
@@ -126,6 +128,7 @@ class DashboardBinaryCodecTest {
         assertEquals(9L, input.readLong())
         assertEquals(2026, input.readInt())
         assertEquals(2026, input.readInt())
+        assertEquals(FluviGhostFilterMode.both.ordinal, input.readInt())
         assertEquals(4, input.readInt())
         assertEquals(2_000L, input.readLong())
         assertBudgetBank(input, "salary", 20L, 100L)

@@ -217,39 +217,16 @@ class _CoreDashboardState extends State<CoreDashboard>
     candidate: 'collapseHandle',
     material: 'DashboardCollapseHandle ${style.name}',
     clip: 'none',
-    zOrder: 'modeContent<logBoxViewport<collapseHandle<ghostQuickFilter',
-    child: Stack(
-      clipBehavior: Clip.none,
-      children: <Widget>[
-        DashboardCollapseHandle(
-          bounds: bounds,
-          style: style,
-          isDragging: isDragging,
-          onTap: controller.expansion.toggle,
-          onVerticalDragStart: (_) => _upperVerticalGestures.begin(),
-          onVerticalDragUpdate: (details) =>
-              _upperVerticalGestures.dragByViewport(details.delta.dy),
-          onVerticalDragEnd: (_) => _upperVerticalGestures.end(),
-        ),
-        Positioned(
-          right: 0,
-          top: (bounds.height - 48) / 2,
-          child: AnimatedBuilder(
-            animation: controller.currentQuery,
-            builder: (context, _) => DashboardGhostQuickFilter(
-              mode: controller.currentQuery
-                  .scopeFor(
-                    controller.transactionDirection.direction ==
-                            TransactionDirection.income
-                        ? LedgerDirection.income
-                        : LedgerDirection.expense,
-                  )
-                  .ghostFilterMode,
-              onTap: () => unawaited(controller.cycleGhostFilterMode()),
-            ),
-          ),
-        ),
-      ],
+    zOrder: 'modeContent<logBoxViewport<collapseHandle',
+    child: DashboardCollapseHandle(
+      bounds: bounds,
+      style: style,
+      isDragging: isDragging,
+      onTap: controller.expansion.toggle,
+      onVerticalDragStart: (_) => _upperVerticalGestures.begin(),
+      onVerticalDragUpdate: (details) =>
+          _upperVerticalGestures.dragByViewport(details.delta.dy),
+      onVerticalDragEnd: (_) => _upperVerticalGestures.end(),
     ),
   );
 
@@ -284,6 +261,7 @@ class _CoreDashboardState extends State<CoreDashboard>
         DashboardBudgetHeaderPresentationController();
     _budgetRingPresentationController = BudgetRingPresentationController();
     _logBoxHeightController.addListener(_onLogBoxHeightChanged);
+    _logBoxSearchPillController.addListener(_onLayoutPresentationChanged);
     _summaryPillVariantController.addListener(_onSummaryPillVariantChanged);
     _bodyOrderController.addListener(_onLayoutPresentationChanged);
     _budgetSectionOrderController.addListener(_onLayoutPresentationChanged);
@@ -946,6 +924,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _shadowStyleController.dispose();
     _borderController.dispose();
     _logBoxAmountPaletteController.dispose();
+    _logBoxSearchPillController.removeListener(_onLayoutPresentationChanged);
     _logBoxSearchPillController.dispose();
     _budgetHeaderPresentationController.dispose();
     _budgetRingPresentationController.dispose();
@@ -1011,6 +990,7 @@ class _CoreDashboardState extends State<CoreDashboard>
       hasStandaloneCollapseHandle:
           _globalAppearance.collapseHandleStyle ==
           FluviCollapseHandleStyle.standalone,
+      showsLogBoxSearchPill: _logBoxSearchPillController.value.isVisible,
       seamlessHeaderContent:
           modeController.committedMode.mode == DashboardMode.mind &&
           _globalAppearance.mindExpandedSurfaceStyle ==
@@ -1711,6 +1691,47 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                 .collapseHandleStyle,
                                             isDragging:
                                                 frame.isExpansionDragging,
+                                          ),
+                                        ),
+                                      if (geometry
+                                              .ghostQuickFilterBounds
+                                              .height >=
+                                          48)
+                                        _FramePosition(
+                                          bounds:
+                                              geometry.ghostQuickFilterBounds,
+                                          child: DashboardRenderDiagnosticProbe(
+                                            candidate: 'ghostQuickFilter',
+                                            material:
+                                                'DashboardGhostQuickFilter',
+                                            clip: 'none',
+                                            zOrder:
+                                                'modeContent<logBoxViewport<collapseHandle<ghostQuickFilter',
+                                            child: AnimatedBuilder(
+                                              animation:
+                                                  controller.currentQuery,
+                                              builder: (context, _) =>
+                                                  DashboardGhostQuickFilter(
+                                                    mode: controller
+                                                        .currentQuery
+                                                        .scopeFor(
+                                                          controller
+                                                                      .transactionDirection
+                                                                      .direction ==
+                                                                  TransactionDirection
+                                                                      .income
+                                                              ? LedgerDirection
+                                                                    .income
+                                                              : LedgerDirection
+                                                                    .expense,
+                                                        )
+                                                        .ghostFilterMode,
+                                                    onTap: () => unawaited(
+                                                      controller
+                                                          .cycleGhostFilterMode(),
+                                                    ),
+                                                  ),
+                                            ),
                                           ),
                                         ),
                                       _DashboardHeaderVisualTunerOverlay(

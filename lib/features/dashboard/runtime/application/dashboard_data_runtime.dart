@@ -452,10 +452,16 @@ final class DashboardDataRuntime {
   DashboardPreparedIndexPublication? _pendingPublication;
   PreparedBudgetLimitSnapshot? _activeBudgetSnapshot;
   PreparedBudgetPartnerDistributionSnapshot? _activePartnerDistributionSnapshot;
-  _BudgetSnapshotKey? _activeBudgetSnapshotKey;
-  _BudgetSnapshotKey? _activePartnerDistributionSnapshotKey;
-  _BudgetSnapshotRequest? _inFlightBudgetSnapshot;
-  _PartnerDistributionSnapshotRequest? _inFlightPartnerDistributionSnapshot;
+  final Map<_BudgetSnapshotKey, PreparedBudgetLimitSnapshot> _budgetSnapshots =
+      <_BudgetSnapshotKey, PreparedBudgetLimitSnapshot>{};
+  final Map<_BudgetSnapshotKey, PreparedBudgetPartnerDistributionSnapshot>
+  _partnerDistributionSnapshots =
+      <_BudgetSnapshotKey, PreparedBudgetPartnerDistributionSnapshot>{};
+  final Map<_BudgetSnapshotKey, _BudgetSnapshotRequest>
+  _inFlightBudgetSnapshots = <_BudgetSnapshotKey, _BudgetSnapshotRequest>{};
+  final Map<_BudgetSnapshotKey, _PartnerDistributionSnapshotRequest>
+  _inFlightPartnerDistributionSnapshots =
+      <_BudgetSnapshotKey, _PartnerDistributionSnapshotRequest>{};
   Future<PreparedDashboardIndex>? _bootstrapFuture;
   int? _desiredRevision;
   bool _bootstrapped = false;
@@ -474,6 +480,10 @@ final class DashboardDataRuntime {
       _activeBudgetSnapshot;
   PreparedBudgetPartnerDistributionSnapshot?
   get activePartnerDistributionSnapshot => _activePartnerDistributionSnapshot;
+  bool get hasBudgetLimitSnapshotRepository =>
+      _budgetSnapshotRepository != null;
+  bool get hasBudgetPartnerDistributionSnapshotRepository =>
+      _partnerDistributionSnapshotRepository != null;
   DashboardIndexRequestTemplate get requestTemplate => _requestTemplate;
   int get globalRevisionSubscribeCount => _revisionObserver.subscribeCount;
   int get globalRevisionCancelCount => _revisionObserver.cancelCount;
@@ -524,19 +534,48 @@ final class DashboardDataRuntime {
   /// starting another native aggregate read.
   Future<PreparedBudgetLimitSnapshot?> prepareBudgetLimitSnapshotFor(
     PreparedDashboardIndex index,
+  ) => _prepareBudgetLimitSnapshot(_BudgetSnapshotKey.fromIndex(index));
+
+  /// Returns the exact prewarmed bank for an interaction publication without
+  /// starting I/O. A ghost quick-filter tap is allowed to use this accessor,
+  /// but must never fall back to [prepareBudgetLimitSnapshotFor].
+  PreparedBudgetLimitSnapshot? cachedBudgetLimitSnapshotFor(
+    PreparedDashboardIndex index,
+  ) {
+    final key = _BudgetSnapshotKey.fromIndex(index);
+    final snapshot = _budgetSnapshots[key];
+    return snapshot != null && key.matches(snapshot) ? snapshot : null;
+  }
+
+  /// Warms every exact ghost membership variant before the quick filter is
+  /// interactive.  The later tap only selects a resident immutable snapshot;
+  /// it never starts a Room/MethodChannel aggregate read.
+  Future<void> warmGhostBudgetSnapshotsFor(PreparedDashboardIndex index) async {
+    _evictBudgetSnapshotsOutsideRevision(index.coreRevision);
+    await Future.wait<void>(
+      GhostFilterMode.values.map((mode) async {
+        final key = _BudgetSnapshotKey.fromIndex(index, ghostFilterMode: mode);
+        await Future.wait<Object?>(<Future<Object?>>[
+          _prepareBudgetLimitSnapshot(key),
+          _prepareBudgetPartnerDistributionSnapshot(key),
+        ]);
+      }),
+    );
+  }
+
+  Future<PreparedBudgetLimitSnapshot?> _prepareBudgetLimitSnapshot(
+    _BudgetSnapshotKey key,
   ) async {
     final repository = _budgetSnapshotRepository;
     if (repository == null) return null;
-    final key = _BudgetSnapshotKey.fromIndex(index);
-    final active = _activeBudgetSnapshot;
-    if (active != null &&
-        key == _activeBudgetSnapshotKey &&
-        key.matches(active)) {
+    final cached = _budgetSnapshots[key];
+    if (cached != null && key.matches(cached)) {
+      _activeBudgetSnapshot = cached;
       _recordBudgetSnapshotReused(key);
-      return active;
+      return cached;
     }
-    final inFlight = _inFlightBudgetSnapshot;
-    if (inFlight != null && inFlight.key == key) {
+    final inFlight = _inFlightBudgetSnapshots[key];
+    if (inFlight != null) {
       _recordBudgetSnapshotReused(key);
       return inFlight.future;
     }
@@ -547,18 +586,23 @@ final class DashboardDataRuntime {
       ghostFilterMode: key.ghostFilterMode,
     );
     final request = _BudgetSnapshotRequest(key, future);
-    _inFlightBudgetSnapshot = request;
+    _inFlightBudgetSnapshots[key] = request;
     try {
       final snapshot = await future;
       if (!key.matches(snapshot)) {
         throw StateError('Prepared Budget snapshot identity is inexact.');
       }
-      _activeBudgetSnapshot = snapshot;
-      _activeBudgetSnapshotKey = key;
+      // A completed old request may outlive a newer core revision. It is
+      // harmless to its original awaiter (which has its own revision guard),
+      // but must never re-enter the resident cache or become an active bank.
+      if (_desiredRevision == null || _desiredRevision == key.coreRevision) {
+        _budgetSnapshots[key] = snapshot;
+        _activeBudgetSnapshot = snapshot;
+      }
       return snapshot;
     } finally {
-      if (identical(_inFlightBudgetSnapshot, request)) {
-        _inFlightBudgetSnapshot = null;
+      if (identical(_inFlightBudgetSnapshots[key], request)) {
+        _inFlightBudgetSnapshots.remove(key);
       }
     }
   }
@@ -567,21 +611,35 @@ final class DashboardDataRuntime {
   /// uses the same ghost membership predicate and joins an existing in-flight native
   /// request rather than making a second bridge acquisition for Query Apply.
   Future<PreparedBudgetPartnerDistributionSnapshot?>
-  prepareBudgetPartnerDistributionSnapshotFor(
-    PreparedDashboardIndex index,
-  ) async {
+  prepareBudgetPartnerDistributionSnapshotFor(PreparedDashboardIndex index) =>
+      _prepareBudgetPartnerDistributionSnapshot(
+        _BudgetSnapshotKey.fromIndex(index),
+      );
+
+  /// Partner equivalent of [cachedBudgetLimitSnapshotFor]. Keeping the
+  /// lookup synchronous makes the all-or-nothing ghost publication explicit:
+  /// list, count, summaries and Budget projections share one mode identity.
+  PreparedBudgetPartnerDistributionSnapshot?
+  cachedBudgetPartnerDistributionSnapshotFor(PreparedDashboardIndex index) {
+    final key = _BudgetSnapshotKey.fromIndex(index);
+    final snapshot = _partnerDistributionSnapshots[key];
+    return snapshot != null && key.matchesPartnerDistribution(snapshot)
+        ? snapshot
+        : null;
+  }
+
+  Future<PreparedBudgetPartnerDistributionSnapshot?>
+  _prepareBudgetPartnerDistributionSnapshot(_BudgetSnapshotKey key) async {
     final repository = _partnerDistributionSnapshotRepository;
     if (repository == null) return null;
-    final key = _BudgetSnapshotKey.fromIndex(index);
-    final active = _activePartnerDistributionSnapshot;
-    if (active != null &&
-        key == _activePartnerDistributionSnapshotKey &&
-        key.matchesPartnerDistribution(active)) {
+    final cached = _partnerDistributionSnapshots[key];
+    if (cached != null && key.matchesPartnerDistribution(cached)) {
+      _activePartnerDistributionSnapshot = cached;
       _recordPartnerDistributionSnapshotReused(key);
-      return active;
+      return cached;
     }
-    final inFlight = _inFlightPartnerDistributionSnapshot;
-    if (inFlight != null && inFlight.key == key) {
+    final inFlight = _inFlightPartnerDistributionSnapshots[key];
+    if (inFlight != null) {
       _recordPartnerDistributionSnapshotReused(key);
       return inFlight.future;
     }
@@ -592,7 +650,7 @@ final class DashboardDataRuntime {
       ghostFilterMode: key.ghostFilterMode,
     );
     final request = _PartnerDistributionSnapshotRequest(key, future);
-    _inFlightPartnerDistributionSnapshot = request;
+    _inFlightPartnerDistributionSnapshots[key] = request;
     try {
       final snapshot = await future;
       if (!key.matchesPartnerDistribution(snapshot)) {
@@ -600,13 +658,28 @@ final class DashboardDataRuntime {
           'Prepared Budget partner snapshot identity is inexact.',
         );
       }
-      _activePartnerDistributionSnapshot = snapshot;
-      _activePartnerDistributionSnapshotKey = key;
+      if (_desiredRevision == null || _desiredRevision == key.coreRevision) {
+        _partnerDistributionSnapshots[key] = snapshot;
+        _activePartnerDistributionSnapshot = snapshot;
+      }
       return snapshot;
     } finally {
-      if (identical(_inFlightPartnerDistributionSnapshot, request)) {
-        _inFlightPartnerDistributionSnapshot = null;
+      if (identical(_inFlightPartnerDistributionSnapshots[key], request)) {
+        _inFlightPartnerDistributionSnapshots.remove(key);
       }
+    }
+  }
+
+  void _evictBudgetSnapshotsOutsideRevision(int revision) {
+    _budgetSnapshots.removeWhere((key, _) => key.coreRevision != revision);
+    _partnerDistributionSnapshots.removeWhere(
+      (key, _) => key.coreRevision != revision,
+    );
+    if (_activeBudgetSnapshot?.coreRevision != revision) {
+      _activeBudgetSnapshot = null;
+    }
+    if (_activePartnerDistributionSnapshot?.coreRevision != revision) {
+      _activePartnerDistributionSnapshot = null;
     }
   }
 
@@ -820,6 +893,7 @@ final class DashboardDataRuntime {
           discardedIndexCount += 1;
           continue;
         }
+        await warmGhostBudgetSnapshotsFor(index);
         final budgetLimitSnapshot = await prepareBudgetLimitSnapshotFor(index);
         final partnerDistributionSnapshot =
             await prepareBudgetPartnerDistributionSnapshotFor(index);
@@ -874,6 +948,7 @@ final class DashboardDataRuntime {
         discardedIndexCount += 1;
         return;
       }
+      await warmGhostBudgetSnapshotsFor(index);
       final publication = DashboardPreparedIndexPublication(
         index: index,
         budgetLimitSnapshot: await prepareBudgetLimitSnapshotFor(index),
@@ -967,13 +1042,15 @@ final class _BudgetSnapshotKey {
     required this.ghostFilterMode,
   });
 
-  factory _BudgetSnapshotKey.fromIndex(PreparedDashboardIndex index) =>
-      _BudgetSnapshotKey(
-        coreRevision: index.coreRevision,
-        yearWindowStart: index.key.yearWindowStart,
-        yearWindowEndInclusive: index.key.yearWindowEndInclusive,
-        ghostFilterMode: index.key.ghostFilterMode,
-      );
+  factory _BudgetSnapshotKey.fromIndex(
+    PreparedDashboardIndex index, {
+    GhostFilterMode? ghostFilterMode,
+  }) => _BudgetSnapshotKey(
+    coreRevision: index.coreRevision,
+    yearWindowStart: index.key.yearWindowStart,
+    yearWindowEndInclusive: index.key.yearWindowEndInclusive,
+    ghostFilterMode: ghostFilterMode ?? index.key.ghostFilterMode,
+  );
 
   final int coreRevision;
   final int yearWindowStart;
@@ -983,14 +1060,16 @@ final class _BudgetSnapshotKey {
   bool matches(PreparedBudgetLimitSnapshot snapshot) =>
       snapshot.coreRevision == coreRevision &&
       snapshot.yearWindowStart == yearWindowStart &&
-      snapshot.yearWindowEndInclusive == yearWindowEndInclusive;
+      snapshot.yearWindowEndInclusive == yearWindowEndInclusive &&
+      snapshot.ghostFilterMode == ghostFilterMode;
 
   bool matchesPartnerDistribution(
     PreparedBudgetPartnerDistributionSnapshot snapshot,
   ) =>
       snapshot.coreRevision == coreRevision &&
       snapshot.yearWindowStart == yearWindowStart &&
-      snapshot.yearWindowEndInclusive == yearWindowEndInclusive;
+      snapshot.yearWindowEndInclusive == yearWindowEndInclusive &&
+      snapshot.ghostFilterMode == ghostFilterMode;
 
   @override
   bool operator ==(Object other) =>

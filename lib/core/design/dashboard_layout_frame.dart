@@ -59,6 +59,7 @@ class DashboardLayoutFrame {
     required this.collapseHandleBounds,
     required this.headerCollapseHandleBounds,
     required this.logBoxHeaderBounds,
+    required this.ghostQuickFilterBounds,
     required this.subheaderOneOpacity,
     required this.subheaderOneShift,
     required this.subheaderOneScale,
@@ -128,6 +129,12 @@ class DashboardLayoutFrame {
   /// It is null for the legacy lower standalone presentation.
   final DashboardBounds? headerCollapseHandleBounds;
   final DashboardBounds logBoxHeaderBounds;
+
+  /// Independent overlay lane for the complete 48×48 ghost control. It is
+  /// deliberately not a child of the collapse handle: both visual gaps are
+  /// solved from the Summary and LogBox filter anchors in one coordinate
+  /// system.
+  final DashboardBounds ghostQuickFilterBounds;
   final double subheaderOneOpacity;
   final double subheaderOneShift;
   final double subheaderOneScale;
