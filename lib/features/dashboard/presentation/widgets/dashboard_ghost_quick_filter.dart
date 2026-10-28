@@ -174,79 +174,74 @@ final class _DashboardGhostSearchPillFlingState
           final itemExtent = constraints.maxHeight.isFinite
               ? constraints.maxHeight
               : 40.0;
-          return DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFFEDE9FE),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  Opacity(
-                    opacity: _showsCanonicalRestingIcon ? 0 : 1,
-                    child: CenteredCarousel<GhostFilterMode>(
-                      dataSource:
-                          const CyclicCarouselDataSource<GhostFilterMode>(
-                            _modes,
-                          ),
-                      controller: _carouselController,
-                      spec: CenteredCarouselSpec(
-                        itemExtent: itemExtent,
-                        scrollDirection: Axis.vertical,
-                        visibleItemCount: 1,
-                        minScale: 1,
-                        neighborScale: 1,
-                        outerScale: 1,
-                        minOpacity: 1,
-                        neighborOpacity: 1,
-                        outerOpacity: 1,
-                        motionProfile:
-                            CenteredCarouselMotionProfiles.timeRefinementRail,
-                        enableHaptics: true,
-                        enableTapToCenter: false,
-                        clipBehavior: Clip.hardEdge,
-                      ),
-                      height: itemExtent,
-                      viewportKey: const ValueKey<String>(
-                        'dashboard-ghost-searchpill-fling-viewport',
-                      ),
-                      onSelectedChanged: _onSelectedChanged,
-                      onMotionStarted: (_) => _setMotionActive(true),
-                      onMotionIdle: (_) {
-                        _setMotionActive(false);
-                        _reconcileCanonicalModeIfIdle();
-                      },
-                      itemBuilder: (context, candidate, metrics) => Center(
-                        key: !_showsCanonicalRestingIcon && metrics.isSelected
-                            ? ValueKey<String>(
-                                'dashboard-ghost-searchpill-fling-icon-${candidate.name}',
-                              )
-                            : null,
-                        child: DashboardGhostFilterReferenceIcon(
-                          mode: candidate,
-                          color: const Color(0xFF6D28D9),
-                          size: 20,
-                        ),
+          // The selector deliberately borrows the SearchPill's surface.  It
+          // owns a rectangular hit/clip area, but never paints a second chip
+          // or rounded-square behind the moving reference icons.
+          return ClipRect(
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                Opacity(
+                  opacity: _showsCanonicalRestingIcon ? 0 : 1,
+                  child: CenteredCarousel<GhostFilterMode>(
+                    dataSource: const CyclicCarouselDataSource<GhostFilterMode>(
+                      _modes,
+                    ),
+                    controller: _carouselController,
+                    spec: CenteredCarouselSpec(
+                      itemExtent: itemExtent,
+                      scrollDirection: Axis.vertical,
+                      visibleItemCount: 1,
+                      minScale: 1,
+                      neighborScale: 1,
+                      outerScale: 1,
+                      minOpacity: 1,
+                      neighborOpacity: 1,
+                      outerOpacity: 1,
+                      motionProfile:
+                          CenteredCarouselMotionProfiles.timeRefinementRail,
+                      enableHaptics: true,
+                      enableTapToCenter: false,
+                      clipBehavior: Clip.hardEdge,
+                    ),
+                    height: itemExtent,
+                    viewportKey: const ValueKey<String>(
+                      'dashboard-ghost-searchpill-fling-viewport',
+                    ),
+                    onSelectedChanged: _onSelectedChanged,
+                    onMotionStarted: (_) => _setMotionActive(true),
+                    onMotionIdle: (_) {
+                      _setMotionActive(false);
+                      _reconcileCanonicalModeIfIdle();
+                    },
+                    itemBuilder: (context, candidate, metrics) => Center(
+                      key: !_showsCanonicalRestingIcon && metrics.isSelected
+                          ? ValueKey<String>(
+                              'dashboard-ghost-searchpill-fling-icon-${candidate.name}',
+                            )
+                          : null,
+                      child: DashboardGhostFilterReferenceIcon(
+                        mode: candidate,
+                        color: const Color(0xFF6D28D9),
+                        size: 20,
                       ),
                     ),
                   ),
-                  if (_showsCanonicalRestingIcon)
-                    IgnorePointer(
-                      child: Center(
-                        key: ValueKey<String>(
-                          'dashboard-ghost-searchpill-fling-icon-${widget.mode.name}',
-                        ),
-                        child: DashboardGhostFilterReferenceIcon(
-                          mode: widget.mode,
-                          color: const Color(0xFF6D28D9),
-                          size: 20,
-                        ),
+                ),
+                if (_showsCanonicalRestingIcon)
+                  IgnorePointer(
+                    child: Center(
+                      key: ValueKey<String>(
+                        'dashboard-ghost-searchpill-fling-icon-${widget.mode.name}',
+                      ),
+                      child: DashboardGhostFilterReferenceIcon(
+                        mode: widget.mode,
+                        color: const Color(0xFF6D28D9),
+                        size: 20,
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           );
         },

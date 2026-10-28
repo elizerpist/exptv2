@@ -1121,19 +1121,31 @@ class _FluviAppShellState extends State<FluviAppShell>
                             },
                             children: [
                               dashboard,
-                              AutomationDashboardPage(
-                                repository: _automationRepository,
-                                permissions: _automationPermissionRepository,
-                                manualRepository: _manualTransactionRepository,
-                                categories: _categoryCollection.value,
-                                direction:
-                                    _controller
-                                            .transactionDirection
-                                            .direction ==
-                                        TransactionDirection.income
-                                    ? LedgerDirection.income
-                                    : LedgerDirection.expense,
-                                onOpenLedgerEntry: _openEditTransaction,
+                              // IndexedStack retains this route while the
+                              // dashboard direction pill changes.  Rebuild its
+                              // configuration from the notifier so "Új
+                              // ismétlődés" snapshots the currently visible
+                              // income/expense side instead of the old shell
+                              // build's default.
+                              AnimatedBuilder(
+                                animation: _controller.transactionDirection,
+                                builder: (context, _) =>
+                                    AutomationDashboardPage(
+                                      repository: _automationRepository,
+                                      permissions:
+                                          _automationPermissionRepository,
+                                      manualRepository:
+                                          _manualTransactionRepository,
+                                      categories: _categoryCollection.value,
+                                      direction:
+                                          _controller
+                                                  .transactionDirection
+                                                  .direction ==
+                                              TransactionDirection.income
+                                          ? LedgerDirection.income
+                                          : LedgerDirection.expense,
+                                      onOpenLedgerEntry: _openEditTransaction,
+                                    ),
                               ),
                               _pulseInitialized
                                   ? PulseDashboardPage(

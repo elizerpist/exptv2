@@ -23,6 +23,12 @@ void main() {
         'createdCategoryCount': 10,
         'createdPartnerCount': 27,
         'createdEntryCount': 4304,
+        'createdGhostOccurrenceCount': 96,
+        'createdGhostLedgerEntryCount': 48,
+        'ghostOccurrenceCount': 96,
+        'ghostPendingOccurrenceCount': 48,
+        'ghostRealizedOccurrenceCount': 48,
+        'ghostLedgerEntryCount': 48,
         'earliestEntryAtUtcMs': 1735686000000,
         'latestEntryAtUtcMs': 1782777600000,
         'alreadySeeded': false,
@@ -62,6 +68,12 @@ void main() {
     expect(received?.arguments, <String, Object?>{'forceReset': false});
     expect(report.seedVersion, 2);
     expect(report.createdEntryCount, 4304);
+    expect(report.createdGhostOccurrenceCount, 96);
+    expect(report.createdGhostLedgerEntryCount, 48);
+    expect(report.ghostOccurrenceCount, 96);
+    expect(report.ghostPendingOccurrenceCount, 48);
+    expect(report.ghostRealizedOccurrenceCount, 48);
+    expect(report.ghostLedgerEntryCount, 48);
     expect(report.monthlyReports.first.entryCount, 288);
     expect(report.monthlyReports.last.expenseTotalMinor, 68900000);
   });

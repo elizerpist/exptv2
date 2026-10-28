@@ -149,6 +149,20 @@ void main() {
         find.byKey(const ValueKey<String>('searchpill-test-trailing')),
         findsOneWidget,
       );
+      final searchWithTrailing = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+      );
+      final trailingRect = tester.getRect(
+        find.byKey(const ValueKey<String>('searchpill-test-trailing')),
+      );
+      expect(
+        trailingRect.right,
+        closeTo(searchWithTrailing.right - 2, .01),
+        reason:
+            'The trailing hit target moves with its icon to the SearchPill '
+            'edge; it is not only visually translated.',
+      );
+      expect(trailingRect.width, 48);
 
       await tester.pumpWidget(
         buildHeader(

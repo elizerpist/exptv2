@@ -44,15 +44,19 @@ class FluviDashboardObservationTest {
         val slice = core.query.readSlice(scope, pageSize = 50)
 
         assertEquals("expense|month:2026-07|categories:|partners:|refinements:", slice.queryKey)
-        assertEquals(94, slice.entryCount)
-        assertEquals(689_000L * 100L, slice.totalMinor)
+        assertEquals(95, slice.entryCount)
+        assertEquals(698_800L * 100L, slice.totalMinor)
         assertEquals(50, slice.entries.size)
         assertNotNull(slice.nextCursor)
         assertTrue(slice.entries.all { it.categoryColorId.startsWith("color_") })
         assertTrue(slice.entries.all { it.categoryIconId.startsWith("icon_") })
-        assertTrue(slice.entries.zipWithNext().all { (left, right) ->
-            left.bookedLocalEpochDay >= right.bookedLocalEpochDay
-        })
+        // Pending ghost occurrences join the presentation after the booked
+        // keyset page.  The booked ledger lane itself remains date ordered.
+        assertTrue(
+            slice.entries.filterNot { it.isPendingGhost }.zipWithNext().all { (left, right) ->
+                left.bookedLocalEpochDay >= right.bookedLocalEpochDay
+            },
+        )
     }
 
     @Test
@@ -186,29 +190,29 @@ class FluviDashboardObservationTest {
         val allIncome = core.query.readSlice(FluviQueryScope(direction = LedgerDirection.income))
         val allExpense = core.query.readSlice(FluviQueryScope(direction = LedgerDirection.expense))
 
-        assertEquals(70_700_000L, julyIncome.totalMinor)
-        assertEquals(6, julyIncome.entryCount)
-        assertEquals(68_900_000L, julyExpense.totalMinor)
-        assertEquals(94, julyExpense.entryCount)
-        assertEquals(493_800_000L, yearIncome.totalMinor)
-        assertEquals(42, yearIncome.entryCount)
-        assertEquals(569_325_800L, yearExpense.totalMinor)
-        assertEquals(1_773, yearExpense.entryCount)
+        assertEquals(73_200_000L, julyIncome.totalMinor)
+        assertEquals(7, julyIncome.entryCount)
+        assertEquals(69_880_000L, julyExpense.totalMinor)
+        assertEquals(95, julyExpense.entryCount)
+        assertEquals(523_800_000L, yearIncome.totalMinor)
+        assertEquals(54, yearIncome.entryCount)
+        assertEquals(581_085_800L, yearExpense.totalMinor)
+        assertEquals(1_785, yearExpense.entryCount)
         assertEquals(1_804, denseYearIncome.entryCount)
         assertEquals(1_800, denseYearExpense.entryCount)
-        assertEquals(1_846, allIncome.entryCount)
-        assertEquals(3_673, allExpense.entryCount)
+        assertEquals(1_870, allIncome.entryCount)
+        assertEquals(3_697, allExpense.entryCount)
         assertEquals(783_300_000L, denseYearIncome.totalMinor)
         assertEquals(
-            yearIncome.totalMinor + denseYearIncome.totalMinor,
+            yearIncome.totalMinor + denseYearIncome.totalMinor + 12 * 2_500_000L,
             allIncome.totalMinor,
         )
         assertEquals(
-            yearIncome.entryCount + denseYearIncome.entryCount,
+            yearIncome.entryCount + denseYearIncome.entryCount + 12,
             allIncome.entryCount,
         )
         assertEquals(
-            yearExpense.entryCount + denseYearExpense.entryCount + 100,
+            yearExpense.entryCount + denseYearExpense.entryCount + 100 + 12,
             allExpense.entryCount,
         )
     }
