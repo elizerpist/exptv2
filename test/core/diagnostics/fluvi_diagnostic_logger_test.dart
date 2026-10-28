@@ -482,6 +482,35 @@ void main() {
     },
   );
 
+  test('Ghost capture filters the shared bounded stream by stable stage', () {
+    FluviDiagnosticLogger.clear();
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(stage: 'UNRELATED_STAGE', message: 'normal'),
+    );
+    FluviDiagnosticLogger.startCapture(domain: FluviDiagnosticDomain.ghost);
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(stage: 'UNRELATED_GHOST_WORD', message: 'no'),
+    );
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(stage: 'GHOST|NATIVE_RESULT', message: 'yes'),
+    );
+    FluviDiagnosticLogger.stopCapture();
+
+    expect(
+      FluviDiagnosticLogger.captureEntries.map((event) => event.stage),
+      everyElement(startsWith('GHOST|')),
+    );
+    expect(FluviDiagnosticLogger.captureText(), contains('filter=ghost'));
+    expect(
+      FluviDiagnosticLogger.captureText(),
+      contains('GHOST|NATIVE_RESULT'),
+    );
+    expect(
+      FluviDiagnosticLogger.captureText(),
+      isNot(contains('UNRELATED_GHOST_WORD')),
+    );
+  });
+
   test('explicit profile diagnostics use the same policy as debug', () {
     expect(
       fluviOnscreenDiagnosticsEnabledFor(

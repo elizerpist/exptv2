@@ -2,6 +2,8 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -1196,7 +1198,7 @@ final class _DeferredRichProjectionBuilder {
       <DashboardLogGroupLayoutViewModel>[];
   final List<String> _stableRowIdentities = <String>[];
   final Set<String> _stableAssetIdentities = <String>{};
-  final Set<String> _seen = <String>{};
+  final Map<String, int> _seenOrdinals = <String, int>{};
   LocalDate? _currentDate;
   List<DashboardLogRowViewModel> _currentRows = <DashboardLogRowViewModel>[];
   DashboardLedgerEntry? _previous;
@@ -1227,9 +1229,27 @@ final class _DeferredRichProjectionBuilder {
 
   void _projectOneRow(int rowIndex) {
     final entry = _owner._entryAt(rowIndex);
-    if (!_seen.add(entry.id)) {
+    final firstOrdinal = _seenOrdinals[entry.id];
+    if (firstOrdinal != null) {
+      // Keep the invariant. This is intentionally a rare diagnostic before
+      // the throw, not a dedupe or a recovery path.
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'GHOST|RICH_PROJECTION_DUPLICATE_ROW',
+          scope:
+              'builderRun=${identityHashCode(this)} '
+              'ordinal=$_nextSourceRow rowTableIndex=$rowIndex '
+              'firstOrdinal=$firstOrdinal duplicateEntryId=${entry.id} '
+              'sourceReferenceCount=${_owner._rowIndices.length} '
+              'uniqueIdCount=${_seenOrdinals.length} '
+              'pendingGhost=${entry.isPendingGhost} '
+              'hasGhostOrigin=${entry.recurrenceOccurrenceId != null} '
+              'yielded=false restarted=false visualRefresh=false',
+        ),
+      );
       throw const FormatException('Prepared frame repeats a row reference.');
     }
+    _seenOrdinals[entry.id] = _nextSourceRow;
     final previous = _previous;
     if (previous != null && !_isOrderedAfter(previous, entry)) {
       throw const FormatException('Prepared row references are not ordered.');

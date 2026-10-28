@@ -23,6 +23,23 @@ class _FluviDiagnosticNotifier extends ValueNotifier<int> {
   }
 }
 
+/// A filter over the one existing bounded event stream and capture buffer.
+/// It never owns a second ghost-only history.
+enum FluviDiagnosticDomain {
+  all,
+  ghost;
+
+  bool accepts(FluviDiagnosticEvent event) => switch (this) {
+    FluviDiagnosticDomain.all => true,
+    FluviDiagnosticDomain.ghost => event.isGhostDiagnostic,
+  };
+
+  String stage(String stage) => switch (this) {
+    FluviDiagnosticDomain.all => stage,
+    FluviDiagnosticDomain.ghost => 'GHOST|$stage',
+  };
+}
+
 /// Fixed-capacity FIFO without list shifts. Snapshot materialization is only
 /// requested by the onscreen console, never by the scroll/render hot path.
 final class _FluviDiagnosticRingBuffer<T> {
@@ -125,6 +142,7 @@ abstract final class FluviDiagnosticLogger {
   static var _structuralDiagnosticCoalescedEntryCount = 0;
   static DateTime? _captureStartedAt;
   static DateTime? _captureStoppedAt;
+  static FluviDiagnosticDomain _captureDomain = FluviDiagnosticDomain.all;
 
   static void log(FluviDiagnosticEvent event) {
     if (!kFluviOnscreenDiagnosticsEnabled) return;
@@ -148,7 +166,7 @@ abstract final class FluviDiagnosticLogger {
       _liveEvictedEntryCount += 1;
     }
     _emitBoundedStartupSceneTrace(stamped);
-    if (_captureActive && !_captureFrozen) {
+    if (_captureActive && !_captureFrozen && _captureDomain.accepts(stamped)) {
       _append(_capture, stamped.withCaptureId(_captureId));
     }
     _scheduleNotify();
@@ -248,17 +266,20 @@ abstract final class FluviDiagnosticLogger {
   static List<FluviDiagnosticEvent> get captureEntries =>
       List<FluviDiagnosticEvent>.unmodifiable(_capture.snapshot());
 
-  static int startCapture() {
+  static int startCapture({
+    FluviDiagnosticDomain domain = FluviDiagnosticDomain.all,
+  }) {
     if (!kFluviOnscreenDiagnosticsEnabled) return 0;
     _captureId += 1;
     _capture.clear();
     _captureActive = true;
     _captureFrozen = false;
+    _captureDomain = domain;
     _captureStartedAt = DateTime.now();
     _captureStoppedAt = null;
     log(
       FluviDiagnosticEvent(
-        stage: 'CAPTURE_STARTED',
+        stage: domain.stage('CAPTURE_STARTED'),
         message: 'captureId=$_captureId',
         timestamp: _captureStartedAt,
       ),
@@ -266,7 +287,7 @@ abstract final class FluviDiagnosticLogger {
     // Emit exact Header lifecycle evidence through the same logger/logcat
     // path, not by synthesising a parallel diagnostics string. This is
     // intentionally capture-start-only and bounded by renderer stages.
-    for (final event in _headerRendererEvidence.values) {
+    for (final event in _headerRendererEvidence.values.where(domain.accepts)) {
       log(
         FluviDiagnosticEvent(
           stage: event.stage,
@@ -283,7 +304,7 @@ abstract final class FluviDiagnosticLogger {
     _captureStoppedAt = DateTime.now();
     log(
       FluviDiagnosticEvent(
-        stage: 'CAPTURE_STOPPED',
+        stage: _captureDomain.stage('CAPTURE_STOPPED'),
         message: 'captureId=$_captureId',
         timestamp: _captureStoppedAt,
       ),
@@ -305,7 +326,7 @@ abstract final class FluviDiagnosticLogger {
         .join(' ');
     log(
       FluviDiagnosticEvent(
-        stage: 'CAPTURE_STATE_SNAPSHOT',
+        stage: _captureDomain.stage('CAPTURE_STATE_SNAPSHOT'),
         message: 'boundary=$boundary $fields',
       ),
     );
@@ -369,23 +390,46 @@ abstract final class FluviDiagnosticLogger {
       entries.map((event) => event.toLine()).join('\n');
 
   /// Materializes the rolling tail only for an explicit copy/export action.
-  static String latestText() =>
-      _exportText(label: 'LIVE_TAIL', events: _entries.snapshot());
+  static String latestText({
+    FluviDiagnosticDomain domain = FluviDiagnosticDomain.all,
+  }) => _exportText(
+    label: 'LIVE_TAIL',
+    domain: domain,
+    events: _entries.snapshot().where(domain.accepts).toList(growable: false),
+  );
 
   /// Materializes the independent bounded capture only on explicit copy.
   static String captureText() => _exportText(
     label: 'FROZEN_CAPTURE',
+    domain: _captureDomain,
     events: _capture.snapshot(),
     captureId: _captureId,
+  );
+
+  /// Explicit copy/export only. Callers may pass a view-filtered subset from
+  /// the same ring without creating a second retained event history.
+  static String exportEvents({
+    required String label,
+    required Iterable<FluviDiagnosticEvent> events,
+    FluviDiagnosticDomain domain = FluviDiagnosticDomain.all,
+  }) => _exportText(
+    label: label,
+    domain: domain,
+    events: events.toList(growable: false),
   );
 
   static void markUserBug(
     String issue, {
     Map<String, Object?> context = const <String, Object?>{},
+    String? providerOwnerPrefix,
   }) {
     if (!kFluviOnscreenDiagnosticsEnabled) return;
     final providerContext = <String, Object?>{};
     for (final provider in _userMarkerContextProviders.entries) {
+      if (providerOwnerPrefix != null &&
+          !provider.key.startsWith(providerOwnerPrefix)) {
+        continue;
+      }
       try {
         for (final field in provider.value().entries) {
           providerContext['${provider.key}.${field.key}'] = field.value;
@@ -400,8 +444,13 @@ abstract final class FluviDiagnosticLogger {
             .where((entry) => entry.value != null)
             .map((entry) => '${entry.key}=${entry.value}')
             .join(' ');
-    _mirrorRetainedDirectManipulationEvidenceAtUserMark();
-    log(FluviDiagnosticEvent(stage: 'USER_MARK', scope: fields));
+    final domain = issue == 'ghost_transactions'
+        ? FluviDiagnosticDomain.ghost
+        : FluviDiagnosticDomain.all;
+    if (domain == FluviDiagnosticDomain.all) {
+      _mirrorRetainedDirectManipulationEvidenceAtUserMark();
+    }
+    log(FluviDiagnosticEvent(stage: domain.stage('USER_MARK'), scope: fields));
   }
 
   /// Lets a mounted feature contribute its latest already-sampled state to a
@@ -446,6 +495,7 @@ abstract final class FluviDiagnosticLogger {
 
   static String _exportText({
     required String label,
+    required FluviDiagnosticDomain domain,
     required List<FluviDiagnosticEvent> events,
     int? captureId,
   }) {
@@ -453,6 +503,7 @@ abstract final class FluviDiagnosticLogger {
     final lastSequence = events.isEmpty ? null : events.last.sequence;
     final header = <String>[
       'FLUVI_DIAGNOSTICS $label',
+      'filter=${domain.name}',
       'sessionId=$_sessionId',
       'sessionEventCount=$_sessionEventCount',
       if (captureId != null) 'captureId=$captureId',

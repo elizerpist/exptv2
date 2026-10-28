@@ -55,6 +55,10 @@ class FluviDiagnosticEvent {
   final bool? isStale;
   final String? error;
 
+  /// Domain classification is a stable stage protocol, never a substring
+  /// search through query keys or other free-form diagnostic fields.
+  bool get isGhostDiagnostic => stage.startsWith('GHOST|');
+
   FluviDiagnosticEvent withTimestamp(DateTime value) {
     return FluviDiagnosticEvent(
       stage: stage,

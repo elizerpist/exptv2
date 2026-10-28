@@ -10,6 +10,11 @@ import '../presentation/core_modes/balance_presentation_settings.dart';
 /// deliberately separate from the query mode and never changes membership.
 enum DashboardGhostQuickFilterIconPack { current, receiptGhost }
 
+/// Presentation-only shape of the dashboard ghost quick filter.  This is
+/// intentionally independent from [GhostFilterMode]: changing it must never
+/// alter the active query membership.
+enum DashboardGhostQuickFilterPresentation { current, dropdown, rail }
+
 /// Persisted presentation-only choices. Financial membership, query state,
 /// selected time and prepared data are deliberately outside this value.
 final class DashboardPresentationPreferences {
@@ -44,6 +49,8 @@ final class DashboardPresentationPreferences {
     required this.balanceMonthCombinedCardPresentation,
     this.balanceHeaderGlassConfigurationJson = '',
     this.ghostQuickFilterIconPack = DashboardGhostQuickFilterIconPack.current,
+    this.ghostQuickFilterPresentation =
+        DashboardGhostQuickFilterPresentation.current,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -73,6 +80,7 @@ final class DashboardPresentationPreferences {
   balanceMonthCombinedCardPresentation;
   final String balanceHeaderGlassConfigurationJson;
   final DashboardGhostQuickFilterIconPack ghostQuickFilterIconPack;
+  final DashboardGhostQuickFilterPresentation ghostQuickFilterPresentation;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.sumA,
@@ -90,6 +98,7 @@ final class DashboardPresentationPreferences {
         BalanceMonthCombinedCardPresentation.incomeExpense,
     balanceHeaderGlassConfigurationJson: '',
     ghostQuickFilterIconPack: DashboardGhostQuickFilterIconPack.current,
+    ghostQuickFilterPresentation: DashboardGhostQuickFilterPresentation.current,
   );
 
   @override
@@ -125,7 +134,8 @@ final class DashboardPresentationPreferences {
           balanceMonthCombinedCardPresentation &&
       other.balanceHeaderGlassConfigurationJson ==
           balanceHeaderGlassConfigurationJson &&
-      other.ghostQuickFilterIconPack == ghostQuickFilterIconPack;
+      other.ghostQuickFilterIconPack == ghostQuickFilterIconPack &&
+      other.ghostQuickFilterPresentation == ghostQuickFilterPresentation;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -153,6 +163,7 @@ final class DashboardPresentationPreferences {
     balanceMonthCombinedCardPresentation,
     balanceHeaderGlassConfigurationJson,
     ghostQuickFilterIconPack,
+    ghostQuickFilterPresentation,
   ]);
 
   DashboardPresentationPreferences withGhostQuickFilterIconPack(
@@ -185,6 +196,40 @@ final class DashboardPresentationPreferences {
     balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
     balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
     ghostQuickFilterIconPack: next,
+    ghostQuickFilterPresentation: ghostQuickFilterPresentation,
+  );
+
+  DashboardPresentationPreferences withGhostQuickFilterPresentation(
+    DashboardGhostQuickFilterPresentation next,
+  ) => DashboardPresentationPreferences(
+    sumVisualStyle: sumVisualStyle,
+    showSumLayoutChooser: showSumLayoutChooser,
+    yearGridLayout: yearGridLayout,
+    yearMonthlyAmountPresentation: yearMonthlyAmountPresentation,
+    showDayContentViewChooser: showDayContentViewChooser,
+    balanceUsesChildCards: balanceUsesChildCards,
+    balanceHeaderGraphPresentation: balanceHeaderGraphPresentation,
+    balanceDayLayoutPresentation: balanceDayLayoutPresentation,
+    balanceDayFocusedPresentation: balanceDayFocusedPresentation,
+    balanceDayPerformanceVisualPresentation:
+        balanceDayPerformanceVisualPresentation,
+    balanceDayRatioViewPresentation: balanceDayRatioViewPresentation,
+    balanceDayRatioPresentation: balanceDayRatioPresentation,
+    balanceShowFocusedDayImpact: balanceShowFocusedDayImpact,
+    balanceSumLayoutPresentation: balanceSumLayoutPresentation,
+    balanceSumFocusedPresentation: balanceSumFocusedPresentation,
+    balanceShowSumFocusedSupplementaryStats:
+        balanceShowSumFocusedSupplementaryStats,
+    balanceMonthLayoutPresentation: balanceMonthLayoutPresentation,
+    balanceYearLayoutPresentation: balanceYearLayoutPresentation,
+    balanceDailyCalculationMode: balanceDailyCalculationMode,
+    balanceMonthlySpendingChartPresentation:
+        balanceMonthlySpendingChartPresentation,
+    balanceHeaderPartitionHeightPercent: balanceHeaderPartitionHeightPercent,
+    balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
+    balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
+    ghostQuickFilterIconPack: ghostQuickFilterIconPack,
+    ghostQuickFilterPresentation: next,
   );
 }
 

@@ -465,6 +465,8 @@ void main() {
       'balanceHeaderGlassConfigurationJson': '{"renderer":"glassKit"}',
       'ghostQuickFilterIconPack':
           DashboardGhostQuickFilterIconPack.current.index,
+      'ghostQuickFilterPresentation':
+          DashboardGhostQuickFilterPresentation.current.index,
     });
   });
 
@@ -494,10 +496,11 @@ void main() {
   );
 
   test(
-    'ghost quick-filter icon pack persists and unknown values use current',
+    'ghost quick-filter presentation choices persist independently and unknown values use current',
     () async {
       Map<String, Object?> stored = <String, Object?>{
         'ghostQuickFilterIconPack': 99,
+        'ghostQuickFilterPresentation': 99,
       };
       messenger.setMockMethodCallHandler(channel, (call) async {
         if (call.method == 'writeDashboardPresentationSettings') {
@@ -511,15 +514,27 @@ void main() {
         (await store.read()).ghostQuickFilterIconPack,
         DashboardGhostQuickFilterIconPack.current,
       );
+      expect(
+        (await store.read()).ghostQuickFilterPresentation,
+        DashboardGhostQuickFilterPresentation.current,
+      );
       final receipt = DashboardPresentationPreferences.defaults
           .withGhostQuickFilterIconPack(
             DashboardGhostQuickFilterIconPack.receiptGhost,
+          )
+          .withGhostQuickFilterPresentation(
+            DashboardGhostQuickFilterPresentation.rail,
           );
       await store.write(receipt);
       expect(stored['ghostQuickFilterIconPack'], 1);
+      expect(stored['ghostQuickFilterPresentation'], 2);
       expect(
         (await store.read()).ghostQuickFilterIconPack,
         DashboardGhostQuickFilterIconPack.receiptGhost,
+      );
+      expect(
+        (await store.read()).ghostQuickFilterPresentation,
+        DashboardGhostQuickFilterPresentation.rail,
       );
     },
   );

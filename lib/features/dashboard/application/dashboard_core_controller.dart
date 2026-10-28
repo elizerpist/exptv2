@@ -1932,6 +1932,36 @@ final class DashboardCoreController {
     };
   }
 
+  /// Compact, already-resident state for an explicit Ghost marker/capture.
+  /// It performs no database read and intentionally excludes user text.
+  Map<String, Object?> ghostDiagnosticStatus() {
+    final visible = visibleFrames.value;
+    final direction = navigation.state.parentQueryScope.direction;
+    final scope = currentQuery.scopeFor(direction);
+    return <String, Object?>{
+      'buildCommit': const String.fromEnvironment(
+        'FLUVI_BUILD_COMMIT',
+        defaultValue: 'unknown',
+      ),
+      'coreRevision': coreRevision ?? 0,
+      'requestedMode':
+          _acceptedGhostFilterIntent?.name ?? scope.ghostFilterMode.name,
+      'acceptedMode': scope.ghostFilterMode.name,
+      'queryKey': scope.key.value,
+      'direction': direction.name,
+      'period': scope.temporalFilter.canonicalKey,
+      'hasCategoryFilter': scope.categoryIds.isNotEmpty,
+      'hasPartnerFilter': scope.partnerIds.isNotEmpty,
+      'hasSearch': scope.refinements['noteContains'] != null,
+      'minAmount': scope.refinements['minimumAmountScaled100'],
+      'maxAmount': scope.refinements['maximumAmountScaled100'],
+      'visibleQueryKey': visible?.queryKey.value ?? 'none',
+      'visibleEntryCount': visible?.preparedFrame.entryCount,
+      'visibleGeneration': visible?.frameGeneration,
+      'ghostIntentGeneration': _ghostFilterIntentGeneration,
+    };
+  }
+
   Future<DashboardVisibleFrame> bootstrap({int? coreRevision}) async {
     if (_disposed) throw StateError('Dashboard core has been disposed.');
     if (!_seedReady) {
@@ -2212,7 +2242,7 @@ final class DashboardCoreController {
     if (visible == null) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'GHOST_PROJECTION_PUBLICATION_DEFERRED',
+          stage: 'GHOST|PROJECTION_PUBLICATION_DEFERRED',
           queryKey: activeScope.key.value,
           coreRevision: source.coreRevision,
           scope:
@@ -7700,6 +7730,18 @@ final class DashboardCoreController {
     _acceptedGhostFilterIntent = mode;
     _cancelActiveComposerApply(reason: 'ghostQuickFilter');
     final generation = ++_ghostFilterIntentGeneration;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'GHOST|UI_INTENT',
+        queryKey: desiredQueries
+            .scopeFor(navigation.state.parentQueryScope.direction)
+            .key
+            .value,
+        direction: navigation.state.parentQueryScope.direction.name,
+        coreRevision: coreRevision,
+        scope: 'requestedMode=${mode.name} generation=$generation',
+      ),
+    );
     late final Future<bool> operation;
     operation =
         _applyGhostFilterMode(
@@ -7727,16 +7769,39 @@ final class DashboardCoreController {
     required int generation,
   }) async {
     if (_disposed || generation != _ghostFilterIntentGeneration) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'GHOST|REQUEST_REJECTED',
+          coreRevision: coreRevision,
+          scope: 'reason=disposedOrSuperseded generation=$generation',
+        ),
+      );
       return false;
     }
     // The runtime keeps the ghost-neutral (both) source index resident. A
     // ghost transition must never derive onlyGhost from a former nonGhost
     // projection, nor wait for Room/MethodChannel/Budget work.
     final base = _focusBaseIndex ?? dataRuntime.currentIndex;
-    if (base == null || base.coreRevision != coreRevision) return false;
+    if (base == null || base.coreRevision != coreRevision) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'GHOST|REQUEST_REJECTED',
+          coreRevision: coreRevision,
+          scope: 'reason=missingOrStaleNeutralIndex generation=$generation',
+        ),
+      );
+      return false;
+    }
     if (base.partitionFor(LedgerDirection.income).focusMembershipSeed == null ||
         base.partitionFor(LedgerDirection.expense).focusMembershipSeed ==
             null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'GHOST|REQUEST_REJECTED',
+          coreRevision: base.coreRevision,
+          scope: 'reason=missingMembershipSeed generation=$generation',
+        ),
+      );
       return false;
     }
     try {
@@ -7784,6 +7849,18 @@ final class DashboardCoreController {
                 ? publicationState.retainedChildScope
                 : null,
           );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'GHOST|PROJECTION_DERIVED',
+          queryKey: activeScope.key.value,
+          direction: activeDirection.name,
+          coreRevision: base.coreRevision,
+          scope:
+              'requestedMode=${activeScope.ghostFilterMode.name} '
+              'generation=$generation membershipOrdinals=${derivation.membershipOrdinalCount} '
+              'hotsetHit=${prepared != null}',
+        ),
+      );
       if (_disposed || generation != _ghostFilterIntentGeneration) return false;
       // These exact banks were warmed with the ghost-neutral source before
       // this control became interactive. Deliberately use cache-only lookup:
@@ -7836,7 +7913,7 @@ final class DashboardCoreController {
       _focusBaseIndex = base;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'GHOST_QUICK_FILTER_PREPARED_APPLIED',
+          stage: 'GHOST|PROJECTION_PUBLISHED',
           queryKey: activeScope.key.value,
           direction: activeDirection.name,
           coreRevision: base.coreRevision,
@@ -7855,7 +7932,7 @@ final class DashboardCoreController {
     } on Object catch (error) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'GHOST_QUICK_FILTER_FAILED',
+          stage: 'GHOST|FLOW_FAILED',
           error: '$error',
           scope: 'mode=${desiredQueries.income.ghostFilterMode.name}',
         ),

@@ -94,6 +94,67 @@ void main() {
       );
     }
   });
+
+  testWidgets('dropdown selects directly while rail keeps exactly one active', (
+    tester,
+  ) async {
+    final selected = <GhostFilterMode>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardGhostQuickFilter(
+            mode: GhostFilterMode.both,
+            presentation: DashboardGhostQuickFilterPresentation.dropdown,
+            onTap: _noop,
+            onModeSelected: (mode) async {
+              selected.add(mode);
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('dashboard-ghost-quick-filter-dropdown')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('dashboard-ghost-dropdown-onlyGhost')),
+    );
+    await tester.pump();
+    expect(selected, <GhostFilterMode>[GhostFilterMode.onlyGhost]);
+
+    var railCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardGhostQuickFilter(
+            mode: GhostFilterMode.onlyGhost,
+            presentation: DashboardGhostQuickFilterPresentation.rail,
+            onTap: _noop,
+            onModeSelected: (_) async {
+              railCalls += 1;
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+    expect(
+      tester
+          .widget<InkWell>(
+            find.byKey(const ValueKey('dashboard-ghost-rail-onlyGhost')),
+          )
+          .onTap,
+      isNull,
+      reason: 'only the selected pill is a no-op',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('dashboard-ghost-rail-onlyGhost')),
+    );
+    await tester.pump();
+    expect(railCalls, 0, reason: 'an active rail pill is an intentional no-op');
+  });
 }
 
 void _noop() {}

@@ -18,14 +18,34 @@ final class DashboardGhostQuickFilter extends StatelessWidget {
     required this.mode,
     required this.onTap,
     this.iconPack = DashboardGhostQuickFilterIconPack.current,
+    this.presentation = DashboardGhostQuickFilterPresentation.current,
+    this.onModeSelected,
   });
 
   final GhostFilterMode mode;
   final VoidCallback onTap;
   final DashboardGhostQuickFilterIconPack iconPack;
+  final DashboardGhostQuickFilterPresentation presentation;
+
+  /// Direct selection is used only by Dropdown and Rail. The Core remains the
+  /// one owner of [mode]; this callback never optimistically changes a local
+  /// filter value.
+  final Future<bool> Function(GhostFilterMode mode)? onModeSelected;
 
   @override
   Widget build(BuildContext context) {
+    if (presentation == DashboardGhostQuickFilterPresentation.dropdown) {
+      return _DashboardGhostQuickFilterDropdown(
+        mode: mode,
+        onModeSelected: onModeSelected ?? (_) async => false,
+      );
+    }
+    if (presentation == DashboardGhostQuickFilterPresentation.rail) {
+      return _DashboardGhostQuickFilterRail(
+        mode: mode,
+        onModeSelected: onModeSelected ?? (_) async => false,
+      );
+    }
     final dotCount = GhostFilterMode.values.length;
     final selectedIndex = GhostFilterMode.values.indexOf(mode);
     return Semantics(
@@ -72,6 +92,254 @@ final class DashboardGhostQuickFilter extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Reference icon language for the two direct-selection variants. It does not
+/// depend on the persisted current-control icon package.
+final class DashboardGhostFilterReferenceIcon extends StatelessWidget {
+  const DashboardGhostFilterReferenceIcon({
+    super.key,
+    required this.mode,
+    required this.color,
+    this.size = 23,
+  });
+
+  final GhostFilterMode mode;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final receiptSize = size * .88;
+    if (mode == GhostFilterMode.onlyGhost) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Center(
+          child: _GhostSilhouette(size: size, color: color),
+        ),
+      );
+    }
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          Positioned(
+            left: size * .04,
+            top: size * .03,
+            child: Icon(
+              Icons.receipt_long_outlined,
+              size: receiptSize,
+              color: color,
+            ),
+          ),
+          if (mode == GhostFilterMode.both)
+            Positioned(
+              right: -1,
+              bottom: -1,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color.withValues(alpha: .30)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(1),
+                  child: _GhostSilhouette(size: size * .47, color: color),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+final class _DashboardGhostQuickFilterDropdown extends StatelessWidget {
+  const _DashboardGhostQuickFilterDropdown({
+    required this.mode,
+    required this.onModeSelected,
+  });
+
+  final GhostFilterMode mode;
+  final Future<bool> Function(GhostFilterMode mode) onModeSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    const lavender = Color(0xFFEDE9FE);
+    const purple = Color(0xFF6D28D9);
+    final label = switch (mode) {
+      GhostFilterMode.both => 'Összes',
+      GhostFilterMode.nonGhost => 'Normál',
+      GhostFilterMode.onlyGhost => 'Ghost',
+    };
+    return Semantics(
+      button: true,
+      label: 'Ghost gyorsszűrő: $label',
+      child: MenuAnchor(
+        alignmentOffset: const Offset(0, 4),
+        style: const MenuStyle(
+          padding: WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 4)),
+        ),
+        menuChildren: <Widget>[
+          for (final candidate in <GhostFilterMode>[
+            GhostFilterMode.both,
+            GhostFilterMode.nonGhost,
+            GhostFilterMode.onlyGhost,
+          ])
+            MenuItemButton(
+              key: ValueKey<String>(
+                'dashboard-ghost-dropdown-${candidate.name}',
+              ),
+              onPressed: () => onModeSelected(candidate),
+              leadingIcon: DashboardGhostFilterReferenceIcon(
+                mode: candidate,
+                color: candidate == mode
+                    ? purple
+                    : FluviVisualTokens.textSecondary,
+                size: 20,
+              ),
+              trailingIcon: candidate == mode
+                  ? const Icon(Icons.check_rounded, color: purple, size: 18)
+                  : const SizedBox(width: 18),
+              child: Text(switch (candidate) {
+                GhostFilterMode.both => 'Összes tranzakció',
+                GhostFilterMode.nonGhost => 'Ghost nélkül',
+                GhostFilterMode.onlyGhost => 'Csak ghost',
+              }),
+            ),
+        ],
+        builder: (context, controller, _) => SizedBox(
+          key: const ValueKey('dashboard-ghost-quick-filter-dropdown'),
+          width: 144,
+          height: 48,
+          child: Material(
+            color: lavender,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              onTap: controller.open,
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: <Widget>[
+                    DashboardGhostFilterReferenceIcon(
+                      mode: mode,
+                      color: purple,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: purple,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _DashboardGhostQuickFilterRail extends StatelessWidget {
+  const _DashboardGhostQuickFilterRail({
+    required this.mode,
+    required this.onModeSelected,
+  });
+
+  final GhostFilterMode mode;
+  final Future<bool> Function(GhostFilterMode mode) onModeSelected;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    key: const ValueKey('dashboard-ghost-quick-filter-rail'),
+    width: 144,
+    height: 48,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .62),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: <Widget>[
+          for (final candidate in <GhostFilterMode>[
+            GhostFilterMode.both,
+            GhostFilterMode.nonGhost,
+            GhostFilterMode.onlyGhost,
+          ])
+            Expanded(
+              child: _GhostRailPill(
+                mode: candidate,
+                active: candidate == mode,
+                onPressed: candidate == mode
+                    ? null
+                    : () => onModeSelected(candidate),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+final class _GhostRailPill extends StatelessWidget {
+  const _GhostRailPill({
+    required this.mode,
+    required this.active,
+    required this.onPressed,
+  });
+
+  final GhostFilterMode mode;
+  final bool active;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    const purple = Color(0xFF6D28D9);
+    final label = switch (mode) {
+      GhostFilterMode.both => 'Összes tranzakció',
+      GhostFilterMode.nonGhost => 'Ghost nélkül',
+      GhostFilterMode.onlyGhost => 'Csak ghost',
+    };
+    return Semantics(
+      button: true,
+      selected: active,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: Material(
+          color: active ? const Color(0xFFEDE9FE) : Colors.transparent,
+          borderRadius: BorderRadius.circular(11),
+          child: InkWell(
+            key: ValueKey<String>('dashboard-ghost-rail-${mode.name}'),
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(11),
+            child: Center(
+              child: DashboardGhostFilterReferenceIcon(
+                mode: mode,
+                color: active
+                    ? purple
+                    : FluviVisualTokens.textSecondary.withValues(alpha: .72),
+                size: 21,
               ),
             ),
           ),

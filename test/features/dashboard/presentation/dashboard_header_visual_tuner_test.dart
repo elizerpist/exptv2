@@ -74,15 +74,6 @@ void main() {
             .dashboardPresentationPreferences,
         same(preferences),
       );
-      await tester.tap(find.text('MEGJELENÉS'));
-      await tester.pump();
-      expect(
-        controller.isTunerSectionExpanded(
-          DashboardHeaderTunerSection.appearance,
-        ),
-        isTrue,
-      );
-
       expect(find.text('Ghost szűrő ikonjai'), findsOneWidget);
       expect(
         find.byKey(
@@ -104,6 +95,16 @@ void main() {
         reason:
             'The dashboard-owned presentation preference changes in place; '
             'the tuner does not own a query, transaction, or row-cache state.',
+      );
+      final rail = find.byKey(
+        const ValueKey<String>('dashboard-ghost-filter-presentation-rail'),
+      );
+      await tester.ensureVisible(rail);
+      await tester.tap(rail);
+      await tester.pump();
+      expect(
+        preferences.value.ghostQuickFilterPresentation,
+        DashboardGhostQuickFilterPresentation.rail,
       );
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();

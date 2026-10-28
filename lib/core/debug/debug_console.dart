@@ -26,7 +26,7 @@ enum _DebugConsoleSection { logs, report }
 
 /// A view-only projection over the one bounded diagnostic ring.  It owns no
 /// second history, export path, or diagnostic retention policy.
-enum _DebugConsoleLogFilter { all, mindHeatmap, balanceWave }
+enum _DebugConsoleLogFilter { all, mindHeatmap, balanceWave, ghost }
 
 class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   static const _followThreshold = 36.0;
@@ -134,10 +134,18 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
 
   Future<void> _copyAll() async {
     final entries = _filteredEntries();
-    if (entries.isEmpty) return;
     try {
       await Clipboard.setData(
-        ClipboardData(text: entries.map((entry) => entry.toLine()).join('\n')),
+        ClipboardData(
+          text: _logFilter == _DebugConsoleLogFilter.ghost
+              ? FluviDiagnosticLogger.latestText(
+                  domain: FluviDiagnosticDomain.ghost,
+                )
+              : FluviDiagnosticLogger.exportEvents(
+                  label: 'LIVE_FILTER',
+                  events: entries,
+                ),
+        ),
       );
       if (mounted) setState(() => _copied = true);
     } on Object catch (_) {
@@ -147,7 +155,6 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   }
 
   Future<void> _copyCapture() async {
-    if (FluviDiagnosticLogger.captureEntries.isEmpty) return;
     try {
       await Clipboard.setData(
         ClipboardData(text: FluviDiagnosticLogger.captureText()),
@@ -161,7 +168,19 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   void _markBug(String issue) {
     final status =
         widget.diagnosticStatusProvider?.call() ?? const <String, Object?>{};
-    FluviDiagnosticLogger.markUserBug(issue, context: status);
+    final ghost = issue == 'ghost_transactions';
+    if (ghost) {
+      setState(() {
+        _logFilter = _DebugConsoleLogFilter.ghost;
+        _section = _DebugConsoleSection.logs;
+      });
+      _scheduleJumpToLive();
+    }
+    FluviDiagnosticLogger.markUserBug(
+      issue,
+      context: ghost ? <String, Object?>{'ghost': status['ghost']} : status,
+      providerOwnerPrefix: ghost ? 'ghost.' : null,
+    );
   }
 
   Future<void> _copyPhysicalReport() async {
@@ -264,6 +283,13 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                         value: 'balance_wave',
                         child: Text(
                           'Balance wave',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'ghost_transactions',
+                        child: Text(
+                          'Ghost tranzakciók',
                           style: TextStyle(color: Color(0xFF1F2937)),
                         ),
                       ),
@@ -412,6 +438,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                           value: _DebugConsoleLogFilter.balanceWave,
                           child: Text('Balance Wave'),
                         ),
+                        DropdownMenuItem(
+                          value: _DebugConsoleLogFilter.ghost,
+                          child: Text('Ghost tranzakciók'),
+                        ),
                       ],
                     ),
                   ),
@@ -454,7 +484,11 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                     OutlinedButton.icon(
                       key: const ValueKey('debug-console-start-capture'),
                       onPressed: () {
-                        FluviDiagnosticLogger.startCapture();
+                        FluviDiagnosticLogger.startCapture(
+                          domain: _logFilter == _DebugConsoleLogFilter.ghost
+                              ? FluviDiagnosticDomain.ghost
+                              : FluviDiagnosticDomain.all,
+                        );
                         FluviDiagnosticLogger.recordCaptureStateSnapshot(
                           'start',
                           status,
@@ -691,6 +725,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
           _DebugConsoleLogFilter.balanceWave => entry.stage.startsWith(
             'BALANCE_WAVE|',
           ),
+          _DebugConsoleLogFilter.ghost => entry.isGhostDiagnostic,
         },
       ),
     );

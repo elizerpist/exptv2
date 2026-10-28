@@ -416,6 +416,7 @@ class MainActivity : FlutterActivity() {
                             "balanceMonthCombinedCardPresentation" to preferences.getInt("balanceMonthCombinedCardPresentation", 0),
                             "balanceHeaderGlassConfigurationJson" to preferences.getString("balanceHeaderGlassConfigurationJson", ""),
                             "ghostQuickFilterIconPack" to ((preferences.all["ghostQuickFilterIconPack"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
+                            "ghostQuickFilterPresentation" to ((preferences.all["ghostQuickFilterPresentation"] as? Number)?.toInt()?.takeIf { it in 0..2 } ?: 0),
                         ),
                     )
                     "writeDashboardPresentationSettings" -> {
@@ -471,6 +472,8 @@ class MainActivity : FlutterActivity() {
                         require(balanceHeaderGlassConfigurationJson.length <= 32768) { "Balance Header glass configuration is too large." }
                         val ghostQuickFilterIconPack = ((values["ghostQuickFilterIconPack"] as? Number)?.toInt() ?: 0)
                         require(ghostQuickFilterIconPack in 0..1) { "Invalid Ghost quick-filter icon pack." }
+                        val ghostQuickFilterPresentation = ((values["ghostQuickFilterPresentation"] as? Number)?.toInt() ?: 0)
+                        require(ghostQuickFilterPresentation in 0..2) { "Invalid Ghost quick-filter presentation." }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
@@ -496,6 +499,7 @@ class MainActivity : FlutterActivity() {
                             .putInt("balanceMonthCombinedCardPresentation", balanceMonthCombinedCardPresentation)
                             .putString("balanceHeaderGlassConfigurationJson", balanceHeaderGlassConfigurationJson)
                             .putInt("ghostQuickFilterIconPack", ghostQuickFilterIconPack)
+                            .putInt("ghostQuickFilterPresentation", ghostQuickFilterPresentation)
                             .apply()
                         result.success(null)
                     }
@@ -1970,6 +1974,23 @@ class MainActivity : FlutterActivity() {
             require(index.coreRevision == expectedRevision) {
                 "Prepared index revision changed while building."
             }
+            val pendingGhostRows = index.rows.count { it.isPendingGhost }
+            val realizedGhostRows = index.rows.count {
+                !it.isPendingGhost && it.recurrenceOccurrenceId != null
+            }
+            emitDiagnostic(
+                stage = "GHOST|NATIVE_INDEX_RESULT",
+                message = "GHOST|NATIVE_INDEX_RESULT",
+                flowId = "ghost:${generation}",
+                coreRevision = index.coreRevision,
+                scope = "generation=$generation " +
+                    "incomeMode=${directionalFilters.income.ghostFilterMode.name} " +
+                    "expenseMode=${directionalFilters.expense.ghostFilterMode.name} " +
+                    "normalPreview=${index.rows.size - pendingGhostRows - realizedGhostRows} " +
+                    "realizedGhostPreview=$realizedGhostRows pendingGhostPreview=$pendingGhostRows " +
+                    "rowSample=${index.rows.take(12).joinToString(",") { it.entryId }",
+                entryCount = index.rows.size.toLong(),
+            )
             currentCoroutineContext().ensureActive()
             val serializationStartedAtNanos = System.nanoTime()
             val payload = DashboardBinaryCodec.encodePreparedIndex(index)

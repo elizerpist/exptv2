@@ -281,6 +281,66 @@ void main() {
     },
   );
 
+  testWidgets('Ghost view and marker use only stable Ghost protocol events', (
+    tester,
+  ) async {
+    String? clipboardText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardText =
+                (call.arguments as Map<Object?, Object?>)['text'] as String?;
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'AVATAR|X'));
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(stage: 'GHOST|PROJECTION_DERIVED'),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              DebugFloatingButton(
+                diagnosticStatusProvider: () => const <String, Object?>{
+                  'ghost': <String, Object?>{'acceptedMode': 'both'},
+                  'unrelated': 'must-not-export',
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('debug-console-log-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ghost tranzakciók').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('GHOST|PROJECTION_DERIVED'), findsOneWidget);
+    expect(find.textContaining('AVATAR|X'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('debug-console-copy')));
+    await tester.pump();
+    expect(clipboardText, contains('filter=ghost'));
+    expect(clipboardText, contains('GHOST|PROJECTION_DERIVED'));
+    expect(clipboardText, isNot(contains('AVATAR|X')));
+
+    await tester.tap(find.byKey(const ValueKey('debug-console-mark-bug')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ghost tranzakciók').last);
+    await tester.pump();
+    final marker = FluviDiagnosticLogger.entries.last;
+    expect(marker.stage, 'GHOST|USER_MARK');
+    expect(marker.scope, contains('acceptedMode'));
+    expect(marker.scope, isNot(contains('must-not-export')));
+  });
+
   testWidgets('manual review pauses follow and jump-to-live clears unseen', (
     tester,
   ) async {

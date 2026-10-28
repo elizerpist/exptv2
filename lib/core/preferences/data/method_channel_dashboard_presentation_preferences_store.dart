@@ -145,6 +145,11 @@ final class MethodChannelDashboardPresentationPreferencesStore
           values['ghostQuickFilterIconPack'] as int?,
           DashboardGhostQuickFilterIconPack.current,
         ),
+        ghostQuickFilterPresentation: _enumValue(
+          DashboardGhostQuickFilterPresentation.values,
+          values['ghostQuickFilterPresentation'] as int?,
+          DashboardGhostQuickFilterPresentation.current,
+        ),
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -200,6 +205,8 @@ final class MethodChannelDashboardPresentationPreferencesStore
         'balanceHeaderGlassConfigurationJson':
             preferences.balanceHeaderGlassConfigurationJson,
         'ghostQuickFilterIconPack': preferences.ghostQuickFilterIconPack.index,
+        'ghostQuickFilterPresentation':
+            preferences.ghostQuickFilterPresentation.index,
       });
 }
 

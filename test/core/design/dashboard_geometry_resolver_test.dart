@@ -741,6 +741,40 @@ void main() {
         expect(collapsed.headerExpansionProgress, 0);
       },
     );
+
+    test(
+      'wide ghost controls grow left without moving dashboard landmarks',
+      () {
+        const metrics = DashboardLayoutMetrics.reference;
+        final current = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: metrics.collapseTravel / 2,
+          isRailExpanded: true,
+          ghostQuickFilterWidth: 48,
+        );
+        for (final width in <double>[144, 160]) {
+          final candidate = DashboardGeometryResolver.resolve(
+            metrics: metrics,
+            mode: DashboardModeSpec.balance,
+            collapseProgress: metrics.collapseTravel / 2,
+            isRailExpanded: true,
+            ghostQuickFilterWidth: width,
+          );
+          expect(candidate.summaryBounds, current.summaryBounds);
+          expect(candidate.logBoxHeaderBounds, current.logBoxHeaderBounds);
+          expect(candidate.collapseHandleBounds, current.collapseHandleBounds);
+          expect(
+            candidate.ghostQuickFilterBounds.right,
+            current.ghostQuickFilterBounds.right,
+          );
+          expect(
+            candidate.ghostQuickFilterBounds.top,
+            current.ghostQuickFilterBounds.top,
+          );
+        }
+      },
+    );
   });
 }
 

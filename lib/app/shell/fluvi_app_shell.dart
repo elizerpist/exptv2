@@ -773,6 +773,7 @@ class _FluviAppShellState extends State<FluviAppShell>
 
   Map<String, Object?> _diagnosticStatus() => <String, Object?>{
     ..._controller.onscreenDiagnosticStatus(),
+    'ghost': _controller.ghostDiagnosticStatus(),
     'build mode': kProfileMode ? 'profile' : (kDebugMode ? 'debug' : 'release'),
     'build purpose': kFluviBuildPurpose.diagnosticLabel,
     'entrypoint': kFluviBuildPurpose.entrypoint,

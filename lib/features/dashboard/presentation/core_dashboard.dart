@@ -313,6 +313,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _dashboardPresentationPreferences.addListener(
       _applyDashboardPresentationPreferences,
     );
+    _dashboardPresentationPreferences.addListener(_onLayoutPresentationChanged);
     // Shell-owned settings are restored once for both the Dashboard and the
     // Settings route.  A standalone CoreDashboard still owns and restores its
     // local controller, which keeps the embedded/test host behaviour intact.
@@ -654,6 +655,9 @@ class _CoreDashboardState extends State<CoreDashboard>
             .encode(),
         ghostQuickFilterIconPack:
             _dashboardPresentationPreferences.value.ghostQuickFilterIconPack,
+        ghostQuickFilterPresentation: _dashboardPresentationPreferences
+            .value
+            .ghostQuickFilterPresentation,
       ),
     );
   }
@@ -908,6 +912,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     _dashboardPresentationPreferences.removeListener(
       _applyDashboardPresentationPreferences,
     );
+    _dashboardPresentationPreferences.removeListener(
+      _onLayoutPresentationChanged,
+    );
     _balancePresentationSettings.removeListener(
       _persistDashboardPresentationPreferences,
     );
@@ -1002,6 +1009,9 @@ class _CoreDashboardState extends State<CoreDashboard>
           modeController.committedMode.mode == DashboardMode.mind &&
           _globalAppearance.mindExpandedSurfaceStyle ==
               MindExpandedSurfaceStyle.seamlessCard,
+      ghostQuickFilterWidth: _ghostQuickFilterWidth(
+        _dashboardPresentationPreferences.value.ghostQuickFilterPresentation,
+      ),
     );
     final flatBottomNavStretch = DashboardFlatBottomNavStretchLayout.resolve(
       viewport: viewport,
@@ -1038,6 +1048,9 @@ class _CoreDashboardState extends State<CoreDashboard>
       hasStandaloneCollapseHandle:
           _globalAppearance.collapseHandleStyle ==
           FluviCollapseHandleStyle.standalone,
+      ghostQuickFilterWidth: _ghostQuickFilterWidth(
+        _dashboardPresentationPreferences.value.ghostQuickFilterPresentation,
+      ),
       seamlessHeaderContentResolver: (mode) =>
           mode.mode == DashboardMode.mind &&
           _globalAppearance.mindExpandedSurfaceStyle ==
@@ -1739,6 +1752,12 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                     _dashboardPresentationPreferences
                                                         .value
                                                         .ghostQuickFilterIconPack,
+                                                presentation:
+                                                    _dashboardPresentationPreferences
+                                                        .value
+                                                        .ghostQuickFilterPresentation,
+                                                onModeSelected: controller
+                                                    .applyGhostFilterMode,
                                                 onTap: () => unawaited(
                                                   controller
                                                       .cycleGhostFilterMode(),
@@ -2220,6 +2239,14 @@ class _CoreDashboardState extends State<CoreDashboard>
   void _onLayoutPresentationChanged() {
     if (mounted) setState(() {});
   }
+
+  double _ghostQuickFilterWidth(
+    DashboardGhostQuickFilterPresentation presentation,
+  ) => switch (presentation) {
+    DashboardGhostQuickFilterPresentation.current => 48,
+    DashboardGhostQuickFilterPresentation.dropdown => 144,
+    DashboardGhostQuickFilterPresentation.rail => 144,
+  };
 
   DashboardDayRhythmNavigation get _dayRhythmNavigation =>
       DashboardDayRhythmNavigation(

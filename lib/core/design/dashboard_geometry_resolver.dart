@@ -17,6 +17,7 @@ abstract final class DashboardGeometryResolver {
     bool hasPhysicalRail = true,
     bool hasStandaloneCollapseHandle = true,
     bool showsLogBoxSearchPill = true,
+    double ghostQuickFilterWidth = 48,
     bool seamlessHeaderContent = false,
     double modeContentExtraHeight = 0,
     double principalModeContentExtraHeight = 0,
@@ -27,6 +28,7 @@ abstract final class DashboardGeometryResolver {
     assert(principalModeContentExtraHeight >= 0);
     assert(canonicalMotherCardContentExtraHeight >= 0);
     assert(expandedHeaderExtraHeight >= 0);
+    assert(ghostQuickFilterWidth >= 48);
     assert(!seamlessHeaderContent || mode.mode == DashboardMode.mind);
     final progress = (collapseProgress / metrics.collapseTravel)
         .clamp(0.0, 1.0)
@@ -292,9 +294,12 @@ abstract final class DashboardGeometryResolver {
       headerCollapseHandleBounds: headerCollapseHandleBounds,
       logBoxHeaderBounds: bounds(logBoxHeaderTop, metrics.logBoxHeaderHeight),
       ghostQuickFilterBounds: DashboardBounds(
-        left: left + metrics.contentWidth - ghostSize,
+        // All variants retain the same vertical lane. Wider variants grow
+        // left into the existing empty span, leaving the summary, count,
+        // search, filter and LogBox header positions untouched.
+        left: left + metrics.contentWidth - ghostQuickFilterWidth,
         top: ghostTop,
-        width: ghostSize,
+        width: ghostQuickFilterWidth,
         height: ghostSize,
       ),
       subheaderOneOpacity: isSplitMode

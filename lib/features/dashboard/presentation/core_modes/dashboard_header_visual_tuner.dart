@@ -3107,6 +3107,10 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                   controller: presentationPreferences,
                 ),
                 const SizedBox(height: 14),
+                _DashboardGhostQuickFilterPresentationSection(
+                  controller: presentationPreferences,
+                ),
+                const SizedBox(height: 14),
               ],
               _DashboardHeaderTunerTopic(
                 key: const ValueKey<String>(
@@ -5163,4 +5167,135 @@ final class _DashboardGhostQuickFilterIconPackSection extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// Separate from the icon-pack choice: this changes only the affordance shape
+/// occupying the already-resolved quick-filter lane.
+final class _DashboardGhostQuickFilterPresentationSection
+    extends StatelessWidget {
+  const _DashboardGhostQuickFilterPresentationSection({
+    required this.controller,
+  });
+
+  final DashboardPresentationPreferencesController controller;
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<DashboardPresentationPreferences>(
+    valueListenable: controller,
+    builder: (context, preferences, _) => _TunerSection(
+      title: 'Ghost szűrő megjelenése',
+      children: <Widget>[
+        const Text(
+          'Csak a vezérlő formája változik, a kiválasztott szűrés nem.',
+        ),
+        const SizedBox(height: 8),
+        RadioGroup<DashboardGhostQuickFilterPresentation>(
+          groupValue: preferences.ghostQuickFilterPresentation,
+          onChanged: (next) {
+            if (next == null) return;
+            controller.setPreferences(
+              preferences.withGhostQuickFilterPresentation(next),
+            );
+          },
+          child: Column(
+            children: <Widget>[
+              for (final presentation
+                  in DashboardGhostQuickFilterPresentation.values)
+                RadioListTile<DashboardGhostQuickFilterPresentation>(
+                  key: ValueKey<String>(
+                    'dashboard-ghost-filter-presentation-${presentation.name}',
+                  ),
+                  value: presentation,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(switch (presentation) {
+                    DashboardGhostQuickFilterPresentation.current =>
+                      'Jelenlegi',
+                    DashboardGhostQuickFilterPresentation.dropdown =>
+                      'Dropdown',
+                    DashboardGhostQuickFilterPresentation.rail => 'Rail',
+                  }),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: _GhostQuickFilterPresentationPreview(
+                      presentation: presentation,
+                      iconPack: preferences.ghostQuickFilterIconPack,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+final class _GhostQuickFilterPresentationPreview extends StatelessWidget {
+  const _GhostQuickFilterPresentationPreview({
+    required this.presentation,
+    required this.iconPack,
+  });
+
+  final DashboardGhostQuickFilterPresentation presentation;
+  final DashboardGhostQuickFilterIconPack iconPack;
+
+  @override
+  Widget build(BuildContext context) {
+    const purple = Color(0xFF6D28D9);
+    return switch (presentation) {
+      DashboardGhostQuickFilterPresentation.current => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          for (final mode in GhostFilterMode.values) ...<Widget>[
+            DashboardGhostQuickFilterIcon(mode: mode, iconPack: iconPack),
+            if (mode != GhostFilterMode.values.last) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+      DashboardGhostQuickFilterPresentation.dropdown => DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFEDE9FE),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              DashboardGhostFilterReferenceIcon(
+                mode: GhostFilterMode.both,
+                color: purple,
+                size: 18,
+              ),
+              SizedBox(width: 5),
+              Text('Összes'),
+              Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: purple),
+            ],
+          ),
+        ),
+      ),
+      DashboardGhostQuickFilterPresentation.rail => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          for (final mode in <GhostFilterMode>[
+            GhostFilterMode.both,
+            GhostFilterMode.nonGhost,
+            GhostFilterMode.onlyGhost,
+          ])
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: DashboardGhostFilterReferenceIcon(
+                mode: mode,
+                color: mode == GhostFilterMode.both
+                    ? purple
+                    : FluviVisualTokens.textSecondary,
+                size: 18,
+              ),
+            ),
+        ],
+      ),
+    };
+  }
 }
