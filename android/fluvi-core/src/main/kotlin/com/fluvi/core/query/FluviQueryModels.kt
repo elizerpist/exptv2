@@ -114,9 +114,11 @@ data class FluviTimelineCursor(
     val bookedLocalEpochDay: Long,
     val bookedLocalTimeMinutes: Int,
     val entryId: String,
-    /** 0 = pending ghost segment; 1 = normal chronological segment. */
+    /**
+     * Retained in the binary/API transport for compatibility with cursors
+     * issued before pending and booked rows became one chronological timeline.
+     */
     val timelineSegment: Int = 1,
-    /** 0 = due/overdue; 1 = future; 2 = non-pending row. */
     val pendingSortBucket: Int = 2,
     val pendingExpectedAtUtcMs: Long = 0L,
 )

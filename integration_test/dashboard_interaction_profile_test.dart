@@ -76,7 +76,7 @@ void main() {
       final densityTimelines = <String, Object?>{};
       for (final scenario in const <_ProfileScenario>[
         _ProfileScenario.monthEmpty,
-        _ProfileScenario.month94,
+        _ProfileScenario.month95,
         _ProfileScenario.yearEmpty,
         _ProfileScenario.yearPopulated,
       ]) {
@@ -122,7 +122,7 @@ void main() {
           reports[_ProfileScenario.yearEmpty.reportKey]!,
         ),
         'month_empty_vs_populated': _p95Comparison(
-          reports[_ProfileScenario.month94.reportKey]!,
+          reports[_ProfileScenario.month95.reportKey]!,
           reports[_ProfileScenario.monthEmpty.reportKey]!,
         ),
         'first_vs_tenth_fling': _p95Comparison(
@@ -141,12 +141,12 @@ void main() {
         label: 'year populated/empty',
       );
       _expectEquivalentMotion(
-        reports[_ProfileScenario.month94.reportKey]!,
+        reports[_ProfileScenario.month95.reportKey]!,
         reports[_ProfileScenario.monthEmpty.reportKey]!,
         label: 'month populated/empty',
       );
       _expectEquivalentRailFlight(
-        reports[_ProfileScenario.month94.reportKey]!,
+        reports[_ProfileScenario.month95.reportKey]!,
         reports[_ProfileScenario.monthEmpty.reportKey]!,
         label: 'month populated/empty',
       );
@@ -205,7 +205,7 @@ enum _ProfileScenario {
   summaryPlane,
   yearPopulated,
   yearEmpty,
-  month94,
+  month95,
   monthEmpty,
   parentWhileRailOpen,
   directionWhileRailOpen,
@@ -216,7 +216,7 @@ enum _ProfileScenario {
     summaryPlane => 'A_summary_sum_year_month',
     yearPopulated => 'B_year_month_rail_populated',
     yearEmpty => 'C_year_month_rail_empty',
-    month94 => 'D_month_day_rail_94',
+    month95 => 'D_month_day_rail_95',
     monthEmpty => 'E_month_day_rail_empty',
     parentWhileRailOpen => 'F_parent_while_rail_open',
     directionWhileRailOpen => 'G_direction_while_rail_open',
@@ -1478,7 +1478,7 @@ Future<void> _runMeasuredScenario(
       );
       return;
     case _ProfileScenario.yearEmpty:
-    case _ProfileScenario.month94:
+    case _ProfileScenario.month95:
     case _ProfileScenario.monthEmpty:
       for (var index = 0; index < 10; index += 1) {
         await _flingRail(tester, controller);

@@ -6,7 +6,7 @@ abstract final class DashboardProfileReport {
     'A_summary_sum_year_month',
     'B_year_month_rail_populated',
     'C_year_month_rail_empty',
-    'D_month_day_rail_94',
+    'D_month_day_rail_95',
     'E_month_day_rail_empty',
     'F_parent_while_rail_open',
     'G_direction_while_rail_open',
@@ -1199,14 +1199,14 @@ abstract final class DashboardProfileReport {
     Map<int, Map<String, dynamic>> reportsByDensity, {
     double targetMaxAbsoluteDeltaPercent = 10,
   }) {
-    const referenceDensity = 94;
+    const referenceDensity = 95;
     const candidateDensities = <int>[0, 1000];
     final reference = reportsByDensity[referenceDensity];
     if (reference == null) {
       throw ArgumentError.value(
         reportsByDensity.keys,
         'reportsByDensity',
-        'must contain the 94-row reference report',
+        'must contain the 95-row reference report',
       );
     }
 

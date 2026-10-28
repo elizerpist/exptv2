@@ -159,6 +159,52 @@ void main() {
   });
 
   testWidgets(
+    'SearchPill fling uses the SearchPill surface without a second lavender chip',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 48,
+              height: 40,
+              child: DashboardGhostSearchPillFling(
+                mode: GhostFilterMode.both,
+                onModeSelected: _accept,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final selector = find.byKey(
+        const ValueKey<String>('dashboard-ghost-searchpill-fling-semantics'),
+      );
+      final icon = find.byKey(
+        const ValueKey<String>('dashboard-ghost-searchpill-fling-icon-both'),
+      );
+      expect(
+        find.descendant(
+          of: selector,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is DecoratedBox &&
+                widget.decoration is BoxDecoration &&
+                (widget.decoration as BoxDecoration).color ==
+                    const Color(0xFFEDE9FE),
+          ),
+        ),
+        findsNothing,
+        reason: 'The carousel clips its belt but does not paint its own chip.',
+      );
+      expect(
+        tester.getRect(icon).center.dx,
+        tester.getRect(selector).center.dx,
+      );
+      expect(tester.getSize(selector), const Size(48, 40));
+    },
+  );
+
+  testWidgets(
     'SearchPill fling applies a semantic crossing before motion becomes idle',
     (tester) async {
       var mode = GhostFilterMode.both;
@@ -343,3 +389,5 @@ final class _RejectingSearchPillFling extends StatelessWidget {
 }
 
 void _noop() {}
+
+Future<bool> _accept(GhostFilterMode _) async => true;
