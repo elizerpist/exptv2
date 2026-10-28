@@ -1626,6 +1626,40 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                   ),
                                                 );
                                               },
+                                              searchPillTrailing:
+                                                  _dashboardPresentationPreferences
+                                                          .value
+                                                          .ghostQuickFilterPresentation ==
+                                                      DashboardGhostQuickFilterPresentation
+                                                          .searchPillFling
+                                                  ? AnimatedBuilder(
+                                                      animation: Listenable.merge(<
+                                                        Listenable
+                                                      >[
+                                                        controller.currentQuery,
+                                                        controller
+                                                            .transactionDirection,
+                                                      ]),
+                                                      builder: (context, _) => DashboardGhostSearchPillFling(
+                                                        mode: controller
+                                                            .currentQuery
+                                                            .scopeFor(
+                                                              controller
+                                                                          .transactionDirection
+                                                                          .direction ==
+                                                                      TransactionDirection
+                                                                          .income
+                                                                  ? LedgerDirection
+                                                                        .income
+                                                                  : LedgerDirection
+                                                                        .expense,
+                                                            )
+                                                            .ghostFilterMode,
+                                                        onModeSelected: controller
+                                                            .applyGhostFilterMode,
+                                                      ),
+                                                    )
+                                                  : null,
                                               onAvatarTap: (row) {
                                                 if (row.categoryId.isEmpty) {
                                                   return;
@@ -1713,10 +1747,15 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                 frame.isExpansionDragging,
                                           ),
                                         ),
-                                      if (geometry
-                                              .ghostQuickFilterBounds
-                                              .height >=
-                                          48)
+                                      if (_dashboardPresentationPreferences
+                                                  .value
+                                                  .ghostQuickFilterPresentation !=
+                                              DashboardGhostQuickFilterPresentation
+                                                  .searchPillFling &&
+                                          geometry
+                                                  .ghostQuickFilterBounds
+                                                  .height >=
+                                              48)
                                         _FramePosition(
                                           bounds:
                                               geometry.ghostQuickFilterBounds,
@@ -2246,6 +2285,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     DashboardGhostQuickFilterPresentation.current => 48,
     DashboardGhostQuickFilterPresentation.dropdown => 144,
     DashboardGhostQuickFilterPresentation.rail => 144,
+    DashboardGhostQuickFilterPresentation.searchPillFling => 48,
   };
 
   DashboardDayRhythmNavigation get _dayRhythmNavigation =>

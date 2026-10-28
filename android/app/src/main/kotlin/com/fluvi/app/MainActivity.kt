@@ -416,7 +416,7 @@ class MainActivity : FlutterActivity() {
                             "balanceMonthCombinedCardPresentation" to preferences.getInt("balanceMonthCombinedCardPresentation", 0),
                             "balanceHeaderGlassConfigurationJson" to preferences.getString("balanceHeaderGlassConfigurationJson", ""),
                             "ghostQuickFilterIconPack" to ((preferences.all["ghostQuickFilterIconPack"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
-                            "ghostQuickFilterPresentation" to ((preferences.all["ghostQuickFilterPresentation"] as? Number)?.toInt()?.takeIf { it in 0..2 } ?: 0),
+                            "ghostQuickFilterPresentation" to ((preferences.all["ghostQuickFilterPresentation"] as? Number)?.toInt()?.takeIf { it in 0..3 } ?: 0),
                         ),
                     )
                     "writeDashboardPresentationSettings" -> {
@@ -473,7 +473,7 @@ class MainActivity : FlutterActivity() {
                         val ghostQuickFilterIconPack = ((values["ghostQuickFilterIconPack"] as? Number)?.toInt() ?: 0)
                         require(ghostQuickFilterIconPack in 0..1) { "Invalid Ghost quick-filter icon pack." }
                         val ghostQuickFilterPresentation = ((values["ghostQuickFilterPresentation"] as? Number)?.toInt() ?: 0)
-                        require(ghostQuickFilterPresentation in 0..2) { "Invalid Ghost quick-filter presentation." }
+                        require(ghostQuickFilterPresentation in 0..3) { "Invalid Ghost quick-filter presentation." }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)

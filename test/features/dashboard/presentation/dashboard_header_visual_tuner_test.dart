@@ -96,15 +96,17 @@ void main() {
             'The dashboard-owned presentation preference changes in place; '
             'the tuner does not own a query, transaction, or row-cache state.',
       );
-      final rail = find.byKey(
-        const ValueKey<String>('dashboard-ghost-filter-presentation-rail'),
+      final searchPillFling = find.byKey(
+        const ValueKey<String>(
+          'dashboard-ghost-filter-presentation-searchPillFling',
+        ),
       );
-      await tester.ensureVisible(rail);
-      await tester.tap(rail);
+      await tester.ensureVisible(searchPillFling);
+      await tester.tap(searchPillFling);
       await tester.pump();
       expect(
         preferences.value.ghostQuickFilterPresentation,
-        DashboardGhostQuickFilterPresentation.rail,
+        DashboardGhostQuickFilterPresentation.searchPillFling,
       );
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
 import 'package:fluvi/core/categories/catalog/category_icon_catalog.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 
 void main() {
@@ -252,9 +253,13 @@ void main() {
       expect(editPlaceholder.logicalSize, const Size.square(24));
       expect(editPlaceholder.picture, isA<ui.Picture>());
       expect(editPlaceholder.picture.debugDisposed, isFalse);
+      final ghostOrigin = rasters.ghostOriginGlyph;
+      expect(ghostOrigin.logicalSize, const Size.square(24));
+      expect(ghostOrigin.picture, isA<ui.Picture>());
+      expect(ghostOrigin.picture.debugDisposed, isFalse);
       expect(atlas.pictureDecodeCount, decodeCount);
       expect(atlas.logBoxBadgeBuildCount, 4);
-      expect(atlas.logBoxGlyphBuildCount, 1);
+      expect(atlas.logBoxGlyphBuildCount, 2);
       expect(atlas.logBoxRasterByteEstimate, greaterThan(0));
       expect(atlas.logBoxRasterByteEstimate, lessThan(4 * 1024 * 1024));
       expect(atlas.logBoxRasterSurfaceCount, 0);
@@ -272,7 +277,7 @@ void main() {
       await atlas.prepareLogBoxRasters(devicePixelRatio: 2);
       expect(atlas.logBoxRasterBuildCount, 2);
       expect(atlas.logBoxBadgeBuildCount, 4);
-      expect(atlas.logBoxGlyphBuildCount, 1);
+      expect(atlas.logBoxGlyphBuildCount, 2);
       expect(atlas.pictureDecodeCount, decodeCount);
       expect(atlas.logBoxRastersFor(2).badge(0), same(badge));
       expect(atlas.logBoxRastersFor(2).glyph(0), same(glyph));
@@ -282,6 +287,37 @@ void main() {
       atlas.dispose();
       expect(badge.picture.debugDisposed, isTrue);
       expect(glyph.picture.debugDisposed, isTrue);
+      expect(ghostOrigin.picture.debugDisposed, isTrue);
+    },
+  );
+
+  testWidgets(
+    'the Ghost provenance glyph is grey while the shared category glyph remains white',
+    (tester) async {
+      final atlas = PreparedVectorAssetAtlas();
+      addTearDown(atlas.dispose);
+      await atlas.prepare();
+      await atlas.prepareLogBoxRasters(devicePixelRatio: 1);
+      final rasters = atlas.logBoxRastersFor(1);
+      final image = (await tester.runAsync(
+        () => _paintGlyphSentinels(
+          first: rasters.ghostOriginGlyph,
+          second: rasters.glyph(CategoryIconCatalog.handleOf('icon_28')),
+        ),
+      ))!;
+      addTearDown(image.dispose);
+      final pixels = (await tester.runAsync(() => _readPixels(image)))!;
+
+      expect(
+        pixels.countColorIn(_firstGlyphTarget, FluviVisualTokens.textSecondary),
+        greaterThan(0),
+        reason: 'The Ghost provenance mark must remain visible on white cards.',
+      );
+      expect(
+        pixels.countColorIn(_secondGlyphTarget, Colors.white),
+        greaterThan(0),
+        reason: 'The shared white category glyph must not be recoloured.',
+      );
     },
   );
 

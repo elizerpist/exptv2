@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/presentation/category_icon_view.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_presentation_preferences.dart';
 import '../../query/domain/ghost_filter_mode.dart';
 
@@ -45,6 +48,11 @@ final class DashboardGhostQuickFilter extends StatelessWidget {
         mode: mode,
         onModeSelected: onModeSelected ?? (_) async => false,
       );
+    }
+    if (presentation == DashboardGhostQuickFilterPresentation.searchPillFling) {
+      // This presentation is installed by DashboardLogBoxHeader as a trailing
+      // SearchPill control, never in the resolved quick-filter lane.
+      return const SizedBox.shrink();
     }
     final dotCount = GhostFilterMode.values.length;
     final selectedIndex = GhostFilterMode.values.indexOf(mode);
@@ -101,7 +109,227 @@ final class DashboardGhostQuickFilter extends StatelessWidget {
   }
 }
 
-/// Reference icon language for the two direct-selection variants. It does not
+/// The SearchPill-local presentation adapter for the shared vertical carousel.
+///
+/// It owns only the physical belt and the last user intent. [mode] remains
+/// Core-owned, so failed or superseded requests can never leave a local ghost
+/// filter state different from the prepared dashboard projection.
+final class DashboardGhostSearchPillFling extends StatefulWidget {
+  const DashboardGhostSearchPillFling({
+    super.key,
+    required this.mode,
+    required this.onModeSelected,
+  });
+
+  final GhostFilterMode mode;
+  final Future<bool> Function(GhostFilterMode mode) onModeSelected;
+
+  @override
+  State<DashboardGhostSearchPillFling> createState() =>
+      _DashboardGhostSearchPillFlingState();
+}
+
+final class _DashboardGhostSearchPillFlingState
+    extends State<DashboardGhostSearchPillFling> {
+  static const _modes = <GhostFilterMode>[
+    GhostFilterMode.both,
+    GhostFilterMode.nonGhost,
+    GhostFilterMode.onlyGhost,
+  ];
+
+  late final CenteredCarouselController _carouselController =
+      CenteredCarouselController(initialIndex: _indexOf(widget.mode));
+  late int _lastLogicalIndex = _indexOf(widget.mode);
+  GhostFilterMode? _lastRequestedTarget;
+  var _requestEpoch = 0;
+  var _motionActive = false;
+
+  bool get _showsCanonicalRestingIcon =>
+      !_motionActive && _lastRequestedTarget == null;
+
+  @override
+  void didUpdateWidget(covariant DashboardGhostSearchPillFling oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.mode == widget.mode) return;
+
+    // A completion is accepted only when the canonical query has caught up.
+    // Do not interrupt an in-flight physical fling merely because a prior
+    // semantic request has published in the meantime.
+    if (_lastRequestedTarget == widget.mode) {
+      _lastRequestedTarget = null;
+    }
+    _reconcileCanonicalModeIfIdle();
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    key: const ValueKey<String>('dashboard-ghost-searchpill-fling-semantics'),
+    label: 'Ghost gyorsszűrő: ${widget.mode.semanticLabel}',
+    hint: 'Függőlegesen húzva válthat.',
+    onIncrease: () => _moveBy(1),
+    onDecrease: () => _moveBy(-1),
+    child: ExcludeSemantics(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final itemExtent = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : 40.0;
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFFEDE9FE),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  Opacity(
+                    opacity: _showsCanonicalRestingIcon ? 0 : 1,
+                    child: CenteredCarousel<GhostFilterMode>(
+                      dataSource:
+                          const CyclicCarouselDataSource<GhostFilterMode>(
+                            _modes,
+                          ),
+                      controller: _carouselController,
+                      spec: CenteredCarouselSpec(
+                        itemExtent: itemExtent,
+                        scrollDirection: Axis.vertical,
+                        visibleItemCount: 1,
+                        minScale: 1,
+                        neighborScale: 1,
+                        outerScale: 1,
+                        minOpacity: 1,
+                        neighborOpacity: 1,
+                        outerOpacity: 1,
+                        motionProfile:
+                            CenteredCarouselMotionProfiles.timeRefinementRail,
+                        enableHaptics: true,
+                        enableTapToCenter: false,
+                        clipBehavior: Clip.hardEdge,
+                      ),
+                      height: itemExtent,
+                      viewportKey: const ValueKey<String>(
+                        'dashboard-ghost-searchpill-fling-viewport',
+                      ),
+                      onSelectedChanged: _onSelectedChanged,
+                      onMotionStarted: (_) => _setMotionActive(true),
+                      onMotionIdle: (_) {
+                        _setMotionActive(false);
+                        _reconcileCanonicalModeIfIdle();
+                      },
+                      itemBuilder: (context, candidate, metrics) => Center(
+                        key: !_showsCanonicalRestingIcon && metrics.isSelected
+                            ? ValueKey<String>(
+                                'dashboard-ghost-searchpill-fling-icon-${candidate.name}',
+                              )
+                            : null,
+                        child: DashboardGhostFilterReferenceIcon(
+                          mode: candidate,
+                          color: const Color(0xFF6D28D9),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_showsCanonicalRestingIcon)
+                    IgnorePointer(
+                      child: Center(
+                        key: ValueKey<String>(
+                          'dashboard-ghost-searchpill-fling-icon-${widget.mode.name}',
+                        ),
+                        child: DashboardGhostFilterReferenceIcon(
+                          mode: widget.mode,
+                          color: const Color(0xFF6D28D9),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ),
+  );
+
+  void _onSelectedChanged(int logicalIndex) {
+    if (logicalIndex == _lastLogicalIndex) return;
+    _lastLogicalIndex = logicalIndex;
+    _requestMode(_modeAt(logicalIndex));
+  }
+
+  void _moveBy(int delta) {
+    unawaited(_carouselController.animateToIndex(_lastLogicalIndex + delta));
+  }
+
+  void _requestMode(GhostFilterMode target) {
+    // The last physical target, rather than only the still-published query,
+    // is the dedupe boundary. This preserves an A -> B -> A fling while A is
+    // still the canonical mode.
+    if (target == _lastRequestedTarget) return;
+    if (_lastRequestedTarget == null && target == widget.mode) return;
+    _lastRequestedTarget = target;
+    final requestEpoch = ++_requestEpoch;
+    unawaited(_applyRequestedMode(target, requestEpoch));
+  }
+
+  Future<void> _applyRequestedMode(
+    GhostFilterMode target,
+    int requestEpoch,
+  ) async {
+    var accepted = false;
+    try {
+      accepted = await widget.onModeSelected(target);
+    } catch (_) {
+      accepted = false;
+    }
+    if (!mounted || requestEpoch != _requestEpoch) return;
+    if (accepted && widget.mode == target) {
+      _lastRequestedTarget = null;
+      return;
+    }
+    if (!accepted) {
+      _lastRequestedTarget = null;
+      _reconcileCanonicalModeIfIdle();
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _setMotionActive(bool active) {
+    if (_motionActive == active || !mounted) return;
+    setState(() => _motionActive = active);
+  }
+
+  void _reconcileCanonicalModeIfIdle() {
+    if (_carouselController.isScrolling || _lastRequestedTarget != null) {
+      return;
+    }
+    final canonicalIndex = _indexOf(widget.mode);
+    if (_lastLogicalIndex == canonicalIndex) return;
+    _lastLogicalIndex = canonicalIndex;
+    _carouselController.interruptAndJumpToIndexSilently(canonicalIndex);
+  }
+
+  static GhostFilterMode _modeAt(int logicalIndex) =>
+      _modes[_positiveModulo(logicalIndex, _modes.length)];
+
+  static int _indexOf(GhostFilterMode mode) => _modes.indexOf(mode);
+
+  static int _positiveModulo(int value, int divisor) {
+    final result = value % divisor;
+    return result < 0 ? result + divisor : result;
+  }
+
+  @override
+  void dispose() {
+    _carouselController.dispose();
+    super.dispose();
+  }
+}
+
+/// Reference icon language for the direct-selection variants. It does not
 /// depend on the persisted current-control icon package.
 final class DashboardGhostFilterReferenceIcon extends StatelessWidget {
   const DashboardGhostFilterReferenceIcon({

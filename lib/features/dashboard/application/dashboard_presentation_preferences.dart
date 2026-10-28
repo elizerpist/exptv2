@@ -13,7 +13,12 @@ enum DashboardGhostQuickFilterIconPack { current, receiptGhost }
 /// Presentation-only shape of the dashboard ghost quick filter.  This is
 /// intentionally independent from [GhostFilterMode]: changing it must never
 /// alter the active query membership.
-enum DashboardGhostQuickFilterPresentation { current, dropdown, rail }
+enum DashboardGhostQuickFilterPresentation {
+  current,
+  dropdown,
+  rail,
+  searchPillFling,
+}
 
 /// Persisted presentation-only choices. Financial membership, query state,
 /// selected time and prepared data are deliberately outside this value.

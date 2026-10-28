@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
@@ -155,6 +157,189 @@ void main() {
     await tester.pump();
     expect(railCalls, 0, reason: 'an active rail pill is an intentional no-op');
   });
+
+  testWidgets(
+    'SearchPill fling applies a semantic crossing before motion becomes idle',
+    (tester) async {
+      var mode = GhostFilterMode.both;
+      final selected = <GhostFilterMode>[];
+      await tester.pumpWidget(
+        StatefulBuilder(
+          builder: (context, setState) => MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 48,
+                  height: 40,
+                  child: DashboardGhostSearchPillFling(
+                    mode: mode,
+                    onModeSelected: (next) async {
+                      selected.add(next);
+                      setState(() => mode = next);
+                      return true;
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final selector = find.byKey(
+        const ValueKey<String>('dashboard-ghost-searchpill-fling-viewport'),
+      );
+      expect(selector, findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-ghost-searchpill-fling-icon-both'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.fling(selector, const Offset(0, -72), 900);
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(selected, isNotEmpty);
+      expect(
+        selected.first,
+        GhostFilterMode.nonGhost,
+        reason:
+            'The first Core selection is sent at the first carousel crossing, '
+            'before the fling has reached its idle callback.',
+      );
+      expect(mode, selected.last);
+    },
+  );
+
+  testWidgets('SearchPill fling keeps a later return-to-current intent', (
+    tester,
+  ) async {
+    final mode = GhostFilterMode.both;
+    final completions = <Completer<bool>>[];
+    final requested = <GhostFilterMode>[];
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, _) => MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 48,
+              height: 40,
+              child: DashboardGhostSearchPillFling(
+                mode: mode,
+                onModeSelected: (next) {
+                  requested.add(next);
+                  final completion = Completer<bool>();
+                  completions.add(completion);
+                  return completion.future;
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final selector = find.byKey(
+      const ValueKey<String>('dashboard-ghost-searchpill-fling-viewport'),
+    );
+
+    await tester.drag(selector, const Offset(0, -48));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.drag(selector, const Offset(0, 48));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      requested,
+      <GhostFilterMode>[GhostFilterMode.nonGhost, GhostFilterMode.both],
+      reason:
+          'A still-canonical both mode must not erase the later both intent.',
+    );
+    // A late failure from the first request is stale and must not undo the
+    // second physical target.
+    completions.first.complete(false);
+    await tester.pump();
+    expect(mode, GhostFilterMode.both);
+  });
+
+  testWidgets('SearchPill fling restores the accepted Core mode on rejection', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 48,
+            height: 40,
+            child: _RejectingSearchPillFling(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final selector = find.byKey(
+      const ValueKey<String>('dashboard-ghost-searchpill-fling-viewport'),
+    );
+
+    await tester.drag(selector, const Offset(0, -48));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey<String>('dashboard-ghost-searchpill-fling-icon-both'),
+      ),
+      findsOneWidget,
+      reason: 'A rejected Core request must not leave a local optimistic icon.',
+    );
+  });
+
+  testWidgets('SearchPill fling adopts an external accepted mode while idle', (
+    tester,
+  ) async {
+    final mode = ValueNotifier<GhostFilterMode>(GhostFilterMode.both);
+    addTearDown(mode.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 48,
+            height: 40,
+            child: ValueListenableBuilder<GhostFilterMode>(
+              valueListenable: mode,
+              builder: (context, value, _) => DashboardGhostSearchPillFling(
+                mode: value,
+                onModeSelected: (_) async => true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    mode.value = GhostFilterMode.onlyGhost;
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'dashboard-ghost-searchpill-fling-icon-onlyGhost',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+}
+
+final class _RejectingSearchPillFling extends StatelessWidget {
+  const _RejectingSearchPillFling();
+
+  @override
+  Widget build(BuildContext context) => DashboardGhostSearchPillFling(
+    mode: GhostFilterMode.both,
+    onModeSelected: (_) async => false,
+  );
 }
 
 void _noop() {}

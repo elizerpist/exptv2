@@ -5190,6 +5190,9 @@ final class _DashboardGhostQuickFilterPresentationSection
         const Text(
           'Csak a vezérlő formája változik, a kiválasztott szűrés nem.',
         ),
+        const Text(
+          'A Searchpill · Fling csak látható keresősáv mellett jelenik meg.',
+        ),
         const SizedBox(height: 8),
         RadioGroup<DashboardGhostQuickFilterPresentation>(
           groupValue: preferences.ghostQuickFilterPresentation,
@@ -5215,6 +5218,8 @@ final class _DashboardGhostQuickFilterPresentationSection
                     DashboardGhostQuickFilterPresentation.dropdown =>
                       'Dropdown',
                     DashboardGhostQuickFilterPresentation.rail => 'Rail',
+                    DashboardGhostQuickFilterPresentation.searchPillFling =>
+                      'Searchpill · Fling',
                   }),
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: 5),
@@ -5295,6 +5300,31 @@ final class _GhostQuickFilterPresentationPreview extends StatelessWidget {
               ),
             ),
         ],
+      ),
+      DashboardGhostQuickFilterPresentation.searchPillFling => DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFEDE9FE),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                Icons.search_rounded,
+                size: 18,
+                color: FluviVisualTokens.textSecondary,
+              ),
+              SizedBox(width: 12),
+              DashboardGhostFilterReferenceIcon(
+                mode: GhostFilterMode.both,
+                color: purple,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
       ),
     };
   }

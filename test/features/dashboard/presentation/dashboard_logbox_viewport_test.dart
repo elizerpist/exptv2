@@ -95,6 +95,77 @@ void main() {
     );
   });
 
+  testWidgets(
+    'SearchPill reserves an optional trailing control without moving its outer geometry',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      Widget buildHeader({Widget? trailing, bool visible = true}) =>
+          MaterialApp(
+            home: SizedBox(
+              width: 378,
+              child: DashboardLogBoxHeader(
+                bounds: const DashboardBounds(
+                  left: 0,
+                  top: 0,
+                  width: 378,
+                  height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
+                ),
+                visibleFrames: store,
+                showsSearchPill: visible,
+                searchPillTrailing: trailing,
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(buildHeader());
+      final baselineSearch = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+      );
+      final baselineFilter = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-filter-button')),
+      );
+
+      await tester.pumpWidget(
+        buildHeader(
+          trailing: const SizedBox(
+            key: ValueKey<String>('searchpill-test-trailing'),
+          ),
+        ),
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+        ),
+        baselineSearch,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('dashboard-logbox-filter-button')),
+        ),
+        baselineFilter,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('searchpill-test-trailing')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        buildHeader(
+          visible: false,
+          trailing: const SizedBox(
+            key: ValueKey<String>('searchpill-test-trailing'),
+          ),
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('searchpill-test-trailing')),
+        findsNothing,
+        reason: 'The Fling presentation has no fallback beside the handle.',
+      );
+    },
+  );
+
   test(
     'query facet presentation defaults and hidden SearchPill fallback are stable',
     () {

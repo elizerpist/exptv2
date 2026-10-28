@@ -9,7 +9,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
-import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
@@ -2964,7 +2963,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
     _drawPreparedVectorResourceContained(
       canvas,
-      rasters.glyph(CategoryIconCatalog.handleOf('icon_28')),
+      rasters.ghostOriginGlyph,
       target,
     );
   }

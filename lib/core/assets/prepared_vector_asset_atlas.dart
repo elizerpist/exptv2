@@ -81,6 +81,7 @@ final class PreparedLogBoxRasterSet {
     required this.badges,
     required this.glyphs,
     required this.editPlaceholderGlyph,
+    required this.ghostOriginGlyph,
     required this.estimatedBytes,
   });
 
@@ -91,6 +92,12 @@ final class PreparedLogBoxRasterSet {
   final List<PreparedLogBoxVectorBadge> badges;
   final List<PreparedLogBoxVectorGlyph> glyphs;
   final PreparedLogBoxVectorGlyph editPlaceholderGlyph;
+
+  /// Neutral, pre-tinted Ghost provenance mark for the time column.
+  ///
+  /// This deliberately does not replace the catalog's white Ghost glyph:
+  /// category avatars retain that white resource over their coloured badges.
+  final PreparedLogBoxVectorGlyph ghostOriginGlyph;
   final int estimatedBytes;
 
   int get badgeCount => badges.length;
@@ -253,6 +260,7 @@ final class PreparedVectorAssetAtlas {
   _logBoxBadges;
   List<PreparedLogBoxVectorGlyph>? _logBoxGlyphs;
   PreparedLogBoxVectorGlyph? _logBoxEditPlaceholderGlyph;
+  PreparedLogBoxVectorGlyph? _logBoxGhostOriginGlyph;
   int _pictureDecodeCount = 0;
   int _prepareDurationMicros = 0;
   int _logBoxRasterBuildCount = 0;
@@ -266,7 +274,8 @@ final class PreparedVectorAssetAtlas {
       _categoryGradients != null &&
       _logBoxBadges != null &&
       _logBoxGlyphs != null &&
-      _logBoxEditPlaceholderGlyph != null;
+      _logBoxEditPlaceholderGlyph != null &&
+      _logBoxGhostOriginGlyph != null;
   int get pictureCount => _pictures?.length ?? 0;
   int get logBoxGlyphCount => _logBoxGlyphs?.length ?? 0;
   int get pictureDecodeCount => _pictureDecodeCount;
@@ -559,8 +568,14 @@ final class PreparedVectorAssetAtlas {
         color: DashboardLogBoxTokens.editPlaceholderGlyphColor,
       );
       editPlaceholderInfo.picture.dispose();
+      final ghostSource = glyphs[CategoryIconCatalog.handleOf('icon_28')];
+      _logBoxGhostOriginGlyph = _recordTintedLogBoxGlyph(
+        ghostSource.picture,
+        logicalSize: ghostSource.logicalSize,
+        color: FluviVisualTokens.textSecondary,
+      );
       _logBoxBadgeBuildCount += CategoryAvatarColorProfile.values.length;
-      _logBoxGlyphBuildCount += 1;
+      _logBoxGlyphBuildCount += 2;
       prepareTimer.stop();
       _prepareDurationMicros = prepareTimer.elapsedMicroseconds;
     } on Object {
@@ -582,9 +597,11 @@ final class PreparedVectorAssetAtlas {
       final badgesByProfile = _logBoxBadges;
       final glyphs = _logBoxGlyphs;
       final editPlaceholderGlyph = _logBoxEditPlaceholderGlyph;
+      final ghostOriginGlyph = _logBoxGhostOriginGlyph;
       if (badgesByProfile == null ||
           glyphs == null ||
-          editPlaceholderGlyph == null) {
+          editPlaceholderGlyph == null ||
+          ghostOriginGlyph == null) {
         throw StateError('Prepared LogBox vector avatars are not ready.');
       }
       if (_disposed) {
@@ -600,6 +617,7 @@ final class PreparedVectorAssetAtlas {
             badges: badgesByProfile[profile]!,
             glyphs: glyphs,
             editPlaceholderGlyph: editPlaceholderGlyph,
+            ghostOriginGlyph: ghostOriginGlyph,
             estimatedBytes:
                 badgesByProfile[profile]!.fold<int>(
                   0,
@@ -609,7 +627,8 @@ final class PreparedVectorAssetAtlas {
                   0,
                   (total, glyph) => total + glyph.picture.approximateBytesUsed,
                 ) +
-                editPlaceholderGlyph.picture.approximateBytesUsed,
+                editPlaceholderGlyph.picture.approximateBytesUsed +
+                ghostOriginGlyph.picture.approximateBytesUsed,
           ),
       };
       final previous = _logBoxRasters;
@@ -700,6 +719,12 @@ final class PreparedVectorAssetAtlas {
       editPlaceholderGlyph.dispose();
     }
     _logBoxEditPlaceholderGlyph = null;
+    final ghostOriginGlyph = _logBoxGhostOriginGlyph;
+    if (ghostOriginGlyph != null &&
+        disposedPictures.add(ghostOriginGlyph.picture)) {
+      ghostOriginGlyph.dispose();
+    }
+    _logBoxGhostOriginGlyph = null;
     _prepareDurationMicros = 0;
     _logBoxRasterPrepareDurationMicros = 0;
   }

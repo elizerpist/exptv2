@@ -518,23 +518,37 @@ void main() {
         (await store.read()).ghostQuickFilterPresentation,
         DashboardGhostQuickFilterPresentation.current,
       );
+      for (final legacyChoice in <(int, DashboardGhostQuickFilterPresentation)>[
+        (0, DashboardGhostQuickFilterPresentation.current),
+        (1, DashboardGhostQuickFilterPresentation.dropdown),
+        (2, DashboardGhostQuickFilterPresentation.rail),
+      ]) {
+        stored['ghostQuickFilterPresentation'] = legacyChoice.$1;
+        expect(
+          (await store.read()).ghostQuickFilterPresentation,
+          legacyChoice.$2,
+          reason:
+              'The appended Searchpill option must not renumber existing '
+              'persisted presentation choices.',
+        );
+      }
       final receipt = DashboardPresentationPreferences.defaults
           .withGhostQuickFilterIconPack(
             DashboardGhostQuickFilterIconPack.receiptGhost,
           )
           .withGhostQuickFilterPresentation(
-            DashboardGhostQuickFilterPresentation.rail,
+            DashboardGhostQuickFilterPresentation.searchPillFling,
           );
       await store.write(receipt);
       expect(stored['ghostQuickFilterIconPack'], 1);
-      expect(stored['ghostQuickFilterPresentation'], 2);
+      expect(stored['ghostQuickFilterPresentation'], 3);
       expect(
         (await store.read()).ghostQuickFilterIconPack,
         DashboardGhostQuickFilterIconPack.receiptGhost,
       );
       expect(
         (await store.read()).ghostQuickFilterPresentation,
-        DashboardGhostQuickFilterPresentation.rail,
+        DashboardGhostQuickFilterPresentation.searchPillFling,
       );
     },
   );

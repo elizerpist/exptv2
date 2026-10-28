@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -47,6 +48,7 @@ final class DashboardLogBoxHeader extends StatelessWidget {
     this.searchFocusNode,
     this.onSearchChanged,
     this.onOpenQueryMenu,
+    this.searchPillTrailing,
     this.showExternalFacets = true,
     this.showInsideFacets = false,
     this.queryFacetStyle = DashboardQueryFacetPillStyle.current,
@@ -70,6 +72,10 @@ final class DashboardLogBoxHeader extends StatelessWidget {
   final FocusNode? searchFocusNode;
   final ValueChanged<String>? onSearchChanged;
   final VoidCallback? onOpenQueryMenu;
+
+  /// An optional compact control that lives inside the visible SearchPill.
+  /// Keeping this in the existing row preserves the LogBox header geometry.
+  final Widget? searchPillTrailing;
   final bool showExternalFacets;
   final bool showInsideFacets;
   final DashboardQueryFacetPillStyle queryFacetStyle;
@@ -97,6 +103,7 @@ final class DashboardLogBoxHeader extends StatelessWidget {
               searchFocusNode: searchFocusNode,
               onSearchChanged: onSearchChanged,
               onOpenQueryMenu: onOpenQueryMenu,
+              searchPillTrailing: searchPillTrailing,
               insideFacetChips:
                   showInsideFacets &&
                       currentQuery != null &&
@@ -159,6 +166,7 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
     this.searchFocusNode,
     this.onSearchChanged,
     this.onOpenQueryMenu,
+    this.searchPillTrailing,
     this.insideFacetChips,
   });
 
@@ -171,6 +179,7 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
   final FocusNode? searchFocusNode;
   final ValueChanged<String>? onSearchChanged;
   final VoidCallback? onOpenQueryMenu;
+  final Widget? searchPillTrailing;
   final Widget? insideFacetChips;
 
   @override
@@ -250,6 +259,7 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
                     focusNode: searchFocusNode,
                     onChanged: onSearchChanged,
                     onOpenQueryMenu: onOpenQueryMenu,
+                    searchPillTrailing: searchPillTrailing,
                     insideFacetChips: insideFacetChips,
                   ),
                 ),
@@ -281,6 +291,7 @@ final class _DashboardLogBoxSearchAndFilterRow extends StatelessWidget {
     this.onChanged,
     this.onOpenQueryMenu,
     this.insideFacetChips,
+    this.searchPillTrailing,
   });
 
   final double scale;
@@ -290,6 +301,7 @@ final class _DashboardLogBoxSearchAndFilterRow extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final VoidCallback? onOpenQueryMenu;
   final Widget? insideFacetChips;
+  final Widget? searchPillTrailing;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -314,6 +326,7 @@ final class _DashboardLogBoxSearchAndFilterRow extends StatelessWidget {
           focusNode: focusNode,
           onChanged: onChanged,
           insideFacetChips: insideFacetChips,
+          trailing: searchPillTrailing,
         ),
       ),
       SizedBox(width: 8 * scale),
@@ -376,6 +389,7 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
     this.focusNode,
     this.onChanged,
     this.insideFacetChips,
+    this.trailing,
   });
 
   final double scale;
@@ -384,12 +398,31 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
   final FocusNode? focusNode;
   final ValueChanged<String>? onChanged;
   final Widget? insideFacetChips;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final depth = DashboardShadowStyleScope.profileOf(
       context,
     ).depthFor(DashboardCornerSurfaceFamily.searchPill);
+    final trailingWidth = trailing == null ? 0.0 : 48 * scale;
+    final innerGap = FluviVisualTokens.controlInnerGap * scale;
+    final iconWidth = FluviVisualTokens.iconSize * scale;
+    final availableTextAndFacets = math.max(
+      0.0,
+      bounds.width -
+          2 * FluviVisualTokens.controlHorizontalInset * scale -
+          iconWidth -
+          innerGap -
+          trailingWidth -
+          (trailing == null ? 0 : innerGap),
+    );
+    final facetWidth = insideFacetChips == null
+        ? 0.0
+        : math.min(
+            bounds.width * .43,
+            math.max(0.0, availableTextAndFacets - 48 * scale),
+          );
     return Semantics(
       key: const ValueKey('dashboard-logbox-search-pill'),
       textField: controller != null,
@@ -424,7 +457,7 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
               if (insideFacetChips != null)
                 SizedBox(
                   key: const ValueKey('dashboard-query-facets-inside-search'),
-                  width: bounds.width * .43,
+                  width: facetWidth,
                   child: insideFacetChips,
                 ),
               if (insideFacetChips != null)
@@ -456,6 +489,12 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
                   ),
                 ),
               ),
+              if (trailing != null) SizedBox(width: innerGap),
+              if (trailing != null)
+                SizedBox(
+                  width: trailingWidth,
+                  child: TextFieldTapRegion(child: trailing!),
+                ),
             ],
           ),
         ),
