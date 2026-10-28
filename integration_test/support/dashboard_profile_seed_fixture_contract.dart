@@ -6,6 +6,13 @@ import 'package:fluvi/core/demo_data/demo_seed_report.dart';
 /// scattering counts.
 abstract final class DashboardProfileSeedFixtureContract {
   static const int expectedSeededTransactionCount = 5519;
+  static const int expectedGhostOccurrenceCount = 96;
+  static const int expectedGhostPendingOccurrenceCount = 48;
+  static const int expectedGhostRealizedOccurrenceCount = 48;
+  static const int expectedGhostLedgerEntryCount = 48;
+  static const int _ghostStartYear = 2026;
+  static const int _ghostEndYear = 2027;
+  static const int _ghostDirectionCount = 2;
   static const Map<int, int> expectedMonthsByYear = <int, int>{
     2025: 12,
     2026: 8,
@@ -20,6 +27,23 @@ abstract final class DashboardProfileSeedFixtureContract {
       throw StateError(
         'Profile seed created ${report.createdEntryCount} transactions; '
         'expected $expectedSeededTransactionCount.',
+      );
+    }
+    if (report.ghostOccurrenceCount != expectedGhostOccurrenceCount ||
+        report.ghostPendingOccurrenceCount !=
+            expectedGhostPendingOccurrenceCount ||
+        report.ghostRealizedOccurrenceCount !=
+            expectedGhostRealizedOccurrenceCount ||
+        report.ghostLedgerEntryCount != expectedGhostLedgerEntryCount) {
+      throw StateError(
+        'Profile ghost fixture was ${report.ghostOccurrenceCount}/'
+        '${report.ghostPendingOccurrenceCount}/'
+        '${report.ghostRealizedOccurrenceCount}/'
+        '${report.ghostLedgerEntryCount}; expected '
+        '$expectedGhostOccurrenceCount/'
+        '$expectedGhostPendingOccurrenceCount/'
+        '$expectedGhostRealizedOccurrenceCount/'
+        '$expectedGhostLedgerEntryCount.',
       );
     }
     if (report.monthlyReports.length != expectedTotalMonthCount) {
@@ -48,7 +72,12 @@ abstract final class DashboardProfileSeedFixtureContract {
   /// The profile must not carry a parallel, stale set of aggregate counts.
   static DashboardProfileSeedFixture verifiedFixtureFor(DemoSeedReport report) {
     verify(report);
-    return DashboardProfileSeedFixture._(report.monthlyReports);
+    return DashboardProfileSeedFixture._(
+      report.monthlyReports,
+      ghostBookedRowsPerDirectionMonth:
+          report.ghostRealizedOccurrenceCount ~/
+          ((_ghostEndYear - _ghostStartYear + 1) * 12 * _ghostDirectionCount),
+    );
   }
 
   static bool _sameCounts(Map<int, int> actual, Map<int, int> expected) {
@@ -62,22 +91,45 @@ abstract final class DashboardProfileSeedFixtureContract {
 
 /// Immutable, report-derived aggregate counts for profile scenarios.
 final class DashboardProfileSeedFixture {
-  DashboardProfileSeedFixture._(List<DemoMonthReport> months)
-    : _months = List<DemoMonthReport>.unmodifiable(months);
+  DashboardProfileSeedFixture._(
+    List<DemoMonthReport> months, {
+    required int ghostBookedRowsPerDirectionMonth,
+  }) : _months = List<DemoMonthReport>.unmodifiable(months),
+       _ghostBookedRowsPerDirectionMonth = ghostBookedRowsPerDirectionMonth;
 
   final List<DemoMonthReport> _months;
+  final int _ghostBookedRowsPerDirectionMonth;
 
-  int incomeEntryCount({int? year, int? month}) => _entryCount(
-    year: year,
-    month: month,
-    select: (report) => report.incomeCount,
-  );
+  int incomeEntryCount({int? year, int? month}) =>
+      _entryCount(
+        year: year,
+        month: month,
+        select: (report) => report.incomeCount,
+      ) +
+      _ghostBookedEntryCount(year: year, month: month);
 
-  int expenseEntryCount({int? year, int? month}) => _entryCount(
-    year: year,
-    month: month,
-    select: (report) => report.expenseCount,
-  );
+  int expenseEntryCount({int? year, int? month}) =>
+      _entryCount(
+        year: year,
+        month: month,
+        select: (report) => report.expenseCount,
+      ) +
+      _ghostBookedEntryCount(year: year, month: month);
+
+  int _ghostBookedEntryCount({required int? year, required int? month}) {
+    if (year != null &&
+        (year < DashboardProfileSeedFixtureContract._ghostStartYear ||
+            year > DashboardProfileSeedFixtureContract._ghostEndYear)) {
+      return 0;
+    }
+    final yearCount = year == null
+        ? DashboardProfileSeedFixtureContract._ghostEndYear -
+              DashboardProfileSeedFixtureContract._ghostStartYear +
+              1
+        : 1;
+    final monthCount = month == null ? 12 : 1;
+    return _ghostBookedRowsPerDirectionMonth * yearCount * monthCount;
+  }
 
   int _entryCount({
     required int? year,

@@ -10,6 +10,7 @@ import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.FluviFinancialLimitPeriod
 import com.fluvi.core.query.FluviPreparedYearWindow
+import com.fluvi.core.query.FluviGhostFilterMode
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryRefinements
@@ -25,6 +26,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.LocalDate
+import java.time.ZoneId
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -51,17 +53,17 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(11, report.createdCategoryCount)
         assertEquals(33, report.createdPartnerCount)
         assertEquals(5_519, report.createdEntryCount)
-        assertEquals(12, core.categories.list().size)
+        assertEquals(14, core.categories.list().size)
 
         val income = core.query.total(yearScope(LedgerDirection.income))
         val expense = core.query.total(yearScope(LedgerDirection.expense))
 
-        assertEquals(493_800_000L, income.amountScaled100)
-        assertEquals(569_325_800L, expense.amountScaled100)
-        assertEquals(42L, income.entryCount)
-        assertEquals(1_773L, expense.entryCount)
-        assertEquals(707_000L * 100L, core.query.total(monthScope(LedgerDirection.income, 7)).amountScaled100)
-        assertEquals(689_000L * 100L, core.query.total(monthScope(LedgerDirection.expense, 7)).amountScaled100)
+        assertEquals(523_800_000L, income.amountScaled100)
+        assertEquals(581_085_800L, expense.amountScaled100)
+        assertEquals(54L, income.entryCount)
+        assertEquals(1_785L, expense.entryCount)
+        assertEquals(732_000L * 100L, core.query.total(monthScope(LedgerDirection.income, 7)).amountScaled100)
+        assertEquals(698_800L * 100L, core.query.total(monthScope(LedgerDirection.expense, 7)).amountScaled100)
         val highDensityReports = report.monthlyReports.filter { it.year == 2025 }
         assertEquals(12, highDensityReports.size)
         highDensityReports.forEach { month ->
@@ -87,11 +89,124 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(0, second.createdCategoryCount)
         assertEquals(0, second.createdPartnerCount)
         assertEquals(0, second.createdEntryCount)
+        assertEquals(96, first.createdGhostOccurrenceCount)
+        assertEquals(48, first.createdGhostLedgerEntryCount)
+        assertEquals(96, first.ghostOccurrenceCount)
+        assertEquals(48, first.ghostPendingOccurrenceCount)
+        assertEquals(48, first.ghostRealizedOccurrenceCount)
+        assertEquals(48, first.ghostLedgerEntryCount)
+        assertEquals(0, second.createdGhostOccurrenceCount)
+        assertEquals(0, second.createdGhostLedgerEntryCount)
+        assertEquals(96, second.ghostOccurrenceCount)
+        assertEquals(48, second.ghostLedgerEntryCount)
         assertEquals(
-            5_519L,
+            5_567L,
             core.query.total(FluviQueryScope(direction = LedgerDirection.income)).entryCount +
                 core.query.total(FluviQueryScope(direction = LedgerDirection.expense)).entryCount,
         )
+    }
+
+    @Test
+    fun ghostFixtureWritesEvery2026And2027MonthThroughTheNormalOccurrenceAndLedgerPaths() = runBlocking {
+        core.demoSeed.seed()
+
+        val occurrences = core.recurrences.occurrences(limit = 200)
+            .filter { it.note?.startsWith("Demo ") == true }
+        assertEquals(96, occurrences.size)
+        assertEquals(48, occurrences.count { it.status == com.fluvi.core.model.RecurrenceOccurrenceStatus.pending })
+        assertEquals(48, occurrences.count { it.status == com.fluvi.core.model.RecurrenceOccurrenceStatus.realized })
+        assertEquals(
+            (2026..2027).flatMap { year -> (1..12).map { month -> year to month } }.toSet(),
+            occurrences.map { occurrence ->
+                val date = LocalDate.ofEpochDay(occurrence.expectedLocalEpochDay)
+                date.year to date.monthValue
+            }.toSet(),
+        )
+        occurrences.groupBy { LocalDate.ofEpochDay(it.expectedLocalEpochDay) }.forEach { (day, monthly) ->
+            assertEquals(28, day.dayOfMonth)
+            assertEquals(4, monthly.size)
+            assertEquals(2, monthly.count { it.status == com.fluvi.core.model.RecurrenceOccurrenceStatus.pending })
+            assertEquals(2, monthly.count { it.status == com.fluvi.core.model.RecurrenceOccurrenceStatus.realized })
+        }
+        occurrences.forEach { occurrence ->
+            val date = LocalDate.ofEpochDay(occurrence.expectedLocalEpochDay)
+            assertEquals(
+                date.atTime(
+                    occurrence.expectedLocalTimeMinutes / 60,
+                    occurrence.expectedLocalTimeMinutes % 60,
+                ).atZone(ZoneId.of("Europe/Budapest")).toInstant().toEpochMilli(),
+                occurrence.expectedAtUtcMs,
+            )
+        }
+        occurrences.groupBy { occurrence ->
+            occurrence.direction to occurrence.status
+        }.forEach { (group, examples) ->
+            val (direction, status) = group
+            val (amount, minute) = when (direction to status) {
+                LedgerDirection.income to com.fluvi.core.model.RecurrenceOccurrenceStatus.pending ->
+                    10_000L * 100L to 8 * 60
+                LedgerDirection.income to com.fluvi.core.model.RecurrenceOccurrenceStatus.realized ->
+                    25_000L * 100L to 10 * 60
+                LedgerDirection.expense to com.fluvi.core.model.RecurrenceOccurrenceStatus.pending ->
+                    4_500L * 100L to 12 * 60
+                LedgerDirection.expense to com.fluvi.core.model.RecurrenceOccurrenceStatus.realized ->
+                    9_800L * 100L to 18 * 60
+                else -> error("Unexpected ghost fixture group: $direction / $status")
+            }
+            assertEquals(24, examples.size)
+            assertTrue(examples.all { it.expectedAmountScaled100 == amount })
+            assertTrue(examples.all { it.expectedLocalTimeMinutes == minute })
+        }
+
+        val realized = occurrences.filter {
+            it.status == com.fluvi.core.model.RecurrenceOccurrenceStatus.realized
+        }
+        assertEquals(48, realized.map { core.recurrences.realizedLedgerEntryId(it.occurrenceId) }.distinct().size)
+        assertTrue(realized.all { core.recurrences.realizedLedgerEntryId(it.occurrenceId) != null })
+
+        // All fixture rules are unbound push recurrences, so a scheduler pass
+        // cannot turn the past pending examples into booked Ledger rows.
+        assertTrue(core.recurrences.realizeDueTimeOccurrences(Long.MAX_VALUE).isEmpty())
+        assertEquals(
+            48,
+            core.recurrences.occurrences(limit = 200)
+                .count { it.note?.startsWith("Demo ") == true && it.status == com.fluvi.core.model.RecurrenceOccurrenceStatus.pending },
+        )
+
+        assertMonthlyGhostPresentation(
+            direction = LedgerDirection.income,
+            realizedAmountScaled100 = 25_000L * 100L,
+        )
+        assertMonthlyGhostPresentation(
+            direction = LedgerDirection.expense,
+            realizedAmountScaled100 = 9_800L * 100L,
+        )
+
+        // This is the same retained preview lane consumed by the LogBox
+        // renderer. Pending and realized rows must share its chronological
+        // ordering; grouping pending rows ahead of booked rows makes Dart's
+        // prepared projection correctly reject the frame.
+        val prepared = core.query.preparedDashboardIndex(
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.month("2026-07")),
+                ),
+            ),
+            categoryIds = emptySet(),
+            partnerIds = emptySet(),
+            refinements = FluviQueryRefinements(),
+            previewPageSize = 200,
+            yearWindow = FluviPreparedYearWindow(2026, 2027),
+        )
+        LedgerDirection.entries.forEach { direction ->
+            val frame = prepared.frames.single {
+                it.direction == direction && it.timeScopeKey == "month:2026-07"
+            }
+            val rows = frame.rowIndices.map(prepared.rows::get)
+            assertEquals(2, rows.count { it.recurrenceOccurrenceId != null })
+            assertChronologicalRendererOrder(rows)
+        }
     }
 
     @Test
@@ -135,7 +250,11 @@ class SeedFluviDemoDatasetUseCaseTest {
     fun sumExpensePagingKeepsOneAllTimeIdentityWhileItsNewestHundredRowsAreThe2027FastfoodMirror() = runBlocking {
         core.demoSeed.seed()
 
-        val sumScope = FluviQueryScope(direction = LedgerDirection.expense)
+        val fastfoodCategory = core.categories.list().single { it.name == "Gyorsétterem" }
+        val sumScope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            categoryIds = setOf(fastfoodCategory.id),
+        )
         val total = core.query.total(sumScope)
         assertTrue(total.entryCount > 100L)
         val revision = core.query.currentCoreRevision()
@@ -317,7 +436,11 @@ class SeedFluviDemoDatasetUseCaseTest {
         )
         val categoryInventory = core.categories.list()
         val categoryById = categoryInventory.associateBy { it.id }
-        val incomeNames = setOf("Fizetés", "Egyéb bevétel")
+        val incomeNames = setOf(
+            "Fizetés",
+            "Egyéb bevétel",
+            "Demo ghost bevétel",
+        )
         val expenseNames = setOf(
             "Lakhatás",
             "Élelmiszer",
@@ -328,6 +451,7 @@ class SeedFluviDemoDatasetUseCaseTest {
             "Vásárlás",
             "Előfizetések",
             "Gyorsétterem",
+            "Demo ghost kiadás",
         )
         // The Budget bank must retain the authoritative category-repository
         // order, not the demo generator declaration order.
@@ -339,8 +463,8 @@ class SeedFluviDemoDatasetUseCaseTest {
 
         assertEquals(incomeIds, income.orderedCategoryIds)
         assertEquals(expenseIds, expense.orderedCategoryIds)
-        assertEquals(3, income.targetCount)
-        assertEquals(10, expense.targetCount)
+        assertEquals(4, income.targetCount)
+        assertEquals(11, expense.targetCount)
         assertEquals(
             incomeNames,
             income.orderedCategoryIds.map { categoryById.getValue(it).name }.toSet(),
@@ -383,7 +507,7 @@ class SeedFluviDemoDatasetUseCaseTest {
 
         assertTrue(core.categories.getById(userCategoryId) != null)
         assertEquals(
-            1_774L,
+            1_786L,
             core.query.total(yearScope(LedgerDirection.expense)).entryCount,
         )
     }
@@ -412,4 +536,75 @@ class SeedFluviDemoDatasetUseCaseTest {
             ),
         ),
     )
+
+    private suspend fun assertMonthlyGhostPresentation(
+        direction: LedgerDirection,
+        realizedAmountScaled100: Long,
+    ) {
+        val base = FluviQueryScope(
+            direction = direction,
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.day("2026-07-28")),
+                ),
+            ),
+        )
+        val onlyGhost = core.query.readSlice(
+            base.copy(ghostFilterMode = FluviGhostFilterMode.onlyGhost),
+        )
+        val nonGhost = core.query.readSlice(
+            base.copy(ghostFilterMode = FluviGhostFilterMode.nonGhost),
+        )
+        val both = core.query.readSlice(base)
+
+        assertEquals(2L, onlyGhost.presentationEntryCount)
+        assertEquals(1L, onlyGhost.entryCount)
+        assertEquals(realizedAmountScaled100, onlyGhost.totalMinor)
+        assertEquals(1, onlyGhost.entries.count { it.isPendingGhost })
+        assertEquals(1, onlyGhost.entries.count { !it.isPendingGhost && it.recurrenceOccurrenceId != null })
+        assertChronologicalRendererOrder(onlyGhost.entries)
+
+        val onlyGhostScope = base.copy(ghostFilterMode = FluviGhostFilterMode.onlyGhost)
+        val revision = core.query.currentCoreRevision()
+        val firstCommitted = core.query.readCommittedPage(
+            scope = onlyGhostScope,
+            pageSize = 1,
+            after = null,
+            expectedRevision = revision,
+            authoritativeTotalMinor = onlyGhost.totalMinor,
+            authoritativeEntryCount = onlyGhost.entryCount,
+            authoritativePresentationEntryCount = onlyGhost.presentationEntryCount,
+        ).slice
+        val secondCommitted = core.query.readCommittedPage(
+            scope = onlyGhostScope,
+            pageSize = 1,
+            after = requireNotNull(firstCommitted.nextCursor),
+            expectedRevision = revision,
+            authoritativeTotalMinor = onlyGhost.totalMinor,
+            authoritativeEntryCount = onlyGhost.entryCount,
+            authoritativePresentationEntryCount = onlyGhost.presentationEntryCount,
+        ).slice
+        assertChronologicalRendererOrder(firstCommitted.entries + secondCommitted.entries)
+        assertEquals(2, (firstCommitted.entries + secondCommitted.entries).map { it.entryId }.distinct().size)
+
+        assertTrue(nonGhost.entries.none { it.note?.startsWith("Demo ") == true })
+        assertEquals(nonGhost.presentationEntryCount + 2L, both.presentationEntryCount)
+        assertEquals(nonGhost.entryCount + 1L, both.entryCount)
+        assertEquals(nonGhost.totalMinor + realizedAmountScaled100, both.totalMinor)
+    }
+
+    private fun assertChronologicalRendererOrder(
+        rows: List<com.fluvi.core.query.FluviDashboardLedgerRow>,
+    ) {
+        assertTrue(
+            rows.zipWithNext().all { (left, right) ->
+                left.bookedLocalEpochDay > right.bookedLocalEpochDay ||
+                    (left.bookedLocalEpochDay == right.bookedLocalEpochDay &&
+                        (left.bookedLocalTimeMinutes > right.bookedLocalTimeMinutes ||
+                            (left.bookedLocalTimeMinutes == right.bookedLocalTimeMinutes &&
+                                left.entryId > right.entryId)))
+            },
+        )
+    }
 }

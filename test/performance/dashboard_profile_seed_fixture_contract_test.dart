@@ -14,6 +14,14 @@ void main() {
       const <int, int>{2025: 12, 2026: 8, 2027: 12},
     );
     expect(DashboardProfileSeedFixtureContract.expectedTotalMonthCount, 32);
+    expect(
+      DashboardProfileSeedFixtureContract.expectedGhostOccurrenceCount,
+      96,
+    );
+    expect(
+      DashboardProfileSeedFixtureContract.expectedGhostLedgerEntryCount,
+      48,
+    );
 
     expect(
       () => DashboardProfileSeedFixtureContract.verify(_currentSeedReport()),
@@ -39,35 +47,44 @@ void main() {
       _currentSeedReport(),
     );
 
-    expect(fixture.incomeEntryCount(), 19);
+    expect(fixture.incomeEntryCount(), 43);
     expect(fixture.incomeEntryCount(year: 2025), 12);
-    expect(fixture.incomeEntryCount(year: 2026, month: 7), 1);
-    expect(fixture.expenseEntryCount(), 1215);
-    expect(fixture.expenseEntryCount(year: 2027), 100);
+    expect(fixture.incomeEntryCount(year: 2026, month: 7), 2);
+    expect(fixture.expenseEntryCount(), 1239);
+    expect(fixture.expenseEntryCount(year: 2027), 112);
   });
 }
 
-DemoSeedReport _currentSeedReport({List<DemoMonthReport>? months}) =>
-    DemoSeedReport(
-      seedVersion: 8,
-      prngSeed: 20260107,
-      createdCategoryCount: 10,
-      createdPartnerCount: 27,
-      createdEntryCount:
-          DashboardProfileSeedFixtureContract.expectedSeededTransactionCount,
-      monthlyReports:
-          months ??
-          <DemoMonthReport>[
-            ..._monthsFor(year: 2025, count: 12),
-            ..._monthsFor(year: 2026, count: 7),
-            _september2026(),
-            ..._fastfoodMonthsFor2027(),
-          ],
-      earliestEntryAtUtcMs: 1735686000000,
-      latestEntryAtUtcMs: 1782777600000,
-      alreadySeeded: false,
-      durationMs: 0,
-    );
+DemoSeedReport _currentSeedReport({
+  List<DemoMonthReport>? months,
+}) => DemoSeedReport(
+  seedVersion: 8,
+  prngSeed: 20260107,
+  createdCategoryCount: 10,
+  createdPartnerCount: 27,
+  createdEntryCount:
+      DashboardProfileSeedFixtureContract.expectedSeededTransactionCount,
+  monthlyReports:
+      months ??
+      <DemoMonthReport>[
+        ..._monthsFor(year: 2025, count: 12),
+        ..._monthsFor(year: 2026, count: 7),
+        _september2026(),
+        ..._fastfoodMonthsFor2027(),
+      ],
+  earliestEntryAtUtcMs: 1735686000000,
+  latestEntryAtUtcMs: 1782777600000,
+  alreadySeeded: false,
+  durationMs: 0,
+  ghostOccurrenceCount:
+      DashboardProfileSeedFixtureContract.expectedGhostOccurrenceCount,
+  ghostPendingOccurrenceCount:
+      DashboardProfileSeedFixtureContract.expectedGhostPendingOccurrenceCount,
+  ghostRealizedOccurrenceCount:
+      DashboardProfileSeedFixtureContract.expectedGhostRealizedOccurrenceCount,
+  ghostLedgerEntryCount:
+      DashboardProfileSeedFixtureContract.expectedGhostLedgerEntryCount,
+);
 
 List<DemoMonthReport> _monthsFor({required int year, required int count}) =>
     List<DemoMonthReport>.generate(

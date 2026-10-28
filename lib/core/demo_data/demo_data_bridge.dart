@@ -61,6 +61,21 @@ class MethodChannelDemoDataBridge {
       latestEntryAtUtcMs: _optionalInt(map['latestEntryAtUtcMs']),
       alreadySeeded: _asBool(map['alreadySeeded'], 'alreadySeeded'),
       durationMs: _asInt(map['durationMs'], 'durationMs'),
+      createdGhostCategoryCount:
+          _optionalInt(map['createdGhostCategoryCount']) ?? 0,
+      createdGhostPartnerCount:
+          _optionalInt(map['createdGhostPartnerCount']) ?? 0,
+      createdGhostRuleCount: _optionalInt(map['createdGhostRuleCount']) ?? 0,
+      createdGhostOccurrenceCount:
+          _optionalInt(map['createdGhostOccurrenceCount']) ?? 0,
+      createdGhostLedgerEntryCount:
+          _optionalInt(map['createdGhostLedgerEntryCount']) ?? 0,
+      ghostOccurrenceCount: _optionalInt(map['ghostOccurrenceCount']) ?? 0,
+      ghostPendingOccurrenceCount:
+          _optionalInt(map['ghostPendingOccurrenceCount']) ?? 0,
+      ghostRealizedOccurrenceCount:
+          _optionalInt(map['ghostRealizedOccurrenceCount']) ?? 0,
+      ghostLedgerEntryCount: _optionalInt(map['ghostLedgerEntryCount']) ?? 0,
     );
   }
 

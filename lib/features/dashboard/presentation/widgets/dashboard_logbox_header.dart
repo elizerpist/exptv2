@@ -406,12 +406,18 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
       context,
     ).depthFor(DashboardCornerSurfaceFamily.searchPill);
     final trailingWidth = trailing == null ? 0.0 : 48 * scale;
+    final leftInset = FluviVisualTokens.controlHorizontalInset * scale;
+    // The fling selector is part of the SearchPill, not a floating control.
+    // Keep the established leading/search spacing but allow its full 48dp
+    // hit target to sit close to the trailing rounded edge.
+    final rightInset = trailing == null ? leftInset : 2 * scale;
     final innerGap = FluviVisualTokens.controlInnerGap * scale;
     final iconWidth = FluviVisualTokens.iconSize * scale;
     final availableTextAndFacets = math.max(
       0.0,
       bounds.width -
-          2 * FluviVisualTokens.controlHorizontalInset * scale -
+          leftInset -
+          rightInset -
           iconWidth -
           innerGap -
           trailingWidth -
@@ -443,9 +449,7 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
             ),
         boxShadow: depth.shadows,
         child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: FluviVisualTokens.controlHorizontalInset * scale,
-          ),
+          padding: EdgeInsets.only(left: leftInset, right: rightInset),
           child: Row(
             children: [
               Icon(
