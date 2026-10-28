@@ -36,7 +36,6 @@ class _RecurringTransactionWizardPageState
   int _step = 0;
   PartnerDirectoryEntry? _partner;
   String? _overrideCategory;
-  late LedgerDirection _direction;
   var _policy = RecurrenceAmountPolicy.fixed;
   var _trigger = RecurrenceTriggerKind.time;
   late DateTime _first;
@@ -51,7 +50,6 @@ class _RecurringTransactionWizardPageState
   @override
   void initState() {
     super.initState();
-    _direction = widget.initialDirection;
     _first = DateTime.now();
     _loadPushProfiles();
   }
@@ -180,7 +178,9 @@ class _RecurringTransactionWizardPageState
         categorySelection: _overrideCategory == null
             ? const ManualCategorySelection.partnerDefault()
             : ManualCategorySelection.entryOverride(_overrideCategory),
-        direction: _direction,
+        // The creation surface snapshots the Dashboard income/expense pill.
+        // It intentionally cannot be changed within this wizard.
+        direction: widget.initialDirection,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
         triggerKind: _trigger,
         amountPolicy: _policy,
@@ -224,6 +224,9 @@ class _RecurringTransactionWizardPageState
 
   @override
   Widget build(BuildContext context) {
+    final directionTitle = widget.initialDirection == LedgerDirection.income
+        ? 'bevételi'
+        : 'kiadási';
     const titles = [
       'Alapadatok',
       'Összeg beállítása',
@@ -237,7 +240,11 @@ class _RecurringTransactionWizardPageState
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Új ismétlődő tranzakció'),
+        title: Text(
+          'Új ismétlődő $directionTitle tranzakció',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(value: (_step + 1) / titles.length),
@@ -324,22 +331,6 @@ class _RecurringTransactionWizardPageState
               label: _overrideCategory == null
                   ? 'Kategória · Partner alapértelmezése'
                   : 'Kategória · Egyedi',
-            ),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<LedgerDirection>(
-              initialValue: _direction,
-              items: const [
-                DropdownMenuItem(
-                  value: LedgerDirection.expense,
-                  child: Text('Kiadás'),
-                ),
-                DropdownMenuItem(
-                  value: LedgerDirection.income,
-                  child: Text('Bevétel'),
-                ),
-              ],
-              onChanged: (value) => setState(() => _direction = value!),
-              decoration: const InputDecoration(labelText: 'Tranzakcióirány'),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -524,7 +515,7 @@ class _RecurringTransactionWizardPageState
           children: [
             Text(_name.text, style: Theme.of(context).textTheme.headlineSmall),
             Text(
-              '${_direction == LedgerDirection.expense ? 'Kiadás' : 'Bevétel'} · $_amountLabel',
+              '${widget.initialDirection == LedgerDirection.expense ? 'Kiadás' : 'Bevétel'} · $_amountLabel',
             ),
             Text(
               'Havonta ${_first.day}. napján · ${_trigger == RecurrenceTriggerKind.time ? 'Időalapú' : 'Push-triggerelt'}',

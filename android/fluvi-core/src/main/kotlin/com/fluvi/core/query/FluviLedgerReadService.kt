@@ -415,8 +415,7 @@ class FluviLedgerReadService internal constructor(
                     presentationRows += ghost
                 }
             }
-            val presentationNow = System.currentTimeMillis()
-            presentationRows.sortWith(presentationRowComparator(presentationNow))
+            presentationRows.sortWith(presentationRowComparator())
             val retained = retainPreparedRows(
                 rows = presentationRows,
                 previewCapacity = previewPageSize + 1,
@@ -889,40 +888,19 @@ class FluviLedgerReadService internal constructor(
             tableAlias = "ledger",
         )
         val ghostWhere = ghostPresentationWhere(scope, expandedPartners)
-        val presentationNow = System.currentTimeMillis()
         val arguments = ArrayList<Any>(ledgerWhere.arguments.size + ghostWhere.arguments.size + 20)
         arguments.addAll(ledgerWhere.arguments)
-        // This placeholder occurs in the ghost SELECT before its WHERE
-        // predicates. Keep bind order identical to the SQL text: swapping
-        // these would make a valid pending-ghost count render an empty page.
-        arguments += presentationNow
         arguments.addAll(ghostWhere.arguments)
         val outerCursor = after?.let { cursor ->
-            require(cursor.timelineSegment in 0..1) { "Invalid presentation cursor segment." }
-            arguments += cursor.timelineSegment
-            arguments += cursor.timelineSegment
-            arguments += cursor.pendingSortBucket
-            arguments += cursor.pendingSortBucket
-            arguments += cursor.pendingExpectedAtUtcMs
-            arguments += cursor.pendingExpectedAtUtcMs
-            arguments += cursor.pendingExpectedAtUtcMs
-            arguments += cursor.entryId
-            arguments += cursor.timelineSegment
             arguments += cursor.bookedLocalEpochDay
             arguments += cursor.bookedLocalEpochDay
             arguments += cursor.bookedLocalTimeMinutes
             arguments += cursor.bookedLocalEpochDay
             arguments += cursor.bookedLocalTimeMinutes
             arguments += cursor.entryId
-            " WHERE (timeline_segment > ? OR " +
-                "(timeline_segment = 0 AND ? = 0 AND (" +
-                "pending_sort_bucket > ? OR " +
-                "(pending_sort_bucket = ? AND ((pending_sort_bucket = 0 AND pending_expected_at_utc_ms < ?) OR " +
-                "(pending_sort_bucket = 1 AND pending_expected_at_utc_ms > ?) OR " +
-                "(pending_expected_at_utc_ms = ? AND timeline_id > ?))))) OR " +
-                "(timeline_segment = 1 AND ? = 1 AND (booked_local_epoch_day < ? OR " +
+            " WHERE (booked_local_epoch_day < ? OR " +
                 "(booked_local_epoch_day = ? AND booked_local_time_minutes < ?) OR " +
-                "(booked_local_epoch_day = ? AND booked_local_time_minutes = ? AND timeline_id < ?))))"
+                "(booked_local_epoch_day = ? AND booked_local_time_minutes = ? AND timeline_id < ?))"
         }.orEmpty()
         arguments += limit
         val sql = "SELECT * FROM (" +
@@ -962,7 +940,7 @@ class FluviLedgerReadService internal constructor(
             "occurrence.category_assignment_mode AS assignment_mode, 'recurring' AS origin_kind, " +
             "occurrence.note AS note, 1 AS is_pending_ghost, occurrence.id AS recurrence_occurrence_id, " +
             "CASE WHEN occurrence.expected_amount_scaled_100 IS NULL THEN 1 ELSE 0 END AS amount_is_unknown, " +
-            "0 AS timeline_segment, CASE WHEN occurrence.expected_at_utc_ms <= ? THEN 0 ELSE 1 END AS pending_sort_bucket, " +
+            "0 AS timeline_segment, 0 AS pending_sort_bucket, " +
             "occurrence.expected_at_utc_ms AS pending_expected_at_utc_ms " +
             "FROM fluvi_recurrence_occurrences AS occurrence " +
             "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
@@ -972,11 +950,7 @@ class FluviLedgerReadService internal constructor(
             "JOIN fluvi_categories AS ghost_category ON ghost_category.id = occurrence.category_id " +
             ghostWhere.sql +
             ")" + outerCursor +
-            " ORDER BY timeline_segment ASC, pending_sort_bucket ASC, " +
-            "CASE WHEN timeline_segment = 0 AND pending_sort_bucket = 0 THEN pending_expected_at_utc_ms END DESC, " +
-            "CASE WHEN timeline_segment = 0 AND pending_sort_bucket = 1 THEN pending_expected_at_utc_ms END ASC, " +
-            "CASE WHEN timeline_segment = 0 THEN timeline_id END ASC, " +
-            "booked_local_epoch_day DESC, booked_local_time_minutes DESC, timeline_id DESC LIMIT ?"
+            " ORDER BY booked_local_epoch_day DESC, booked_local_time_minutes DESC, timeline_id DESC LIMIT ?"
         val rows = mutableListOf<FluviDashboardLedgerRow>()
         database.openHelper.readableDatabase.query(SimpleSQLiteQuery(sql, arguments.toTypedArray())).use { cursor ->
             while (cursor.moveToNext()) rows += cursor.toPresentationRow()
@@ -1429,39 +1403,15 @@ class FluviLedgerReadService internal constructor(
         )
     }
 
-    private fun FluviDashboardLedgerRow.toCursor(
-        nowUtcMs: Long = System.currentTimeMillis(),
-    ): FluviTimelineCursor = FluviTimelineCursor(
+    private fun FluviDashboardLedgerRow.toCursor(): FluviTimelineCursor = FluviTimelineCursor(
         bookedLocalEpochDay = bookedLocalEpochDay,
         bookedLocalTimeMinutes = bookedLocalTimeMinutes,
         entryId = entryId,
-        timelineSegment = if (isPendingGhost) 0 else 1,
-        pendingSortBucket = if (!isPendingGhost) 2 else if (occurredAtUtcMs <= nowUtcMs) 0 else 1,
-        pendingExpectedAtUtcMs = if (isPendingGhost) occurredAtUtcMs else 0L,
     )
 
-    private fun presentationRowComparator(
-        nowUtcMs: Long,
-    ): Comparator<FluviDashboardLedgerRow> = Comparator { left, right ->
+    private fun presentationRowComparator(): Comparator<FluviDashboardLedgerRow> = Comparator { left, right ->
         val direction = left.direction.name.compareTo(right.direction.name)
         if (direction != 0) return@Comparator direction
-        val leftSegment = if (left.isPendingGhost) 0 else 1
-        val rightSegment = if (right.isPendingGhost) 0 else 1
-        val segment = leftSegment.compareTo(rightSegment)
-        if (segment != 0) return@Comparator segment
-        if (leftSegment == 0) {
-            val leftBucket = if (left.occurredAtUtcMs <= nowUtcMs) 0 else 1
-            val rightBucket = if (right.occurredAtUtcMs <= nowUtcMs) 0 else 1
-            val bucket = leftBucket.compareTo(rightBucket)
-            if (bucket != 0) return@Comparator bucket
-            val expected = if (leftBucket == 0) {
-                right.occurredAtUtcMs.compareTo(left.occurredAtUtcMs)
-            } else {
-                left.occurredAtUtcMs.compareTo(right.occurredAtUtcMs)
-            }
-            if (expected != 0) return@Comparator expected
-            return@Comparator left.entryId.compareTo(right.entryId)
-        }
         val day = right.bookedLocalEpochDay.compareTo(left.bookedLocalEpochDay)
         if (day != 0) return@Comparator day
         val minute = right.bookedLocalTimeMinutes.compareTo(left.bookedLocalTimeMinutes)

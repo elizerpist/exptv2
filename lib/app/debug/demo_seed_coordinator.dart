@@ -41,6 +41,11 @@ class DemoSeedCoordinator {
         '[DashboardQuery] event=D1 demoSeedCommitted '
         'time=${DateTime.now().microsecondsSinceEpoch} '
         'entries=${report.createdEntryCount} '
+        'ghostOccurrences=${report.ghostOccurrenceCount} '
+        'ghostPending=${report.ghostPendingOccurrenceCount} '
+        'ghostRealized=${report.ghostRealizedOccurrenceCount} '
+        'ghostLedger=${report.ghostLedgerEntryCount} '
+        'createdGhostOccurrences=${report.createdGhostOccurrenceCount} '
         'alreadySeeded=${report.alreadySeeded} '
         'earliest=${report.earliestEntryAtUtcMs} '
         'latest=${report.latestEntryAtUtcMs}',
@@ -80,6 +85,8 @@ class DemoSeedCoordinator {
       debugPrint(
         '[FluviDemoSeed] version=${report.seedVersion} '
         'entries=${report.createdEntryCount} '
+        'ghostOccurrences=${report.ghostOccurrenceCount} '
+        'ghostLedger=${report.ghostLedgerEntryCount} '
         'alreadySeeded=${report.alreadySeeded}',
       );
       return true;
