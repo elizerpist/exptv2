@@ -355,6 +355,11 @@ class MainActivity : FlutterActivity() {
                                                     "createdEntries=${report.createdEntryCount} " +
                                                     "createdCategories=${report.createdCategoryCount} " +
                                                     "createdPartners=${report.createdPartnerCount} " +
+                                                    "ghostOccurrences=${report.ghostOccurrenceCount} " +
+                                                    "ghostPending=${report.ghostPendingOccurrenceCount} " +
+                                                    "ghostRealized=${report.ghostRealizedOccurrenceCount} " +
+                                                    "ghostLedger=${report.ghostLedgerEntryCount} " +
+                                                    "createdGhostOccurrences=${report.createdGhostOccurrenceCount} " +
                                                     "alreadySeeded=${report.alreadySeeded}",
                                                 durationMs = report.durationMs,
                                             )
@@ -2388,6 +2393,15 @@ class MainActivity : FlutterActivity() {
         "createdCategoryCount" to report.createdCategoryCount,
         "createdPartnerCount" to report.createdPartnerCount,
         "createdEntryCount" to report.createdEntryCount,
+        "createdGhostCategoryCount" to report.createdGhostCategoryCount,
+        "createdGhostPartnerCount" to report.createdGhostPartnerCount,
+        "createdGhostRuleCount" to report.createdGhostRuleCount,
+        "createdGhostOccurrenceCount" to report.createdGhostOccurrenceCount,
+        "createdGhostLedgerEntryCount" to report.createdGhostLedgerEntryCount,
+        "ghostOccurrenceCount" to report.ghostOccurrenceCount,
+        "ghostPendingOccurrenceCount" to report.ghostPendingOccurrenceCount,
+        "ghostRealizedOccurrenceCount" to report.ghostRealizedOccurrenceCount,
+        "ghostLedgerEntryCount" to report.ghostLedgerEntryCount,
         "earliestEntryAtUtcMs" to report.earliestEntryAtUtcMs,
         "latestEntryAtUtcMs" to report.latestEntryAtUtcMs,
         "alreadySeeded" to report.alreadySeeded,

@@ -76,7 +76,7 @@ void main() {
       final densityTimelines = <String, Object?>{};
       for (final scenario in const <_ProfileScenario>[
         _ProfileScenario.monthEmpty,
-        _ProfileScenario.month94,
+        _ProfileScenario.month95,
         _ProfileScenario.yearEmpty,
         _ProfileScenario.yearPopulated,
       ]) {
@@ -122,7 +122,7 @@ void main() {
           reports[_ProfileScenario.yearEmpty.reportKey]!,
         ),
         'month_empty_vs_populated': _p95Comparison(
-          reports[_ProfileScenario.month94.reportKey]!,
+          reports[_ProfileScenario.month95.reportKey]!,
           reports[_ProfileScenario.monthEmpty.reportKey]!,
         ),
         'first_vs_tenth_fling': _p95Comparison(
@@ -141,12 +141,12 @@ void main() {
         label: 'year populated/empty',
       );
       _expectEquivalentMotion(
-        reports[_ProfileScenario.month94.reportKey]!,
+        reports[_ProfileScenario.month95.reportKey]!,
         reports[_ProfileScenario.monthEmpty.reportKey]!,
         label: 'month populated/empty',
       );
       _expectEquivalentRailFlight(
-        reports[_ProfileScenario.month94.reportKey]!,
+        reports[_ProfileScenario.month95.reportKey]!,
         reports[_ProfileScenario.monthEmpty.reportKey]!,
         label: 'month populated/empty',
       );
@@ -205,7 +205,7 @@ enum _ProfileScenario {
   summaryPlane,
   yearPopulated,
   yearEmpty,
-  month94,
+  month95,
   monthEmpty,
   parentWhileRailOpen,
   directionWhileRailOpen,
@@ -216,7 +216,7 @@ enum _ProfileScenario {
     summaryPlane => 'A_summary_sum_year_month',
     yearPopulated => 'B_year_month_rail_populated',
     yearEmpty => 'C_year_month_rail_empty',
-    month94 => 'D_month_day_rail_94',
+    month95 => 'D_month_day_rail_95',
     monthEmpty => 'E_month_day_rail_empty',
     parentWhileRailOpen => 'F_parent_while_rail_open',
     directionWhileRailOpen => 'G_direction_while_rail_open',
@@ -1478,7 +1478,7 @@ Future<void> _runMeasuredScenario(
       );
       return;
     case _ProfileScenario.yearEmpty:
-    case _ProfileScenario.month94:
+    case _ProfileScenario.month95:
     case _ProfileScenario.monthEmpty:
       for (var index = 0; index < 10; index += 1) {
         await _flingRail(tester, controller);
@@ -2060,9 +2060,11 @@ Future<void> _flingBudgetAvatar(
 }
 
 /// The 2027-only Fastfood category is deliberately absent from July 2026,
-/// which is the fixed native profile fixture month. K's row-paint assertions
-/// remain about the eight nonempty fixture categories, so a broad real fling
-/// that lands on that one empty category gets one bounded, real
+/// which is the fixed native profile fixture month. K deliberately preserves
+/// its eight legacy category targets: the deterministic ghost demo category
+/// is real application data, but is outside this baseline's stable target
+/// set. A broad real fling that lands on the one empty category gets one
+/// bounded, real
 /// pointer recovery before its final nonempty evidence is captured. This does
 /// not command the carousel or change production selection ownership.
 Future<void> _recoverAvatarToNonemptyFixtureTarget(
@@ -2341,7 +2343,10 @@ Map<String, Object?> _verifyAvatarNonemptyFixture(
   );
   final seen = <String>{};
   final counts = <String, int>{};
-  final nonemptyTargets = categoryTargets
+  final legacyCategoryTargets = categoryTargets
+      .where((target) => target.category?.displayName != 'Demo ghost kiadás')
+      .toList(growable: false);
+  final nonemptyTargets = legacyCategoryTargets
       .where((target) {
         final categoryId = target.category!.id;
         return rows.any((row) => row.categoryId == categoryId);
@@ -2381,11 +2386,14 @@ Map<String, Object?> _verifyAvatarNonemptyFixture(
       .toSet();
   expect(futureOnlyIds, isEmpty);
   expect(rows.length, greaterThanOrEqualTo(8));
+  // The membership is the booked ledger base. The rendered frame also keeps
+  // July's visible pending Expense ghost occurrence, which deliberately has
+  // no ledger row and therefore must not be folded into financial membership.
   expect(
-    rows.length,
     controller.preparedIndex!
         .frameFor(controller.navigation.state.parentQueryScope)
         .entryCount,
+    rows.length + 1,
   );
   return {
     'fixture_category_row_counts': counts,

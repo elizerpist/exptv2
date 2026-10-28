@@ -11,6 +11,8 @@ import com.fluvi.core.demo.DemoDatasetGenerator
 import com.fluvi.core.demo.DemoDatasetPlan
 import com.fluvi.core.demo.DemoDatasetVersion
 import com.fluvi.core.demo.DemoSeedReport
+import com.fluvi.core.demo.GhostDemoDatasetFixture
+import com.fluvi.core.demo.GhostDemoSeedResult
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.FluviClock
 import com.fluvi.core.model.FluviSystemIds
@@ -65,6 +67,11 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                 manifest.isComplete(categories, partners, ledger, financialLimits)
 
             if (complete && !forceReset) {
+                // This manifest is intentionally independent from the base v8
+                // fixture.  Existing debug databases receive ghost examples
+                // without a destructive base-fixture upgrade.
+                val ghost = seedGhostFixture()
+                publishGhostFixtureIfChanged(ghost)
                 return@withTransaction report(
                     plan = plan,
                     createdCategoryCount = 0,
@@ -72,6 +79,7 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                     createdEntryCount = 0,
                     alreadySeeded = true,
                     startedAt = startedAt,
+                    ghost = ghost,
                 )
             }
 
@@ -114,6 +122,7 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                 )
             }
             ledger.insertAll(entries)
+            val ghost = seedGhostFixture()
             financialLimits.upsertAll(
                 demoFinancialLimits(
                     entries = entries,
@@ -121,7 +130,7 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                 ),
             )
             revisionRepository.advance(clock.nowUtcMs())
-            changePublisher.publishUpserts(entries)
+            changePublisher.publishUpserts(entries + ghost.createdLedgerEntries)
             check(
                 database.appSettingsDao().markDemoSeedCompleted(
                     settingsId = FluviSystemIds.APP_SETTINGS,
@@ -137,8 +146,24 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                 createdEntryCount = entries.size,
                 alreadySeeded = false,
                 startedAt = startedAt,
+                ghost = ghost,
             )
         }
+    }
+
+    private suspend fun seedGhostFixture(): GhostDemoSeedResult =
+        GhostDemoDatasetFixture(
+            database = database,
+            categories = categories,
+            partners = partners,
+            ledger = ledger,
+            clock = clock,
+        ).ensure()
+
+    private suspend fun publishGhostFixtureIfChanged(ghost: GhostDemoSeedResult) {
+        if (!ghost.changed) return
+        revisionRepository.advance(clock.nowUtcMs())
+        changePublisher.publishUpserts(ghost.createdLedgerEntries)
     }
 
     private suspend fun insertCategories(plan: DemoDatasetPlan) {
@@ -204,6 +229,7 @@ class SeedFluviDemoDatasetUseCase internal constructor(
         createdEntryCount: Int,
         alreadySeeded: Boolean,
         startedAt: Long,
+        ghost: GhostDemoSeedResult,
     ): DemoSeedReport = DemoSeedReport(
         seedVersion = plan.version,
         prngSeed = plan.prngSeed,
@@ -215,6 +241,15 @@ class SeedFluviDemoDatasetUseCase internal constructor(
         latestEntryAtUtcMs = plan.entries.maxOf { it.occurredAtUtcMs },
         alreadySeeded = alreadySeeded,
         durationMs = (System.nanoTime() - startedAt) / 1_000_000L,
+        createdGhostCategoryCount = ghost.createdCategoryCount,
+        createdGhostPartnerCount = ghost.createdPartnerCount,
+        createdGhostRuleCount = ghost.createdRuleCount,
+        createdGhostOccurrenceCount = ghost.createdOccurrenceCount,
+        createdGhostLedgerEntryCount = ghost.createdLedgerEntryCount,
+        ghostOccurrenceCount = ghost.occurrenceCount,
+        ghostPendingOccurrenceCount = ghost.pendingOccurrenceCount,
+        ghostRealizedOccurrenceCount = ghost.realizedOccurrenceCount,
+        ghostLedgerEntryCount = ghost.ledgerEntryCount,
     )
 
     /**

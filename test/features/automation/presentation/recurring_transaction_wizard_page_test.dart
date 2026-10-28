@@ -29,6 +29,104 @@ void main() {
   });
 
   testWidgets(
+    'recurring wizard snapshots the dashboard direction and never offers a second direction picker',
+    (tester) async {
+      for (final direction in LedgerDirection.values) {
+        Map<Object?, Object?>? savedArguments;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(automation, (call) async {
+              if (call.method == 'listProfiles') return const <Object>[];
+              if (call.method == 'listRecurrenceOccurrences') {
+                return const <Object>[];
+              }
+              if (call.method == 'createRecurringRule') {
+                savedArguments = call.arguments! as Map<Object?, Object?>;
+                return <String, Object?>{
+                  'ruleId': 'rule-${direction.name}',
+                  'name': 'Rögzített irány',
+                  'partnerId': 'partner-spotify',
+                  'categoryId': 'shopping',
+                  'categoryAssignmentMode': 'partnerDefault',
+                  'direction': direction.name,
+                  'note': null,
+                  'triggerKind': 'time',
+                  'amountPolicy': 'fixed',
+                  'amountScaled100': 1200000,
+                  'dayOfMonth': 28,
+                  'localTimeMinutes': 480,
+                  'startLocalEpochDay': 20500,
+                  'endLocalEpochDay': null,
+                  'timezoneId': 'Europe/Budapest',
+                  'isActive': true,
+                  'ruleVersion': 1,
+                };
+              }
+              throw PlatformException(code: 'unexpected', message: call.method);
+            });
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RecurringTransactionWizardPage(
+              repository: MethodChannelAutomationRepository(
+                channel: automation,
+              ),
+              manualRepository: _PartnerRepository(),
+              categories: <FluviCategory>[_category('shopping', 'Vásárlás')],
+              initialDirection: direction,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(
+            direction == LedgerDirection.income
+                ? 'Új ismétlődő bevételi tranzakció'
+                : 'Új ismétlődő kiadási tranzakció',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byWidgetPredicate(
+            (widget) => widget is DropdownButtonFormField<LedgerDirection>,
+          ),
+          findsNothing,
+        );
+
+        await tester.enterText(find.byType(TextField).first, 'Rögzített irány');
+        await tester.tap(find.text('Partner kiválasztása'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Spotify'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Következő'));
+        await tester.pumpAndSettle();
+        expect(find.text('2 / 5 · Összeg beállítása'), findsOneWidget);
+        await tester.enterText(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is TextField && widget.decoration?.labelText == 'Összeg',
+          ),
+          '12000',
+        );
+        await tester.pump();
+        await tester.tap(find.text('Következő'));
+        await tester.pumpAndSettle();
+        expect(find.text('3 / 5 · Gyakoriság és időzítés'), findsOneWidget);
+        await tester.tap(find.text('Következő'));
+        await tester.pumpAndSettle();
+        expect(find.text('4 / 5 · Hogyan teljesüljön?'), findsOneWidget);
+        await tester.tap(find.text('Következő'));
+        await tester.pumpAndSettle();
+        expect(find.text('5 / 5 · Ismétlődés áttekintése'), findsOneWidget);
+        await tester.tap(find.text('Ismétlődés létrehozása'));
+        await tester.pump();
+
+        expect(savedArguments?['direction'], direction.name);
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    },
+  );
+
+  testWidgets(
     'recurring selected partner retains its catalog category avatar',
     (tester) async {
       await tester.pumpWidget(

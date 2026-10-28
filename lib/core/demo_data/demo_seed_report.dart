@@ -38,6 +38,15 @@ class DemoSeedReport {
     required this.latestEntryAtUtcMs,
     required this.alreadySeeded,
     required this.durationMs,
+    this.createdGhostCategoryCount = 0,
+    this.createdGhostPartnerCount = 0,
+    this.createdGhostRuleCount = 0,
+    this.createdGhostOccurrenceCount = 0,
+    this.createdGhostLedgerEntryCount = 0,
+    this.ghostOccurrenceCount = 0,
+    this.ghostPendingOccurrenceCount = 0,
+    this.ghostRealizedOccurrenceCount = 0,
+    this.ghostLedgerEntryCount = 0,
   });
 
   final int seedVersion;
@@ -50,4 +59,13 @@ class DemoSeedReport {
   final int? latestEntryAtUtcMs;
   final bool alreadySeeded;
   final int durationMs;
+  final int createdGhostCategoryCount;
+  final int createdGhostPartnerCount;
+  final int createdGhostRuleCount;
+  final int createdGhostOccurrenceCount;
+  final int createdGhostLedgerEntryCount;
+  final int ghostOccurrenceCount;
+  final int ghostPendingOccurrenceCount;
+  final int ghostRealizedOccurrenceCount;
+  final int ghostLedgerEntryCount;
 }
