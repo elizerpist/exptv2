@@ -1978,6 +1978,9 @@ class MainActivity : FlutterActivity() {
             val realizedGhostRows = index.rows.count {
                 !it.isPendingGhost && it.recurrenceOccurrenceId != null
             }
+            val ghostRowSample = index.rows
+                .take(12)
+                .joinToString(separator = ",") { it.entryId }
             emitDiagnostic(
                 stage = "GHOST|NATIVE_INDEX_RESULT",
                 message = "GHOST|NATIVE_INDEX_RESULT",
@@ -1988,7 +1991,7 @@ class MainActivity : FlutterActivity() {
                     "expenseMode=${directionalFilters.expense.ghostFilterMode.name} " +
                     "normalPreview=${index.rows.size - pendingGhostRows - realizedGhostRows} " +
                     "realizedGhostPreview=$realizedGhostRows pendingGhostPreview=$pendingGhostRows " +
-                    "rowSample=${index.rows.take(12).joinToString(",") { it.entryId }",
+                    "rowSample=$ghostRowSample",
                 entryCount = index.rows.size.toLong(),
             )
             currentCoroutineContext().ensureActive()
