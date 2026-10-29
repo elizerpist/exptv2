@@ -540,7 +540,7 @@ void main() {
       'ghostQuickFilterIconPack':
           DashboardGhostQuickFilterIconPack.current.index,
       'ghostQuickFilterPresentation':
-          DashboardGhostQuickFilterPresentation.current.index,
+          DashboardGhostQuickFilterPresentation.searchPillFling.index,
     });
   });
 
@@ -570,7 +570,7 @@ void main() {
   );
 
   test(
-    'ghost quick-filter presentation choices persist independently and unknown values use current',
+    'ghost quick-filter presentation choices persist independently and unknown values use Searchpill',
     () async {
       Map<String, Object?> stored = <String, Object?>{
         'ghostQuickFilterIconPack': 99,
@@ -590,7 +590,17 @@ void main() {
       );
       expect(
         (await store.read()).ghostQuickFilterPresentation,
-        DashboardGhostQuickFilterPresentation.current,
+        DashboardGhostQuickFilterPresentation.searchPillFling,
+      );
+      stored['ghostQuickFilterPresentation'] = 'invalid';
+      expect(
+        (await store.read()).ghostQuickFilterPresentation,
+        DashboardGhostQuickFilterPresentation.searchPillFling,
+      );
+      stored.remove('ghostQuickFilterPresentation');
+      expect(
+        (await store.read()).ghostQuickFilterPresentation,
+        DashboardGhostQuickFilterPresentation.searchPillFling,
       );
       for (final legacyChoice in <(int, DashboardGhostQuickFilterPresentation)>[
         (0, DashboardGhostQuickFilterPresentation.current),

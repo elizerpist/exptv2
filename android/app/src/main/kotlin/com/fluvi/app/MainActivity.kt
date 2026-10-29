@@ -436,7 +436,7 @@ class MainActivity : FlutterActivity() {
                             "balanceMonthCombinedCardPresentation" to preferences.getInt("balanceMonthCombinedCardPresentation", 0),
                             "balanceHeaderGlassConfigurationJson" to preferences.getString("balanceHeaderGlassConfigurationJson", ""),
                             "ghostQuickFilterIconPack" to ((preferences.all["ghostQuickFilterIconPack"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
-                            "ghostQuickFilterPresentation" to ((preferences.all["ghostQuickFilterPresentation"] as? Number)?.toInt()?.takeIf { it in 0..3 } ?: 0),
+                            "ghostQuickFilterPresentation" to ((preferences.all["ghostQuickFilterPresentation"] as? Number)?.toInt()?.takeIf { it in 0..3 } ?: 3),
                         ),
                     )
                     "writeDashboardPresentationSettings" -> {
@@ -492,7 +492,15 @@ class MainActivity : FlutterActivity() {
                         require(balanceHeaderGlassConfigurationJson.length <= 32768) { "Balance Header glass configuration is too large." }
                         val ghostQuickFilterIconPack = ((values["ghostQuickFilterIconPack"] as? Number)?.toInt() ?: 0)
                         require(ghostQuickFilterIconPack in 0..1) { "Invalid Ghost quick-filter icon pack." }
-                        val ghostQuickFilterPresentation = ((values["ghostQuickFilterPresentation"] as? Number)?.toInt() ?: 0)
+                        // Older Dart clients can omit this display-only field.
+                        // Keep that transport fallback aligned with the read
+                        // fallback, but still reject an explicitly invalid value.
+                        val ghostQuickFilterPresentation = if (values.containsKey("ghostQuickFilterPresentation")) {
+                            (values["ghostQuickFilterPresentation"] as? Number)?.toInt()
+                                ?: throw IllegalArgumentException("Invalid Ghost quick-filter presentation.")
+                        } else {
+                            3
+                        }
                         require(ghostQuickFilterPresentation in 0..3) { "Invalid Ghost quick-filter presentation." }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)

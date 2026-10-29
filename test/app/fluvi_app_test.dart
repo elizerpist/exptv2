@@ -122,7 +122,9 @@ void main() {
       await naturalTap.up();
       // The shell owns its lock before it awaits the exposure confirmation,
       // so a rapid second completed icon tap cannot push a second route.
-      final duplicateTap = await tester.startGesture(tester.getCenter(selector));
+      final duplicateTap = await tester.startGesture(
+        tester.getCenter(selector),
+      );
       await duplicateTap.up();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
@@ -131,6 +133,36 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('shared FAB creation route enters and exits vertically', (
+    tester,
+  ) async {
+    final navigator = GlobalKey<NavigatorState>();
+    const page = ValueKey<String>('creation-route-page');
+    await tester.pumpWidget(
+      MaterialApp(navigatorKey: navigator, home: const SizedBox.expand()),
+    );
+    navigator.currentState!.push<void>(
+      creationSlideUpRoute<void>(
+        builder: (_) => const SizedBox.expand(key: page),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final slide = tester.widget<SlideTransition>(
+      find.ancestor(
+        of: find.byKey(page),
+        matching: find.byType(SlideTransition),
+      ),
+    );
+    expect(slide.position.value.dx, 0);
+    expect(slide.position.value.dy, greaterThan(0));
+
+    navigator.currentState!.pop();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(slide.position.value.dx, 0);
+    expect(slide.position.value.dy, greaterThan(0));
+  });
 
   testWidgets(
     'RED physical regression: a ready dashboard survives every Avatar profile switch',

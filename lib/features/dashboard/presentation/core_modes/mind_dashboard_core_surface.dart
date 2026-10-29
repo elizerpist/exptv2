@@ -489,32 +489,6 @@ final class _MindMovingContent extends StatelessWidget {
                       fit: StackFit.expand,
                       clipBehavior: Clip.hardEdge,
                       children: [
-                        // Retain the original borderless body wash over the
-                        // joined perimeter at expansion. It has no depth or
-                        // border ownership, fades with separation, and cannot
-                        // paint outside the moving physical-body clip.
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color:
-                                    (DashboardShadowStyleScope.profileOf(
-                                                  context,
-                                                )
-                                                .depthFor(
-                                                  DashboardCornerSurfaceFamily
-                                                      .contentCard,
-                                                )
-                                                .surfaceColor ??
-                                            FluviVisualTokens.surface)
-                                        .withValues(
-                                          alpha: 1 - transition.separation,
-                                        ),
-                                borderRadius: transition.shape.contentRadius,
-                              ),
-                            ),
-                          ),
-                        ),
                         SizedBox.expand(
                           key: const ValueKey('dashboard-core-mode-mind-body'),
                           child: body ?? const SizedBox.expand(),

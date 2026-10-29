@@ -1,4 +1,7 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_donut_scene.dart';
 
@@ -35,6 +38,71 @@ void main() {
       );
       expect(scene.selectedSliceIndexForStableId('health'), 1);
       expect(scene.geometryBuildCount, 1);
+    },
+  );
+
+  testWidgets(
+    'Canvas center plate rim is light at the top and darkest at the bottom',
+    (tester) async {
+      const capture = ValueKey<String>('clay-donut-rim-capture');
+      final scene = BudgetClayDonutScene.fromSlices(
+        const <BudgetClayDonutSliceInput>[
+          BudgetClayDonutSliceInput(
+            label: 'Food',
+            value: 100,
+            color: Color(0xff224466),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: RepaintBoundary(
+              key: capture,
+              child: SizedBox(
+                width: 424,
+                height: 424,
+                child: CustomPaint(
+                  painter: BudgetClayDonutPainter(
+                    scene: scene,
+                    selectedSliceIndex: -1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      Future<Color> pixelAt(int x, int y) async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(capture),
+        );
+        return (await tester.runAsync(() async {
+          final image = await boundary.toImage(pixelRatio: 1);
+          final data = await image.toByteData(
+            format: ui.ImageByteFormat.rawRgba,
+          );
+          final offset = (y * image.width + x) * 4;
+          final bytes = data!.buffer.asUint8List();
+          final color = Color.fromARGB(
+            bytes[offset + 3],
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+          );
+          image.dispose();
+          return color;
+        }))!;
+      }
+
+      final top = await pixelAt(212, 106);
+      final bottom = await pixelAt(212, 318);
+      expect(top.computeLuminance(), greaterThan(bottom.computeLuminance()));
+      expect(bottom.r, lessThan(top.r));
+      expect(bottom.g, lessThan(top.g));
     },
   );
 

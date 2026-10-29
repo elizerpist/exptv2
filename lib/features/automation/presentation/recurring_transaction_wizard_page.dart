@@ -33,6 +33,10 @@ class _RecurringTransactionWizardPageState
   final _note = TextEditingController();
   final _amount = TextEditingController();
   final _tolerance = TextEditingController(text: '0');
+  final _nameFocus = FocusNode(debugLabel: 'recurring-name-input');
+  final _noteFocus = FocusNode(debugLabel: 'recurring-note-input');
+  final _amountFocus = FocusNode(debugLabel: 'recurring-amount-input');
+  final _toleranceFocus = FocusNode(debugLabel: 'recurring-tolerance-input');
   int _step = 0;
   PartnerDirectoryEntry? _partner;
   String? _overrideCategory;
@@ -60,20 +64,21 @@ class _RecurringTransactionWizardPageState
     _note.dispose();
     _amount.dispose();
     _tolerance.dispose();
+    _nameFocus.dispose();
+    _noteFocus.dispose();
+    _amountFocus.dispose();
+    _toleranceFocus.dispose();
     super.dispose();
   }
 
-  int? get _scaledAmount {
-    final normalized = _amount.text
-        .replaceAll(RegExp(r'[^0-9,]'), '')
-        .replaceAll(',', '.');
-    if (normalized.isEmpty) return null;
-    final parts = normalized.split('.');
-    final major = int.tryParse(parts.first) ?? 0;
-    final minor = parts.length > 1
-        ? int.tryParse('${parts[1]}00'.substring(0, 2)) ?? 0
-        : 0;
-    return major * 100 + minor;
+  int? get _scaledAmount => _parseAmountScaled100(_amount.text);
+
+  void _setStep(int next) {
+    // A step can replace a focused text client with an amount client. Close
+    // the old client before the new field attaches, so Android receives the
+    // visible field's input configuration rather than a reused one.
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _step = next);
   }
 
   int get _epochDay => _first.difference(DateTime(1970)).inDays;
@@ -267,7 +272,7 @@ class _RecurringTransactionWizardPageState
                 children: [
                   if (_step > 0)
                     TextButton(
-                      onPressed: () => setState(() => _step--),
+                      onPressed: () => _setStep(_step - 1),
                       child: const Text('Előző'),
                     ),
                   const Spacer(),
@@ -277,7 +282,7 @@ class _RecurringTransactionWizardPageState
                         : _step == 4
                         ? _save
                         : _canAdvance
-                        ? () => setState(() => _step++)
+                        ? () => _setStep(_step + 1)
                         : null,
                     child: Text(
                       _saving
@@ -302,7 +307,9 @@ class _RecurringTransactionWizardPageState
         return Column(
           children: [
             TextField(
+              key: const ValueKey<String>('recurring-name-field'),
               controller: _name,
+              focusNode: _nameFocus,
               decoration: const InputDecoration(
                 labelText: 'Megnevezés',
                 hintText: 'Netflix előfizetés',
@@ -334,7 +341,9 @@ class _RecurringTransactionWizardPageState
             ),
             const SizedBox(height: 14),
             TextField(
+              key: const ValueKey<String>('recurring-note-field'),
               controller: _note,
+              focusNode: _noteFocus,
               decoration: const InputDecoration(
                 labelText: 'Megjegyzés (opcionális)',
               ),
@@ -345,7 +354,9 @@ class _RecurringTransactionWizardPageState
         return Column(
           children: [
             TextField(
+              key: const ValueKey<String>('recurring-amount-field'),
               controller: _amount,
+              focusNode: _amountFocus,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -473,7 +484,11 @@ class _RecurringTransactionWizardPageState
                       ),
                       const SizedBox(height: 12),
                       TextField(
+                        key: const ValueKey<String>(
+                          'recurring-tolerance-field',
+                        ),
                         controller: _tolerance,
+                        focusNode: _toleranceFocus,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           labelText: 'Összegtolerancia',
@@ -559,4 +574,24 @@ class _RecurringTransactionWizardPageState
       _first.day.clamp(1, lastDay).toInt(),
     );
   }
+}
+
+int? _parseAmountScaled100(String source) {
+  final compact = source.replaceAll(RegExp(r'[\s\u00a0]'), '');
+  if (compact.isEmpty || !RegExp(r'^[0-9,.]+$').hasMatch(compact)) {
+    return null;
+  }
+  final separator = [
+    compact.lastIndexOf(','),
+    compact.lastIndexOf('.'),
+  ].reduce((left, right) => left > right ? left : right);
+  final wholeSource = separator < 0 ? compact : compact.substring(0, separator);
+  final fraction = separator < 0 ? '' : compact.substring(separator + 1);
+  if (!RegExp(r'^\d{0,2}$').hasMatch(fraction)) return null;
+  final whole = wholeSource.replaceAll(RegExp(r'[,.]'), '');
+  if (whole.isEmpty || !RegExp(r'^\d+$').hasMatch(whole)) return null;
+  final major = int.tryParse(whole);
+  if (major == null) return null;
+  final minor = fraction.isEmpty ? 0 : int.parse(fraction.padRight(2, '0'));
+  return major * 100 + minor;
 }

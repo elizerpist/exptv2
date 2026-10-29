@@ -175,6 +175,69 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'name-step input connection is replaced by decimal numeric amount input',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RecurringTransactionWizardPage(
+            repository: MethodChannelAutomationRepository(channel: automation),
+            manualRepository: _PartnerRepository(),
+            categories: <FluviCategory>[_category('shopping', 'Vásárlás')],
+            initialDirection: LedgerDirection.expense,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final name = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.labelText == 'Megnevezés',
+      );
+      await tester.tap(name);
+      await tester.enterText(name, 'Előfizetés');
+      expect(
+        (tester.testTextInput.setClientArgs!['inputType']
+            as Map<String, dynamic>)['name'],
+        'TextInputType.text',
+      );
+
+      await tester.tap(find.text('Partner kiválasztása'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Spotify'));
+      await tester.pumpAndSettle();
+
+      // Reproduce a normal transition from a still active text connection.
+      await tester.tap(name);
+      await tester.pump();
+      await tester.tap(find.text('Következő'));
+      await tester.pump();
+
+      final amount = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.labelText == 'Összeg',
+      );
+      expect(amount, findsOneWidget);
+      await tester.tap(amount);
+      await tester.pump();
+      final inputType =
+          tester.testTextInput.setClientArgs!['inputType']
+              as Map<String, dynamic>;
+      expect(inputType['name'], 'TextInputType.number');
+      expect(inputType['decimal'], isTrue);
+
+      await tester.enterText(amount, '12.34');
+      await tester.pump();
+      await tester.tap(find.text('Következő'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Következő'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Következő'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kiadás · 12.34 Ft'), findsOneWidget);
+    },
+  );
 }
 
 FluviCategory _category(String id, String name) => FluviCategory(

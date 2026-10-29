@@ -515,6 +515,8 @@ final class BudgetClayDonutPainter extends CustomPainter {
       BudgetClayDonutGeometry.centerPlateRadius,
       Paint()
         ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: <Color>[
             Color(0xffffffff),
             Color(0xfff1ecfa),

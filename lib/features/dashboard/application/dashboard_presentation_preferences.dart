@@ -55,7 +55,7 @@ final class DashboardPresentationPreferences {
     this.balanceHeaderGlassConfigurationJson = '',
     this.ghostQuickFilterIconPack = DashboardGhostQuickFilterIconPack.current,
     this.ghostQuickFilterPresentation =
-        DashboardGhostQuickFilterPresentation.current,
+        DashboardGhostQuickFilterPresentation.searchPillFling,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -107,7 +107,8 @@ final class DashboardPresentationPreferences {
         BalanceMonthCombinedCardPresentation.incomeExpense,
     balanceHeaderGlassConfigurationJson: '',
     ghostQuickFilterIconPack: DashboardGhostQuickFilterIconPack.current,
-    ghostQuickFilterPresentation: DashboardGhostQuickFilterPresentation.current,
+    ghostQuickFilterPresentation:
+        DashboardGhostQuickFilterPresentation.searchPillFling,
   );
 
   @override

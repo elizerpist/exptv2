@@ -155,8 +155,10 @@ final class MethodChannelDashboardPresentationPreferencesStore
         ),
         ghostQuickFilterPresentation: _enumValue(
           DashboardGhostQuickFilterPresentation.values,
-          values['ghostQuickFilterPresentation'] as int?,
-          DashboardGhostQuickFilterPresentation.current,
+          values['ghostQuickFilterPresentation'] is int
+              ? values['ghostQuickFilterPresentation'] as int
+              : null,
+          DashboardGhostQuickFilterPresentation.searchPillFling,
         ),
       );
     } on PlatformException {
