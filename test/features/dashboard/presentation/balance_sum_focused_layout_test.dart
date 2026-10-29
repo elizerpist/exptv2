@@ -175,7 +175,7 @@ void main() {
     });
   }
   testWidgets(
-    'SUM old/new roundtrip keeps Mother Card, header and prepared data',
+    'SUM starts focused and roundtrips through the explicit old renderer',
     (tester) async {
       const scope = AllTimeScope();
       final settings = BalancePresentationController();
@@ -189,6 +189,9 @@ void main() {
       addTearDown(linked.dispose);
       addTearDown(header.dispose);
       await tester.pumpWidget(_host(scope, settings, linked, header));
+      await tester.pump();
+      expect(find.byType(BalanceSumFocusedLayout), findsOneWidget);
+      settings.setSumLayoutPresentation(BalanceSumLayoutPresentation.current);
       await tester.pump();
       expect(find.byType(BalanceAlternativeSumHistogramCard), findsOneWidget);
       final mother = tester.getRect(

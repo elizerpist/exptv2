@@ -11,11 +11,7 @@ class AutomationMethodChannelResponseTest {
         val response = automationMethodChannelResponse(Unit)
 
         assertNull(response)
-        assertNull(
-            StandardMethodCodec.INSTANCE.decodeEnvelope(
-                StandardMethodCodec.INSTANCE.encodeSuccessEnvelope(response),
-            ),
-        )
+        assertNull(decodeSuccessEnvelope(response))
     }
 
     @Test
@@ -26,9 +22,12 @@ class AutomationMethodChannelResponseTest {
 
         assertEquals(
             mapOf("occurrenceId" to "occurrence-1", "skipped" to true),
-            StandardMethodCodec.INSTANCE.decodeEnvelope(
-                StandardMethodCodec.INSTANCE.encodeSuccessEnvelope(response),
-            ),
+            decodeSuccessEnvelope(response),
         )
     }
+
+    private fun decodeSuccessEnvelope(value: Any?): Any? =
+        StandardMethodCodec.INSTANCE.decodeEnvelope(
+            StandardMethodCodec.INSTANCE.encodeSuccessEnvelope(value).apply { flip() },
+        )
 }

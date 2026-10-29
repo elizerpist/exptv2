@@ -165,7 +165,7 @@ void main() {
   }
 
   testWidgets(
-    'year layout switches repeatedly without changing Mother Card or header snapshot',
+    'year layout starts focused and switches through the explicit old renderer without changing the Mother Card or header snapshot',
     (tester) async {
       const scope = YearScope(2025);
       final settings = BalancePresentationController()
@@ -180,6 +180,9 @@ void main() {
       addTearDown(linked.dispose);
       addTearDown(balance.dispose);
       await tester.pumpWidget(_host(scope, settings, linked, balance));
+      await tester.pump();
+      expect(find.byType(BalanceYearFocusedLayout), findsOneWidget);
+      settings.setYearLayoutPresentation(BalanceYearLayoutPresentation.current);
       await tester.pump();
       expect(find.byType(BalanceAlternativeAnnualClosingsCard), findsOneWidget);
       expect(find.byType(BalanceAlternativeSavingsRingCard), findsOneWidget);

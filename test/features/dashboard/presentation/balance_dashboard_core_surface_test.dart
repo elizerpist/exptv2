@@ -21,6 +21,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboa
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_header_glass_configuration.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_sum_focused_layout.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
@@ -450,7 +451,7 @@ void main() {
   );
 
   testWidgets(
-    'BALDEFAULT-02: an unconfigured Balance surface mounts the continuous four-child composition',
+    'BALDEFAULT-02: an unconfigured SUM Balance surface mounts the focused composition',
     (tester) async {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(),
@@ -478,14 +479,11 @@ void main() {
         ),
         findsOneWidget,
       );
-      for (final key in <String>[
-        'balance-tetris-card-3',
-        'balance-tetris-card-4',
-        'balance-tetris-card-5',
-        'balance-tetris-card-combined',
-      ]) {
-        expect(find.byKey(ValueKey<String>(key)), findsOneWidget);
-      }
+      expect(find.byType(BalanceSumFocusedLayout), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('balance-sum-focused-layout')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -495,7 +493,7 @@ void main() {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(cashflow: _alternativeYearCashflow()),
       );
-      final settings = BalancePresentationController();
+      final settings = _legacyScopeLayoutSettings();
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
 
@@ -566,7 +564,7 @@ void main() {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(cashflow: _alternativeYearCashflow()),
       );
-      final settings = BalancePresentationController();
+      final settings = _legacyScopeLayoutSettings();
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
       await tester.pumpWidget(
@@ -716,8 +714,7 @@ void main() {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(cashflow: _alternativeDayCashflow()),
       );
-      final settings = BalancePresentationController()
-        ..setUsesChildCards(false);
+      final settings = _legacyScopeLayoutSettings()..setUsesChildCards(false);
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
 
@@ -765,7 +762,7 @@ void main() {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _richAlternativeMonthLinked(),
       );
-      final settings = BalancePresentationController();
+      final settings = _legacyScopeLayoutSettings();
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
       final metrics = DashboardLayoutMetrics.reference.fitToViewport(
@@ -1205,6 +1202,8 @@ void main() {
       ),
     );
     addTearDown(balance.dispose);
+    final settings = _legacyScopeLayoutSettings();
+    addTearDown(settings.dispose);
     Rect? initialPartition, initialAmount;
     double? partitionDelta, amountDelta;
     for (final state in [
@@ -1236,6 +1235,7 @@ void main() {
                   ),
                   balancePresentation: balance,
                   balanceLinkedPresentation: linked,
+                  presentationSettings: settings,
                 ),
               ),
             ),
@@ -1497,6 +1497,16 @@ DashboardCoreModePresentation _balanceModePresentation({
     palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.balance),
   );
 }
+
+BalancePresentationController _legacyScopeLayoutSettings() =>
+    BalancePresentationController(
+      initial: const BalancePresentationSettings.defaults().copyWith(
+        dayLayoutPresentation: BalanceDayLayoutPresentation.current,
+        sumLayoutPresentation: BalanceSumLayoutPresentation.current,
+        monthLayoutPresentation: BalanceMonthLayoutPresentation.current,
+        yearLayoutPresentation: BalanceYearLayoutPresentation.current,
+      ),
+    );
 
 DashboardBalancePresentation _balance() => const DashboardBalancePresentation(
   scopeKey: 'income|all|expense|all',

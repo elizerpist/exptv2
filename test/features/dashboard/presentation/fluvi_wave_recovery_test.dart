@@ -78,6 +78,7 @@ void main() {
       final settings = BalancePresentationController(
         initial: const BalancePresentationSettings.defaults().copyWith(
           usesChildCards: true,
+          monthLayoutPresentation: BalanceMonthLayoutPresentation.current,
           monthlySpendingChartPresentation:
               BalanceMonthlySpendingChartPresentation.topographic,
         ),
@@ -364,6 +365,7 @@ void main() {
       );
       final settings = BalancePresentationController(
         initial: const BalancePresentationSettings.defaults().copyWith(
+          monthLayoutPresentation: BalanceMonthLayoutPresentation.current,
           monthlySpendingChartPresentation:
               BalanceMonthlySpendingChartPresentation.topographic,
         ),
@@ -591,6 +593,7 @@ void main() {
     );
     final settings = BalancePresentationController(
       initial: const BalancePresentationSettings.defaults().copyWith(
+        monthLayoutPresentation: BalanceMonthLayoutPresentation.current,
         monthlySpendingChartPresentation:
             BalanceMonthlySpendingChartPresentation.topographic,
         usesChildCards: true,

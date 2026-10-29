@@ -120,7 +120,7 @@ void main() {
   );
 
   testWidgets(
-    'day router preserves default old content, header and Mother Card through all variants',
+    'day router starts focused and preserves legacy content after an explicit old-layout choice',
     (tester) async {
       final settings = BalancePresentationController();
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
@@ -133,6 +133,9 @@ void main() {
       addTearDown(linked.dispose);
       addTearDown(header.dispose);
       await tester.pumpWidget(_host(_day, settings, linked, header));
+      await tester.pump();
+      expect(find.byType(BalanceDayFocusedLayout), findsOneWidget);
+      settings.setDayLayoutPresentation(BalanceDayLayoutPresentation.current);
       await tester.pump();
       expect(
         find.byType(BalanceAlternativeDailyMomentumCoordinateCard),

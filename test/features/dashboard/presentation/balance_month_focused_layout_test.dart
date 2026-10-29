@@ -105,7 +105,7 @@ void main() {
   }
 
   testWidgets(
-    'monthly layout roundtrip preserves header, Mother Card and old renderer',
+    'monthly layout starts focused and roundtrips through the explicit old renderer',
     (tester) async {
       const scope = MonthScope(YearMonth(year: 2025, month: 5));
       final settings = BalancePresentationController();
@@ -119,6 +119,11 @@ void main() {
       addTearDown(linked.dispose);
       addTearDown(header.dispose);
       await tester.pumpWidget(_host(scope, settings, linked, header));
+      await tester.pump();
+      expect(find.byType(BalanceMonthFocusedLayout), findsOneWidget);
+      settings.setMonthLayoutPresentation(
+        BalanceMonthLayoutPresentation.current,
+      );
       await tester.pump();
       expect(find.byType(BalanceAlternativeDailySpendCard), findsOneWidget);
       expect(find.byType(BalanceAlternativeSavingsRingCard), findsOneWidget);

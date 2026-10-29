@@ -33,6 +33,7 @@ void main() {
     final settings = BalancePresentationController(
       initial: const BalancePresentationSettings.defaults().copyWith(
         usesChildCards: true,
+        monthLayoutPresentation: BalanceMonthLayoutPresentation.current,
       ),
     );
     addTearDown(linked.dispose);
