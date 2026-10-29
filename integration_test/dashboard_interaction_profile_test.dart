@@ -2386,15 +2386,22 @@ Map<String, Object?> _verifyAvatarNonemptyFixture(
       .toSet();
   expect(futureOnlyIds, isEmpty);
   expect(rows.length, greaterThanOrEqualTo(8));
-  // The membership is the booked ledger base. The rendered frame also keeps
-  // July's visible pending Expense ghost occurrence, which deliberately has
-  // no ledger row and therefore must not be folded into financial membership.
-  expect(
-    controller.preparedIndex!
-        .frameFor(controller.navigation.state.parentQueryScope)
-        .entryCount,
-    rows.length + 1,
+  // Membership deliberately includes the visible pending Expense ghost. Its
+  // presentation row is not a ledger row, so financial and presentation
+  // counts must remain distinct even while the Avatar rail reads one shared
+  // membership seed.
+  final financialRows = rows
+      .where((row) => !row.isPendingGhost)
+      .toList(growable: false);
+  final pendingGhostRows = rows
+      .where((row) => row.isPendingGhost)
+      .toList(growable: false);
+  expect(pendingGhostRows, hasLength(1));
+  final frame = controller.preparedIndex!.frameFor(
+    controller.navigation.state.parentQueryScope,
   );
+  expect(frame.entryCount, financialRows.length);
+  expect(frame.presentationEntryCount, rows.length);
   return {
     'fixture_category_row_counts': counts,
     'fixture_nonempty_target_handles': nonemptyTargets
