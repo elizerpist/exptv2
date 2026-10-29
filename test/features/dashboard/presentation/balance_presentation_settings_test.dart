@@ -302,7 +302,7 @@ void main() {
       final original = controller.value;
       expect(
         original.sumLayoutPresentation,
-        BalanceSumLayoutPresentation.current,
+        BalanceSumLayoutPresentation.focused,
       );
       expect(
         original.sumFocusedPresentation,
@@ -311,20 +311,20 @@ void main() {
       expect(original.showSumFocusedSupplementaryStats, isTrue);
       var notifications = 0;
       controller.addListener(() => notifications++);
-      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.focused);
+      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.current);
       controller.setSumFocusedPresentation(
         BalanceSumFocusedPresentation.positiveRatio,
       );
       controller.setShowSumFocusedSupplementaryStats(false);
       final changed = original.copyWith(
-        sumLayoutPresentation: BalanceSumLayoutPresentation.focused,
+        sumLayoutPresentation: BalanceSumLayoutPresentation.current,
         sumFocusedPresentation: BalanceSumFocusedPresentation.positiveRatio,
         showSumFocusedSupplementaryStats: false,
         revision: 3,
       );
       expect(controller.value, changed);
       expect(controller.value.hashCode, changed.hashCode);
-      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.focused);
+      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.current);
       controller.setSumFocusedPresentation(
         BalanceSumFocusedPresentation.positiveRatio,
       );
@@ -333,8 +333,8 @@ void main() {
       controller.setSumFocusedPresentation(
         BalanceSumFocusedPresentation.stability,
       );
-      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.current);
       controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.focused);
+      controller.setSumLayoutPresentation(BalanceSumLayoutPresentation.current);
       expect(controller.value.showSumFocusedSupplementaryStats, isFalse);
       expect(
         controller.value.sumFocusedPresentation,
@@ -343,7 +343,7 @@ void main() {
       controller.reset();
       expect(
         controller.value.sumLayoutPresentation,
-        BalanceSumLayoutPresentation.current,
+        BalanceSumLayoutPresentation.focused,
       );
       expect(
         controller.value.sumFocusedPresentation,
@@ -360,7 +360,7 @@ void main() {
       final original = controller.value;
       expect(
         original.dayLayoutPresentation,
-        BalanceDayLayoutPresentation.current,
+        BalanceDayLayoutPresentation.focused,
       );
       expect(
         original.dayFocusedPresentation,
@@ -369,13 +369,13 @@ void main() {
       expect(original.showFocusedDayImpact, isTrue);
       var notifications = 0;
       controller.addListener(() => notifications++);
-      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.focused);
+      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.current);
       controller.setDayFocusedPresentation(
         BalanceDayFocusedPresentation.financialComparison,
       );
       controller.setShowFocusedDayImpact(false);
       final changed = original.copyWith(
-        dayLayoutPresentation: BalanceDayLayoutPresentation.focused,
+        dayLayoutPresentation: BalanceDayLayoutPresentation.current,
         dayFocusedPresentation:
             BalanceDayFocusedPresentation.financialComparison,
         showFocusedDayImpact: false,
@@ -383,7 +383,7 @@ void main() {
       );
       expect(controller.value, changed);
       expect(controller.value.hashCode, changed.hashCode);
-      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.focused);
+      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.current);
       controller.setDayFocusedPresentation(
         BalanceDayFocusedPresentation.financialComparison,
       );
@@ -392,8 +392,8 @@ void main() {
       controller.setDayFocusedPresentation(
         BalanceDayFocusedPresentation.dailyImpactFocus,
       );
-      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.current);
       controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.focused);
+      controller.setDayLayoutPresentation(BalanceDayLayoutPresentation.current);
       expect(controller.value.showFocusedDayImpact, isFalse);
       expect(
         controller.value.dayFocusedPresentation,
@@ -402,7 +402,7 @@ void main() {
       controller.reset();
       expect(
         controller.value.dayLayoutPresentation,
-        BalanceDayLayoutPresentation.current,
+        BalanceDayLayoutPresentation.focused,
       );
       expect(
         controller.value.dayFocusedPresentation,
@@ -420,23 +420,23 @@ void main() {
     controller.addListener(() => notifications++);
     expect(
       original.monthLayoutPresentation,
-      BalanceMonthLayoutPresentation.current,
-    );
-    controller.setMonthLayoutPresentation(
       BalanceMonthLayoutPresentation.focused,
     );
+    controller.setMonthLayoutPresentation(
+      BalanceMonthLayoutPresentation.current,
+    );
     final focused = original.copyWith(
-      monthLayoutPresentation: BalanceMonthLayoutPresentation.focused,
+      monthLayoutPresentation: BalanceMonthLayoutPresentation.current,
       revision: 1,
     );
     expect(controller.value, focused);
     expect(controller.value.hashCode, focused.hashCode);
     controller.setMonthLayoutPresentation(
-      BalanceMonthLayoutPresentation.focused,
+      BalanceMonthLayoutPresentation.current,
     );
     expect(notifications, 1);
     controller.setMonthLayoutPresentation(
-      BalanceMonthLayoutPresentation.current,
+      BalanceMonthLayoutPresentation.focused,
     );
     expect(controller.value, original.copyWith(revision: 2));
     expect(notifications, 2);
@@ -449,18 +449,18 @@ void main() {
     controller.addListener(() => notifications++);
     expect(
       original.yearLayoutPresentation,
-      BalanceYearLayoutPresentation.current,
+      BalanceYearLayoutPresentation.focused,
     );
-    controller.setYearLayoutPresentation(BalanceYearLayoutPresentation.focused);
+    controller.setYearLayoutPresentation(BalanceYearLayoutPresentation.current);
     final focused = original.copyWith(
-      yearLayoutPresentation: BalanceYearLayoutPresentation.focused,
+      yearLayoutPresentation: BalanceYearLayoutPresentation.current,
       revision: 1,
     );
     expect(controller.value, focused);
     expect(controller.value.hashCode, focused.hashCode);
-    controller.setYearLayoutPresentation(BalanceYearLayoutPresentation.focused);
-    expect(notifications, 1);
     controller.setYearLayoutPresentation(BalanceYearLayoutPresentation.current);
+    expect(notifications, 1);
+    controller.setYearLayoutPresentation(BalanceYearLayoutPresentation.focused);
     expect(controller.value, original.copyWith(revision: 2));
     expect(notifications, 2);
   });

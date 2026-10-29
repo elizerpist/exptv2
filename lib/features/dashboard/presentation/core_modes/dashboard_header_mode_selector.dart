@@ -7,7 +7,6 @@ import 'package:flutter/gestures.dart'
         DragStartDetails,
         DragUpdateDetails,
         GestureRecognizer,
-        PointerDeviceKind,
         TapGestureRecognizer,
         Velocity,
         VerticalDragGestureRecognizer;
@@ -231,10 +230,10 @@ final class _DashboardHeaderModeSelectorState
                               >(() => TapGestureRecognizer(), (recognizer) {
                                 recognizer.onTap = widget.onTap;
                               }),
-                          _HeaderModeInputGainDragRecognizer:
+                          VerticalDragGestureRecognizer:
                               GestureRecognizerFactoryWithHandlers<
-                                _HeaderModeInputGainDragRecognizer
-                              >(() => _HeaderModeInputGainDragRecognizer(), (
+                                VerticalDragGestureRecognizer
+                              >(() => VerticalDragGestureRecognizer(), (
                                 recognizer,
                               ) {
                                 recognizer
@@ -398,18 +397,4 @@ final class _DashboardHeaderModeSelectorState
     _carouselController.dispose();
     super.dispose();
   }
-}
-
-/// This is intentionally local to the Header. The shared carousel's stock
-/// scroll recognizer must keep its normal platform slop and physics for every
-/// other consumer. The compact 32px Header lane needs its first real motion
-/// sample immediately so the scaled delta remains a linear .5 mapping rather
-/// than a delayed touch-slop approximation.
-final class _HeaderModeInputGainDragRecognizer
-    extends VerticalDragGestureRecognizer {
-  @override
-  bool hasSufficientGlobalDistanceToAccept(
-    PointerDeviceKind pointerDeviceKind,
-    double? deviceTouchSlop,
-  ) => true;
 }

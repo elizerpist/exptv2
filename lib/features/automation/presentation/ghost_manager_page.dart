@@ -7,6 +7,8 @@ import '../../manual_transactions/presentation/partner_selector.dart';
 import '../domain/automation_models.dart';
 import '../domain/automation_repository.dart';
 
+enum _GhostManagerLoadResult { applied, failed, superseded }
+
 final class GhostManagerPage extends StatefulWidget {
   const GhostManagerPage({
     super.key,
@@ -30,55 +32,109 @@ class _GhostManagerPageState extends State<GhostManagerPage> {
   List<RecurrenceOccurrence> _items = [];
   RecurrenceOccurrenceStatus? _filter;
   bool _openedInitial = false;
+  bool _loading = true;
+  Object? _loadError;
+  int _loadRequest = 0;
+  final Set<String> _skippingOccurrenceIds = <String>{};
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
-  Future<void> _load() async {
-    final r = await Future.wait([
-      widget.repository.recurrenceDashboard(),
-      widget.repository.recurrenceOccurrences(status: _filter),
-    ]);
-    if (mounted) {
+  Future<_GhostManagerLoadResult> _load() async {
+    final request = ++_loadRequest;
+    if (_data == null && mounted) {
       setState(() {
-        _data = r[0] as RecurrenceDashboardSnapshot;
-        _items = r[1] as List<RecurrenceOccurrence>;
-        final initial = widget.initialOccurrenceId;
-        if (initial != null &&
-            _items.every((item) => item.occurrenceId != initial)) {
-          _filter = null;
-        }
-        RecurrenceOccurrence? selected;
-        if (initial != null) {
-          for (final item in _items) {
-            if (item.occurrenceId == initial) {
-              selected = item;
-              break;
-            }
-          }
-        }
-        if (selected != null && !_openedInitial) {
-          _openedInitial = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            if (!mounted) return;
-            await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
-                builder: (_) => GhostOccurrenceDetailPage(
-                  repository: widget.repository,
-                  occurrence: selected!,
-                  manualRepository: widget.manualRepository,
-                  categories: widget.categories,
-                  onOpenLedgerEntry: widget.onOpenLedgerEntry,
-                ),
-              ),
-            );
-            if (mounted) _load();
-          });
-        }
+        _loading = true;
+        _loadError = null;
       });
     }
+    try {
+      final result = await Future.wait<Object>([
+        widget.repository.recurrenceDashboard(),
+        widget.repository.recurrenceOccurrences(status: _filter),
+      ]);
+      if (!mounted || request != _loadRequest) {
+        return _GhostManagerLoadResult.superseded;
+      }
+      final data = result[0] as RecurrenceDashboardSnapshot;
+      final items = result[1] as List<RecurrenceOccurrence>;
+      RecurrenceOccurrence? selected;
+      final initial = widget.initialOccurrenceId;
+      if (initial != null) {
+        for (final item in items) {
+          if (item.occurrenceId == initial) {
+            selected = item;
+            break;
+          }
+        }
+      }
+      setState(() {
+        _data = data;
+        _items = items;
+        _loading = false;
+        _loadError = null;
+        if (initial != null && selected == null) _filter = null;
+      });
+      if (selected != null && !_openedInitial) {
+        _openedInitial = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => GhostOccurrenceDetailPage(
+                repository: widget.repository,
+                occurrence: selected!,
+                manualRepository: widget.manualRepository,
+                categories: widget.categories,
+                onOpenLedgerEntry: widget.onOpenLedgerEntry,
+              ),
+            ),
+          );
+          if (mounted) _load();
+        });
+      }
+      return _GhostManagerLoadResult.applied;
+    } catch (error) {
+      if (!mounted || request != _loadRequest) {
+        return _GhostManagerLoadResult.superseded;
+      }
+      setState(() {
+        _loading = false;
+        _loadError = error;
+      });
+      return _GhostManagerLoadResult.failed;
+    }
+  }
+
+  Future<void> _skipInline(String occurrenceId) async {
+    if (_skippingOccurrenceIds.contains(occurrenceId)) return;
+    setState(() => _skippingOccurrenceIds.add(occurrenceId));
+    try {
+      await widget.repository.skipRecurrenceOccurrence(occurrenceId);
+    } catch (_) {
+      _showFailure('Az alkalom kihagyása nem sikerült. Próbáld újra.');
+      return;
+    } finally {
+      if (mounted) {
+        setState(() => _skippingOccurrenceIds.remove(occurrenceId));
+      }
+    }
+
+    if (!mounted) return;
+    final refresh = await _load();
+    if (refresh == _GhostManagerLoadResult.failed) {
+      _showFailure('Az alkalom kimaradt, de a lista frissítése nem sikerült.');
+    }
+  }
+
+  void _showFailure(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -87,10 +143,38 @@ class _GhostManagerPageState extends State<GhostManagerPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Ghost Manager')),
       body: d == null
-          ? const Center(child: CircularProgressIndicator())
+          ? _loading
+                ? const Center(child: CircularProgressIndicator())
+                : Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('A Ghost Manager betöltése nem sikerült.'),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: _load,
+                            child: const Text('Újrapróbálás'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                if (_loadError != null)
+                  Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: ListTile(
+                      title: const Text('A lista frissítése nem sikerült.'),
+                      trailing: TextButton(
+                        onPressed: _load,
+                        child: const Text('Újra'),
+                      ),
+                    ),
+                  ),
                 Card(
                   child: SwitchListTile(
                     title: const Text('Ghostok megjelenítése'),
@@ -166,13 +250,15 @@ class _GhostManagerPageState extends State<GhostManagerPage> {
                       },
                       trailing: x.status == RecurrenceOccurrenceStatus.pending
                           ? IconButton(
+                              key: ValueKey('ghost-skip-${x.occurrenceId}'),
                               icon: const Icon(Icons.skip_next),
                               tooltip: 'Alkalom kihagyása',
-                              onPressed: () async {
-                                await widget.repository
-                                    .skipRecurrenceOccurrence(x.occurrenceId);
-                                _load();
-                              },
+                              onPressed:
+                                  _skippingOccurrenceIds.contains(
+                                    x.occurrenceId,
+                                  )
+                                  ? null
+                                  : () => _skipInline(x.occurrenceId),
                             )
                           : null,
                     ),
@@ -428,12 +514,23 @@ class _GhostOccurrenceDetailPageState extends State<GhostOccurrenceDetailPage> {
   }
 
   Future<void> _skip() async {
+    if (_working) return;
     setState(() => _working = true);
     try {
       await widget.repository.skipRecurrenceOccurrence(
         _occurrence.occurrenceId,
       );
       if (mounted) Navigator.of(context).pop(true);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Az alkalom kihagyása nem sikerült. Próbáld újra.'),
+            ),
+          );
+      }
     } finally {
       if (mounted) setState(() => _working = false);
     }

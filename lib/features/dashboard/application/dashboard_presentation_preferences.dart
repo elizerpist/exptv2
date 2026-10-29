@@ -31,7 +31,7 @@ final class DashboardPresentationPreferences {
     required this.showDayContentViewChooser,
     required this.balanceUsesChildCards,
     required this.balanceHeaderGraphPresentation,
-    this.balanceDayLayoutPresentation = BalanceDayLayoutPresentation.current,
+    this.balanceDayLayoutPresentation = BalanceDayLayoutPresentation.focused,
     this.balanceDayFocusedPresentation =
         BalanceDayFocusedPresentation.financialCompass,
     this.balanceDayPerformanceVisualPresentation =
@@ -40,13 +40,13 @@ final class DashboardPresentationPreferences {
         BalanceDayRatioViewPresentation.dualGauge,
     this.balanceDayRatioPresentation = BalanceDayRatioPresentation.coverage,
     this.balanceShowFocusedDayImpact = true,
-    this.balanceSumLayoutPresentation = BalanceSumLayoutPresentation.current,
+    this.balanceSumLayoutPresentation = BalanceSumLayoutPresentation.focused,
     this.balanceSumFocusedPresentation =
         BalanceSumFocusedPresentation.distribution,
     this.balanceShowSumFocusedSupplementaryStats = true,
     this.balanceMonthLayoutPresentation =
-        BalanceMonthLayoutPresentation.current,
-    this.balanceYearLayoutPresentation = BalanceYearLayoutPresentation.current,
+        BalanceMonthLayoutPresentation.focused,
+    this.balanceYearLayoutPresentation = BalanceYearLayoutPresentation.focused,
     this.balanceDailyCalculationMode = BalanceDailyCalculationMode.monthToDate,
     this.balanceMonthlySpendingChartPresentation =
         BalanceMonthlySpendingChartPresentation.current,
@@ -96,6 +96,10 @@ final class DashboardPresentationPreferences {
     balanceUsesChildCards: true,
     balanceHeaderGraphPresentation:
         BalanceHeaderGraphPresentation.incomeExpensePartition,
+    balanceDayLayoutPresentation: BalanceDayLayoutPresentation.focused,
+    balanceSumLayoutPresentation: BalanceSumLayoutPresentation.focused,
+    balanceMonthLayoutPresentation: BalanceMonthLayoutPresentation.focused,
+    balanceYearLayoutPresentation: BalanceYearLayoutPresentation.focused,
     balanceMonthlySpendingChartPresentation:
         BalanceMonthlySpendingChartPresentation.current,
     balanceHeaderPartitionHeightPercent: 50,

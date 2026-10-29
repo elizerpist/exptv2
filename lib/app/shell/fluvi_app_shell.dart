@@ -853,7 +853,14 @@ class _FluviAppShellState extends State<FluviAppShell>
     try {
       // Capture the actually visible reservation before setting route
       // obstruction; its confirmation must see the still-qualified Header.
-      await _pulseDelivery.confirmVisibleTap();
+      try {
+        await _pulseDelivery.confirmVisibleTap();
+      } catch (_) {
+        // Exposure confirmation is an acknowledgement for an already visible
+        // Story. A transient bridge failure must not turn the explicit mode
+        // icon action into a dead tap or retain the route lock. The delivery
+        // coordinator deliberately does not mark the exposure as confirmed.
+      }
       if (!mounted) return;
       _routeObstructed = true;
       _syncPulseDeliverySurface();

@@ -491,7 +491,7 @@ void main() {
   });
 
   testWidgets(
-    'BNB FAB defaults to the active income add-transaction artwork instead of the shop glyph',
+    'BNB FAB defaults to the white plus without changing the add-transaction action',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -502,10 +502,11 @@ void main() {
         ),
       );
 
-      expect(
-        find.byKey(const ValueKey<String>('bnb03-fab-income-artwork')),
-        findsOneWidget,
+      final icon = tester.widget<Icon>(
+        find.byKey(const ValueKey<String>('bnb03-fab-legacy-store-icon')),
       );
+      expect(icon.icon, Icons.add_rounded);
+      expect(icon.color, Colors.white);
       expect(find.byIcon(IconsaxPlusLinear.shop), findsNothing);
       expect(find.byIcon(IconsaxPlusBold.shop), findsNothing);
     },
@@ -517,10 +518,12 @@ void main() {
       final income = Bnb03FabDirectionVisual.resolve(
         direction: TransactionDirection.income,
         profile: FluviDirectionColorProfile.vivid,
+        iconPresentation: FluviFabIconPresentation.directionArtwork,
       );
       final expense = Bnb03FabDirectionVisual.resolve(
         direction: TransactionDirection.expense,
         profile: FluviDirectionColorProfile.vivid,
+        iconPresentation: FluviFabIconPresentation.directionArtwork,
       );
       final expectedIncome = FluviDirectionColorPaletteCatalog.income(
         FluviDirectionColorProfile.vivid,
@@ -543,6 +546,25 @@ void main() {
     },
   );
 
+  testWidgets('default FAB shows the persisted white plus presentation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Bnb03BottomNavigation(
+          selected: Bnb03Item.home,
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    final icon = tester.widget<Icon>(
+      find.byKey(const ValueKey<String>('bnb03-fab-legacy-store-icon')),
+    );
+    expect(icon.icon, Icons.add_rounded);
+    expect(icon.color, Colors.white);
+  });
+
   testWidgets('FAB switches to expense artwork with the active direction', (
     tester,
   ) async {
@@ -552,6 +574,7 @@ void main() {
           selected: Bnb03Item.home,
           transactionDirection: TransactionDirection.expense,
           directionColorProfile: FluviDirectionColorProfile.pastel,
+          fabIconPresentation: FluviFabIconPresentation.directionArtwork,
           onChanged: (_) {},
         ),
       ),
@@ -585,6 +608,7 @@ void main() {
             selected: Bnb03Item.home,
             transactionDirection: TransactionDirection.expense,
             directionColorProfile: FluviDirectionColorProfile.vivid,
+            fabIconPresentation: FluviFabIconPresentation.directionArtwork,
             onChanged: (_) {},
           ),
         ),
@@ -695,6 +719,7 @@ void main() {
                 selected: Bnb03Item.home,
                 transactionDirection: TransactionDirection.expense,
                 directionColorProfile: FluviDirectionColorProfile.vivid,
+                fabIconPresentation: FluviFabIconPresentation.directionArtwork,
                 onChanged: (_) {},
               ),
             ),

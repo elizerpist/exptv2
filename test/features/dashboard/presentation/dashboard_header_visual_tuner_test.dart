@@ -196,7 +196,7 @@ void main() {
         DashboardHeaderTunerSection.balancePresentation,
       ]);
       expect(find.text('SUM nézet elrendezése'), findsOneWidget);
-      expect(find.text('Új SUM nézet tartalma'), findsNothing);
+      expect(find.text('Új SUM nézet tartalma'), findsOneWidget);
       final original = balance.value;
       Future<void> select(String key) async {
         final target = find.byKey(ValueKey(key));
@@ -275,7 +275,7 @@ void main() {
       ]);
       final original = balance.value;
       expect(find.text('Napi nézet elrendezése'), findsOneWidget);
-      expect(find.text('Új nézet tartalma'), findsNothing);
+      expect(find.text('Új nézet tartalma'), findsOneWidget);
       final toggle = find.byKey(
         const ValueKey('balance-focused-day-impact-toggle'),
       );

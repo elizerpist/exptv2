@@ -355,7 +355,7 @@ void main() {
   );
 
   testWidgets(
-    'HMS-02 RED: a partial vertical drag moves the real clipped items before semantic crossing',
+    'HMS-02 RED: a vertical drag past touch slop moves the real clipped items before semantic crossing',
     (tester) async {
       final controller = DashboardCoreModeController(
         initialMode: DashboardModeSpec.balance,
@@ -373,10 +373,10 @@ void main() {
       final downwardIncoming = _headerModeVisual(DashboardMode.mind);
       final center = tester.getCenter(viewport);
       final up = await tester.startGesture(center);
-      // The Header selector opts into pointer-down drag ownership because its
-      // 32px viewport is smaller than the platform touch slop. A 10px move
-      // is therefore a real pre-crossing scroll, not an injected animation.
-      await up.moveBy(const Offset(0, -10));
+      // The Header selector keeps the platform tap/drag boundary. Once a
+      // vertical motion has crossed touch slop, its accumulated displacement
+      // must be forwarded into the real carousel before a mode crossing.
+      await up.moveBy(const Offset(0, -24));
       await tester.pump();
       expect(tester.getCenter(outgoing).dy, lessThan(center.dy));
       expect(tester.getCenter(upwardIncoming).dy, greaterThan(center.dy));
@@ -385,7 +385,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final down = await tester.startGesture(tester.getCenter(viewport));
-      await down.moveBy(const Offset(0, 10));
+      await down.moveBy(const Offset(0, 24));
       await tester.pump();
       expect(tester.getCenter(outgoing).dy, greaterThan(center.dy));
       expect(tester.getCenter(downwardIncoming).dy, lessThan(center.dy));
@@ -444,15 +444,28 @@ void main() {
         reason: 'The bounded mode icon must not seed a second header wave.',
       );
 
+      // A real finger tap is rarely motionless. Movement inside Flutter's
+      // platform tap slop must stay in the tap arena; it may not be stolen by
+      // the Header-local vertical drag recognizer.
+      final naturalTap = await tester.startGesture(tester.getCenter(selector));
+      await naturalTap.moveBy(const Offset(3, 2));
+      await tester.pump();
+      await naturalTap.moveBy(const Offset(-2, 1));
+      await tester.pump();
+      await naturalTap.up();
+      await tester.pump();
+      expect(pulseOpenRequests, 2);
+      expect(controller.committedMode, DashboardModeSpec.balance);
+
       await tester.fling(selector, const Offset(0, -140), 1000);
       await tester.pump(const Duration(seconds: 2));
-      expect(pulseOpenRequests, 1);
+      expect(pulseOpenRequests, 2);
       expect(controller.committedMode, isNot(DashboardModeSpec.balance));
 
       final cancelled = await tester.startGesture(tester.getCenter(selector));
       await cancelled.cancel();
       await tester.pump();
-      expect(pulseOpenRequests, 1);
+      expect(pulseOpenRequests, 2);
       semantics.dispose();
       visual.dispose();
     },

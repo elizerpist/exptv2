@@ -58,8 +58,10 @@ final class MethodChannelDashboardPresentationPreferencesStore
             values['showDayContentViewChooser'] as bool? ?? false,
         balanceDayLayoutPresentation: _enumValue(
           BalanceDayLayoutPresentation.values,
-          values['balanceDayLayoutPresentation'] as int?,
-          BalanceDayLayoutPresentation.current,
+          values['balanceDayLayoutPresentation'] is int
+              ? values['balanceDayLayoutPresentation'] as int
+              : null,
+          BalanceDayLayoutPresentation.focused,
         ),
         balanceDayFocusedPresentation: _enumValue(
           BalanceDayFocusedPresentation.values,
@@ -91,8 +93,10 @@ final class MethodChannelDashboardPresentationPreferencesStore
             values['balanceShowFocusedDayImpact'] as bool? ?? true,
         balanceSumLayoutPresentation: _enumValue(
           BalanceSumLayoutPresentation.values,
-          values['balanceSumLayoutPresentation'] as int?,
-          BalanceSumLayoutPresentation.current,
+          values['balanceSumLayoutPresentation'] is int
+              ? values['balanceSumLayoutPresentation'] as int
+              : null,
+          BalanceSumLayoutPresentation.focused,
         ),
         balanceSumFocusedPresentation: _enumValue(
           BalanceSumFocusedPresentation.values,
@@ -103,13 +107,17 @@ final class MethodChannelDashboardPresentationPreferencesStore
             values['balanceShowSumFocusedSupplementaryStats'] as bool? ?? true,
         balanceMonthLayoutPresentation: _enumValue(
           BalanceMonthLayoutPresentation.values,
-          values['balanceMonthLayoutPresentation'] as int?,
-          BalanceMonthLayoutPresentation.current,
+          values['balanceMonthLayoutPresentation'] is int
+              ? values['balanceMonthLayoutPresentation'] as int
+              : null,
+          BalanceMonthLayoutPresentation.focused,
         ),
         balanceYearLayoutPresentation: _enumValue(
           BalanceYearLayoutPresentation.values,
-          values['balanceYearLayoutPresentation'] as int?,
-          BalanceYearLayoutPresentation.current,
+          values['balanceYearLayoutPresentation'] is int
+              ? values['balanceYearLayoutPresentation'] as int
+              : null,
+          BalanceYearLayoutPresentation.focused,
         ),
         balanceDailyCalculationMode: _enumValue(
           BalanceDailyCalculationMode.values,

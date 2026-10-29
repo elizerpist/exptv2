@@ -16,6 +16,80 @@ void main() {
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
   test(
+    'missing or invalid scope layouts fall back to the focused presentation while saved current choices remain intact',
+    () async {
+      final stored = <String, Object?>{};
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored
+            ..clear()
+            ..addAll(Map<String, Object?>.from(call.arguments as Map));
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+
+      Future<void> expectFocused() async {
+        final restored = await store.read();
+        expect(
+          restored.balanceDayLayoutPresentation,
+          BalanceDayLayoutPresentation.focused,
+        );
+        expect(
+          restored.balanceMonthLayoutPresentation,
+          BalanceMonthLayoutPresentation.focused,
+        );
+        expect(
+          restored.balanceYearLayoutPresentation,
+          BalanceYearLayoutPresentation.focused,
+        );
+        expect(
+          restored.balanceSumLayoutPresentation,
+          BalanceSumLayoutPresentation.focused,
+        );
+      }
+
+      await expectFocused();
+      stored.addAll(<String, Object?>{
+        'balanceDayLayoutPresentation': 99,
+        'balanceMonthLayoutPresentation': -1,
+        'balanceYearLayoutPresentation': 'bad',
+        'balanceSumLayoutPresentation': 2,
+      });
+      await expectFocused();
+
+      stored.addAll(<String, Object?>{
+        'balanceDayLayoutPresentation':
+            BalanceDayLayoutPresentation.current.index,
+        'balanceMonthLayoutPresentation':
+            BalanceMonthLayoutPresentation.current.index,
+        'balanceYearLayoutPresentation':
+            BalanceYearLayoutPresentation.current.index,
+        'balanceSumLayoutPresentation':
+            BalanceSumLayoutPresentation.current.index,
+      });
+      final savedCurrent = await store.read();
+      expect(
+        savedCurrent.balanceDayLayoutPresentation,
+        BalanceDayLayoutPresentation.current,
+      );
+      expect(
+        savedCurrent.balanceMonthLayoutPresentation,
+        BalanceMonthLayoutPresentation.current,
+      );
+      expect(
+        savedCurrent.balanceYearLayoutPresentation,
+        BalanceYearLayoutPresentation.current,
+      );
+      expect(
+        savedCurrent.balanceSumLayoutPresentation,
+        BalanceSumLayoutPresentation.current,
+      );
+    },
+  );
+
+  test(
     'obsolete Balance keys cannot reactivate legacy layouts or erase scope choices',
     () async {
       final legacy = <String, Object?>{
@@ -299,7 +373,7 @@ void main() {
       final restoredSum = await store.read();
       expect(
         restoredSum.balanceSumLayoutPresentation,
-        BalanceSumLayoutPresentation.current,
+        BalanceSumLayoutPresentation.focused,
       );
       expect(
         restoredSum.balanceSumFocusedPresentation,
@@ -312,7 +386,7 @@ void main() {
       final restoredDay = await store.read();
       expect(
         restoredDay.balanceDayLayoutPresentation,
-        BalanceDayLayoutPresentation.current,
+        BalanceDayLayoutPresentation.focused,
       );
       expect(
         restoredDay.balanceDayFocusedPresentation,
@@ -322,12 +396,12 @@ void main() {
       stored['balanceMonthLayoutPresentation'] = 99;
       expect(
         (await store.read()).balanceMonthLayoutPresentation,
-        BalanceMonthLayoutPresentation.current,
+        BalanceMonthLayoutPresentation.focused,
       );
       stored['balanceYearLayoutPresentation'] = 99;
       expect(
         (await store.read()).balanceYearLayoutPresentation,
-        BalanceYearLayoutPresentation.current,
+        BalanceYearLayoutPresentation.focused,
       );
       stored['balanceDailyCalculationMode'] = 99;
       expect(
@@ -434,12 +508,12 @@ void main() {
           MindYearMonthlyAmountPresentation.inline.index,
       'showDayContentViewChooser': false,
       'balanceSumLayoutPresentation':
-          BalanceSumLayoutPresentation.current.index,
+          BalanceSumLayoutPresentation.focused.index,
       'balanceSumFocusedPresentation':
           BalanceSumFocusedPresentation.distribution.index,
       'balanceShowSumFocusedSupplementaryStats': true,
       'balanceDayLayoutPresentation':
-          BalanceDayLayoutPresentation.current.index,
+          BalanceDayLayoutPresentation.focused.index,
       'balanceDayFocusedPresentation':
           BalanceDayFocusedPresentation.financialCompass.index,
       'balanceShowFocusedDayImpact': true,
@@ -449,9 +523,9 @@ void main() {
           BalanceDayRatioViewPresentation.dualGauge.index,
       'balanceDayRatioPresentation': BalanceDayRatioPresentation.coverage.index,
       'balanceMonthLayoutPresentation':
-          BalanceMonthLayoutPresentation.current.index,
+          BalanceMonthLayoutPresentation.focused.index,
       'balanceYearLayoutPresentation':
-          BalanceYearLayoutPresentation.current.index,
+          BalanceYearLayoutPresentation.focused.index,
       'balanceDailyCalculationMode':
           BalanceDailyCalculationMode.monthToDate.index,
       'balanceUsesChildCards': false,

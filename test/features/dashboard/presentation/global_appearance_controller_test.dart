@@ -24,7 +24,7 @@ void main() {
     );
     expect(
       controller.tuning.value.globalAppearance.fabIconPresentation,
-      FluviFabIconPresentation.directionArtwork,
+      FluviFabIconPresentation.legacyWhiteStore,
     );
     expect(
       controller.tuning.value.globalAppearance.fabVectorPrimaryArgb,
@@ -90,7 +90,7 @@ void main() {
         budgetAvatarContentStyle: BudgetAvatarContentStyle.overlappingGlow,
       ),
     );
-    expect(controller.tuning.value.generation, initialGeneration + 15);
+    expect(controller.tuning.value.generation, initialGeneration + 14);
     expect(controller.tickerIdentity, same(ticker));
   });
 }

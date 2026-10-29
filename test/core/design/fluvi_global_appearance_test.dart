@@ -118,6 +118,10 @@ void main() {
         expect(settings.showsDirectionArtwork, isTrue);
         expect(settings.typography, FluviTypographyProfile.app);
         expect(
+          settings.fabIconPresentation,
+          FluviFabIconPresentation.legacyWhiteStore,
+        );
+        expect(
           settings
               .copyWith(directionColorProfile: FluviDirectionColorProfile.vivid)
               .avatarColorProfile,

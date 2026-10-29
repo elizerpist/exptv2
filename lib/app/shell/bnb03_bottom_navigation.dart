@@ -31,7 +31,7 @@ final class Bnb03FabDirectionVisual {
     required TransactionDirection direction,
     required FluviDirectionColorProfile profile,
     FluviFabIconPresentation iconPresentation =
-        FluviFabIconPresentation.directionArtwork,
+        FluviFabIconPresentation.legacyWhiteStore,
   }) {
     final source = direction == TransactionDirection.income
         ? FluviDirectionColorPaletteCatalog.income(profile)
@@ -410,7 +410,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
     this.layoutStyle = DashboardBottomNavLayoutStyle.raisedFab,
     this.transactionDirection = TransactionDirection.income,
     this.directionColorProfile = FluviDirectionColorProfile.original,
-    this.fabIconPresentation = FluviFabIconPresentation.directionArtwork,
+    this.fabIconPresentation = FluviFabIconPresentation.legacyWhiteStore,
     this.fabVectorPrimaryArgb = 0xFF715EFB,
     this.fabVectorHighlightArgb = 0xFFE2D7FF,
   });

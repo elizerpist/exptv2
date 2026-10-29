@@ -20,6 +20,8 @@ import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart'
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
+import 'package:fluvi/features/pulse/data/unavailable_pulse_repository.dart';
+import 'package:fluvi/features/pulse/presentation/pulse_dashboard_page.dart';
 import 'package:fluvi/shared/presentation/fluvi_slide_up_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -94,6 +96,41 @@ void main() {
     expect(gate.absorbing, isFalse);
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
   });
+
+  testWidgets(
+    'a natural mode-icon tap reaches the real Pulse route without a header Story',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: FluviAppShell(
+            dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+            pulseRepository: UnavailablePulseRepository(),
+          ),
+        ),
+      );
+      await _pumpInteractiveDashboard(tester);
+
+      final selector = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-selector-input-gain'),
+      );
+      expect(selector, findsOneWidget);
+      final naturalTap = await tester.startGesture(tester.getCenter(selector));
+      await naturalTap.moveBy(const Offset(3, 2));
+      await tester.pump();
+      await naturalTap.moveBy(const Offset(-2, 1));
+      await tester.pump();
+      await naturalTap.up();
+      // The shell owns its lock before it awaits the exposure confirmation,
+      // so a rapid second completed icon tap cannot push a second route.
+      final duplicateTap = await tester.startGesture(tester.getCenter(selector));
+      await duplicateTap.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.byType(PulseDashboardPage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'RED physical regression: a ready dashboard survives every Avatar profile switch',

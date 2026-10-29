@@ -196,15 +196,26 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 scope.launch {
-                    runCatching { withContext(Dispatchers.IO) { handleAutomationCall(call, fluviCore) } }
-                        .onSuccess(result::success)
-                        .onFailure { error ->
-                            result.error(
-                                if (error is IllegalArgumentException) "validation" else "automation_error",
-                                error.message ?: "Automation operation failed.",
-                                null,
-                            )
+                    val response = try {
+                        val nativeResult = withContext(Dispatchers.IO) {
+                            handleAutomationCall(call, fluviCore)
                         }
+                        automationMethodChannelResponse(nativeResult)
+                    } catch (error: Throwable) {
+                        // A cancelled activity scope must not manufacture a
+                        // second MethodChannel reply while it is shutting down.
+                        if (error is CancellationException) throw error
+                        result.error(
+                            if (error is IllegalArgumentException) "validation" else "automation_error",
+                            error.message ?: "Automation operation failed.",
+                            null,
+                        )
+                        return@launch
+                    }
+                    // [automationMethodChannelResponse] has already encoded the
+                    // exact envelope, so this one success reply cannot expose a
+                    // Kotlin Unit or another unsupported codec value.
+                    result.success(response)
                 }
             }
         }
@@ -390,6 +401,10 @@ class MainActivity : FlutterActivity() {
                     DASHBOARD_PRESENTATION_PREFERENCES,
                     MODE_PRIVATE,
                 )
+                fun focusedLayoutPreference(key: String): Int =
+                    ((preferences.all[key] as? Number)?.toInt())
+                        ?.takeIf { it in 0..1 }
+                        ?: 1
                 when (call.method) {
                     "readDashboardPresentationSettings" -> result.success(
                         mapOf(
@@ -404,17 +419,17 @@ class MainActivity : FlutterActivity() {
                             "showDayContentViewChooser" to preferences.getBoolean("showDayContentViewChooser", false),
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
                             "balanceHeaderGraphPresentation" to preferences.getInt("balanceHeaderGraphPresentation", 1),
-                            "balanceDayLayoutPresentation" to preferences.getInt("balanceDayLayoutPresentation", 0),
+                            "balanceDayLayoutPresentation" to focusedLayoutPreference("balanceDayLayoutPresentation"),
                             "balanceDayPerformanceVisualPresentation" to ((preferences.all["balanceDayPerformanceVisualPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "balanceDayRatioViewPresentation" to ((preferences.all["balanceDayRatioViewPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "balanceDayRatioPresentation" to ((preferences.all["balanceDayRatioPresentation"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "balanceDayFocusedPresentation" to ((preferences.all["balanceDayFocusedPresentation"] as? Number)?.toInt()?.takeIf { it in 0..3 } ?: 0),
                             "balanceShowFocusedDayImpact" to preferences.getBoolean("balanceShowFocusedDayImpact", true),
-                            "balanceSumLayoutPresentation" to preferences.getInt("balanceSumLayoutPresentation", 0),
+                            "balanceSumLayoutPresentation" to focusedLayoutPreference("balanceSumLayoutPresentation"),
                             "balanceSumFocusedPresentation" to preferences.getInt("balanceSumFocusedPresentation", 0),
                             "balanceShowSumFocusedSupplementaryStats" to preferences.getBoolean("balanceShowSumFocusedSupplementaryStats", true),
-                            "balanceMonthLayoutPresentation" to preferences.getInt("balanceMonthLayoutPresentation", 0),
-                            "balanceYearLayoutPresentation" to preferences.getInt("balanceYearLayoutPresentation", 0),
+                            "balanceMonthLayoutPresentation" to focusedLayoutPreference("balanceMonthLayoutPresentation"),
+                            "balanceYearLayoutPresentation" to focusedLayoutPreference("balanceYearLayoutPresentation"),
                             "balanceDailyCalculationMode" to preferences.getInt("balanceDailyCalculationMode", 0),
                             "balanceMonthlySpendingChartPresentation" to preferences.getInt("balanceMonthlySpendingChartPresentation", 0),
                             "balanceHeaderPartitionHeightPercent" to preferences.getInt("balanceHeaderPartitionHeightPercent", 50),
@@ -442,20 +457,20 @@ class MainActivity : FlutterActivity() {
                             ?: throw IllegalArgumentException("Missing Day view chooser visibility.")
                         val balanceChildren = values["balanceUsesChildCards"] as? Boolean
                             ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
-                        val balanceDayLayoutPresentation = (values["balanceDayLayoutPresentation"] as? Number)?.toInt() ?: 0
+                        val balanceDayLayoutPresentation = (values["balanceDayLayoutPresentation"] as? Number)?.toInt() ?: 1
                         require(balanceDayLayoutPresentation in 0..1) { "Invalid Balance day presentation." }
                         val balanceDayPerformanceVisualPresentation = ((values["balanceDayPerformanceVisualPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
                         val balanceDayRatioViewPresentation = ((values["balanceDayRatioViewPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
                         val balanceDayRatioPresentation = ((values["balanceDayRatioPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..1 } ?: 0
                         val balanceDayFocusedPresentation = ((values["balanceDayFocusedPresentation"] as? Number)?.toInt() ?: 0).takeIf { it in 0..3 } ?: 0
                         val balanceShowFocusedDayImpact = values["balanceShowFocusedDayImpact"] as? Boolean ?: true
-                        val balanceSumLayoutPresentation = (values["balanceSumLayoutPresentation"] as? Number)?.toInt() ?: 0
+                        val balanceSumLayoutPresentation = (values["balanceSumLayoutPresentation"] as? Number)?.toInt() ?: 1
                         require(balanceSumLayoutPresentation in 0..1) { "Invalid Balance SUM presentation." }
                         val balanceSumFocusedPresentation = (values["balanceSumFocusedPresentation"] as? Number)?.toInt() ?: 0
                         require(balanceSumFocusedPresentation in 0..2) { "Invalid Balance SUM presentation." }
                         val balanceShowSumFocusedSupplementaryStats = values["balanceShowSumFocusedSupplementaryStats"] as? Boolean ?: true
-                        val balanceMonthLayoutPresentation = (values["balanceMonthLayoutPresentation"] as? Number)?.toInt() ?: 0
-                        val balanceYearLayoutPresentation = (values["balanceYearLayoutPresentation"] as? Number)?.toInt() ?: 0
+                        val balanceMonthLayoutPresentation = (values["balanceMonthLayoutPresentation"] as? Number)?.toInt() ?: 1
+                        val balanceYearLayoutPresentation = (values["balanceYearLayoutPresentation"] as? Number)?.toInt() ?: 1
                         require(balanceMonthLayoutPresentation in 0..1) { "Invalid Balance month layout presentation." }
                         require(balanceYearLayoutPresentation in 0..1) { "Invalid Balance year layout presentation." }
                         val balanceDailyCalculationMode = (values["balanceDailyCalculationMode"] as? Number)?.toInt() ?: 0

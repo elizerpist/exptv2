@@ -235,7 +235,7 @@ final class BalancePresentationSettings {
     this.headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
     this.monthCombinedCardPresentation =
         BalanceMonthCombinedCardPresentation.incomeExpense,
-    this.dayLayoutPresentation = BalanceDayLayoutPresentation.current,
+    this.dayLayoutPresentation = BalanceDayLayoutPresentation.focused,
     this.dayFocusedPresentation =
         BalanceDayFocusedPresentation.financialCompass,
     this.dayPerformanceVisualPresentation =
@@ -243,11 +243,11 @@ final class BalancePresentationSettings {
     this.dayRatioViewPresentation = BalanceDayRatioViewPresentation.dualGauge,
     this.dayRatioPresentation = BalanceDayRatioPresentation.coverage,
     this.showFocusedDayImpact = true,
-    this.sumLayoutPresentation = BalanceSumLayoutPresentation.current,
+    this.sumLayoutPresentation = BalanceSumLayoutPresentation.focused,
     this.sumFocusedPresentation = BalanceSumFocusedPresentation.distribution,
     this.showSumFocusedSupplementaryStats = true,
-    this.monthLayoutPresentation = BalanceMonthLayoutPresentation.current,
-    this.yearLayoutPresentation = BalanceYearLayoutPresentation.current,
+    this.monthLayoutPresentation = BalanceMonthLayoutPresentation.focused,
+    this.yearLayoutPresentation = BalanceYearLayoutPresentation.focused,
     this.yearBarPresentation = BalanceYearBarPresentation.current,
     this.usesChildCards = true,
     required this.revision,
@@ -267,18 +267,18 @@ final class BalancePresentationSettings {
       headerGlassConfiguration = const BalanceHeaderGlassConfiguration(),
       monthCombinedCardPresentation =
           BalanceMonthCombinedCardPresentation.incomeExpense,
-      dayLayoutPresentation = BalanceDayLayoutPresentation.current,
+      dayLayoutPresentation = BalanceDayLayoutPresentation.focused,
       dayFocusedPresentation = BalanceDayFocusedPresentation.financialCompass,
       dayPerformanceVisualPresentation =
           BalanceDayPerformanceVisualPresentation.semicircle,
       dayRatioViewPresentation = BalanceDayRatioViewPresentation.dualGauge,
       dayRatioPresentation = BalanceDayRatioPresentation.coverage,
       showFocusedDayImpact = true,
-      sumLayoutPresentation = BalanceSumLayoutPresentation.current,
+      sumLayoutPresentation = BalanceSumLayoutPresentation.focused,
       sumFocusedPresentation = BalanceSumFocusedPresentation.distribution,
       showSumFocusedSupplementaryStats = true,
-      monthLayoutPresentation = BalanceMonthLayoutPresentation.current,
-      yearLayoutPresentation = BalanceYearLayoutPresentation.current,
+      monthLayoutPresentation = BalanceMonthLayoutPresentation.focused,
+      yearLayoutPresentation = BalanceYearLayoutPresentation.focused,
       yearBarPresentation = BalanceYearBarPresentation.current,
       usesChildCards = true,
       revision = 0;
