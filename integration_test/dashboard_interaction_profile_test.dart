@@ -1298,7 +1298,7 @@ Future<void> _prepareScenario(
 Future<void> _showBudgetAvatarRail(WidgetTester tester) async {
   await tester.drag(
     find.byKey(
-      const ValueKey<String>('dashboard-header-mode-selector-viewport'),
+      const ValueKey<String>('dashboard-header-mode-selector-input-gain'),
     ),
     const Offset(0, -36),
   );
