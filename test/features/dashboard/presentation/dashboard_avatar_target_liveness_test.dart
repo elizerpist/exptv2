@@ -743,11 +743,11 @@ class _PhysicalAvatarSequence {
   double get logBoxViewportDimension => tester
       .stateList<ScrollableState>(
         find.descendant(
-          of: find.byType(DashboardLogBoxViewport),
+          of: find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
           matching: find.byType(Scrollable),
         ),
       )
-      .singleWhere((state) => state.position.axis == Axis.vertical)
+      .single
       .position
       .viewportDimension;
   String get trace => FluviDiagnosticLogger.entries
