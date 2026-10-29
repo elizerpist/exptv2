@@ -95,9 +95,11 @@ uniform vec4 uRipple7;
 uniform vec4 uRipple8;
 uniform vec4 uRipple9;
 
-// The CSS-source pink overlay and pointer trail are analytical, native-size
-// fragment fields. Keeping them in this retained program removes the former
-// Canvas saveLayer/ImageFilter blur surface from the normal Header path.
+// The CSS-source pink overlay and connected water path are analytical,
+// native-size fragment fields. Keeping them in this retained program removes
+// the former Canvas saveLayer/ImageFilter blur surface from the normal Header
+// path. Each trail vec4 is `(x, y, ageSeconds, signedVelocity)`; a negative
+// velocity marks a deliberate break between separate path pieces.
 uniform float uTouchOverlayActive;
 uniform vec2 uTouchOverlayOrigin;
 uniform float uTouchOverlayOpacity;
@@ -131,6 +133,7 @@ uniform vec4 uTrail21;
 uniform vec4 uTrail22;
 uniform vec4 uTrail23;
 uniform vec4 uTrail24;
+// Retained ABI reserve. Dart publishes at most 25 samples / 24 segments.
 uniform vec4 uTrail25;
 
 out vec4 fragColor;
@@ -1562,51 +1565,112 @@ vec3 touchOverlay(vec2 uv, out float alpha) {
   return saturateColor(color.rgb, 1.85);
 }
 
-// Source pointer-trail palette and lifetime are prepared in the retained Dart
-// bank. Each point is an analytical radial field; no blurred bitmap or
-// offscreen layer is enlarged over the Header.
-vec3 touchTrail(vec2 uv, out float alpha) {
-  vec3 mixed = vec3(0.0);
-  alpha = 0.0;
+// The saved `trailSize` setting historically expressed a circular particle
+// diameter. Preserve its key and range, but map it to the water path's
+// deliberately narrow 12–18 logical-pixel full width.
+float waterTrailWidthPixels() {
+  float amount = saturate((uTrailSize - 24.0) / (160.0 - 24.0));
+  return mix(12.0, 18.0, amount);
+}
+
+float waterGaussian(float distance, float width) {
+  float safeWidth = max(.0001, width);
+  float ratio = distance / safeWidth;
+  return exp(-.5 * ratio * ratio);
+}
+
+// Finds the nearest point on each connected A–B piece. Its age and velocity
+// interpolate along the piece, so sparse and dense pointer delivery both
+// produce one continuous water path instead of separate circular particles.
+vec2 displaceWaterTrail(vec2 uv, out float highlight, out float shadow) {
+  highlight = 0.0;
+  shadow = 0.0;
   float aspect = uSize.x / max(1.0, uSize.y);
-  for (int index = 0; index < 26; index++) {
+  float height = max(1.0, uSize.y);
+  vec2 point = vec2(uv.x * aspect, uv.y);
+  vec2 offset = vec2(0.0);
+  float accumulatedWeight = 0.0;
+  // `waterGaussian` is a standard-deviation-like falloff. Quartering the
+  // persisted full width keeps the visible centre at the requested 12–18 px,
+  // rather than turning its soft tail into a broad luminous tube.
+  float coreWidth = max(.0001, waterTrailWidthPixels() * .25 / height);
+
+  // 25 retained samples encode at most 24 connected segments. The final ABI
+  // reserve stays unwritten, which avoids growing the FragmentProgram bank.
+  for (int index = 1; index < 25; index++) {
     if (float(index) >= uTrailCount) break;
-    vec4 trail = trailAt(index);
-    if (trail.z <= .0001 || trail.w <= .0001) continue;
-    vec2 delta = uv - trail.xy;
-    delta.x *= aspect;
-    // `delta` above is height-normalized after aspect correction. The source
-    // trail size is logical pixels, so normalize it by Header height as well.
-    float radius = max(.0001, (uTrailSize / max(1.0, uSize.y)) * .5 * trail.w);
-    float t = length(delta) / radius;
-    vec4 c0 = vec4(1.0, .6549, .8863, .96);
-    vec4 c1 = vec4(1.0, .5451, .8549, .82);
-    vec4 c2 = vec4(.5451, .2431, 1.0, .72);
-    vec4 c3 = vec4(1.0, 1.0, 1.0, .42);
-    vec4 color = t < .18 ? mix(c0, c1, t / .18) :
-        (t < .38 ? mix(c1, c2, (t - .18) / .20) :
-        (t < .62 ? mix(c2, c3, (t - .38) / .24) :
-        mix(c3, vec4(1.0, 1.0, 1.0, 0.0), saturate((t - .62) / .14))));
-    // The authored .62 → .76 alpha ramp provides the broad soft falloff.
-    // This narrow, radius-relative width only removes physical pixel steps.
-    float radiusPixels = radius * max(1.0, uSize.y);
-    float edge = 1.25 / max(1.0, radiusPixels);
-    float halo = c3.a * .14 *
-        smoothstep(.62 - edge, .62 + edge, t) *
-        (1.0 - smoothstep(.76, .76 + edge * 3.0, t));
-    float localAlpha = max(color.a, halo) * trail.z *
-        uTouchInteractionOpacity *
-        (1.0 - smoothstep(.76 + edge * 2.0, .76 + edge * 4.0, t));
-    mixed = screenBlend(mixed, saturateColor(color.rgb, 1.2 + trail.z * .8));
-    alpha = 1.0 - (1.0 - alpha) * (1.0 - localAlpha);
+    vec4 a = trailAt(index - 1);
+    vec4 b = trailAt(index);
+    // Connection is owned by the newer endpoint: `b` says whether this
+    // A-to-B piece may be drawn. `a` can be the detached first vertex of a
+    // new contact (or a trimmed tail) and still legitimately begin its first
+    // connected segment.
+    if (b.w < 0.0) continue;
+    float segmentAgeFloor = min(a.z, b.z);
+    if (segmentAgeFloor >= .8) continue;
+    vec2 start = vec2(a.x * aspect, a.y);
+    vec2 end = vec2(b.x * aspect, b.y);
+    vec2 segment = end - start;
+    float segmentLengthSquared = dot(segment, segment);
+    if (segmentLengthSquared <= .00000001) continue;
+    float u = clamp(dot(point - start, segment) / segmentLengthSquared, 0.0, 1.0);
+    vec2 closest = start + u * segment;
+    vec2 radial = point - closest;
+    float distanceToPath = length(radial);
+    vec2 normal = distanceToPath > .00001
+        ? radial / distanceToPath
+        : vec2(.342, .940);
+    float age = mix(a.z, b.z, u);
+    if (age < 0.0 || age >= .8) continue;
+    float velocity = saturate(mix(a.w, b.w, u));
+    float lifetime = 1.0 - smooth01(.46, .8, age);
+    // The ring advances at roughly 32 logical pixels/second. It is broad and
+    // shallow by design: header colours stay dominant over the water optics.
+    float edgeDistance = (2.5 + age * 30.0) / height;
+    float edgeWidth = (2.3 + velocity * 1.1) / height;
+    float center = waterGaussian(distanceToPath, coreWidth);
+    float brightEdge = waterGaussian(distanceToPath - edgeDistance, edgeWidth);
+    float darkEdge = waterGaussian(
+        distanceToPath - max(0.0, edgeDistance - edgeWidth * 1.45),
+        edgeWidth * 1.35);
+    // A small centre indentation plus an opposite-signed travelling edge
+    // gives the material a water surface rather than a glowing tube.
+    float crossSection =
+        -center * (.56 + velocity * .24) +
+        brightEdge * (.72 + velocity * .28) -
+        darkEdge * .24;
+    vec2 candidateOffset = normal * crossSection *
+        mix(1.35, 2.45, velocity) / height * lifetime;
+    float localWeight = lifetime * max(center, max(brightEdge, darkEdge));
+    float blend = localWeight / max(.0001, accumulatedWeight + localWeight);
+    offset = mix(offset, candidateOffset, blend);
+    accumulatedWeight = min(1.0, accumulatedWeight + localWeight);
+    highlight = max(highlight, brightEdge * lifetime * (.045 + velocity * .035));
+    shadow = max(shadow, (darkEdge * .90 + center * .22) *
+        lifetime * (.085 + velocity * .045));
   }
-  return mixed;
+
+  vec2 displaced = uv + vec2(offset.x / aspect, offset.y);
+  // The Header shell clips final pixels, while this envelope also avoids
+  // dragging material sampling into a hard stripe right at its rounded edge.
+  float edgeEnvelope = smooth01(0.0, .035, uv.x) *
+      smooth01(0.0, .035, uv.y) *
+      smooth01(0.0, .035, 1.0 - uv.x) *
+      smooth01(0.0, .035, 1.0 - uv.y);
+  return mix(uv, clamp(displaced, vec2(0.0), vec2(1.0)),
+      edgeEnvelope * uTouchInteractionOpacity);
 }
 
 void main() {
   vec2 uv = FlutterFragCoord().xy / max(uSize, vec2(1.0));
+  float waterHighlight;
+  float waterShadow;
+  // Water deformation happens before every Header material sample, so Portal
+  // and canonical palettes refract together while foreground widgets stay in
+  // Flutter's sharp layer above this shader.
+  vec2 waterDisplaced = displaceWaterTrail(uv, waterHighlight, waterShadow);
   float rippleLight;
-  vec2 displaced = displaceRipples(uv, rippleLight);
+  vec2 displaced = displaceRipples(waterDisplaced, rippleLight);
 
   float backgroundMatter = uBackgroundEnabled > .5
       ? portalSample(displaced, uBackgroundEffect, uBackgroundPhase, 1.0)
@@ -1656,12 +1720,19 @@ void main() {
     // screen compressed the material contrast until BE/KI was imperceptible.
     composed = mix(composed, interior, matter * .38);
   }
+  // Keep the optical edge deliberately subordinate to the refracted material:
+  // a lavender glint and its soft dark counterpart, never white dots.
+  composed = mix(
+      composed,
+      screenBlend(composed, vec3(1.0, .79, .98)),
+      saturate(waterHighlight) * uTouchInteractionOpacity);
+  composed = mix(
+      composed,
+      composed * vec3(.84, .87, .96),
+      saturate(waterShadow) * uTouchInteractionOpacity);
   float overlayAlpha;
   vec3 overlay = touchOverlay(uv, overlayAlpha);
   composed = mix(composed, screenBlend(composed, overlay), overlayAlpha);
-  float trailAlpha;
-  vec3 trail = touchTrail(uv, trailAlpha);
-  composed = mix(composed, screenBlend(composed, trail), trailAlpha);
   // The clipped physical Header shell owns an opaque white base below this
   // colour/material layer. A zero opacity therefore reveals white while text,
   // charts, borders and interaction surfaces remain entirely outside it.

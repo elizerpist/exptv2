@@ -128,9 +128,9 @@ final class DashboardHeaderTapRippleUniformSlot {
   }
 }
 
-/// Retained fixed-capacity input for the CSS-source pink overlay and pointer
-/// trail. It replaces the Canvas saveLayer/ImageFilter lane with analytical
-/// full-surface fields in the existing Header FragmentProgram.
+/// Retained fixed-capacity input for the CSS-source pink overlay and connected
+/// water-path vertices. It replaces the Canvas saveLayer/ImageFilter lane
+/// with analytical full-surface fields in the existing Header FragmentProgram.
 final class DashboardHeaderTapWaveVisualUniformBank {
   DashboardHeaderTapWaveVisualUniformBank()
     : _trails = List<DashboardHeaderTapWaveTrailFrame>.generate(
@@ -164,7 +164,7 @@ final class DashboardHeaderTapWaveVisualUniformBank {
         timestamp: elapsed,
         into: _trails[index],
       );
-      if (_trails[index].opacity > 0) index += 1;
+      if (_trails[index].age < .8) index += 1;
     }
     for (var clear = index; clear < _trails.length; clear += 1) {
       _trails[clear].clear();
@@ -250,7 +250,10 @@ final class DashboardHeaderFragmentPortalInput {
 /// owns the entire palette field; keeping this layout explicit prevents a
 /// later bank insertion from silently redirecting Portal values.
 abstract final class DashboardHeaderFragmentUniformLayout {
-  static const int version = 3;
+  // v4 retains the scalar count but changes every trail vec4 from an isolated
+  // dot's `(x, y, opacity, scale)` to a connected-path vertex's
+  // `(x, y, ageSeconds, signedVelocity)`.
+  static const int version = 4;
   static const int canonicalGradientStopCapacity = 10;
   // The v3 uniform bank reserves ten colour positions for index stability,
   // but the accepted Budget Header projects the authored Cool scale into its
@@ -408,8 +411,8 @@ abstract final class DashboardHeaderFragmentUniformLayout {
     for (final trail in input.tapVisuals.trails) {
       f(trail.x);
       f(trail.y);
-      f(trail.opacity);
-      f(trail.scale);
+      f(trail.age);
+      f(trail.signedVelocity);
     }
     assert(index == floatCount);
   }

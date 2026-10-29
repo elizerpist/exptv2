@@ -219,28 +219,44 @@ final class DashboardHeaderTapWaveTrail {
   const DashboardHeaderTapWaveTrail({
     required this.origin,
     required this.startedAt,
+    required this.velocity,
+    required this.connectsToPrevious,
   });
 
   final Offset origin;
   final Duration startedAt;
+
+  /// Smoothed logical-pixel velocity, normalized to the shader's bounded
+  /// 0..1 domain. A negative value is reserved by the retained frame for a
+  /// deliberate path break; this source value always remains non-negative.
+  final double velocity;
+
+  /// A fresh pointer contact, a re-entry after leaving the Header, or a
+  /// capacity-trimmed tail must never draw a line to its predecessor.
+  final bool connectsToPrevious;
+
+  DashboardHeaderTapWaveTrail withoutPreviousConnection() =>
+      DashboardHeaderTapWaveTrail(
+        origin: origin,
+        startedAt: startedAt,
+        velocity: velocity,
+        connectsToPrevious: false,
+      );
 }
 
-/// Source CSS keyframe projection for one pointer-trail particle.  It lives
-/// with the state rather than the painter so deterministic contract tests and
-/// rendering share precisely the same 0% → 58% → 100% curve.
+/// Immutable diagnostic projection for one water-path sample. The shader
+/// joins consecutive samples; it never renders this as a standalone dot.
 @immutable
 final class DashboardHeaderTapWaveTrailSample {
   const DashboardHeaderTapWaveTrailSample({
-    required this.opacity,
-    required this.scale,
-    required this.blur,
-    required this.saturation,
+    required this.age,
+    required this.velocity,
+    required this.connectsToPrevious,
   });
 
-  final double opacity;
-  final double scale;
-  final double blur;
-  final double saturation;
+  final double age;
+  final double velocity;
+  final bool connectsToPrevious;
 }
 
 /// Mutable bridge from the source-state curves to the retained fragment
@@ -263,32 +279,39 @@ final class DashboardHeaderTapWaveOverlayFrame {
   }
 }
 
-/// Mutable source-curve projection for one retained pointer-trail slot.
+/// Mutable projection for one retained water-path vertex.
+///
+/// The fragment ABI intentionally keeps the historic vec4 capacity, but its
+/// components now are `(x, y, ageSeconds, signedVelocity)`. A negative
+/// velocity is a path-break sentinel, which prevents separate contacts or an
+/// outside detour from being joined by the shader.
 final class DashboardHeaderTapWaveTrailFrame {
   double x = 0;
   double y = 0;
-  double opacity = 0;
-  double scale = 0;
+  double age = 1;
+  double signedVelocity = -1;
 
   void clear() {
     x = 0;
     y = 0;
-    opacity = 0;
-    scale = 0;
+    age = 1;
+    signedVelocity = -1;
   }
 }
 
 /// Bounded one-shot source state advanced by the existing shared Header clock.
 /// It intentionally owns neither a [Ticker] nor any Dashboard semantic state.
 final class DashboardHeaderTapWaveState {
-  static const Duration _trailLifetime = Duration(milliseconds: 1350);
+  static const Duration _trailLifetime = Duration(milliseconds: 800);
   static const Duration _rippleFadeDuration = Duration(milliseconds: 1560);
   static const Duration _releaseCleanup = Duration(milliseconds: 1740);
-  static const Duration _rippleMinimumGap = Duration(milliseconds: 58);
-  static const Duration _trailMinimumGap = Duration(milliseconds: 24);
-  static const double _trailMinimumDistance = .055;
+  static const Duration _tapToDragTransition = Duration(milliseconds: 80);
+  static const double _dragThresholdLogicalPixels = 5;
+  static const double _sampleSpacingLogicalPixels = 6;
+  static const double _maximumVelocityLogicalPixelsPerSecond = 1200;
   static const int _maxRipples = 10;
-  static const int _maxTrails = 26;
+  static const int _maxTrailSegments = 24;
+  static const int _maxTrails = _maxTrailSegments + 1;
 
   final List<DashboardHeaderTapWaveRipple> _ripples =
       <DashboardHeaderTapWaveRipple>[];
@@ -298,10 +321,14 @@ final class DashboardHeaderTapWaveState {
       DashboardHeaderTapWaveTuning.defaults();
   Offset _origin = const Offset(.5, .5);
   bool _pointerActive = false;
-  bool _moved = false;
+  bool _dragging = false;
+  bool _pathBreakPending = false;
   Duration? _releaseStartedAt;
-  Duration? _lastTrailAt;
-  Offset? _lastTrailOrigin;
+  Duration? _dragStartedAt;
+  Duration? _lastPointerTimestamp;
+  Size _pathLogicalSize = Size.zero;
+  Offset _pendingMovement = Offset.zero;
+  double _smoothedVelocity = 0;
   int _waveGeneration = 0;
 
   DashboardHeaderTapWaveTuning get tuning => _tuning;
@@ -311,45 +338,138 @@ final class DashboardHeaderTapWaveState {
   int get trailCount => _trails.length;
   int get waveGeneration => _waveGeneration;
   bool get hasActiveFieldRipples => _ripples.isNotEmpty;
+  bool get isDragging => _dragging;
+  static int get maxTrailSegments => _maxTrailSegments;
+  static int get maxTrailSamples => _maxTrails;
 
   bool get requiresFrames =>
-      _pointerActive ||
-      _releaseStartedAt != null ||
-      _ripples.isNotEmpty ||
-      _trails.isNotEmpty;
+      _releaseStartedAt != null || _ripples.isNotEmpty || _trails.isNotEmpty;
 
   void configure(DashboardHeaderTapWaveTuning value) => _tuning = value;
 
-  void pointerDown({required Offset origin, required Duration timestamp}) {
+  void pointerDown({
+    required Offset origin,
+    required Duration timestamp,
+    required Size logicalSize,
+  }) {
     _origin = _clampPoint(origin);
     _pointerActive = true;
-    _moved = false;
+    _dragging = false;
+    _pathBreakPending = false;
     _releaseStartedAt = null;
-    _spawnTrail(_origin, timestamp, force: true);
+    _dragStartedAt = null;
+    _lastPointerTimestamp = timestamp;
+    _pathLogicalSize = _safeLogicalSize(logicalSize);
+    _pendingMovement = Offset.zero;
+    _smoothedVelocity = 0;
+    _appendTrail(
+      origin: _origin,
+      timestamp: timestamp,
+      velocity: 0,
+      connectsToPrevious: false,
+      force: true,
+    );
     _spawnRipple(_origin, timestamp);
   }
 
-  void pointerMove({required Offset origin, required Duration timestamp}) {
+  void pointerMove({
+    required Offset origin,
+    required Offset logicalDelta,
+    required Size logicalSize,
+    required Duration timestamp,
+  }) {
     if (!_pointerActive) return;
-    _origin = _clampPoint(origin);
-    _moved = true;
-    _spawnTrail(_origin, timestamp);
-    _spawnRipple(_origin, timestamp);
+    final nextOrigin = _clampPoint(origin);
+    final nextSize = _safeLogicalSize(logicalSize);
+    final previousTimestamp = _lastPointerTimestamp ?? timestamp;
+    final elapsedMicros = (timestamp - previousTimestamp).inMicroseconds;
+    // Pointer event timestamps, not the render clock, own velocity. Multiple
+    // moves can legitimately land in one animation frame, so an equal event
+    // timestamp falls back to a small, stable sampling interval rather than
+    // producing an infinite speed spike.
+    final safeElapsedMicros = elapsedMicros > 0
+        ? elapsedMicros
+        : const Duration(milliseconds: 8).inMicroseconds;
+    final deltaDistance = logicalDelta.distance;
+    final rawVelocity =
+        (deltaDistance * Duration.microsecondsPerSecond / safeElapsedMicros)
+            .clamp(0.0, _maximumVelocityLogicalPixelsPerSecond)
+            .toDouble();
+    _smoothedVelocity = _smoothedVelocity == 0
+        ? rawVelocity
+        : _lerp(_smoothedVelocity, rawVelocity, .36);
+    _lastPointerTimestamp = timestamp;
+
+    final sizeChanged = _pathLogicalSize != nextSize;
+    if (sizeChanged) {
+      // A collapsing/expanding Header changes normalized coordinates without
+      // the user moving. Keep old vertices surface-relative, and require a
+      // fresh in-bounds vertex before a resized path can continue.
+      _pathLogicalSize = nextSize;
+      if (deltaDistance <= .001) {
+        _pathBreakPending = true;
+        return;
+      }
+      _pathBreakPending = true;
+    }
+
+    if (!_dragging) {
+      _pendingMovement += logicalDelta;
+      if (_pendingMovement.distance < _dragThresholdLogicalPixels) return;
+      _dragging = true;
+      _dragStartedAt = timestamp;
+    }
+
+    if (_pathBreakPending) {
+      _origin = nextOrigin;
+      _appendTrail(
+        origin: nextOrigin,
+        timestamp: timestamp,
+        velocity: _normalizedVelocity,
+        connectsToPrevious: false,
+        force: true,
+      );
+      _pathBreakPending = false;
+      return;
+    }
+
+    _appendResampledPath(
+      to: nextOrigin,
+      timestamp: timestamp,
+      velocity: _normalizedVelocity,
+    );
+    _origin = nextOrigin;
   }
 
   void pointerUp({required Duration timestamp}) {
     if (!_pointerActive) return;
     _pointerActive = false;
     _releaseStartedAt = timestamp;
+    _lastPointerTimestamp = null;
+  }
+
+  /// Called by the passive listener when a primary pointer leaves the visual
+  /// Header bounds. It intentionally does not clamp a stream of off-surface
+  /// events to one edge pixel; a later re-entry begins a separate segment.
+  void breakPath() {
+    if (!_pointerActive) return;
+    _pathBreakPending = true;
+    _pendingMovement = Offset.zero;
   }
 
   void advance(Duration timestamp) {
     _ripples.removeWhere(
       (ripple) => timestamp - ripple.startedAt >= _rippleLifetime,
     );
-    _trails.removeWhere(
-      (trail) => timestamp - trail.startedAt >= _trailLifetime,
-    );
+    var trimmedTrailHead = false;
+    while (_trails.isNotEmpty &&
+        timestamp - _trails.first.startedAt >= _trailLifetime) {
+      _trails.removeAt(0);
+      trimmedTrailHead = true;
+    }
+    if (trimmedTrailHead && _trails.isNotEmpty) {
+      _trails[0] = _trails.first.withoutPreviousConnection();
+    }
     final releaseStartedAt = _releaseStartedAt;
     if (releaseStartedAt != null &&
         timestamp - releaseStartedAt >= _releaseCleanup) {
@@ -359,19 +479,24 @@ final class DashboardHeaderTapWaveState {
 
   DashboardHeaderTapWaveOverlay? overlayAt(Duration timestamp) {
     if (_pointerActive) {
+      final dragFade = _dragOverlayFactor(timestamp);
+      if (dragFade <= .0001) return null;
       return _overlay(
-        opacity: _moved ? .9 : .96,
-        scale: _moved ? 1 : .8,
-        blur: _moved ? 10 : 7,
+        opacity: .96 * dragFade,
+        scale: _lerp(.8, 1, 1 - dragFade),
+        blur: _lerp(7, 10, 1 - dragFade),
       );
     }
     final releaseStartedAt = _releaseStartedAt;
     if (releaseStartedAt == null) return null;
     final age = timestamp - releaseStartedAt;
     if (age >= _releaseCleanup) return null;
-    final initialOpacity = _moved ? .9 : .96;
-    final initialScale = _moved ? 1.0 : .8;
-    final initialBlur = _moved ? 10.0 : 7.0;
+    // A real drag has already retracted the large tap overlay. It must not
+    // reappear as a second circle when the pointer is released.
+    if (_dragging) return null;
+    const initialOpacity = .96;
+    const initialScale = .8;
+    const initialBlur = 7.0;
     final fade = _curveFraction(
       age,
       const Duration(milliseconds: 1560),
@@ -401,10 +526,15 @@ final class DashboardHeaderTapWaveState {
       ..x = _origin.dx
       ..y = _origin.dy;
     if (_pointerActive) {
+      final dragFade = _dragOverlayFactor(timestamp);
+      if (dragFade <= .0001) {
+        into.clear();
+        return;
+      }
       into
-        ..opacity = _moved ? .9 : .96
-        ..scale = _moved ? 1 : .8
-        ..blur = _moved ? 10 : 7
+        ..opacity = .96 * dragFade
+        ..scale = _lerp(.8, 1, 1 - dragFade)
+        ..blur = _lerp(7, 10, 1 - dragFade)
         ..active = 1;
       return;
     }
@@ -418,9 +548,13 @@ final class DashboardHeaderTapWaveState {
       into.clear();
       return;
     }
-    final initialOpacity = _moved ? .9 : .96;
-    final initialScale = _moved ? 1.0 : .8;
-    final initialBlur = _moved ? 10.0 : 7.0;
+    if (_dragging) {
+      into.clear();
+      return;
+    }
+    const initialOpacity = .96;
+    const initialScale = .8;
+    const initialBlur = 7.0;
     final fade = _curveFraction(
       age,
       const Duration(milliseconds: 1560),
@@ -460,52 +594,33 @@ final class DashboardHeaderTapWaveState {
     required Duration timestamp,
   }) {
     final age = timestamp - trail.startedAt;
-    if (age < Duration.zero || age >= _trailLifetime) return null;
-    final fraction = age.inMicroseconds / _trailLifetime.inMicroseconds;
-    const curve = Cubic(.16, 1, .3, 1);
-    if (fraction <= .58) {
-      final amount = curve.transform(fraction / .58);
-      return DashboardHeaderTapWaveTrailSample(
-        opacity: _lerp(.96, .48, amount),
-        scale: _lerp(1, .58, amount),
-        blur: _lerp(8, 14, amount),
-        saturation: _lerp(2, 1.65, amount),
-      );
-    }
-    final amount = curve.transform((fraction - .58) / .42);
+    if (age >= _trailLifetime) return null;
     return DashboardHeaderTapWaveTrailSample(
-      opacity: _lerp(.48, 0, amount),
-      scale: _lerp(.58, .18, amount),
-      blur: _lerp(14, 21, amount),
-      saturation: _lerp(1.65, 1.2, amount),
+      age: math.max(0, age.inMicroseconds) / Duration.microsecondsPerSecond,
+      velocity: trail.velocity,
+      connectsToPrevious: trail.connectsToPrevious,
     );
   }
 
-  /// Source-equivalent trail timing written into retained scalar storage for
-  /// the shader. It mirrors [trailSampleAt] without allocating a sample.
+  /// Writes a vertex of the time-decaying, connected water path into retained
+  /// storage without allocating a frame object per paint.
   void writeTrailFrame({
     required DashboardHeaderTapWaveTrail trail,
     required Duration timestamp,
     required DashboardHeaderTapWaveTrailFrame into,
   }) {
-    final age = timestamp - trail.startedAt;
-    if (age < Duration.zero || age >= _trailLifetime) {
+    final sample = trailSampleAt(trail: trail, timestamp: timestamp);
+    if (sample == null) {
       into.clear();
       return;
     }
-    final fraction = age.inMicroseconds / _trailLifetime.inMicroseconds;
-    const curve = Cubic(.16, 1, .3, 1);
-    final opacity = fraction <= .58
-        ? _lerp(.96, .48, curve.transform(fraction / .58))
-        : _lerp(.48, 0, curve.transform((fraction - .58) / .42));
-    final scale = fraction <= .58
-        ? _lerp(1, .58, curve.transform(fraction / .58))
-        : _lerp(.58, .18, curve.transform((fraction - .58) / .42));
     into
       ..x = trail.origin.dx
       ..y = trail.origin.dy
-      ..opacity = opacity
-      ..scale = scale;
+      ..age = sample.age
+      ..signedVelocity = sample.connectsToPrevious
+          ? math.max(.0001, sample.velocity)
+          : -math.max(.0001, sample.velocity);
   }
 
   void writeFieldSample({
@@ -565,8 +680,6 @@ final class DashboardHeaderTapWaveState {
   );
 
   void _spawnRipple(Offset origin, Duration timestamp) {
-    final last = _ripples.isEmpty ? null : _ripples.last;
-    if (last != null && timestamp - last.startedAt < _rippleMinimumGap) return;
     _ripples.add(
       DashboardHeaderTapWaveRipple(origin: origin, startedAt: timestamp),
     );
@@ -574,24 +687,99 @@ final class DashboardHeaderTapWaveState {
     if (_ripples.length > _maxRipples) _ripples.removeAt(0);
   }
 
-  void _spawnTrail(Offset origin, Duration timestamp, {bool force = false}) {
-    final lastAt = _lastTrailAt;
-    final lastOrigin = _lastTrailOrigin;
-    if (!force && lastAt != null && lastOrigin != null) {
-      final dx = origin.dx - lastOrigin.dx;
-      final dy = origin.dy - lastOrigin.dy;
-      if (timestamp - lastAt < _trailMinimumGap &&
-          math.sqrt(dx * dx + dy * dy) < _trailMinimumDistance) {
-        return;
+  void _appendResampledPath({
+    required Offset to,
+    required Duration timestamp,
+    required double velocity,
+  }) {
+    if (_trails.isEmpty) {
+      _appendTrail(
+        origin: to,
+        timestamp: timestamp,
+        velocity: velocity,
+        connectsToPrevious: false,
+        force: true,
+      );
+      return;
+    }
+    final from = _trails.last;
+    final distance = _logicalDistance(from.origin, to, _pathLogicalSize);
+    if (distance <= .001) return;
+    final pieces = math.max(1, (distance / _sampleSpacingLogicalPixels).ceil());
+    for (var index = 1; index <= pieces; index += 1) {
+      final progress = index / pieces;
+      _appendTrail(
+        origin: Offset.lerp(from.origin, to, progress)!,
+        timestamp: _lerpDuration(from.startedAt, timestamp, progress),
+        velocity: velocity,
+        connectsToPrevious: true,
+      );
+    }
+  }
+
+  void _appendTrail({
+    required Offset origin,
+    required Duration timestamp,
+    required double velocity,
+    required bool connectsToPrevious,
+    bool force = false,
+  }) {
+    final last = _trails.isEmpty ? null : _trails.last;
+    if (!force &&
+        last != null &&
+        _logicalDistance(last.origin, origin, _pathLogicalSize) <= .001) {
+      return;
+    }
+    _trails.add(
+      DashboardHeaderTapWaveTrail(
+        origin: origin,
+        startedAt: timestamp,
+        velocity: velocity,
+        connectsToPrevious: connectsToPrevious && last != null,
+      ),
+    );
+    if (_trails.length > _maxTrails) {
+      _trails.removeAt(0);
+      if (_trails.isNotEmpty) {
+        _trails[0] = _trails.first.withoutPreviousConnection();
       }
     }
-    _lastTrailAt = timestamp;
-    _lastTrailOrigin = origin;
-    _trails.add(
-      DashboardHeaderTapWaveTrail(origin: origin, startedAt: timestamp),
-    );
-    if (_trails.length > _maxTrails) _trails.removeAt(0);
   }
+
+  double get _normalizedVelocity =>
+      (_smoothedVelocity / _maximumVelocityLogicalPixelsPerSecond)
+          .clamp(0.0, 1.0)
+          .toDouble();
+
+  double _dragOverlayFactor(Duration timestamp) {
+    final startedAt = _dragStartedAt;
+    if (startedAt == null) return 1;
+    final age = timestamp - startedAt;
+    final progress =
+        age.inMicroseconds / math.max(1, _tapToDragTransition.inMicroseconds);
+    final smooth = progress.clamp(0.0, 1.0).toDouble();
+    return 1 - smooth * smooth * (3 - 2 * smooth);
+  }
+
+  static Size _safeLogicalSize(Size value) => Size(
+    value.width.isFinite && value.width > 0 ? value.width : 1,
+    value.height.isFinite && value.height > 0 ? value.height : 1,
+  );
+
+  static double _logicalDistance(Offset from, Offset to, Size size) {
+    final dx = (to.dx - from.dx) * size.width;
+    final dy = (to.dy - from.dy) * size.height;
+    return math.sqrt(dx * dx + dy * dy);
+  }
+
+  static Duration _lerpDuration(Duration from, Duration to, double amount) =>
+      Duration(
+        microseconds: _lerp(
+          from.inMicroseconds.toDouble(),
+          to.inMicroseconds.toDouble(),
+          amount,
+        ).round(),
+      );
 
   static Offset _clampPoint(Offset value) => Offset(
     value.dx.clamp(0.0, 1.0).toDouble(),

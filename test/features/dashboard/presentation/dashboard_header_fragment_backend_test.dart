@@ -101,10 +101,13 @@ void main() {
         state.pointerDown(
           origin: const Offset(.5, .5),
           timestamp: Duration.zero,
+          logicalSize: const Size(320, 120),
         );
         for (var index = 1; index <= 30; index += 1) {
           state.pointerMove(
             origin: Offset((.1 + index / 100).clamp(0.0, 1.0), .5),
+            logicalDelta: const Offset(3.2, 0),
+            logicalSize: const Size(320, 120),
             timestamp: Duration(milliseconds: 60 * index),
           );
         }
@@ -119,36 +122,44 @@ void main() {
       },
     );
 
-    test('field displacement, optical overlay and trail retain independent '
-        'diagnostic inputs', () {
-      final state = DashboardHeaderTapWaveState();
-      state.pointerDown(
-        origin: const Offset(.25, .75),
-        timestamp: Duration.zero,
-      );
-      state.pointerMove(
-        origin: const Offset(.55, .40),
-        timestamp: const Duration(milliseconds: 90),
-      );
+    test(
+      'field displacement, optical overlay and connected water path retain independent '
+      'diagnostic inputs',
+      () {
+        final state = DashboardHeaderTapWaveState();
+        state.pointerDown(
+          origin: const Offset(.25, .75),
+          timestamp: Duration.zero,
+          logicalSize: const Size(320, 120),
+        );
+        state.pointerMove(
+          origin: const Offset(.55, .40),
+          logicalDelta: const Offset(96, -42),
+          logicalSize: const Size(320, 120),
+          timestamp: const Duration(milliseconds: 90),
+        );
 
-      final ripples = DashboardHeaderTapRippleUniformBank()
-        ..update(state: state, elapsed: const Duration(milliseconds: 180));
-      final visuals = DashboardHeaderTapWaveVisualUniformBank()
-        ..update(state: state, elapsed: const Duration(milliseconds: 180));
+        final ripples = DashboardHeaderTapRippleUniformBank()
+          ..update(state: state, elapsed: const Duration(milliseconds: 180));
+        final visuals = DashboardHeaderTapWaveVisualUniformBank()
+          ..update(state: state, elapsed: const Duration(milliseconds: 180));
 
-      // The same one shared touch state feeds three independently
-      // inspectable shader lanes: field deformation, radial optics, and
-      // pointer trail. None needs a Canvas/offscreen source image.
-      expect(ripples.activeCount, greaterThan(0));
-      expect(visuals.overlay.active, 1);
-      // The source overlay follows the current pointer origin during drag;
-      // its first trail retains the initial pointer-down coordinate.
-      expect(visuals.overlay.x, closeTo(.55, 1e-12));
-      expect(visuals.overlay.y, closeTo(.40, 1e-12));
-      expect(visuals.activeTrailCount, greaterThan(0));
-      expect(visuals.trails.first.opacity, greaterThan(0));
-      expect(visuals.trails, hasLength(26));
-    });
+        // The same one shared touch state feeds three independently
+        // inspectable shader lanes: tap field deformation, radial optics, and
+        // the connected water path. None needs a Canvas/offscreen source image.
+        expect(ripples.activeCount, greaterThan(0));
+        expect(ripples.activeCount, 1);
+        // A true drag retracts the large overlay, while the water-path source
+        // follows the latest input and retains its original source vertex.
+        expect(visuals.overlay.active, 0);
+        expect(visuals.overlay.x, closeTo(.55, 1e-12));
+        expect(visuals.overlay.y, closeTo(.40, 1e-12));
+        expect(visuals.activeTrailCount, greaterThan(0));
+        expect(visuals.trails.first.signedVelocity, lessThan(0));
+        expect(visuals.trails[1].signedVelocity, greaterThan(0));
+        expect(visuals.trails, hasLength(26));
+      },
+    );
 
     test(
       'Portal source profiles do not add a second mesh decimation at max',
@@ -196,7 +207,7 @@ void main() {
           },
         );
 
-        expect(DashboardHeaderFragmentUniformLayout.version, 3);
+        expect(DashboardHeaderFragmentUniformLayout.version, 4);
         expect(DashboardHeaderFragmentUniformLayout.gradientColorStart, 9);
         expect(DashboardHeaderFragmentUniformLayout.gradientStopStart, 49);
         expect(DashboardHeaderFragmentUniformLayout.commonSettingsStart, 61);
@@ -370,7 +381,7 @@ void main() {
     );
 
     testWidgets(
-      'the pinned runtime-stage compiler retains every v3 uniform-bank slot',
+      'the pinned runtime-stage compiler retains every v4 uniform-bank slot',
       (tester) async {
         final program = await FragmentProgram.fromAsset(
           DashboardHeaderFragmentBackend.asset,
@@ -389,7 +400,7 @@ void main() {
     );
 
     test(
-      'touch overlay and trail are native full-surface shader fields, not canvas layers',
+      'touch overlay and connected water path are native full-surface shader fields, not canvas layers',
       () async {
         final shader = await File(
           'shaders/dashboard_header_field.frag',
@@ -400,7 +411,18 @@ void main() {
         ).readAsString();
 
         expect(shader, contains('vec3 touchOverlay'));
-        expect(shader, contains('vec3 touchTrail'));
+        expect(shader, contains('vec2 displaceWaterTrail'));
+        expect(shader, contains('for (int index = 1; index < 25; index++)'));
+        expect(shader, contains('if (b.w < 0.0) continue;'));
+        expect(
+          shader,
+          isNot(contains('if (a.w < 0.0 || b.w < 0.0) continue;')),
+          reason:
+              'The new endpoint owns the connection flag, so the first '
+              'piece after a detached sample remains visible.',
+        );
+        expect(shader, contains('float waterTrailWidthPixels()'));
+        expect(shader, contains('signedVelocity'));
         expect(shader, isNot(contains('fwidth(')));
         expect(
           shader,
@@ -413,12 +435,12 @@ void main() {
         expect(shader, isNot(contains('farthest * .25 * uTouchOverlayScale')));
         expect(
           shader,
-          contains('uTrailSize / max(1.0, uSize.y)'),
+          contains('waterTrailWidthPixels()'),
           reason:
-              'Trail distance is height-normalized after aspect correction, '
-              'so its logical-pixel radius must use Header height too.',
+              'The persisted trail-size key maps to a narrow logical-pixel '
+              'water-path width inside the shader.',
         );
-        expect(shader, contains('float halo ='));
+        expect(shader, isNot(contains('vec3 touchTrail')));
         expect(engine, isNot(contains('DashboardHeaderTapWavePainter')));
         expect(engine, isNot(contains('saveLayer(')));
       },

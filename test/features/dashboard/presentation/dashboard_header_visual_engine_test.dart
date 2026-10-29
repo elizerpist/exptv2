@@ -2090,6 +2090,97 @@ void main() {
   );
 
   testWidgets(
+    'the production shader retains a connected water path through drag and release frames',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(412, 120);
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      controller.selectEffect(DashboardHeaderEffectId.staticEffect);
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.innerMotion,
+        false,
+      );
+      controller.setPortalEnabled(
+        DashboardHeaderPortalChannel.backgroundMorph,
+        false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: RepaintBoundary(
+              key: const ValueKey<String>('water-path-boundary'),
+              child: SizedBox(
+                width: 412,
+                height: 120,
+                child: DashboardHeaderVisualPaintLayer(
+                  controller: controller,
+                  frame: _coolFrame(opacityScalePosition: 100),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      // Let the retained production FragmentProgram become available before
+      // any touch frame is captured.
+      await tester.pump(const Duration(seconds: 1));
+
+      controller.beginTapWave(
+        const Offset(.25, .52),
+        logicalSize: const Size(412, 120),
+      );
+      controller.updateTapWave(
+        const Offset(.60, .52),
+        logicalDelta: const Offset(144, 0),
+        logicalSize: const Size(412, 120),
+      );
+
+      controller.debugAdvance(const Duration(milliseconds: 20));
+      await tester.pump();
+      await expectLater(
+        find.byKey(const ValueKey<String>('water-path-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/dashboard_header_water_path_020.png',
+        ),
+      );
+
+      controller.debugAdvance(const Duration(milliseconds: 180));
+      await tester.pump();
+      await expectLater(
+        find.byKey(const ValueKey<String>('water-path-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/dashboard_header_water_path_200.png',
+        ),
+      );
+
+      controller.debugAdvance(const Duration(milliseconds: 260));
+      await tester.pump();
+      await expectLater(
+        find.byKey(const ValueKey<String>('water-path-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/dashboard_header_water_path_460.png',
+        ),
+      );
+
+      controller.endTapWave();
+      controller.debugAdvance(const Duration(milliseconds: 180));
+      await tester.pump();
+      await expectLater(
+        find.byKey(const ValueKey<String>('water-path-boundary')),
+        matchesGoldenFile(
+          '../../../goldens/dashboard_header_water_path_release_640.png',
+        ),
+      );
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
     'the retained runtime shader gives a static Cool Header a visible independent inner Portal contribution',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester);
@@ -2274,6 +2365,58 @@ void main() {
         controller.tapWave.rippleCount,
         1,
         reason: 'the stacked action retains its independent hit target',
+      );
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'Header water-path observation stays passive to an existing drag recognizer',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      var downCount = 0;
+      var moveCount = 0;
+      var upCount = 0;
+      var panCount = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 240,
+            height: 96,
+            child: DashboardHeaderTapWaveGestureLayer(
+              controller: controller,
+              onPointerDown: (_) => downCount += 1,
+              onPointerMove: (_) => moveCount += 1,
+              onPointerUp: (_) => upCount += 1,
+              child: GestureDetector(
+                key: const ValueKey<String>('water-path-passive-body'),
+                behavior: HitTestBehavior.translucent,
+                onPanUpdate: (_) => panCount += 1,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey<String>('water-path-passive-body')),
+        ),
+      );
+      await gesture.moveBy(const Offset(42, 0));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      expect(downCount, 1);
+      expect(moveCount, greaterThan(0));
+      expect(upCount, 1);
+      expect(panCount, greaterThan(0));
+      expect(controller.tapWave.isDragging, isTrue);
+      expect(
+        controller.tapWave.rippleCount,
+        1,
+        reason: 'Drag samples extend one path; they never spawn tap circles.',
       );
       controller.dispose();
     },

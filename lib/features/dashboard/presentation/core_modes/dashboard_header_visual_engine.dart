@@ -2424,6 +2424,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   late final Ticker _ticker;
   Duration _lastTickerElapsed = Duration.zero;
   Duration _elapsed = Duration.zero;
+  Duration? _tapPointerEpoch;
+  Duration? _tapEffectEpoch;
   Duration? _pulseStartedAt;
   double _phase = 0;
   bool _motionEnabled = true;
@@ -3222,9 +3224,19 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
 
   /// Receives Header-local normalized coordinates from the passive gesture
   /// listener. It never participates in Dashboard pan ownership.
-  void beginTapWave(Offset origin) {
+  void beginTapWave(
+    Offset origin, {
+    Size logicalSize = const Size(1, 1),
+    Duration? pointerTimestamp,
+  }) {
     if (_disposed) return;
-    _tapWave.pointerDown(origin: origin, timestamp: _elapsed);
+    _tapPointerEpoch = pointerTimestamp;
+    _tapEffectEpoch = _elapsed;
+    _tapWave.pointerDown(
+      origin: origin,
+      timestamp: _tapTimestamp(pointerTimestamp),
+      logicalSize: logicalSize,
+    );
     _syncTicker();
     _record(
       'HEADER_TAP_WAVE_TRIGGERED',
@@ -3234,26 +3246,46 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateTapWave(Offset origin) {
+  void updateTapWave(
+    Offset origin, {
+    Offset logicalDelta = Offset.zero,
+    Size logicalSize = const Size(1, 1),
+    Duration? pointerTimestamp,
+  }) {
     if (_disposed) return;
-    final generation = _tapWave.waveGeneration;
-    _tapWave.pointerMove(origin: origin, timestamp: _elapsed);
-    if (_tapWave.waveGeneration != generation) {
-      _record(
-        'HEADER_TAP_WAVE_RETRIGGERED',
-        'originXNormalized=${origin.dx} originYNormalized=${origin.dy} '
-            'waveGeneration=${_tapWave.waveGeneration} '
-            'activeWaveCount=${_tapWave.rippleCount}',
-      );
-    }
+    _tapWave.pointerMove(
+      origin: origin,
+      logicalDelta: logicalDelta,
+      logicalSize: logicalSize,
+      timestamp: _tapTimestamp(pointerTimestamp),
+    );
     notifyListeners();
   }
 
-  void endTapWave() {
+  /// Separates an off-surface detour from a future in-bounds path without
+  /// claiming the dashboard's pan/collapse recognizer.
+  void breakTapWavePath() {
     if (_disposed) return;
-    _tapWave.pointerUp(timestamp: _elapsed);
+    _tapWave.breakPath();
+  }
+
+  void endTapWave({Duration? pointerTimestamp}) {
+    if (_disposed) return;
+    _tapWave.pointerUp(timestamp: _tapTimestamp(pointerTimestamp));
+    _tapPointerEpoch = null;
+    _tapEffectEpoch = null;
     _syncTicker();
     notifyListeners();
+  }
+
+  Duration _tapTimestamp(Duration? pointerTimestamp) {
+    if (pointerTimestamp == null) return _elapsed;
+    final pointerEpoch = _tapPointerEpoch;
+    final effectEpoch = _tapEffectEpoch;
+    if (pointerEpoch == null || effectEpoch == null) return _elapsed;
+    final delta = pointerTimestamp - pointerEpoch;
+    if (delta < Duration.zero) return _elapsed;
+    return effectEpoch + delta;
   }
 
   /// Mirrors the Color Lab's reduced-motion boundary. This freezes only the
@@ -5772,14 +5804,31 @@ final class _DashboardHeaderTapWaveGestureLayerState
   int? _activePointer;
 
   @override
+  void dispose() {
+    final visual = widget.controller;
+    if (visual != null && _activePointer != null) {
+      visual.endTapWave();
+    }
+    _activePointer = null;
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth;
       final height = constraints.maxHeight;
-      Offset origin(Offset local) => Offset(
-        (local.dx / width).clamp(0.0, 1.0).toDouble(),
-        (local.dy / height).clamp(0.0, 1.0).toDouble(),
-      );
+      Offset? origin(Offset local) {
+        if (local.dx < 0 ||
+            local.dx > width ||
+            local.dy < 0 ||
+            local.dy > height) {
+          return null;
+        }
+        return Offset(local.dx / width, local.dy / height);
+      }
+
+      final logicalSize = Size(width, height);
       final visual = widget.controller;
       final observesPointer =
           widget.onPointerDown != null ||
@@ -5791,7 +5840,9 @@ final class _DashboardHeaderTapWaveGestureLayerState
       }
       return MouseRegion(
         onExit: (_) {
-          if (visual != null) _endActivePointer(visual);
+          if (visual != null && _activePointer != null) {
+            visual.breakTapWavePath();
+          }
         },
         child: Listener(
           behavior: HitTestBehavior.translucent,
@@ -5801,22 +5852,42 @@ final class _DashboardHeaderTapWaveGestureLayerState
             // Flutter exposes pointer ids instead, so retain exactly one
             // Header-local primary interaction until its terminal event.
             if (visual == null || _activePointer != null) return;
+            final point = origin(event.localPosition);
+            if (point == null) return;
             _activePointer = event.pointer;
-            visual.beginTapWave(origin(event.localPosition));
+            visual.beginTapWave(
+              point,
+              logicalSize: logicalSize,
+              pointerTimestamp: event.timeStamp,
+            );
           },
           onPointerMove: (event) {
             widget.onPointerMove?.call(event);
             if (visual == null) return;
             if (event.pointer != _activePointer) return;
-            visual.updateTapWave(origin(event.localPosition));
+            final point = origin(event.localPosition);
+            if (point == null) {
+              visual.breakTapWavePath();
+              return;
+            }
+            visual.updateTapWave(
+              point,
+              logicalDelta: event.delta,
+              logicalSize: logicalSize,
+              pointerTimestamp: event.timeStamp,
+            );
           },
           onPointerUp: (event) {
             widget.onPointerUp?.call(event);
-            if (visual != null) _endPointer(visual, event.pointer);
+            if (visual != null) {
+              _endPointer(visual, event.pointer, event.timeStamp);
+            }
           },
           onPointerCancel: (event) {
             widget.onPointerCancel?.call(event);
-            if (visual != null) _endPointer(visual, event.pointer);
+            if (visual != null) {
+              _endPointer(visual, event.pointer, event.timeStamp);
+            }
           },
           child: widget.child,
         ),
@@ -5824,15 +5895,22 @@ final class _DashboardHeaderTapWaveGestureLayerState
     },
   );
 
-  void _endPointer(DashboardHeaderVisualController visual, int pointer) {
+  void _endPointer(
+    DashboardHeaderVisualController visual,
+    int pointer,
+    Duration timestamp,
+  ) {
     if (pointer != _activePointer) return;
-    _endActivePointer(visual);
+    _endActivePointer(visual, timestamp);
   }
 
-  void _endActivePointer(DashboardHeaderVisualController visual) {
+  void _endActivePointer(
+    DashboardHeaderVisualController visual, [
+    Duration? timestamp,
+  ]) {
     if (_activePointer == null) return;
     _activePointer = null;
-    visual.endTapWave();
+    visual.endTapWave(pointerTimestamp: timestamp);
   }
 }
 
