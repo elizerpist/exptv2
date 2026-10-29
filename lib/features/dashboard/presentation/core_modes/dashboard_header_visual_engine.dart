@@ -2614,6 +2614,23 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Applies the persisted Balance-only colour controls as one semantic
+  /// update. The catalog normalizes stale unsupported variants before the
+  /// frame policy or the tuner can observe them.
+  void restoreBalanceHeaderColor(DashboardBalanceHeaderColorState value) {
+    final next = value.normalized();
+    if (next == tuning.value.balanceColor) return;
+    tuning.value = tuning.value.copyWith(balanceColor: next);
+    _record(
+      'BALANCE_HEADER_PALETTE_RESTORED',
+      'palette=${next.palette.name} variant=${next.variant.name} '
+          'positionPct=${next.positionPercent} '
+          'windowWidthPct=${next.windowWidthPercent} '
+          'settingsGeneration=${tuning.value.generation}',
+    );
+    notifyListeners();
+  }
+
   void selectBalanceHeaderPaletteVariant(
     DashboardBalanceHeaderPaletteVariant variant,
   ) {

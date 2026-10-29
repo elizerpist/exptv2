@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 
 void main() {
@@ -38,6 +39,11 @@ void main() {
           balanceMonthCombinedCardPresentation:
               BalanceMonthCombinedCardPresentation.spendingRhythm,
           balanceHeaderGlassConfigurationJson: '{"renderer":"glassKit"}',
+          balanceHeaderPalette: DashboardBalanceHeaderPalette.b3mMy3,
+          balanceHeaderPaletteVariant:
+              DashboardBalanceHeaderPaletteVariant.original,
+          balanceHeaderPalettePositionPercent: 73,
+          balanceHeaderPaletteWindowWidthPercent: 41,
         ),
       );
       await Future<void>.delayed(Duration.zero);
@@ -87,6 +93,16 @@ void main() {
         restored.value.balanceHeaderGlassConfigurationJson,
         '{"renderer":"glassKit"}',
       );
+      expect(
+        restored.value.balanceHeaderPalette,
+        DashboardBalanceHeaderPalette.b3mMy3,
+      );
+      expect(
+        restored.value.balanceHeaderPaletteVariant,
+        DashboardBalanceHeaderPaletteVariant.original,
+      );
+      expect(restored.value.balanceHeaderPalettePositionPercent, 73);
+      expect(restored.value.balanceHeaderPaletteWindowWidthPercent, 41);
     },
   );
 }

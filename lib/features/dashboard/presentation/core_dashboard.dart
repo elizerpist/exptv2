@@ -45,6 +45,7 @@ import 'dashboard_day_rhythm_navigation.dart';
 import 'widgets/dashboard_temporal_component_carousel.dart';
 import 'core_modes/balance_presentation_settings.dart';
 import 'core_modes/balance_header_glass_configuration.dart';
+import 'core_modes/dashboard_header_balance_color_scale.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
 import 'core_modes/budget_category_distribution_visual_bank.dart';
@@ -307,6 +308,9 @@ class _CoreDashboardState extends State<CoreDashboard>
         DashboardPresentationPreferencesController(
           store: MethodChannelDashboardPresentationPreferencesStore(),
         );
+    _headerVisualController.tuning.addListener(
+      _persistBalanceHeaderColorPreferences,
+    );
     controller.mindYearHeatmapPresentation.addListener(
       _persistDashboardPresentationPreferences,
     );
@@ -605,6 +609,14 @@ class _CoreDashboardState extends State<CoreDashboard>
         ..setMonthCombinedCardPresentation(
           restored.balanceMonthCombinedCardPresentation,
         );
+      _headerVisualController.restoreBalanceHeaderColor(
+        DashboardBalanceHeaderColorState(
+          palette: restored.balanceHeaderPalette,
+          variant: restored.balanceHeaderPaletteVariant,
+          positionPercent: restored.balanceHeaderPalettePositionPercent,
+          windowWidthPercent: restored.balanceHeaderPaletteWindowWidthPercent,
+        ),
+      );
     } finally {
       _applyingDashboardPresentationPreferences = false;
     }
@@ -658,6 +670,17 @@ class _CoreDashboardState extends State<CoreDashboard>
             .value
             .headerGlassConfiguration
             .encode(),
+        balanceHeaderPalette:
+            _headerVisualController.tuning.value.balanceColor.palette,
+        balanceHeaderPaletteVariant:
+            _headerVisualController.tuning.value.balanceColor.variant,
+        balanceHeaderPalettePositionPercent:
+            _headerVisualController.tuning.value.balanceColor.positionPercent,
+        balanceHeaderPaletteWindowWidthPercent: _headerVisualController
+            .tuning
+            .value
+            .balanceColor
+            .windowWidthPercent,
         ghostQuickFilterIconPack:
             _dashboardPresentationPreferences.value.ghostQuickFilterIconPack,
         ghostQuickFilterPresentation: _dashboardPresentationPreferences
@@ -665,6 +688,14 @@ class _CoreDashboardState extends State<CoreDashboard>
             .ghostQuickFilterPresentation,
       ),
     );
+  }
+
+  /// The header controller owns semantic palette selection; the established
+  /// dashboard preference store owns persistence. This listener intentionally
+  /// observes only semantic tuning publications, never the shared paint clock.
+  void _persistBalanceHeaderColorPreferences() {
+    if (_applyingDashboardPresentationPreferences || !mounted) return;
+    _persistDashboardPresentationPreferences();
   }
 
   /// Reuses the currently visible immutable payload only to replace cached
@@ -923,6 +954,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     );
     _balancePresentationSettings.removeListener(
       _persistDashboardPresentationPreferences,
+    );
+    _headerVisualController.tuning.removeListener(
+      _persistBalanceHeaderColorPreferences,
     );
     if (_ownsDashboardPresentationPreferences) {
       _dashboardPresentationPreferences.dispose();

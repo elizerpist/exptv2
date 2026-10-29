@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/fluvi_shared_color_scales.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
 
 void main() {
@@ -141,7 +142,7 @@ void main() {
           DashboardBalanceHeaderPalette.customBalance,
         ],
       );
-      expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(8));
+      expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(10));
       expect(DashboardBalanceHeaderPaletteCatalog.variants, hasLength(3));
       expect(
         expected.length * DashboardBalanceHeaderPaletteCatalog.variants.length,
@@ -162,6 +163,66 @@ void main() {
             variants[DashboardBalanceHeaderPaletteVariant.original]!.length,
           );
         }
+      }
+    },
+  );
+
+  test(
+    'B3M-MY3 and Dynamic Red–B3M Bridge retain their exact shared original stops and normalize unsupported variants',
+    () {
+      final expected = <DashboardBalanceHeaderPalette, List<Color>>{
+        DashboardBalanceHeaderPalette.b3mMy3: FluviSharedColorScales.b3mMy3,
+        DashboardBalanceHeaderPalette.dynamicRedB3mBridge:
+            FluviSharedColorScales.dynamicRedB3mBridge,
+      };
+      expect(
+        DashboardBalanceHeaderPaletteCatalog.palettes.skip(8),
+        <DashboardBalanceHeaderPalette>[
+          DashboardBalanceHeaderPalette.b3mMy3,
+          DashboardBalanceHeaderPalette.dynamicRedB3mBridge,
+        ],
+      );
+      for (final entry in expected.entries) {
+        final palette = entry.key;
+        final scale = DashboardBalanceHeaderPaletteCatalog.scaleFor(palette);
+        expect(scale.variant, DashboardBalanceHeaderPaletteVariant.original);
+        expect(scale.colors, entry.value);
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.variantsFor(palette),
+          const <DashboardBalanceHeaderPaletteVariant>[
+            DashboardBalanceHeaderPaletteVariant.original,
+          ],
+        );
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.scaleFor(
+            palette,
+            DashboardBalanceHeaderPaletteVariant.vivid,
+          ).variant,
+          DashboardBalanceHeaderPaletteVariant.original,
+        );
+
+        final atStart = DashboardBalanceHeaderWindowSampler.sample(
+          DashboardBalanceHeaderColorState(
+            palette: palette,
+            variant: DashboardBalanceHeaderPaletteVariant.saturated,
+            positionPercent: 0,
+            windowWidthPercent: 10,
+          ),
+        );
+        final atEnd = DashboardBalanceHeaderWindowSampler.sample(
+          DashboardBalanceHeaderColorState(
+            palette: palette,
+            variant: DashboardBalanceHeaderPaletteVariant.vivid,
+            positionPercent: 100,
+            windowWidthPercent: 10,
+          ),
+        );
+        expect(
+          atStart.state.variant,
+          DashboardBalanceHeaderPaletteVariant.original,
+        );
+        expect(atStart.colorA, entry.value.first);
+        expect(atEnd.colorB, entry.value.last);
       }
     },
   );

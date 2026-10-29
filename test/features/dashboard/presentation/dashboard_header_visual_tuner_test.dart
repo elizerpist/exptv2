@@ -858,7 +858,7 @@ void main() {
       await tester.ensureVisible(selector);
       final dropdown = tester
           .widget<DropdownButton<DashboardBalanceHeaderPalette>>(selector);
-      expect(dropdown.items, hasLength(8));
+      expect(dropdown.items, hasLength(10));
       final variantSelector = find.byKey(
         const ValueKey<String>('dashboard-header-balance-variant-selector'),
       );
@@ -912,6 +912,31 @@ void main() {
       );
       expect(controller.tuning.value.balanceColor.positionPercent, 100);
       expect(controller.tuning.value.balanceColor.windowWidthPercent, 10);
+
+      for (final palette in const <DashboardBalanceHeaderPalette>[
+        DashboardBalanceHeaderPalette.b3mMy3,
+        DashboardBalanceHeaderPalette.dynamicRedB3mBridge,
+      ]) {
+        dropdown.onChanged!(palette);
+        await tester.pump();
+        expect(controller.tuning.value.balanceColor.palette, palette);
+        expect(
+          controller.tuning.value.balanceColor.variant,
+          DashboardBalanceHeaderPaletteVariant.original,
+        );
+        expect(controller.tuning.value.balanceColor.positionPercent, 100);
+        expect(controller.tuning.value.balanceColor.windowWidthPercent, 10);
+        final originalOnly = tester
+            .widget<DropdownButton<DashboardBalanceHeaderPaletteVariant>>(
+              variantSelector,
+            );
+        expect(originalOnly.items, hasLength(1));
+        expect(
+          originalOnly.value,
+          DashboardBalanceHeaderPaletteVariant.original,
+        );
+        expect(originalOnly.onChanged, isNull);
+      }
 
       final iconSize = find.byKey(
         const ValueKey<String>('dashboard-header-mode-icon-size-slider'),

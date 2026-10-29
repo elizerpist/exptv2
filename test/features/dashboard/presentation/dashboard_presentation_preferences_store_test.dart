@@ -3,6 +3,7 @@ import 'package:fluvi/core/preferences/data/method_channel_dashboard_presentatio
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -86,6 +87,72 @@ void main() {
         savedCurrent.balanceSumLayoutPresentation,
         BalanceSumLayoutPresentation.current,
       );
+    },
+  );
+
+  test(
+    'Balance header palettes round-trip through the native preference map and stale unsupported variants normalize to original',
+    () async {
+      Map<String, Object?> stored = <String, Object?>{};
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      final defaults = DashboardPresentationPreferences.defaults;
+      final choice = DashboardPresentationPreferences(
+        sumVisualStyle: defaults.sumVisualStyle,
+        showSumLayoutChooser: defaults.showSumLayoutChooser,
+        yearGridLayout: defaults.yearGridLayout,
+        yearMonthlyAmountPresentation: defaults.yearMonthlyAmountPresentation,
+        showDayContentViewChooser: defaults.showDayContentViewChooser,
+        balanceUsesChildCards: defaults.balanceUsesChildCards,
+        balanceHeaderGraphPresentation: defaults.balanceHeaderGraphPresentation,
+        balanceHeaderPartitionHeightPercent:
+            defaults.balanceHeaderPartitionHeightPercent,
+        balanceMonthCombinedCardPresentation:
+            defaults.balanceMonthCombinedCardPresentation,
+        balanceHeaderPalette: DashboardBalanceHeaderPalette.dynamicRedB3mBridge,
+        balanceHeaderPaletteVariant:
+            DashboardBalanceHeaderPaletteVariant.original,
+        balanceHeaderPalettePositionPercent: 0,
+        balanceHeaderPaletteWindowWidthPercent: 100,
+      );
+
+      await store.write(choice);
+      expect(
+        stored['balanceHeaderPalette'],
+        DashboardBalanceHeaderPalette.dynamicRedB3mBridge.index,
+      );
+      expect(
+        stored['balanceHeaderPaletteVariant'],
+        DashboardBalanceHeaderPaletteVariant.original.index,
+      );
+      expect(stored['balanceHeaderPalettePositionPercent'], 0);
+      expect(stored['balanceHeaderPaletteWindowWidthPercent'], 100);
+      expect(await store.read(), choice);
+
+      stored.addAll(<String, Object?>{
+        'balanceHeaderPalette': DashboardBalanceHeaderPalette.b3mMy3.index,
+        'balanceHeaderPaletteVariant':
+            DashboardBalanceHeaderPaletteVariant.vivid.index,
+        'balanceHeaderPalettePositionPercent': 'invalid',
+        'balanceHeaderPaletteWindowWidthPercent': 999,
+      });
+      final repaired = await store.read();
+      expect(
+        repaired.balanceHeaderPalette,
+        DashboardBalanceHeaderPalette.b3mMy3,
+      );
+      expect(
+        repaired.balanceHeaderPaletteVariant,
+        DashboardBalanceHeaderPaletteVariant.original,
+      );
+      expect(repaired.balanceHeaderPalettePositionPercent, 50);
+      expect(repaired.balanceHeaderPaletteWindowWidthPercent, 100);
     },
   );
 
@@ -537,6 +604,11 @@ void main() {
       'balanceMonthCombinedCardPresentation':
           BalanceMonthCombinedCardPresentation.spendingRhythm.index,
       'balanceHeaderGlassConfigurationJson': '{"renderer":"glassKit"}',
+      'balanceHeaderPalette': DashboardBalanceHeaderPalette.softRainbow.index,
+      'balanceHeaderPaletteVariant':
+          DashboardBalanceHeaderPaletteVariant.saturated.index,
+      'balanceHeaderPalettePositionPercent': 50,
+      'balanceHeaderPaletteWindowWidthPercent': 15,
       'ghostQuickFilterIconPack':
           DashboardGhostQuickFilterIconPack.current.index,
       'ghostQuickFilterPresentation':

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/design/fluvi_shared_color_scales.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_palette_resolver.dart';
@@ -112,6 +113,25 @@ void main() {
         expect(legend, hasLength(10));
         expect(legend.map((sample) => sample.background), entry.value);
       }
+    },
+  );
+
+  test(
+    'the shared B3M source leaves Mind authored and dynamic bridge scales byte-exact',
+    () {
+      expect(
+        MindYearHeatmapPaletteResolver.resolveScale(
+          style: MindYearHeatmapPaletteStyle.b3mMy3,
+          scaleResolution: MindHeatmapScaleResolution.ten,
+          scaleMode: MindHeatmapScaleMode.existing,
+          score: 58,
+        ).stops,
+        FluviSharedColorScales.b3mMy3,
+      );
+      expect(
+        MindYearHeatmapPaletteResolver.resolveDynamicMixedScale(35).stops,
+        FluviSharedColorScales.dynamicRedB3mBridge,
+      );
     },
   );
 

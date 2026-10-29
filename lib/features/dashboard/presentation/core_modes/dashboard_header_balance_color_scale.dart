@@ -2,10 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/fluvi_shared_color_scales.dart';
 import 'dashboard_header_perceptual_color.dart';
 
-/// The eight user-approved Balance-only manual palette identities. These are
-/// presentation controls only: no financial or Summary value participates.
+/// The eight established Balance identities plus two authored Mind scales made
+/// available as Balance manual choices. These are presentation controls only:
+/// no financial or Summary value participates.
 enum DashboardBalanceHeaderPalette {
   softRainbow,
   levanderRoseEmbrace,
@@ -15,6 +17,8 @@ enum DashboardBalanceHeaderPalette {
   limitColorLabNoWhite,
   softRainbowNoYellowLeft,
   softRainbowReordered,
+  b3mMy3,
+  dynamicRedB3mBridge,
 }
 
 extension DashboardBalanceHeaderPalettePresentation
@@ -31,6 +35,9 @@ extension DashboardBalanceHeaderPalettePresentation
       'Soft rainbow (no yellow)',
     DashboardBalanceHeaderPalette.softRainbowReordered =>
       'Soft rainbow (reordered)',
+    DashboardBalanceHeaderPalette.b3mMy3 => 'B3M-MY3',
+    DashboardBalanceHeaderPalette.dynamicRedB3mBridge =>
+      'Dynamic Red–B3M Bridge',
   };
 }
 
@@ -74,16 +81,27 @@ final class DashboardBalanceHeaderColorState {
     DashboardBalanceHeaderPaletteVariant? variant,
     double? positionPercent,
     double? windowWidthPercent,
-  }) => DashboardBalanceHeaderColorState(
-    palette: palette ?? this.palette,
-    variant: variant ?? this.variant,
-    positionPercent: (positionPercent ?? this.positionPercent)
-        .clamp(0.0, 100.0)
-        .roundToDouble(),
-    windowWidthPercent: (windowWidthPercent ?? this.windowWidthPercent)
-        .clamp(10.0, 100.0)
-        .roundToDouble(),
-  );
+  }) {
+    final nextPalette = palette ?? this.palette;
+    return DashboardBalanceHeaderColorState(
+      palette: nextPalette,
+      variant: DashboardBalanceHeaderPaletteCatalog.normalizedVariantFor(
+        nextPalette,
+        variant ?? this.variant,
+      ),
+      positionPercent: (positionPercent ?? this.positionPercent)
+          .clamp(0.0, 100.0)
+          .roundToDouble(),
+      windowWidthPercent: (windowWidthPercent ?? this.windowWidthPercent)
+          .clamp(10.0, 100.0)
+          .roundToDouble(),
+    );
+  }
+
+  /// Legacy or external state may still carry a no-longer-supported variant.
+  /// Normalize it at the catalog boundary rather than making a missing map
+  /// entry look like a selectable colour treatment.
+  DashboardBalanceHeaderColorState normalized() => copyWith();
 
   @override
   bool operator ==(Object other) =>
@@ -493,13 +511,24 @@ abstract final class DashboardBalanceHeaderPaletteCatalog {
             0xff58e66b,
           ],
         ),
+        DashboardBalanceHeaderPalette.b3mMy3: _originalOnly(
+          DashboardBalanceHeaderPalette.b3mMy3,
+          FluviSharedColorScales.b3mMy3,
+        ),
+        DashboardBalanceHeaderPalette.dynamicRedB3mBridge: _originalOnly(
+          DashboardBalanceHeaderPalette.dynamicRedB3mBridge,
+          FluviSharedColorScales.dynamicRedB3mBridge,
+        ),
       });
 
   static DashboardBalanceHeaderPaletteScale scaleFor(
     DashboardBalanceHeaderPalette palette, [
     DashboardBalanceHeaderPaletteVariant variant =
         DashboardBalanceHeaderPaletteVariant.original,
-  ]) => _scales[palette]![variant]!;
+  ]) {
+    final variantsForPalette = _scales[palette]!;
+    return variantsForPalette[normalizedVariantFor(palette, variant)]!;
+  }
 
   static List<DashboardBalanceHeaderPalette> get palettes =>
       List<DashboardBalanceHeaderPalette>.unmodifiable(
@@ -510,6 +539,24 @@ abstract final class DashboardBalanceHeaderPaletteCatalog {
       List<DashboardBalanceHeaderPaletteVariant>.unmodifiable(
         DashboardBalanceHeaderPaletteVariant.values,
       );
+
+  static List<DashboardBalanceHeaderPaletteVariant> variantsFor(
+    DashboardBalanceHeaderPalette palette,
+  ) => List<DashboardBalanceHeaderPaletteVariant>.unmodifiable(
+    _scales[palette]!.keys,
+  );
+
+  static bool supportsVariant(
+    DashboardBalanceHeaderPalette palette,
+    DashboardBalanceHeaderPaletteVariant variant,
+  ) => _scales[palette]!.containsKey(variant);
+
+  static DashboardBalanceHeaderPaletteVariant normalizedVariantFor(
+    DashboardBalanceHeaderPalette palette,
+    DashboardBalanceHeaderPaletteVariant variant,
+  ) => supportsVariant(palette, variant)
+      ? variant
+      : DashboardBalanceHeaderPaletteVariant.original;
 
   static Map<
     DashboardBalanceHeaderPaletteVariant,
@@ -545,6 +592,25 @@ abstract final class DashboardBalanceHeaderPaletteCatalog {
         ),
       });
 
+  static Map<
+    DashboardBalanceHeaderPaletteVariant,
+    DashboardBalanceHeaderPaletteScale
+  >
+  _originalOnly(DashboardBalanceHeaderPalette palette, List<Color> original) =>
+      Map<
+        DashboardBalanceHeaderPaletteVariant,
+        DashboardBalanceHeaderPaletteScale
+      >.unmodifiable(<
+        DashboardBalanceHeaderPaletteVariant,
+        DashboardBalanceHeaderPaletteScale
+      >{
+        DashboardBalanceHeaderPaletteVariant.original: _colorScale(
+          palette,
+          DashboardBalanceHeaderPaletteVariant.original,
+          original,
+        ),
+      });
+
   static DashboardBalanceHeaderPaletteScale _scale(
     DashboardBalanceHeaderPalette palette,
     DashboardBalanceHeaderPaletteVariant variant,
@@ -556,22 +622,35 @@ abstract final class DashboardBalanceHeaderPaletteCatalog {
       argb.map(Color.new).toList(growable: false),
     ),
   );
+
+  static DashboardBalanceHeaderPaletteScale _colorScale(
+    DashboardBalanceHeaderPalette palette,
+    DashboardBalanceHeaderPaletteVariant variant,
+    List<Color> colors,
+  ) => DashboardBalanceHeaderPaletteScale(
+    palette: palette,
+    variant: variant,
+    colors: List<Color>.unmodifiable(colors),
+  );
 }
 
 abstract final class DashboardBalanceHeaderWindowSampler {
   static DashboardBalanceHeaderColorWindow sample(
     DashboardBalanceHeaderColorState state,
   ) {
-    final center = state.positionPercent.clamp(0.0, 100.0).toDouble();
-    final width = state.windowWidthPercent.clamp(10.0, 100.0).toDouble();
+    final normalizedState = state.normalized();
+    final center = normalizedState.positionPercent.clamp(0.0, 100.0).toDouble();
+    final width = normalizedState.windowWidthPercent
+        .clamp(10.0, 100.0)
+        .toDouble();
     final left = (center - width / 2).clamp(0.0, 100.0).toDouble();
     final right = (center + width / 2).clamp(0.0, 100.0).toDouble();
     final scale = DashboardBalanceHeaderPaletteCatalog.scaleFor(
-      state.palette,
-      state.variant,
+      normalizedState.palette,
+      normalizedState.variant,
     );
     return DashboardBalanceHeaderColorWindow(
-      state: state,
+      state: normalizedState,
       leftSamplePercent: left,
       rightSamplePercent: right,
       colorA: scale.samplePercent(left),

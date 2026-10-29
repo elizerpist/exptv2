@@ -592,49 +592,47 @@ final class _CompactMindAmountRangeSurface extends StatelessWidget {
   final Widget? centerAccessory;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => Padding(
     key: const ValueKey('query-amount-range-control'),
-    margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-    padding: const EdgeInsets.fromLTRB(12, 3, 12, 1),
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.all(Radius.circular(16)),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        SizedBox(
-          height: 34,
-          child: SliderTheme(data: sliderTheme, child: slider),
-        ),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: _CompactAmountValue(
-                label: 'Min.',
-                value: QueryMenuFormatters.money(lower),
-              ),
-            ),
-            if (centerAccessory case final accessory?)
-              Padding(
-                key: const ValueKey<String>(
-                  'mind-query-amount-range-center-accessory',
+    padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(12, 3, 12, 1),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SizedBox(
+            height: 34,
+            child: SliderTheme(data: sliderTheme, child: slider),
+          ),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _CompactAmountValue(
+                  label: 'Min.',
+                  value: QueryMenuFormatters.money(lower),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: accessory,
-              )
-            else
-              const SizedBox(width: 8),
-            Expanded(
-              child: _CompactAmountValue(
-                label: 'Max.',
-                value: QueryMenuFormatters.money(upper),
-                alignEnd: true,
               ),
-            ),
-          ],
-        ),
-      ],
+              if (centerAccessory case final accessory?)
+                Padding(
+                  key: const ValueKey<String>(
+                    'mind-query-amount-range-center-accessory',
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: accessory,
+                )
+              else
+                const SizedBox(width: 8),
+              Expanded(
+                child: _CompactAmountValue(
+                  label: 'Max.',
+                  value: QueryMenuFormatters.money(upper),
+                  alignEnd: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     ),
   );
 }

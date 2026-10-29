@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/fluvi_shared_color_scales.dart';
 import '../../presentation/core_modes/dashboard_header_perceptual_color.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../time_navigation/domain/local_date.dart';
@@ -267,18 +268,8 @@ abstract final class MindYearHeatmapPaletteResolver {
     Color(0xffa5223c),
     Color(0xff7e1f39),
   ];
-  static const List<Color> _dynamicRedB3mBridge = <Color>[
-    Color(0xfffff0e4),
-    Color(0xffffe0c8),
-    Color(0xfffec7a6),
-    Color(0xfffda77f),
-    Color(0xfff7866c),
-    Color(0xfff26862),
-    Color(0xffe95276),
-    Color(0xffd33f8d),
-    Color(0xffb433a0),
-    Color(0xff9227a8),
-  ];
+  static const List<Color> _dynamicRedB3mBridge =
+      FluviSharedColorScales.dynamicRedB3mBridge;
   static const List<Color> _dynamicB3mMeadowBridge = <Color>[
     Color(0xffeef1d2),
     Color(0xffd9e493),
@@ -291,18 +282,7 @@ abstract final class MindYearHeatmapPaletteResolver {
     Color(0xff206f86),
     Color(0xff195a75),
   ];
-  static const List<Color> _b3mMy3 = <Color>[
-    Color(0xfff4f7fb),
-    Color(0xffffeeda),
-    Color(0xffffd5af),
-    Color(0xffffb15c),
-    Color(0xffff8d64),
-    Color(0xffff6b6b),
-    Color(0xfff536bd),
-    Color(0xffd03cb0),
-    Color(0xffa237bf),
-    Color(0xff821ac2),
-  ];
+  static const List<Color> _b3mMy3 = FluviSharedColorScales.b3mMy3;
   static const List<Color> _meadowGreen = <Color>[
     Color(0xffd9ed92),
     Color(0xffb5e48c),

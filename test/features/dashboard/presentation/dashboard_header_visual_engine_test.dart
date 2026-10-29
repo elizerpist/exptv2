@@ -68,7 +68,7 @@ void main() {
 
   group('Balance manual palette and per-mode opacity contract', () {
     test(
-      'PAL-01 RED: eight families expose the exact three explicit variants',
+      'PAL-01 RED: eight legacy families retain three variants while the two shared Mind palettes are original-only',
       () {
         expect(
           DashboardBalanceHeaderPaletteVariant.values,
@@ -79,9 +79,15 @@ void main() {
           ],
         );
         expect(
-          DashboardBalanceHeaderPaletteCatalog.palettes.length *
-              DashboardBalanceHeaderPaletteVariant.values.length,
-          24,
+          DashboardBalanceHeaderPaletteCatalog.palettes.fold<int>(
+            0,
+            (count, palette) =>
+                count +
+                DashboardBalanceHeaderPaletteCatalog.variantsFor(
+                  palette,
+                ).length,
+          ),
+          26,
         );
       },
     );
@@ -256,7 +262,7 @@ void main() {
             };
 
         expect(
-          DashboardBalanceHeaderPaletteCatalog.palettes,
+          DashboardBalanceHeaderPaletteCatalog.palettes.take(8),
           <DashboardBalanceHeaderPalette>[
             DashboardBalanceHeaderPalette.softRainbow,
             DashboardBalanceHeaderPalette.levanderRoseEmbrace,
@@ -268,7 +274,7 @@ void main() {
             DashboardBalanceHeaderPalette.softRainbowReordered,
           ],
         );
-        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(8));
+        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(10));
 
         for (final family in expected.entries) {
           for (final variant in family.value.entries) {
@@ -390,7 +396,7 @@ void main() {
     test(
       'all four approved palette identities retain exact ARGB endpoints',
       () {
-        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(8));
+        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(10));
         expect(
           DashboardBalanceHeaderPaletteCatalog.scaleFor(
             DashboardBalanceHeaderPalette.softRainbow,

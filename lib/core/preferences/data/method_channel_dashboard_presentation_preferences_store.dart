@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../features/dashboard/application/balance_daily_calculation_mode.dart';
 import '../../../features/dashboard/application/dashboard_presentation_preferences.dart';
 import '../../../features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
+import '../../../features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
 import '../../../features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 
 /// Native SharedPreferences adapter for presentation-only dashboard choices.
@@ -34,6 +35,20 @@ final class MethodChannelDashboardPresentationPreferencesStore
           values['yearMonthlyAmountPresentation'] as int?;
       final legacyScopeAmounts =
           values['showYearFourByThreeScopeAmounts'] as bool? ?? true;
+      final balanceHeaderPalette = _enumValue(
+        DashboardBalanceHeaderPalette.values,
+        values['balanceHeaderPalette'] as int?,
+        DashboardBalanceHeaderPalette.softRainbow,
+      );
+      final balanceHeaderPaletteVariant =
+          DashboardBalanceHeaderPaletteCatalog.normalizedVariantFor(
+            balanceHeaderPalette,
+            _enumValue(
+              DashboardBalanceHeaderPaletteVariant.values,
+              values['balanceHeaderPaletteVariant'] as int?,
+              DashboardBalanceHeaderPaletteVariant.saturated,
+            ),
+          );
       return DashboardPresentationPreferences(
         sumVisualStyle:
             styleIndex >= 0 && styleIndex < MindSumVisualStyle.values.length
@@ -148,6 +163,26 @@ final class MethodChannelDashboardPresentationPreferencesStore
         ),
         balanceHeaderGlassConfigurationJson:
             values['balanceHeaderGlassConfigurationJson'] as String? ?? '',
+        balanceHeaderPalette: balanceHeaderPalette,
+        balanceHeaderPaletteVariant: balanceHeaderPaletteVariant,
+        balanceHeaderPalettePositionPercent:
+            ((values['balanceHeaderPalettePositionPercent'] is num
+                            ? values['balanceHeaderPalettePositionPercent']
+                                  as num
+                            : null)
+                        ?.toDouble() ??
+                    50)
+                .clamp(0, 100)
+                .roundToDouble(),
+        balanceHeaderPaletteWindowWidthPercent:
+            ((values['balanceHeaderPaletteWindowWidthPercent'] is num
+                            ? values['balanceHeaderPaletteWindowWidthPercent']
+                                  as num
+                            : null)
+                        ?.toDouble() ??
+                    15)
+                .clamp(10, 100)
+                .roundToDouble(),
         ghostQuickFilterIconPack: _enumValue(
           DashboardGhostQuickFilterIconPack.values,
           values['ghostQuickFilterIconPack'] as int?,
@@ -214,6 +249,15 @@ final class MethodChannelDashboardPresentationPreferencesStore
             preferences.balanceMonthCombinedCardPresentation.index,
         'balanceHeaderGlassConfigurationJson':
             preferences.balanceHeaderGlassConfigurationJson,
+        'balanceHeaderPalette': preferences.balanceHeaderPalette.index,
+        'balanceHeaderPaletteVariant':
+            preferences.balanceHeaderPaletteVariant.index,
+        'balanceHeaderPalettePositionPercent': preferences
+            .balanceHeaderPalettePositionPercent
+            .round(),
+        'balanceHeaderPaletteWindowWidthPercent': preferences
+            .balanceHeaderPaletteWindowWidthPercent
+            .round(),
         'ghostQuickFilterIconPack': preferences.ghostQuickFilterIconPack.index,
         'ghostQuickFilterPresentation':
             preferences.ghostQuickFilterPresentation.index,

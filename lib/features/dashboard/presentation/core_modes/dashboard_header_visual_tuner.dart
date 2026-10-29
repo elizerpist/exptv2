@@ -3489,17 +3489,27 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                                 labelText: 'Színerősség',
                               ),
                               child: DropdownButtonHideUnderline(
-                                child:
-                                    DropdownButton<
+                                child: Builder(
+                                  builder: (context) {
+                                    final palette = tuning.balanceColor.palette;
+                                    final variants =
+                                        DashboardBalanceHeaderPaletteCatalog.variantsFor(
+                                          palette,
+                                        );
+                                    final selected =
+                                        DashboardBalanceHeaderPaletteCatalog.normalizedVariantFor(
+                                          palette,
+                                          tuning.balanceColor.variant,
+                                        );
+                                    return DropdownButton<
                                       DashboardBalanceHeaderPaletteVariant
                                     >(
                                       key: const ValueKey<String>(
                                         'dashboard-header-balance-variant-selector',
                                       ),
-                                      value: tuning.balanceColor.variant,
+                                      value: selected,
                                       isExpanded: true,
-                                      items: DashboardBalanceHeaderPaletteCatalog
-                                          .variants
+                                      items: variants
                                           .map(
                                             (variant) =>
                                                 DropdownMenuItem<
@@ -3510,15 +3520,19 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                                                 ),
                                           )
                                           .toList(growable: false),
-                                      onChanged: (variant) {
-                                        if (variant != null) {
-                                          controller
-                                              .selectBalanceHeaderPaletteVariant(
-                                                variant,
-                                              );
-                                        }
-                                      },
-                                    ),
+                                      onChanged: variants.length == 1
+                                          ? null
+                                          : (variant) {
+                                              if (variant != null) {
+                                                controller
+                                                    .selectBalanceHeaderPaletteVariant(
+                                                      variant,
+                                                    );
+                                              }
+                                            },
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                             _TunerSlider(

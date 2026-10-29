@@ -410,9 +410,11 @@ void main() {
       (3.6, 'two_percent'),
       (9.0, 'early'),
       (18.0, 'ten'),
+      (45.0, 'twenty_five'),
       (63.0, 'thirty_five'),
       (90.0, 'half'),
       (117.0, 'sixty_five'),
+      (135.0, 'seventy_five'),
       (171.0, 'near'),
       (180.0, 'collapsed'),
     ]) {

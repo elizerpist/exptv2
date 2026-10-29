@@ -435,6 +435,10 @@ class MainActivity : FlutterActivity() {
                             "balanceHeaderPartitionHeightPercent" to preferences.getInt("balanceHeaderPartitionHeightPercent", 50),
                             "balanceMonthCombinedCardPresentation" to preferences.getInt("balanceMonthCombinedCardPresentation", 0),
                             "balanceHeaderGlassConfigurationJson" to preferences.getString("balanceHeaderGlassConfigurationJson", ""),
+                            "balanceHeaderPalette" to ((preferences.all["balanceHeaderPalette"] as? Number)?.toInt()?.takeIf { it in 0..9 } ?: 0),
+                            "balanceHeaderPaletteVariant" to ((preferences.all["balanceHeaderPaletteVariant"] as? Number)?.toInt()?.takeIf { it in 0..2 } ?: 1),
+                            "balanceHeaderPalettePositionPercent" to ((preferences.all["balanceHeaderPalettePositionPercent"] as? Number)?.toInt()?.takeIf { it in 0..100 } ?: 50),
+                            "balanceHeaderPaletteWindowWidthPercent" to ((preferences.all["balanceHeaderPaletteWindowWidthPercent"] as? Number)?.toInt()?.takeIf { it in 10..100 } ?: 15),
                             "ghostQuickFilterIconPack" to ((preferences.all["ghostQuickFilterIconPack"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "ghostQuickFilterPresentation" to ((preferences.all["ghostQuickFilterPresentation"] as? Number)?.toInt()?.takeIf { it in 0..3 } ?: 3),
                         ),
@@ -490,6 +494,38 @@ class MainActivity : FlutterActivity() {
                         val balanceHeaderGlassConfigurationJson = values["balanceHeaderGlassConfigurationJson"] as? String
                             ?: throw IllegalArgumentException("Missing Balance Header glass configuration.")
                         require(balanceHeaderGlassConfigurationJson.length <= 32768) { "Balance Header glass configuration is too large." }
+                        // Older clients do not have the manual Balance header
+                        // palette controls. Absent fields receive the existing
+                        // fresh-install defaults; explicit invalid writes stay
+                        // rejected rather than being silently normalized.
+                        val balanceHeaderPalette = if (values.containsKey("balanceHeaderPalette")) {
+                            (values["balanceHeaderPalette"] as? Number)?.toInt()
+                                ?: throw IllegalArgumentException("Invalid Balance Header palette.")
+                        } else {
+                            0
+                        }
+                        require(balanceHeaderPalette in 0..9) { "Invalid Balance Header palette." }
+                        val balanceHeaderPaletteVariant = if (values.containsKey("balanceHeaderPaletteVariant")) {
+                            (values["balanceHeaderPaletteVariant"] as? Number)?.toInt()
+                                ?: throw IllegalArgumentException("Invalid Balance Header palette variant.")
+                        } else {
+                            1
+                        }
+                        require(balanceHeaderPaletteVariant in 0..2) { "Invalid Balance Header palette variant." }
+                        val balanceHeaderPalettePositionPercent = if (values.containsKey("balanceHeaderPalettePositionPercent")) {
+                            (values["balanceHeaderPalettePositionPercent"] as? Number)?.toInt()
+                                ?: throw IllegalArgumentException("Invalid Balance Header palette position.")
+                        } else {
+                            50
+                        }
+                        require(balanceHeaderPalettePositionPercent in 0..100) { "Invalid Balance Header palette position." }
+                        val balanceHeaderPaletteWindowWidthPercent = if (values.containsKey("balanceHeaderPaletteWindowWidthPercent")) {
+                            (values["balanceHeaderPaletteWindowWidthPercent"] as? Number)?.toInt()
+                                ?: throw IllegalArgumentException("Invalid Balance Header palette window width.")
+                        } else {
+                            15
+                        }
+                        require(balanceHeaderPaletteWindowWidthPercent in 10..100) { "Invalid Balance Header palette window width." }
                         val ghostQuickFilterIconPack = ((values["ghostQuickFilterIconPack"] as? Number)?.toInt() ?: 0)
                         require(ghostQuickFilterIconPack in 0..1) { "Invalid Ghost quick-filter icon pack." }
                         // Older Dart clients can omit this display-only field.
@@ -526,6 +562,10 @@ class MainActivity : FlutterActivity() {
                             .putInt("balanceHeaderPartitionHeightPercent", balanceHeaderPartitionHeightPercent)
                             .putInt("balanceMonthCombinedCardPresentation", balanceMonthCombinedCardPresentation)
                             .putString("balanceHeaderGlassConfigurationJson", balanceHeaderGlassConfigurationJson)
+                            .putInt("balanceHeaderPalette", balanceHeaderPalette)
+                            .putInt("balanceHeaderPaletteVariant", balanceHeaderPaletteVariant)
+                            .putInt("balanceHeaderPalettePositionPercent", balanceHeaderPalettePositionPercent)
+                            .putInt("balanceHeaderPaletteWindowWidthPercent", balanceHeaderPaletteWindowWidthPercent)
                             .putInt("ghostQuickFilterIconPack", ghostQuickFilterIconPack)
                             .putInt("ghostQuickFilterPresentation", ghostQuickFilterPresentation)
                             .apply()

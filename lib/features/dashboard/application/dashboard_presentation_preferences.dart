@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'balance_daily_calculation_mode.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../presentation/core_modes/balance_presentation_settings.dart';
+import '../presentation/core_modes/dashboard_header_balance_color_scale.dart';
 
 /// Visual-only package for the three-state ghost quick filter. It is
 /// deliberately separate from the query mode and never changes membership.
@@ -53,6 +54,11 @@ final class DashboardPresentationPreferences {
     required this.balanceHeaderPartitionHeightPercent,
     required this.balanceMonthCombinedCardPresentation,
     this.balanceHeaderGlassConfigurationJson = '',
+    this.balanceHeaderPalette = DashboardBalanceHeaderPalette.softRainbow,
+    this.balanceHeaderPaletteVariant =
+        DashboardBalanceHeaderPaletteVariant.saturated,
+    this.balanceHeaderPalettePositionPercent = 50,
+    this.balanceHeaderPaletteWindowWidthPercent = 15,
     this.ghostQuickFilterIconPack = DashboardGhostQuickFilterIconPack.current,
     this.ghostQuickFilterPresentation =
         DashboardGhostQuickFilterPresentation.searchPillFling,
@@ -84,6 +90,10 @@ final class DashboardPresentationPreferences {
   final BalanceMonthCombinedCardPresentation
   balanceMonthCombinedCardPresentation;
   final String balanceHeaderGlassConfigurationJson;
+  final DashboardBalanceHeaderPalette balanceHeaderPalette;
+  final DashboardBalanceHeaderPaletteVariant balanceHeaderPaletteVariant;
+  final double balanceHeaderPalettePositionPercent;
+  final double balanceHeaderPaletteWindowWidthPercent;
   final DashboardGhostQuickFilterIconPack ghostQuickFilterIconPack;
   final DashboardGhostQuickFilterPresentation ghostQuickFilterPresentation;
 
@@ -106,6 +116,10 @@ final class DashboardPresentationPreferences {
     balanceMonthCombinedCardPresentation:
         BalanceMonthCombinedCardPresentation.incomeExpense,
     balanceHeaderGlassConfigurationJson: '',
+    balanceHeaderPalette: DashboardBalanceHeaderPalette.softRainbow,
+    balanceHeaderPaletteVariant: DashboardBalanceHeaderPaletteVariant.saturated,
+    balanceHeaderPalettePositionPercent: 50,
+    balanceHeaderPaletteWindowWidthPercent: 15,
     ghostQuickFilterIconPack: DashboardGhostQuickFilterIconPack.current,
     ghostQuickFilterPresentation:
         DashboardGhostQuickFilterPresentation.searchPillFling,
@@ -144,6 +158,12 @@ final class DashboardPresentationPreferences {
           balanceMonthCombinedCardPresentation &&
       other.balanceHeaderGlassConfigurationJson ==
           balanceHeaderGlassConfigurationJson &&
+      other.balanceHeaderPalette == balanceHeaderPalette &&
+      other.balanceHeaderPaletteVariant == balanceHeaderPaletteVariant &&
+      other.balanceHeaderPalettePositionPercent ==
+          balanceHeaderPalettePositionPercent &&
+      other.balanceHeaderPaletteWindowWidthPercent ==
+          balanceHeaderPaletteWindowWidthPercent &&
       other.ghostQuickFilterIconPack == ghostQuickFilterIconPack &&
       other.ghostQuickFilterPresentation == ghostQuickFilterPresentation;
 
@@ -172,6 +192,10 @@ final class DashboardPresentationPreferences {
     balanceHeaderPartitionHeightPercent,
     balanceMonthCombinedCardPresentation,
     balanceHeaderGlassConfigurationJson,
+    balanceHeaderPalette,
+    balanceHeaderPaletteVariant,
+    balanceHeaderPalettePositionPercent,
+    balanceHeaderPaletteWindowWidthPercent,
     ghostQuickFilterIconPack,
     ghostQuickFilterPresentation,
   ]);
@@ -205,6 +229,11 @@ final class DashboardPresentationPreferences {
     balanceHeaderPartitionHeightPercent: balanceHeaderPartitionHeightPercent,
     balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
     balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
+    balanceHeaderPalette: balanceHeaderPalette,
+    balanceHeaderPaletteVariant: balanceHeaderPaletteVariant,
+    balanceHeaderPalettePositionPercent: balanceHeaderPalettePositionPercent,
+    balanceHeaderPaletteWindowWidthPercent:
+        balanceHeaderPaletteWindowWidthPercent,
     ghostQuickFilterIconPack: next,
     ghostQuickFilterPresentation: ghostQuickFilterPresentation,
   );
@@ -238,6 +267,11 @@ final class DashboardPresentationPreferences {
     balanceHeaderPartitionHeightPercent: balanceHeaderPartitionHeightPercent,
     balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
     balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
+    balanceHeaderPalette: balanceHeaderPalette,
+    balanceHeaderPaletteVariant: balanceHeaderPaletteVariant,
+    balanceHeaderPalettePositionPercent: balanceHeaderPalettePositionPercent,
+    balanceHeaderPaletteWindowWidthPercent:
+        balanceHeaderPaletteWindowWidthPercent,
     ghostQuickFilterIconPack: ghostQuickFilterIconPack,
     ghostQuickFilterPresentation: next,
   );

@@ -1,4 +1,7 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_live_projection.dart';
@@ -530,6 +533,81 @@ void main() {
       expect(caption, findsNothing);
       expect(find.text('Min.'), findsOneWidget);
       expect(find.text('Max.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'RED COMPACT-RANGE-SURFACE-01: compact Mind inherits its host background while standard Query retains its white card',
+    (tester) async {
+      const capture = ValueKey<String>('query-range-surface-capture');
+      const hostColor = Color(0xFF17324D);
+      const values = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 26000000,
+        lowerScaled100: 100000,
+        upperScaled100: 26000000,
+      );
+
+      Future<Color> render(QueryAmountRangePresentation presentation) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: RepaintBoundary(
+                  key: capture,
+                  child: SizedBox(
+                    width: 360,
+                    height: 150,
+                    child: ColoredBox(
+                      color: hostColor,
+                      child: QueryAmountRangeControl(
+                        values: values,
+                        presentation: presentation,
+                        onRangeCommitted: _discardRange,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(capture),
+        );
+        return (await tester.runAsync(() async {
+          final image = await boundary.toImage(pixelRatio: 1);
+          final bytes = (await image.toByteData(
+            format: ui.ImageByteFormat.rawRgba,
+          ))!;
+          const x = 180;
+          const y = 2;
+          final offset = (y * image.width + x) * 4;
+          final color = Color.fromARGB(
+            bytes.getUint8(offset + 3),
+            bytes.getUint8(offset),
+            bytes.getUint8(offset + 1),
+            bytes.getUint8(offset + 2),
+          );
+          image.dispose();
+          return color;
+        }))!;
+      }
+
+      expect(
+        await render(QueryAmountRangePresentation.compactMind),
+        hostColor,
+        reason:
+            'The compact Mind range has no independently painted surface at '
+            'its outer extent; its parent mother card remains visible.',
+      );
+      expect(
+        await render(QueryAmountRangePresentation.standard),
+        Colors.white,
+        reason: 'The normal Query menu keeps its independent white range card.',
+      );
+      expect(tester.takeException(), isNull);
     },
   );
 
