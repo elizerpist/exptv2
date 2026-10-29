@@ -395,6 +395,70 @@ void main() {
   );
 
   testWidgets(
+    'Header taps remain waves while only a selector tap opens Pulse and selector drags cancel that tap',
+    (tester) async {
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      final visual = DashboardHeaderVisualController(vsync: tester);
+      var pulseOpenRequests = 0;
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _ModeHostHarness(
+          controller: controller,
+          headerVisual: visual,
+          onOpenPulse: () => pulseOpenRequests += 1,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final header = find.byKey(
+        const ValueKey<String>('dashboard-core-mode-header-gesture-region'),
+      );
+      final selector = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-selector-input-gain'),
+      );
+      final semantics = tester.ensureSemantics();
+      expect(
+        find.bySemanticsLabel(
+          'Mód: Balance. Érintéssel Pulse nyílik, függőlegesen húzva módot válthat.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(header);
+      await tester.pump();
+      expect(visual.tapWave.rippleCount, 1);
+      expect(pulseOpenRequests, 0);
+      expect(controller.committedMode, DashboardModeSpec.balance);
+
+      await tester.tap(selector);
+      await tester.pump();
+      expect(pulseOpenRequests, 1);
+      expect(controller.committedMode, DashboardModeSpec.balance);
+      expect(
+        visual.tapWave.rippleCount,
+        1,
+        reason: 'The bounded mode icon must not seed a second header wave.',
+      );
+
+      await tester.fling(selector, const Offset(0, -140), 1000);
+      await tester.pump(const Duration(seconds: 2));
+      expect(pulseOpenRequests, 1);
+      expect(controller.committedMode, isNot(DashboardModeSpec.balance));
+
+      final cancelled = await tester.startGesture(tester.getCenter(selector));
+      await cancelled.cancel();
+      await tester.pump();
+      expect(pulseOpenRequests, 1);
+      semantics.dispose();
+      visual.dispose();
+    },
+  );
+
+  testWidgets(
     'HSG-01 RED: Header-local gain doubles both cumulative finger-distance boundaries before release',
     (tester) async {
       final controller = DashboardCoreModeController(
@@ -861,6 +925,7 @@ class _ModeHostHarness extends StatelessWidget {
     this.expansion,
     this.headerVisual,
     this.balanceHeaderVisualFrame,
+    this.onOpenPulse,
     this.collapseProgress = 0,
   });
 
@@ -868,6 +933,7 @@ class _ModeHostHarness extends StatelessWidget {
   final _ExpansionRecorder? expansion;
   final DashboardHeaderVisualController? headerVisual;
   final ValueListenable<DashboardHeaderVisualFrame>? balanceHeaderVisualFrame;
+  final VoidCallback? onOpenPulse;
   final double collapseProgress;
 
   @override
@@ -889,6 +955,7 @@ class _ModeHostHarness extends StatelessWidget {
               onVerticalExpansionEnd: expansion.end,
               headerVisualController: headerVisual,
               balanceHeaderVisualFrame: balanceHeaderVisualFrame,
+              onOpenPulse: onOpenPulse,
             ),
           ),
         ),

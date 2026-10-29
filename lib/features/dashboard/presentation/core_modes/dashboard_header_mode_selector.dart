@@ -8,6 +8,7 @@ import 'package:flutter/gestures.dart'
         DragUpdateDetails,
         GestureRecognizer,
         PointerDeviceKind,
+        TapGestureRecognizer,
         Velocity,
         VerticalDragGestureRecognizer;
 import 'package:flutter/material.dart';
@@ -30,6 +31,7 @@ final class DashboardHeaderModeSelector extends StatefulWidget {
     this.budgetVisualFrame,
     this.mindVisualFrame,
     this.onInteractionChanged,
+    this.onTap,
   });
 
   final DashboardCoreModeController controller;
@@ -41,6 +43,10 @@ final class DashboardHeaderModeSelector extends StatefulWidget {
   /// Lets the delivery surface wait until this existing carousel has released
   /// its pointer; it does not change selector ownership or physics.
   final ValueChanged<bool>? onInteractionChanged;
+
+  /// Opens Pulse only after the gesture arena has resolved this bounded
+  /// control as a tap. Vertical drags remain exclusively mode-carousel input.
+  final VoidCallback? onTap;
 
   @override
   State<DashboardHeaderModeSelector> createState() =>
@@ -111,13 +117,18 @@ final class _DashboardHeaderModeSelectorState
   @override
   Widget build(BuildContext context) {
     final viewportExtent = _viewportExtent;
+    final semanticsLabel = widget.onTap == null
+        ? 'Mód: ${_modeLabel(widget.selectedMode)}. Függőlegesen húzva válthat.'
+        : 'Mód: ${_modeLabel(widget.selectedMode)}. Érintéssel Pulse nyílik, '
+              'függőlegesen húzva módot válthat.';
     return SizedBox(
       key: const ValueKey<String>('dashboard-header-mode-selector'),
       width: viewportExtent,
       height: viewportExtent,
       child: Semantics(
-        label:
-            'Mód: ${_modeLabel(widget.selectedMode)}. Függőlegesen húzva válthat.',
+        label: semanticsLabel,
+        button: widget.onTap != null,
+        onTap: widget.onTap,
         onIncrease: () =>
             widget.controller.switchMode(DashboardCoreModeDirection.forward),
         onDecrease: () =>
@@ -197,38 +208,47 @@ final class _DashboardHeaderModeSelectorState
                   ),
                 ),
               ),
-              if (_initialCenterReady)
-                Positioned.fill(
-                  child: Listener(
-                    key: const ValueKey<String>(
-                      'dashboard-header-mode-selector-input-gain',
-                    ),
+              // Input is available from the fallback's first frame as well:
+              // a normal TapGestureRecognizer opens Pulse, while the existing
+              // drag recognizer continues forwarding the exact scaled motion
+              // into the shared carousel position.
+              Positioned.fill(
+                child: Listener(
+                  key: const ValueKey<String>(
+                    'dashboard-header-mode-selector-input-gain',
+                  ),
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: (_) => _beginDirectInput(),
+                  onPointerUp: (_) => _finishDirectInput(),
+                  onPointerCancel: (_) => _finishDirectInput(),
+                  child: RawGestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onPointerDown: (_) => _beginDirectInput(),
-                    onPointerUp: (_) => _finishDirectInput(),
-                    onPointerCancel: (_) => _finishDirectInput(),
-                    child: RawGestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      gestures:
-                          <Type, GestureRecognizerFactory<GestureRecognizer>>{
-                            _HeaderModeInputGainDragRecognizer:
-                                GestureRecognizerFactoryWithHandlers<
-                                  _HeaderModeInputGainDragRecognizer
-                                >(() => _HeaderModeInputGainDragRecognizer(), (
-                                  recognizer,
-                                ) {
-                                  recognizer
-                                    ..dragStartBehavior = DragStartBehavior.down
-                                    ..onStart = _startScaledDrag
-                                    ..onUpdate = _updateScaledDrag
-                                    ..onEnd = _endScaledDrag
-                                    ..onCancel = _cancelScaledDrag;
-                                }),
-                          },
-                      child: const SizedBox.expand(),
-                    ),
+                    gestures:
+                        <Type, GestureRecognizerFactory<GestureRecognizer>>{
+                          TapGestureRecognizer:
+                              GestureRecognizerFactoryWithHandlers<
+                                TapGestureRecognizer
+                              >(() => TapGestureRecognizer(), (recognizer) {
+                                recognizer.onTap = widget.onTap;
+                              }),
+                          _HeaderModeInputGainDragRecognizer:
+                              GestureRecognizerFactoryWithHandlers<
+                                _HeaderModeInputGainDragRecognizer
+                              >(() => _HeaderModeInputGainDragRecognizer(), (
+                                recognizer,
+                              ) {
+                                recognizer
+                                  ..dragStartBehavior = DragStartBehavior.down
+                                  ..onStart = _startScaledDrag
+                                  ..onUpdate = _updateScaledDrag
+                                  ..onEnd = _endScaledDrag
+                                  ..onCancel = _cancelScaledDrag;
+                              }),
+                        },
+                    child: const SizedBox.expand(),
                   ),
                 ),
+              ),
             ],
           ),
         ),

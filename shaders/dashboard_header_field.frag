@@ -1514,7 +1514,9 @@ vec3 saturateColor(vec3 color, float amount) {
 
 // Source CSS radial overlay: pink → magenta → violet → white → transparent.
 // The old Canvas path blurred a temporary layer; this stays analytical at the
-// final Header surface and uses fragment derivatives for a subpixel edge.
+// final Header surface. The pinned runtime-effect compiler has no derivative
+// intrinsic, so softness is converted explicitly from logical pixels to this
+// radius space.
 vec3 touchOverlay(vec2 uv, out float alpha) {
   alpha = 0.0;
   if (uTouchOverlayActive < .5 || uTouchOverlayOpacity <= .0001) {
@@ -1526,7 +1528,10 @@ vec3 touchOverlay(vec2 uv, out float alpha) {
   vec2 toRight = vec2(1.0) - uTouchOverlayOrigin;
   float farthest = length(vec2(max(toLeft.x, toRight.x) * uSize.x / max(1.0, uSize.y),
       max(toLeft.y, toRight.y)));
-  float radius = max(.0001, farthest * .25 * uTouchOverlayScale);
+  // `t` owns the source gradient stops below. They already end at .25, so
+  // applying .25 to the geometric radius as well shrank the visible field by
+  // four. Keep the CSS stops and restore the source-radius coordinate system.
+  float radius = max(.0001, farthest * uTouchOverlayScale);
   float t = length(point) / radius;
   vec4 c0 = vec4(1.0, .6549, .8863, .98);
   vec4 c1 = vec4(1.0, .5451, .8549, .86);
@@ -1536,13 +1541,24 @@ vec3 touchOverlay(vec2 uv, out float alpha) {
       (t < .11 ? mix(c1, c2, (t - .05) / .06) :
       (t < .19 ? mix(c2, c3, (t - .11) / .08) :
       mix(c3, vec4(1.0, 1.0, 1.0, 0.0), saturate((t - .19) / .06))));
-  float blur = uTouchOverlayBlur / max(1.0, min(uSize.x, uSize.y));
-  // The current SkSL runtime-effect compiler does not expose derivatives.
-  // `uSize` still gives a native-fragment-scale edge width without an
-  // unsupported fwidth call or a low-resolution blur texture.
-  float edge = max(1.5 / max(uSize.x, uSize.y), blur * .34);
-  alpha = color.a * uTouchOverlayOpacity * uTouchInteractionOpacity *
-      (1.0 - smoothstep(.25 - edge, .25 + edge, t));
+  // `point` is height-normalized after its aspect correction. Convert the
+  // logical blur and one-pixel anti-aliasing width into the same `t` domain;
+  // `uSize` and FlutterFragCoord() deliberately share logical canvas pixels.
+  float radiusPixels = radius * max(1.0, uSize.y);
+  float aa = 1.25 / max(1.0, radiusPixels);
+  float blur = uTouchOverlayBlur / max(1.0, radiusPixels);
+  // CSS filter blur leaves a low-alpha optical halo beyond the last authored
+  // stop. A smoothstep on the already-transparent `.25` endpoint cannot make
+  // that halo by itself, so retain the source gradient and add its soft tail.
+  float halo = c3.a * .22 *
+      smoothstep(.19 - aa, .19 + aa, t) *
+      (1.0 - smoothstep(.25, .25 + max(aa, blur), t));
+  float outerEdge = 1.0 - smoothstep(
+      .25 + max(aa, blur) - aa,
+      .25 + max(aa, blur) + aa,
+      t);
+  alpha = max(color.a, halo) * outerEdge * uTouchOverlayOpacity *
+      uTouchInteractionOpacity;
   return saturateColor(color.rgb, 1.85);
 }
 
@@ -1559,7 +1575,9 @@ vec3 touchTrail(vec2 uv, out float alpha) {
     if (trail.z <= .0001 || trail.w <= .0001) continue;
     vec2 delta = uv - trail.xy;
     delta.x *= aspect;
-    float radius = max(.0001, (uTrailSize / max(1.0, uSize.x)) * .5 * trail.w);
+    // `delta` above is height-normalized after aspect correction. The source
+    // trail size is logical pixels, so normalize it by Header height as well.
+    float radius = max(.0001, (uTrailSize / max(1.0, uSize.y)) * .5 * trail.w);
     float t = length(delta) / radius;
     vec4 c0 = vec4(1.0, .6549, .8863, .96);
     vec4 c1 = vec4(1.0, .5451, .8549, .82);
@@ -1569,9 +1587,16 @@ vec3 touchTrail(vec2 uv, out float alpha) {
         (t < .38 ? mix(c1, c2, (t - .18) / .20) :
         (t < .62 ? mix(c2, c3, (t - .38) / .24) :
         mix(c3, vec4(1.0, 1.0, 1.0, 0.0), saturate((t - .62) / .14))));
-    float edge = max(1.5 / max(uSize.x, uSize.y), .018);
-    float localAlpha = color.a * trail.z * uTouchInteractionOpacity *
-        (1.0 - smoothstep(.76 - edge, .76 + edge, t));
+    // The authored .62 → .76 alpha ramp provides the broad soft falloff.
+    // This narrow, radius-relative width only removes physical pixel steps.
+    float radiusPixels = radius * max(1.0, uSize.y);
+    float edge = 1.25 / max(1.0, radiusPixels);
+    float halo = c3.a * .14 *
+        smoothstep(.62 - edge, .62 + edge, t) *
+        (1.0 - smoothstep(.76, .76 + edge * 3.0, t));
+    float localAlpha = max(color.a, halo) * trail.z *
+        uTouchInteractionOpacity *
+        (1.0 - smoothstep(.76 + edge * 2.0, .76 + edge * 4.0, t));
     mixed = screenBlend(mixed, saturateColor(color.rgb, 1.2 + trail.z * .8));
     alpha = 1.0 - (1.0 - alpha) * (1.0 - localAlpha);
   }

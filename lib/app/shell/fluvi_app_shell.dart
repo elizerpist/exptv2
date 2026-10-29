@@ -230,6 +230,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   bool _appActive = true;
   bool _headerInteractionActive = false;
   bool _routeObstructed = false;
+  bool _openingPulseFromHeader = false;
 
   @override
   void initState() {
@@ -844,12 +845,18 @@ class _FluviAppShellState extends State<FluviAppShell>
   }
 
   Future<void> _openPulseFromHeader() async {
+    // Own the route lock before any qualified-exposure await. This makes a
+    // rapid second icon tap a no-op rather than a second push/confirmation.
+    if (_openingPulseFromHeader || !mounted) return;
+    _openingPulseFromHeader = true;
     final presentation = _pulseDelivery.presentation;
-    await _pulseDelivery.confirmVisibleTap();
-    if (!mounted) return;
-    _routeObstructed = true;
-    _syncPulseDeliverySurface();
     try {
+      // Capture the actually visible reservation before setting route
+      // obstruction; its confirmation must see the still-qualified Header.
+      await _pulseDelivery.confirmVisibleTap();
+      if (!mounted) return;
+      _routeObstructed = true;
+      _syncPulseDeliverySurface();
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           fullscreenDialog: true,
@@ -864,6 +871,7 @@ class _FluviAppShellState extends State<FluviAppShell>
     } finally {
       if (mounted) {
         _routeObstructed = false;
+        _openingPulseFromHeader = false;
         _syncPulseDeliverySurface();
       }
     }

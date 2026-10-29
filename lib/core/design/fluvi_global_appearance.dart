@@ -75,7 +75,7 @@ abstract final class FluviFabReferenceMaterial {
 
 extension FluviFabIconPresentationPresentation on FluviFabIconPresentation {
   String get label => switch (this) {
-    FluviFabIconPresentation.legacyWhiteStore => 'Fehér bolt ikon',
+    FluviFabIconPresentation.legacyWhiteStore => 'Fehér plusz ikon',
     FluviFabIconPresentation.directionArtwork => 'Artwork',
     FluviFabIconPresentation.compactEditableVector => 'Színezhető vektor',
     FluviFabIconPresentation.fullBabyBlueVector => 'Babakék vektor',

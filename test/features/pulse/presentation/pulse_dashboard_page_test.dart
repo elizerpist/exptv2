@@ -195,12 +195,12 @@ void main() {
   );
 
   testWidgets(
-    'header delivery renders native Story copy without changing its bounds',
+    'header delivery copy passes through while its own actions stay interactive',
     (tester) async {
       final repository = _Repository(_snapshot())..deliveryEnabled = true;
       final coordinator = PulseDeliveryCoordinator(repository: repository);
       addTearDown(coordinator.dispose);
-      var opened = false;
+      var backgroundPointerDowns = 0;
       coordinator.updateSurface(
         appActive: true,
         ledgerVisible: true,
@@ -214,22 +214,29 @@ void main() {
         MaterialApp(
           home: Center(
             child: SizedBox(
-              width: 360,
-              height: 112,
-              child: PulseHeaderPresentationLayer(
-                coordinator: coordinator,
-                onOpenPulse: () => opened = true,
-                onVerticalDragStart: (_) {},
-                onVerticalDragUpdate: (_) {},
-                onVerticalDragEnd: (_) {},
-                onLayoutSupported: coordinator.reportHeaderLayout,
+              width: 640,
+              height: 180,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Listener(
+                    key: const ValueKey('pulse-header-pass-through-target'),
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: (_) => backgroundPointerDowns += 1,
+                    child: const SizedBox.expand(),
+                  ),
+                  PulseHeaderPresentationLayer(
+                    coordinator: coordinator,
+                    onLayoutSupported: coordinator.reportHeaderLayout,
+                  ),
+                ],
               ),
             ),
           ),
         ),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
 
       expect(
         find.text('A hónap végére túllépheted a kereted.'),
@@ -238,15 +245,59 @@ void main() {
       expect(
         find.byType(SizedBox).evaluate().any((element) {
           final render = element.renderObject;
-          return render is RenderBox && render.size == const Size(360, 112);
+          return render is RenderBox && render.size == const Size(640, 180);
         }),
         isTrue,
       );
-      await tester.tap(find.text('A hónap végére túllépheted a kereted.'));
+      expect(find.text('Részletek'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('pulse-header-dismiss')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('pulse-header-actions')),
+        findsOneWidget,
+      );
+      expect(coordinator.presentation, isNotNull);
+
+      await tester.tap(find.byTooltip('Elrejtés'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(repository.dismissCalls, 1);
+
+      await coordinator.reconcile();
       await tester.pump();
-      expect(opened, isTrue);
+      await tester.pump();
+      await _selectHeaderAction(tester, 0);
+      await tester.pump();
+      expect(repository.snoozeCalls, 1);
+
+      await coordinator.reconcile();
+      await tester.pump();
+      await tester.pump();
+      await _selectHeaderAction(tester, 2);
+      await tester.pump();
+      expect(repository.muteCalls, 1);
+
+      await coordinator.reconcile();
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(
+        find.text('A hónap végére túllépheted a kereted.'),
+        warnIfMissed: false,
+      );
+      await tester.pump();
+      expect(backgroundPointerDowns, 1);
+      expect(repository.confirmCalls, 0);
     },
   );
+}
+
+Future<void> _selectHeaderAction(WidgetTester tester, int index) async {
+  final finder = find.byKey(const ValueKey('pulse-header-actions'));
+  final dynamic menu = tester.widget(finder);
+  final dynamic entry = menu.itemBuilder(tester.element(finder))[index];
+  menu.onSelected!(entry.value);
+  await tester.pump();
 }
 
 PulseDashboardSnapshot _snapshot({
@@ -319,6 +370,10 @@ final class _Repository implements PulseRepository {
   final PulseDashboardSnapshot snapshot;
   final List<double> saved = [];
   int resetCalls = 0;
+  int confirmCalls = 0;
+  int dismissCalls = 0;
+  int snoozeCalls = 0;
+  int muteCalls = 0;
   bool deliveryEnabled = false;
 
   @override
@@ -502,7 +557,10 @@ final class _Repository implements PulseRepository {
     required String leaseToken,
     required String hostSessionId,
     required String contentFingerprint,
-  }) async => true;
+  }) async {
+    confirmCalls += 1;
+    return true;
+  }
 
   @override
   Future<bool> finishPresentation({
@@ -529,7 +587,10 @@ final class _Repository implements PulseRepository {
     required String hostSessionId,
     required String contentFingerprint,
     required String commandKey,
-  }) async => true;
+  }) async {
+    dismissCalls += 1;
+    return true;
+  }
 
   @override
   Future<bool> snoozeSituation({
@@ -539,13 +600,18 @@ final class _Repository implements PulseRepository {
     required String contentFingerprint,
     required int untilUtcMs,
     required String commandKey,
-  }) async => true;
+  }) async {
+    snoozeCalls += 1;
+    return true;
+  }
 
   @override
   Future<void> muteDeliveryTarget({
     required String targetScope,
     required String commandKey,
-  }) async {}
+  }) async {
+    muteCalls += 1;
+  }
 
   @override
   Future<bool> unmuteDeliveryTarget({

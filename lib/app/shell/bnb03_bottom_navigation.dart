@@ -703,12 +703,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                                                     )
                                                   : Center(
                                                       child: Icon(
-                                                        selected ==
-                                                                Bnb03Item.shop
-                                                            ? IconsaxPlusBold
-                                                                  .shop
-                                                            : IconsaxPlusLinear
-                                                                  .shop,
+                                                        Icons.add_rounded,
                                                         key: const ValueKey<String>(
                                                           'bnb03-fab-legacy-store-icon',
                                                         ),

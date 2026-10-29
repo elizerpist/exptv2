@@ -6,24 +6,16 @@ import '../../application/pulse_delivery_coordinator.dart';
 import '../../domain/pulse_models.dart';
 
 /// Content-only adapter for the existing dashboard Header Card. It owns no
-/// card geometry, palette, shader or ambient animation. Vertical drags are
-/// explicitly forwarded to the existing Header gesture owner.
+/// card geometry, palette, shader, ambient animation, or full-header gesture.
+/// Passive copy falls through to the Header's existing wave/drag owner.
 class PulseHeaderPresentationLayer extends StatefulWidget {
   const PulseHeaderPresentationLayer({
     super.key,
     required this.coordinator,
-    required this.onOpenPulse,
-    required this.onVerticalDragStart,
-    required this.onVerticalDragUpdate,
-    required this.onVerticalDragEnd,
     required this.onLayoutSupported,
   });
 
   final PulseDeliveryCoordinator coordinator;
-  final VoidCallback onOpenPulse;
-  final GestureDragStartCallback onVerticalDragStart;
-  final GestureDragUpdateCallback onVerticalDragUpdate;
-  final GestureDragEndCallback onVerticalDragEnd;
   final ValueChanged<bool> onLayoutSupported;
 
   @override
@@ -112,40 +104,33 @@ class _PulseHeaderPresentationLayerState
             ),
           );
         }
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () async {
-            if (presentation != null) {
-              await widget.coordinator.confirmVisibleTap();
-            }
-            widget.onOpenPulse();
-          },
-          onVerticalDragStart: widget.onVerticalDragStart,
-          onVerticalDragUpdate: widget.onVerticalDragUpdate,
-          onVerticalDragEnd: widget.onVerticalDragEnd,
-          onVerticalDragCancel: () =>
-              widget.onVerticalDragEnd(DragEndDetails()),
-          child: AnimatedSwitcher(
-            duration: disableAnimations
-                ? Duration.zero
-                : const Duration(milliseconds: 420),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            layoutBuilder: (currentChild, previousChildren) => Stack(
-              fit: StackFit.expand,
-              children: [...previousChildren, ?currentChild],
-            ),
-            child: presentation == null
-                ? const SizedBox.expand(
-                    key: ValueKey('pulse-header-financial-content'),
-                  )
-                : _PulseHeaderCopy(
-                    key: ValueKey('pulse-header-${presentation.attemptId}'),
-                    presentation: presentation,
-                    coordinator: widget.coordinator,
-                    onOpenPulse: widget.onOpenPulse,
-                  ),
+        // Passive copy deliberately has no full-header gesture detector.
+        // Its ordinary text therefore falls through to the Header wave/drag
+        // layer below; the compact action buttons retain their own hit targets.
+        return AnimatedSwitcher(
+          duration: disableAnimations
+              ? Duration.zero
+              : const Duration(milliseconds: 420),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          layoutBuilder: (currentChild, previousChildren) => Stack(
+            fit: StackFit.expand,
+            children: [
+              ...previousChildren.where(
+                (child) => child.key != currentChild?.key,
+              ),
+              ?currentChild,
+            ],
           ),
+          child: presentation == null
+              ? const SizedBox.expand(
+                  key: ValueKey('pulse-header-financial-content'),
+                )
+              : _PulseHeaderCopy(
+                  key: ValueKey('pulse-header-${presentation.attemptId}'),
+                  presentation: presentation,
+                  coordinator: widget.coordinator,
+                ),
         );
       },
     );
@@ -188,95 +173,104 @@ class _PulseHeaderCopy extends StatelessWidget {
     super.key,
     required this.presentation,
     required this.coordinator,
-    required this.onOpenPulse,
   });
 
   final PulseHeaderPresentationReservation presentation;
   final PulseDeliveryCoordinator coordinator;
-  final VoidCallback onOpenPulse;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final compact = constraints.maxHeight < 150;
       final theme = Theme.of(context);
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 72, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              height: 28,
-              child: Row(
+      return Stack(
+        children: [
+          // RenderParagraph participates in hit testing even without a tap
+          // callback. Ignore the copy subtree deliberately so ordinary text
+          // reaches the Header wave listener below this layer.
+          IgnorePointer(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 72, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  SizedBox(
+                    height: 28,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        compact ? 'PULSE' : 'PULSE · AKTUÁLIS HÓNAP',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .45,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
-                    compact ? 'PULSE' : 'PULSE · AKTUÁLIS HÓNAP',
-                    style: theme.textTheme.labelSmall?.copyWith(
+                    presentation.story.headline,
+                    maxLines: compact ? 2 : 3,
+                    overflow: TextOverflow.clip,
+                    style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
-                      letterSpacing: .45,
                     ),
                   ),
-                  const Spacer(),
-                  _HeaderActionButton(
-                    key: const ValueKey('pulse-header-dismiss'),
-                    tooltip: 'Elrejtés',
-                    icon: Icons.close_rounded,
-                    onPressed: coordinator.dismiss,
-                  ),
-                  const SizedBox(width: 4),
-                  PopupMenuButton<_PulseHeaderAction>(
-                    key: const ValueKey('pulse-header-actions'),
-                    tooltip: 'Pulse műveletek',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 28,
-                      height: 28,
+                  if (!compact && presentation.story.detail != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      presentation.story.detail!,
+                      maxLines: 2,
+                      overflow: TextOverflow.clip,
+                      style: theme.textTheme.bodySmall,
                     ),
-                    icon: const Icon(Icons.more_horiz_rounded, size: 19),
-                    onSelected: (value) => _onAction(context, value),
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: _PulseHeaderAction.details,
-                        child: Text('Részletek'),
-                      ),
-                      PopupMenuItem(
-                        value: _PulseHeaderAction.laterHour,
-                        child: Text('Később · 1 óra'),
-                      ),
-                      PopupMenuItem(
-                        value: _PulseHeaderAction.laterTomorrow,
-                        child: Text('Később · holnap 09:00'),
-                      ),
-                      PopupMenuItem(
-                        value: _PulseHeaderAction.mute,
-                        child: Text('Cél némítása'),
-                      ),
-                    ],
-                  ),
+                  ],
                 ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              presentation.story.headline,
-              maxLines: compact ? 2 : 3,
-              overflow: TextOverflow.clip,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          ),
+          Positioned(
+            top: compact ? 23 : 16,
+            right: 72,
+            child: Row(
+              children: [
+                _HeaderActionButton(
+                  key: const ValueKey('pulse-header-dismiss'),
+                  tooltip: 'Elrejtés',
+                  icon: Icons.close_rounded,
+                  onPressed: coordinator.dismiss,
+                ),
+                const SizedBox(width: 4),
+                PopupMenuButton<_PulseHeaderAction>(
+                  key: const ValueKey('pulse-header-actions'),
+                  tooltip: 'Pulse műveletek',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
+                  icon: const Icon(Icons.more_horiz_rounded, size: 19),
+                  onSelected: (value) => _onAction(context, value),
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: _PulseHeaderAction.laterHour,
+                      child: Text('Később · 1 óra'),
+                    ),
+                    PopupMenuItem(
+                      value: _PulseHeaderAction.laterTomorrow,
+                      child: Text('Később · holnap 09:00'),
+                    ),
+                    PopupMenuItem(
+                      value: _PulseHeaderAction.mute,
+                      child: Text('Cél némítása'),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            if (!compact && presentation.story.detail != null) ...[
-              const SizedBox(height: 3),
-              Text(
-                presentation.story.detail!,
-                maxLines: 2,
-                overflow: TextOverflow.clip,
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       );
     },
   );
@@ -286,9 +280,6 @@ class _PulseHeaderCopy extends StatelessWidget {
     _PulseHeaderAction action,
   ) async {
     switch (action) {
-      case _PulseHeaderAction.details:
-        await coordinator.confirmVisibleTap();
-        onOpenPulse();
       case _PulseHeaderAction.laterHour:
         await coordinator.snooze(const Duration(hours: 1));
       case _PulseHeaderAction.laterTomorrow:
@@ -327,4 +318,4 @@ class _HeaderActionButton extends StatelessWidget {
   );
 }
 
-enum _PulseHeaderAction { details, laterHour, laterTomorrow, mute }
+enum _PulseHeaderAction { laterHour, laterTomorrow, mute }

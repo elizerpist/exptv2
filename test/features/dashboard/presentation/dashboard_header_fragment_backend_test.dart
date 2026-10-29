@@ -402,7 +402,23 @@ void main() {
         expect(shader, contains('vec3 touchOverlay'));
         expect(shader, contains('vec3 touchTrail'));
         expect(shader, isNot(contains('fwidth(')));
-        expect(shader, contains('1.5 / max(uSize.x, uSize.y)'));
+        expect(
+          shader,
+          contains('farthest * uTouchOverlayScale'),
+          reason:
+              'The authored .25 gradient endpoint already owns the visible '
+              'overlay stop; applying it to geometry as well shrinks the '
+              'field fourfold.',
+        );
+        expect(shader, isNot(contains('farthest * .25 * uTouchOverlayScale')));
+        expect(
+          shader,
+          contains('uTrailSize / max(1.0, uSize.y)'),
+          reason:
+              'Trail distance is height-normalized after aspect correction, '
+              'so its logical-pixel radius must use Header height too.',
+        );
+        expect(shader, contains('float halo ='));
         expect(engine, isNot(contains('DashboardHeaderTapWavePainter')));
         expect(engine, isNot(contains('saveLayer(')));
       },

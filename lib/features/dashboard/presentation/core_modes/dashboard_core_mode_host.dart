@@ -343,10 +343,6 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
               if (widget.pulseDeliveryCoordinator case final coordinator?)
                 PulseHeaderPresentationLayer(
                   coordinator: coordinator,
-                  onOpenPulse: widget.onOpenPulse ?? () {},
-                  onVerticalDragStart: _onHeaderVerticalStart,
-                  onVerticalDragUpdate: _onHeaderVerticalUpdate,
-                  onVerticalDragEnd: _onHeaderVerticalEnd,
                   onLayoutSupported: coordinator.reportHeaderLayout,
                 ),
               // This remains a sibling above the passive wave listener. Its
@@ -362,6 +358,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
                   budgetVisualFrame: widget.budgetHeaderVisualFrame,
                   mindVisualFrame: widget.mindHeaderVisualFrame,
                   onInteractionChanged: widget.onHeaderInteractionChanged,
+                  onTap: widget.onOpenPulse,
                 ),
               ),
             ],

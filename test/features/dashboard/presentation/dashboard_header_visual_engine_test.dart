@@ -2022,6 +2022,68 @@ void main() {
   );
 
   testWidgets(
+    'the production fragment shader restores the wide pink touch field at multiple pixel densities',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      for (final density in <double>[1, 3]) {
+        tester.view.devicePixelRatio = density;
+        tester.view.physicalSize = Size(412 * density, 120 * density);
+        final controller = DashboardHeaderVisualController(vsync: tester);
+        final boundary = GlobalKey();
+
+        controller.selectEffect(DashboardHeaderEffectId.staticEffect);
+        controller.setPortalEnabled(
+          DashboardHeaderPortalChannel.innerMotion,
+          false,
+        );
+        controller.setPortalEnabled(
+          DashboardHeaderPortalChannel.backgroundMorph,
+          false,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: RepaintBoundary(
+                key: boundary,
+                child: SizedBox(
+                  width: 412,
+                  height: 120,
+                  child: DashboardHeaderVisualPaintLayer(
+                    controller: controller,
+                    frame: _coolFrame(opacityScalePosition: 100),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        final idle = await _headerRgba(tester, boundary);
+
+        controller.beginTapWave(const Offset(.5, .5));
+        await tester.pump();
+        // FragmentProgram loading is asynchronous; this waits through the
+        // production retained renderer rather than sampling a source formula.
+        await tester.pump(const Duration(seconds: 1));
+        final active = await _headerRgba(tester, boundary);
+
+        expect(
+          _rgbDeltaAt(idle, active, width: 412, x: 206 + 36, y: 60),
+          greaterThan(20),
+          reason:
+              'At DPR $density the restored field must still visibly reach '
+              '36 logical pixels from its center; the old double .25 scale '
+              'ended near 11 pixels.',
+        );
+        controller.dispose();
+      }
+    },
+  );
+
+  testWidgets(
     'the retained runtime shader gives a static Cool Header a visible independent inner Portal contribution',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester);
@@ -2569,6 +2631,19 @@ Future<ByteData> _headerRgba(WidgetTester tester, GlobalKey boundary) async {
   } finally {
     image.dispose();
   }
+}
+
+int _rgbDeltaAt(
+  ByteData first,
+  ByteData second, {
+  required int width,
+  required int x,
+  required int y,
+}) {
+  final offset = (y * width + x) * 4;
+  return (first.getUint8(offset) - second.getUint8(offset)).abs() +
+      (first.getUint8(offset + 1) - second.getUint8(offset + 1)).abs() +
+      (first.getUint8(offset + 2) - second.getUint8(offset + 2)).abs();
 }
 
 Future<ByteData> _nativeStaticFieldRgba({

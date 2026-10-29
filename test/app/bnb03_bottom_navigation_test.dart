@@ -568,7 +568,7 @@ void main() {
   });
 
   testWidgets(
-    'FAB artwork fills the former ring footprint without a ring or inner core while legacy retains the white shop glyph',
+    'FAB artwork fills the former ring footprint without a ring or inner core while legacy retains the white plus glyph',
     (tester) async {
       final artwork = Bnb03FabDirectionVisual.resolve(
         direction: TransactionDirection.expense,
@@ -635,7 +635,11 @@ void main() {
         ),
       );
 
-      expect(find.byIcon(IconsaxPlusLinear.shop), findsOneWidget);
+      final legacyIcon = tester.widget<Icon>(
+        find.byKey(const ValueKey<String>('bnb03-fab-legacy-store-icon')),
+      );
+      expect(legacyIcon.icon, Icons.add_rounded);
+      expect(legacyIcon.color, Colors.white);
       expect(
         find.byKey(const ValueKey<String>('bnb03-fab-expense-artwork')),
         findsNothing,
@@ -800,19 +804,16 @@ void main() {
     },
   );
 
-  test(
-    'full baby-blue vector uses the photographed reference FAB cyan',
-    () {
-      expect(
-        Bnb03FabVectorArtworkGeometry.babyBluePrimary,
-        FluviFabReferenceMaterial.fullBabyBluePrimary,
-      );
-      expect(
-        Bnb03FabVectorArtworkGeometry.babyBlueHighlight,
-        FluviFabReferenceMaterial.fullBabyBlueHighlight,
-      );
-    },
-  );
+  test('full baby-blue vector uses the photographed reference FAB cyan', () {
+    expect(
+      Bnb03FabVectorArtworkGeometry.babyBluePrimary,
+      FluviFabReferenceMaterial.fullBabyBluePrimary,
+    );
+    expect(
+      Bnb03FabVectorArtworkGeometry.babyBlueHighlight,
+      FluviFabReferenceMaterial.fullBabyBlueHighlight,
+    );
+  });
 
   testWidgets(
     'vector FAB treatments retain their distinct material hierarchy',
