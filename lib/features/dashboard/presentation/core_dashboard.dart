@@ -484,6 +484,11 @@ class _CoreDashboardState extends State<CoreDashboard>
       scheduleRebase: _scheduleSceneRebaseOnNextFrame,
       report: _preparedSceneCache.report,
     );
+    // A listener observes only future mode commits.  Restore the same
+    // Core-owned admission path for a dashboard that is mounted with Mind
+    // already selected (for example after shell-state restoration), so its
+    // body and Header do not wait for an unrelated user interaction.
+    _onCoreModeChanged(entrySource: 'dashboardInitialMount');
   }
 
   @override
@@ -713,7 +718,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _onBudgetDistributionVisibleFrame();
   }
 
-  void _onCoreModeChanged() {
+  void _onCoreModeChanged({String entrySource = 'dashboardModeCommitted'}) {
     _syncMindModeContentGeometry();
     controller.setBalanceLinkedPresentationActive(
       modeController.committedMode == DashboardModeSpec.balance,
@@ -721,6 +726,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     if (modeController.committedMode == DashboardModeSpec.mind) {
       controller.beginMindTemporalEntryTrace(
         modeEpoch: modeController.committedModeEpoch,
+        source: entrySource,
       );
       // The range renderer must wait for the canonical domain, but the Core
       // admission that creates that domain cannot wait for the renderer. This

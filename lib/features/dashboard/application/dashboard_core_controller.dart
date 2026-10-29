@@ -4439,7 +4439,10 @@ final class DashboardCoreController {
   /// publication-critical scenes exist. Noncritical bank completion remains
   /// cancellable background maintenance; the callbacks make navigation, index
   /// and applied-query pointer switch at one publication boundary.
-  void beginMindTemporalEntryTrace({required int modeEpoch}) {
+  void beginMindTemporalEntryTrace({
+    required int modeEpoch,
+    String source = 'dashboardModeCommitted',
+  }) {
     if (_disposed) return;
     final state = navigation.state;
     final direction = state.parentQueryScope.direction;
@@ -4471,7 +4474,7 @@ final class DashboardCoreController {
       trace,
       'REQUEST_ACCEPTED',
       details:
-          'source=dashboardModeCommitted '
+          'source=$source '
           'canonicalDomain=${canonicalDomain == null ? 'absent' : 'present'} '
           'preparedBase=${resident == null ? 'absent' : 'resident'}',
     );
@@ -4550,7 +4553,16 @@ final class DashboardCoreController {
       currentQuery.scopeFor(direction),
     );
     final base = _mindAmountPreparedBaseFor(domainScope);
-    if (base == null) return false;
+    if (base == null) {
+      if (trace != null && trace.direction == direction) {
+        _recordMindTemporalEntryStage(
+          trace,
+          'PREPARED_BASE_REJECTED',
+          details: 'reason=baseMissing source=semanticAdmission',
+        );
+      }
+      return false;
+    }
     final readyTrace = _pendingMindTemporalEntryTrace;
     if (readyTrace != null && readyTrace.direction == direction) {
       _recordMindTemporalEntryStage(
@@ -4883,15 +4895,42 @@ final class DashboardCoreController {
       }),
     );
     final index = await indexReady.future;
+    final superseded =
+        primeGeneration != _mindAmountPreviewPrimeGenerations[direction];
+    final domainStillCurrent = QueryAmountRange.hasSameDomainIdentity(
+      currentQuery.scopeFor(direction),
+      domainScope,
+    );
+    final revisionMatches = index?.coreRevision == coreRevision;
+    final scopeMatches = index?.key.matchesScope(domainScope) ?? false;
     if (_disposed ||
-        primeGeneration != _mindAmountPreviewPrimeGenerations[direction] ||
-        !QueryAmountRange.hasSameDomainIdentity(
-          currentQuery.scopeFor(direction),
-          domainScope,
-        ) ||
+        superseded ||
+        !domainStillCurrent ||
         index == null ||
-        index.coreRevision != coreRevision ||
-        !index.key.matchesScope(domainScope)) {
+        !revisionMatches ||
+        !scopeMatches) {
+      final reason = _disposed
+          ? 'disposed'
+          : superseded
+          ? 'superseded'
+          : !domainStillCurrent
+          ? 'queryIdentityMismatch'
+          : index == null
+          ? 'baseMissing'
+          : !revisionMatches
+          ? 'revisionMismatch'
+          : 'scopeMismatch';
+      final trace = _pendingMindTemporalEntryTrace;
+      if (trace != null && trace.direction == direction) {
+        _recordMindTemporalEntryStage(
+          trace,
+          'PREPARED_BASE_REJECTED',
+          details:
+              'reason=$reason source=preparedCandidate '
+              'requestedGeneration=$primeGeneration '
+              'candidateGeneration=${index?.generation ?? '-'}',
+        );
+      }
       return false;
     }
     _setMindAmountPreviewBase(index, domainScope);
@@ -5805,6 +5844,14 @@ final class DashboardCoreController {
     final published =
         heatmapPublished && scorePublished && mindTemporalHeatmap.value != null;
     final trace = _pendingMindTemporalEntryTrace;
+    if (!published && trace != null) {
+      _recordMindTemporalEntryPublicationRejection(
+        trace: trace,
+        state: state,
+        heatmapPublished: heatmapPublished,
+        scorePublished: scorePublished,
+      );
+    }
     if (published && trace != null) {
       final bodyFrame = switch (state.plane) {
         TimePlane.year => mindYearHeatmap.value,
@@ -5847,6 +5894,83 @@ final class DashboardCoreController {
       );
     }
     return published;
+  }
+
+  /// Records one compact, correlated failure snapshot for an admitted Mind
+  /// entry.  This reads only the same resident bindings and membership used by
+  /// the projection methods above; diagnostics must never retry or acquire
+  /// data on behalf of the renderer.
+  void _recordMindTemporalEntryPublicationRejection({
+    required _MindTemporalEntryTrace trace,
+    required DashboardNavigationState state,
+    required bool heatmapPublished,
+    required bool scorePublished,
+  }) {
+    final direction = state.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(direction);
+    final domainScope = QueryAmountRange.domainScope(appliedScope);
+    final base = _mindAmountPreparedBaseFor(domainScope);
+    final binding = mindAmountRangeBindingFor(
+      direction,
+      navigationState: state,
+    );
+    final seed = base?.partitionFor(direction).focusMembershipSeed;
+    final membership = base == null
+        ? null
+        : _mindYearHeatmapPreparedMembershipFor(
+            base: base,
+            domainScope: domainScope,
+          );
+    final bodyFrame = state.plane == TimePlane.year
+        ? mindYearHeatmap.value
+        : mindTemporalHeatmap.value;
+    final headerFrame = mindBehavioralScore.value;
+    final snapshot =
+        'plane=${state.plane.name} railOpen=${state.isRailOpen} '
+        'month=${state.monthCursor.year}-${state.monthCursor.month.toString().padLeft(2, '0')} '
+        'direction=${direction.name} ghostFilter=${appliedScope.ghostFilterMode.name} '
+        'domain=${FluviDiagnosticKeyDigest.of(domainScope.key.value)} '
+        'preparedBase=${base == null ? 'absent' : 'present'} '
+        'preparedGeneration=${base?.generation ?? '-'} '
+        'binding=${binding == null ? 'absent' : 'present'} '
+        'focusMembershipSeed=${seed == null ? 'absent' : 'present'} '
+        'annualMembership=${membership == null ? 'absent' : 'present'} '
+        'heatmapFrame=${bodyFrame?.runtimeType ?? 'absent'} '
+        'scoreFrame=${headerFrame == null ? 'absent' : 'present'} '
+        'chartSeries=${headerFrame?.chartSeries == null ? 'absent' : 'present'} '
+        'heatmapPublished=$heatmapPublished scorePublished=$scorePublished';
+    if (!heatmapPublished) {
+      final reason = base == null
+          ? 'baseMissing'
+          : binding == null
+          ? 'bindingMissing'
+          : seed == null
+          ? 'membershipSeedMissing'
+          : membership == null
+          ? 'membershipMissing'
+          : 'heatmapPublicationFailed';
+      _recordMindTemporalEntryStage(
+        trace,
+        'HEATMAP_PUBLICATION_REJECTED',
+        details: 'reason=$reason $snapshot',
+      );
+    }
+    if (!scorePublished) {
+      final reason = base == null
+          ? 'baseMissing'
+          : binding == null
+          ? 'bindingMissing'
+          : seed == null
+          ? 'membershipSeedMissing'
+          : membership == null
+          ? 'membershipMissing'
+          : 'scorePublicationFailed';
+      _recordMindTemporalEntryStage(
+        trace,
+        'SCORE_PUBLICATION_REJECTED',
+        details: 'reason=$reason $snapshot',
+      );
+    }
   }
 
   void _recordMindTemporalEntryStage(

@@ -720,6 +720,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
           _DebugConsoleLogFilter.all => true,
           _DebugConsoleLogFilter.mindHeatmap =>
             entry.stage.startsWith('MIND_HEATMAP|') ||
+                entry.stage.startsWith('MIND_TEMPORAL_HEATMAP|') ||
                 entry.stage.startsWith('MIND_SUM|') ||
                 entry.stage.startsWith('MIND_ENTRY|'),
           _DebugConsoleLogFilter.balanceWave => entry.stage.startsWith(

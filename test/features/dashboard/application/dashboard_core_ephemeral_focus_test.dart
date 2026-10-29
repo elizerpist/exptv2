@@ -835,6 +835,151 @@ void main() {
     },
   );
 
+  testWidgets(
+    'MIND-ENTRY-04 RED: a directly mounted July expense Mind host publishes the Month body and matching Header without a user wake-up',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'july-expense-rent',
+            direction: 'expense',
+            categoryId: 'housing',
+            partnerId: 'landlord',
+            amount: 420000,
+            date: const LocalDate(year: 2026, month: 7, day: 3),
+          ),
+          _mindYearEntry(
+            id: 'july-expense-food',
+            direction: 'expense',
+            categoryId: 'food',
+            partnerId: 'market',
+            amount: 269000,
+            date: const LocalDate(year: 2026, month: 7, day: 18),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+        initialPlane: TimePlane.month,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      FluviDiagnosticLogger.clear();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+      await tester.pump();
+
+      final body = core.mindTemporalHeatmap.value;
+      final header = core.mindBehavioralScore.value;
+      expect(body, isA<MindMonthHeatmapFrame>());
+      final month = body! as MindMonthHeatmapFrame;
+      expect(month.year, 2026);
+      expect(month.month, 7);
+      expect(header, isNotNull);
+      final score = header!;
+      expect(score.identity.coreRevision, month.identity.coreRevision);
+      expect(score.chartSeries, isNotNull);
+      expect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-header-score-chart-paint')),
+        findsOneWidget,
+      );
+      final request = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'MIND_ENTRY|REQUEST_ACCEPTED',
+      );
+      expect(request.scope, contains('source=dashboardInitialMount'));
+      expect(
+        FluviDiagnosticLogger.entries
+            .where(
+              (event) => event.stage == 'MIND_TEMPORAL_HEATMAP|FRAME_PUBLISHED',
+            )
+            .length,
+        greaterThanOrEqualTo(1),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'MIND-ENTRY-05: a directly mounted empty July is a published Month frame, not a loading hole',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'june-expense-before-empty-july',
+              direction: 'expense',
+              categoryId: 'housing',
+              partnerId: 'landlord',
+              amount: 120000,
+              date: const LocalDate(year: 2026, month: 6, day: 20),
+            ),
+          ],
+        ),
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+        initialPlane: TimePlane.month,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+
+      final frame = core.mindTemporalHeatmap.value;
+      expect(frame, isA<MindMonthHeatmapFrame>());
+      final month = frame! as MindMonthHeatmapFrame;
+      expect(month.year, 2026);
+      expect(month.month, 7);
+      expect(month.activeDayCount, 0);
+      expect(month.total, 0);
+      expect(core.mindBehavioralScore.value, isNotNull);
+      expect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-unavailable')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test(
     'BALANCE-HEADER RED: Core prepares same-scope income, expense, net, and latest transaction without a renderer read',
     () async {

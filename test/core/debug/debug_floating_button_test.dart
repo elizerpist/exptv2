@@ -83,6 +83,11 @@ void main() {
         const FluviDiagnosticEvent(stage: 'MIND_ENTRY|SUMMARY'),
       );
       FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'MIND_TEMPORAL_HEATMAP|FRAME_PUBLISHED',
+        ),
+      );
+      FluviDiagnosticLogger.log(
         const FluviDiagnosticEvent(stage: 'MIND|PREVIEW_FRAME'),
       );
       FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'AVATAR|X'));
@@ -124,6 +129,13 @@ void main() {
         reason:
             'The on-screen Mind Heatmap export is the one retained flow for '
             'both existing heatmap records and correlated Mind entries.',
+      );
+      expect(
+        find.textContaining('[FLOW][MIND_TEMPORAL_HEATMAP|FRAME_PUBLISHED]'),
+        findsOneWidget,
+        reason:
+            'The compact Month/Sum publication lane belongs to the same '
+            'Mind Heatmap export and must remain copyable.',
       );
       expect(find.textContaining('[FLOW][MIND|PREVIEW_FRAME]'), findsNothing);
       expect(find.textContaining('[FLOW][AVATAR|X]'), findsNothing);
