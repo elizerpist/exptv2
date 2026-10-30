@@ -25,6 +25,8 @@ import 'partner_selector.dart';
 
 enum ManualTransactionEditorMode { create, edit }
 
+enum _ManualEditorInlinePicker { partner, category }
+
 /// One draft serves both renderings. Toggling layout rebuilds only the surface
 /// around retained controllers, focus nodes, picker state and scroll position.
 final class ManualTransactionEditor extends StatefulWidget {
@@ -80,7 +82,6 @@ final class _ManualTransactionEditorState
   final _amountFocus = FocusNode();
   final _noteFocus = FocusNode();
   final _scrollController = ScrollController();
-  final _partnerDropdownKey = GlobalKey<PartnerDropdownState>();
   final _createdCategories = <FluviCategory>[];
 
   late DateTime _date;
@@ -100,6 +101,7 @@ final class _ManualTransactionEditorState
   bool _loading = false;
   bool _saving = false;
   bool _revisionConflict = false;
+  _ManualEditorInlinePicker? _openInlinePicker;
   String? _error;
 
   bool get _editing => widget.mode == ManualTransactionEditorMode.edit;
@@ -194,11 +196,19 @@ final class _ManualTransactionEditorState
   }
 
   Future<void> _setPreferences(ManualTransactionEditorPreferences value) async {
-    _partnerDropdownKey.currentState?.close();
-    setState(() => _preferences = value);
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _openInlinePicker = null;
+      _preferences = value;
+    });
     await (widget.preferencesStore ??
             const DefaultManualTransactionEditorPreferencesStore())
         .write(value);
+  }
+
+  void _setInlinePicker(_ManualEditorInlinePicker picker, bool open) {
+    if (open) FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _openInlinePicker = open ? picker : null);
   }
 
   Future<void> _load() async {
@@ -851,7 +861,6 @@ final class _ManualTransactionEditorState
       if (_preferences!.partnerPickerPresentation ==
           ManualPartnerPickerPresentation.dropdown)
         PartnerDropdown(
-          key: _partnerDropdownKey,
           repository: widget.repository,
           categories: _categories,
           selectedPartnerId: switch (_partnerSelection) {
@@ -860,6 +869,9 @@ final class _ManualTransactionEditorState
           },
           selectedPartner: _partner,
           enabled: !_saving,
+          expanded: _openInlinePicker == _ManualEditorInlinePicker.partner,
+          onExpandedChanged: (open) =>
+              _setInlinePicker(_ManualEditorInlinePicker.partner, open),
           onSelected: _acceptPartner,
         )
       else
@@ -887,6 +899,10 @@ final class _ManualTransactionEditorState
         categories: _categories,
         selectedCategoryId: _selectedCategoryId,
         enabled: !_saving,
+        inline: true,
+        expanded: _openInlinePicker == _ManualEditorInlinePicker.category,
+        onExpandedChanged: (open) =>
+            _setInlinePicker(_ManualEditorInlinePicker.category, open),
         onCreate: widget.categoryRepository == null ? null : _createCategory,
         onSelected: (categoryId) {
           setState(
@@ -1000,18 +1016,39 @@ final class _ManualTransactionEditorState
           padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 4),
           child: Row(
             children: [
-              ManualEditorIconSurface(icon: icon),
+              ManualEditorIconSurface(
+                icon: icon,
+                color: const Color(0xff64748b),
+                background: const Color(0xfff1f5f9),
+              ),
               const SizedBox(width: 9),
               Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      key == const ValueKey('manual-date-field')
+                          ? 'Dátum'
+                          : 'Idő',
+                      style: const TextStyle(
+                        color: FluviVisualTokens.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: FluviVisualTokens.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1110,9 +1147,14 @@ final class _ManualTransactionEditorState
       decoration: const BoxDecoration(color: Colors.white),
       child: SafeArea(
         top: false,
-        minimum: const EdgeInsets.only(bottom: 12),
+        minimum: EdgeInsets.zero,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            12,
+            20,
+            12 + _LedgerPillButton.shadowBottomOutset(context),
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final cancelWidth = _ctaButtonWidth(context, 'Mégse', 104);
@@ -1511,6 +1553,7 @@ final class _LedgerPillButton extends StatelessWidget {
       button: true,
       child: Material(
         color: Colors.transparent,
+        clipBehavior: Clip.none,
         child: Ink(
           height: height,
           decoration: BoxDecoration(
@@ -1539,6 +1582,21 @@ final class _LedgerPillButton extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// The footer reserves paint room from the exact direction-control shadow
+  /// profile. The controls used to reserve only their layout height, which
+  /// left the profile's lower blur outside the Scaffold viewport.
+  static double shadowBottomOutset(BuildContext context) {
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.directionControl);
+    return depth.shadows.fold<double>(0, (outset, shadow) {
+      final lowerExtent = shadow.offset.dy > 0
+          ? shadow.offset.dy + shadow.blurRadius + shadow.spreadRadius
+          : shadow.blurRadius + shadow.spreadRadius;
+      return lowerExtent > outset ? lowerExtent : outset;
+    });
   }
 }
 

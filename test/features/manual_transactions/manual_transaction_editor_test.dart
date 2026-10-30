@@ -76,7 +76,9 @@ void main() {
         find.byKey(const ValueKey('manual-category-dropdown-anchor')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Vásárlás').last);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -260));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-category-shopping')));
       await tester.pumpAndSettle();
       expect(find.text('Vásárlás'), findsOneWidget);
 
@@ -427,6 +429,94 @@ void main() {
     );
   });
 
+  testWidgets(
+    'inline selectors push editor fields down, close one another and retain the draft',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final preferences = _MemoryEditorPreferencesStore()
+        ..value = const ManualTransactionEditorPreferences(
+          layout: ManualTransactionEditorLayout.hero,
+          partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
+        );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ManualTransactionEditor.create(
+            repository: _FakeManualRepository(),
+            categories: categories,
+            direction: LedgerDirection.expense,
+            preferencesStore: preferences,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('manual-amount-field')),
+        '8 500',
+      );
+      final dateBefore = tester.getTopLeft(
+        find.byKey(const ValueKey('manual-date-field')),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('manual-category-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('manual-inline-picker-panel')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('manual-category-search')),
+            )
+            .focusNode
+            ?.hasFocus,
+        isFalse,
+      );
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('manual-date-field'))).dy,
+        greaterThan(dateBefore.dy),
+      );
+      expect(
+        find.byKey(const ValueKey('manual-inline-picker-selected-check')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('manual-category-search')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('manual-partner-search')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('manual-partner-search')),
+            )
+            .focusNode
+            ?.hasFocus,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('manual-amount-field')),
+            )
+            .controller
+            ?.text,
+        '8 500',
+      );
+    },
+  );
+
   testWidgets('editor CTA group is compact, right-aligned and above its edge', (
     tester,
   ) async {
@@ -453,7 +543,9 @@ void main() {
     expect(save.width, 120);
     expect(save.left - cancel.right, 12);
     expect(save.right, closeTo(370, .01));
-    expect(save.bottom, lessThan(844));
+    // The footer leaves the profile-derived lower shadow outset in addition
+    // to the button's layout bounds; it must not end at the viewport edge.
+    expect(save.bottom, lessThanOrEqualTo(804));
   });
 
   testWidgets('edit impact request excludes the persisted entry', (
@@ -478,6 +570,8 @@ void main() {
   testWidgets(
     'new category is persisted and selected as this transaction override',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final categoryRepository = _FakeCategoryRepository();
       await tester.pumpWidget(
         MaterialApp(
@@ -749,6 +843,43 @@ void main() {
       find.byKey(const ValueKey('manual-partner-dropdown-visual-boundary')),
       matchesGoldenFile(
         '../../goldens/manual_transaction_partner_dropdown_unfocused.png',
+      ),
+    );
+  });
+
+  testWidgets('category dropdown has the shared in-flow visual treatment', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final preferences = _MemoryEditorPreferencesStore()
+      ..value = const ManualTransactionEditorPreferences(
+        layout: ManualTransactionEditorLayout.hero,
+        partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
+      );
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const ValueKey('manual-category-dropdown-visual-boundary'),
+        child: MaterialApp(
+          home: ManualTransactionEditor.create(
+            repository: _FakeManualRepository(),
+            categories: categories,
+            direction: LedgerDirection.expense,
+            preferencesStore: preferences,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('manual-category-dropdown-anchor')),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byKey(const ValueKey('manual-category-dropdown-visual-boundary')),
+      matchesGoldenFile(
+        '../../goldens/manual_transaction_category_dropdown_inline.png',
       ),
     );
   });

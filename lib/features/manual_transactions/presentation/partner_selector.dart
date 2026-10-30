@@ -10,6 +10,7 @@ import '../domain/manual_transaction_models.dart';
 import '../domain/manual_transaction_repository.dart';
 import 'partner_editor_popup.dart';
 import 'manual_transaction_editor_field_rows.dart';
+import 'manual_transaction_inline_picker_panel.dart';
 
 /// Fullscreen partner picker. It queries once, then filters its immutable
 /// in-memory snapshot for every keystroke.
@@ -243,9 +244,8 @@ final class PartnerCategoryAvatar extends StatelessWidget {
 String _normalize(String value) =>
     value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
-/// Anchored counterpart to [PartnerSelector]. It deliberately shares the
-/// repository, row avatar and partner-editor route with the fullscreen picker;
-/// only its presentation differs.
+/// In-flow counterpart to [PartnerSelector]. It shares its repository, avatar
+/// and editor route, but deliberately lives in the editor's scroll content.
 final class PartnerDropdown extends StatefulWidget {
   const PartnerDropdown({
     super.key,
@@ -255,6 +255,8 @@ final class PartnerDropdown extends StatefulWidget {
     required this.onSelected,
     this.selectedPartner,
     this.enabled = true,
+    required this.expanded,
+    required this.onExpandedChanged,
   });
 
   final ManualTransactionRepository repository;
@@ -263,13 +265,14 @@ final class PartnerDropdown extends StatefulWidget {
   final PartnerDirectoryEntry? selectedPartner;
   final ValueChanged<ManualPartnerSelection> onSelected;
   final bool enabled;
+  final bool expanded;
+  final ValueChanged<bool> onExpandedChanged;
 
   @override
   State<PartnerDropdown> createState() => PartnerDropdownState();
 }
 
 final class PartnerDropdownState extends State<PartnerDropdown> {
-  final MenuController _controller = MenuController();
   final TextEditingController _search = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   List<PartnerDirectoryEntry>? _partners;
@@ -288,15 +291,18 @@ final class PartnerDropdownState extends State<PartnerDropdown> {
     super.dispose();
   }
 
-  void close() => _controller.close();
-
   Future<void> _open() async {
     // An amount/note field may have been active before the anchor was tapped.
-    // Clear it synchronously, before the menu enters the overlay, so the
-    // keyboard never appears behind the partner list.
+    // Clear it synchronously before the in-flow results appear, so the
+    // keyboard never remains open underneath the partner list.
     FocusManager.instance.primaryFocus?.unfocus();
-    _controller.open();
+    widget.onExpandedChanged(true);
     if (_partners != null) return;
+    await _load();
+  }
+
+  Future<void> _load() async {
+    if (mounted) setState(() => _error = null);
     try {
       final partners = await widget.repository.listPartners();
       if (mounted) setState(() => _partners = partners);
@@ -329,7 +335,7 @@ final class PartnerDropdownState extends State<PartnerDropdown> {
   }
 
   Future<void> _newPartner() async {
-    _controller.close();
+    widget.onExpandedChanged(false);
     final result = await showPartnerEditorPopup(
       context,
       repository: widget.repository,
@@ -340,139 +346,182 @@ final class PartnerDropdownState extends State<PartnerDropdown> {
   }
 
   Future<void> _edit(PartnerDirectoryEntry partner) async {
-    _controller.close();
-    await showPartnerEditorPopup(
+    widget.onExpandedChanged(false);
+    final result = await showPartnerEditorPopup(
       context,
       repository: widget.repository,
       categories: widget.categories,
       existing: partner,
     );
-    if (mounted) setState(() => _partners = null);
+    if (!mounted) return;
+    setState(() => _partners = null);
+    await _load();
+    if (mounted &&
+        result is ExistingManualPartner &&
+        result.partnerId == widget.selectedPartnerId) {
+      widget.onSelected(result);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final partner = _selectedPartner;
-    final availableHeight =
-        (MediaQuery.sizeOf(context).height -
-                MediaQuery.viewInsetsOf(context).bottom -
-                24)
-            .clamp(220, 420)
-            .toDouble();
-    final listContentHeight = _partners == null
-        ? 88.0
-        : _visible.isEmpty
-        ? 64.0
-        : _visible.length * 64.0;
-    final menuHeight = (64 + 57 + listContentHeight)
-        .clamp(220, availableHeight)
-        .toDouble();
-    return MenuAnchor(
-      controller: _controller,
-      alignmentOffset: const Offset(0, 8),
-      menuChildren: [
-        SizedBox(
-          width: 380,
-          height: menuHeight,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                child: TextField(
-                  key: const ValueKey('manual-partner-search'),
-                  controller: _search,
-                  focusNode: _searchFocus,
-                  autofocus: false,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    prefixIcon: Icon(Icons.search_rounded),
-                    hintText: 'Partner keresése',
-                    border: OutlineInputBorder(),
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ManualEditorSelectionRow(
+          key: const ValueKey('manual-partner-dropdown-anchor'),
+          label: 'Partner',
+          value: partner?.displayName ?? 'Partner kiválasztása',
+          valueSemantics: partner == null
+              ? 'Partner kiválasztása legördülő listából'
+              : 'Partner: ${partner.displayName}',
+          leading: partner == null
+              ? const ManualEditorIconSurface(
+                  icon: Icons.storefront_outlined,
+                  color: Color(0xff64748b),
+                  background: Color(0xfff1f5f9),
+                )
+              : PartnerCategoryAvatar(
+                  partner: partner,
+                  size: 40,
+                  iconSize: 20,
+                  roundedSquare: true,
                 ),
-              ),
-              Expanded(
-                child: _error != null
-                    ? Center(
-                        child: Text('A partnerlista nem tölthető be: $_error'),
-                      )
-                    : _partners == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : _visible.isEmpty
-                    ? const Center(child: Text('Nincs találat.'))
-                    : ListView.builder(
-                        primary: false,
-                        padding: EdgeInsets.zero,
-                        itemCount: _visible.length,
-                        itemBuilder: (context, index) {
-                          final partner = _visible[index];
-                          return ListTile(
-                            dense: true,
-                            leading: PartnerCategoryAvatar(
-                              partner: partner,
-                              size: 32,
-                              iconSize: 16,
-                            ),
-                            title: Text(partner.displayName),
-                            subtitle: Text(partner.defaultCategoryName),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (partner.partnerId ==
-                                    widget.selectedPartnerId)
-                                  const Icon(Icons.check_rounded),
-                                IconButton(
-                                  tooltip: 'Partner szerkesztése',
-                                  icon: const Icon(Icons.edit_outlined),
-                                  onPressed: () => _edit(partner),
-                                ),
-                              ],
-                            ),
-                            onTap: () {
-                              _controller.close();
-                              widget.onSelected(
-                                ExistingManualPartner(
-                                  partner.partnerId,
-                                  directoryEntry: partner,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.add_rounded),
-                title: const Text('Új partner'),
-                onTap: _newPartner,
-              ),
-            ],
-          ),
+          enabled: widget.enabled,
+          expanded: widget.expanded,
+          onTap: () {
+            if (widget.expanded) {
+              FocusManager.instance.primaryFocus?.unfocus();
+              widget.onExpandedChanged(false);
+            } else {
+              _open();
+            }
+          },
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: widget.expanded
+              ? ManualTransactionInlinePickerPanel(
+                  searchController: _search,
+                  searchFocusNode: _searchFocus,
+                  searchFieldKey: const ValueKey('manual-partner-search'),
+                  searchHint: 'Partner keresése',
+                  emptyMessage: 'Nincs találat.',
+                  itemCount: _visible.length,
+                  itemExtent: 64,
+                  loading: _partners == null,
+                  error: _error,
+                  createLabel: 'Új partner',
+                  createActionKey: const ValueKey(
+                    'manual-partner-create-action',
+                  ),
+                  onCreate: _newPartner,
+                  itemBuilder: (context, index) {
+                    final item = _visible[index];
+                    return _PartnerPickerRow(
+                      key: ValueKey('manual-partner-${item.partnerId}'),
+                      partner: item,
+                      selected: item.partnerId == widget.selectedPartnerId,
+                      onSelect: () {
+                        widget.onExpandedChanged(false);
+                        widget.onSelected(
+                          ExistingManualPartner(
+                            item.partnerId,
+                            directoryEntry: item,
+                          ),
+                        );
+                      },
+                      onEdit: () => _edit(item),
+                    );
+                  },
+                )
+              : const SizedBox.shrink(),
         ),
       ],
-      builder: (context, controller, _) => ManualEditorSelectionRow(
-        key: const ValueKey('manual-partner-dropdown-anchor'),
-        label: 'Partner',
-        value: partner?.displayName ?? 'Partner kiválasztása',
-        valueSemantics: partner == null
-            ? 'Partner kiválasztása legördülő listából'
-            : 'Partner: ${partner.displayName}',
-        leading: partner == null
-            ? const ManualEditorIconSurface(
-                icon: Icons.storefront_outlined,
-                color: Color(0xff64748b),
-                background: Color(0xfff1f5f9),
-              )
-            : PartnerCategoryAvatar(
-                partner: partner,
-                size: 40,
-                iconSize: 20,
-                roundedSquare: true,
-              ),
-        enabled: widget.enabled,
-        onTap: () => controller.isOpen ? controller.close() : _open(),
-      ),
     );
   }
+}
+
+final class _PartnerPickerRow extends StatelessWidget {
+  const _PartnerPickerRow({
+    super.key,
+    required this.partner,
+    required this.selected,
+    required this.onSelect,
+    required this.onEdit,
+  });
+
+  final PartnerDirectoryEntry partner;
+  final bool selected;
+  final VoidCallback onSelect;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? const Color(0xffe6faf2) : Colors.transparent,
+    borderRadius: BorderRadius.circular(12),
+    child: InkWell(
+      onTap: onSelect,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+        child: Row(
+          children: [
+            PartnerCategoryAvatar(
+              partner: partner,
+              size: 40,
+              iconSize: 19,
+              roundedSquare: true,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    partner.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xff172554),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    partner.defaultCategoryName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xff64748b),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected) const ManualTransactionPickerCheck(),
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: IconButton(
+                tooltip: 'Partner szerkesztése',
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 19,
+                  color: Color(0xff64748b),
+                ),
+                onPressed: onEdit,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

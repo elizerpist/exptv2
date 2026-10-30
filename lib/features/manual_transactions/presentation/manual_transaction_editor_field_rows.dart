@@ -14,6 +14,7 @@ final class ManualEditorSelectionRow extends StatelessWidget {
     required this.onTap,
     this.enabled = true,
     this.valueSemantics,
+    this.expanded = false,
   });
 
   final String label;
@@ -22,6 +23,7 @@ final class ManualEditorSelectionRow extends StatelessWidget {
   final VoidCallback? onTap;
   final bool enabled;
   final String? valueSemantics;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -64,8 +66,10 @@ final class ManualEditorSelectionRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right_rounded,
+              Icon(
+                expanded
+                    ? Icons.keyboard_arrow_down_rounded
+                    : Icons.chevron_right_rounded,
                 color: FluviVisualTokens.textSecondary,
                 size: 25,
               ),
