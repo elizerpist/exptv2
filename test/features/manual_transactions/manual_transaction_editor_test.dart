@@ -1,16 +1,22 @@
+import 'dart:ui' as ui;
+
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/domain/category_repository.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
+import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/manual_transactions/application/manual_transaction_editor_preferences.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_impact_repository.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_models.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_repository.dart';
+import 'package:fluvi/features/manual_transactions/presentation/category_dropdown.dart';
 import 'package:fluvi/features/manual_transactions/presentation/manual_transaction_editor.dart';
 import 'package:fluvi/features/manual_transactions/presentation/partner_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -553,8 +559,18 @@ void main() {
   testWidgets('footer lets the CTA shadow paint through the bottom safe area', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final view = tester.view;
+    view.devicePixelRatio = 1;
+    view.physicalSize = const Size(390, 844);
+    addTearDown(() {
+      view.resetPhysicalSize();
+      view.resetDevicePixelRatio();
+    });
+    final previousDisableShadows = debugDisableShadows;
+    debugDisableShadows = false;
+    final shadows = DashboardShadowStyleController()
+      ..select(DashboardShadowStyle.current);
+    addTearDown(shadows.dispose);
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => MediaQuery(
@@ -564,10 +580,13 @@ void main() {
           ),
           child: child!,
         ),
-        home: ManualTransactionEditor.create(
-          repository: _FakeManualRepository(),
-          categories: categories,
-          direction: LedgerDirection.expense,
+        home: DashboardShadowStyleScope(
+          controller: shadows,
+          child: ManualTransactionEditor.create(
+            repository: _FakeManualRepository(),
+            categories: categories,
+            direction: LedgerDirection.expense,
+          ),
         ),
       ),
     );
@@ -576,11 +595,48 @@ void main() {
     final save = tester.getRect(
       find.byKey(const ValueKey('manual-save-button')),
     );
+    final cancel = tester.getRect(
+      find.byKey(const ValueKey('manual-cancel-button')),
+    );
     expect(save.bottom, closeTo(820, .01));
+    expect(cancel.bottom, closeTo(820, .01));
+
+    // The current depth profile has a downward card-foot shadow. Sampling in
+    // the positive safe inset proves that the paint escaped the button's Ink
+    // layer; the preceding implementation returned the untouched white
+    // footer pixel here because _RenderInkFeatures clipped it to button size.
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(const ValueKey('manual-editor-visual-boundary')),
+    );
+    final image = (await tester.runAsync(
+      () => boundary.toImage(pixelRatio: 1),
+    ))!;
+    try {
+      final bytes = (await tester.runAsync(
+        () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+      ))!.buffer.asUint8List();
+      int luminanceAt(double x, double y) {
+        final pixelX = x.floor().clamp(0, image.width - 1);
+        final pixelY = y.floor().clamp(0, image.height - 1);
+        final index = (pixelY * image.width + pixelX) * 4;
+        return bytes[index] + bytes[index + 1] + bytes[index + 2];
+      }
+
+      final sampleY = save.bottom + 2;
+      final background = luminanceAt(12, sampleY);
+      expect(luminanceAt(cancel.center.dx, sampleY), lessThan(background));
+      expect(luminanceAt(save.center.dx, sampleY), lessThan(background));
+    } finally {
+      image.dispose();
+    }
     await expectLater(
       find.byKey(const ValueKey('manual-editor-visual-boundary')),
       matchesGoldenFile('../../goldens/manual_transaction_editor_footer.png'),
     );
+    // TestWidgets verifies painting globals before addTearDown callbacks run.
+    // Restore explicitly once both the pixel inspection and golden capture
+    // have consumed the enabled shadow rendering.
+    debugDisableShadows = previousDisableShadows;
   });
 
   for (final direction in LedgerDirection.values) {
@@ -682,6 +738,130 @@ void main() {
       expect(categoryRepository.created?.name, 'Közlekedés');
       expect(find.text('Közlekedés'), findsOneWidget);
       expect(find.text('Közlekedés'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'category edit preserves the transaction selection and refreshes its row',
+    (tester) async {
+      final repository = _FakeManualRepository();
+      final preferences = _MemoryEditorPreferencesStore()
+        ..value = const ManualTransactionEditorPreferences(
+          layout: ManualTransactionEditorLayout.hero,
+          partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
+        );
+      final categoryRepository = _FakeCategoryRepository(
+        categories: categories,
+        onUpdated: (category) {
+          if (category.id != 'food') return;
+          repository.partner = PartnerDirectoryEntry(
+            partnerId: repository.partner.partnerId,
+            displayName: repository.partner.displayName,
+            originalName: repository.partner.originalName,
+            defaultCategoryId: category.id,
+            defaultCategoryName: category.name,
+            categoryColorId: category.colorId,
+            categoryIconId: category.iconId,
+            isUncategorized: category.isSystemUncategorized,
+            searchNames: repository.partner.searchNames,
+          );
+        },
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ManualTransactionEditor.create(
+            repository: repository,
+            categories: categories,
+            categoryRepository: categoryRepository,
+            direction: LedgerDirection.expense,
+            preferencesStore: preferences,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('manual-amount-field')),
+        '1 000',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-partner-partner-1')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('manual-category-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('manual-category-shopping')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-category-shopping')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('manual-category-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('manual-category-edit-uncategorized')),
+        findsNothing,
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('manual-category-edit-food')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-category-edit-food')));
+      await tester.pumpAndSettle();
+      expect(find.text('Kategória szerkesztése'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('category-editor-name-input')),
+        'Friss élelmiszer',
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('category-editor-save')),
+      );
+      await tester.tap(find.byKey(const ValueKey('category-editor-save')));
+      await tester.pumpAndSettle();
+
+      expect(categoryRepository.updated?.id, 'food');
+      expect(categoryRepository.updated?.name, 'Friss élelmiszer');
+      // Editing a different row never selects it: the existing partner's
+      // entry override (shopping) remains the draft category assignment.
+      expect(find.text('Vásárlás'), findsOneWidget);
+
+      // Category metadata is also part of the partner directory rows. The
+      // directory revision must evict the closed list's cache before reopen.
+      await tester.tap(
+        find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Élelmiszer'), findsNothing);
+      expect(find.text('Friss élelmiszer'), findsWidgets);
+      await tester.tap(
+        find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('manual-category-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Friss élelmiszer'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('manual-category-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-save-button')));
+      await tester.pumpAndSettle();
+      expect(
+        repository.lastCategorySelection?.mode,
+        ManualCategoryAssignmentMode.entryOverride,
+      );
+      expect(repository.lastCategorySelection?.categoryId, 'shopping');
     },
   );
 
@@ -927,27 +1107,27 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final preferences = _MemoryEditorPreferencesStore()
-      ..value = const ManualTransactionEditorPreferences(
-        layout: ManualTransactionEditorLayout.hero,
-        partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
-      );
     await tester.pumpWidget(
       RepaintBoundary(
         key: const ValueKey('manual-category-dropdown-visual-boundary'),
         child: MaterialApp(
-          home: ManualTransactionEditor.create(
-            repository: _FakeManualRepository(),
-            categories: categories,
-            direction: LedgerDirection.expense,
-            preferencesStore: preferences,
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(20),
+              child: CategoryDropdown(
+                categories: categories,
+                selectedCategoryId: 'food',
+                inline: true,
+                expanded: true,
+                onExpandedChanged: (_) {},
+                onSelected: (_) {},
+                onCreate: () async {},
+                onEdit: (_) async {},
+              ),
+            ),
           ),
         ),
       ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('manual-category-dropdown-anchor')),
     );
     await tester.pumpAndSettle();
 
@@ -999,33 +1179,48 @@ final class _FakeImpactRepository implements ManualTransactionImpactRepository {
 }
 
 final class _FakeCategoryRepository implements CategoryRepository {
+  _FakeCategoryRepository({
+    Iterable<FluviCategory> categories = const [],
+    this.onUpdated,
+  }) {
+    for (final category in categories) {
+      _categories[category.id] = category;
+    }
+  }
+
+  final _categories = <String, FluviCategory>{};
+  final ValueChanged<FluviCategory>? onUpdated;
   FluviCategory? created;
+  FluviCategory? updated;
 
   @override
   Future<FluviCategory> createCategory({
     required String name,
     required String colorId,
     required String iconId,
-  }) async => created = FluviCategory(
-    id: 'created-category',
-    name: name,
-    colorId: colorId,
-    iconId: iconId,
-    isSystemUncategorized: false,
-    createdAtUtcMs: 1,
-    updatedAtUtcMs: 1,
-  );
+  }) async {
+    final category = FluviCategory(
+      id: 'created-category',
+      name: name,
+      colorId: colorId,
+      iconId: iconId,
+      isSystemUncategorized: false,
+      createdAtUtcMs: 1,
+      updatedAtUtcMs: 1,
+    );
+    _categories[category.id] = category;
+    return created = category;
+  }
 
   @override
   Future<void> deleteCategory(String id) async {}
 
   @override
   Future<List<FluviCategory>> getCategories() async =>
-      created == null ? const [] : [created!];
+      _categories.values.toList(growable: false);
 
   @override
-  Future<FluviCategory?> getCategoryById(String id) async =>
-      created?.id == id ? created : null;
+  Future<FluviCategory?> getCategoryById(String id) async => _categories[id];
 
   @override
   Future<FluviCategory> updateCategory({
@@ -1033,11 +1228,25 @@ final class _FakeCategoryRepository implements CategoryRepository {
     required String name,
     required String colorId,
     required String iconId,
-  }) async => createCategory(name: name, colorId: colorId, iconId: iconId);
+  }) async {
+    final previous = _categories[id];
+    final category = FluviCategory(
+      id: id,
+      name: name,
+      colorId: colorId,
+      iconId: iconId,
+      isSystemUncategorized: previous?.isSystemUncategorized ?? false,
+      createdAtUtcMs: previous?.createdAtUtcMs ?? 1,
+      updatedAtUtcMs: (previous?.updatedAtUtcMs ?? 0) + 1,
+    );
+    _categories[id] = category;
+    onUpdated?.call(category);
+    return updated = category;
+  }
 
   @override
   Stream<List<FluviCategory>> watchCategories() =>
-      Stream.value(created == null ? const [] : [created!]);
+      Stream.value(_categories.values.toList(growable: false));
 }
 
 final class _RecordingImpactRepository
@@ -1074,7 +1283,7 @@ FluviCategory _category(String id, String name, {bool uncategorized = false}) =>
     );
 
 final class _FakeManualRepository implements ManualTransactionRepository {
-  final PartnerDirectoryEntry partner = const PartnerDirectoryEntry(
+  PartnerDirectoryEntry partner = const PartnerDirectoryEntry(
     partnerId: 'partner-1',
     displayName: 'Tesco',
     originalName: 'TESCO',

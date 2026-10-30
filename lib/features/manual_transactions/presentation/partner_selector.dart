@@ -255,6 +255,7 @@ final class PartnerDropdown extends StatefulWidget {
     required this.onSelected,
     this.selectedPartner,
     this.enabled = true,
+    this.directoryRevision = 0,
     required this.expanded,
     required this.onExpandedChanged,
   });
@@ -265,6 +266,7 @@ final class PartnerDropdown extends StatefulWidget {
   final PartnerDirectoryEntry? selectedPartner;
   final ValueChanged<ManualPartnerSelection> onSelected;
   final bool enabled;
+  final int directoryRevision;
   final bool expanded;
   final ValueChanged<bool> onExpandedChanged;
 
@@ -282,6 +284,17 @@ final class PartnerDropdownState extends State<PartnerDropdown> {
   void initState() {
     super.initState();
     _search.addListener(() => setState(() {}));
+  }
+
+  @override
+  void didUpdateWidget(covariant PartnerDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.directoryRevision == oldWidget.directoryRevision) return;
+    // A category rename changes each affected directory entry's derived
+    // category label and avatar. Do not retain that stale list between opens.
+    _partners = null;
+    _error = null;
+    if (widget.expanded) _load();
   }
 
   @override

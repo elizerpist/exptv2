@@ -18,6 +18,7 @@ final class CategoryDropdown extends StatefulWidget {
     required this.selectedCategoryId,
     required this.onSelected,
     this.onCreate,
+    this.onEdit,
     this.label = 'Kategória',
     this.enabled = true,
     this.inline = false,
@@ -29,6 +30,7 @@ final class CategoryDropdown extends StatefulWidget {
   final String? selectedCategoryId;
   final ValueChanged<String> onSelected;
   final Future<void> Function()? onCreate;
+  final Future<void> Function(FluviCategory category)? onEdit;
   final String label;
   final bool enabled;
   final bool inline;
@@ -135,6 +137,12 @@ final class _CategoryDropdownState extends State<CategoryDropdown> {
           widget.onExpandedChanged?.call(false);
           widget.onSelected(category.id);
         },
+        onEdit: category.isSystemUncategorized || widget.onEdit == null
+            ? null
+            : () async {
+                widget.onExpandedChanged?.call(false);
+                await widget.onEdit!(category);
+              },
       );
     },
   );
@@ -249,11 +257,13 @@ final class _PickerCategoryRow extends StatelessWidget {
     required this.category,
     required this.selected,
     required this.onTap,
+    this.onEdit,
   });
 
   final FluviCategory category;
   final bool selected;
   final VoidCallback onTap;
+  final Future<void> Function()? onEdit;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -263,7 +273,7 @@ final class _PickerCategoryRow extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        padding: const EdgeInsets.fromLTRB(10, 9, 4, 9),
         child: Row(
           children: [
             _CategoryAvatar(category: category, size: 38),
@@ -280,6 +290,21 @@ final class _PickerCategoryRow extends StatelessWidget {
               ),
             ),
             if (selected) const ManualTransactionPickerCheck(),
+            if (onEdit != null)
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: IconButton(
+                  key: ValueKey('manual-category-edit-${category.id}'),
+                  tooltip: 'Kategória szerkesztése',
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    size: 19,
+                    color: Color(0xff64748b),
+                  ),
+                  onPressed: () async => await onEdit!(),
+                ),
+              ),
           ],
         ),
       ),

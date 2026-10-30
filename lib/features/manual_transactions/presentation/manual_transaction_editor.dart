@@ -83,6 +83,7 @@ final class _ManualTransactionEditorState
   final _noteFocus = FocusNode();
   final _scrollController = ScrollController();
   final _createdCategories = <FluviCategory>[];
+  List<FluviCategory>? _categorySnapshot;
 
   late DateTime _date;
   late TimeOfDay _time;
@@ -101,12 +102,16 @@ final class _ManualTransactionEditorState
   bool _loading = false;
   bool _saving = false;
   bool _revisionConflict = false;
+  int _partnerDirectoryRevision = 0;
   _ManualEditorInlinePicker? _openInlinePicker;
   String? _error;
 
   bool get _editing => widget.mode == ManualTransactionEditorMode.edit;
   List<FluviCategory> get _categories {
-    final authoritative = widget.categoryCollection?.value ?? widget.categories;
+    final authoritative =
+        widget.categoryCollection?.value ??
+        _categorySnapshot ??
+        widget.categories;
     if (_createdCategories.isEmpty) return authoritative;
     final known = authoritative.map((value) => value.id).toSet();
     return <FluviCategory>[
@@ -358,6 +363,60 @@ final class _ManualTransactionEditorState
       _categorySelection = ManualCategorySelection.entryOverride(category.id);
     });
     _reloadImpact();
+  }
+
+  Future<void> _editCategory(FluviCategory category) async {
+    final repository = widget.categoryRepository;
+    if (repository == null || category.isSystemUncategorized) return;
+
+    // Match the partner editor lifecycle: the in-flow panel closes before the
+    // sheet opens, and its search never steals focus when the sheet returns.
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _openInlinePicker = null);
+    final saved = await showCategoryEditorSheet(
+      context,
+      repository: repository,
+      category: category,
+    );
+    if (!mounted || saved == null) return;
+
+    final selectedPartnerId = switch (_partnerSelection) {
+      ExistingManualPartner(:final partnerId) => partnerId,
+      _ => null,
+    };
+    List<FluviCategory>? snapshot;
+    if (widget.categoryCollection == null) {
+      try {
+        snapshot = await repository.getCategories();
+      } catch (_) {
+        // The update itself has already succeeded. A later reopen can retry
+        // the repository read instead of discarding the transaction draft.
+      }
+    }
+
+    PartnerDirectoryEntry? refreshedPartner;
+    if (selectedPartnerId != null) {
+      try {
+        refreshedPartner = await widget.repository.getPartnerById(
+          selectedPartnerId,
+        );
+      } catch (_) {
+        // A stale directory row is preferable to changing the draft partner
+        // or category-assignment mode after a successful category edit.
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      if (snapshot != null) _categorySnapshot = snapshot;
+      if (refreshedPartner != null && selectedPartnerId != null) {
+        _partner = refreshedPartner;
+        _partnerSelection = ExistingManualPartner(
+          selectedPartnerId,
+          directoryEntry: refreshedPartner,
+        );
+      }
+      _partnerDirectoryRevision++;
+    });
   }
 
   Future<void> _pickDate() async {
@@ -960,6 +1019,7 @@ final class _ManualTransactionEditorState
           },
           selectedPartner: _partner,
           enabled: !_saving,
+          directoryRevision: _partnerDirectoryRevision,
           expanded: _openInlinePicker == _ManualEditorInlinePicker.partner,
           onExpandedChanged: (open) =>
               _setInlinePicker(_ManualEditorInlinePicker.partner, open),
@@ -995,6 +1055,7 @@ final class _ManualTransactionEditorState
         onExpandedChanged: (open) =>
             _setInlinePicker(_ManualEditorInlinePicker.category, open),
         onCreate: widget.categoryRepository == null ? null : _createCategory,
+        onEdit: widget.categoryRepository == null ? null : _editCategory,
         onSelected: (categoryId) {
           setState(
             () => _categorySelection = ManualCategorySelection.entryOverride(
@@ -1640,30 +1701,39 @@ final class _LedgerPillButton extends StatelessWidget {
     ).depthFor(DashboardCornerSurfaceFamily.directionControl);
     return Semantics(
       button: true,
-      child: Material(
-        color: Colors.transparent,
-        clipBehavior: Clip.none,
-        child: Ink(
-          height: height,
-          decoration: BoxDecoration(
-            color: primary
-                ? null
-                : (depth.surfaceColor ?? FluviVisualTokens.surface),
-            gradient: gradient,
-            borderRadius: radius,
-            border: Border.all(
-              color: primary ? Colors.transparent : FluviVisualTokens.border,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: depth.outerShadows,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: Ink(
+            height: height,
+            decoration: BoxDecoration(
+              color: primary
+                  ? null
+                  : (depth.surfaceColor ?? FluviVisualTokens.surface),
+              gradient: gradient,
+              borderRadius: radius,
+              border: Border.all(
+                color: primary ? Colors.transparent : FluviVisualTokens.border,
+              ),
+              boxShadow: depth.innerShadows,
             ),
-            boxShadow: depth.shadows,
-          ),
-          child: InkWell(
-            borderRadius: radius,
-            onTap: onPressed,
-            child: Center(
-              child: Text(
-                label,
-                style: FluviVisualTokens.actionLabelTextStyle.copyWith(
-                  color: primary ? Colors.white : FluviVisualTokens.textPrimary,
+            child: InkWell(
+              borderRadius: radius,
+              onTap: onPressed,
+              child: Center(
+                child: Text(
+                  label,
+                  style: FluviVisualTokens.actionLabelTextStyle.copyWith(
+                    color: primary
+                        ? Colors.white
+                        : FluviVisualTokens.textPrimary,
+                  ),
                 ),
               ),
             ),
