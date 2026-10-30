@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -8,8 +9,15 @@ import '../../../core/categories/presentation/category_editor_sheet.dart';
 import '../../../core/categories/presentation/category_visual_badge.dart';
 import '../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../core/categories/catalog/category_icon_catalog.dart';
+import '../../../core/design/app_control_metrics.dart';
+import '../../../core/design/dashboard_corner_profile.dart';
+import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/design/fluvi_global_appearance.dart';
+import '../../../core/navigation/creation_slide_up_route.dart';
 import '../../../core/presentation/child_editor_sheet.dart';
+import '../../dashboard/presentation/dashboard_corner_roundness.dart';
+import '../../dashboard/presentation/dashboard_shadow_style.dart';
+import '../../dashboard/application/dashboard_presentation_preferences.dart';
 import '../../dashboard/query/domain/ledger_direction.dart';
 import '../../manual_transactions/application/manual_transaction_editor_preferences.dart';
 import '../../manual_transactions/domain/manual_transaction_models.dart';
@@ -19,7 +27,7 @@ import '../../manual_transactions/presentation/manual_transaction_editor_field_r
 import '../../manual_transactions/presentation/partner_selector.dart';
 import '../domain/automation_models.dart';
 import '../domain/automation_repository.dart';
-import 'push_profile_wizard_page.dart';
+import 'push_profile_navigation.dart';
 
 const _recurringPrimary = Color(0xff19264d);
 const _recurringSecondary = Color(0xff718096);
@@ -39,6 +47,8 @@ final class UnifiedRecurringTransactionEditorPage extends StatefulWidget {
     this.categoryRepository,
     this.preferencesStore,
     this.permissions,
+    this.directionColorProfile = FluviDirectionColorProfile.original,
+    this.pushProfileUiDesign = PushProfileUiDesign.unified,
   }) : existingRule = null;
 
   const UnifiedRecurringTransactionEditorPage.edit({
@@ -50,6 +60,8 @@ final class UnifiedRecurringTransactionEditorPage extends StatefulWidget {
     this.categoryRepository,
     this.preferencesStore,
     this.permissions,
+    this.directionColorProfile = FluviDirectionColorProfile.original,
+    this.pushProfileUiDesign = PushProfileUiDesign.unified,
   }) : initialDirection = null;
 
   final AutomationRepository repository;
@@ -58,6 +70,8 @@ final class UnifiedRecurringTransactionEditorPage extends StatefulWidget {
   final CategoryRepository? categoryRepository;
   final ManualTransactionEditorPreferencesStore? preferencesStore;
   final AutomationPermissionRepository? permissions;
+  final FluviDirectionColorProfile directionColorProfile;
+  final PushProfileUiDesign pushProfileUiDesign;
   final LedgerDirection? initialDirection;
   final RecurrenceRule? existingRule;
 
@@ -375,14 +389,11 @@ final class _UnifiedRecurringTransactionEditorPageState
   Future<List<PushProfile>> _createPushProfile() async {
     final permissions = widget.permissions;
     if (permissions == null) return _profiles;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (_) => PushProfileWizardPage(
-          repository: widget.repository,
-          permissions: permissions,
-        ),
-      ),
+    await PushProfileNavigation.openCreate(
+      context,
+      design: widget.pushProfileUiDesign,
+      repository: widget.repository,
+      permissions: permissions,
     );
     final profiles = await widget.repository.listProfiles();
     if (mounted) setState(() => _profiles = profiles);
@@ -530,13 +541,12 @@ final class _UnifiedRecurringTransactionEditorPageState
 
   Widget _hero(BuildContext context) {
     final palette = _direction == LedgerDirection.income
-        ? FluviDirectionColorPaletteCatalog.income(
-            FluviDirectionColorProfile.original,
-          )
+        ? FluviDirectionColorPaletteCatalog.income(widget.directionColorProfile)
         : FluviDirectionColorPaletteCatalog.expense(
-            FluviDirectionColorProfile.original,
+            widget.directionColorProfile,
           );
     return DecoratedBox(
+      key: const ValueKey<String>('unified-recurring-editor-hero'),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: palette.begin,
@@ -555,131 +565,201 @@ final class _UnifiedRecurringTransactionEditorPageState
           20,
           20,
         ),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -6,
-              bottom: -8,
-              child: IgnorePointer(
-                child: Image.asset(
-                  'assets/fluvi/manual_transaction_hero/${_direction == LedgerDirection.income ? 'income' : 'expense'}_original.png',
-                  width: 96,
-                  height: 96,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final showArtwork = _canShowHeroArtwork(
+              context,
+              constraints.maxWidth,
+            );
+            final amountWidth = constraints.maxWidth - (showArtwork ? 92 : 0);
+            return Stack(
+              clipBehavior: Clip.none,
               children: [
-                Row(
+                if (showArtwork)
+                  Positioned(
+                    right: -6,
+                    bottom: -8,
+                    child: IgnorePointer(
+                      child: ExcludeSemantics(
+                        child: SizedBox(
+                          width: 96,
+                          height: 96,
+                          child: Image.asset(
+                            'assets/fluvi/manual_transaction_hero/'
+                            '${_direction == LedgerDirection.income ? 'income' : 'expense'}_${widget.directionColorProfile.name}.png',
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.medium,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    IconButton(
-                      tooltip: 'Vissza',
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(
-                        Icons.arrow_back_rounded,
-                        color: _recurringPrimary,
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: IconButton(
+                            tooltip: 'Vissza',
+                            padding: EdgeInsets.zero,
+                            onPressed: () => Navigator.of(context).maybePop(),
+                            icon: const Icon(Icons.arrow_back_rounded),
+                            color: _recurringPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Expanded(
+                          child: Text(
+                            _editing
+                                ? 'Ismétlődés szerkesztése'
+                                : 'Új ismétlődés',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: _recurringPrimary,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -.2,
+                                ),
+                          ),
+                        ),
+                        _MetadataToggle(
+                          showSurface: _showMetadataSurfaces,
+                          onTap: _saving ? null : _toggleMetadataSurfaces,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      _policy == RecurrenceAmountPolicy.unknown
+                          ? 'Várható összeg'
+                          : 'Összeg',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: _recurringSecondary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(width: 2),
-                    Expanded(
-                      child: Text(
-                        _editing ? 'Ismétlődés szerkesztése' : 'Új ismétlődés',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: _recurringPrimary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                    ),
-                    _MetadataToggle(
-                      showSurface: _showMetadataSurfaces,
-                      onTap: _toggleMetadataSurfaces,
-                    ),
+                    const SizedBox(height: 1),
+                    _heroAmountEditor(context, maxWidth: amountWidth),
                   ],
                 ),
-                const SizedBox(height: 12),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .68),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 4,
-                    ),
-                    child: Text(
-                      _direction == LedgerDirection.income
-                          ? 'Bevétel'
-                          : 'Kiadás',
-                      style: const TextStyle(
-                        color: _recurringPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _policy == RecurrenceAmountPolicy.unknown
-                      ? 'Várható összeg'
-                      : 'Összeg',
-                  style: const TextStyle(
-                    color: _recurringSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                if (_policy == RecurrenceAmountPolicy.unknown)
-                  const Text(
-                    'Értesítésből',
-                    style: TextStyle(
-                      color: _recurringPrimary,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  )
-                else
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 230,
-                        child: TextField(
-                          controller: _amount,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          style: const TextStyle(
-                            color: _recurringPrimary,
-                            fontSize: 38,
-                            height: 1.05,
-                            fontWeight: FontWeight.w900,
-                          ),
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: '0',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      const Text(
-                        'Ft',
-                        style: TextStyle(
-                          color: _recurringPrimary,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
               ],
-            ),
-          ],
+            );
+          },
         ),
       ),
+    );
+  }
+
+  TextStyle? _heroAmountStyle(BuildContext context) =>
+      Theme.of(context).textTheme.displaySmall?.copyWith(
+        color: _recurringPrimary,
+        fontWeight: FontWeight.w900,
+        letterSpacing: -.8,
+        height: 1.08,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+
+  double _heroCurrencyWidth(BuildContext context) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: 'Ft',
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          color: _recurringPrimary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return painter.width;
+  }
+
+  double _heroAmountWidth(
+    BuildContext context,
+    TextStyle? style, {
+    required double maxWidth,
+  }) {
+    final displayed = _policy == RecurrenceAmountPolicy.unknown
+        ? 'Értesítésből'
+        : (_amount.text.isEmpty ? '0' : _amount.text);
+    final painter = TextPainter(
+      text: TextSpan(text: displayed, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout(maxWidth: maxWidth.clamp(52, 244).toDouble());
+    return (painter.width + 12).clamp(52, maxWidth.clamp(52, 244)).toDouble();
+  }
+
+  bool _canShowHeroArtwork(BuildContext context, double headerWidth) {
+    final amountWidth = _heroAmountWidth(
+      context,
+      _heroAmountStyle(context),
+      maxWidth: 244,
+    );
+    return amountWidth + 4 + _heroCurrencyWidth(context) <= headerWidth - 92;
+  }
+
+  Widget _heroAmountEditor(BuildContext context, {required double maxWidth}) {
+    final amountStyle = _heroAmountStyle(context);
+    final amountAvailable = (maxWidth - 4 - _heroCurrencyWidth(context))
+        .clamp(52, 244)
+        .toDouble();
+    final fieldWidth = _heroAmountWidth(
+      context,
+      amountStyle,
+      maxWidth: amountAvailable,
+    );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        SizedBox(
+          width: fieldWidth,
+          child: _policy == RecurrenceAmountPolicy.unknown
+              ? FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text('Értesítésből', style: amountStyle),
+                )
+              : TextField(
+                  key: const ValueKey<String>('unified-recurring-amount-field'),
+                  controller: _amount,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  maxLines: 1,
+                  style: amountStyle,
+                  decoration: InputDecoration(
+                    hintText: '0',
+                    hintStyle: amountStyle?.copyWith(
+                      color: _recurringPrimary.withValues(alpha: .36),
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    isDense: true,
+                    isCollapsed: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+        ),
+        if (_policy != RecurrenceAmountPolicy.unknown) ...[
+          const SizedBox(width: 4),
+          Text(
+            'Ft',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: _recurringPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -1054,40 +1134,21 @@ final class _UnifiedRecurringTransactionEditorPageState
         : '${profile.displayName} · ${rule.name}';
   }
 
-  Widget _footer() => DecoratedBox(
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(top: BorderSide(color: _recurringDivider)),
-    ),
-    child: SafeArea(
-      top: false,
-      minimum: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Wrap(
-            spacing: 8,
-            children: [
-              _RecurringActionButton(
-                label: 'Mégse',
-                primary: false,
-                onPressed: _saving
-                    ? null
-                    : () => Navigator.of(context).maybePop(),
-              ),
-              _RecurringActionButton(
-                label: _saving
-                    ? 'Mentés…'
-                    : (_editing ? 'Mentés' : 'Létrehozás'),
-                primary: true,
-                onPressed: _saving ? null : _save,
-              ),
-            ],
-          ),
-        ),
+  Widget _footer() => _RecurringCtaFooter(
+    direction: _direction,
+    colorProfile: widget.directionColorProfile,
+    actions: [
+      _RecurringFooterAction(
+        label: 'Mégse',
+        primary: false,
+        onPressed: _saving ? null : () => Navigator.of(context).maybePop(),
       ),
-    ),
+      _RecurringFooterAction(
+        label: _saving ? 'Mentés…' : (_editing ? 'Mentés' : 'Létrehozás'),
+        primary: true,
+        onPressed: _saving ? null : _save,
+      ),
+    ],
   );
 
   Widget _errorPanel() => Padding(
@@ -1325,7 +1386,8 @@ final class _UnifiedRecurringManagerPageState
           borderRadius: BorderRadius.circular(12),
           onTap: () async {
             await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
+              creationSlideUpRoute<bool>(
+                fullscreenDialog: true,
                 builder: (_) => UnifiedRecurringTransactionEditorPage.create(
                   repository: widget.repository,
                   manualRepository: widget.manualRepository,
@@ -1992,57 +2054,40 @@ final class _UnifiedRecurringRuleDetailPageState
     );
   }
 
-  Widget _detailFooter(RecurrenceRule rule) => DecoratedBox(
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(top: BorderSide(color: _recurringDivider)),
-    ),
-    child: SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Wrap(
-            spacing: 8,
-            children: [
-              _RecurringActionButton(
-                label: _busy
-                    ? 'Művelet…'
-                    : (rule.isActive ? 'Szüneteltetés' : 'Folytatás'),
-                primary: false,
-                onPressed: _busy
-                    ? null
-                    : () => _setActive(rule, !rule.isActive),
-              ),
-              _RecurringActionButton(
-                label: 'Szerkesztés',
-                primary: true,
-                onPressed: _busy
-                    ? null
-                    : () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                UnifiedRecurringTransactionEditorPage.edit(
-                                  repository: widget.repository,
-                                  manualRepository: widget.manualRepository,
-                                  categories: widget.categories,
-                                  existingRule: rule,
-                                  categoryRepository: widget.categoryRepository,
-                                  preferencesStore: widget.preferencesStore,
-                                  permissions: widget.permissions,
-                                ),
-                          ),
-                        );
-                        _load();
-                      },
-              ),
-            ],
-          ),
-        ),
+  Widget _detailFooter(RecurrenceRule rule) => _RecurringCtaFooter(
+    direction: rule.direction,
+    actions: [
+      _RecurringFooterAction(
+        label: _busy
+            ? 'Művelet…'
+            : (rule.isActive ? 'Szüneteltetés' : 'Folytatás'),
+        primary: false,
+        onPressed: _busy ? null : () => _setActive(rule, !rule.isActive),
       ),
-    ),
+      _RecurringFooterAction(
+        label: 'Szerkesztés',
+        primary: true,
+        onPressed: _busy
+            ? null
+            : () async {
+                await Navigator.of(context).push(
+                  creationSlideUpRoute<void>(
+                    fullscreenDialog: true,
+                    builder: (_) => UnifiedRecurringTransactionEditorPage.edit(
+                      repository: widget.repository,
+                      manualRepository: widget.manualRepository,
+                      categories: widget.categories,
+                      existingRule: rule,
+                      categoryRepository: widget.categoryRepository,
+                      preferencesStore: widget.preferencesStore,
+                      permissions: widget.permissions,
+                    ),
+                  ),
+                );
+                _load();
+              },
+      ),
+    ],
   );
   Future<void> _setActive(RecurrenceRule rule, bool active) async {
     setState(() => _busy = true);
@@ -2366,45 +2411,28 @@ final class _UnifiedRecurringOccurrenceDetailPageState
     ),
   );
   Widget _footer(RecurrenceOccurrence occurrence, bool recorded) =>
-      DecoratedBox(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: _recurringDivider)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Wrap(
-                spacing: 8,
-                children: recorded
-                    ? [
-                        _RecurringActionButton(
-                          label: 'Kapcsolódó tranzakció megnyitása',
-                          primary: true,
-                          onPressed: _busy
-                              ? null
-                              : () => _openLinked(occurrence),
-                        ),
-                      ]
-                    : [
-                        _RecurringActionButton(
-                          label: 'Kihagyás',
-                          primary: false,
-                          onPressed: _busy ? null : () => _skip(occurrence),
-                        ),
-                        _RecurringActionButton(
-                          label: 'Módosítás',
-                          primary: true,
-                          onPressed: _busy ? null : () => _edit(occurrence),
-                        ),
-                      ],
-              ),
-            ),
-          ),
-        ),
+      _RecurringCtaFooter(
+        direction: _rule?.direction ?? LedgerDirection.expense,
+        actions: recorded
+            ? [
+                _RecurringFooterAction(
+                  label: 'Kapcsolódó tranzakció megnyitása',
+                  primary: true,
+                  onPressed: _busy ? null : () => _openLinked(occurrence),
+                ),
+              ]
+            : [
+                _RecurringFooterAction(
+                  label: 'Kihagyás',
+                  primary: false,
+                  onPressed: _busy ? null : () => _skip(occurrence),
+                ),
+                _RecurringFooterAction(
+                  label: 'Módosítás',
+                  primary: true,
+                  onPressed: _busy ? null : () => _edit(occurrence),
+                ),
+              ],
       );
   Future<void> _openLinked(RecurrenceOccurrence item) async {
     final entry = await widget.repository.realizedRecurrenceLedgerEntryId(
@@ -2502,7 +2530,7 @@ final class _SegmentOption extends StatelessWidget {
 final class _MetadataToggle extends StatelessWidget {
   const _MetadataToggle({required this.showSurface, required this.onTap});
   final bool showSurface;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
@@ -2510,20 +2538,25 @@ final class _MetadataToggle extends StatelessWidget {
     label: showSurface
         ? 'Ikonhátterek elrejtése'
         : 'Ikonhátterek megjelenítése',
-    child: Material(
-      color: Colors.white.withValues(alpha: .62),
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(
-            showSurface
-                ? Icons.dashboard_customize_outlined
-                : Icons.grid_view_rounded,
-            color: _recurringPrimary,
+    child: Tooltip(
+      message: showSurface
+          ? 'Ikonhátterek elrejtése'
+          : 'Ikonhátterek megjelenítése',
+      child: Material(
+        color: Colors.white.withValues(alpha: .62),
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(
+              showSurface
+                  ? Icons.dashboard_customize_outlined
+                  : Icons.grid_view_rounded,
+              color: _recurringPrimary,
+            ),
           ),
         ),
       ),
@@ -2531,49 +2564,188 @@ final class _MetadataToggle extends StatelessWidget {
   );
 }
 
-final class _RecurringActionButton extends StatelessWidget {
-  const _RecurringActionButton({
+final class _RecurringFooterAction {
+  const _RecurringFooterAction({
     required this.label,
     required this.primary,
     required this.onPressed,
   });
+
   final String label;
   final bool primary;
   final VoidCallback? onPressed;
+}
+
+/// Matches the manual editor's single-inset CTA geometry. The action widths
+/// are resolved before the row is laid out, so `Center` never turns a button
+/// into a full-width Wrap child and moves the next action to a new line.
+final class _RecurringCtaFooter extends StatelessWidget {
+  const _RecurringCtaFooter({
+    required this.direction,
+    required this.actions,
+    this.colorProfile = FluviDirectionColorProfile.original,
+  });
+
+  final LedgerDirection direction;
+  final FluviDirectionColorProfile colorProfile;
+  final List<_RecurringFooterAction> actions;
+
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(14),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x2619264d),
-          blurRadius: 5,
-          offset: Offset(0, 2),
+  Widget build(BuildContext context) {
+    final gradient = direction == LedgerDirection.income
+        ? FluviDirectionColorPaletteCatalog.income(colorProfile)
+        : FluviDirectionColorPaletteCatalog.expense(colorProfile);
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: Colors.white),
+      child: SafeArea(
+        top: false,
+        minimum: EdgeInsets.zero,
+        child: Padding(
+          // SafeArea owns the bottom inset once. The controls end where it
+          // begins; their external DecoratedBox shadow paints over the white
+          // safe-area surface without creating a second bottom gap.
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final widths = _recurringActionWidths(
+                context,
+                actions,
+                constraints.maxWidth,
+              );
+              return Align(
+                alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var index = 0; index < actions.length; index++) ...[
+                      if (index > 0) const SizedBox(width: 12),
+                      SizedBox(
+                        width: widths[index],
+                        child: _RecurringActionButton(
+                          key: ValueKey<String>(
+                            'unified-recurring-cta-${actions[index].primary ? 'primary' : 'secondary'}',
+                          ),
+                          label: actions[index].label,
+                          primary: actions[index].primary,
+                          gradient: actions[index].primary ? gradient : null,
+                          onPressed: actions[index].onPressed,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
         ),
-      ],
-    ),
-    child: Material(
-      color: Colors.transparent,
-      clipBehavior: Clip.antiAlias,
-      borderRadius: BorderRadius.circular(14),
-      child: Ink(
+      ),
+    );
+  }
+}
+
+List<double> _recurringActionWidths(
+  BuildContext context,
+  List<_RecurringFooterAction> actions,
+  double maxWidth,
+) {
+  final desired = [
+    for (final action in actions)
+      _recurringActionWidth(context, action.label, action.primary ? 120 : 104),
+  ];
+  if (desired.length < 2) {
+    return [math.min(desired.single, maxWidth)];
+  }
+  const gap = 12.0;
+  final available = math.max(0, maxWidth - gap);
+  final total = desired.fold<double>(0, (sum, value) => sum + value);
+  if (total <= available) return desired;
+
+  // A phone-width footer still stays one compact line. At extreme text
+  // scaling the labels scale down inside their explicit slots rather than
+  // creating a second action row or clipping the footer shadow.
+  final secondary = math
+      .min(desired.first, math.max(88, available * .44))
+      .toDouble();
+  final primary = math.max(0, available - secondary).toDouble();
+  return [secondary, primary];
+}
+
+double _recurringActionWidth(
+  BuildContext context,
+  String label,
+  double minimum,
+) {
+  final painter = TextPainter(
+    text: TextSpan(text: label, style: FluviVisualTokens.actionLabelTextStyle),
+    textScaler: MediaQuery.textScalerOf(context),
+    textDirection: Directionality.of(context),
+    maxLines: 1,
+  )..layout();
+  return math.max(minimum, painter.width + 28);
+}
+
+final class _RecurringActionButton extends StatelessWidget {
+  const _RecurringActionButton({
+    super.key,
+    required this.label,
+    required this.primary,
+    required this.onPressed,
+    this.gradient,
+  });
+  final String label;
+  final bool primary;
+  final VoidCallback? onPressed;
+  final LinearGradient? gradient;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = AppSelectorMetrics.directionControlHeight;
+    final radius = DashboardCornerRoundnessScope.profileOf(context)
+        .borderRadiusFor(
+          DashboardCornerSurfaceFamily.directionControl,
+          size: Size(168, height),
+        );
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.directionControl);
+    return Semantics(
+      button: true,
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          color: primary ? const Color(0xff7552b8) : Colors.white,
-          border: primary ? null : Border.all(color: const Color(0xffdde2ec)),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: radius,
+          boxShadow: depth.outerShadows,
         ),
-        child: InkWell(
-          onTap: onPressed,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48, minWidth: 96),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: Ink(
+            height: height,
+            decoration: BoxDecoration(
+              color: primary
+                  ? null
+                  : (depth.surfaceColor ?? FluviVisualTokens.surface),
+              gradient: gradient,
+              borderRadius: radius,
+              border: Border.all(
+                color: primary ? Colors.transparent : FluviVisualTokens.border,
+              ),
+              boxShadow: depth.innerShadows,
+            ),
+            child: InkWell(
+              borderRadius: radius,
+              onTap: onPressed,
               child: Center(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: primary ? Colors.white : _recurringPrimary,
-                    fontWeight: FontWeight.w700,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: FluviVisualTokens.actionLabelTextStyle.copyWith(
+                      color: primary
+                          ? Colors.white
+                          : FluviVisualTokens.textPrimary,
+                    ),
                   ),
                 ),
               ),
@@ -2581,8 +2753,8 @@ final class _RecurringActionButton extends StatelessWidget {
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 final class _TimingDraft {

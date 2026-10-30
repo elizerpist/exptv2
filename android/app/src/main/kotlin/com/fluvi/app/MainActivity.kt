@@ -494,6 +494,7 @@ class MainActivity : FlutterActivity() {
                             // is named rather than indexed so old numeric
                             // settings cannot accidentally change it.
                             "recurringUiDesign" to preferences.getString("recurringUiDesign", "unified"),
+                            "pushProfileUiDesign" to preferences.getString("pushProfileUiDesign", "unified"),
                         ),
                     )
                     "writeDashboardPresentationSettings" -> {
@@ -600,6 +601,15 @@ class MainActivity : FlutterActivity() {
                         require(recurringUiDesign == "legacy" || recurringUiDesign == "unified") {
                             "Invalid recurring UI design."
                         }
+                        val pushProfileUiDesign = if (values.containsKey("pushProfileUiDesign")) {
+                            values["pushProfileUiDesign"] as? String
+                                ?: throw IllegalArgumentException("Invalid push profile UI design.")
+                        } else {
+                            "unified"
+                        }
+                        require(pushProfileUiDesign == "legacy" || pushProfileUiDesign == "unified") {
+                            "Invalid push profile UI design."
+                        }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
@@ -631,6 +641,7 @@ class MainActivity : FlutterActivity() {
                             .putInt("ghostQuickFilterIconPack", ghostQuickFilterIconPack)
                             .putInt("ghostQuickFilterPresentation", ghostQuickFilterPresentation)
                             .putString("recurringUiDesign", recurringUiDesign)
+                            .putString("pushProfileUiDesign", pushProfileUiDesign)
                             .apply()
                         result.success(null)
                     }

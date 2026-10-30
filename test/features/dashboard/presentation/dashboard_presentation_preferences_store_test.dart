@@ -614,6 +614,7 @@ void main() {
       'ghostQuickFilterPresentation':
           DashboardGhostQuickFilterPresentation.searchPillFling.index,
       'recurringUiDesign': 'unified',
+      'pushProfileUiDesign': 'unified',
     });
   });
 
@@ -664,6 +665,34 @@ void main() {
         ),
       );
       expect(stored['recurringUiDesign'], 'legacy');
+    },
+  );
+
+  test(
+    'push profile UI defaults to unified and uses only named values',
+    () async {
+      Map<String, Object?> stored = <String, Object?>{'pushProfileUiDesign': 0};
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      expect(
+        (await store.read()).pushProfileUiDesign,
+        PushProfileUiDesign.unified,
+      );
+      stored['pushProfileUiDesign'] = 'legacy';
+      expect(
+        (await store.read()).pushProfileUiDesign,
+        PushProfileUiDesign.legacy,
+      );
+      await store.write(
+        (await store.read()).withRecurringUiDesign(RecurringUiDesign.legacy),
+      );
+      expect(stored['pushProfileUiDesign'], 'legacy');
     },
   );
 

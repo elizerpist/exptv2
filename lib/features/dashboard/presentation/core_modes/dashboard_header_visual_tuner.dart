@@ -3127,6 +3127,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                   if (presentationPreferences case final preferences?) ...[
                     const SizedBox(height: 14),
                     _RecurringUiDesignSection(controller: preferences),
+                    const SizedBox(height: 14),
+                    _PushProfileUiDesignSection(controller: preferences),
                   ],
                 ],
               ),
@@ -5202,6 +5204,103 @@ final class _RecurringUiDesignOption extends StatelessWidget {
             child: Center(
               child: Text(
                 design == RecurringUiDesign.legacy ? 'Régi' : 'Új',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected
+                      ? FluviVisualTokens.textPrimary
+                      : FluviVisualTokens.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// This separate choice controls only which push-profile flow is opened by
+/// the next root entry point. It is deliberately independent from recurrence,
+/// FAB treatment and icon-background preferences.
+final class _PushProfileUiDesignSection extends StatelessWidget {
+  const _PushProfileUiDesignSection({required this.controller});
+
+  final DashboardPresentationPreferencesController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardPresentationPreferences>(
+        valueListenable: controller,
+        builder: (context, preferences, _) => _TunerSection(
+          title: 'Push profilok',
+          children: <Widget>[
+            const Text('A létrehozás, tanítás és kezelés felülete.'),
+            const SizedBox(height: 10),
+            Semantics(
+              label: 'Push profilok felülete',
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: FluviVisualTokens.surfaceMuted,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: FluviVisualTokens.border),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: Row(
+                    children: [
+                      for (final design in PushProfileUiDesign.values)
+                        Expanded(
+                          child: _PushProfileUiDesignOption(
+                            design: design,
+                            selected: preferences.pushProfileUiDesign == design,
+                            onTap: () => controller.setPreferences(
+                              preferences.withPushProfileUiDesign(design),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+final class _PushProfileUiDesignOption extends StatelessWidget {
+  const _PushProfileUiDesignOption({
+    required this.design,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final PushProfileUiDesign design;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: design == PushProfileUiDesign.legacy ? 'Régi' : 'Új',
+    child: Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        key: ValueKey<String>('dashboard-push-profile-ui-${design.name}'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Center(
+              child: Text(
+                design == PushProfileUiDesign.legacy ? 'Régi' : 'Új',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: selected
                       ? FluviVisualTokens.textPrimary

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/categories/domain/category_repository.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/design/fluvi_global_appearance.dart';
+import '../../../core/navigation/creation_slide_up_route.dart';
 import '../../dashboard/application/dashboard_presentation_preferences.dart';
 import '../../dashboard/query/domain/ledger_direction.dart';
 import '../../manual_transactions/application/manual_transaction_editor_preferences.dart';
@@ -26,8 +28,11 @@ abstract final class RecurringNavigation {
     CategoryRepository? categoryRepository,
     ManualTransactionEditorPreferencesStore? preferencesStore,
     AutomationPermissionRepository? permissions,
+    FluviDirectionColorProfile directionColorProfile =
+        FluviDirectionColorProfile.original,
+    PushProfileUiDesign pushProfileUiDesign = PushProfileUiDesign.unified,
   }) => Navigator.of(context).push<bool>(
-    MaterialPageRoute<bool>(
+    creationSlideUpRoute<bool>(
       fullscreenDialog: true,
       builder: (_) => design == RecurringUiDesign.legacy
           ? RecurringTransactionWizardPage(
@@ -44,6 +49,8 @@ abstract final class RecurringNavigation {
               preferencesStore: preferencesStore,
               permissions: permissions,
               initialDirection: direction,
+              directionColorProfile: directionColorProfile,
+              pushProfileUiDesign: pushProfileUiDesign,
             ),
     ),
   );

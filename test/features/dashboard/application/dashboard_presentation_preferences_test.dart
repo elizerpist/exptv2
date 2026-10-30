@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
@@ -34,6 +36,44 @@ void main() {
       );
     },
   );
+
+  test(
+    'push and recurring UI choices persist independently from each other',
+    () async {
+      final store = InMemoryDashboardPresentationPreferencesStore();
+      final controller = DashboardPresentationPreferencesController(
+        store: store,
+      );
+      addTearDown(controller.dispose);
+
+      controller.setPreferences(
+        controller.value.withPushProfileUiDesign(PushProfileUiDesign.legacy),
+      );
+      controller.setPreferences(
+        controller.value.withRecurringUiDesign(RecurringUiDesign.legacy),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final restored = DashboardPresentationPreferencesController(store: store);
+      addTearDown(restored.dispose);
+      await restored.restore();
+      expect(restored.value.pushProfileUiDesign, PushProfileUiDesign.legacy);
+      expect(restored.value.recurringUiDesign, RecurringUiDesign.legacy);
+    },
+  );
+
+  test('a delayed restore cannot undo a current dashboard selection', () async {
+    final store = _DelayedPreferencesStore();
+    final controller = DashboardPresentationPreferencesController(store: store);
+    addTearDown(controller.dispose);
+    final restoring = controller.restore();
+    controller.setPreferences(
+      controller.value.withPushProfileUiDesign(PushProfileUiDesign.legacy),
+    );
+    store.complete(DashboardPresentationPreferences.defaults);
+    await restoring;
+    expect(controller.value.pushProfileUiDesign, PushProfileUiDesign.legacy);
+  });
 
   test(
     'PRESENTATION-PREFERENCES-01 RED: visual choices restore and persist without owning financial state',
@@ -135,4 +175,18 @@ void main() {
       expect(restored.value.balanceHeaderPaletteWindowWidthPercent, 41);
     },
   );
+}
+
+final class _DelayedPreferencesStore
+    implements DashboardPresentationPreferencesStore {
+  final Completer<DashboardPresentationPreferences> _read = Completer();
+
+  void complete(DashboardPresentationPreferences value) =>
+      _read.complete(value);
+
+  @override
+  Future<DashboardPresentationPreferences> read() => _read.future;
+
+  @override
+  Future<void> write(DashboardPresentationPreferences preferences) async {}
 }

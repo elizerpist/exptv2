@@ -7,6 +7,7 @@ import 'package:fluvi/features/automation/presentation/unified_recurring_pages.d
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_repository.dart';
+import 'package:fluvi/features/manual_transactions/presentation/manual_transaction_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -124,6 +125,71 @@ void main() {
       find.byKey(const ValueKey('unified-recurring-editor-visual-boundary')),
       matchesGoldenFile('../../../goldens/unified_recurring_editor_timed.png'),
     );
+  });
+
+  testWidgets(
+    'recurring CTA actions keep one compact right-aligned footer row',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(280, 720));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UnifiedRecurringTransactionEditorPage.create(
+            repository: _AutomationFake(),
+            manualRepository: _ManualFake(),
+            categories: const <FluviCategory>[],
+            initialDirection: LedgerDirection.expense,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final cancel = tester.getRect(
+        find.byKey(const ValueKey('unified-recurring-cta-secondary')),
+      );
+      final create = tester.getRect(
+        find.byKey(const ValueKey('unified-recurring-cta-primary')),
+      );
+      expect(cancel.top, closeTo(create.top, 0.1));
+      expect(cancel.right, lessThan(create.left));
+      expect(create.right, closeTo(260, 0.5));
+    },
+  );
+
+  testWidgets('recurring editor hero has the manual editor hero geometry', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualTransactionEditor.create(
+          repository: _ManualFake(),
+          categories: const <FluviCategory>[],
+          direction: LedgerDirection.expense,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final manualSize = tester.getSize(
+      find.byKey(const ValueKey('manual-editor-hero')),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UnifiedRecurringTransactionEditorPage.create(
+          repository: _AutomationFake(),
+          manualRepository: _ManualFake(),
+          categories: const <FluviCategory>[],
+          initialDirection: LedgerDirection.expense,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final recurringSize = tester.getSize(
+      find.byKey(const ValueKey('unified-recurring-editor-hero')),
+    );
+    expect(recurringSize.height, closeTo(manualSize.height, 0.1));
   });
 }
 

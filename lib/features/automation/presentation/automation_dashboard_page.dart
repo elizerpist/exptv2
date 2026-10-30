@@ -9,9 +9,7 @@ import '../../dashboard/application/dashboard_presentation_preferences.dart';
 import '../../dashboard/query/domain/ledger_direction.dart';
 import '../../manual_transactions/application/manual_transaction_editor_preferences.dart';
 import 'recurring_navigation.dart';
-import 'notification_inbox_page.dart';
-import 'push_profile_details_page.dart';
-import 'push_profile_wizard_page.dart';
+import 'push_profile_navigation.dart';
 
 class AutomationDashboardPage extends StatefulWidget {
   const AutomationDashboardPage({
@@ -23,6 +21,7 @@ class AutomationDashboardPage extends StatefulWidget {
     this.categoryRepository,
     this.preferencesStore,
     this.recurringUiDesign,
+    this.pushProfileUiDesign,
     this.direction = LedgerDirection.expense,
     this.onOpenLedgerEntry,
   });
@@ -33,6 +32,7 @@ class AutomationDashboardPage extends StatefulWidget {
   final CategoryRepository? categoryRepository;
   final ManualTransactionEditorPreferencesStore? preferencesStore;
   final RecurringUiDesign Function()? recurringUiDesign;
+  final PushProfileUiDesign Function()? pushProfileUiDesign;
   final LedgerDirection direction;
   final Future<void> Function(String entryId)? onOpenLedgerEntry;
   @override
@@ -114,13 +114,11 @@ class _AutomationDashboardPageState extends State<AutomationDashboardPage>
   }
 
   Future<void> _newProfile() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PushProfileWizardPage(
-          repository: widget.repository,
-          permissions: widget.permissions,
-        ),
-      ),
+    await PushProfileNavigation.openCreate(
+      context,
+      design: widget.pushProfileUiDesign?.call() ?? PushProfileUiDesign.unified,
+      repository: widget.repository,
+      permissions: widget.permissions,
     );
     if (mounted) {
       _refresh();
@@ -140,6 +138,30 @@ class _AutomationDashboardPageState extends State<AutomationDashboardPage>
       preferencesStore: widget.preferencesStore,
       permissions: widget.permissions,
       direction: widget.direction,
+      pushProfileUiDesign:
+          widget.pushProfileUiDesign?.call() ?? PushProfileUiDesign.unified,
+    );
+    if (mounted) _refresh();
+  }
+
+  Future<void> _openProfile(String profileId) async {
+    await PushProfileNavigation.openProfile(
+      context,
+      design: widget.pushProfileUiDesign?.call() ?? PushProfileUiDesign.unified,
+      repository: widget.repository,
+      permissions: widget.permissions,
+      profileId: profileId,
+    );
+    if (mounted) _refresh();
+  }
+
+  Future<void> _openInbox({bool onlyReview = false}) async {
+    await PushProfileNavigation.openInbox(
+      context,
+      design: widget.pushProfileUiDesign?.call() ?? PushProfileUiDesign.unified,
+      repository: widget.repository,
+      permissions: widget.permissions,
+      onlyReview: onlyReview,
     );
     if (mounted) _refresh();
   }
@@ -220,17 +242,7 @@ class _AutomationDashboardPageState extends State<AutomationDashboardPage>
                       '${snapshot.pendingReviewCount} értesítés felülvizsgálatra vár',
                   subtitle:
                       'A kétes találatok nem kerültek automatikusan a Ledgerbe.',
-                  onTap: () => Navigator.of(context)
-                      .push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => NotificationInboxPage(
-                            repository: widget.repository,
-                            profileId: null,
-                            onlyReview: true,
-                          ),
-                        ),
-                      )
-                      .then((_) => _refresh()),
+                  onTap: () => _openInbox(onlyReview: true),
                 ),
               ],
               const SizedBox(height: 22),
@@ -260,17 +272,7 @@ class _AutomationDashboardPageState extends State<AutomationDashboardPage>
                 ...snapshot.profiles.map(
                   (profile) => _ProfileTile(
                     profile: profile,
-                    onTap: () => Navigator.of(context)
-                        .push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => PushProfileDetailsPage(
-                              repository: widget.repository,
-                              permissions: widget.permissions,
-                              profileId: profile.profileId,
-                            ),
-                          ),
-                        )
-                        .then((_) => _refresh()),
+                    onTap: () => _openProfile(profile.profileId),
                   ),
                 ),
               if (widget.manualRepository != null) ...[
@@ -346,16 +348,7 @@ class _AutomationDashboardPageState extends State<AutomationDashboardPage>
                     ),
                   ),
                   TextButton(
-                    onPressed: () => Navigator.of(context)
-                        .push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => NotificationInboxPage(
-                              repository: widget.repository,
-                              profileId: null,
-                            ),
-                          ),
-                        )
-                        .then((_) => _refresh()),
+                    onPressed: _openInbox,
                     child: const Text('Összes'),
                   ),
                 ],

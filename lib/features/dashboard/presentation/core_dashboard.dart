@@ -688,6 +688,8 @@ class _CoreDashboardState extends State<CoreDashboard>
             .ghostQuickFilterPresentation,
         recurringUiDesign:
             _dashboardPresentationPreferences.value.recurringUiDesign,
+        pushProfileUiDesign:
+            _dashboardPresentationPreferences.value.pushProfileUiDesign,
       ),
     );
   }

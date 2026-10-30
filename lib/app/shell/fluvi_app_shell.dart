@@ -24,6 +24,7 @@ import '../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
+import '../../core/navigation/creation_slide_up_route.dart';
 import '../../features/manual_transactions/data/method_channel_manual_transaction_repository.dart';
 import '../../features/manual_transactions/data/method_channel_manual_transaction_impact_repository.dart';
 import '../../features/manual_transactions/data/method_channel_manual_transaction_editor_preferences_store.dart';
@@ -36,7 +37,7 @@ import '../../features/automation/data/method_channel_automation_repository.dart
 import '../../features/automation/data/unavailable_automation_repository.dart';
 import '../../features/automation/domain/automation_repository.dart';
 import '../../features/automation/presentation/automation_dashboard_page.dart';
-import '../../features/automation/presentation/push_profile_wizard_page.dart';
+import '../../features/automation/presentation/push_profile_navigation.dart';
 import '../../features/automation/presentation/recurring_navigation.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../../features/pulse/data/method_channel_pulse_repository.dart';
@@ -99,29 +100,6 @@ class _BottomNavigationSafeArea extends StatelessWidget {
     );
   }
 }
-
-/// Creation surfaces all use one vertical route while retaining their typed
-/// result contracts. The reverse animation follows the same path downward.
-@visibleForTesting
-PageRouteBuilder<T> creationSlideUpRoute<T>({
-  required WidgetBuilder builder,
-  bool fullscreenDialog = false,
-}) => PageRouteBuilder<T>(
-  fullscreenDialog: fullscreenDialog,
-  pageBuilder: (context, animation, secondaryAnimation) => builder(context),
-  transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-      SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-            .animate(
-              CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              ),
-            ),
-        child: child,
-      ),
-);
 
 /// Root owner for the one dashboard controller lifecycle in this UI slice.
 class FluviAppShell extends StatefulWidget {
@@ -451,14 +429,11 @@ class _FluviAppShellState extends State<FluviAppShell>
       );
       if (!mounted || action == null) return;
       if (action == CreationSelectorAction.pushProfile) {
-        await Navigator.of(context).push<void>(
-          creationSlideUpRoute<void>(
-            fullscreenDialog: true,
-            builder: (_) => PushProfileWizardPage(
-              repository: _automationRepository,
-              permissions: _automationPermissionRepository,
-            ),
-          ),
+        await PushProfileNavigation.openCreate(
+          context,
+          design: _dashboardPresentationPreferences.value.pushProfileUiDesign,
+          repository: _automationRepository,
+          permissions: _automationPermissionRepository,
         );
         return;
       }
@@ -475,6 +450,13 @@ class _FluviAppShellState extends State<FluviAppShell>
               : MethodChannelManualTransactionEditorPreferencesStore(),
           permissions: _automationPermissionRepository,
           direction: direction,
+          directionColorProfile: _headerVisualController
+              .tuning
+              .value
+              .globalAppearance
+              .directionColorProfile,
+          pushProfileUiDesign:
+              _dashboardPresentationPreferences.value.pushProfileUiDesign,
         );
         return;
       }
@@ -1194,6 +1176,10 @@ class _FluviAppShellState extends State<FluviAppShell>
                                       _dashboardPresentationPreferences
                                           .value
                                           .recurringUiDesign,
+                                  pushProfileUiDesign: () =>
+                                      _dashboardPresentationPreferences
+                                          .value
+                                          .pushProfileUiDesign,
                                   direction:
                                       _controller
                                               .transactionDirection

@@ -7,6 +7,7 @@ import 'package:fluvi/app/shell/fluvi_bottom_navigation.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/navigation/creation_slide_up_route.dart';
 import 'package:fluvi/core/categories/domain/category_repository.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';

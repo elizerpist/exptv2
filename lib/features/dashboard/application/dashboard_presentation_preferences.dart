@@ -25,6 +25,11 @@ enum DashboardGhostQuickFilterPresentation {
 /// carries no rule, scheduler, query or financial state.
 enum RecurringUiDesign { legacy, unified }
 
+/// Chooses only the push-profile surface family. Like [RecurringUiDesign],
+/// this is visual/navigation state and must never alter collected data,
+/// profile state, rules or transactions.
+enum PushProfileUiDesign { legacy, unified }
+
 /// Persisted presentation-only choices. Financial membership, query state,
 /// selected time and prepared data are deliberately outside this value.
 final class DashboardPresentationPreferences {
@@ -67,6 +72,7 @@ final class DashboardPresentationPreferences {
     this.ghostQuickFilterPresentation =
         DashboardGhostQuickFilterPresentation.searchPillFling,
     this.recurringUiDesign = RecurringUiDesign.unified,
+    this.pushProfileUiDesign = PushProfileUiDesign.unified,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -102,6 +108,7 @@ final class DashboardPresentationPreferences {
   final DashboardGhostQuickFilterIconPack ghostQuickFilterIconPack;
   final DashboardGhostQuickFilterPresentation ghostQuickFilterPresentation;
   final RecurringUiDesign recurringUiDesign;
+  final PushProfileUiDesign pushProfileUiDesign;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.sumA,
@@ -130,6 +137,7 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterPresentation:
         DashboardGhostQuickFilterPresentation.searchPillFling,
     recurringUiDesign: RecurringUiDesign.unified,
+    pushProfileUiDesign: PushProfileUiDesign.unified,
   );
 
   @override
@@ -173,7 +181,8 @@ final class DashboardPresentationPreferences {
           balanceHeaderPaletteWindowWidthPercent &&
       other.ghostQuickFilterIconPack == ghostQuickFilterIconPack &&
       other.ghostQuickFilterPresentation == ghostQuickFilterPresentation &&
-      other.recurringUiDesign == recurringUiDesign;
+      other.recurringUiDesign == recurringUiDesign &&
+      other.pushProfileUiDesign == pushProfileUiDesign;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -207,6 +216,7 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterIconPack,
     ghostQuickFilterPresentation,
     recurringUiDesign,
+    pushProfileUiDesign,
   ]);
 
   DashboardPresentationPreferences withGhostQuickFilterIconPack(
@@ -246,6 +256,7 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterIconPack: next,
     ghostQuickFilterPresentation: ghostQuickFilterPresentation,
     recurringUiDesign: recurringUiDesign,
+    pushProfileUiDesign: pushProfileUiDesign,
   );
 
   DashboardPresentationPreferences withGhostQuickFilterPresentation(
@@ -285,6 +296,7 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterIconPack: ghostQuickFilterIconPack,
     ghostQuickFilterPresentation: next,
     recurringUiDesign: recurringUiDesign,
+    pushProfileUiDesign: pushProfileUiDesign,
   );
 
   DashboardPresentationPreferences withRecurringUiDesign(
@@ -324,6 +336,47 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterIconPack: ghostQuickFilterIconPack,
     ghostQuickFilterPresentation: ghostQuickFilterPresentation,
     recurringUiDesign: next,
+    pushProfileUiDesign: pushProfileUiDesign,
+  );
+
+  DashboardPresentationPreferences withPushProfileUiDesign(
+    PushProfileUiDesign next,
+  ) => DashboardPresentationPreferences(
+    sumVisualStyle: sumVisualStyle,
+    showSumLayoutChooser: showSumLayoutChooser,
+    yearGridLayout: yearGridLayout,
+    yearMonthlyAmountPresentation: yearMonthlyAmountPresentation,
+    showDayContentViewChooser: showDayContentViewChooser,
+    balanceUsesChildCards: balanceUsesChildCards,
+    balanceHeaderGraphPresentation: balanceHeaderGraphPresentation,
+    balanceDayLayoutPresentation: balanceDayLayoutPresentation,
+    balanceDayFocusedPresentation: balanceDayFocusedPresentation,
+    balanceDayPerformanceVisualPresentation:
+        balanceDayPerformanceVisualPresentation,
+    balanceDayRatioViewPresentation: balanceDayRatioViewPresentation,
+    balanceDayRatioPresentation: balanceDayRatioPresentation,
+    balanceShowFocusedDayImpact: balanceShowFocusedDayImpact,
+    balanceSumLayoutPresentation: balanceSumLayoutPresentation,
+    balanceSumFocusedPresentation: balanceSumFocusedPresentation,
+    balanceShowSumFocusedSupplementaryStats:
+        balanceShowSumFocusedSupplementaryStats,
+    balanceMonthLayoutPresentation: balanceMonthLayoutPresentation,
+    balanceYearLayoutPresentation: balanceYearLayoutPresentation,
+    balanceDailyCalculationMode: balanceDailyCalculationMode,
+    balanceMonthlySpendingChartPresentation:
+        balanceMonthlySpendingChartPresentation,
+    balanceHeaderPartitionHeightPercent: balanceHeaderPartitionHeightPercent,
+    balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
+    balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
+    balanceHeaderPalette: balanceHeaderPalette,
+    balanceHeaderPaletteVariant: balanceHeaderPaletteVariant,
+    balanceHeaderPalettePositionPercent: balanceHeaderPalettePositionPercent,
+    balanceHeaderPaletteWindowWidthPercent:
+        balanceHeaderPaletteWindowWidthPercent,
+    ghostQuickFilterIconPack: ghostQuickFilterIconPack,
+    ghostQuickFilterPresentation: ghostQuickFilterPresentation,
+    recurringUiDesign: recurringUiDesign,
+    pushProfileUiDesign: next,
   );
 }
 
@@ -340,10 +393,15 @@ final class DashboardPresentationPreferencesController
        super(DashboardPresentationPreferences.defaults);
 
   final DashboardPresentationPreferencesStore _store;
+  int _mutationRevision = 0;
 
   Future<void> restore() async {
+    final restoreRevision = _mutationRevision;
     try {
-      value = await _store.read();
+      final restored = await _store.read();
+      // A delayed platform read must never undo a selection made while the
+      // dashboard was already interactive.
+      if (restoreRevision == _mutationRevision) value = restored;
     } catch (_) {
       // Presentation settings are never allowed to block dashboard admission.
     }
@@ -351,6 +409,7 @@ final class DashboardPresentationPreferencesController
 
   void setPreferences(DashboardPresentationPreferences next) {
     if (next == value) return;
+    _mutationRevision++;
     value = next;
     unawaited(_persist(next));
   }

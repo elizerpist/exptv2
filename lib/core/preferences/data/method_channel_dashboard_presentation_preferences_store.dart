@@ -201,6 +201,12 @@ final class MethodChannelDashboardPresentationPreferencesStore
           'legacy' => RecurringUiDesign.legacy,
           _ => RecurringUiDesign.unified,
         },
+        // A named value keeps historical dashboard enum indices from being
+        // accidentally interpreted as a push-profile surface choice.
+        pushProfileUiDesign: switch (values['pushProfileUiDesign']) {
+          'legacy' => PushProfileUiDesign.legacy,
+          _ => PushProfileUiDesign.unified,
+        },
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -268,6 +274,7 @@ final class MethodChannelDashboardPresentationPreferencesStore
         'ghostQuickFilterPresentation':
             preferences.ghostQuickFilterPresentation.index,
         'recurringUiDesign': preferences.recurringUiDesign.name,
+        'pushProfileUiDesign': preferences.pushProfileUiDesign.name,
       });
 }
 
