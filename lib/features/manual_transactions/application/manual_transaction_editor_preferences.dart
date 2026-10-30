@@ -1,41 +1,33 @@
 import 'package:flutter/foundation.dart';
 
-enum ManualTransactionEditorLayout { hero, islands }
-
-enum ManualPartnerPickerPresentation { fullScreen, dropdown }
-
 @immutable
 final class ManualTransactionEditorPreferences {
   const ManualTransactionEditorPreferences({
-    required this.layout,
-    required this.partnerPickerPresentation,
+    this.showMetadataIconBackgrounds = true,
   });
 
   static const defaults = ManualTransactionEditorPreferences(
-    layout: ManualTransactionEditorLayout.hero,
-    partnerPickerPresentation: ManualPartnerPickerPresentation.fullScreen,
+    showMetadataIconBackgrounds: true,
   );
 
-  final ManualTransactionEditorLayout layout;
-  final ManualPartnerPickerPresentation partnerPickerPresentation;
+  /// The only editor presentation preference. Legacy layout and picker-mode
+  /// values are intentionally neither decoded nor allowed to affect the UI.
+  final bool showMetadataIconBackgrounds;
 
   ManualTransactionEditorPreferences copyWith({
-    ManualTransactionEditorLayout? layout,
-    ManualPartnerPickerPresentation? partnerPickerPresentation,
+    bool? showMetadataIconBackgrounds,
   }) => ManualTransactionEditorPreferences(
-    layout: layout ?? this.layout,
-    partnerPickerPresentation:
-        partnerPickerPresentation ?? this.partnerPickerPresentation,
+    showMetadataIconBackgrounds:
+        showMetadataIconBackgrounds ?? this.showMetadataIconBackgrounds,
   );
 
   @override
   bool operator ==(Object other) =>
       other is ManualTransactionEditorPreferences &&
-      other.layout == layout &&
-      other.partnerPickerPresentation == partnerPickerPresentation;
+      other.showMetadataIconBackgrounds == showMetadataIconBackgrounds;
 
   @override
-  int get hashCode => Object.hash(layout, partnerPickerPresentation);
+  int get hashCode => showMetadataIconBackgrounds.hashCode;
 }
 
 abstract interface class ManualTransactionEditorPreferencesStore {

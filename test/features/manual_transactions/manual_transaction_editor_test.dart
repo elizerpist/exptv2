@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/domain/category_repository.dart';
+import 'package:fluvi/core/categories/presentation/category_editor_sheet.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
@@ -14,6 +15,7 @@ import 'package:fluvi/features/manual_transactions/domain/manual_transaction_mod
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_repository.dart';
 import 'package:fluvi/features/manual_transactions/presentation/category_dropdown.dart';
 import 'package:fluvi/features/manual_transactions/presentation/manual_transaction_editor.dart';
+import 'package:fluvi/features/manual_transactions/presentation/partner_editor_popup.dart';
 import 'package:fluvi/features/manual_transactions/presentation/partner_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -51,7 +53,9 @@ void main() {
         find.byKey(const ValueKey('manual-amount-field')),
         '12 450',
       );
-      await tester.tap(find.byKey(const ValueKey('manual-partner-field')));
+      await tester.tap(
+        find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+      );
       await tester.pumpAndSettle();
       expect(
         find.byWidgetPredicate(
@@ -144,7 +148,7 @@ void main() {
   });
 
   testWidgets(
-    'layout and partner-presentation switches retain the live draft',
+    'metadata icon-background switch retains the live draft and text geometry',
     (tester) async {
       final preferences = _MemoryEditorPreferencesStore();
       await tester.pumpWidget(
@@ -170,11 +174,17 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('manual-layout-toggle')));
+      final dateLabelBefore = tester.getRect(find.text('Dátum'));
+      await tester.tap(
+        find.byKey(const ValueKey('manual-metadata-icon-background-toggle')),
+      );
       await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('manual-editor-hero')), findsOneWidget);
+      expect(find.byKey(const ValueKey('manual-editor-islands')), findsNothing);
+      expect(find.byKey(const ValueKey('manual-layout-toggle')), findsNothing);
       expect(
-        find.byKey(const ValueKey('manual-editor-islands')),
-        findsOneWidget,
+        find.byKey(const ValueKey('manual-partner-presentation-toggle')),
+        findsNothing,
       );
       expect(
         tester
@@ -187,10 +197,6 @@ void main() {
       );
       expect(find.text('Megőrzendő szöveg'), findsOneWidget);
 
-      await tester.tap(
-        find.byKey(const ValueKey('manual-partner-presentation-toggle')),
-      );
-      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
         findsOneWidget,
@@ -198,10 +204,10 @@ void main() {
       expect(
         preferences.value,
         const ManualTransactionEditorPreferences(
-          layout: ManualTransactionEditorLayout.islands,
-          partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
+          showMetadataIconBackgrounds: false,
         ),
       );
+      expect(tester.getRect(find.text('Dátum')), dateLabelBefore);
 
       await tester.tap(find.byKey(const ValueKey('manual-quick-5000')));
       expect(
@@ -213,6 +219,19 @@ void main() {
             ?.text,
         '7 500',
       );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ManualTransactionEditor.create(
+            repository: _FakeManualRepository(),
+            categories: categories,
+            direction: LedgerDirection.expense,
+            preferencesStore: preferences,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Ikonhátterek megjelenítése'), findsOneWidget);
     },
   );
 
@@ -381,9 +400,7 @@ void main() {
     );
   });
 
-  testWidgets('partner searches start unfocused in both picker presentations', (
-    tester,
-  ) async {
+  testWidgets('partner dropdown search starts unfocused', (tester) async {
     final preferences = _MemoryEditorPreferencesStore();
     await tester.pumpWidget(
       MaterialApp(
@@ -397,7 +414,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('manual-partner-field')));
+    await tester.tap(
+      find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+    );
     await tester.pumpAndSettle();
     var search = tester.widget<TextField>(
       find.byKey(const ValueKey('manual-partner-search')),
@@ -409,32 +428,6 @@ void main() {
       find.byKey(const ValueKey('manual-partner-search')),
     );
     expect(search.focusNode?.hasFocus, isTrue);
-
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('manual-partner-presentation-toggle')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
-    );
-    await tester.pumpAndSettle();
-    search = tester.widget<TextField>(
-      find.byKey(const ValueKey('manual-partner-search')),
-    );
-    expect(search.focusNode?.hasFocus, isFalse);
-    await tester.tap(find.byKey(const ValueKey('manual-partner-search')));
-    await tester.pump();
-    expect(
-      tester
-          .widget<TextField>(
-            find.byKey(const ValueKey('manual-partner-search')),
-          )
-          .focusNode
-          ?.hasFocus,
-      isTrue,
-    );
   });
 
   testWidgets(
@@ -442,11 +435,7 @@ void main() {
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final preferences = _MemoryEditorPreferencesStore()
-        ..value = const ManualTransactionEditorPreferences(
-          layout: ManualTransactionEditorLayout.hero,
-          partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
-        );
+      final preferences = _MemoryEditorPreferencesStore();
       await tester.pumpWidget(
         MaterialApp(
           home: ManualTransactionEditor.create(
@@ -723,6 +712,46 @@ void main() {
         find.byKey(const ValueKey('manual-category-create-action')),
       );
       await tester.pumpAndSettle();
+      final pickerSize = tester.getSize(
+        find.byKey(const ValueKey('category-editor-picker-region')),
+      );
+      final saveTop = tester
+          .getTopLeft(find.byKey(const ValueKey('category-editor-save')))
+          .dy;
+      await tester.tap(find.byKey(const ValueKey('category-editor-icon-tab')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey('category-editor-picker-region')),
+        ),
+        pickerSize,
+      );
+      expect(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('category-editor-save')))
+            .dy,
+        saveTop,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey('category-editor-icon-pages')),
+        const Offset(-390, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(categoryRepository.created, isNull);
+      await tester.tap(
+        find.byKey(const ValueKey('category-editor-icon-icon_09')),
+      );
+      await tester.tap(find.byKey(const ValueKey('category-editor-color-tab')));
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byKey(const ValueKey('category-editor-color-pages')),
+        const Offset(-390, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(categoryRepository.created, isNull);
+      await tester.tap(
+        find.byKey(const ValueKey('category-editor-color-color_06')),
+      );
       await tester.enterText(
         find.byKey(const ValueKey('category-editor-name-input')),
         'Közlekedés',
@@ -736,20 +765,268 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(categoryRepository.created?.name, 'Közlekedés');
+      expect(categoryRepository.created?.colorId, 'color_06');
+      expect(categoryRepository.created?.iconId, 'icon_09');
       expect(find.text('Közlekedés'), findsOneWidget);
       expect(find.text('Közlekedés'), findsOneWidget);
     },
   );
 
   testWidgets(
+    'partner editor keeps a new partner local and filters its inline category list',
+    (tester) async {
+      final repository = _FakeManualRepository();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ManualTransactionEditor.create(
+            repository: repository,
+            categories: categories,
+            direction: LedgerDirection.expense,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('manual-partner-create-action')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Új partner'), findsOneWidget);
+      final nameField = tester.widget<TextField>(
+        find.byKey(const ValueKey('partner-editor-name-input')),
+      );
+      expect(nameField.autofocus, isFalse);
+      await tester.enterText(
+        find.byKey(const ValueKey('partner-editor-name-input')),
+        'Sarki bolt',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('partner-editor-category-search')),
+        'Vás',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('partner-editor-category-shopping')),
+        findsOneWidget,
+      );
+      expect(find.text('Nincs találat.'), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('partner-editor-category-shopping')),
+      );
+      expect(
+        find.text(
+          'A módosítás az öröklő tranzakciókat és ismétlődő szabályokat is érintheti. Az egyedi felülírások megmaradnak.',
+        ),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('partner-editor-save')));
+      await tester.pumpAndSettle();
+
+      expect(repository.updatePartnerCalls, 0);
+      expect(find.text('Sarki bolt'), findsOneWidget);
+    },
+  );
+
+  testWidgets('partner editor warns only for an altered existing default', (
+    tester,
+  ) async {
+    final repository = _FakeManualRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () => showPartnerEditorPopup(
+                  context,
+                  repository: repository,
+                  categories: categories,
+                  existing: repository.partner,
+                ),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Partner szerkesztése'), findsOneWidget);
+    expect(
+      find.text(
+        'A módosítás az öröklő tranzakciókat és ismétlődő szabályokat is érintheti. Az egyedi felülírások megmaradnak.',
+      ),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('partner-editor-category-shopping')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'A módosítás az öröklő tranzakciókat és ismétlődő szabályokat is érintheti. Az egyedi felülírások megmaradnak.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('partner-editor-cancel')));
+    await tester.pumpAndSettle();
+    expect(repository.updatePartnerCalls, 0);
+  });
+
+  testWidgets('new category color editor visual reference', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeCategoryRepository();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const ValueKey<String>('category-editor-visual-boundary'),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: FilledButton(
+                  onPressed: () =>
+                      showCategoryEditorSheet(context, repository: repository),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byKey(const ValueKey('category-editor-visual-boundary')),
+      matchesGoldenFile('../../goldens/category_editor_sheet_color.png'),
+    );
+  });
+
+  testWidgets('existing category icon editor visual reference', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeCategoryRepository(categories: categories);
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const ValueKey<String>('category-editor-icon-visual-boundary'),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: FilledButton(
+                  onPressed: () => showCategoryEditorSheet(
+                    context,
+                    repository: repository,
+                    category: categories[1],
+                  ),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('category-editor-icon-tab')));
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byKey(const ValueKey('category-editor-icon-visual-boundary')),
+      matchesGoldenFile('../../goldens/category_editor_sheet_icon.png'),
+    );
+  });
+
+  testWidgets('existing partner editor warning visual reference', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeManualRepository();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const ValueKey<String>('partner-editor-visual-boundary'),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: FilledButton(
+                  onPressed: () => showPartnerEditorPopup(
+                    context,
+                    repository: repository,
+                    categories: categories,
+                    existing: repository.partner,
+                  ),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('partner-editor-category-shopping')),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byKey(const ValueKey('partner-editor-visual-boundary')),
+      matchesGoldenFile('../../goldens/partner_editor_sheet_warning.png'),
+    );
+  });
+
+  testWidgets('child editors keep their footer reachable on a small screen', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 480));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.35)),
+          child: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: FilledButton(
+                  onPressed: () => showPartnerEditorPopup(
+                    context,
+                    repository: _FakeManualRepository(),
+                    categories: categories,
+                  ),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('partner-editor-save')), findsOneWidget);
+    expect(find.byKey(const ValueKey('partner-editor-cancel')), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('partner-editor-save')),
+    );
+    expect(tester.any(find.text('Alapértelmezett kategória')), isTrue);
+  });
+
+  testWidgets(
     'category edit preserves the transaction selection and refreshes its row',
     (tester) async {
       final repository = _FakeManualRepository();
-      final preferences = _MemoryEditorPreferencesStore()
-        ..value = const ManualTransactionEditorPreferences(
-          layout: ManualTransactionEditorLayout.hero,
-          partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
-        );
+      final preferences = _MemoryEditorPreferencesStore();
       final categoryRepository = _FakeCategoryRepository(
         categories: categories,
         onUpdated: (category) {
@@ -908,6 +1185,38 @@ void main() {
     },
   );
 
+  testWidgets('hero metadata backgrounds hidden visual reference', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const ValueKey<String>('manual-metadata-hidden-visual-boundary'),
+        child: MaterialApp(
+          home: ManualTransactionEditor.create(
+            repository: _FakeManualRepository(),
+            categories: categories,
+            direction: LedgerDirection.expense,
+            impactRepository: const _FakeImpactRepository(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('manual-metadata-icon-background-toggle')),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byKey(const ValueKey('manual-metadata-hidden-visual-boundary')),
+      matchesGoldenFile(
+        '../../goldens/manual_transaction_editor_metadata_hidden.png',
+      ),
+    );
+  });
+
   testWidgets('hero income editor visual reference', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -928,7 +1237,9 @@ void main() {
       find.byKey(const ValueKey('manual-amount-field')),
       '8 500',
     );
-    await tester.tap(find.byKey(const ValueKey('manual-partner-field')));
+    await tester.tap(
+      find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text(repository.partner.displayName));
     await tester.pumpAndSettle();
@@ -937,37 +1248,6 @@ void main() {
       find.byKey(const ValueKey('manual-editor-visual-boundary')),
       matchesGoldenFile(
         '../../goldens/manual_transaction_editor_hero_income.png',
-      ),
-    );
-  });
-
-  testWidgets('islands expense editor visual reference', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final preferences = _MemoryEditorPreferencesStore()
-      ..value = const ManualTransactionEditorPreferences(
-        layout: ManualTransactionEditorLayout.islands,
-        partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
-      );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ManualTransactionEditor.create(
-          repository: _FakeManualRepository(),
-          categories: categories,
-          direction: LedgerDirection.expense,
-          preferencesStore: preferences,
-          impactRepository: const _FakeImpactRepository(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('manual-quick-5000')));
-    await tester.pumpAndSettle();
-
-    await expectLater(
-      find.byKey(const ValueKey('manual-editor-visual-boundary')),
-      matchesGoldenFile(
-        '../../goldens/manual_transaction_editor_islands_expense.png',
       ),
     );
   });
@@ -1061,11 +1341,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final preferences = _MemoryEditorPreferencesStore()
-      ..value = const ManualTransactionEditorPreferences(
-        layout: ManualTransactionEditorLayout.hero,
-        partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
-      );
+    final preferences = _MemoryEditorPreferencesStore();
     await tester.pumpWidget(
       RepaintBoundary(
         key: const ValueKey('manual-partner-dropdown-visual-boundary'),
@@ -1297,6 +1573,7 @@ final class _FakeManualRepository implements ManualTransactionRepository {
 
   int createCalls = 0;
   int updateCalls = 0;
+  int updatePartnerCalls = 0;
   int? lastAmount;
   LedgerDirection? lastDirection;
   ManualCategorySelection? lastCategorySelection;
@@ -1369,7 +1646,10 @@ final class _FakeManualRepository implements ManualTransactionRepository {
     required String partnerId,
     required String? displayNameOverride,
     required String defaultCategoryId,
-  }) async => partner;
+  }) async {
+    updatePartnerCalls += 1;
+    return partner;
+  }
 
   LedgerEntryDetail _entry({
     int amountScaled100 = 100000,

@@ -427,29 +427,28 @@ class MainActivity : FlutterActivity() {
                     }
                     "readManualTransactionEditorSettings" -> result.success(
                         mapOf(
-                            // First use is Hero plus the existing fullscreen
-                            // partner selector. Both values are presentation
-                            // only and intentionally share this established
-                            // local-settings store.
-                            "layout" to preferences.getInt("manualTransactionEditorLayout", 0)
-                                .takeIf { it in 0..1 },
-                            "partnerPickerPresentation" to preferences
-                                .getInt("manualTransactionPartnerPickerPresentation", 0)
-                                .takeIf { it in 0..1 },
+                            // Legacy layout/picker enum values are ignored.
+                            // A missing new key is always the visible-icon-
+                            // background default, never an old enum index.
+                            "showMetadataIconBackgrounds" to preferences.getBoolean(
+                                "manualTransactionShowMetadataIconBackgrounds",
+                                true,
+                            ),
                         ),
                     )
                     "writeManualTransactionEditorSettings" -> {
                         val values = call.arguments as? Map<*, *>
                             ?: throw IllegalArgumentException("Manual editor settings must be a map.")
-                        val layout = (values["layout"] as? Number)?.toInt()
-                            ?: throw IllegalArgumentException("Missing manual editor layout.")
-                        val picker = (values["partnerPickerPresentation"] as? Number)?.toInt()
-                            ?: throw IllegalArgumentException("Missing partner picker presentation.")
-                        require(layout in 0..1) { "Invalid manual editor layout." }
-                        require(picker in 0..1) { "Invalid partner picker presentation." }
+                        val showMetadataIconBackgrounds =
+                            values["showMetadataIconBackgrounds"] as? Boolean
+                                ?: throw IllegalArgumentException(
+                                    "Missing metadata icon background preference.",
+                                )
                         preferences.edit()
-                            .putInt("manualTransactionEditorLayout", layout)
-                            .putInt("manualTransactionPartnerPickerPresentation", picker)
+                            .putBoolean(
+                                "manualTransactionShowMetadataIconBackgrounds",
+                                showMetadataIconBackgrounds,
+                            )
                             .apply()
                         result.success(null)
                     }

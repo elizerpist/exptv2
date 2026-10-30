@@ -19,16 +19,10 @@ final class MethodChannelManualTransactionEditorPreferencesStore
       );
       if (values == null) return ManualTransactionEditorPreferences.defaults;
       return ManualTransactionEditorPreferences(
-        layout: _enumValue(
-          ManualTransactionEditorLayout.values,
-          values['layout'] as int?,
-          ManualTransactionEditorLayout.hero,
-        ),
-        partnerPickerPresentation: _enumValue(
-          ManualPartnerPickerPresentation.values,
-          values['partnerPickerPresentation'] as int?,
-          ManualPartnerPickerPresentation.fullScreen,
-        ),
+        // An absent key is deliberately the documented true default. In
+        // particular, never reinterpret the old enum integers as this bool.
+        showMetadataIconBackgrounds:
+            values['showMetadataIconBackgrounds'] as bool? ?? true,
       );
     } on PlatformException {
       return ManualTransactionEditorPreferences.defaults;
@@ -40,12 +34,13 @@ final class MethodChannelManualTransactionEditorPreferencesStore
   @override
   Future<void> write(ManualTransactionEditorPreferences preferences) async {
     try {
-      await _channel
-          .invokeMethod<void>('writeManualTransactionEditorSettings', {
-            'layout': preferences.layout.index,
-            'partnerPickerPresentation':
-                preferences.partnerPickerPresentation.index,
-          });
+      await _channel.invokeMethod<void>(
+        'writeManualTransactionEditorSettings',
+        {
+          'showMetadataIconBackgrounds':
+              preferences.showMetadataIconBackgrounds,
+        },
+      );
     } on PlatformException {
       // The editor remains usable in an embedded or unsupported host; the
       // next opening falls back to the documented first-use defaults.
@@ -54,8 +49,3 @@ final class MethodChannelManualTransactionEditorPreferencesStore
     }
   }
 }
-
-T _enumValue<T extends Enum>(List<T> values, int? index, T fallback) =>
-    index != null && index >= 0 && index < values.length
-    ? values[index]
-    : fallback;

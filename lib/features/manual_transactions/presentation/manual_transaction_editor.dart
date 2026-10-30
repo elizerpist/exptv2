@@ -27,8 +27,7 @@ enum ManualTransactionEditorMode { create, edit }
 
 enum _ManualEditorInlinePicker { partner, category }
 
-/// One draft serves both renderings. Toggling layout rebuilds only the surface
-/// around retained controllers, focus nodes, picker state and scroll position.
+/// One transaction draft powers the fixed hero-and-inline-picker editor.
 final class ManualTransactionEditor extends StatefulWidget {
   const ManualTransactionEditor.create({
     super.key,
@@ -201,11 +200,9 @@ final class _ManualTransactionEditorState
   }
 
   Future<void> _setPreferences(ManualTransactionEditorPreferences value) async {
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() {
-      _openInlinePicker = null;
-      _preferences = value;
-    });
+    // This display-only toggle must not disturb the transaction draft, an
+    // active text session, an open picker or the retained scroll position.
+    setState(() => _preferences = value);
     await (widget.preferencesStore ??
             const DefaultManualTransactionEditorPreferencesStore())
         .write(value);
@@ -324,23 +321,6 @@ final class _ManualTransactionEditorState
       });
     }
     _reloadImpact();
-  }
-
-  Future<void> _pickPartnerFullscreen() async {
-    // Opening a selector is a navigation action, not an invitation to start
-    // typing. This also dismisses a previously focused amount/note keyboard
-    // before the full-screen route becomes visible.
-    FocusManager.instance.primaryFocus?.unfocus();
-    final selected = await Navigator.of(context).push<ManualPartnerSelection>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => PartnerSelector(
-          repository: widget.repository,
-          categories: _categories,
-        ),
-      ),
-    );
-    if (mounted && selected != null) await _acceptPartner(selected);
   }
 
   Future<void> _createCategory() async {
@@ -584,8 +564,6 @@ final class _ManualTransactionEditorState
     if (_loading || _preferences == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final islands =
-        _preferences!.layout == ManualTransactionEditorLayout.islands;
     return RepaintBoundary(
       key: const ValueKey('manual-editor-visual-boundary'),
       child: PopScope(
@@ -596,9 +574,7 @@ final class _ManualTransactionEditorState
         },
         child: Scaffold(
           resizeToAvoidBottomInset: true,
-          backgroundColor: islands
-              ? FluviVisualTokens.pageBackground
-              : Colors.white,
+          backgroundColor: Colors.white,
           body: Column(
             children: [
               Expanded(
@@ -608,33 +584,22 @@ final class _ManualTransactionEditorState
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   children: [
-                    if (islands)
-                      _islandHeader(context)
-                    else
-                      _heroHeader(context),
-                    _quickAmounts(islands: islands),
-                    if (islands) ...[
-                      _island(_partnerAndCategory(context)),
-                      _island(_dateAndNote(context)),
-                    ] else ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                        child: _partnerAndCategory(context),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _dateAndNote(context),
-                      ),
-                    ],
+                    _heroHeader(context),
+                    _quickAmounts(),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                      child: _partnerAndCategory(context),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _dateAndNote(context),
+                    ),
                     if (MediaQuery.viewInsetsOf(context).bottom == 0)
-                      if (islands)
-                        _island(_impactPreview(context))
-                      else
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-                          child: _impactPreview(context),
-                        ),
-                    if (_error != null) _errorBlock(context, islands: islands),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+                        child: _impactPreview(context),
+                      ),
+                    if (_error != null) _errorBlock(context),
                     const SizedBox(height: 22),
                   ],
                 ),
@@ -678,27 +643,6 @@ final class _ManualTransactionEditorState
         20,
       ),
       child: _headerContent(context),
-    ),
-  );
-
-  Widget _islandHeader(BuildContext context) => Padding(
-    key: const ValueKey('manual-editor-islands'),
-    padding: EdgeInsets.fromLTRB(
-      16,
-      MediaQuery.paddingOf(context).top + 14,
-      16,
-      0,
-    ),
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: _heroGradient,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: FluviVisualTokens.cardSurfaceShadows,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-        child: _headerContent(context),
-      ),
     ),
   );
 
@@ -757,53 +701,22 @@ final class _ManualTransactionEditorState
                       ),
                     ),
                     _headerToggle(
-                      key: const ValueKey('manual-partner-presentation-toggle'),
-                      tooltip:
-                          _preferences!.partnerPickerPresentation ==
-                              ManualPartnerPickerPresentation.fullScreen
-                          ? 'Partnerlista: teljes oldal'
-                          : 'Partnerlista: legördülő lista',
-                      icon:
-                          _preferences!.partnerPickerPresentation ==
-                              ManualPartnerPickerPresentation.fullScreen
-                          ? Icons.open_in_full_rounded
-                          : Icons.arrow_drop_down_circle_outlined,
+                      key: const ValueKey(
+                        'manual-metadata-icon-background-toggle',
+                      ),
+                      tooltip: _preferences!.showMetadataIconBackgrounds
+                          ? 'Ikonhátterek elrejtése'
+                          : 'Ikonhátterek megjelenítése',
+                      toggled: _preferences!.showMetadataIconBackgrounds,
+                      icon: _MetadataIconBackgroundToggleIcon(
+                        showSurface: _preferences!.showMetadataIconBackgrounds,
+                      ),
                       onTap: _saving
                           ? null
                           : () => _setPreferences(
                               _preferences!.copyWith(
-                                partnerPickerPresentation:
-                                    _preferences!.partnerPickerPresentation ==
-                                        ManualPartnerPickerPresentation
-                                            .fullScreen
-                                    ? ManualPartnerPickerPresentation.dropdown
-                                    : ManualPartnerPickerPresentation
-                                          .fullScreen,
-                              ),
-                            ),
-                    ),
-                    const SizedBox(width: 4),
-                    _headerToggle(
-                      key: const ValueKey('manual-layout-toggle'),
-                      tooltip:
-                          _preferences!.layout ==
-                              ManualTransactionEditorLayout.hero
-                          ? 'Szerkesztő elrendezés: Hero'
-                          : 'Szerkesztő elrendezés: szigetes',
-                      icon:
-                          _preferences!.layout ==
-                              ManualTransactionEditorLayout.hero
-                          ? Icons.dashboard_outlined
-                          : Icons.view_agenda_outlined,
-                      onTap: _saving
-                          ? null
-                          : () => _setPreferences(
-                              _preferences!.copyWith(
-                                layout:
-                                    _preferences!.layout ==
-                                        ManualTransactionEditorLayout.hero
-                                    ? ManualTransactionEditorLayout.islands
-                                    : ManualTransactionEditorLayout.hero,
+                                showMetadataIconBackgrounds:
+                                    !_preferences!.showMetadataIconBackgrounds,
                               ),
                             ),
                     ),
@@ -939,29 +852,32 @@ final class _ManualTransactionEditorState
   Widget _headerToggle({
     required Key key,
     required String tooltip,
-    required IconData icon,
+    required Widget icon,
+    required bool toggled,
     required VoidCallback? onTap,
   }) => Semantics(
     button: true,
+    toggled: toggled,
     label: tooltip,
     child: Tooltip(
       message: tooltip,
       child: IconButton(
         key: key,
         onPressed: onTap,
-        icon: Icon(icon),
+        icon: icon,
         color: FluviVisualTokens.textPrimary,
         style: IconButton.styleFrom(
           backgroundColor: Colors.white.withValues(alpha: .58),
           side: const BorderSide(color: Color(0x33FFFFFF)),
           minimumSize: const Size(44, 44),
+          shape: const CircleBorder(),
         ),
       ),
     ),
   );
 
-  Widget _quickAmounts({required bool islands}) => Padding(
-    padding: EdgeInsets.fromLTRB(islands ? 16 : 20, 14, islands ? 16 : 20, 4),
+  Widget _quickAmounts() => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
     child: Row(
       children: [
         for (final (index, amount) in <int>[1000, 5000, 10000].indexed) ...[
@@ -993,58 +909,24 @@ final class _ManualTransactionEditorState
     ),
   );
 
-  Widget _island(Widget child) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: FluviVisualTokens.cardSurfaceShadows,
-      ),
-      child: Padding(padding: const EdgeInsets.all(16), child: child),
-    ),
-  );
-
   Widget _partnerAndCategory(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      if (_preferences!.partnerPickerPresentation ==
-          ManualPartnerPickerPresentation.dropdown)
-        PartnerDropdown(
-          repository: widget.repository,
-          categories: _categories,
-          selectedPartnerId: switch (_partnerSelection) {
-            ExistingManualPartner(:final partnerId) => partnerId,
-            _ => null,
-          },
-          selectedPartner: _partner,
-          enabled: !_saving,
-          directoryRevision: _partnerDirectoryRevision,
-          expanded: _openInlinePicker == _ManualEditorInlinePicker.partner,
-          onExpandedChanged: (open) =>
-              _setInlinePicker(_ManualEditorInlinePicker.partner, open),
-          onSelected: _acceptPartner,
-        )
-      else
-        ManualEditorSelectionRow(
-          key: const ValueKey('manual-partner-field'),
-          label: 'Partner',
-          value: _partner?.displayName ?? 'Partner kiválasztása',
-          leading: _partner == null
-              ? const ManualEditorIconSurface(
-                  icon: Icons.storefront_outlined,
-                  color: Color(0xff64748b),
-                  background: Color(0xfff1f5f9),
-                )
-              : PartnerCategoryAvatar(
-                  partner: _partner!,
-                  size: 40,
-                  iconSize: 20,
-                  roundedSquare: true,
-                ),
-          enabled: !_saving,
-          onTap: _pickPartnerFullscreen,
-        ),
+      PartnerDropdown(
+        repository: widget.repository,
+        categories: _categories,
+        selectedPartnerId: switch (_partnerSelection) {
+          ExistingManualPartner(:final partnerId) => partnerId,
+          _ => null,
+        },
+        selectedPartner: _partner,
+        enabled: !_saving,
+        directoryRevision: _partnerDirectoryRevision,
+        expanded: _openInlinePicker == _ManualEditorInlinePicker.partner,
+        onExpandedChanged: (open) =>
+            _setInlinePicker(_ManualEditorInlinePicker.partner, open),
+        onSelected: _acceptPartner,
+      ),
       manualEditorDivider,
       CategoryDropdown(
         categories: _categories,
@@ -1082,7 +964,14 @@ final class _ManualTransactionEditorState
               onTap: _saving ? null : _pickDate,
             ),
           ),
-          Container(width: 1, height: 32, color: const Color(0xffe1e6ee)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Container(
+              width: 1,
+              height: 32,
+              color: const Color(0xffe1e6ee),
+            ),
+          ),
           Expanded(
             child: _dateTimePart(
               key: const ValueKey('manual-time-field'),
@@ -1099,12 +988,13 @@ final class _ManualTransactionEditorState
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const ManualEditorIconSurface(
+            ManualEditorIconSurface(
               icon: Icons.edit_outlined,
               color: FluviVisualTokens.textPrimary,
               background: Color(0xfff1f5f9),
+              showBackground: _preferences!.showMetadataIconBackgrounds,
             ),
-            const SizedBox(width: 13),
+            const SizedBox(width: ManualEditorFieldMetrics.leadingToText),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1117,7 +1007,7 @@ final class _ManualTransactionEditorState
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: ManualEditorFieldMetrics.labelToValue),
                   TextField(
                     key: const ValueKey('manual-note-field'),
                     controller: _note,
@@ -1165,15 +1055,16 @@ final class _ManualTransactionEditorState
         key: key,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 13),
           child: Row(
             children: [
               ManualEditorIconSurface(
                 icon: icon,
                 color: const Color(0xff64748b),
                 background: const Color(0xfff1f5f9),
+                showBackground: _preferences!.showMetadataIconBackgrounds,
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: ManualEditorFieldMetrics.leadingToText),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1183,21 +1074,22 @@ final class _ManualTransactionEditorState
                       key == const ValueKey('manual-date-field')
                           ? 'Dátum'
                           : 'Idő',
-                      style: const TextStyle(
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: FluviVisualTokens.textSecondary,
-                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(
+                      height: ManualEditorFieldMetrics.labelToValue,
+                    ),
                     Text(
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: FluviVisualTokens.textPrimary,
-                        fontSize: 14,
                         fontWeight: FontWeight.w800,
+                        letterSpacing: -.15,
                       ),
                     ),
                   ],
@@ -1282,8 +1174,8 @@ final class _ManualTransactionEditorState
     );
   }
 
-  Widget _errorBlock(BuildContext context, {required bool islands}) => Padding(
-    padding: EdgeInsets.fromLTRB(islands ? 16 : 20, 14, islands ? 16 : 20, 0),
+  Widget _errorBlock(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
     child: Text(
       _error!,
       style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -1354,6 +1246,39 @@ final class _ManualTransactionEditorState
       ),
     );
   }
+}
+
+final class _MetadataIconBackgroundToggleIcon extends StatelessWidget {
+  const _MetadataIconBackgroundToggleIcon({required this.showSurface});
+
+  final bool showSurface;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 22,
+    height: 22,
+    child: Center(
+      child: showSurface
+          ? Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: const Color(0xfff1f5f9),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: const Icon(
+                Icons.schedule_outlined,
+                size: 13,
+                color: Color(0xff64748b),
+              ),
+            )
+          : const Icon(
+              Icons.schedule_outlined,
+              size: 22,
+              color: FluviVisualTokens.textPrimary,
+            ),
+    ),
+  );
 }
 
 double _ctaButtonWidth(BuildContext context, String label, double minimum) {
