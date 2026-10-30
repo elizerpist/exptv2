@@ -19,6 +19,7 @@ import '../domain/manual_transaction_impact_repository.dart';
 import '../domain/manual_transaction_models.dart';
 import '../domain/manual_transaction_repository.dart';
 import 'category_dropdown.dart';
+import 'manual_transaction_editor_field_rows.dart';
 import 'partner_selector.dart';
 
 enum ManualTransactionEditorMode { create, edit }
@@ -540,19 +541,15 @@ final class _ManualTransactionEditorState
                     _quickAmounts(islands: islands),
                     if (islands) ...[
                       _island(_partnerAndCategory(context)),
-                      _island(_dateNoteAndMore(context)),
+                      _island(_dateAndNote(context)),
                     ] else ...[
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
                         child: _partnerAndCategory(context),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 20),
-                        child: Divider(height: 32),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _dateNoteAndMore(context),
+                        child: _dateAndNote(context),
                       ),
                     ],
                     if (MediaQuery.viewInsetsOf(context).bottom == 0)
@@ -576,8 +573,21 @@ final class _ManualTransactionEditorState
     );
   }
 
-  LinearGradient get _heroGradient =>
-      FluviDirectionColorPaletteCatalog.income(_directionColorProfile);
+  LinearGradient get _heroGradient {
+    final source = FluviDirectionColorPaletteCatalog.income(
+      _directionColorProfile,
+    );
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        for (final color in source.colors)
+          Color.lerp(color, Colors.white, .86)!,
+      ],
+      stops: source.stops,
+    );
+  }
+
   FluviDirectionColorProfile get _directionColorProfile =>
       widget.headerVisualTuning?.value.globalAppearance.directionColorProfile ??
       FluviDirectionColorProfile.original;
@@ -588,9 +598,9 @@ final class _ManualTransactionEditorState
     child: Padding(
       padding: EdgeInsets.fromLTRB(
         20,
-        MediaQuery.paddingOf(context).top + 14,
+        MediaQuery.paddingOf(context).top + 12,
         20,
-        26,
+        20,
       ),
       child: _headerContent(context),
     ),
@@ -611,7 +621,7 @@ final class _ManualTransactionEditorState
         boxShadow: FluviVisualTokens.cardSurfaceShadows,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
         child: _headerContent(context),
       ),
     ),
@@ -635,8 +645,9 @@ final class _ManualTransactionEditorState
               child: Text(
                 title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
+                  color: FluviVisualTokens.textPrimary,
                   fontWeight: FontWeight.w800,
+                  letterSpacing: -.2,
                 ),
               ),
             ),
@@ -688,32 +699,72 @@ final class _ManualTransactionEditorState
             ),
           ],
         ),
-        const SizedBox(height: 20),
-        TextField(
-          key: const ValueKey('manual-amount-field'),
-          controller: _amount,
-          focusNode: _amountFocus,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9,.\s\u00A0]')),
-          ],
-          maxLines: 1,
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-            color: Colors.white,
-            fontFeatures: const [FontFeature.tabularFigures()],
-            fontWeight: FontWeight.w800,
+        const SizedBox(height: 18),
+        Text(
+          'Összeg',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: FluviVisualTokens.textSecondary,
+            fontWeight: FontWeight.w700,
           ),
-          decoration: InputDecoration(
-            hintText: '0',
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: .62)),
-            suffixText: 'Ft',
-            suffixStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white.withValues(alpha: .78),
-              fontWeight: FontWeight.w700,
+        ),
+        const SizedBox(height: 1),
+        _amountEditor(context),
+      ],
+    );
+  }
+
+  Widget _amountEditor(BuildContext context) {
+    final amountStyle = Theme.of(context).textTheme.displaySmall?.copyWith(
+      color: FluviVisualTokens.textPrimary,
+      fontFeatures: const [FontFeature.tabularFigures()],
+      fontWeight: FontWeight.w900,
+      letterSpacing: -.8,
+      height: 1.08,
+    );
+    final displayed = _amount.text.isEmpty ? '0' : _amount.text;
+    final painter = TextPainter(
+      text: TextSpan(text: displayed, style: amountStyle),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout(maxWidth: 244);
+    final fieldWidth = (painter.width + 12).clamp(52, 244).toDouble();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        SizedBox(
+          width: fieldWidth,
+          child: TextField(
+            key: const ValueKey('manual-amount-field'),
+            controller: _amount,
+            focusNode: _amountFocus,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9,.\s\u00A0]')),
+            ],
+            maxLines: 1,
+            style: amountStyle,
+            decoration: InputDecoration(
+              hintText: '0',
+              hintStyle: amountStyle?.copyWith(
+                color: FluviVisualTokens.textPrimary.withValues(alpha: .36),
+              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              isDense: true,
+              isCollapsed: true,
+              contentPadding: EdgeInsets.zero,
             ),
-            border: InputBorder.none,
-            isDense: true,
-            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          'Ft',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: FluviVisualTokens.textPrimary,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],
@@ -734,9 +785,10 @@ final class _ManualTransactionEditorState
         key: key,
         onPressed: onTap,
         icon: Icon(icon),
-        color: Colors.white,
+        color: FluviVisualTokens.textPrimary,
         style: IconButton.styleFrom(
-          backgroundColor: Colors.white.withValues(alpha: .18),
+          backgroundColor: Colors.white.withValues(alpha: .58),
+          side: const BorderSide(color: Color(0x33FFFFFF)),
           minimumSize: const Size(44, 44),
         ),
       ),
@@ -750,12 +802,23 @@ final class _ManualTransactionEditorState
         for (final (index, amount) in <int>[1000, 5000, 10000].indexed) ...[
           if (index > 0) const SizedBox(width: 8),
           Expanded(
-            child: OutlinedButton(
+            child: FilledButton(
               key: ValueKey('manual-quick-$amount'),
               onPressed: _saving ? null : () => _addQuickAmount(amount),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 42),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xfff1eaff),
+                foregroundColor: const Color(0xff6d28d9),
+                disabledBackgroundColor: const Color(0xfff1eaff),
+                disabledForegroundColor: const Color(0xff6d28d9),
+                elevation: 0,
+                minimumSize: const Size(0, 40),
                 padding: const EdgeInsets.symmetric(horizontal: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                textStyle: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               child: Text('+${_formatHungarianMinor(amount * 100)} Ft'),
             ),
@@ -795,26 +858,26 @@ final class _ManualTransactionEditorState
           onSelected: _acceptPartner,
         )
       else
-        ListTile(
+        ManualEditorSelectionRow(
           key: const ValueKey('manual-partner-field'),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-          shape: RoundedRectangleBorder(
-            side: BorderSide(
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Text(_partner?.displayName ?? 'Partner kiválasztása'),
-          subtitle: _partner == null
-              ? null
-              : Text(_partner!.defaultCategoryName),
+          label: 'Partner',
+          value: _partner?.displayName ?? 'Partner kiválasztása',
           leading: _partner == null
-              ? const Icon(Icons.storefront_outlined)
-              : PartnerCategoryAvatar(partner: _partner!),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: _saving ? null : _pickPartnerFullscreen,
+              ? const ManualEditorIconSurface(
+                  icon: Icons.storefront_outlined,
+                  color: Color(0xff64748b),
+                  background: Color(0xfff1f5f9),
+                )
+              : PartnerCategoryAvatar(
+                  partner: _partner!,
+                  size: 40,
+                  iconSize: 20,
+                  roundedSquare: true,
+                ),
+          enabled: !_saving,
+          onTap: _pickPartnerFullscreen,
         ),
-      const SizedBox(height: 14),
+      manualEditorDivider,
       CategoryDropdown(
         categories: _categories,
         selectedCategoryId: _selectedCategoryId,
@@ -829,96 +892,137 @@ final class _ManualTransactionEditorState
           _reloadImpact();
         },
       ),
-      if (_categorySelection.mode ==
-          ManualCategoryAssignmentMode.entryOverride) ...[
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            const Icon(Icons.edit_outlined, size: 16),
-            const SizedBox(width: 4),
-            const Text('Egyedi kategória'),
-            const Spacer(),
-            TextButton(
-              onPressed: _partner == null || _saving
-                  ? null
-                  : () {
-                      setState(
-                        () => _categorySelection =
-                            const ManualCategorySelection.partnerDefault(),
-                      );
-                      _reloadImpact();
-                    },
-              child: const Text('Visszaállítás'),
-            ),
-          ],
-        ),
-      ] else if (_partner != null)
-        const Padding(
-          padding: EdgeInsets.only(top: 6),
-          child: Text('Partner alapértelmezése'),
-        ),
+      manualEditorDivider,
     ],
   );
 
-  Widget _dateNoteAndMore(BuildContext context) => Column(
+  Widget _dateAndNote(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Row(
         children: [
           Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _saving ? null : _pickDate,
-              icon: const Icon(Icons.calendar_today_outlined),
-              label: Text(
-                MaterialLocalizations.of(context).formatMediumDate(_date),
+            child: _dateTimePart(
+              key: const ValueKey('manual-date-field'),
+              icon: Icons.calendar_month_outlined,
+              label: _formatHungarianEditorDate(_date),
+              onTap: _saving ? null : _pickDate,
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xffe1e6ee)),
+          Expanded(
+            child: _dateTimePart(
+              key: const ValueKey('manual-time-field'),
+              icon: Icons.schedule_outlined,
+              label: _formatHungarianTime(_time),
+              onTap: _saving ? null : _pickTime,
+            ),
+          ),
+        ],
+      ),
+      manualEditorDivider,
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const ManualEditorIconSurface(
+              icon: Icons.edit_outlined,
+              color: FluviVisualTokens.textPrimary,
+              background: Color(0xfff1f5f9),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Megjegyzés',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: FluviVisualTokens.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  TextField(
+                    key: const ValueKey('manual-note-field'),
+                    controller: _note,
+                    focusNode: _noteFocus,
+                    minLines: 1,
+                    maxLines: null,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: FluviVisualTokens.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Megjegyzés hozzáadása',
+                      hintStyle: Theme.of(context).textTheme.bodyLarge
+                          ?.copyWith(color: FluviVisualTokens.textSecondary),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                      isCollapsed: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _saving ? null : _pickTime,
-              icon: const Icon(Icons.schedule_outlined),
-              label: Text(_time.format(context)),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 16),
-      TextField(
-        key: const ValueKey('manual-note-field'),
-        controller: _note,
-        focusNode: _noteFocus,
-        minLines: 1,
-        maxLines: null,
-        textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(
-          labelText: 'Megjegyzés',
-          alignLabelWithHint: true,
-          border: OutlineInputBorder(),
+          ],
         ),
       ),
-      const SizedBox(height: 6),
-      ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        title: const Text('További adatok'),
-        subtitle: const Text('Nincs további szerkeszthető tranzakciómező.'),
-        childrenPadding: const EdgeInsets.only(bottom: 6),
-        children: [
-          Text(
-            _editing && _entry?.originKind != 'manual'
-                ? 'Az importált tétel eredeti eseményideje megmarad.'
-                : 'A partner, kategória, dátum, idő és megjegyzés a fenti mezőkben szerkeszthető.',
-          ),
-        ],
-      ),
+      manualEditorDivider,
     ],
+  );
+
+  Widget _dateTimePart({
+    required Key key,
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+  }) => Semantics(
+    button: true,
+    label: label,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: key,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 4),
+          child: Row(
+            children: [
+              ManualEditorIconSurface(icon: icon),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: FluviVisualTokens.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
   );
 
   Widget _impactPreview(BuildContext context) {
     final direction = _direction ?? LedgerDirection.expense;
     final amount = _parseHungarianMinor(_amount.text);
     final impact = _impact;
+    final category = _category(_selectedCategoryId);
+    final period = _formatHungarianMonth(_date);
+    final expenseSubtitle = '${category?.name ?? 'Kategorizálatlan'} · $period';
     if (amount == null || amount <= 0) {
       return const _ImpactSurface(
         title: 'A tranzakció hatása',
@@ -942,9 +1046,10 @@ final class _ManualTransactionEditorState
       final after = before + amount;
       return _ImpactSurface(
         title: 'A tranzakció hatása',
+        subtitle: 'Havi egyenleg · $period',
         headline: 'Mentés utáni havi egyenleg',
         value: _formatHungarianMinor(after),
-        detail: 'Most: ${_formatHungarianMinor(before)} Ft',
+        calculation: 'Most: ${_formatHungarianMinor(before)} Ft',
       );
     }
     final limit = impact.categoryLimitScaled100;
@@ -964,10 +1069,18 @@ final class _ManualTransactionEditorState
         : (amount / limit).clamp(0.0, 1.0 - spent).toDouble();
     return _ImpactSurface(
       title: 'A tranzakció hatása',
+      subtitle: expenseSubtitle,
       headline: 'Mentés után megmarad',
       value: '${after < 0 ? '−' : ''}${_formatHungarianMinor(after.abs())}',
-      detail: 'Most rendelkezésre áll: ${_formatHungarianMinor(before)} Ft',
+      calculation:
+          '${_formatHungarianMinor(impact.categoryActualScaled100)} Ft elköltve + ${_formatHungarianMinor(amount)} Ft most',
+      limitLabel: 'Havi keret: ${_formatHungarianMinor(limit)} Ft',
       fraction: (spent, draft),
+      legend: (
+        spent: impact.categoryActualScaled100,
+        draft: amount,
+        remaining: after,
+      ),
       overflow: after < 0,
     );
   }
@@ -1019,18 +1132,24 @@ final class _ImpactSurface extends StatelessWidget {
   const _ImpactSurface({
     required this.title,
     this.message,
+    this.subtitle,
     this.headline,
     this.value,
-    this.detail,
+    this.calculation,
+    this.limitLabel,
     this.fraction,
+    this.legend,
     this.overflow = false,
   });
   final String title;
   final String? message;
+  final String? subtitle;
   final String? headline;
   final String? value;
-  final String? detail;
+  final String? calculation;
+  final String? limitLabel;
   final (double spent, double draft)? fraction;
+  final ({int spent, int draft, int remaining})? legend;
   final bool overflow;
 
   @override
@@ -1039,13 +1158,29 @@ final class _ImpactSurface extends StatelessWidget {
     children: [
       Text(
         title,
-        style: Theme.of(
-          context,
-        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: FluviVisualTokens.textPrimary,
+          fontWeight: FontWeight.w900,
+          letterSpacing: -.25,
+        ),
       ),
-      const SizedBox(height: 10),
+      if (subtitle != null) ...[
+        const SizedBox(height: 2),
+        Text(
+          subtitle!,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: FluviVisualTokens.textSecondary,
+          ),
+        ),
+      ],
+      const SizedBox(height: 9),
       if (message != null)
-        Text(message!)
+        Text(
+          message!,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: FluviVisualTokens.textSecondary,
+          ),
+        )
       else ...[
         Text(
           headline!,
@@ -1064,38 +1199,125 @@ final class _ImpactSurface extends StatelessWidget {
                 : FluviVisualTokens.textPrimary,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 7),
+        if (calculation != null)
+          Text(
+            calculation!,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: FluviVisualTokens.textSecondary,
+            ),
+          ),
+        if (limitLabel != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            limitLabel!,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: FluviVisualTokens.textSecondary,
+            ),
+          ),
+        ],
+        if (fraction != null) const SizedBox(height: 10),
         if (fraction case final segments?)
           ClipRRect(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(8),
             child: SizedBox(
-              height: 8,
+              height: 10,
               child: Row(
                 children: [
                   Expanded(
-                    flex: (segments.$1 * 1000).round().clamp(0, 1000).toInt(),
-                    child: const ColoredBox(color: Color(0xff94a3b8)),
+                    flex: _impactFlex(segments.$1),
+                    child: const ColoredBox(color: Color(0xff9786e8)),
                   ),
                   Expanded(
-                    flex: (segments.$2 * 1000).round().clamp(0, 1000).toInt(),
-                    child: const ColoredBox(color: Color(0xffe478c3)),
+                    flex: _impactFlex(segments.$2),
+                    child: const ColoredBox(color: Color(0xffff999b)),
                   ),
                   Expanded(
-                    flex: ((1 - segments.$1 - segments.$2) * 1000)
-                        .round()
-                        .clamp(0, 1000)
-                        .toInt(),
+                    flex: _impactFlex(1 - segments.$1 - segments.$2),
                     child: const ColoredBox(color: Color(0xffe2e8f0)),
                   ),
                 ],
               ),
             ),
           ),
-        if (detail != null) ...[
+        if (legend != null) ...[
           const SizedBox(height: 8),
-          Text(detail!, style: Theme.of(context).textTheme.bodySmall),
+          Row(
+            children: [
+              Expanded(
+                child: _ImpactLegend(
+                  color: const Color(0xff9786e8),
+                  label: 'Elköltve',
+                  value: _formatHungarianMinor(legend!.spent),
+                ),
+              ),
+              Expanded(
+                child: _ImpactLegend(
+                  color: const Color(0xffff999b),
+                  label: 'Most',
+                  value: _formatHungarianMinor(legend!.draft),
+                ),
+              ),
+              Expanded(
+                child: _ImpactLegend(
+                  color: const Color(0xffcbd5e1),
+                  label: 'Marad',
+                  value:
+                      '${legend!.remaining < 0 ? '−' : ''}${_formatHungarianMinor(legend!.remaining.abs())}',
+                ),
+              ),
+            ],
+          ),
         ],
       ],
+    ],
+  );
+}
+
+int _impactFlex(double fraction) =>
+    (fraction.clamp(0.0, 1.0) * 1000).round().clamp(1, 1000).toInt();
+
+final class _ImpactLegend extends StatelessWidget {
+  const _ImpactLegend({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
+
+  final Color color;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: FluviVisualTokens.textSecondary,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 1),
+      Text(
+        '$value Ft',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: FluviVisualTokens.textPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     ],
   );
 }
@@ -1201,3 +1423,35 @@ String _formatHungarianMinor(int minor) {
       ? grouped.toString()
       : '${grouped.toString()},${fraction.toString().padLeft(2, '0')}';
 }
+
+const _hungarianMonthShort = <String>[
+  'jan.',
+  'febr.',
+  'márc.',
+  'ápr.',
+  'máj.',
+  'jún.',
+  'júl.',
+  'aug.',
+  'szept.',
+  'okt.',
+  'nov.',
+  'dec.',
+];
+
+String _formatHungarianEditorDate(DateTime date) {
+  final today = DateTime.now();
+  final month = _hungarianMonthShort[date.month - 1];
+  if (date.year == today.year &&
+      date.month == today.month &&
+      date.day == today.day) {
+    return 'Ma · $month ${date.day}.';
+  }
+  return '$month ${date.day}. ${date.year}';
+}
+
+String _formatHungarianMonth(DateTime date) =>
+    '${_hungarianMonthShort[date.month - 1]} ${date.year}';
+
+String _formatHungarianTime(TimeOfDay time) =>
+    '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';

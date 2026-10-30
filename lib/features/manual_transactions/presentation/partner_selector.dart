@@ -9,6 +9,7 @@ import '../../../core/categories/presentation/category_icon_view.dart';
 import '../domain/manual_transaction_models.dart';
 import '../domain/manual_transaction_repository.dart';
 import 'partner_editor_popup.dart';
+import 'manual_transaction_editor_field_rows.dart';
 
 /// Fullscreen partner picker. It queries once, then filters its immutable
 /// in-memory snapshot for every keystroke.
@@ -189,11 +190,13 @@ final class PartnerCategoryAvatar extends StatelessWidget {
     required this.partner,
     this.size = 40,
     this.iconSize = 20,
+    this.roundedSquare = false,
   });
 
   final PartnerDirectoryEntry partner;
   final double size;
   final double iconSize;
+  final bool roundedSquare;
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +216,10 @@ final class PartnerCategoryAvatar extends StatelessWidget {
             colorHandle,
             profile: CategoryAvatarColorProfileScope.profileOf(context),
           ),
-          shape: BoxShape.circle,
+          shape: roundedSquare ? BoxShape.rectangle : BoxShape.circle,
+          borderRadius: roundedSquare
+              ? BorderRadius.circular(size * .28)
+              : null,
         ),
         alignment: Alignment.center,
         child: CategoryIconView(
@@ -423,50 +429,27 @@ final class PartnerDropdownState extends State<PartnerDropdown> {
           ),
         ),
       ],
-      builder: (context, controller, _) => Semantics(
-        button: true,
-        label: 'Partner kiválasztása legördülő listából',
-        child: InkWell(
-          key: const ValueKey('manual-partner-dropdown-anchor'),
-          borderRadius: BorderRadius.circular(16),
-          onTap: widget.enabled
-              ? () => controller.isOpen ? controller.close() : _open()
-              : null,
-          child: InputDecorator(
-            decoration: const InputDecoration(
-              labelText: 'Partner',
-              suffixIcon: Icon(Icons.keyboard_arrow_down_rounded),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(16)),
+      builder: (context, controller, _) => ManualEditorSelectionRow(
+        key: const ValueKey('manual-partner-dropdown-anchor'),
+        label: 'Partner',
+        value: partner?.displayName ?? 'Partner kiválasztása',
+        valueSemantics: partner == null
+            ? 'Partner kiválasztása legördülő listából'
+            : 'Partner: ${partner.displayName}',
+        leading: partner == null
+            ? const ManualEditorIconSurface(
+                icon: Icons.storefront_outlined,
+                color: Color(0xff64748b),
+                background: Color(0xfff1f5f9),
+              )
+            : PartnerCategoryAvatar(
+                partner: partner,
+                size: 40,
+                iconSize: 20,
+                roundedSquare: true,
               ),
-            ),
-            child: partner == null
-                ? const Text('Partner kiválasztása')
-                : Row(
-                    children: [
-                      PartnerCategoryAvatar(
-                        partner: partner,
-                        size: 28,
-                        iconSize: 14,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(partner.displayName),
-                            Text(
-                              partner.defaultCategoryName,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
+        enabled: widget.enabled,
+        onTap: () => controller.isOpen ? controller.close() : _open(),
       ),
     );
   }

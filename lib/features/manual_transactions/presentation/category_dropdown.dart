@@ -4,6 +4,7 @@ import '../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
 import '../../../core/categories/presentation/category_visual_badge.dart';
+import 'manual_transaction_editor_field_rows.dart';
 
 /// A route-local anchored category picker. It returns only an ID; each caller
 /// owns whether that means a partner default or an entry override.
@@ -61,10 +62,16 @@ final class _CategoryDropdownState extends State<CategoryDropdown> {
                 24)
             .clamp(180, 340)
             .toDouble();
-    final selected = widget.categories.cast<FluviCategory?>().firstWhere(
+    final selectedById = widget.categories.cast<FluviCategory?>().firstWhere(
       (category) => category?.id == widget.selectedCategoryId,
       orElse: () => null,
     );
+    final selected =
+        selectedById ??
+        widget.categories.cast<FluviCategory?>().firstWhere(
+          (category) => category?.isSystemUncategorized ?? false,
+          orElse: () => null,
+        );
     return MenuAnchor(
       controller: _controller,
       alignmentOffset: const Offset(0, 8),
@@ -136,35 +143,19 @@ final class _CategoryDropdownState extends State<CategoryDropdown> {
           ),
         ),
       ],
-      builder: (context, controller, _) => Semantics(
-        button: true,
-        label: '${widget.label} kiválasztása',
-        child: InkWell(
-          key: const ValueKey('manual-category-dropdown-anchor'),
-          borderRadius: BorderRadius.circular(16),
-          onTap: widget.enabled
-              ? () => controller.isOpen ? controller.close() : controller.open()
-              : null,
-          child: InputDecorator(
-            decoration: InputDecoration(
-              labelText: widget.label,
-              enabled: widget.enabled,
-              suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            child: selected == null
-                ? const Text('Kategorizálatlan')
-                : Row(
-                    children: [
-                      _CategoryAvatar(category: selected, size: 28),
-                      const SizedBox(width: 10),
-                      Expanded(child: Text(selected.name)),
-                    ],
-                  ),
-          ),
-        ),
+      builder: (context, controller, _) => ManualEditorSelectionRow(
+        key: const ValueKey('manual-category-dropdown-anchor'),
+        label: widget.label,
+        value: selected?.name ?? 'Kategorizálatlan',
+        leading: selected == null
+            ? const ManualEditorIconSurface(
+                icon: Icons.category_outlined,
+                color: Color(0xff64748b),
+                background: Color(0xfff1f5f9),
+              )
+            : _CategoryAvatar(category: selected, size: 40),
+        enabled: widget.enabled,
+        onTap: () => controller.isOpen ? controller.close() : controller.open(),
       ),
     );
   }

@@ -58,7 +58,7 @@ void main() {
       await tester.tap(find.text('Tesco'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Partner alapértelmezése'), findsOneWidget);
+      expect(find.text('Tesco'), findsOneWidget);
       expect(find.text('Élelmiszer'), findsWidgets);
       expect(
         find.byWidgetPredicate(
@@ -78,7 +78,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Vásárlás').last);
       await tester.pumpAndSettle();
-      expect(find.text('Egyedi kategória'), findsOneWidget);
+      expect(find.text('Vásárlás'), findsOneWidget);
 
       await tester.tap(find.text('Mentés'));
       await tester.pumpAndSettle();
@@ -258,6 +258,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('manual-quick-1000')));
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('A tranzakció hatása'),
       240,
@@ -327,17 +328,61 @@ void main() {
 
       expect(categoryRepository.created?.name, 'Közlekedés');
       expect(find.text('Közlekedés'), findsOneWidget);
-      expect(find.text('Egyedi kategória'), findsOneWidget);
+      expect(find.text('Közlekedés'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'editor uses borderless reference rows and expands the in-place note',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ManualTransactionEditor.create(
+            repository: _FakeManualRepository(),
+            categories: categories,
+            direction: LedgerDirection.expense,
+            impactRepository: const _FakeImpactRepository(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Összeg'), findsOneWidget);
+      expect(find.text('További adatok'), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is InputDecorator &&
+              widget.decoration.border is OutlineInputBorder,
+        ),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('manual-date-field')), findsOneWidget);
+      expect(find.byKey(const ValueKey('manual-time-field')), findsOneWidget);
+
+      final compactHeight = tester
+          .getSize(find.byKey(const ValueKey('manual-note-field')))
+          .height;
+      await tester.enterText(
+        find.byKey(const ValueKey('manual-note-field')),
+        'Első sor\nMásodik sor\nHarmadik sor',
+      );
+      await tester.pump();
+      expect(
+        tester.getSize(find.byKey(const ValueKey('manual-note-field'))).height,
+        greaterThan(compactHeight),
+      );
     },
   );
 
   testWidgets('hero income editor visual reference', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeManualRepository();
     await tester.pumpWidget(
       MaterialApp(
         home: ManualTransactionEditor.create(
-          repository: _FakeManualRepository(),
+          repository: repository,
           categories: categories,
           direction: LedgerDirection.income,
           preferencesStore: _MemoryEditorPreferencesStore(),
@@ -346,7 +391,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('manual-quick-1000')));
+    await tester.enterText(
+      find.byKey(const ValueKey('manual-amount-field')),
+      '8 500',
+    );
+    await tester.tap(find.byKey(const ValueKey('manual-partner-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(repository.partner.displayName));
     await tester.pumpAndSettle();
 
     await expectLater(

@@ -1,4 +1,5 @@
 import 'package:fluvi/features/manual_transactions/presentation/creation_selector_sheet.dart';
+import 'package:fluvi/features/manual_transactions/application/creation_selector_preferences.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,8 @@ void main() {
                 selected = await showCreationSelectorSheet(
                   context,
                   direction: LedgerDirection.expense,
+                  preferencesStore:
+                      const DefaultCreationSelectorPreferencesStore(),
                 );
               },
               child: const Text('open'),
@@ -55,6 +58,8 @@ void main() {
               onPressed: () => showCreationSelectorSheet(
                 context,
                 direction: LedgerDirection.income,
+                preferencesStore:
+                    const DefaultCreationSelectorPreferencesStore(),
               ),
               child: const Text('open income'),
             ),
@@ -82,6 +87,8 @@ void main() {
               onPressed: () => showCreationSelectorSheet(
                 context,
                 direction: LedgerDirection.income,
+                preferencesStore:
+                    const DefaultCreationSelectorPreferencesStore(),
               ),
               child: const Text('open visual'),
             ),
@@ -100,6 +107,39 @@ void main() {
     );
   });
 
+  testWidgets('previous creation selector visual reference', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final preferences = _MemoryCreationSelectorPreferencesStore()
+      ..design = CreationSelectorDesign.previous;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          backgroundColor: const Color(0xffedf1f6),
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => showCreationSelectorSheet(
+                context,
+                direction: LedgerDirection.income,
+                preferencesStore: preferences,
+              ),
+              child: const Text('open previous visual'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open previous visual'));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byKey(const ValueKey('creation-selector-sheet-boundary')),
+      matchesGoldenFile(
+        '../../goldens/manual_transaction_creation_selector_previous_income.png',
+      ),
+    );
+  });
+
   testWidgets('modified direction palettes reach the primary FAB action', (
     tester,
   ) async {
@@ -114,6 +154,8 @@ void main() {
                     context,
                     direction: LedgerDirection.income,
                     directionColorProfile: FluviDirectionColorProfile.vivid,
+                    preferencesStore:
+                        const DefaultCreationSelectorPreferencesStore(),
                   ),
                   child: const Text('open vivid income'),
                 ),
@@ -122,6 +164,8 @@ void main() {
                     context,
                     direction: LedgerDirection.expense,
                     directionColorProfile: FluviDirectionColorProfile.pastel,
+                    preferencesStore:
+                        const DefaultCreationSelectorPreferencesStore(),
                   ),
                   child: const Text('open pastel expense'),
                 ),
@@ -154,6 +198,63 @@ void main() {
       ),
     );
   });
+
+  testWidgets('FAB selector design toggle persists without closing the sheet', (
+    tester,
+  ) async {
+    final preferences = _MemoryCreationSelectorPreferencesStore();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => showCreationSelectorSheet(
+                context,
+                direction: LedgerDirection.income,
+                preferencesStore: preferences,
+              ),
+              child: const Text('open persistent design'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open persistent design'));
+    await tester.pumpAndSettle();
+    expect(find.text('Új bevétel'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('creation-selector-design-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Új bevételi tranzakció létrehozása'), findsOneWidget);
+    expect(preferences.design, CreationSelectorDesign.previous);
+    expect(find.text('Manuális tranzakció'), findsOneWidget);
+
+    Navigator.of(
+      tester.element(
+        find.byKey(const ValueKey('creation-selector-sheet-boundary')),
+      ),
+    ).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('open persistent design'));
+    await tester.pumpAndSettle();
+    expect(find.text('Új bevételi tranzakció létrehozása'), findsOneWidget);
+  });
+}
+
+final class _MemoryCreationSelectorPreferencesStore
+    implements CreationSelectorPreferencesStore {
+  CreationSelectorDesign design = CreationSelectorDesign.refreshed;
+
+  @override
+  Future<CreationSelectorDesign> read() async => design;
+
+  @override
+  Future<void> write(CreationSelectorDesign value) async {
+    design = value;
+  }
 }
 
 LinearGradient _primaryActionGradient(WidgetTester tester) {

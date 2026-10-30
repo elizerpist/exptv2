@@ -409,6 +409,22 @@ class MainActivity : FlutterActivity() {
                         ?.takeIf { it in 0..1 }
                         ?: 1
                 when (call.method) {
+                    "readCreationSelectorDesign" -> result.success(
+                        preferences.getInt("creationSelectorDesign", 0)
+                            .takeIf { it in 0..1 }
+                            ?: 0,
+                    )
+                    "writeCreationSelectorDesign" -> {
+                        val values = call.arguments as? Map<*, *>
+                            ?: throw IllegalArgumentException("Creation selector settings must be a map.")
+                        val design = (values["design"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing creation selector design.")
+                        require(design in 0..1) { "Invalid creation selector design." }
+                        preferences.edit()
+                            .putInt("creationSelectorDesign", design)
+                            .apply()
+                        result.success(null)
+                    }
                     "readManualTransactionEditorSettings" -> result.success(
                         mapOf(
                             // First use is Hero plus the existing fullscreen
