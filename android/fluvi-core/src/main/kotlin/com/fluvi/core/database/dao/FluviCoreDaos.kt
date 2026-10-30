@@ -904,6 +904,33 @@ internal interface FluviRecurrenceDao {
     suspend fun rules(): List<com.fluvi.core.database.entity.FluviRecurrenceRuleEntity>
 
     @Query(
+        "UPDATE fluvi_recurrence_rules SET name = :name, trigger_kind = :triggerKind, partner_id = :partnerId, " +
+            "category_id = :categoryId, category_assignment_mode = :categoryMode, note = :note, amount_policy = :amountPolicy, " +
+            "amount_scaled_100 = :amountScaled100, day_of_month = :dayOfMonth, local_time_minutes = :localTimeMinutes, " +
+            "start_local_epoch_day = :startLocalEpochDay, end_local_epoch_day = :endLocalEpochDay, timezone_id = :timezoneId, " +
+            "rule_version = rule_version + 1, updated_at_utc_ms = :now " +
+            "WHERE id = :ruleId AND rule_version = :expectedVersion AND archived_at_utc_ms IS NULL",
+    )
+    suspend fun updateRuleIfVersion(
+        ruleId: String,
+        expectedVersion: Int,
+        name: String,
+        triggerKind: com.fluvi.core.model.RecurrenceTriggerKind,
+        partnerId: String,
+        categoryId: String,
+        categoryMode: com.fluvi.core.model.CategoryAssignmentMode,
+        note: String?,
+        amountPolicy: com.fluvi.core.model.RecurrenceAmountPolicy,
+        amountScaled100: Long,
+        dayOfMonth: Int,
+        localTimeMinutes: Int,
+        startLocalEpochDay: Long,
+        endLocalEpochDay: Long?,
+        timezoneId: String,
+        now: Long,
+    ): Int
+
+    @Query(
         "UPDATE fluvi_recurrence_rules SET is_active = :isActive, updated_at_utc_ms = :now " +
             "WHERE id = :ruleId AND archived_at_utc_ms IS NULL",
     )
@@ -929,6 +956,12 @@ internal interface FluviRecurrenceDao {
         config: com.fluvi.core.database.entity.FluviPushRecurringRuleConfigEntity,
     )
 
+    @Query("DELETE FROM fluvi_time_recurring_rule_config WHERE rule_id = :ruleId")
+    suspend fun deleteTimeConfig(ruleId: String): Int
+
+    @Query("DELETE FROM fluvi_push_recurring_rule_config WHERE rule_id = :ruleId")
+    suspend fun deletePushConfig(ruleId: String): Int
+
     @Query("SELECT * FROM fluvi_push_recurring_rule_config WHERE rule_id = :ruleId LIMIT 1")
     suspend fun pushConfig(
         ruleId: String,
@@ -953,6 +986,23 @@ internal interface FluviRecurrenceDao {
 
     @Query("SELECT * FROM fluvi_recurrence_occurrences WHERE id = :occurrenceId LIMIT 1")
     suspend fun occurrence(occurrenceId: String): com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity?
+
+    @Query(
+        "SELECT * FROM fluvi_recurrence_occurrences " +
+            "WHERE (:ruleId IS NULL OR rule_id = :ruleId) " +
+            "AND (:status IS NULL OR status = :status) " +
+            "AND (:fromUtcMs IS NULL OR expected_at_utc_ms >= :fromUtcMs) " +
+            "AND (:toUtcMs IS NULL OR expected_at_utc_ms <= :toUtcMs) " +
+            "ORDER BY expected_at_utc_ms ASC, id ASC LIMIT :limit OFFSET :offset",
+    )
+    suspend fun occurrencePageFiltered(
+        ruleId: String?,
+        status: com.fluvi.core.model.RecurrenceOccurrenceStatus?,
+        fromUtcMs: Long?,
+        toUtcMs: Long?,
+        limit: Int,
+        offset: Int,
+    ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
 
     @Query("SELECT * FROM fluvi_recurrence_occurrences WHERE rule_id = :ruleId ORDER BY expected_at_utc_ms ASC, id ASC")
     suspend fun occurrencesForRule(ruleId: String): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
@@ -1011,6 +1061,13 @@ internal interface FluviRecurrenceDao {
     suspend fun duePending(now: Long): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
 
     @Query(
+        "UPDATE fluvi_recurrence_occurrences SET status = 'skipped', resolved_at_utc_ms = :now, " +
+            "updated_at_utc_ms = :now, revision = revision + 1 " +
+            "WHERE rule_id = :ruleId AND status = 'pending' AND expected_at_utc_ms < :now",
+    )
+    suspend fun skipPastPendingForResumedRule(ruleId: String, now: Long): Int
+
+    @Query(
         "SELECT occurrence.* FROM fluvi_recurrence_occurrences AS occurrence " +
             "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
             "WHERE occurrence.status = 'pending' AND occurrence.trigger_kind = 'time' " +
@@ -1032,7 +1089,7 @@ internal interface FluviRecurrenceDao {
             "AND occurrence.trigger_kind = 'push' " +
             "AND config.push_profile_id = :profileId AND config.push_rule_id = :pushRuleId " +
             "AND occurrence.direction = :direction " +
-            "AND ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= config.day_window * 86400000 " +
+            "AND (config.day_window = 0 OR ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= config.day_window * 86400000) " +
             "AND (occurrence.expected_amount_scaled_100 IS NULL " +
             "OR ABS(occurrence.expected_amount_scaled_100 - :amountScaled100) <= config.amount_tolerance_scaled_100) " +
             "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC",
@@ -1058,7 +1115,7 @@ internal interface FluviRecurrenceDao {
             "AND occurrence.trigger_kind = 'push' " +
             "AND config.push_profile_id = :profileId AND config.push_rule_id IS NOT NULL " +
             "AND occurrence.direction = :direction " +
-            "AND ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= config.day_window * 86400000 " +
+            "AND (config.day_window = 0 OR ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= config.day_window * 86400000) " +
             "AND (occurrence.expected_amount_scaled_100 IS NULL " +
             "OR ABS(occurrence.expected_amount_scaled_100 - :amountScaled100) <= config.amount_tolerance_scaled_100) " +
             "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC",
@@ -1077,7 +1134,7 @@ internal interface FluviRecurrenceDao {
             "WHERE occurrence.status = 'realized' AND occurrence.trigger_kind = 'push' " +
             "AND config.push_profile_id = :profileId AND config.push_rule_id = :pushRuleId " +
             "AND occurrence.direction = :direction " +
-            "AND ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= config.day_window * 86400000 " +
+            "AND (config.day_window = 0 OR ABS(occurrence.expected_at_utc_ms - :receivedAtUtcMs) <= config.day_window * 86400000) " +
             "AND (occurrence.expected_amount_scaled_100 IS NULL " +
             "OR ABS(occurrence.expected_amount_scaled_100 - :amountScaled100) <= config.amount_tolerance_scaled_100) " +
             "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC",

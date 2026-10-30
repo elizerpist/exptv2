@@ -3124,6 +3124,10 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                     appearance: tuning.globalAppearance,
                     controller: controller,
                   ),
+                  if (presentationPreferences case final preferences?) ...[
+                    const SizedBox(height: 14),
+                    _RecurringUiDesignSection(controller: preferences),
+                  ],
                 ],
               ),
               const SizedBox(height: 14),
@@ -5113,6 +5117,102 @@ final class _CollapsibleTunerSection extends StatelessWidget {
             ),
           ),
       ],
+    ),
+  );
+}
+
+/// This selector chooses a route family only. It never touches recurrence
+/// records, scheduling, Ledger membership or the active/suspended state.
+final class _RecurringUiDesignSection extends StatelessWidget {
+  const _RecurringUiDesignSection({required this.controller});
+
+  final DashboardPresentationPreferencesController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardPresentationPreferences>(
+        valueListenable: controller,
+        builder: (context, preferences, _) => _TunerSection(
+          title: 'Ismétlődő tranzakciók',
+          children: <Widget>[
+            const Text('A létrehozás és a kezelés felülete.'),
+            const SizedBox(height: 10),
+            Semantics(
+              label: 'Ismétlődő tranzakciók felülete',
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: FluviVisualTokens.surfaceMuted,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: FluviVisualTokens.border),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: Row(
+                    children: [
+                      for (final design in RecurringUiDesign.values)
+                        Expanded(
+                          child: _RecurringUiDesignOption(
+                            design: design,
+                            selected: preferences.recurringUiDesign == design,
+                            onTap: () => controller.setPreferences(
+                              preferences.withRecurringUiDesign(design),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+final class _RecurringUiDesignOption extends StatelessWidget {
+  const _RecurringUiDesignOption({
+    required this.design,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final RecurringUiDesign design;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: design == RecurringUiDesign.legacy ? 'Régi' : 'Új',
+    child: Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        key: ValueKey<String>('dashboard-recurring-ui-${design.name}'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Center(
+              child: Text(
+                design == RecurringUiDesign.legacy ? 'Régi' : 'Új',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected
+                      ? FluviVisualTokens.textPrimary
+                      : FluviVisualTokens.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     ),
   );
 }

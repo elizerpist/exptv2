@@ -613,6 +613,7 @@ void main() {
           DashboardGhostQuickFilterIconPack.current.index,
       'ghostQuickFilterPresentation':
           DashboardGhostQuickFilterPresentation.searchPillFling.index,
+      'recurringUiDesign': 'unified',
     });
   });
 
@@ -638,6 +639,31 @@ void main() {
           await MethodChannelDashboardPresentationPreferencesStore().read();
 
       expect(preferences.sumVisualStyle, MindSumVisualStyle.sumA);
+    },
+  );
+
+  test(
+    'recurring UI defaults to unified and ignores historical numeric values',
+    () async {
+      Map<String, Object?> stored = <String, Object?>{'recurringUiDesign': 0};
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      expect((await store.read()).recurringUiDesign, RecurringUiDesign.unified);
+
+      stored['recurringUiDesign'] = 'legacy';
+      expect((await store.read()).recurringUiDesign, RecurringUiDesign.legacy);
+      await store.write(
+        (await store.read()).withGhostQuickFilterIconPack(
+          DashboardGhostQuickFilterIconPack.receiptGhost,
+        ),
+      );
+      expect(stored['recurringUiDesign'], 'legacy');
     },
   );
 

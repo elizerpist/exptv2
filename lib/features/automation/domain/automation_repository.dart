@@ -56,11 +56,16 @@ abstract interface class AutomationRepository {
   Future<void> ignoreReview(String notificationId);
   Future<RecurrenceDashboardSnapshot> recurrenceDashboard();
   Future<List<RecurrenceRule>> recurringRules();
+  Future<RecurrenceRule> recurringRule(String ruleId);
   Future<List<RecurrenceOccurrence>> recurrenceOccurrences({
     RecurrenceOccurrenceStatus? status,
+    String? ruleId,
+    int? fromUtcMs,
+    int? toUtcMs,
     int limit = 100,
     int offset = 0,
   });
+  Future<RecurrenceOccurrence> recurrenceOccurrence(String occurrenceId);
   Future<String?> realizedRecurrenceLedgerEntryId(String occurrenceId);
   Future<RecurrenceRule> createRecurringRule({
     required String name,
@@ -80,6 +85,56 @@ abstract interface class AutomationRepository {
     String? pushRuleId,
     int amountToleranceScaled100 = 0,
     int dayWindow = 2,
+  });
+
+  /// Same Core transaction as creation, but accepts the manual editor's
+  /// existing/new-partner draft without requiring a premature partner write.
+  Future<RecurrenceRule> createRecurringRuleWithPartner({
+    required String name,
+    required ManualPartnerSelection partner,
+    required ManualCategorySelection categorySelection,
+    required LedgerDirection direction,
+    String? note,
+    required RecurrenceTriggerKind triggerKind,
+    required RecurrenceAmountPolicy amountPolicy,
+    int? amountScaled100,
+    required int dayOfMonth,
+    required int localTimeMinutes,
+    required int startLocalEpochDay,
+    int? endLocalEpochDay,
+    required String timezoneId,
+    String? pushProfileId,
+    String? pushRuleId,
+    int amountToleranceScaled100 = 0,
+    int dayWindow = 2,
+  });
+  Future<RecurrenceRule> updateRecurringRule({
+    required String ruleId,
+    required int expectedRuleVersion,
+    required String name,
+    required String partnerId,
+    required ManualCategorySelection categorySelection,
+    String? note,
+    required RecurrenceTriggerKind triggerKind,
+    required RecurrenceAmountPolicy amountPolicy,
+    int? amountScaled100,
+    required int dayOfMonth,
+    required int localTimeMinutes,
+    required int startLocalEpochDay,
+    int? endLocalEpochDay,
+    required String timezoneId,
+    String? pushProfileId,
+    String? pushRuleId,
+    int amountToleranceScaled100 = 0,
+    int dayWindow = 2,
+  });
+  Future<List<RecurrencePreview>> previewRecurringOccurrences({
+    required int dayOfMonth,
+    required int localTimeMinutes,
+    required int startLocalEpochDay,
+    int? endLocalEpochDay,
+    required String timezoneId,
+    int count = 3,
   });
   Future<void> setRecurringRuleActive(String ruleId, bool isActive);
   Future<void> archiveRecurringRule(String ruleId);

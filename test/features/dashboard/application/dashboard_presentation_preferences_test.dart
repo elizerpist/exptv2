@@ -6,6 +6,36 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_present
 
 void main() {
   test(
+    'recurring UI choice persists independently from other dashboard presentation writes',
+    () async {
+      final store = InMemoryDashboardPresentationPreferencesStore();
+      final controller = DashboardPresentationPreferencesController(
+        store: store,
+      );
+      addTearDown(controller.dispose);
+
+      controller.setPreferences(
+        controller.value.withRecurringUiDesign(RecurringUiDesign.legacy),
+      );
+      controller.setPreferences(
+        controller.value.withGhostQuickFilterPresentation(
+          DashboardGhostQuickFilterPresentation.dropdown,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final restored = DashboardPresentationPreferencesController(store: store);
+      addTearDown(restored.dispose);
+      await restored.restore();
+      expect(restored.value.recurringUiDesign, RecurringUiDesign.legacy);
+      expect(
+        restored.value.ghostQuickFilterPresentation,
+        DashboardGhostQuickFilterPresentation.dropdown,
+      );
+    },
+  );
+
+  test(
     'PRESENTATION-PREFERENCES-01 RED: visual choices restore and persist without owning financial state',
     () async {
       final store = InMemoryDashboardPresentationPreferencesStore();

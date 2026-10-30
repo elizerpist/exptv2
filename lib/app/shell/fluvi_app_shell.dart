@@ -37,8 +37,7 @@ import '../../features/automation/data/unavailable_automation_repository.dart';
 import '../../features/automation/domain/automation_repository.dart';
 import '../../features/automation/presentation/automation_dashboard_page.dart';
 import '../../features/automation/presentation/push_profile_wizard_page.dart';
-import '../../features/automation/presentation/recurring_transaction_wizard_page.dart';
-import '../../features/automation/presentation/ghost_manager_page.dart';
+import '../../features/automation/presentation/recurring_navigation.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../../features/pulse/data/method_channel_pulse_repository.dart';
 import '../../features/pulse/data/unavailable_pulse_repository.dart';
@@ -464,16 +463,18 @@ class _FluviAppShellState extends State<FluviAppShell>
         return;
       }
       if (action == CreationSelectorAction.recurringTransaction) {
-        await Navigator.of(context).push<bool>(
-          creationSlideUpRoute<bool>(
-            fullscreenDialog: true,
-            builder: (_) => RecurringTransactionWizardPage(
-              repository: _automationRepository,
-              manualRepository: _manualTransactionRepository,
-              categories: _categoryCollection.value,
-              initialDirection: direction,
-            ),
-          ),
+        await RecurringNavigation.openCreate(
+          context,
+          design: _dashboardPresentationPreferences.value.recurringUiDesign,
+          repository: _automationRepository,
+          manualRepository: _manualTransactionRepository,
+          categories: _categoryCollection.value,
+          categoryRepository: _categoryRepository,
+          preferencesStore: kIsWeb
+              ? null
+              : MethodChannelManualTransactionEditorPreferencesStore(),
+          permissions: _automationPermissionRepository,
+          direction: direction,
         );
         return;
       }
@@ -510,16 +511,14 @@ class _FluviAppShellState extends State<FluviAppShell>
     _syncPulseDeliverySurface();
     try {
       if (entryId.startsWith('ghost:')) {
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (_) => GhostManagerPage(
-              repository: _automationRepository,
-              manualRepository: _manualTransactionRepository,
-              categories: _categoryCollection.value,
-              initialOccurrenceId: entryId.substring('ghost:'.length),
-              onOpenLedgerEntry: _openEditTransaction,
-            ),
-          ),
+        await RecurringNavigation.openOccurrence(
+          context,
+          design: _dashboardPresentationPreferences.value.recurringUiDesign,
+          repository: _automationRepository,
+          manualRepository: _manualTransactionRepository,
+          categories: _categoryCollection.value,
+          occurrenceId: entryId.substring('ghost:'.length),
+          onOpenLedgerEntry: _openEditTransaction,
         );
         return;
       }
@@ -1181,23 +1180,29 @@ class _FluviAppShellState extends State<FluviAppShell>
                               // build's default.
                               AnimatedBuilder(
                                 animation: _controller.transactionDirection,
-                                builder: (context, _) =>
-                                    AutomationDashboardPage(
-                                      repository: _automationRepository,
-                                      permissions:
-                                          _automationPermissionRepository,
-                                      manualRepository:
-                                          _manualTransactionRepository,
-                                      categories: _categoryCollection.value,
-                                      direction:
-                                          _controller
-                                                  .transactionDirection
-                                                  .direction ==
-                                              TransactionDirection.income
-                                          ? LedgerDirection.income
-                                          : LedgerDirection.expense,
-                                      onOpenLedgerEntry: _openEditTransaction,
-                                    ),
+                                builder: (context, _) => AutomationDashboardPage(
+                                  repository: _automationRepository,
+                                  permissions: _automationPermissionRepository,
+                                  manualRepository:
+                                      _manualTransactionRepository,
+                                  categories: _categoryCollection.value,
+                                  categoryRepository: _categoryRepository,
+                                  preferencesStore: kIsWeb
+                                      ? null
+                                      : MethodChannelManualTransactionEditorPreferencesStore(),
+                                  recurringUiDesign: () =>
+                                      _dashboardPresentationPreferences
+                                          .value
+                                          .recurringUiDesign,
+                                  direction:
+                                      _controller
+                                              .transactionDirection
+                                              .direction ==
+                                          TransactionDirection.income
+                                      ? LedgerDirection.income
+                                      : LedgerDirection.expense,
+                                  onOpenLedgerEntry: _openEditTransaction,
+                                ),
                               ),
                               _pulseInitialized
                                   ? PulseDashboardPage(

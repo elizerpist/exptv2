@@ -19,6 +19,10 @@ data class FluviRecurrenceRule(
     val timezoneId: String,
     val isActive: Boolean,
     val ruleVersion: Int,
+    val pushProfileId: String? = null,
+    val pushRuleId: String? = null,
+    val amountToleranceScaled100: Long = 0L,
+    val dayWindow: Int = 0,
 )
 
 data class FluviRecurrenceOccurrence(
@@ -62,7 +66,9 @@ data class FluviTimeRecurrenceEvidence(
 
 data class CreateRecurrenceRuleCommand(
     val name: String,
-    val partnerId: String,
+    /** Legacy callers supply [partnerId]; unified creation supplies [partner]. */
+    val partnerId: String? = null,
+    val partner: ManualTransactionPartnerSelection? = null,
     val categorySelection: LedgerCategorySelection,
     val direction: LedgerDirection,
     val note: String?,
@@ -78,6 +84,42 @@ data class CreateRecurrenceRuleCommand(
     val pushRuleId: String? = null,
     val amountToleranceScaled100: Long = 0L,
     val dayWindow: Int = 2,
+)
+
+data class UpdateRecurrenceRuleCommand(
+    val ruleId: String,
+    val expectedRuleVersion: Int,
+    val name: String,
+    val partnerId: String,
+    val categorySelection: LedgerCategorySelection,
+    val note: String?,
+    val triggerKind: RecurrenceTriggerKind,
+    val amountPolicy: RecurrenceAmountPolicy,
+    val amountScaled100: Long?,
+    val dayOfMonth: Int,
+    val localTimeMinutes: Int,
+    val startLocalEpochDay: Long,
+    val endLocalEpochDay: Long?,
+    val timezoneId: String,
+    val pushProfileId: String? = null,
+    val pushRuleId: String? = null,
+    val amountToleranceScaled100: Long = 0L,
+    val dayWindow: Int = 2,
+)
+
+data class RecurrencePreviewRequest(
+    val dayOfMonth: Int,
+    val localTimeMinutes: Int,
+    val startLocalEpochDay: Long,
+    val endLocalEpochDay: Long?,
+    val timezoneId: String,
+    val count: Int = 3,
+)
+
+data class FluviRecurrencePreview(
+    val expectedLocalEpochDay: Long,
+    val expectedLocalTimeMinutes: Int,
+    val expectedAtUtcMs: Long,
 )
 
 data class UpdateOccurrenceOverrideCommand(

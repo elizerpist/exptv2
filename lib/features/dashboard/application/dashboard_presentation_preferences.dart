@@ -21,6 +21,10 @@ enum DashboardGhostQuickFilterPresentation {
   searchPillFling,
 }
 
+/// Chooses only the recurring-transaction surface family. It deliberately
+/// carries no rule, scheduler, query or financial state.
+enum RecurringUiDesign { legacy, unified }
+
 /// Persisted presentation-only choices. Financial membership, query state,
 /// selected time and prepared data are deliberately outside this value.
 final class DashboardPresentationPreferences {
@@ -62,6 +66,7 @@ final class DashboardPresentationPreferences {
     this.ghostQuickFilterIconPack = DashboardGhostQuickFilterIconPack.current,
     this.ghostQuickFilterPresentation =
         DashboardGhostQuickFilterPresentation.searchPillFling,
+    this.recurringUiDesign = RecurringUiDesign.unified,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -96,6 +101,7 @@ final class DashboardPresentationPreferences {
   final double balanceHeaderPaletteWindowWidthPercent;
   final DashboardGhostQuickFilterIconPack ghostQuickFilterIconPack;
   final DashboardGhostQuickFilterPresentation ghostQuickFilterPresentation;
+  final RecurringUiDesign recurringUiDesign;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.sumA,
@@ -123,6 +129,7 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterIconPack: DashboardGhostQuickFilterIconPack.current,
     ghostQuickFilterPresentation:
         DashboardGhostQuickFilterPresentation.searchPillFling,
+    recurringUiDesign: RecurringUiDesign.unified,
   );
 
   @override
@@ -165,7 +172,8 @@ final class DashboardPresentationPreferences {
       other.balanceHeaderPaletteWindowWidthPercent ==
           balanceHeaderPaletteWindowWidthPercent &&
       other.ghostQuickFilterIconPack == ghostQuickFilterIconPack &&
-      other.ghostQuickFilterPresentation == ghostQuickFilterPresentation;
+      other.ghostQuickFilterPresentation == ghostQuickFilterPresentation &&
+      other.recurringUiDesign == recurringUiDesign;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -198,6 +206,7 @@ final class DashboardPresentationPreferences {
     balanceHeaderPaletteWindowWidthPercent,
     ghostQuickFilterIconPack,
     ghostQuickFilterPresentation,
+    recurringUiDesign,
   ]);
 
   DashboardPresentationPreferences withGhostQuickFilterIconPack(
@@ -236,6 +245,7 @@ final class DashboardPresentationPreferences {
         balanceHeaderPaletteWindowWidthPercent,
     ghostQuickFilterIconPack: next,
     ghostQuickFilterPresentation: ghostQuickFilterPresentation,
+    recurringUiDesign: recurringUiDesign,
   );
 
   DashboardPresentationPreferences withGhostQuickFilterPresentation(
@@ -274,6 +284,46 @@ final class DashboardPresentationPreferences {
         balanceHeaderPaletteWindowWidthPercent,
     ghostQuickFilterIconPack: ghostQuickFilterIconPack,
     ghostQuickFilterPresentation: next,
+    recurringUiDesign: recurringUiDesign,
+  );
+
+  DashboardPresentationPreferences withRecurringUiDesign(
+    RecurringUiDesign next,
+  ) => DashboardPresentationPreferences(
+    sumVisualStyle: sumVisualStyle,
+    showSumLayoutChooser: showSumLayoutChooser,
+    yearGridLayout: yearGridLayout,
+    yearMonthlyAmountPresentation: yearMonthlyAmountPresentation,
+    showDayContentViewChooser: showDayContentViewChooser,
+    balanceUsesChildCards: balanceUsesChildCards,
+    balanceHeaderGraphPresentation: balanceHeaderGraphPresentation,
+    balanceDayLayoutPresentation: balanceDayLayoutPresentation,
+    balanceDayFocusedPresentation: balanceDayFocusedPresentation,
+    balanceDayPerformanceVisualPresentation:
+        balanceDayPerformanceVisualPresentation,
+    balanceDayRatioViewPresentation: balanceDayRatioViewPresentation,
+    balanceDayRatioPresentation: balanceDayRatioPresentation,
+    balanceShowFocusedDayImpact: balanceShowFocusedDayImpact,
+    balanceSumLayoutPresentation: balanceSumLayoutPresentation,
+    balanceSumFocusedPresentation: balanceSumFocusedPresentation,
+    balanceShowSumFocusedSupplementaryStats:
+        balanceShowSumFocusedSupplementaryStats,
+    balanceMonthLayoutPresentation: balanceMonthLayoutPresentation,
+    balanceYearLayoutPresentation: balanceYearLayoutPresentation,
+    balanceDailyCalculationMode: balanceDailyCalculationMode,
+    balanceMonthlySpendingChartPresentation:
+        balanceMonthlySpendingChartPresentation,
+    balanceHeaderPartitionHeightPercent: balanceHeaderPartitionHeightPercent,
+    balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
+    balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
+    balanceHeaderPalette: balanceHeaderPalette,
+    balanceHeaderPaletteVariant: balanceHeaderPaletteVariant,
+    balanceHeaderPalettePositionPercent: balanceHeaderPalettePositionPercent,
+    balanceHeaderPaletteWindowWidthPercent:
+        balanceHeaderPaletteWindowWidthPercent,
+    ghostQuickFilterIconPack: ghostQuickFilterIconPack,
+    ghostQuickFilterPresentation: ghostQuickFilterPresentation,
+    recurringUiDesign: next,
   );
 }
 

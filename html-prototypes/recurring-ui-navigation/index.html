@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="prototype-id" content="fluvi/recurring-ui-navigation">
+  <meta name="prototype-status" content="current">
+  <title>Fluvi — ismétlődő tranzakciók</title>
+  <style>
+    :root { --ink:#19264d; --muted:#718096; --line:#dde2ec; --wash:#f5f6fa; --accent:#7552b8; --legacy:#c97839; --mint:#1b8b72; }
+    *{box-sizing:border-box} body{margin:0;background:var(--wash);color:var(--ink);font:15px/1.45 system-ui,-apple-system,sans-serif}
+    main{max-width:1180px;margin:auto;padding:32px 20px 56px} h1{font-size:28px;margin:0 0 8px} h2{font-size:17px;margin:0 0 12px}.intro{color:var(--muted);max-width:850px;margin:0 0 26px}
+    .lane{display:grid;gap:14px;margin:18px 0}.node{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 6px 16px #19264d0d}.title{font-weight:800;font-size:16px}.note{color:var(--muted);font-size:13px;margin-top:5px}.accent{border-color:#bdaee1;background:#faf8ff}.legacy{border-color:#e7c096;background:#fffaf4}.data{border-color:#a6dacc;background:#f8fffc}.arrow{text-align:center;color:var(--muted);font-weight:800;line-height:1}.branches{display:grid;grid-template-columns:1fr 1fr;gap:18px}.flow{display:grid;gap:9px}.tag{display:inline-block;border-radius:99px;padding:2px 8px;font-size:12px;font-weight:800;background:#eceef7;color:#514276}.tag.legacy{background:#fff0df;color:#96561d}.tag.data{background:#e6faf2;color:#176d59}ul{margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:13px}@media(max-width:700px){.branches{grid-template-columns:1fr}main{padding:24px 14px}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Ismétlődő tranzakciók — navigáció és közös adatfolyam</h1>
+  <p class="intro">Implementációs tervnézet. A választott design csak útvonalat és megjelenést határoz meg; ugyanaz a repository–method channel–Core lánc szolgálja ki mindkét felületet.</p>
+  <section class="lane">
+    <div class="node accent"><span class="tag">DashboardHeaderVisualTuner</span><div class="title">„Ismétlődő tranzakciók” · Régi / Új</div><div class="note">DashboardPresentationPreferences.recurringUiDesign — alapérték: unified, tartósan mentve.</div></div>
+    <div class="arrow">↓ a belépés pillanatában snapshot</div>
+    <div class="node"><div class="title">RecurringNavigation</div><div class="note">FAB · Automatizáció · Ledger ghost · szabály · alkalom. A nyitott folyamat a saját designját megtartja.</div></div>
+  </section>
+  <section class="branches">
+    <div class="node legacy"><span class="tag legacy">Régi — megőrzött út</span><h2>Meglévő képernyők</h2><div class="flow"><div>RecurringTransactionWizardPage</div><div class="arrow">↓</div><div>RecurringRuleManagerPage</div><div class="arrow">↓</div><div>GhostManagerPage / meglévő részletek</div></div><p class="note">Nem átirányítás: a korábbi wizard és kezelő ténylegesen megmarad.</p></div>
+    <div class="node accent"><span class="tag">Új — unified</span><h2>Új képernyőcsalád</h2><div class="flow"><div>RecurringTransactionEditorPage</div><div class="arrow">↓ létrehozás / mentés</div><div>RecurringRuleDetailPage</div><div class="arrow">↓ következő alkalom / összes</div><div>RecurringOccurrenceDetailPage</div><div class="arrow">↓ csak occurrence override</div><div>RecurringManagerPage · Szabályok / Alkalmak</div></div><p class="note">Közös child sheet: összegjellege, időzítés, banki összekapcsolás.</p></div>
+  </section>
+  <section class="lane">
+    <div class="node data"><span class="tag data">Közös üzleti adat</span><div class="title">AutomationRepository → MethodChannel → FluviRecurrenceUseCase → DAO</div><ul><li>ID-alapú szabály és alkalom, lapozott alkalomlista, megjelenítési feloldás és írásmentes előnézet.</li><li>Szabályszerkesztés szabályverzióval; a lezárt alkalmak és occurrence override-ok sértetlenek.</li><li>Szünet / folytatás / archiválás idempotens Core-művelet; nem a designkapcsoló mellékhatása.</li><li>A pending ghost nem Ledger-tétel; a realizált alkalom a meglévő kapcsolt Ledger-bejegyzést nyitja.</li></ul></div>
+  </section>
+</main>
+</body>
+</html>

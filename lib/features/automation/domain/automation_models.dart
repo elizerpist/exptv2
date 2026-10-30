@@ -304,6 +304,10 @@ final class RecurrenceRule {
     required this.timezoneId,
     required this.isActive,
     required this.ruleVersion,
+    this.pushProfileId,
+    this.pushRuleId,
+    this.amountToleranceScaled100 = 0,
+    this.dayWindow = 0,
   });
   factory RecurrenceRule.fromMap(Map<Object?, Object?> value) => RecurrenceRule(
     ruleId: value['ruleId']! as String,
@@ -327,6 +331,11 @@ final class RecurrenceRule {
     timezoneId: value['timezoneId']! as String,
     isActive: value['isActive'] == true,
     ruleVersion: (value['ruleVersion'] as num?)?.toInt() ?? 1,
+    pushProfileId: value['pushProfileId'] as String?,
+    pushRuleId: value['pushRuleId'] as String?,
+    amountToleranceScaled100:
+        (value['amountToleranceScaled100'] as num?)?.toInt() ?? 0,
+    dayWindow: (value['dayWindow'] as num?)?.toInt() ?? 0,
   );
   final String ruleId,
       name,
@@ -341,6 +350,8 @@ final class RecurrenceRule {
   final int? amountScaled100, endLocalEpochDay;
   final int dayOfMonth, localTimeMinutes, startLocalEpochDay, ruleVersion;
   final bool isActive;
+  final String? pushProfileId, pushRuleId;
+  final int amountToleranceScaled100, dayWindow;
 }
 
 final class RecurrenceOccurrence {
@@ -360,6 +371,9 @@ final class RecurrenceOccurrence {
     required this.triggerKind,
     required this.status,
     required this.realizationKind,
+    this.amountPolicy = RecurrenceAmountPolicy.unknown,
+    this.timezoneId = 'Europe/Budapest',
+    this.resolvedAtUtcMs,
   });
   factory RecurrenceOccurrence.fromMap(Map<Object?, Object?> value) =>
       RecurrenceOccurrence(
@@ -391,6 +405,12 @@ final class RecurrenceOccurrence {
           value['status']! as String,
         ),
         realizationKind: value['realizationKind'] as String?,
+        amountPolicy: switch (value['amountPolicy']) {
+          final String policy => RecurrenceAmountPolicy.values.byName(policy),
+          _ => RecurrenceAmountPolicy.unknown,
+        },
+        timezoneId: value['timezoneId'] as String? ?? 'Europe/Budapest',
+        resolvedAtUtcMs: (value['resolvedAtUtcMs'] as num?)?.toInt(),
       );
   final String occurrenceId, ruleId, occurrenceKey, partnerId, categoryId;
   final ManualCategoryAssignmentMode categoryAssignmentMode;
@@ -400,6 +420,31 @@ final class RecurrenceOccurrence {
   final String? note, realizationKind;
   final RecurrenceTriggerKind triggerKind;
   final RecurrenceOccurrenceStatus status;
+  final RecurrenceAmountPolicy amountPolicy;
+  final String timezoneId;
+  final int? resolvedAtUtcMs;
+}
+
+/// A read-only occurrence projection returned by the Core's scheduling
+/// algorithm. Previewing must never insert a rule or an occurrence.
+final class RecurrencePreview {
+  const RecurrencePreview({
+    required this.expectedLocalEpochDay,
+    required this.expectedLocalTimeMinutes,
+    required this.expectedAtUtcMs,
+  });
+
+  factory RecurrencePreview.fromMap(Map<Object?, Object?> value) =>
+      RecurrencePreview(
+        expectedLocalEpochDay: (value['expectedLocalEpochDay'] as num).toInt(),
+        expectedLocalTimeMinutes: (value['expectedLocalTimeMinutes'] as num)
+            .toInt(),
+        expectedAtUtcMs: (value['expectedAtUtcMs'] as num).toInt(),
+      );
+
+  final int expectedLocalEpochDay;
+  final int expectedLocalTimeMinutes;
+  final int expectedAtUtcMs;
 }
 
 final class RecurrenceDashboardSnapshot {

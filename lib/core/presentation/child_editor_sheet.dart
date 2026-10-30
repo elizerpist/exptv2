@@ -25,6 +25,118 @@ Future<T?> showFluviChildEditorSheet<T>(
   builder: builder,
 );
 
+/// Generic sibling of [ChildEditorSheetFrame] for a child panel that has no
+/// avatar/name row (for example recurrence timing and bank-link settings).
+/// It owns exactly one keyboard/system-inset path and shares the same footer
+/// buttons and un-clipped outer button shadows as the category/partner panel.
+final class ChildEditorSheetScaffold extends StatelessWidget {
+  const ChildEditorSheetScaffold({
+    super.key,
+    required this.title,
+    required this.body,
+    required this.onCancel,
+    required this.onApply,
+    required this.applying,
+    this.applyLabel = 'Alkalmaz',
+    this.cancelKey,
+    this.applyKey,
+  });
+
+  final String title;
+  final Widget body;
+  final VoidCallback? onCancel;
+  final VoidCallback? onApply;
+  final bool applying;
+  final String applyLabel;
+  final Key? cancelKey;
+  final Key? applyKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final maximumHeight =
+        (media.size.height - media.viewInsets.bottom - media.padding.top - 12)
+            .clamp(220.0, double.infinity)
+            .toDouble();
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maximumHeight),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            clipBehavior: Clip.none,
+            child: SafeArea(
+              top: false,
+              minimum: EdgeInsets.zero,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Center(
+                            child: SizedBox(
+                              width: 32,
+                              height: 4,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Color(0xffcdd2dd),
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(99),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              color: ChildEditorSheetTokens.primary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          body,
+                        ],
+                      ),
+                    ),
+                  ),
+                  _ChildEditorFooter(
+                    cancelKey: cancelKey,
+                    saveKey: applyKey,
+                    saving: applying,
+                    onCancel: onCancel,
+                    onSave: onApply,
+                    saveLabel: applyLabel,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The common bottom-sheet shell used by the two equal-level child editors.
 /// Drafts, validation and persistence deliberately stay with their caller.
 final class ChildEditorSheetFrame extends StatelessWidget {
@@ -232,6 +344,7 @@ final class _ChildEditorFooter extends StatelessWidget {
     required this.saving,
     required this.onCancel,
     required this.onSave,
+    this.saveLabel = 'Mentés',
   });
 
   final Key? cancelKey;
@@ -239,6 +352,7 @@ final class _ChildEditorFooter extends StatelessWidget {
   final bool saving;
   final VoidCallback? onCancel;
   final VoidCallback? onSave;
+  final String saveLabel;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -263,7 +377,7 @@ final class _ChildEditorFooter extends StatelessWidget {
             ),
             _ChildEditorButton(
               key: saveKey,
-              label: saving ? 'Mentés…' : 'Mentés',
+              label: saving ? '$saveLabel…' : saveLabel,
               minimumWidth: 108,
               primary: true,
               onPressed: saving ? null : onSave,

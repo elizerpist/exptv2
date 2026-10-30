@@ -129,6 +129,9 @@ final class _GhostRepository implements AutomationRepository {
   @override
   Future<List<RecurrenceOccurrence>> recurrenceOccurrences({
     RecurrenceOccurrenceStatus? status,
+    String? ruleId,
+    int? fromUtcMs,
+    int? toUtcMs,
     int limit = 100,
     int offset = 0,
   }) async {

@@ -4,9 +4,11 @@ import '../domain/automation_models.dart';
 import '../domain/automation_repository.dart';
 import '../../manual_transactions/domain/manual_transaction_repository.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/categories/domain/category_repository.dart';
+import '../../dashboard/application/dashboard_presentation_preferences.dart';
 import '../../dashboard/query/domain/ledger_direction.dart';
-import 'recurring_transaction_wizard_page.dart';
-import 'recurring_rule_manager_page.dart';
+import '../../manual_transactions/application/manual_transaction_editor_preferences.dart';
+import 'recurring_navigation.dart';
 import 'notification_inbox_page.dart';
 import 'push_profile_details_page.dart';
 import 'push_profile_wizard_page.dart';
@@ -18,6 +20,9 @@ class AutomationDashboardPage extends StatefulWidget {
     required this.permissions,
     this.manualRepository,
     this.categories = const <FluviCategory>[],
+    this.categoryRepository,
+    this.preferencesStore,
+    this.recurringUiDesign,
     this.direction = LedgerDirection.expense,
     this.onOpenLedgerEntry,
   });
@@ -25,6 +30,9 @@ class AutomationDashboardPage extends StatefulWidget {
   final AutomationPermissionRepository permissions;
   final ManualTransactionRepository? manualRepository;
   final List<FluviCategory> categories;
+  final CategoryRepository? categoryRepository;
+  final ManualTransactionEditorPreferencesStore? preferencesStore;
+  final RecurringUiDesign Function()? recurringUiDesign;
   final LedgerDirection direction;
   final Future<void> Function(String entryId)? onOpenLedgerEntry;
   @override
@@ -122,16 +130,16 @@ class _AutomationDashboardPageState extends State<AutomationDashboardPage>
   Future<void> _newRecurring() async {
     final manual = widget.manualRepository;
     if (manual == null) return;
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        fullscreenDialog: true,
-        builder: (_) => RecurringTransactionWizardPage(
-          repository: widget.repository,
-          manualRepository: manual,
-          categories: widget.categories,
-          initialDirection: widget.direction,
-        ),
-      ),
+    await RecurringNavigation.openCreate(
+      context,
+      design: widget.recurringUiDesign?.call() ?? RecurringUiDesign.unified,
+      repository: widget.repository,
+      manualRepository: manual,
+      categories: widget.categories,
+      categoryRepository: widget.categoryRepository,
+      preferencesStore: widget.preferencesStore,
+      permissions: widget.permissions,
+      direction: widget.direction,
     );
     if (mounted) _refresh();
   }
@@ -301,18 +309,25 @@ class _AutomationDashboardPageState extends State<AutomationDashboardPage>
                           'Szabályok és várható teljesülések kezelése',
                         ),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () => Navigator.of(context)
-                            .push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => RecurringRuleManagerPage(
-                                  repository: widget.repository,
-                                  manualRepository: widget.manualRepository,
-                                  categories: widget.categories,
-                                  onOpenLedgerEntry: widget.onOpenLedgerEntry,
-                                ),
-                              ),
-                            )
-                            .then((_) => _refresh()),
+                        onTap: () async {
+                          final manual = widget.manualRepository;
+                          if (manual == null) return;
+                          await RecurringNavigation.openManager(
+                            context,
+                            design:
+                                widget.recurringUiDesign?.call() ??
+                                RecurringUiDesign.unified,
+                            repository: widget.repository,
+                            manualRepository: manual,
+                            categories: widget.categories,
+                            categoryRepository: widget.categoryRepository,
+                            preferencesStore: widget.preferencesStore,
+                            permissions: widget.permissions,
+                            direction: widget.direction,
+                            onOpenLedgerEntry: widget.onOpenLedgerEntry,
+                          );
+                          if (mounted) _refresh();
+                        },
                       ),
                     );
                   },

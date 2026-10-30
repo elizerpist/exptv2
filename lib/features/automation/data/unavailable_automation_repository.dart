@@ -78,11 +78,20 @@ final class UnavailableAutomationRepository implements AutomationRepository {
   @override
   Future<List<RecurrenceRule>> recurringRules() async => _unavailable();
   @override
+  Future<RecurrenceRule> recurringRule(String ruleId) async => _unavailable();
+  @override
   Future<List<RecurrenceOccurrence>> recurrenceOccurrences({
     RecurrenceOccurrenceStatus? status,
+    String? ruleId,
+    int? fromUtcMs,
+    int? toUtcMs,
     int limit = 100,
     int offset = 0,
   }) async => _unavailable();
+  @override
+  Future<RecurrenceOccurrence> recurrenceOccurrence(
+    String occurrenceId,
+  ) async => _unavailable();
   @override
   Future<String?> realizedRecurrenceLedgerEntryId(String occurrenceId) async =>
       _unavailable();
@@ -105,6 +114,56 @@ final class UnavailableAutomationRepository implements AutomationRepository {
     String? pushRuleId,
     int amountToleranceScaled100 = 0,
     int dayWindow = 2,
+  }) async => _unavailable();
+  @override
+  Future<RecurrenceRule> createRecurringRuleWithPartner({
+    required String name,
+    required ManualPartnerSelection partner,
+    required ManualCategorySelection categorySelection,
+    required LedgerDirection direction,
+    String? note,
+    required RecurrenceTriggerKind triggerKind,
+    required RecurrenceAmountPolicy amountPolicy,
+    int? amountScaled100,
+    required int dayOfMonth,
+    required int localTimeMinutes,
+    required int startLocalEpochDay,
+    int? endLocalEpochDay,
+    required String timezoneId,
+    String? pushProfileId,
+    String? pushRuleId,
+    int amountToleranceScaled100 = 0,
+    int dayWindow = 2,
+  }) async => _unavailable();
+  @override
+  Future<RecurrenceRule> updateRecurringRule({
+    required String ruleId,
+    required int expectedRuleVersion,
+    required String name,
+    required String partnerId,
+    required ManualCategorySelection categorySelection,
+    String? note,
+    required RecurrenceTriggerKind triggerKind,
+    required RecurrenceAmountPolicy amountPolicy,
+    int? amountScaled100,
+    required int dayOfMonth,
+    required int localTimeMinutes,
+    required int startLocalEpochDay,
+    int? endLocalEpochDay,
+    required String timezoneId,
+    String? pushProfileId,
+    String? pushRuleId,
+    int amountToleranceScaled100 = 0,
+    int dayWindow = 2,
+  }) async => _unavailable();
+  @override
+  Future<List<RecurrencePreview>> previewRecurringOccurrences({
+    required int dayOfMonth,
+    required int localTimeMinutes,
+    required int startLocalEpochDay,
+    int? endLocalEpochDay,
+    required String timezoneId,
+    int count = 3,
   }) async => _unavailable();
   @override
   Future<void> setRecurringRuleActive(String ruleId, bool isActive) async =>

@@ -7,8 +7,13 @@ import com.fluvi.core.database.entity.FluviRecurrenceRuleEntity
 import com.fluvi.core.database.entity.FluviOccurrenceOverrideEntity
 import com.fluvi.core.database.entity.FluviPushRecurringRuleConfigEntity
 import com.fluvi.core.database.entity.FluviTimeRecurringRuleConfigEntity
+import com.fluvi.core.database.entity.FluviPartnerAliasEntity
+import com.fluvi.core.database.entity.FluviPartnerEntity
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.CreateRecurrenceRuleCommand
+import com.fluvi.core.model.UpdateRecurrenceRuleCommand
+import com.fluvi.core.model.RecurrencePreviewRequest
+import com.fluvi.core.model.FluviRecurrencePreview
 import com.fluvi.core.model.CreateRecurringLedgerEntryCommand
 import com.fluvi.core.model.FluviClock
 import com.fluvi.core.model.FluviIdGenerator
@@ -25,6 +30,7 @@ import com.fluvi.core.model.RecurrenceOccurrenceStatus
 import com.fluvi.core.model.RecurrenceRealizationKind
 import com.fluvi.core.model.RecurrenceTriggerKind
 import com.fluvi.core.model.UpdateOccurrenceOverrideCommand
+import com.fluvi.core.model.ManualTransactionPartnerSelection
 import com.fluvi.core.repository.FluviPartnerRepository
 import com.fluvi.core.repository.PartnerAliasNormalizer
 import java.time.Instant
@@ -48,7 +54,7 @@ class FluviRecurrenceUseCase internal constructor(
         ensureRollingWindowInTransaction()
         val dao = database.recurrenceDao()
         FluviRecurrenceDashboardSnapshot(
-            rules = dao.rules().map(::ruleModel),
+            rules = dao.rules().map { ruleModel(it) },
             pendingCount = dao.countByStatus(RecurrenceOccurrenceStatus.pending),
             dueCount = dao.dueCount(clock.nowUtcMs()),
             realizedCount = dao.countByStatus(RecurrenceOccurrenceStatus.realized),
@@ -58,18 +64,30 @@ class FluviRecurrenceUseCase internal constructor(
 
     suspend fun rules(): List<FluviRecurrenceRule> = database.withTransaction {
         ensureRollingWindowInTransaction()
-        database.recurrenceDao().rules().map(::ruleModel)
+        database.recurrenceDao().rules().map { ruleModel(it) }
+    }
+
+    suspend fun rule(ruleId: String): FluviRecurrenceRule = database.withTransaction {
+        ensureRollingWindowInTransaction()
+        ruleModel(requireNotNull(database.recurrenceDao().rule(ruleId)) { "Unknown recurrence rule." })
     }
 
     suspend fun occurrences(
         status: RecurrenceOccurrenceStatus? = null,
+        ruleId: String? = null,
+        fromUtcMs: Long? = null,
+        toUtcMs: Long? = null,
         limit: Int = 100,
         offset: Int = 0,
     ): List<FluviRecurrenceOccurrence> = database.withTransaction {
         require(limit in 1..200) { "Occurrence page size must be 1..200." }
         val dao = database.recurrenceDao()
-        (status?.let { dao.occurrencesByStatus(it, limit, offset) }
-            ?: dao.occurrencePage(limit, offset)).map(::occurrenceModel)
+        dao.occurrencePageFiltered(ruleId, status, fromUtcMs, toUtcMs, limit, offset)
+            .map(::occurrenceModel)
+    }
+
+    suspend fun occurrence(occurrenceId: String): FluviRecurrenceOccurrence = database.withTransaction {
+        occurrenceModel(requireOccurrence(occurrenceId))
     }
 
     /**
@@ -88,7 +106,7 @@ class FluviRecurrenceUseCase internal constructor(
 
     suspend fun create(command: CreateRecurrenceRuleCommand): FluviRecurrenceRule = database.withTransaction {
         validate(command)
-        val partnerId = partners.resolveCanonicalPartnerId(command.partnerId)
+        val partnerId = resolvePartnerInTransaction(command)
         val category = resolveCategory(partnerId, command.categorySelection)
         val now = clock.nowUtcMs()
         val rule = FluviRecurrenceRuleEntity(
@@ -128,11 +146,98 @@ class FluviRecurrenceUseCase internal constructor(
         ruleModel(rule)
     }
 
+    /**
+     * Updates only future, non-overridden schedule truth. Existing Ledger
+     * rows and occurrence override records are intentionally untouched.
+     */
+    suspend fun update(command: UpdateRecurrenceRuleCommand): FluviRecurrenceRule = database.withTransaction {
+        val current = requireNotNull(database.recurrenceDao().rule(command.ruleId)) {
+            "Unknown recurrence rule."
+        }
+        validate(command, current.direction)
+        val partnerId = partners.resolveCanonicalPartnerId(command.partnerId)
+        val category = resolveCategory(partnerId, command.categorySelection)
+        val now = clock.nowUtcMs()
+        check(database.recurrenceDao().updateRuleIfVersion(
+            ruleId = current.id,
+            expectedVersion = command.expectedRuleVersion,
+            name = command.name.trim(),
+            triggerKind = command.triggerKind,
+            partnerId = partnerId,
+            categoryId = category.first,
+            categoryMode = category.second,
+            note = command.note?.trim()?.ifEmpty { null },
+            amountPolicy = command.amountPolicy,
+            amountScaled100 = command.amountScaled100 ?: 0L,
+            dayOfMonth = command.dayOfMonth,
+            localTimeMinutes = command.localTimeMinutes,
+            startLocalEpochDay = command.startLocalEpochDay,
+            endLocalEpochDay = command.endLocalEpochDay,
+            timezoneId = command.timezoneId,
+            now = now,
+        ) == 1) { "The recurrence rule changed elsewhere. Reload it and try again." }
+        if (command.triggerKind == RecurrenceTriggerKind.time) {
+            database.recurrenceDao().upsertTimeConfig(
+                FluviTimeRecurringRuleConfigEntity(current.id, command.dayOfMonth, command.localTimeMinutes),
+            )
+            database.recurrenceDao().deletePushConfig(current.id)
+        } else {
+            database.recurrenceDao().upsertPushConfig(
+                FluviPushRecurringRuleConfigEntity(
+                    ruleId = current.id,
+                    pushProfileId = command.pushProfileId,
+                    pushRuleId = command.pushRuleId,
+                    expectedLocalTimeMinutes = command.localTimeMinutes,
+                    amountToleranceScaled100 = command.amountToleranceScaled100,
+                    dayWindow = command.dayWindow,
+                    parserMatchText = null,
+                ),
+            )
+            database.recurrenceDao().deleteTimeConfig(current.id)
+        }
+        val updated = requireNotNull(database.recurrenceDao().rule(current.id))
+        // Existing generated rows carry their own revision. Refresh only the
+        // open rows which have no explicit exception; the exception table is
+        // left as the durable boundary of user-authored occurrence changes.
+        refreshFutureOpenOccurrencesInTransaction(updated)
+        generateForRuleInTransaction(updated, months = 12)
+        publishPresentationMutation(now)
+        ruleModel(requireNotNull(database.recurrenceDao().rule(current.id)))
+    }
+
+    suspend fun preview(request: RecurrencePreviewRequest): List<FluviRecurrencePreview> = database.withTransaction {
+        require(request.dayOfMonth in 1..31)
+        require(request.localTimeMinutes in 0..1439)
+        require(request.count in 1..12)
+        require(request.endLocalEpochDay == null || request.endLocalEpochDay >= request.startLocalEpochDay)
+        scheduleDates(
+            dayOfMonth = request.dayOfMonth,
+            startLocalEpochDay = request.startLocalEpochDay,
+            endLocalEpochDay = request.endLocalEpochDay,
+            timezoneId = request.timezoneId,
+            count = request.count,
+            fromEpochDay = maxOf(
+                request.startLocalEpochDay,
+                Instant.ofEpochMilli(clock.nowUtcMs())
+                    .atZone(ZoneId.of(request.timezoneId))
+                    .toLocalDate()
+                    .toEpochDay(),
+            ),
+        ).map { day ->
+            FluviRecurrencePreview(day, request.localTimeMinutes, localInstant(day, request.localTimeMinutes, request.timezoneId))
+        }
+    }
+
     suspend fun setRuleActive(ruleId: String, active: Boolean) = database.withTransaction {
         val rule = requireNotNull(database.recurrenceDao().rule(ruleId)) { "Unknown recurrence rule." }
         require(rule.archivedAtUtcMs == null) { "Archived recurrence rules cannot be reactivated." }
         check(database.recurrenceDao().setRuleActive(ruleId, active, clock.nowUtcMs()) == 1)
-        if (active) generateForRuleInTransaction(rule, months = 12)
+        if (active) {
+            // Resuming starts from the next future opportunity. A paused
+            // period must not become an accidental catch-up booking burst.
+            database.recurrenceDao().skipPastPendingForResumedRule(ruleId, clock.nowUtcMs())
+            generateForRuleInTransaction(rule, months = 12)
+        }
         publishPresentationMutation(clock.nowUtcMs())
     }
 
@@ -261,7 +366,9 @@ class FluviRecurrenceUseCase internal constructor(
             direction = direction,
             amountScaled100 = amountScaled100,
             receivedAtUtcMs = receivedAtUtcMs,
-        ).filter { it.partnerId == canonicalPartnerId }.map(::occurrenceModel)
+        ).filter {
+            it.partnerId == canonicalPartnerId && matchesPushLocalDayWindow(it, receivedAtUtcMs)
+        }.map(::occurrenceModel)
     }
 
     /**
@@ -286,7 +393,9 @@ class FluviRecurrenceUseCase internal constructor(
             direction = direction,
             amountScaled100 = amountScaled100,
             receivedAtUtcMs = receivedAtUtcMs,
-        ).filter { it.partnerId == canonicalPartnerId }.map(::occurrenceModel)
+        ).filter {
+            it.partnerId == canonicalPartnerId && matchesPushLocalDayWindow(it, receivedAtUtcMs)
+        }.map(::occurrenceModel)
     }
 
     /** Ambiguous parser matches are visible in Ghost Manager and cannot book automatically. */
@@ -320,7 +429,9 @@ class FluviRecurrenceUseCase internal constructor(
             direction = direction,
             amountScaled100 = amountScaled100,
             receivedAtUtcMs = receivedAtUtcMs,
-        ).filter { it.partnerId == canonicalPartnerId }
+        ).filter {
+            it.partnerId == canonicalPartnerId && matchesPushLocalDayWindow(it, receivedAtUtcMs)
+        }
         buildList {
             occurrences.forEach { occurrence ->
                 database.ledgerDao().findByRecurrenceOccurrenceId(occurrence.id)?.id?.let(::add)
@@ -413,20 +524,20 @@ class FluviRecurrenceUseCase internal constructor(
     }
 
     private suspend fun generateForRuleInTransaction(rule: FluviRecurrenceRuleEntity, months: Int) {
-        val zone = ZoneId.of(rule.timezoneId)
-        val first = LocalDate.ofEpochDay(rule.startLocalEpochDay).withDayOfMonth(1)
-        val today = Instant.ofEpochMilli(clock.nowUtcMs()).atZone(zone).toLocalDate().withDayOfMonth(1)
-        val start = if (first.isAfter(today)) first else today
-        repeat(months) { offset ->
-            val ym = YearMonth.from(start).plusMonths(offset.toLong())
-            val day = minOf(rule.dayOfMonth, ym.lengthOfMonth())
-            val localDate = ym.atDay(day)
-            if (localDate.toEpochDay() < rule.startLocalEpochDay ||
-                (rule.endLocalEpochDay != null && localDate.toEpochDay() > rule.endLocalEpochDay)) return@repeat
-            val expected = localInstant(localDate.toEpochDay(), rule.localTimeMinutes, rule.timezoneId)
+        val today = Instant.ofEpochMilli(clock.nowUtcMs()).atZone(ZoneId.of(rule.timezoneId)).toLocalDate().toEpochDay()
+        scheduleDates(
+            dayOfMonth = rule.dayOfMonth,
+            startLocalEpochDay = rule.startLocalEpochDay,
+            endLocalEpochDay = rule.endLocalEpochDay,
+            timezoneId = rule.timezoneId,
+            count = months,
+            fromEpochDay = today,
+        ).forEach { day ->
+            val localDate = LocalDate.ofEpochDay(day)
+            val expected = localInstant(day, rule.localTimeMinutes, rule.timezoneId)
             database.recurrenceDao().insertOccurrence(FluviRecurrenceOccurrenceEntity(
-                id = idGenerator.next(), ruleId = rule.id, occurrenceKey = "%04d-%02d".format(ym.year, ym.monthValue),
-                ruleVersion = rule.ruleVersion, expectedLocalEpochDay = localDate.toEpochDay(),
+                id = idGenerator.next(), ruleId = rule.id, occurrenceKey = "%04d-%02d".format(localDate.year, localDate.monthValue),
+                ruleVersion = rule.ruleVersion, expectedLocalEpochDay = day,
                 expectedLocalTimeMinutes = rule.localTimeMinutes, expectedAtUtcMs = expected, timezoneId = rule.timezoneId,
                 partnerId = rule.partnerId, categoryId = rule.categoryId, categoryAssignmentMode = rule.categoryAssignmentMode,
                 direction = rule.direction, expectedAmountScaled100 = rule.amountScaled100.takeIf { it > 0L },
@@ -435,6 +546,75 @@ class FluviRecurrenceUseCase internal constructor(
                 createdAtUtcMs = clock.nowUtcMs(), updatedAtUtcMs = clock.nowUtcMs(), revision = 1,
             ))
         }
+    }
+
+    private fun scheduleDates(
+        dayOfMonth: Int,
+        startLocalEpochDay: Long,
+        endLocalEpochDay: Long?,
+        timezoneId: String,
+        count: Int,
+        fromEpochDay: Long,
+    ): List<Long> {
+        val zone = ZoneId.of(timezoneId)
+        val first = LocalDate.ofEpochDay(startLocalEpochDay).withDayOfMonth(1)
+        val from = LocalDate.ofEpochDay(fromEpochDay).atStartOfDay(zone).toLocalDate().withDayOfMonth(1)
+        val start = if (first.isAfter(from)) first else from
+        val result = mutableListOf<Long>()
+        var offset = 0L
+        // Need tolerate an early end date while still producing every valid
+        // month requested. The bounded guard also prevents a malformed draft
+        // from spinning indefinitely.
+        while (result.size < count && offset < 240) {
+            val ym = YearMonth.from(start).plusMonths(offset++)
+            val day = ym.atDay(minOf(dayOfMonth, ym.lengthOfMonth())).toEpochDay()
+            if (day < startLocalEpochDay) continue
+            if (endLocalEpochDay != null && day > endLocalEpochDay) break
+            result += day
+        }
+        return result
+    }
+
+    private suspend fun refreshFutureOpenOccurrencesInTransaction(rule: FluviRecurrenceRuleEntity) {
+        // Overrides have explicit persisted state and must never be silently
+        // overwritten. New monthly slots are generated separately afterwards.
+        val now = clock.nowUtcMs()
+        database.recurrenceDao().occurrencesForRule(rule.id)
+            .filter { it.status == RecurrenceOccurrenceStatus.pending && it.expectedAtUtcMs >= now }
+            .forEach { occurrence ->
+                if (database.recurrenceDao().occurrenceOverride(rule.id, occurrence.occurrenceKey) != null) return@forEach
+                val ym = YearMonth.of(
+                    occurrence.occurrenceKey.substring(0, 4).toInt(),
+                    occurrence.occurrenceKey.substring(5, 7).toInt(),
+                )
+                val day = ym.atDay(minOf(rule.dayOfMonth, ym.lengthOfMonth())).toEpochDay()
+                if (day < rule.startLocalEpochDay || (rule.endLocalEpochDay != null && day > rule.endLocalEpochDay)) {
+                    // This remains visible as a stopped historical slot instead
+                    // of silently disappearing. Explicit overrides above are
+                    // deliberately excluded from this transition.
+                    database.recurrenceDao().transition(
+                        occurrenceId = occurrence.id,
+                        expected = RecurrenceOccurrenceStatus.pending,
+                        status = RecurrenceOccurrenceStatus.cancelled,
+                        kind = null,
+                        resolvedAt = now,
+                        now = now,
+                    )
+                    return@forEach
+                }
+                database.recurrenceDao().updatePendingOccurrence(
+                    occurrenceId = occurrence.id,
+                    amount = rule.amountScaled100.takeIf { it > 0L },
+                    epochDay = day,
+                    minutes = rule.localTimeMinutes,
+                    atUtc = localInstant(day, rule.localTimeMinutes, rule.timezoneId),
+                    partnerId = rule.partnerId,
+                    categoryId = rule.categoryId,
+                    mode = rule.categoryAssignmentMode,
+                    note = rule.note,
+                    now = now,
+                )
+            }
     }
 
     private suspend fun requireOccurrence(id: String) = requireNotNull(database.recurrenceDao().occurrence(id)) { "Unknown occurrence ID." }
@@ -449,6 +629,7 @@ class FluviRecurrenceUseCase internal constructor(
 
     private suspend fun validate(command: CreateRecurrenceRuleCommand) {
         require(command.name.trim().isNotEmpty()) { "Recurrence name is required." }
+        require(command.partner != null || !command.partnerId.isNullOrBlank()) { "A recurrence needs a partner." }
         require(command.dayOfMonth in 1..31)
         require(command.localTimeMinutes in 0..1439)
         require(command.endLocalEpochDay == null || command.endLocalEpochDay >= command.startLocalEpochDay)
@@ -462,8 +643,13 @@ class FluviRecurrenceUseCase internal constructor(
             if (command.pushProfileId != null) {
                 val profile = database.pushAutomationDao().profile(command.pushProfileId)
                 require(profile != null) { "Unknown push profile." }
-                val pushRule = database.pushAutomationDao().rule(requireNotNull(command.pushRuleId))
-                require(pushRule?.profileId == profile.id) { "The parser rule does not belong to the selected profile." }
+                val pushRule = requireNotNull(
+                    database.pushAutomationDao().rule(requireNotNull(command.pushRuleId)),
+                ) { "Unknown parser rule." }
+                require(pushRule.profileId == profile.id) { "The parser rule does not belong to the selected profile." }
+                require(pushRule.direction == command.direction) {
+                    "The parser rule direction does not match the recurrence."
+                }
             }
         }
         if (command.triggerKind == RecurrenceTriggerKind.time) {
@@ -473,15 +659,85 @@ class FluviRecurrenceUseCase internal constructor(
         }
     }
 
+    private suspend fun validate(command: UpdateRecurrenceRuleCommand, direction: LedgerDirection) {
+        validate(
+            CreateRecurrenceRuleCommand(
+                name = command.name,
+                partnerId = command.partnerId,
+                categorySelection = command.categorySelection,
+                direction = direction,
+                note = command.note,
+                triggerKind = command.triggerKind,
+                amountPolicy = command.amountPolicy,
+                amountScaled100 = command.amountScaled100,
+                dayOfMonth = command.dayOfMonth,
+                localTimeMinutes = command.localTimeMinutes,
+                startLocalEpochDay = command.startLocalEpochDay,
+                endLocalEpochDay = command.endLocalEpochDay,
+                timezoneId = command.timezoneId,
+                pushProfileId = command.pushProfileId,
+                pushRuleId = command.pushRuleId,
+                amountToleranceScaled100 = command.amountToleranceScaled100,
+                dayWindow = command.dayWindow,
+            ),
+        )
+    }
+
+    private suspend fun resolvePartnerInTransaction(command: CreateRecurrenceRuleCommand): String = when (
+        val selection = command.partner
+    ) {
+        is ManualTransactionPartnerSelection.Existing -> partners.resolveCanonicalPartnerId(selection.partnerId)
+        is ManualTransactionPartnerSelection.New -> findOrCreatePartnerInTransaction(
+            selection.displayName,
+            selection.defaultCategoryId,
+        )
+        null -> partners.resolveCanonicalPartnerId(requireNotNull(command.partnerId))
+    }
+
+    private suspend fun findOrCreatePartnerInTransaction(name: String, defaultCategoryId: String): String {
+        val displayName = PartnerAliasNormalizer.displayName(name)
+        val normalizedAlias = PartnerAliasNormalizer.normalize(displayName)
+        val existing = partners.findByNormalizedAlias(normalizedAlias)
+        if (existing != null) return partners.resolveCanonicalPartnerId(existing.id)
+        requireNotNull(database.categoryDao().findById(defaultCategoryId)) { "Unknown category ID." }
+        val now = clock.nowUtcMs()
+        val partnerId = idGenerator.next()
+        partners.insert(
+            FluviPartnerEntity(partnerId, displayName, null, defaultCategoryId, null, now, now),
+            FluviPartnerAliasEntity(idGenerator.next(), partnerId, normalizedAlias, displayName, now, now),
+        )
+        return partnerId
+    }
+
     private fun localInstant(epochDay: Long, minutes: Int, zoneId: String): Long = ZonedDateTime.of(
         LocalDate.ofEpochDay(epochDay), java.time.LocalTime.of(minutes / 60, minutes % 60), ZoneId.of(zoneId),
     ).toInstant().toEpochMilli()
 
-    private fun ruleModel(value: FluviRecurrenceRuleEntity) = FluviRecurrenceRule(
+    /** A zero push day window means the same *local calendar day*, not the
+     * same millisecond. Wider windows remain narrowed in SQL. */
+    private suspend fun matchesPushLocalDayWindow(
+        occurrence: FluviRecurrenceOccurrenceEntity,
+        receivedAtUtcMs: Long,
+    ): Boolean {
+        val config = database.recurrenceDao().pushConfig(occurrence.ruleId)
+            ?: return false
+        if (config.dayWindow != 0) return true
+        val receivedDay = Instant.ofEpochMilli(receivedAtUtcMs)
+            .atZone(ZoneId.of(occurrence.timezoneId))
+            .toLocalDate()
+            .toEpochDay()
+        return occurrence.expectedLocalEpochDay == receivedDay
+    }
+
+    private suspend fun ruleModel(value: FluviRecurrenceRuleEntity): FluviRecurrenceRule {
+        val config = database.recurrenceDao().pushConfig(value.id)
+        return FluviRecurrenceRule(
         value.id, value.name, value.partnerId, value.categoryId, value.categoryAssignmentMode, value.direction,
         value.note, value.triggerKind, value.amountPolicy, value.amountScaled100.takeIf { it > 0L }, value.dayOfMonth,
         value.localTimeMinutes, value.startLocalEpochDay, value.endLocalEpochDay, value.timezoneId, value.isActive, value.ruleVersion,
+        config?.pushProfileId, config?.pushRuleId, config?.amountToleranceScaled100 ?: 0L, config?.dayWindow ?: 0,
     )
+    }
     private fun occurrenceModel(value: FluviRecurrenceOccurrenceEntity) = FluviRecurrenceOccurrence(
         value.id, value.ruleId, value.occurrenceKey, value.expectedLocalEpochDay, value.expectedLocalTimeMinutes,
         value.expectedAtUtcMs, value.timezoneId, value.partnerId, value.categoryId, value.categoryAssignmentMode,

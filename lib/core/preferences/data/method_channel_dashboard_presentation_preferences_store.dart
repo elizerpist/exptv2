@@ -195,6 +195,12 @@ final class MethodChannelDashboardPresentationPreferencesStore
               : null,
           DashboardGhostQuickFilterPresentation.searchPillFling,
         ),
+        // This intentionally reads a named value. Historical dashboard enum
+        // indices must never be reinterpreted as the recurring UI choice.
+        recurringUiDesign: switch (values['recurringUiDesign']) {
+          'legacy' => RecurringUiDesign.legacy,
+          _ => RecurringUiDesign.unified,
+        },
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -261,6 +267,7 @@ final class MethodChannelDashboardPresentationPreferencesStore
         'ghostQuickFilterIconPack': preferences.ghostQuickFilterIconPack.index,
         'ghostQuickFilterPresentation':
             preferences.ghostQuickFilterPresentation.index,
+        'recurringUiDesign': preferences.recurringUiDesign.name,
       });
 }
 

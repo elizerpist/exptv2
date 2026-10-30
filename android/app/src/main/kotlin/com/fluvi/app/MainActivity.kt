@@ -30,6 +30,8 @@ import com.fluvi.core.model.RecurrenceAmountPolicy
 import com.fluvi.core.model.RecurrenceOccurrenceStatus
 import com.fluvi.core.model.RecurrenceTriggerKind
 import com.fluvi.core.model.CreateRecurrenceRuleCommand
+import com.fluvi.core.model.UpdateRecurrenceRuleCommand
+import com.fluvi.core.model.RecurrencePreviewRequest
 import com.fluvi.core.model.UpdateOccurrenceOverrideCommand
 import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviPeriodGroup
@@ -487,6 +489,11 @@ class MainActivity : FlutterActivity() {
                             "balanceHeaderPaletteWindowWidthPercent" to ((preferences.all["balanceHeaderPaletteWindowWidthPercent"] as? Number)?.toInt()?.takeIf { it in 10..100 } ?: 15),
                             "ghostQuickFilterIconPack" to ((preferences.all["ghostQuickFilterIconPack"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
                             "ghostQuickFilterPresentation" to ((preferences.all["ghostQuickFilterPresentation"] as? Number)?.toInt()?.takeIf { it in 0..3 } ?: 3),
+                            // New installs and pre-existing installations both
+                            // enter the unified recurrence presentation. This
+                            // is named rather than indexed so old numeric
+                            // settings cannot accidentally change it.
+                            "recurringUiDesign" to preferences.getString("recurringUiDesign", "unified"),
                         ),
                     )
                     "writeDashboardPresentationSettings" -> {
@@ -584,6 +591,15 @@ class MainActivity : FlutterActivity() {
                             3
                         }
                         require(ghostQuickFilterPresentation in 0..3) { "Invalid Ghost quick-filter presentation." }
+                        val recurringUiDesign = if (values.containsKey("recurringUiDesign")) {
+                            values["recurringUiDesign"] as? String
+                                ?: throw IllegalArgumentException("Invalid recurring UI design.")
+                        } else {
+                            "unified"
+                        }
+                        require(recurringUiDesign == "legacy" || recurringUiDesign == "unified") {
+                            "Invalid recurring UI design."
+                        }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
@@ -614,6 +630,7 @@ class MainActivity : FlutterActivity() {
                             .putInt("balanceHeaderPaletteWindowWidthPercent", balanceHeaderPaletteWindowWidthPercent)
                             .putInt("ghostQuickFilterIconPack", ghostQuickFilterIconPack)
                             .putInt("ghostQuickFilterPresentation", ghostQuickFilterPresentation)
+                            .putString("recurringUiDesign", recurringUiDesign)
                             .apply()
                         result.success(null)
                     }
@@ -924,11 +941,20 @@ class MainActivity : FlutterActivity() {
         "ignoreReview" -> fluviCore.automation.ignoreReview(requireArgument(call, "notificationId"))
         "getRecurrenceDashboard" -> recurrenceDashboardMap(fluviCore.recurrences.dashboard())
         "listRecurringRules" -> fluviCore.recurrences.rules().map(::recurrenceRuleMap)
+        "getRecurringRule" -> recurrenceRuleMap(
+            fluviCore.recurrences.rule(requireArgument(call, "ruleId")),
+        )
         "listRecurrenceOccurrences" -> fluviCore.recurrences.occurrences(
             call.argument<String>("status")?.let(RecurrenceOccurrenceStatus::valueOf),
+            call.argument<String>("ruleId"),
+            call.argument<Number>("fromUtcMs")?.toLong(),
+            call.argument<Number>("toUtcMs")?.toLong(),
             call.argument<Number>("limit")?.toInt() ?: 100,
             call.argument<Number>("offset")?.toInt() ?: 0,
         ).map(::recurrenceOccurrenceMap)
+        "getRecurrenceOccurrence" -> recurrenceOccurrenceMap(
+            fluviCore.recurrences.occurrence(requireArgument(call, "occurrenceId")),
+        )
         "getRealizedRecurrenceLedgerEntryId" -> mapOf(
             "ledgerEntryId" to fluviCore.recurrences.realizedLedgerEntryId(
                 requireArgument(call, "occurrenceId"),
@@ -936,7 +962,10 @@ class MainActivity : FlutterActivity() {
         )
         "createRecurringRule" -> recurrenceRuleMap(fluviCore.recurrences.create(
             CreateRecurrenceRuleCommand(
-                name = requireArgument(call, "name"), partnerId = requireArgument(call, "partnerId"),
+                name = requireArgument(call, "name"), partnerId = call.argument<String>("partnerId"),
+                partner = (call.argument<Map<String, Any?>>("partner"))?.let { raw ->
+                    manualPartnerSelection(mapOf("partner" to raw))
+                },
                 categorySelection = categorySelection(requireArguments(call)),
                 direction = LedgerDirection.valueOf(requireArgument(call, "direction")),
                 note = call.argument<String>("note"),
@@ -951,6 +980,42 @@ class MainActivity : FlutterActivity() {
                 dayWindow = call.argument<Number>("dayWindow")?.toInt() ?: 2,
             ),
         ).also { FluviRecurrenceScheduler.scheduleNext(applicationContext, fluviCore) })
+        "updateRecurringRule" -> recurrenceRuleMap(fluviCore.recurrences.update(
+            UpdateRecurrenceRuleCommand(
+                ruleId = requireArgument(call, "ruleId"),
+                expectedRuleVersion = requireInt(call, "expectedRuleVersion"),
+                name = requireArgument(call, "name"),
+                partnerId = requireArgument(call, "partnerId"),
+                categorySelection = categorySelection(requireArguments(call)),
+                note = call.argument<String>("note"),
+                triggerKind = RecurrenceTriggerKind.valueOf(requireArgument(call, "triggerKind")),
+                amountPolicy = RecurrenceAmountPolicy.valueOf(requireArgument(call, "amountPolicy")),
+                amountScaled100 = call.argument<Number>("amountScaled100")?.toLong(),
+                dayOfMonth = requireInt(call, "dayOfMonth"),
+                localTimeMinutes = requireInt(call, "localTimeMinutes"),
+                startLocalEpochDay = requireLong(call, "startLocalEpochDay"),
+                endLocalEpochDay = call.argument<Number>("endLocalEpochDay")?.toLong(),
+                timezoneId = requireArgument(call, "timezoneId"),
+                pushProfileId = call.argument<String>("pushProfileId"),
+                pushRuleId = call.argument<String>("pushRuleId"),
+                amountToleranceScaled100 = call.argument<Number>("amountToleranceScaled100")?.toLong() ?: 0L,
+                dayWindow = call.argument<Number>("dayWindow")?.toInt() ?: 2,
+            ),
+        ).also { FluviRecurrenceScheduler.scheduleNext(applicationContext, fluviCore) })
+        "previewRecurringOccurrences" -> fluviCore.recurrences.preview(
+            RecurrencePreviewRequest(
+                dayOfMonth = requireInt(call, "dayOfMonth"),
+                localTimeMinutes = requireInt(call, "localTimeMinutes"),
+                startLocalEpochDay = requireLong(call, "startLocalEpochDay"),
+                endLocalEpochDay = call.argument<Number>("endLocalEpochDay")?.toLong(),
+                timezoneId = requireArgument(call, "timezoneId"),
+                count = call.argument<Number>("count")?.toInt() ?: 3,
+            ),
+        ).map { preview -> mapOf(
+            "expectedLocalEpochDay" to preview.expectedLocalEpochDay,
+            "expectedLocalTimeMinutes" to preview.expectedLocalTimeMinutes,
+            "expectedAtUtcMs" to preview.expectedAtUtcMs,
+        ) }
         "setRecurringRuleActive" -> fluviCore.recurrences.setRuleActive(requireArgument(call, "ruleId"), requireArgument(call, "isActive")).also {
             FluviRecurrenceScheduler.scheduleNext(applicationContext, fluviCore)
         }
@@ -1021,6 +1086,9 @@ class MainActivity : FlutterActivity() {
         "localTimeMinutes" to rule.localTimeMinutes, "startLocalEpochDay" to rule.startLocalEpochDay,
         "endLocalEpochDay" to rule.endLocalEpochDay, "timezoneId" to rule.timezoneId, "isActive" to rule.isActive,
         "ruleVersion" to rule.ruleVersion,
+        "pushProfileId" to rule.pushProfileId, "pushRuleId" to rule.pushRuleId,
+        "amountToleranceScaled100" to rule.amountToleranceScaled100,
+        "dayWindow" to rule.dayWindow,
     )
 
     private fun recurrenceOccurrenceMap(value: com.fluvi.core.model.FluviRecurrenceOccurrence): Map<String, Any?> = mapOf(
