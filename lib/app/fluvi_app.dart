@@ -10,6 +10,7 @@ import '../features/dashboard/query/data/query_menu_repository.dart';
 import '../features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import '../features/dashboard/time_navigation/domain/time_plane.dart';
 import 'shell/fluvi_app_shell.dart';
+import 'fluvi_system_surface.dart';
 
 class FluviApp extends StatelessWidget {
   const FluviApp({
@@ -45,6 +46,8 @@ class FluviApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(canvasColor: FluviVisualTokens.pageBackground),
+      builder: (context, child) =>
+          FluviSystemSurface(child: child ?? const SizedBox.shrink()),
       home: FluviAppShell(
         dashboardRepository: dashboardRepository,
         categoryRepository: categoryRepository,

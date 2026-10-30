@@ -28,6 +28,7 @@ final class PartnerSelector extends StatefulWidget {
 
 final class _PartnerSelectorState extends State<PartnerSelector> {
   final TextEditingController _search = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   List<PartnerDirectoryEntry>? _partners;
   Object? _error;
 
@@ -41,6 +42,7 @@ final class _PartnerSelectorState extends State<PartnerSelector> {
   @override
   void dispose() {
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -112,8 +114,13 @@ final class _PartnerSelectorState extends State<PartnerSelector> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: TextField(
+                key: const ValueKey('manual-partner-search'),
                 controller: _search,
-                autofocus: true,
+                focusNode: _searchFocus,
+                // The full-screen selector should open like the category
+                // selector: show results first, and let an explicit tap start
+                // a text session and show the native keyboard.
+                autofocus: false,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search_rounded),
                   hintText: 'Partner keresése',
@@ -264,6 +271,7 @@ final class PartnerDropdown extends StatefulWidget {
 final class PartnerDropdownState extends State<PartnerDropdown> {
   final MenuController _controller = MenuController();
   final TextEditingController _search = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   List<PartnerDirectoryEntry>? _partners;
   Object? _error;
 
@@ -276,12 +284,17 @@ final class PartnerDropdownState extends State<PartnerDropdown> {
   @override
   void dispose() {
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
   void close() => _controller.close();
 
   Future<void> _open() async {
+    // An amount/note field may have been active before the anchor was tapped.
+    // Clear it synchronously, before the menu enters the overlay, so the
+    // keyboard never appears behind the partner list.
+    FocusManager.instance.primaryFocus?.unfocus();
     _controller.open();
     if (_partners != null) return;
     try {
@@ -346,22 +359,30 @@ final class PartnerDropdownState extends State<PartnerDropdown> {
                 24)
             .clamp(220, 420)
             .toDouble();
+    final listContentHeight = _partners == null
+        ? 88.0
+        : _visible.isEmpty
+        ? 64.0
+        : _visible.length * 64.0;
+    final menuHeight = (64 + 57 + listContentHeight)
+        .clamp(220, availableHeight)
+        .toDouble();
     return MenuAnchor(
       controller: _controller,
       alignmentOffset: const Offset(0, 8),
       menuChildren: [
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 380,
-            maxHeight: availableHeight,
-          ),
+        SizedBox(
+          width: 380,
+          height: menuHeight,
           child: Column(
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
                 child: TextField(
+                  key: const ValueKey('manual-partner-search'),
                   controller: _search,
-                  autofocus: true,
+                  focusNode: _searchFocus,
+                  autofocus: false,
                   decoration: const InputDecoration(
                     isDense: true,
                     prefixIcon: Icon(Icons.search_rounded),
@@ -380,6 +401,7 @@ final class PartnerDropdownState extends State<PartnerDropdown> {
                     : _visible.isEmpty
                     ? const Center(child: Text('Nincs találat.'))
                     : ListView.builder(
+                        primary: false,
                         padding: EdgeInsets.zero,
                         itemCount: _visible.length,
                         itemBuilder: (context, index) {

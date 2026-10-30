@@ -207,7 +207,7 @@ void main() {
   );
 
   testWidgets(
-    'expense impact shows a real negative remainder without clamping',
+    'expense impact renders the overrun marker, hatch and positive excess',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -235,8 +235,22 @@ void main() {
         tester
             .widget<Text>(find.byKey(const ValueKey('manual-impact-value')))
             .data,
-        '−1 000 Ft',
+        '1 000 Ft',
       );
+      expect(find.text('Keret túllépése mentés után'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('manual-impact-budget-bar')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('manual-impact-limit-marker')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('manual-impact-overrun-hatch')),
+        findsOneWidget,
+      );
+      expect(find.text('Túllépés'), findsOneWidget);
     },
   );
 
@@ -268,8 +282,178 @@ void main() {
       tester
           .widget<Text>(find.byKey(const ValueKey('manual-impact-value')))
           .data,
-      '−1 000 Ft',
+      '1 000 Ft',
     );
+    expect(
+      find.byKey(const ValueKey('manual-impact-limit-marker')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('manual-impact-overrun-hatch')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('normal expense impact paints a full-width budget bar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualTransactionEditor.create(
+          repository: _FakeManualRepository(),
+          categories: categories,
+          direction: LedgerDirection.expense,
+          impactRepository: const _FakeImpactRepository(
+            categoryActualScaled100: 4800000,
+            categoryLimitScaled100: 8000000,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('manual-amount-field')),
+      '8 500',
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('A tranzakció hatása'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('manual-impact-value')))
+          .data,
+      '23 500 Ft',
+    );
+    final bar = tester.getRect(
+      find.byKey(const ValueKey('manual-impact-budget-bar')),
+    );
+    expect(bar.height, 14);
+    expect(bar.width, greaterThan(250));
+    expect(
+      find.byKey(const ValueKey('manual-impact-limit-marker')),
+      findsNothing,
+    );
+    expect(find.text('Marad'), findsOneWidget);
+  });
+
+  testWidgets('missing category limit has no fictional budget bar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualTransactionEditor.create(
+          repository: _FakeManualRepository(),
+          categories: categories,
+          direction: LedgerDirection.expense,
+          impactRepository: const _FakeImpactRepository(
+            categoryLimitScaled100: null,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('manual-quick-1000')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('A tranzakció hatása'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('Ehhez a kategóriához nincs havi keret.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('manual-impact-budget-bar')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('partner searches start unfocused in both picker presentations', (
+    tester,
+  ) async {
+    final preferences = _MemoryEditorPreferencesStore();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualTransactionEditor.create(
+          repository: _FakeManualRepository(),
+          categories: categories,
+          direction: LedgerDirection.expense,
+          preferencesStore: preferences,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('manual-partner-field')));
+    await tester.pumpAndSettle();
+    var search = tester.widget<TextField>(
+      find.byKey(const ValueKey('manual-partner-search')),
+    );
+    expect(search.focusNode?.hasFocus, isFalse);
+    await tester.tap(find.byKey(const ValueKey('manual-partner-search')));
+    await tester.pump();
+    search = tester.widget<TextField>(
+      find.byKey(const ValueKey('manual-partner-search')),
+    );
+    expect(search.focusNode?.hasFocus, isTrue);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('manual-partner-presentation-toggle')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+    );
+    await tester.pumpAndSettle();
+    search = tester.widget<TextField>(
+      find.byKey(const ValueKey('manual-partner-search')),
+    );
+    expect(search.focusNode?.hasFocus, isFalse);
+    await tester.tap(find.byKey(const ValueKey('manual-partner-search')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('manual-partner-search')),
+          )
+          .focusNode
+          ?.hasFocus,
+      isTrue,
+    );
+  });
+
+  testWidgets('editor CTA group is compact, right-aligned and above its edge', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualTransactionEditor.create(
+          repository: _FakeManualRepository(),
+          categories: categories,
+          direction: LedgerDirection.expense,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final cancel = tester.getRect(
+      find.byKey(const ValueKey('manual-cancel-button')),
+    );
+    final save = tester.getRect(
+      find.byKey(const ValueKey('manual-save-button')),
+    );
+    expect(cancel.width, 104);
+    expect(save.width, 120);
+    expect(save.left - cancel.right, 12);
+    expect(save.right, closeTo(370, .01));
+    expect(save.bottom, lessThan(844));
   });
 
   testWidgets('edit impact request excludes the persisted entry', (
@@ -435,6 +619,136 @@ void main() {
       find.byKey(const ValueKey('manual-editor-visual-boundary')),
       matchesGoldenFile(
         '../../goldens/manual_transaction_editor_islands_expense.png',
+      ),
+    );
+  });
+
+  testWidgets('expense overrun impact visual reference', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualTransactionEditor.create(
+          repository: _FakeManualRepository(),
+          categories: categories,
+          direction: LedgerDirection.expense,
+          impactRepository: const _FakeImpactRepository(
+            categoryActualScaled100: 0,
+            categoryLimitScaled100: 1089464,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('manual-amount-field')),
+      '30 000',
+    );
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('manual-impact-budget-bar')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('manual-impact-value')))
+          .data,
+      '19 105,36 Ft',
+    );
+    expect(
+      find.text('Havi keret: 10 894,64 Ft · Mentés után elköltve: 30 000 Ft'),
+      findsOneWidget,
+    );
+
+    await expectLater(
+      find.byKey(const ValueKey('manual-editor-visual-boundary')),
+      matchesGoldenFile(
+        '../../goldens/manual_transaction_editor_expense_overrun.png',
+      ),
+    );
+  });
+
+  testWidgets('normal expense impact visual reference', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualTransactionEditor.create(
+          repository: _FakeManualRepository(),
+          categories: categories,
+          direction: LedgerDirection.expense,
+          impactRepository: const _FakeImpactRepository(
+            categoryActualScaled100: 4800000,
+            categoryLimitScaled100: 8000000,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('manual-amount-field')),
+      '8 500',
+    );
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('manual-impact-budget-bar')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    await expectLater(
+      find.byKey(const ValueKey('manual-editor-visual-boundary')),
+      matchesGoldenFile(
+        '../../goldens/manual_transaction_editor_expense_normal.png',
+      ),
+    );
+  });
+
+  testWidgets('partner dropdown opens without a keyboard visual reference', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final preferences = _MemoryEditorPreferencesStore()
+      ..value = const ManualTransactionEditorPreferences(
+        layout: ManualTransactionEditorLayout.hero,
+        partnerPickerPresentation: ManualPartnerPickerPresentation.dropdown,
+      );
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const ValueKey('manual-partner-dropdown-visual-boundary'),
+        child: MaterialApp(
+          home: ManualTransactionEditor.create(
+            repository: _FakeManualRepository(),
+            categories: categories,
+            direction: LedgerDirection.expense,
+            preferencesStore: preferences,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('manual-partner-search')),
+          )
+          .focusNode
+          ?.hasFocus,
+      isFalse,
+    );
+
+    await expectLater(
+      find.byKey(const ValueKey('manual-partner-dropdown-visual-boundary')),
+      matchesGoldenFile(
+        '../../goldens/manual_transaction_partner_dropdown_unfocused.png',
       ),
     );
   });

@@ -19,6 +19,7 @@ import '../domain/manual_transaction_impact_repository.dart';
 import '../domain/manual_transaction_models.dart';
 import '../domain/manual_transaction_repository.dart';
 import 'category_dropdown.dart';
+import 'manual_transaction_budget_impact.dart';
 import 'manual_transaction_editor_field_rows.dart';
 import 'partner_selector.dart';
 
@@ -311,6 +312,10 @@ final class _ManualTransactionEditorState
   }
 
   Future<void> _pickPartnerFullscreen() async {
+    // Opening a selector is a navigation action, not an invitation to start
+    // typing. This also dismisses a previously focused amount/note keyboard
+    // before the full-screen route becomes visible.
+    FocusManager.instance.primaryFocus?.unfocus();
     final selected = await Navigator.of(context).push<ManualPartnerSelection>(
       MaterialPageRoute(
         fullscreenDialog: true,
@@ -1059,29 +1064,32 @@ final class _ManualTransactionEditorState
         message: 'Ehhez a kategóriához nincs havi keret.',
       );
     }
-    final before = limit - impact.categoryActualScaled100;
-    final after = before - amount;
-    final spent = limit == 0
-        ? 1.0
-        : (impact.categoryActualScaled100 / limit).clamp(0.0, 1.0).toDouble();
-    final draft = limit == 0
-        ? 0.0
-        : (amount / limit).clamp(0.0, 1.0 - spent).toDouble();
+    final budgetImpact = ManualTransactionBudgetImpactPresentation.calculate(
+      limitScaled100: limit,
+      spentScaled100: impact.categoryActualScaled100,
+      draftScaled100: amount,
+    );
+    final overrun = budgetImpact.isOverrun;
     return _ImpactSurface(
       title: 'A tranzakció hatása',
       subtitle: expenseSubtitle,
-      headline: 'Mentés után megmarad',
-      value: '${after < 0 ? '−' : ''}${_formatHungarianMinor(after.abs())}',
+      headline: overrun
+          ? 'Keret túllépése mentés után'
+          : budgetImpact.isExhausted
+          ? 'A havi keret elfogy'
+          : 'Mentés után megmarad',
+      value: _formatHungarianMinor(
+        overrun
+            ? budgetImpact.overrunScaled100
+            : budgetImpact.remainingScaled100,
+      ),
       calculation:
           '${_formatHungarianMinor(impact.categoryActualScaled100)} Ft elköltve + ${_formatHungarianMinor(amount)} Ft most',
-      limitLabel: 'Havi keret: ${_formatHungarianMinor(limit)} Ft',
-      fraction: (spent, draft),
-      legend: (
-        spent: impact.categoryActualScaled100,
-        draft: amount,
-        remaining: after,
-      ),
-      overflow: after < 0,
+      limitLabel: overrun
+          ? 'Havi keret: ${_formatHungarianMinor(limit)} Ft · Mentés után elköltve: ${_formatHungarianMinor(budgetImpact.totalScaled100)} Ft'
+          : 'Havi keret: ${_formatHungarianMinor(limit)} Ft',
+      budgetImpact: budgetImpact,
+      overflow: overrun,
     );
   }
 
@@ -1098,34 +1106,72 @@ final class _ManualTransactionEditorState
         (_direction ?? LedgerDirection.expense) == LedgerDirection.income
         ? FluviDirectionColorPaletteCatalog.income(_directionColorProfile)
         : FluviDirectionColorPaletteCatalog.expense(_directionColorProfile);
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-        child: Row(
-          children: [
-            Expanded(
-              child: _LedgerPillButton(
-                key: const ValueKey('manual-cancel-button'),
-                label: 'Mégse',
-                onPressed: _saving ? null : _cancel,
-              ),
-            ),
-            const SizedBox(width: FluviVisualTokens.controlInnerGap),
-            Expanded(
-              child: _LedgerPillButton(
-                key: const ValueKey('manual-save-button'),
-                label: _saving ? 'Mentés…' : 'Mentés',
-                gradient: gradient,
-                primary: true,
-                onPressed: _saving ? null : _save,
-              ),
-            ),
-          ],
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: Colors.white),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final cancelWidth = _ctaButtonWidth(context, 'Mégse', 104);
+              final saveWidth = _ctaButtonWidth(
+                context,
+                _saving ? 'Mentés…' : 'Mentés',
+                120,
+              );
+              // A Wrap keeps the normal layout as one compact, right-aligned
+              // group, while high text scales can use an extra line rather
+              // than squeezing, clipping, or expanding across the whole bar.
+              return Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    SizedBox(
+                      width: cancelWidth
+                          .clamp(0, constraints.maxWidth)
+                          .toDouble(),
+                      child: _LedgerPillButton(
+                        key: const ValueKey('manual-cancel-button'),
+                        label: 'Mégse',
+                        onPressed: _saving ? null : _cancel,
+                      ),
+                    ),
+                    SizedBox(
+                      width: saveWidth
+                          .clamp(0, constraints.maxWidth)
+                          .toDouble(),
+                      child: _LedgerPillButton(
+                        key: const ValueKey('manual-save-button'),
+                        label: _saving ? 'Mentés…' : 'Mentés',
+                        gradient: gradient,
+                        primary: true,
+                        onPressed: _saving ? null : _save,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
   }
+}
+
+double _ctaButtonWidth(BuildContext context, String label, double minimum) {
+  final painter = TextPainter(
+    text: TextSpan(text: label, style: FluviVisualTokens.actionLabelTextStyle),
+    textScaler: MediaQuery.textScalerOf(context),
+    textDirection: Directionality.of(context),
+    maxLines: 1,
+  )..layout();
+  return (painter.width + 28).clamp(minimum, double.infinity).toDouble();
 }
 
 final class _ImpactSurface extends StatelessWidget {
@@ -1137,8 +1183,7 @@ final class _ImpactSurface extends StatelessWidget {
     this.value,
     this.calculation,
     this.limitLabel,
-    this.fraction,
-    this.legend,
+    this.budgetImpact,
     this.overflow = false,
   });
   final String title;
@@ -1148,8 +1193,7 @@ final class _ImpactSurface extends StatelessWidget {
   final String? value;
   final String? calculation;
   final String? limitLabel;
-  final (double spent, double draft)? fraction;
-  final ({int spent, int draft, int remaining})? legend;
+  final ManualTransactionBudgetImpactPresentation? budgetImpact;
   final bool overflow;
 
   @override
@@ -1216,31 +1260,9 @@ final class _ImpactSurface extends StatelessWidget {
             ),
           ),
         ],
-        if (fraction != null) const SizedBox(height: 10),
-        if (fraction case final segments?)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              height: 10,
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: _impactFlex(segments.$1),
-                    child: const ColoredBox(color: Color(0xff9786e8)),
-                  ),
-                  Expanded(
-                    flex: _impactFlex(segments.$2),
-                    child: const ColoredBox(color: Color(0xffff999b)),
-                  ),
-                  Expanded(
-                    flex: _impactFlex(1 - segments.$1 - segments.$2),
-                    child: const ColoredBox(color: Color(0xffe2e8f0)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        if (legend != null) ...[
+        if (budgetImpact case final impact?) ...[
+          const SizedBox(height: 10),
+          _BudgetImpactBar(impact: impact),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -1248,22 +1270,27 @@ final class _ImpactSurface extends StatelessWidget {
                 child: _ImpactLegend(
                   color: const Color(0xff9786e8),
                   label: 'Elköltve',
-                  value: _formatHungarianMinor(legend!.spent),
+                  value: _formatHungarianMinor(impact.spentScaled100),
                 ),
               ),
               Expanded(
                 child: _ImpactLegend(
                   color: const Color(0xffff999b),
                   label: 'Most',
-                  value: _formatHungarianMinor(legend!.draft),
+                  value: _formatHungarianMinor(impact.draftScaled100),
                 ),
               ),
               Expanded(
                 child: _ImpactLegend(
-                  color: const Color(0xffcbd5e1),
-                  label: 'Marad',
-                  value:
-                      '${legend!.remaining < 0 ? '−' : ''}${_formatHungarianMinor(legend!.remaining.abs())}',
+                  color: impact.isOverrun
+                      ? const Color(0xffe45b6a)
+                      : const Color(0xffcbd5e1),
+                  label: impact.isOverrun ? 'Túllépés' : 'Marad',
+                  value: _formatHungarianMinor(
+                    impact.isOverrun
+                        ? impact.overrunScaled100
+                        : impact.remainingScaled100,
+                  ),
                 ),
               ),
             ],
@@ -1274,8 +1301,141 @@ final class _ImpactSurface extends StatelessWidget {
   );
 }
 
-int _impactFlex(double fraction) =>
-    (fraction.clamp(0.0, 1.0) * 1000).round().clamp(1, 1000).toInt();
+final class _BudgetImpactBar extends StatelessWidget {
+  const _BudgetImpactBar({required this.impact});
+
+  final ManualTransactionBudgetImpactPresentation impact;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: impact.isOverrun
+        ? 'Költségkeret túllépését jelző sáv'
+        : 'Költségkeret felhasználását jelző sáv',
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        const barTop = 20.0;
+        const barHeight = 14.0;
+        final markerX = width * impact.limitFraction.clamp(0.0, 1.0);
+        final markerLeft = (markerX - 1).clamp(
+          0.0,
+          (width - 2).clamp(0.0, width),
+        );
+        final markerLabelLeft = (markerX - 18).clamp(
+          0.0,
+          (width - 36).clamp(0.0, width),
+        );
+        return SizedBox(
+          key: const ValueKey('manual-impact-budget-bar'),
+          height: impact.isOverrun ? 34 : barHeight,
+          width: double.infinity,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                top: impact.isOverrun ? barTop : 0,
+                left: 0,
+                right: 0,
+                height: barHeight,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(barHeight / 2),
+                  child: LayoutBuilder(
+                    builder: (context, barConstraints) {
+                      final barWidth = barConstraints.maxWidth;
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          const ColoredBox(color: Color(0xffe2e8f0)),
+                          if (impact.spentFraction > 0)
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: barWidth * impact.spentFraction,
+                              child: const ColoredBox(color: Color(0xff9786e8)),
+                            ),
+                          if (impact.draftFraction > 0)
+                            Positioned(
+                              left: barWidth * impact.spentFraction,
+                              top: 0,
+                              bottom: 0,
+                              width: barWidth * impact.draftFraction,
+                              child: const ColoredBox(color: Color(0xffff999b)),
+                            ),
+                          if (impact.isOverrun)
+                            Positioned.fill(
+                              child: CustomPaint(
+                                key: const ValueKey(
+                                  'manual-impact-overrun-hatch',
+                                ),
+                                painter: _BudgetOverrunHatchPainter(
+                                  startFraction: impact.limitFraction,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+              if (impact.isOverrun) ...[
+                Positioned(
+                  key: const ValueKey('manual-impact-limit-marker'),
+                  left: markerLeft,
+                  top: barTop - 3,
+                  width: 2,
+                  height: barHeight + 6,
+                  child: const ColoredBox(color: Color(0xffbe123c)),
+                ),
+                Positioned(
+                  left: markerLabelLeft,
+                  top: 0,
+                  child: Text(
+                    'Keret',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: const Color(0xff9f1239),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
+final class _BudgetOverrunHatchPainter extends CustomPainter {
+  const _BudgetOverrunHatchPainter({required this.startFraction});
+
+  final double startFraction;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final startX = size.width * startFraction.clamp(0.0, 1.0);
+    if (startX >= size.width) return;
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(startX, 0, size.width - startX, size.height));
+    final paint = Paint()
+      ..color = const Color(0xffbe123c).withValues(alpha: .46)
+      ..strokeWidth = 1;
+    for (var x = startX - size.height; x < size.width + size.height; x += 5) {
+      canvas.drawLine(
+        Offset(x, size.height),
+        Offset(x + size.height, 0),
+        paint,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BudgetOverrunHatchPainter oldDelegate) =>
+      oldDelegate.startFraction != startFraction;
+}
 
 final class _ImpactLegend extends StatelessWidget {
   const _ImpactLegend({
