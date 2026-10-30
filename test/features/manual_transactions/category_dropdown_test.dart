@@ -43,6 +43,72 @@ void main() {
         .toList(growable: false);
     expect(badges.map((badge) => badge.iconHandle), containsAll(<int>[2, 7]));
   });
+
+  testWidgets(
+    'category dropdown keeps new-category action fixed at its footer',
+    (tester) async {
+      var createRequested = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CategoryDropdown(
+              categories: <FluviCategory>[
+                _category('food', 'Élelmiszer', 'color_02', 'icon_02'),
+              ],
+              selectedCategoryId: 'food',
+              onSelected: (_) {},
+              onCreate: () async => createRequested = true,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('manual-category-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('manual-category-create-action')),
+      );
+      await tester.pump();
+      expect(createRequested, isTrue);
+    },
+  );
+
+  testWidgets('new category remains available when category search is empty', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CategoryDropdown(
+            categories: <FluviCategory>[
+              _category('food', 'Élelmiszer', 'color_02', 'icon_02'),
+            ],
+            selectedCategoryId: 'food',
+            onSelected: (_) {},
+            onCreate: () async {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('manual-category-dropdown-anchor')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('manual-category-search')),
+      'nincs ilyen kategória',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nincs találat.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('manual-category-create-action')),
+      findsOneWidget,
+    );
+  });
 }
 
 FluviCategory _category(

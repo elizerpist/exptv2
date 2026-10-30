@@ -25,6 +25,8 @@ import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/manual_transactions/data/method_channel_manual_transaction_repository.dart';
+import '../../features/manual_transactions/data/method_channel_manual_transaction_impact_repository.dart';
+import '../../features/manual_transactions/data/method_channel_manual_transaction_editor_preferences_store.dart';
 import '../../features/manual_transactions/data/unavailable_manual_transaction_repository.dart';
 import '../../features/manual_transactions/domain/manual_transaction_repository.dart';
 import '../../features/manual_transactions/domain/manual_transaction_models.dart';
@@ -254,6 +256,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   bool _headerInteractionActive = false;
   bool _routeObstructed = false;
   bool _openingPulseFromHeader = false;
+  bool _openingCreationSelector = false;
 
   @override
   void initState() {
@@ -428,6 +431,8 @@ class _FluviAppShellState extends State<FluviAppShell>
   }
 
   Future<void> _openCreationSelector() async {
+    if (_openingCreationSelector) return;
+    _openingCreationSelector = true;
     _routeObstructed = true;
     _syncPulseDeliverySurface();
     try {
@@ -439,6 +444,11 @@ class _FluviAppShellState extends State<FluviAppShell>
       final action = await showCreationSelectorSheet(
         context,
         direction: direction,
+        directionColorProfile: _headerVisualController
+            .tuning
+            .value
+            .globalAppearance
+            .directionColorProfile,
       );
       if (!mounted || action == null) return;
       if (action == CreationSelectorAction.pushProfile) {
@@ -472,12 +482,22 @@ class _FluviAppShellState extends State<FluviAppShell>
           builder: (_) => ManualTransactionEditor.create(
             repository: _manualTransactionRepository,
             categories: _categoryCollection.value,
+            categoryCollection: _categoryCollection,
+            categoryRepository: _categoryRepository,
+            impactRepository: kIsWeb
+                ? null
+                : MethodChannelManualTransactionImpactRepository(),
+            preferencesStore: kIsWeb
+                ? null
+                : MethodChannelManualTransactionEditorPreferencesStore(),
+            headerVisualTuning: _headerVisualController.tuning,
             direction: direction,
             onSaved: _acceptManualTransactionSave,
           ),
         ),
       );
     } finally {
+      _openingCreationSelector = false;
       if (mounted) {
         _routeObstructed = false;
         _syncPulseDeliverySurface();
@@ -509,6 +529,15 @@ class _FluviAppShellState extends State<FluviAppShell>
               ManualTransactionEditor.edit(
                 repository: _manualTransactionRepository,
                 categories: _categoryCollection.value,
+                categoryCollection: _categoryCollection,
+                categoryRepository: _categoryRepository,
+                impactRepository: kIsWeb
+                    ? null
+                    : MethodChannelManualTransactionImpactRepository(),
+                preferencesStore: kIsWeb
+                    ? null
+                    : MethodChannelManualTransactionEditorPreferencesStore(),
+                headerVisualTuning: _headerVisualController.tuning,
                 entryId: entryId,
                 onSaved: _acceptManualTransactionSave,
               ),

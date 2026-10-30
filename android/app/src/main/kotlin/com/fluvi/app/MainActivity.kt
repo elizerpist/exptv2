@@ -35,6 +35,8 @@ import com.fluvi.core.model.QueryPeriodKind
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
 import com.fluvi.core.query.FluviQueryScope
+import com.fluvi.core.query.FluviGhostFilterMode
+import com.fluvi.core.query.FluviPreparedYearWindow
 import com.fluvi.core.pulse.PulseDashboardSnapshot
 import com.fluvi.core.pulse.PulseIndicatorSnapshot
 import com.fluvi.core.pulse.PulseSignalInspectionSnapshot
@@ -78,6 +80,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 class MainActivity : FlutterActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -406,6 +409,34 @@ class MainActivity : FlutterActivity() {
                         ?.takeIf { it in 0..1 }
                         ?: 1
                 when (call.method) {
+                    "readManualTransactionEditorSettings" -> result.success(
+                        mapOf(
+                            // First use is Hero plus the existing fullscreen
+                            // partner selector. Both values are presentation
+                            // only and intentionally share this established
+                            // local-settings store.
+                            "layout" to preferences.getInt("manualTransactionEditorLayout", 0)
+                                .takeIf { it in 0..1 },
+                            "partnerPickerPresentation" to preferences
+                                .getInt("manualTransactionPartnerPickerPresentation", 0)
+                                .takeIf { it in 0..1 },
+                        ),
+                    )
+                    "writeManualTransactionEditorSettings" -> {
+                        val values = call.arguments as? Map<*, *>
+                            ?: throw IllegalArgumentException("Manual editor settings must be a map.")
+                        val layout = (values["layout"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing manual editor layout.")
+                        val picker = (values["partnerPickerPresentation"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing partner picker presentation.")
+                        require(layout in 0..1) { "Invalid manual editor layout." }
+                        require(picker in 0..1) { "Invalid partner picker presentation." }
+                        preferences.edit()
+                            .putInt("manualTransactionEditorLayout", layout)
+                            .putInt("manualTransactionPartnerPickerPresentation", picker)
+                            .apply()
+                        result.success(null)
+                    }
                     "readDashboardPresentationSettings" -> result.success(
                         mapOf(
                             // SUM-A is the fresh-install presentation default. Only
@@ -742,7 +773,79 @@ class MainActivity : FlutterActivity() {
         "resolvePartner" -> fluviCore.partners
             .getPartnerById(requireArgument(call, "partnerId"))
             ?.let(::partnerDirectoryMap)
+        "getMonthImpact" -> manualTransactionMonthImpactMap(call, fluviCore)
         else -> throw IllegalArgumentException("Unknown manual transaction method: ${call.method}")
+    }
+
+    /**
+     * Editor-only projection from the exact same prepared Budget snapshot that
+     * drives the Budget surface.  Flutter receives just the selected month
+     * cells rather than a second ledger aggregation or a widget-side limit
+     * interpretation.  Existing-entry editing removes the persisted source
+     * row before the draft is applied, avoiding a double-counted preview.
+     */
+    private suspend fun manualTransactionMonthImpactMap(
+        call: MethodCall,
+        fluviCore: FluviCore,
+    ): Map<String, Any?> {
+        val direction = LedgerDirection.valueOf(requireArgument(call, "direction"))
+        val categoryId = call.argument<String>("categoryId")
+        val year = requireInt(call, "year")
+        val month = requireInt(call, "month")
+        require(month in 1..12) { "Invalid impact month." }
+        val revision = fluviCore.query.currentCoreRevision()
+        val snapshot = fluviCore.budget.preparedLimitSnapshot(
+            expectedRevision = revision,
+            yearWindow = FluviPreparedYearWindow(year, year),
+            // This is the dashboard's normal Budget membership. Pending
+            // recurrence occurrences are not ledger entries and therefore do
+            // not become actual spending through this projection.
+            ghostFilterMode = FluviGhostFilterMode.both,
+        )
+        val monthSlice = 2 + month - 1 // SUM, YEAR, then Jan…Dec.
+        fun actual(direction: LedgerDirection, categoryId: String?): Long {
+            val bank = snapshot.directionBank(direction)
+            val handle = if (categoryId == null) 0 else {
+                bank.orderedCategoryIds.indexOf(categoryId).takeIf { it >= 0 }?.plus(1)
+                    ?: return 0L
+            }
+            return bank.actualScaled100[monthSlice * bank.targetCount + handle]
+        }
+        fun limit(direction: LedgerDirection, categoryId: String?): Long? {
+            if (categoryId == null) return null
+            val bank = snapshot.directionBank(direction)
+            val handle = bank.orderedCategoryIds.indexOf(categoryId).takeIf { it >= 0 }?.plus(1)
+                ?: return null
+            val value = bank.limitScaled100[monthSlice * bank.targetCount + handle]
+            // -1 is the prepared-bank sentinel for no resolved monthly
+            // limit. A real zero limit must remain visible as an immediate
+            // overrun instead of being silently presented as "no budget".
+            return value.takeIf { it >= 0L }
+        }
+        var income = actual(LedgerDirection.income, null)
+        var expense = actual(LedgerDirection.expense, null)
+        var categoryActual = actual(direction, categoryId)
+        val excluded = call.argument<String>("excludedEntryId")?.let { entryId ->
+            runCatching { fluviCore.ledger.getLedgerEntryById(entryId) }.getOrNull()
+        }
+        if (excluded != null) {
+            val booked = LocalDate.ofEpochDay(excluded.bookedLocalEpochDay)
+            if (booked.year == year && booked.monthValue == month) {
+                when (excluded.direction) {
+                    LedgerDirection.income -> income -= excluded.amountScaled100
+                    LedgerDirection.expense -> expense -= excluded.amountScaled100
+                }
+                if (excluded.direction == direction && excluded.categoryId == categoryId) {
+                    categoryActual -= excluded.amountScaled100
+                }
+            }
+        }
+        return mapOf(
+            "categoryActualScaled100" to categoryActual.coerceAtLeast(0L),
+            "categoryLimitScaled100" to limit(direction, categoryId),
+            "monthIncomeScaled100" to income.coerceAtLeast(0L),
+            "monthExpenseScaled100" to expense.coerceAtLeast(0L),
+        )
     }
 
     private suspend fun handleAutomationCall(

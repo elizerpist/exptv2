@@ -229,3 +229,245 @@ final class PartnerCategoryAvatar extends StatelessWidget {
 
 String _normalize(String value) =>
     value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+/// Anchored counterpart to [PartnerSelector]. It deliberately shares the
+/// repository, row avatar and partner-editor route with the fullscreen picker;
+/// only its presentation differs.
+final class PartnerDropdown extends StatefulWidget {
+  const PartnerDropdown({
+    super.key,
+    required this.repository,
+    required this.categories,
+    required this.selectedPartnerId,
+    required this.onSelected,
+    this.selectedPartner,
+    this.enabled = true,
+  });
+
+  final ManualTransactionRepository repository;
+  final List<FluviCategory> categories;
+  final String? selectedPartnerId;
+  final PartnerDirectoryEntry? selectedPartner;
+  final ValueChanged<ManualPartnerSelection> onSelected;
+  final bool enabled;
+
+  @override
+  State<PartnerDropdown> createState() => PartnerDropdownState();
+}
+
+final class PartnerDropdownState extends State<PartnerDropdown> {
+  final MenuController _controller = MenuController();
+  final TextEditingController _search = TextEditingController();
+  List<PartnerDirectoryEntry>? _partners;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  void close() => _controller.close();
+
+  Future<void> _open() async {
+    _controller.open();
+    if (_partners != null) return;
+    try {
+      final partners = await widget.repository.listPartners();
+      if (mounted) setState(() => _partners = partners);
+    } catch (error) {
+      if (mounted) setState(() => _error = error);
+    }
+  }
+
+  List<PartnerDirectoryEntry> get _visible {
+    final query = _normalize(_search.text);
+    final source = _partners ?? const <PartnerDirectoryEntry>[];
+    if (query.isEmpty) return source;
+    return source
+        .where((partner) {
+          final names = <String>[
+            partner.displayName,
+            partner.originalName,
+            ...partner.searchNames,
+          ];
+          return names.any((name) => _normalize(name).contains(query));
+        })
+        .toList(growable: false);
+  }
+
+  PartnerDirectoryEntry? get _selectedPartner {
+    for (final partner in _partners ?? const <PartnerDirectoryEntry>[]) {
+      if (partner.partnerId == widget.selectedPartnerId) return partner;
+    }
+    return widget.selectedPartner;
+  }
+
+  Future<void> _newPartner() async {
+    _controller.close();
+    final result = await showPartnerEditorPopup(
+      context,
+      repository: widget.repository,
+      categories: widget.categories,
+      initialName: _search.text.trim(),
+    );
+    if (mounted && result != null) widget.onSelected(result);
+  }
+
+  Future<void> _edit(PartnerDirectoryEntry partner) async {
+    _controller.close();
+    await showPartnerEditorPopup(
+      context,
+      repository: widget.repository,
+      categories: widget.categories,
+      existing: partner,
+    );
+    if (mounted) setState(() => _partners = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final partner = _selectedPartner;
+    final availableHeight =
+        (MediaQuery.sizeOf(context).height -
+                MediaQuery.viewInsetsOf(context).bottom -
+                24)
+            .clamp(220, 420)
+            .toDouble();
+    return MenuAnchor(
+      controller: _controller,
+      alignmentOffset: const Offset(0, 8),
+      menuChildren: [
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 380,
+            maxHeight: availableHeight,
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                child: TextField(
+                  controller: _search,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    prefixIcon: Icon(Icons.search_rounded),
+                    hintText: 'Partner keresése',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _error != null
+                    ? Center(
+                        child: Text('A partnerlista nem tölthető be: $_error'),
+                      )
+                    : _partners == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : _visible.isEmpty
+                    ? const Center(child: Text('Nincs találat.'))
+                    : ListView.builder(
+                        padding: EdgeInsets.zero,
+                        itemCount: _visible.length,
+                        itemBuilder: (context, index) {
+                          final partner = _visible[index];
+                          return ListTile(
+                            dense: true,
+                            leading: PartnerCategoryAvatar(
+                              partner: partner,
+                              size: 32,
+                              iconSize: 16,
+                            ),
+                            title: Text(partner.displayName),
+                            subtitle: Text(partner.defaultCategoryName),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (partner.partnerId ==
+                                    widget.selectedPartnerId)
+                                  const Icon(Icons.check_rounded),
+                                IconButton(
+                                  tooltip: 'Partner szerkesztése',
+                                  icon: const Icon(Icons.edit_outlined),
+                                  onPressed: () => _edit(partner),
+                                ),
+                              ],
+                            ),
+                            onTap: () {
+                              _controller.close();
+                              widget.onSelected(
+                                ExistingManualPartner(
+                                  partner.partnerId,
+                                  directoryEntry: partner,
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.add_rounded),
+                title: const Text('Új partner'),
+                onTap: _newPartner,
+              ),
+            ],
+          ),
+        ),
+      ],
+      builder: (context, controller, _) => Semantics(
+        button: true,
+        label: 'Partner kiválasztása legördülő listából',
+        child: InkWell(
+          key: const ValueKey('manual-partner-dropdown-anchor'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: widget.enabled
+              ? () => controller.isOpen ? controller.close() : _open()
+              : null,
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Partner',
+              suffixIcon: Icon(Icons.keyboard_arrow_down_rounded),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(16)),
+              ),
+            ),
+            child: partner == null
+                ? const Text('Partner kiválasztása')
+                : Row(
+                    children: [
+                      PartnerCategoryAvatar(
+                        partner: partner,
+                        size: 28,
+                        iconSize: 14,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(partner.displayName),
+                            Text(
+                              partner.defaultCategoryName,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}

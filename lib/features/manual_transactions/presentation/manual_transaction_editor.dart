@@ -1,8 +1,21 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/categories/domain/category_repository.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
+import '../../../core/categories/presentation/category_editor_sheet.dart';
+import '../../../core/design/app_control_metrics.dart';
+import '../../../core/design/dashboard_corner_profile.dart';
+import '../../../core/design/dashboard_mode_palette.dart';
+import '../../../core/design/fluvi_global_appearance.dart';
+import '../../dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import '../../dashboard/presentation/dashboard_corner_roundness.dart';
+import '../../dashboard/presentation/dashboard_shadow_style.dart';
 import '../../dashboard/query/domain/ledger_direction.dart';
+import '../application/manual_transaction_editor_preferences.dart';
+import '../data/unavailable_manual_transaction_impact_repository.dart';
+import '../domain/manual_transaction_impact_repository.dart';
 import '../domain/manual_transaction_models.dart';
 import '../domain/manual_transaction_repository.dart';
 import 'category_dropdown.dart';
@@ -10,12 +23,19 @@ import 'partner_selector.dart';
 
 enum ManualTransactionEditorMode { create, edit }
 
+/// One draft serves both renderings. Toggling layout rebuilds only the surface
+/// around retained controllers, focus nodes, picker state and scroll position.
 final class ManualTransactionEditor extends StatefulWidget {
   const ManualTransactionEditor.create({
     super.key,
     required this.repository,
     required this.categories,
     required this.direction,
+    this.categoryCollection,
+    this.categoryRepository,
+    this.impactRepository,
+    this.preferencesStore,
+    this.headerVisualTuning,
     this.onSaved,
   }) : mode = ManualTransactionEditorMode.create,
        entryId = null;
@@ -25,12 +45,22 @@ final class ManualTransactionEditor extends StatefulWidget {
     required this.repository,
     required this.categories,
     required String this.entryId,
+    this.categoryCollection,
+    this.categoryRepository,
+    this.impactRepository,
+    this.preferencesStore,
+    this.headerVisualTuning,
     this.onSaved,
   }) : mode = ManualTransactionEditorMode.edit,
        direction = null;
 
   final ManualTransactionRepository repository;
   final List<FluviCategory> categories;
+  final ValueListenable<List<FluviCategory>>? categoryCollection;
+  final CategoryRepository? categoryRepository;
+  final ManualTransactionImpactRepository? impactRepository;
+  final ManualTransactionEditorPreferencesStore? preferencesStore;
+  final ValueListenable<DashboardHeaderVisualTuning>? headerVisualTuning;
   final ManualTransactionEditorMode mode;
   final String? entryId;
   final LedgerDirection? direction;
@@ -43,8 +73,14 @@ final class ManualTransactionEditor extends StatefulWidget {
 
 final class _ManualTransactionEditorState
     extends State<ManualTransactionEditor> {
-  final TextEditingController _amount = TextEditingController();
-  final TextEditingController _note = TextEditingController();
+  final _amount = TextEditingController();
+  final _note = TextEditingController();
+  final _amountFocus = FocusNode();
+  final _noteFocus = FocusNode();
+  final _scrollController = ScrollController();
+  final _partnerDropdownKey = GlobalKey<PartnerDropdownState>();
+  final _createdCategories = <FluviCategory>[];
+
   late DateTime _date;
   late TimeOfDay _time;
   late DateTime _initialCreateDate;
@@ -55,18 +91,40 @@ final class _ManualTransactionEditorState
   ManualPartnerSelection? _partnerSelection;
   ManualCategorySelection _categorySelection =
       const ManualCategorySelection.partnerDefault();
+  ManualTransactionEditorPreferences? _preferences;
+  ManualTransactionMonthImpact? _impact;
+  bool _impactLoading = false;
+  int _impactGeneration = 0;
   bool _loading = false;
   bool _saving = false;
   bool _revisionConflict = false;
   String? _error;
 
   bool get _editing => widget.mode == ManualTransactionEditorMode.edit;
+  List<FluviCategory> get _categories {
+    final authoritative = widget.categoryCollection?.value ?? widget.categories;
+    if (_createdCategories.isEmpty) return authoritative;
+    final known = authoritative.map((value) => value.id).toSet();
+    return <FluviCategory>[
+      ...authoritative,
+      for (final value in _createdCategories)
+        if (!known.contains(value.id)) value,
+    ];
+  }
+
+  String? get _selectedCategoryId =>
+      _categorySelection.mode == ManualCategoryAssignmentMode.entryOverride
+      ? _categorySelection.categoryId
+      : _partner?.defaultCategoryId;
+
   bool get _dirty {
     final entry = _entry;
     if (!_editing || entry == null) {
       return _amount.text.isNotEmpty ||
           _note.text.isNotEmpty ||
           _partnerSelection != null ||
+          _categorySelection.mode ==
+              ManualCategoryAssignmentMode.entryOverride ||
           _date != _initialCreateDate ||
           _time.hour != _initialCreateTime.hour ||
           _time.minute != _initialCreateTime.minute;
@@ -97,14 +155,48 @@ final class _ManualTransactionEditorState
     _initialCreateDate = _date;
     _initialCreateTime = _time;
     _direction = widget.direction;
-    if (_editing) _load();
+    _amount.addListener(_onDraftTextChanged);
+    _note.addListener(_onDraftTextChanged);
+    _loadPreferences();
+    if (_editing) {
+      _load();
+    } else {
+      _reloadImpact();
+    }
   }
 
   @override
   void dispose() {
-    _amount.dispose();
-    _note.dispose();
+    _amount
+      ..removeListener(_onDraftTextChanged)
+      ..dispose();
+    _note
+      ..removeListener(_onDraftTextChanged)
+      ..dispose();
+    _amountFocus.dispose();
+    _noteFocus.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onDraftTextChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadPreferences() async {
+    final value =
+        await (widget.preferencesStore ??
+                const DefaultManualTransactionEditorPreferencesStore())
+            .read();
+    if (mounted) setState(() => _preferences = value);
+  }
+
+  Future<void> _setPreferences(ManualTransactionEditorPreferences value) async {
+    _partnerDropdownKey.currentState?.close();
+    setState(() => _preferences = value);
+    await (widget.preferencesStore ??
+            const DefaultManualTransactionEditorPreferencesStore())
+        .write(value);
   }
 
   Future<void> _load() async {
@@ -121,7 +213,10 @@ final class _ManualTransactionEditorState
         _entry = entry;
         _direction = entry.direction;
         _partner = partner;
-        _partnerSelection = ExistingManualPartner(entry.partnerId);
+        _partnerSelection = ExistingManualPartner(
+          entry.partnerId,
+          directoryEntry: partner,
+        );
         _categorySelection =
             entry.categoryAssignmentMode ==
                 ManualCategoryAssignmentMode.entryOverride
@@ -135,40 +230,51 @@ final class _ManualTransactionEditorState
         _amount.text = _formatHungarianMinor(entry.amountScaled100);
         _note.text = entry.note ?? '';
       });
+      _reloadImpact();
     } catch (error) {
       if (mounted) {
         setState(() => _error = 'A tranzakció nem tölthető be: $error');
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
-  Future<void> _pickPartner() async {
-    final selected = await Navigator.of(context).push<ManualPartnerSelection>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => PartnerSelector(
-          repository: widget.repository,
-          categories: widget.categories,
-        ),
-      ),
-    );
-    if (!mounted) return;
-    if (selected == null) {
-      final current = _partnerSelection;
-      if (current is ExistingManualPartner &&
-          _categorySelection.mode ==
-              ManualCategoryAssignmentMode.partnerDefault) {
-        final refreshed = await widget.repository.getPartnerById(
-          current.partnerId,
-        );
-        if (mounted && refreshed != null) {
-          setState(() => _partner = refreshed);
-        }
-      }
-      return;
+  Future<void> _reloadImpact() async {
+    final direction = _direction;
+    if (direction == null) return;
+    final generation = ++_impactGeneration;
+    if (mounted) {
+      setState(() => _impactLoading = true);
     }
+    try {
+      final impact =
+          await (widget.impactRepository ??
+                  const UnavailableManualTransactionImpactRepository())
+              .loadMonthImpact(
+                direction: direction,
+                categoryId: _selectedCategoryId,
+                year: _date.year,
+                month: _date.month,
+                excludedEntryId: _editing ? _entry?.entryId : null,
+              );
+      if (mounted && generation == _impactGeneration) {
+        setState(() => _impact = impact);
+      }
+    } catch (_) {
+      if (mounted && generation == _impactGeneration) {
+        setState(() => _impact = null);
+      }
+    } finally {
+      if (mounted && generation == _impactGeneration) {
+        setState(() => _impactLoading = false);
+      }
+    }
+  }
+
+  Future<void> _acceptPartner(ManualPartnerSelection selected) async {
     if (selected case ExistingManualPartner(:final partnerId)) {
       final partner =
           selected.directoryEntry ??
@@ -200,6 +306,42 @@ final class _ManualTransactionEditorState
         _categorySelection = const ManualCategorySelection.partnerDefault();
       });
     }
+    _reloadImpact();
+  }
+
+  Future<void> _pickPartnerFullscreen() async {
+    final selected = await Navigator.of(context).push<ManualPartnerSelection>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => PartnerSelector(
+          repository: widget.repository,
+          categories: _categories,
+        ),
+      ),
+    );
+    if (mounted && selected != null) await _acceptPartner(selected);
+  }
+
+  Future<void> _createCategory() async {
+    final repository = widget.categoryRepository;
+    if (repository == null) {
+      setState(
+        () => _error = 'A kategórialétrehozás ezen a felületen nem érhető el.',
+      );
+      return;
+    }
+    final category = await showCategoryEditorSheet(
+      context,
+      repository: repository,
+    );
+    if (!mounted || category == null) return;
+    setState(() {
+      _createdCategories
+        ..removeWhere((value) => value.id == category.id)
+        ..add(category);
+      _categorySelection = ManualCategorySelection.entryOverride(category.id);
+    });
+    _reloadImpact();
   }
 
   Future<void> _pickDate() async {
@@ -209,12 +351,26 @@ final class _ManualTransactionEditorState
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null && mounted) setState(() => _date = picked);
+    if (picked != null && mounted) {
+      setState(() => _date = picked);
+      _reloadImpact();
+    }
   }
 
   Future<void> _pickTime() async {
     final picked = await showTimePicker(context: context, initialTime: _time);
     if (picked != null && mounted) setState(() => _time = picked);
+  }
+
+  void _addQuickAmount(int major) {
+    final current = _parseHungarianMinor(_amount.text) ?? 0;
+    final addition = major * 100;
+    if (current > _maxStoredMinor - addition) return;
+    final text = _formatHungarianMinor(current + addition);
+    _amount.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 
   Future<bool> _confirmClose() async {
@@ -241,7 +397,12 @@ final class _ManualTransactionEditorState
         false;
   }
 
-  Future<void> _save({required bool keepOpen}) async {
+  Future<void> _cancel() async {
+    if (_saving || !await _confirmClose() || !mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _save() async {
     final partner = _partnerSelection;
     final direction = _direction;
     final scaled = _parseHungarianMinor(_amount.text);
@@ -260,7 +421,7 @@ final class _ManualTransactionEditorState
     });
     try {
       final day = _epochDay(_date);
-      final minute = _time.hour * 60 + _time.minute;
+      final minutes = _time.hour * 60 + _time.minute;
       final occurred = DateTime(
         _date.year,
         _date.month,
@@ -268,56 +429,42 @@ final class _ManualTransactionEditorState
         _time.hour,
         _time.minute,
       ).millisecondsSinceEpoch;
-      if (_editing) {
-        final existing = _entry!;
-        final saved = await widget.repository.updateTransaction(
-          entryId: existing.entryId,
-          expectedRevision: existing.revision,
-          partner: partner,
-          categorySelection: _categorySelection,
-          amountScaled100: scaled,
-          bookedLocalEpochDay: day,
-          bookedLocalTimeMinutes: minute,
-          occurredAtUtcMs: existing.originKind == 'manual'
-              ? occurred
-              : existing.occurredAtUtcMs,
-          note: _note.text,
-        );
-        final result = _saveResult(saved);
-        if (widget.onSaved case final onSaved?) await onSaved(result);
-        if (mounted) Navigator.of(context).pop(result);
-        return;
-      }
-      final saved = await widget.repository.createManualTransaction(
-        partner: partner,
-        categorySelection: _categorySelection,
-        direction: direction,
-        amountScaled100: scaled,
-        bookedLocalEpochDay: day,
-        bookedLocalTimeMinutes: minute,
-        occurredAtUtcMs: occurred,
-        note: _note.text,
+      final saved = _editing
+          ? await widget.repository.updateTransaction(
+              entryId: _entry!.entryId,
+              expectedRevision: _entry!.revision,
+              partner: partner,
+              categorySelection: _categorySelection,
+              amountScaled100: scaled,
+              bookedLocalEpochDay: day,
+              bookedLocalTimeMinutes: minutes,
+              occurredAtUtcMs: _entry!.originKind == 'manual'
+                  ? occurred
+                  : _entry!.occurredAtUtcMs,
+              note: _note.text,
+            )
+          : await widget.repository.createManualTransaction(
+              partner: partner,
+              categorySelection: _categorySelection,
+              direction: direction,
+              amountScaled100: scaled,
+              bookedLocalEpochDay: day,
+              bookedLocalTimeMinutes: minutes,
+              occurredAtUtcMs: occurred,
+              note: _note.text,
+            );
+      final result = ManualTransactionSaveResult(
+        entry: saved,
+        partner: _partner!,
+        effectiveCategory: _category(saved.categoryId),
+        globalCoreRevision: saved.coreRevision,
       );
-      if (!mounted) return;
-      if (!keepOpen) {
-        final result = _saveResult(saved);
-        if (widget.onSaved case final onSaved?) await onSaved(result);
-        if (!mounted) return;
-        Navigator.of(context).pop(result);
-        return;
+      if (widget.onSaved case final onSaved?) {
+        await onSaved(result);
       }
-      final now = DateTime.now();
-      setState(() {
-        _amount.clear();
-        _note.clear();
-        _partner = null;
-        _partnerSelection = null;
-        _categorySelection = const ManualCategorySelection.partnerDefault();
-        _date = DateTime(now.year, now.month, now.day);
-        _time = TimeOfDay.fromDateTime(now);
-        _initialCreateDate = _date;
-        _initialCreateTime = _time;
-      });
+      if (mounted) {
+        Navigator.of(context).pop(result);
+      }
     } on PlatformException catch (error) {
       if (mounted) {
         setState(() {
@@ -328,30 +475,18 @@ final class _ManualTransactionEditorState
         });
       }
     } on Exception catch (error) {
-      if (mounted) setState(() => _error = 'A mentés nem sikerült: $error');
+      if (mounted) {
+        setState(() => _error = 'A mentés nem sikerült: $error');
+      }
     } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  ManualTransactionSaveResult _saveResult(LedgerEntryDetail entry) {
-    FluviCategory? category;
-    for (final candidate in widget.categories) {
-      if (candidate.id == entry.categoryId) {
-        category = candidate;
-        break;
+      if (mounted) {
+        setState(() => _saving = false);
       }
     }
-    return ManualTransactionSaveResult(
-      entry: entry,
-      partner: _partner!,
-      effectiveCategory: category,
-      globalCoreRevision: entry.coreRevision,
-    );
   }
 
   FluviCategory? _category(String? id) {
-    for (final category in widget.categories) {
+    for (final category in _categories) {
       if (category.id == id) return category;
     }
     return null;
@@ -359,221 +494,665 @@ final class _ManualTransactionEditorState
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
+    final listenables = <Listenable>[
+      ?widget.categoryCollection,
+      ?widget.headerVisualTuning,
+    ];
+    if (listenables.isEmpty) return _buildEditor(context);
+    return AnimatedBuilder(
+      animation: Listenable.merge(listenables),
+      builder: (context, _) => _buildEditor(context),
+    );
+  }
+
+  Widget _buildEditor(BuildContext context) {
+    if (_loading || _preferences == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final direction = _direction ?? LedgerDirection.expense;
-    final expense = direction == LedgerDirection.expense;
-    final color = expense ? const Color(0xFFE45C66) : const Color(0xFF2E9D72);
-    final selectedCategoryId =
-        _categorySelection.mode == ManualCategoryAssignmentMode.entryOverride
-        ? _categorySelection.categoryId
-        : _partner?.defaultCategoryId;
-    final title = _editing
-        ? expense
-              ? 'Kiadás szerkesztése'
-              : 'Bevétel szerkesztése'
-        : expense
-        ? 'Új kiadás'
-        : 'Új bevétel';
-    return PopScope(
-      canPop: !_dirty && !_saving,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop || await _confirmClose() == false || !context.mounted) {
-          return;
-        }
-        Navigator.of(context).pop();
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(title),
-          leading: IconButton(
-            tooltip: 'Bezárás',
-            icon: const Icon(Icons.close_rounded),
-            onPressed: _saving
-                ? null
-                : () async {
-                    if (await _confirmClose() && context.mounted) {
-                      Navigator.of(context).pop();
-                    }
-                  },
-          ),
-        ),
-        body: SafeArea(
-          child: Column(
+    final islands =
+        _preferences!.layout == ManualTransactionEditorLayout.islands;
+    return RepaintBoundary(
+      key: const ValueKey('manual-editor-visual-boundary'),
+      child: PopScope(
+        canPop: !_dirty && !_saving,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop || !await _confirmClose() || !context.mounted) return;
+          Navigator.of(context).pop();
+        },
+        child: Scaffold(
+          resizeToAvoidBottomInset: true,
+          backgroundColor: islands
+              ? FluviVisualTokens.pageBackground
+              : Colors.white,
+          body: Column(
             children: [
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                  controller: _scrollController,
+                  padding: EdgeInsets.zero,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   children: [
-                    TextField(
-                      key: const ValueKey('manual-amount-field'),
-                      controller: _amount,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+                    if (islands)
+                      _islandHeader(context)
+                    else
+                      _heroHeader(context),
+                    _quickAmounts(islands: islands),
+                    if (islands) ...[
+                      _island(_partnerAndCategory(context)),
+                      _island(_dateNoteAndMore(context)),
+                    ] else ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                        child: _partnerAndCategory(context),
                       ),
-                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: color,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        fontWeight: FontWeight.w700,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Összeg',
-                        suffixText: 'HUF',
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: color, width: 2),
-                        ),
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    ListTile(
-                      key: const ValueKey('manual-partner-field'),
-                      shape: RoundedRectangleBorder(
-                        side: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      title: Text(
-                        _partner?.displayName ?? 'Partner kiválasztása',
-                      ),
-                      leading: _partner == null
-                          ? null
-                          : PartnerCategoryAvatar(partner: _partner!),
-                      subtitle: _partner == null
-                          ? null
-                          : Text(_partner!.defaultCategoryName),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: _saving ? null : _pickPartner,
-                    ),
-                    const SizedBox(height: 16),
-                    CategoryDropdown(
-                      categories: widget.categories,
-                      selectedCategoryId: selectedCategoryId,
-                      onSelected: (categoryId) => setState(
-                        () => _categorySelection =
-                            ManualCategorySelection.entryOverride(categoryId),
-                      ),
-                    ),
-                    if (_categorySelection.mode ==
-                        ManualCategoryAssignmentMode.entryOverride) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.edit_outlined, size: 16),
-                          const SizedBox(width: 4),
-                          const Text('Egyedi kategória'),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: _partner == null
-                                ? null
-                                : () => setState(
-                                    () => _categorySelection =
-                                        const ManualCategorySelection.partnerDefault(),
-                                  ),
-                            child: const Text('Visszaállítás'),
-                          ),
-                        ],
-                      ),
-                    ] else if (_partner != null)
                       const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Text('Partner alapértelmezése'),
+                        padding: EdgeInsets.symmetric(horizontal: 20),
+                        child: Divider(height: 32),
                       ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _saving ? null : _pickDate,
-                            icon: const Icon(Icons.calendar_today_outlined),
-                            label: Text(
-                              MaterialLocalizations.of(
-                                context,
-                              ).formatMediumDate(_date),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _saving ? null : _pickTime,
-                            icon: const Icon(Icons.schedule_outlined),
-                            label: Text(_time.format(context)),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _note,
-                      minLines: 1,
-                      maxLines: 4,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        labelText: 'Megjegyzés',
-                        alignLabelWithHint: true,
-                        border: OutlineInputBorder(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _dateNoteAndMore(context),
                       ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                      if (_revisionConflict)
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton.icon(
-                            onPressed: _saving ? null : _load,
-                            icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Adatok újratöltése'),
-                          ),
-                        ),
                     ],
+                    if (MediaQuery.viewInsetsOf(context).bottom == 0)
+                      if (islands)
+                        _island(_impactPreview(context))
+                      else
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+                          child: _impactPreview(context),
+                        ),
+                    if (_error != null) _errorBlock(context, islands: islands),
+                    const SizedBox(height: 22),
                   ],
                 ),
               ),
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                  child: Row(
-                    children: [
-                      if (!_editing) ...[
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _saving
-                                ? null
-                                : () => _save(keepOpen: true),
-                            child: const Text('Mentés és újabb'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: _saving
-                              ? null
-                              : () => _save(keepOpen: false),
-                          child: Text(
-                            _saving
-                                ? 'Mentés…'
-                                : _editing
-                                ? 'Módosítások mentése'
-                                : 'Tranzakció hozzáadása',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              _ctaBar(context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  LinearGradient get _heroGradient =>
+      FluviDirectionColorPaletteCatalog.income(_directionColorProfile);
+  FluviDirectionColorProfile get _directionColorProfile =>
+      widget.headerVisualTuning?.value.globalAppearance.directionColorProfile ??
+      FluviDirectionColorProfile.original;
+
+  Widget _heroHeader(BuildContext context) => DecoratedBox(
+    key: const ValueKey('manual-editor-hero'),
+    decoration: BoxDecoration(gradient: _heroGradient),
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        MediaQuery.paddingOf(context).top + 14,
+        20,
+        26,
+      ),
+      child: _headerContent(context),
+    ),
+  );
+
+  Widget _islandHeader(BuildContext context) => Padding(
+    key: const ValueKey('manual-editor-islands'),
+    padding: EdgeInsets.fromLTRB(
+      16,
+      MediaQuery.paddingOf(context).top + 14,
+      16,
+      0,
+    ),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: _heroGradient,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: FluviVisualTokens.cardSurfaceShadows,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: _headerContent(context),
+      ),
+    ),
+  );
+
+  Widget _headerContent(BuildContext context) {
+    final direction = _direction ?? LedgerDirection.expense;
+    final title = _editing
+        ? direction == LedgerDirection.expense
+              ? 'Kiadás szerkesztése'
+              : 'Bevétel szerkesztése'
+        : direction == LedgerDirection.expense
+        ? 'Új kiadás'
+        : 'Új bevétel';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            ],
+            ),
+            _headerToggle(
+              key: const ValueKey('manual-partner-presentation-toggle'),
+              tooltip:
+                  _preferences!.partnerPickerPresentation ==
+                      ManualPartnerPickerPresentation.fullScreen
+                  ? 'Partnerlista: teljes oldal'
+                  : 'Partnerlista: legördülő lista',
+              icon:
+                  _preferences!.partnerPickerPresentation ==
+                      ManualPartnerPickerPresentation.fullScreen
+                  ? Icons.open_in_full_rounded
+                  : Icons.arrow_drop_down_circle_outlined,
+              onTap: _saving
+                  ? null
+                  : () => _setPreferences(
+                      _preferences!.copyWith(
+                        partnerPickerPresentation:
+                            _preferences!.partnerPickerPresentation ==
+                                ManualPartnerPickerPresentation.fullScreen
+                            ? ManualPartnerPickerPresentation.dropdown
+                            : ManualPartnerPickerPresentation.fullScreen,
+                      ),
+                    ),
+            ),
+            const SizedBox(width: 4),
+            _headerToggle(
+              key: const ValueKey('manual-layout-toggle'),
+              tooltip:
+                  _preferences!.layout == ManualTransactionEditorLayout.hero
+                  ? 'Szerkesztő elrendezés: Hero'
+                  : 'Szerkesztő elrendezés: szigetes',
+              icon: _preferences!.layout == ManualTransactionEditorLayout.hero
+                  ? Icons.dashboard_outlined
+                  : Icons.view_agenda_outlined,
+              onTap: _saving
+                  ? null
+                  : () => _setPreferences(
+                      _preferences!.copyWith(
+                        layout:
+                            _preferences!.layout ==
+                                ManualTransactionEditorLayout.hero
+                            ? ManualTransactionEditorLayout.islands
+                            : ManualTransactionEditorLayout.hero,
+                      ),
+                    ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          key: const ValueKey('manual-amount-field'),
+          controller: _amount,
+          focusNode: _amountFocus,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9,.\s\u00A0]')),
+          ],
+          maxLines: 1,
+          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+            color: Colors.white,
+            fontFeatures: const [FontFeature.tabularFigures()],
+            fontWeight: FontWeight.w800,
+          ),
+          decoration: InputDecoration(
+            hintText: '0',
+            hintStyle: TextStyle(color: Colors.white.withValues(alpha: .62)),
+            suffixText: 'Ft',
+            suffixStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.white.withValues(alpha: .78),
+              fontWeight: FontWeight.w700,
+            ),
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _headerToggle({
+    required Key key,
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback? onTap,
+  }) => Semantics(
+    button: true,
+    label: tooltip,
+    child: Tooltip(
+      message: tooltip,
+      child: IconButton(
+        key: key,
+        onPressed: onTap,
+        icon: Icon(icon),
+        color: Colors.white,
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.white.withValues(alpha: .18),
+          minimumSize: const Size(44, 44),
+        ),
+      ),
+    ),
+  );
+
+  Widget _quickAmounts({required bool islands}) => Padding(
+    padding: EdgeInsets.fromLTRB(islands ? 16 : 20, 14, islands ? 16 : 20, 4),
+    child: Row(
+      children: [
+        for (final (index, amount) in <int>[1000, 5000, 10000].indexed) ...[
+          if (index > 0) const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton(
+              key: ValueKey('manual-quick-$amount'),
+              onPressed: _saving ? null : () => _addQuickAmount(amount),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 42),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
+              child: Text('+${_formatHungarianMinor(amount * 100)} Ft'),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+
+  Widget _island(Widget child) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: FluviVisualTokens.cardSurfaceShadows,
+      ),
+      child: Padding(padding: const EdgeInsets.all(16), child: child),
+    ),
+  );
+
+  Widget _partnerAndCategory(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (_preferences!.partnerPickerPresentation ==
+          ManualPartnerPickerPresentation.dropdown)
+        PartnerDropdown(
+          key: _partnerDropdownKey,
+          repository: widget.repository,
+          categories: _categories,
+          selectedPartnerId: switch (_partnerSelection) {
+            ExistingManualPartner(:final partnerId) => partnerId,
+            _ => null,
+          },
+          selectedPartner: _partner,
+          enabled: !_saving,
+          onSelected: _acceptPartner,
+        )
+      else
+        ListTile(
+          key: const ValueKey('manual-partner-field'),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          shape: RoundedRectangleBorder(
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(_partner?.displayName ?? 'Partner kiválasztása'),
+          subtitle: _partner == null
+              ? null
+              : Text(_partner!.defaultCategoryName),
+          leading: _partner == null
+              ? const Icon(Icons.storefront_outlined)
+              : PartnerCategoryAvatar(partner: _partner!),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: _saving ? null : _pickPartnerFullscreen,
+        ),
+      const SizedBox(height: 14),
+      CategoryDropdown(
+        categories: _categories,
+        selectedCategoryId: _selectedCategoryId,
+        enabled: !_saving,
+        onCreate: widget.categoryRepository == null ? null : _createCategory,
+        onSelected: (categoryId) {
+          setState(
+            () => _categorySelection = ManualCategorySelection.entryOverride(
+              categoryId,
+            ),
+          );
+          _reloadImpact();
+        },
+      ),
+      if (_categorySelection.mode ==
+          ManualCategoryAssignmentMode.entryOverride) ...[
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            const Icon(Icons.edit_outlined, size: 16),
+            const SizedBox(width: 4),
+            const Text('Egyedi kategória'),
+            const Spacer(),
+            TextButton(
+              onPressed: _partner == null || _saving
+                  ? null
+                  : () {
+                      setState(
+                        () => _categorySelection =
+                            const ManualCategorySelection.partnerDefault(),
+                      );
+                      _reloadImpact();
+                    },
+              child: const Text('Visszaállítás'),
+            ),
+          ],
+        ),
+      ] else if (_partner != null)
+        const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: Text('Partner alapértelmezése'),
+        ),
+    ],
+  );
+
+  Widget _dateNoteAndMore(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _saving ? null : _pickDate,
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text(
+                MaterialLocalizations.of(context).formatMediumDate(_date),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _saving ? null : _pickTime,
+              icon: const Icon(Icons.schedule_outlined),
+              label: Text(_time.format(context)),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      TextField(
+        key: const ValueKey('manual-note-field'),
+        controller: _note,
+        focusNode: _noteFocus,
+        minLines: 1,
+        maxLines: null,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          labelText: 'Megjegyzés',
+          alignLabelWithHint: true,
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 6),
+      ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        title: const Text('További adatok'),
+        subtitle: const Text('Nincs további szerkeszthető tranzakciómező.'),
+        childrenPadding: const EdgeInsets.only(bottom: 6),
+        children: [
+          Text(
+            _editing && _entry?.originKind != 'manual'
+                ? 'Az importált tétel eredeti eseményideje megmarad.'
+                : 'A partner, kategória, dátum, idő és megjegyzés a fenti mezőkben szerkeszthető.',
+          ),
+        ],
+      ),
+    ],
+  );
+
+  Widget _impactPreview(BuildContext context) {
+    final direction = _direction ?? LedgerDirection.expense;
+    final amount = _parseHungarianMinor(_amount.text);
+    final impact = _impact;
+    if (amount == null || amount <= 0) {
+      return const _ImpactSurface(
+        title: 'A tranzakció hatása',
+        message: 'Adj meg érvényes összeget az előnézethez.',
+      );
+    }
+    if (_impactLoading) {
+      return const _ImpactSurface(
+        title: 'A tranzakció hatása',
+        message: 'Előnézet frissítése…',
+      );
+    }
+    if (impact == null) {
+      return const _ImpactSurface(
+        title: 'A tranzakció hatása',
+        message: 'A havi előnézet most nem érhető el.',
+      );
+    }
+    if (direction == LedgerDirection.income) {
+      final before = impact.monthIncomeScaled100 - impact.monthExpenseScaled100;
+      final after = before + amount;
+      return _ImpactSurface(
+        title: 'A tranzakció hatása',
+        headline: 'Mentés utáni havi egyenleg',
+        value: _formatHungarianMinor(after),
+        detail: 'Most: ${_formatHungarianMinor(before)} Ft',
+      );
+    }
+    final limit = impact.categoryLimitScaled100;
+    if (limit == null) {
+      return const _ImpactSurface(
+        title: 'A tranzakció hatása',
+        message: 'Ehhez a kategóriához nincs havi keret.',
+      );
+    }
+    final before = limit - impact.categoryActualScaled100;
+    final after = before - amount;
+    final spent = limit == 0
+        ? 1.0
+        : (impact.categoryActualScaled100 / limit).clamp(0.0, 1.0).toDouble();
+    final draft = limit == 0
+        ? 0.0
+        : (amount / limit).clamp(0.0, 1.0 - spent).toDouble();
+    return _ImpactSurface(
+      title: 'A tranzakció hatása',
+      headline: 'Mentés után megmarad',
+      value: '${after < 0 ? '−' : ''}${_formatHungarianMinor(after.abs())}',
+      detail: 'Most rendelkezésre áll: ${_formatHungarianMinor(before)} Ft',
+      fraction: (spent, draft),
+      overflow: after < 0,
+    );
+  }
+
+  Widget _errorBlock(BuildContext context, {required bool islands}) => Padding(
+    padding: EdgeInsets.fromLTRB(islands ? 16 : 20, 14, islands ? 16 : 20, 0),
+    child: Text(
+      _error!,
+      style: TextStyle(color: Theme.of(context).colorScheme.error),
+    ),
+  );
+
+  Widget _ctaBar(BuildContext context) {
+    final gradient =
+        (_direction ?? LedgerDirection.expense) == LedgerDirection.income
+        ? FluviDirectionColorPaletteCatalog.income(_directionColorProfile)
+        : FluviDirectionColorPaletteCatalog.expense(_directionColorProfile);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        child: Row(
+          children: [
+            Expanded(
+              child: _LedgerPillButton(
+                key: const ValueKey('manual-cancel-button'),
+                label: 'Mégse',
+                onPressed: _saving ? null : _cancel,
+              ),
+            ),
+            const SizedBox(width: FluviVisualTokens.controlInnerGap),
+            Expanded(
+              child: _LedgerPillButton(
+                key: const ValueKey('manual-save-button'),
+                label: _saving ? 'Mentés…' : 'Mentés',
+                gradient: gradient,
+                primary: true,
+                onPressed: _saving ? null : _save,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _ImpactSurface extends StatelessWidget {
+  const _ImpactSurface({
+    required this.title,
+    this.message,
+    this.headline,
+    this.value,
+    this.detail,
+    this.fraction,
+    this.overflow = false,
+  });
+  final String title;
+  final String? message;
+  final String? headline;
+  final String? value;
+  final String? detail;
+  final (double spent, double draft)? fraction;
+  final bool overflow;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        title,
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 10),
+      if (message != null)
+        Text(message!)
+      else ...[
+        Text(
+          headline!,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: FluviVisualTokens.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '$value Ft',
+          key: const ValueKey('manual-impact-value'),
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: overflow
+                ? Theme.of(context).colorScheme.error
+                : FluviVisualTokens.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (fraction case final segments?)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: SizedBox(
+              height: 8,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: (segments.$1 * 1000).round().clamp(0, 1000).toInt(),
+                    child: const ColoredBox(color: Color(0xff94a3b8)),
+                  ),
+                  Expanded(
+                    flex: (segments.$2 * 1000).round().clamp(0, 1000).toInt(),
+                    child: const ColoredBox(color: Color(0xffe478c3)),
+                  ),
+                  Expanded(
+                    flex: ((1 - segments.$1 - segments.$2) * 1000)
+                        .round()
+                        .clamp(0, 1000)
+                        .toInt(),
+                    child: const ColoredBox(color: Color(0xffe2e8f0)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (detail != null) ...[
+          const SizedBox(height: 8),
+          Text(detail!, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ],
+    ],
+  );
+}
+
+/// Matches Ledger's direction-control geometry and material resolvers.
+final class _LedgerPillButton extends StatelessWidget {
+  const _LedgerPillButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.gradient,
+    this.primary = false,
+  });
+  final String label;
+  final VoidCallback? onPressed;
+  final LinearGradient? gradient;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = AppSelectorMetrics.directionControlHeight;
+    final radius = DashboardCornerRoundnessScope.profileOf(context)
+        .borderRadiusFor(
+          DashboardCornerSurfaceFamily.directionControl,
+          size: Size(168, height),
+        );
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.directionControl);
+    return Semantics(
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        child: Ink(
+          height: height,
+          decoration: BoxDecoration(
+            color: primary
+                ? null
+                : (depth.surfaceColor ?? FluviVisualTokens.surface),
+            gradient: gradient,
+            borderRadius: radius,
+            border: Border.all(
+              color: primary ? Colors.transparent : FluviVisualTokens.border,
+            ),
+            boxShadow: depth.shadows,
+          ),
+          child: InkWell(
+            borderRadius: radius,
+            onTap: onPressed,
+            child: Center(
+              child: Text(
+                label,
+                style: FluviVisualTokens.actionLabelTextStyle.copyWith(
+                  color: primary ? Colors.white : FluviVisualTokens.textPrimary,
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -586,9 +1165,9 @@ int _epochDay(DateTime date) => DateTime.utc(
   date.month,
   date.day,
 ).difference(DateTime.utc(1970)).inDays;
-
 DateTime _dateFromEpochDay(int epochDay) =>
     DateTime.utc(1970).add(Duration(days: epochDay)).toLocal();
+const _maxStoredMinor = 9223372036854775807;
 
 int? _parseHungarianMinor(String source) {
   final normalized = source
@@ -598,13 +1177,12 @@ int? _parseHungarianMinor(String source) {
   final match = RegExp(r'^(\d+)(?:\.(\d{0,2}))?$').firstMatch(normalized);
   if (match == null) return null;
   final whole = int.tryParse(match.group(1)!);
-  if (whole == null) return null;
-  final fractional = (match.group(2) ?? '').padRight(2, '0');
-  final minor = int.tryParse(fractional);
-  if (minor == null) return null;
-  const maxStoredMinor = 9223372036854775807;
-  if (whole > maxStoredMinor ~/ 100 ||
-      whole == maxStoredMinor ~/ 100 && minor > maxStoredMinor.remainder(100)) {
+  final minor = int.tryParse((match.group(2) ?? '').padRight(2, '0'));
+  if (whole == null ||
+      minor == null ||
+      whole > _maxStoredMinor ~/ 100 ||
+      whole == _maxStoredMinor ~/ 100 &&
+          minor > _maxStoredMinor.remainder(100)) {
     return null;
   }
   return whole * 100 + minor;
