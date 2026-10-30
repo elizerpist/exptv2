@@ -34,6 +34,7 @@ flutter:
     - shaders/fluvi_wave_surface.frag
   assets:
     - assets/fluvi/actions/
+    - assets/fluvi/manual_transaction_hero/
     - assets/fluvi/brand/
     - assets/fluvi/budget/
     - assets/fluvi/header_mode_icons/

@@ -1,7 +1,9 @@
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/domain/category_repository.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/manual_transactions/application/manual_transaction_editor_preferences.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_impact_repository.dart';
 import 'package:fluvi/features/manual_transactions/domain/manual_transaction_models.dart';
@@ -517,7 +519,7 @@ void main() {
     },
   );
 
-  testWidgets('editor CTA group is compact, right-aligned and above its edge', (
+  testWidgets('editor CTA group ends exactly at the safe-area edge', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -543,10 +545,83 @@ void main() {
     expect(save.width, 120);
     expect(save.left - cancel.right, 12);
     expect(save.right, closeTo(370, .01));
-    // The footer leaves the profile-derived lower shadow outset in addition
-    // to the button's layout bounds; it must not end at the viewport edge.
-    expect(save.bottom, lessThanOrEqualTo(804));
+    // With no system inset in this test view, the actual button body ends at
+    // the viewport edge. SafeArea is the sole owner of a real device inset.
+    expect(save.bottom, closeTo(844, .01));
   });
+
+  testWidgets('footer lets the CTA shadow paint through the bottom safe area', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            padding: const EdgeInsets.only(bottom: 24),
+            viewPadding: const EdgeInsets.only(bottom: 24),
+          ),
+          child: child!,
+        ),
+        home: ManualTransactionEditor.create(
+          repository: _FakeManualRepository(),
+          categories: categories,
+          direction: LedgerDirection.expense,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final save = tester.getRect(
+      find.byKey(const ValueKey('manual-save-button')),
+    );
+    expect(save.bottom, closeTo(820, .01));
+    await expectLater(
+      find.byKey(const ValueKey('manual-editor-visual-boundary')),
+      matchesGoldenFile('../../goldens/manual_transaction_editor_footer.png'),
+    );
+  });
+
+  for (final direction in LedgerDirection.values) {
+    for (final profile in FluviDirectionColorProfile.values) {
+      testWidgets(
+        'hero uses the dedicated ${direction.name}/${profile.name} artwork',
+        (tester) async {
+          final tuning = ValueNotifier(
+            DashboardHeaderVisualTuning.defaults().copyWith(
+              globalAppearance: const FluviGlobalAppearance.defaults().copyWith(
+                directionColorProfile: profile,
+              ),
+            ),
+          );
+          addTearDown(tuning.dispose);
+          await tester.pumpWidget(
+            MaterialApp(
+              home: ManualTransactionEditor.create(
+                repository: _FakeManualRepository(),
+                categories: categories,
+                direction: direction,
+                headerVisualTuning: tuning,
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          final image = tester.widget<Image>(
+            find.byKey(
+              ValueKey('manual-hero-artwork-${direction.name}-${profile.name}'),
+            ),
+          );
+          expect(
+            (image.image as AssetImage).assetName,
+            'assets/fluvi/manual_transaction_hero/'
+            '${direction == LedgerDirection.income ? 'income' : 'expense'}_${profile.name}.png',
+          );
+        },
+      );
+    }
+  }
 
   testWidgets('edit impact request excludes the persisted entry', (
     tester,

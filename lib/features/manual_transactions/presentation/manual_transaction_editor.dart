@@ -589,15 +589,16 @@ final class _ManualTransactionEditorState
   }
 
   LinearGradient get _heroGradient {
-    final source = FluviDirectionColorPaletteCatalog.income(
-      _directionColorProfile,
-    );
+    final source =
+        (_direction ?? LedgerDirection.expense) == LedgerDirection.income
+        ? FluviDirectionColorPaletteCatalog.income(_directionColorProfile)
+        : FluviDirectionColorPaletteCatalog.expense(_directionColorProfile);
     return LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
+      begin: source.begin,
+      end: source.end,
       colors: [
         for (final color in source.colors)
-          Color.lerp(color, Colors.white, .86)!,
+          Color.lerp(color, Colors.white, .78)!,
       ],
       stops: source.stops,
     );
@@ -651,99 +652,189 @@ final class _ManualTransactionEditorState
         : direction == LedgerDirection.expense
         ? 'Új kiadás'
         : 'Új bevétel';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showsArtwork = _canShowHeroArtwork(context, constraints.maxWidth);
+        final amountWidth =
+            constraints.maxWidth - (showsArtwork ? _heroArtworkTextReserve : 0);
+        return Stack(
+          clipBehavior: Clip.none,
           children: [
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: FluviVisualTokens.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -.2,
+            if (showsArtwork)
+              Positioned(
+                right: -6,
+                bottom: -8,
+                child: IgnorePointer(
+                  child: ExcludeSemantics(
+                    child: SizedBox(
+                      width: _heroArtworkSize,
+                      height: _heroArtworkSize,
+                      child: Image.asset(
+                        _heroArtworkAssetPath,
+                        key: ValueKey(
+                          'manual-hero-artwork-${direction.name}-${_directionColorProfile.name}',
+                        ),
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.medium,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-            _headerToggle(
-              key: const ValueKey('manual-partner-presentation-toggle'),
-              tooltip:
-                  _preferences!.partnerPickerPresentation ==
-                      ManualPartnerPickerPresentation.fullScreen
-                  ? 'Partnerlista: teljes oldal'
-                  : 'Partnerlista: legördülő lista',
-              icon:
-                  _preferences!.partnerPickerPresentation ==
-                      ManualPartnerPickerPresentation.fullScreen
-                  ? Icons.open_in_full_rounded
-                  : Icons.arrow_drop_down_circle_outlined,
-              onTap: _saving
-                  ? null
-                  : () => _setPreferences(
-                      _preferences!.copyWith(
-                        partnerPickerPresentation:
-                            _preferences!.partnerPickerPresentation ==
-                                ManualPartnerPickerPresentation.fullScreen
-                            ? ManualPartnerPickerPresentation.dropdown
-                            : ManualPartnerPickerPresentation.fullScreen,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: FluviVisualTokens.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -.2,
+                            ),
                       ),
                     ),
-            ),
-            const SizedBox(width: 4),
-            _headerToggle(
-              key: const ValueKey('manual-layout-toggle'),
-              tooltip:
-                  _preferences!.layout == ManualTransactionEditorLayout.hero
-                  ? 'Szerkesztő elrendezés: Hero'
-                  : 'Szerkesztő elrendezés: szigetes',
-              icon: _preferences!.layout == ManualTransactionEditorLayout.hero
-                  ? Icons.dashboard_outlined
-                  : Icons.view_agenda_outlined,
-              onTap: _saving
-                  ? null
-                  : () => _setPreferences(
-                      _preferences!.copyWith(
-                        layout:
-                            _preferences!.layout ==
-                                ManualTransactionEditorLayout.hero
-                            ? ManualTransactionEditorLayout.islands
-                            : ManualTransactionEditorLayout.hero,
-                      ),
+                    _headerToggle(
+                      key: const ValueKey('manual-partner-presentation-toggle'),
+                      tooltip:
+                          _preferences!.partnerPickerPresentation ==
+                              ManualPartnerPickerPresentation.fullScreen
+                          ? 'Partnerlista: teljes oldal'
+                          : 'Partnerlista: legördülő lista',
+                      icon:
+                          _preferences!.partnerPickerPresentation ==
+                              ManualPartnerPickerPresentation.fullScreen
+                          ? Icons.open_in_full_rounded
+                          : Icons.arrow_drop_down_circle_outlined,
+                      onTap: _saving
+                          ? null
+                          : () => _setPreferences(
+                              _preferences!.copyWith(
+                                partnerPickerPresentation:
+                                    _preferences!.partnerPickerPresentation ==
+                                        ManualPartnerPickerPresentation
+                                            .fullScreen
+                                    ? ManualPartnerPickerPresentation.dropdown
+                                    : ManualPartnerPickerPresentation
+                                          .fullScreen,
+                              ),
+                            ),
                     ),
+                    const SizedBox(width: 4),
+                    _headerToggle(
+                      key: const ValueKey('manual-layout-toggle'),
+                      tooltip:
+                          _preferences!.layout ==
+                              ManualTransactionEditorLayout.hero
+                          ? 'Szerkesztő elrendezés: Hero'
+                          : 'Szerkesztő elrendezés: szigetes',
+                      icon:
+                          _preferences!.layout ==
+                              ManualTransactionEditorLayout.hero
+                          ? Icons.dashboard_outlined
+                          : Icons.view_agenda_outlined,
+                      onTap: _saving
+                          ? null
+                          : () => _setPreferences(
+                              _preferences!.copyWith(
+                                layout:
+                                    _preferences!.layout ==
+                                        ManualTransactionEditorLayout.hero
+                                    ? ManualTransactionEditorLayout.islands
+                                    : ManualTransactionEditorLayout.hero,
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Összeg',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: FluviVisualTokens.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                _amountEditor(context, maxWidth: amountWidth),
+              ],
             ),
           ],
-        ),
-        const SizedBox(height: 18),
-        Text(
-          'Összeg',
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: FluviVisualTokens.textSecondary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 1),
-        _amountEditor(context),
-      ],
+        );
+      },
     );
   }
 
-  Widget _amountEditor(BuildContext context) {
-    final amountStyle = Theme.of(context).textTheme.displaySmall?.copyWith(
-      color: FluviVisualTokens.textPrimary,
-      fontFeatures: const [FontFeature.tabularFigures()],
-      fontWeight: FontWeight.w900,
-      letterSpacing: -.8,
-      height: 1.08,
-    );
+  static const _heroArtworkSize = 96.0;
+  static const _heroArtworkTextReserve = 92.0;
+
+  bool _canShowHeroArtwork(BuildContext context, double headerWidth) {
+    final amountStyle = _amountStyle(context);
+    final amountWidth = _amountFieldWidth(context, amountStyle, maxWidth: 244);
+    return amountWidth + 4 + _currencyWidth(context) <=
+        headerWidth - _heroArtworkTextReserve;
+  }
+
+  String get _heroArtworkAssetPath {
+    final direction = _direction ?? LedgerDirection.expense;
+    return 'assets/fluvi/manual_transaction_hero/'
+        '${direction == LedgerDirection.income ? 'income' : 'expense'}_${_directionColorProfile.name}.png';
+  }
+
+  TextStyle? _amountStyle(BuildContext context) =>
+      Theme.of(context).textTheme.displaySmall?.copyWith(
+        color: FluviVisualTokens.textPrimary,
+        fontFeatures: const [FontFeature.tabularFigures()],
+        fontWeight: FontWeight.w900,
+        letterSpacing: -.8,
+        height: 1.08,
+      );
+
+  double _currencyWidth(BuildContext context) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: 'Ft',
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          color: FluviVisualTokens.textPrimary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return painter.width;
+  }
+
+  double _amountFieldWidth(
+    BuildContext context,
+    TextStyle? amountStyle, {
+    required double maxWidth,
+  }) {
     final displayed = _amount.text.isEmpty ? '0' : _amount.text;
+    final cappedMaxWidth = maxWidth.clamp(52, 244).toDouble();
     final painter = TextPainter(
       text: TextSpan(text: displayed, style: amountStyle),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
       maxLines: 1,
-    )..layout(maxWidth: 244);
-    final fieldWidth = (painter.width + 12).clamp(52, 244).toDouble();
+    )..layout(maxWidth: cappedMaxWidth);
+    return (painter.width + 12).clamp(52, cappedMaxWidth).toDouble();
+  }
+
+  Widget _amountEditor(BuildContext context, {required double maxWidth}) {
+    final amountStyle = _amountStyle(context);
+    final availableAmountWidth = (maxWidth - 4 - _currencyWidth(context))
+        .clamp(52, 244)
+        .toDouble();
+    final fieldWidth = _amountFieldWidth(
+      context,
+      amountStyle,
+      maxWidth: availableAmountWidth,
+    );
     return Row(
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
@@ -1149,12 +1240,10 @@ final class _ManualTransactionEditorState
         top: false,
         minimum: EdgeInsets.zero,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            12,
-            20,
-            12 + _LedgerPillButton.shadowBottomOutset(context),
-          ),
+          // SafeArea owns the system inset exactly once. The controls end at
+          // its top edge, while their shadow paints over the white safe-area
+          // background below rather than reserving a second layout gap.
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final cancelWidth = _ctaButtonWidth(context, 'Mégse', 104);
@@ -1582,21 +1671,6 @@ final class _LedgerPillButton extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// The footer reserves paint room from the exact direction-control shadow
-  /// profile. The controls used to reserve only their layout height, which
-  /// left the profile's lower blur outside the Scaffold viewport.
-  static double shadowBottomOutset(BuildContext context) {
-    final depth = DashboardShadowStyleScope.profileOf(
-      context,
-    ).depthFor(DashboardCornerSurfaceFamily.directionControl);
-    return depth.shadows.fold<double>(0, (outset, shadow) {
-      final lowerExtent = shadow.offset.dy > 0
-          ? shadow.offset.dy + shadow.blurRadius + shadow.spreadRadius
-          : shadow.blurRadius + shadow.spreadRadius;
-      return lowerExtent > outset ? lowerExtent : outset;
-    });
   }
 }
 
