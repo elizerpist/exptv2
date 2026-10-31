@@ -22,8 +22,6 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recorder.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
-import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
-import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
@@ -1279,10 +1277,11 @@ Future<void> _prepareScenario(
   }
   if (scenario == _ProfileScenario.tenthFling) {
     for (var index = 0; index < 9; index += 1) {
-      await _resetRailToIndex(tester, controller, 13);
-      await _flingRail(tester, controller);
+      // The production Summary no longer has the physical Classic rail.  Keep
+      // the warm-up as nine genuine user flings on the active segmented time
+      // component instead of installing a controller-only rail index.
+      await _flingSegmentedTemporalComponent(tester, controller);
     }
-    await _resetRailToIndex(tester, controller, 13);
   }
 }
 
@@ -1317,64 +1316,6 @@ Future<void> _showBudgetAvatarRail(WidgetTester tester) async {
   fail(
     'Budget Avatar rail did not mount after the real Header mode selector '
     'crossing.',
-  );
-}
-
-Future<void> _resetRailToIndex(
-  WidgetTester tester,
-  DashboardCoreController controller,
-  int logicalIndex,
-) async {
-  await _waitForMotionIdle(controller);
-  await tester.pump();
-  final catalog = controller.motion.catalog;
-  final entry = catalog.entryAtLogicalIndex(logicalIndex);
-  controller.motion.carouselController.jumpToIndex(logicalIndex);
-  await _waitForVisibleReset(tester, controller, entry);
-  final visiblePublishCount = controller.visibleFrames.visiblePublishCount;
-  final visualDigest = controller.visibleFrames.value?.visualDigest;
-  controller.settleRail(logicalIndex);
-  await tester.pump();
-
-  expect(controller.visibleFrames.visiblePublishCount, visiblePublishCount);
-  expect(controller.visibleFrames.value?.visualDigest, visualDigest);
-  expect(controller.motion.state.semanticIndex, entry.logicalIndex);
-  expect(
-    controller.visibleFrames.value?.semanticChildIndex,
-    entry.logicalIndex,
-  );
-  expect(controller.visibleFrames.value?.queryKey, entry.queryKey);
-}
-
-Future<void> _waitForVisibleReset(
-  WidgetTester tester,
-  DashboardCoreController controller,
-  DashboardSemanticEntry entry,
-) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 8));
-  var consecutiveReadySamples = 0;
-  while (DateTime.now().isBefore(deadline)) {
-    await tester.pump();
-    final visible = controller.visibleFrames.value;
-    final isReady =
-        controller.motion.state.semanticIndex == entry.logicalIndex &&
-        visible?.semanticChildIndex == entry.logicalIndex &&
-        visible?.queryKey == entry.queryKey &&
-        !controller.frameCoalescer.hasPendingTarget;
-    if (isReady) {
-      consecutiveReadySamples += 1;
-      if (consecutiveReadySamples >= 3) return;
-    } else {
-      consecutiveReadySamples = 0;
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 16));
-  }
-  fail(
-    'Dashboard rail reset did not reach one coherent visible display frame: '
-    'motion=${controller.motion.state.semanticIndex} '
-    'visible=${controller.visibleFrames.value?.semanticChildIndex} '
-    'target=${entry.logicalIndex} '
-    'pending=${controller.frameCoalescer.hasPendingTarget}.',
   );
 }
 
@@ -1462,11 +1403,11 @@ Future<void> _runMeasuredScenario(
         ),
       );
     case _ProfileScenario.summaryPlane:
-      await _flingSummary(tester, const Offset(0, -180));
-      await _flingSummary(tester, const Offset(0, -180));
+      await _flingSegmentedSummaryLevel(tester);
+      await _flingSegmentedSummaryLevel(tester);
     case _ProfileScenario.yearPopulated:
       for (var index = 0; index < 10; index += 1) {
-        await _flingRail(tester, controller);
+        await _flingSegmentedTemporalComponent(tester, controller);
       }
       onMindYearHeatmapEvidence(
         await _profileMindYearHeatmapSlider(binding, tester, controller),
@@ -1476,13 +1417,13 @@ Future<void> _runMeasuredScenario(
     case _ProfileScenario.month95:
     case _ProfileScenario.monthEmpty:
       for (var index = 0; index < 10; index += 1) {
-        await _flingRail(tester, controller);
+        await _flingSegmentedTemporalComponent(tester, controller);
       }
     case _ProfileScenario.firstFling:
     case _ProfileScenario.tenthFling:
-      await _flingRail(tester, controller);
+      await _flingSegmentedTemporalComponent(tester, controller);
     case _ProfileScenario.parentWhileRailOpen:
-      await _flingSummary(tester, const Offset(-180, 0));
+      await _flingSegmentedSummaryLevel(tester, forward: false);
     case _ProfileScenario.directionWhileRailOpen:
       // Direction-local Budget selections are part of the production target
       // contract. First enter Budget through the same production header
@@ -1540,12 +1481,7 @@ Future<void> _runMeasuredScenario(
     case _ProfileScenario.pulseWithParentNavigation:
       await tester.tap(find.byKey(const ValueKey('fluvi-income-button')));
       await tester.pump(const Duration(milliseconds: 16));
-      await tester.fling(
-        find.byKey(const ValueKey('dashboard-summary-shell-transform')),
-        const Offset(-180, 0),
-        1200,
-      );
-      await _settle(tester);
+      await _flingSegmentedSummaryLevel(tester, forward: false);
   }
 }
 
@@ -2610,45 +2546,39 @@ Map<String, int> _avatarTerminalClassifications(
   return counts;
 }
 
-Future<void> _flingRail(
+/// Fling the currently visible segmented temporal component.  The selected
+/// component has the same temporal meaning as the old Classic rail's active
+/// child, but has its own real hit target and vertical gesture path.
+Future<void> _flingSegmentedTemporalComponent(
   WidgetTester tester,
   DashboardCoreController controller,
 ) async {
+  final state = controller.navigation.state;
+  final selectorKey = switch ((state.plane, state.isRailOpen)) {
+    (TimePlane.year, _) => 'summary-pill-segmented-year-selector',
+    (TimePlane.month, true) => 'summary-pill-segmented-day-selector',
+    (TimePlane.month, false) => 'summary-pill-segmented-month-selector',
+    (TimePlane.sum, _) => throw StateError(
+      'A Sum summary has no temporal component; change its level first.',
+    ),
+  };
   await tester.fling(
-    find.byKey(const ValueKey('dashboard-time-rail')),
-    const Offset(-420, 0),
-    2200,
+    find.byKey(ValueKey<String>(selectorKey)),
+    const Offset(0, -96),
+    1200,
   );
-  await _waitForMotionIdle(controller);
+  await _settle(tester);
 }
 
-Future<void> _waitForMotionIdle(DashboardCoreController controller) async {
-  final carousel = controller.motion.carouselController;
-  final deadline = DateTime.now().add(const Duration(seconds: 8));
-  var consecutiveIdleSamples = 0;
-  while (DateTime.now().isBefore(deadline)) {
-    final isIdle =
-        controller.motion.state.activity == DashboardMotionActivity.idle &&
-        !carousel.hasActiveScrollActivity;
-    if (isIdle) {
-      consecutiveIdleSamples += 1;
-      if (consecutiveIdleSamples >= 3) return;
-    } else {
-      consecutiveIdleSamples = 0;
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 16));
-  }
-  fail(
-    'Dashboard rail did not become motion-idle before the profile timeout: '
-    'activity=${controller.motion.state.activity.name} '
-    'scrollActivity=${carousel.hasActiveScrollActivity}.',
-  );
-}
-
-Future<void> _flingSummary(WidgetTester tester, Offset offset) async {
+/// Changes the Summary hierarchy itself.  Upwards moves towards finer time
+/// scopes; downwards moves to the parent scope and closes the Day level.
+Future<void> _flingSegmentedSummaryLevel(
+  WidgetTester tester, {
+  bool forward = true,
+}) async {
   await tester.fling(
-    find.byKey(const ValueKey('dashboard-summary-shell-transform')),
-    offset,
+    find.byKey(const ValueKey<String>('summary-pill-segmented-mode-selector')),
+    Offset(0, forward ? -96 : 96),
     1200,
   );
   await _settle(tester);
