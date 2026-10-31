@@ -12,6 +12,7 @@ import '../../manual_transactions/application/manual_transaction_editor_preferen
 import '../../manual_transactions/domain/manual_transaction_repository.dart';
 import '../domain/automation_models.dart';
 import '../domain/automation_repository.dart';
+import '../data/automation_update_bridge.dart';
 import 'push_profile_navigation.dart';
 import 'recurring_navigation.dart';
 
@@ -66,17 +67,23 @@ final class _UnifiedAutomationHomePageState
   Object? _recurrenceError;
   bool _loading = true;
   int _request = 0;
+  StreamSubscription<void>? _automationUpdates;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _refresh();
+    _automationUpdates = AutomationUpdateBridge.changes.listen(
+      (_) => unawaited(_refresh()),
+      onError: (_) {},
+    );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _automationUpdates?.cancel();
     super.dispose();
   }
 
@@ -253,6 +260,7 @@ final class _UnifiedAutomationHomePageState
       design: widget.pushProfileUiDesign,
       repository: widget.repository,
       item: item,
+      onOpenLedgerEntry: widget.onOpenLedgerEntry,
     );
     if (mounted) _refresh();
   }
@@ -466,10 +474,36 @@ final class _UnifiedAutomationHomePageState
                   : '${profiles.length} profil${profilesWaiting == 0 ? '' : ' · $profilesWaiting beállításra vár'}',
               onTap: _pushError == null ? _openPushManager : _refresh,
             ),
+            _HomeRow(
+              key: const ValueKey('automation-home-manage-inbox'),
+              icon: Icons.inbox_outlined,
+              title: 'Banki értesítések',
+              subtitle: _inboxSummary(push, profiles),
+              onTap: _openInbox,
+            ),
           ],
         ),
       ],
     );
+  }
+
+  String _inboxSummary(
+    AutomationDashboardSnapshot? push,
+    List<PushProfile> profiles,
+  ) {
+    if (profiles.isEmpty) {
+      return 'Válassz alkalmazást az első értesítés fogadásához.';
+    }
+    final permission = _permission;
+    if (permission?.notificationListenerAvailable == true &&
+        permission?.notificationListenerGranted != true) {
+      return 'Értesítés-hozzáférés szükséges.';
+    }
+    final inbox = push?.recentInbox ?? const <NotificationInboxItem>[];
+    if (inbox.isEmpty) return 'Az első értesítésre vár.';
+    final pending = push?.pendingReviewCount ?? 0;
+    final latest = _humanDate(inbox.first.receivedAtUtcMs);
+    return 'Legutóbbi $latest${pending == 0 ? '' : ' · $pending ellenőrzésre vár'}';
   }
 
   Widget _upcomingSection() {

@@ -117,6 +117,26 @@ final class MethodChannelAutomationRepository implements AutomationRepository {
     ),
   );
   @override
+  Future<PushRule> updateRule({
+    required String ruleId,
+    required int expectedVersion,
+    required String notificationId,
+    required String name,
+    required LedgerDirection direction,
+    required List<PushFieldSpan> spans,
+  }) async => PushRule.fromMap(
+    _map(
+      await _channel.invokeMethod<Object?>('updateRule', {
+        'ruleId': ruleId,
+        'expectedVersion': expectedVersion,
+        'notificationId': notificationId,
+        'name': name,
+        'direction': direction.name,
+        'spans': spans.map((span) => span.toMap()).toList(),
+      }),
+    ),
+  );
+  @override
   Future<PushRuleTestReport> backtest(String id) async =>
       PushRuleTestReport.fromMap(
         _map(
@@ -430,18 +450,39 @@ final class MethodChannelAutomationPermissionRepository
   Future<bool> openAppNotificationSettings() async =>
       await _channel.invokeMethod<bool>('openAppNotificationSettings') ?? false;
   @override
+  Future<bool> openTestNotificationChannelSettings() async =>
+      await _channel.invokeMethod<bool>(
+        'openTestNotificationChannelSettings',
+      ) ??
+      false;
+  @override
   Future<bool> openAppInfoSettings() async =>
       await _channel.invokeMethod<bool>('openAppInfoSettings') ?? false;
   @override
   Future<bool> requestPostNotifications() async =>
       await _channel.invokeMethod<bool>('requestPostNotifications') ?? false;
   @override
-  Future<bool> sendTestNotification() async =>
-      await _channel.invokeMethod<bool>('sendTestNotification') ?? false;
+  Future<PushTestNotificationDispatch> sendTestNotification() async =>
+      PushTestNotificationDispatch.fromMap(
+        _map(await _channel.invokeMethod<Object?>('sendTestNotification')),
+      );
   @override
   Future<List<InstalledApplication>> listInstalledApps() async => _maps(
     await _channel.invokeMethod<List<Object?>>('listInstalledApps'),
   ).map(InstalledApplication.fromMap).toList(growable: false);
+  @override
+  Future<String?> installedApplicationIcon(String packageName) =>
+      _channel.invokeMethod<String>('getInstalledAppIcon', {
+        'packageName': packageName,
+      });
+  @override
+  Future<PushDiagnosticsSnapshot> pushDiagnostics() async =>
+      PushDiagnosticsSnapshot.fromMap(
+        _map(await _channel.invokeMethod<Object?>('getPushDiagnostics')),
+      );
+  @override
+  Future<void> clearPushDiagnostics() =>
+      _channel.invokeMethod<void>('clearPushDiagnostics');
 }
 
 Map<Object?, Object?> _map(Object? value) => value is Map<Object?, Object?>

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../diagnostics/fluvi_diagnostic_event.dart';
 import '../diagnostics/fluvi_diagnostic_logger.dart';
+import '../../features/automation/domain/automation_models.dart';
+import '../../features/automation/domain/automation_repository.dart';
 
 typedef DebugDiagnosticStatusProvider = Map<String, Object?> Function();
 
@@ -13,16 +15,18 @@ class DebugConsoleDialog extends StatefulWidget {
     super.key,
     this.physicalReportProvider,
     this.diagnosticStatusProvider,
+    this.automationPermissions,
   });
 
   final String Function()? physicalReportProvider;
   final DebugDiagnosticStatusProvider? diagnosticStatusProvider;
+  final AutomationPermissionRepository? automationPermissions;
 
   @override
   State<DebugConsoleDialog> createState() => _DebugConsoleDialogState();
 }
 
-enum _DebugConsoleSection { logs, report }
+enum _DebugConsoleSection { logs, report, push }
 
 /// A view-only projection over the one bounded diagnostic ring.  It owns no
 /// second history, export path, or diagnostic retention policy.
@@ -43,6 +47,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   bool _physicalReportCopied = false;
   bool _copyingPhysicalReport = false;
   String? _physicalReportError;
+  PushDiagnosticsSnapshot? _pushSnapshot;
+  bool _loadingPush = false;
+  bool _pushCopied = false;
 
   @override
   void initState() {
@@ -50,6 +57,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     _lastSessionEventCount = FluviDiagnosticLogger.sessionEventCount;
     _logsScrollController.addListener(_handleLogScroll);
     FluviDiagnosticLogger.notifier.addListener(_refreshLogs);
+    if (widget.automationPermissions != null) _refreshPush();
     _scheduleJumpToLive();
   }
 
@@ -203,6 +211,51 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     } finally {
       if (mounted) setState(() => _copyingPhysicalReport = false);
     }
+  }
+
+  Future<void> _refreshPush() async {
+    final permissions = widget.automationPermissions;
+    if (permissions == null || _loadingPush) return;
+    setState(() => _loadingPush = true);
+    try {
+      final snapshot = await permissions.pushDiagnostics();
+      if (mounted) setState(() => _pushSnapshot = snapshot);
+    } finally {
+      if (mounted) setState(() => _loadingPush = false);
+    }
+  }
+
+  Future<void> _sendPushProbe() async {
+    final permissions = widget.automationPermissions;
+    if (permissions == null) return;
+    await permissions.sendTestNotification();
+    await _refreshPush();
+  }
+
+  Future<void> _copyPushDiagnostics() async {
+    final snapshot = _pushSnapshot;
+    if (snapshot == null) return;
+    final text = <String>[
+      'Push diagnosztika',
+      'Build: ${snapshot.buildVersion ?? '—'} (${snapshot.buildCode ?? '—'}) · Android API ${snapshot.androidApi ?? '—'}',
+      'Saját értesítések: ${snapshot.postNotificationsGranted && snapshot.appNotificationsEnabled && snapshot.testChannelEnabled ? 'engedélyezve' : 'nem küldhető'}',
+      'Listener: ${snapshot.listenerConnected ? 'csatlakozva' : 'nincs csatlakozva'}',
+      'App lista: ${snapshot.applicationListMode} · ${snapshot.applicationListFound}/${snapshot.applicationListVisible}',
+      if (snapshot.applicationListError != null)
+        'App lista hiba: ${snapshot.applicationListError}',
+      'Utolsó próba: ${snapshot.lastTestStep ?? '—'} · ${snapshot.lastTestResult ?? '—'}',
+      ...snapshot.events.map(
+        (event) =>
+            '${event.atUtcMs} · ${event.code} · ${event.message}${event.sourcePackage == null ? '' : ' · ${event.sourcePackage}'}',
+      ),
+    ].join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) setState(() => _pushCopied = true);
+  }
+
+  Future<void> _clearPushDiagnostics() async {
+    await widget.automationPermissions?.clearPushDiagnostics();
+    await _refreshPush();
   }
 
   @override
@@ -567,6 +620,16 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                     selected: _section == _DebugConsoleSection.report,
                     onPressed: _showReport,
                   ),
+                if (widget.automationPermissions != null)
+                  _sectionButton(
+                    key: const ValueKey('debug-console-push-tab'),
+                    label: 'PUSH',
+                    selected: _section == _DebugConsoleSection.push,
+                    onPressed: () {
+                      setState(() => _section = _DebugConsoleSection.push);
+                      _refreshPush();
+                    },
+                  ),
               ],
             ),
             const Divider(height: 1, color: Color(0xFF313244)),
@@ -663,6 +726,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
               ],
             );
     }
+    if (_section == _DebugConsoleSection.push) return _pushBody();
     return Column(
       children: [
         Padding(
@@ -707,6 +771,109 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
             key: const ValueKey('debug-console-physical-report'),
             emptyText: 'A riport a Frissítés gombbal készül.',
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _pushBody() {
+    final snapshot = _pushSnapshot;
+    if (_loadingPush && snapshot == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (snapshot == null) {
+      return Center(
+        child: OutlinedButton.icon(
+          onPressed: _refreshPush,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Frissítés'),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('debug-console-push-send-test'),
+                onPressed: _loadingPush ? null : _sendPushProbe,
+                icon: const Icon(Icons.send_outlined, size: 15),
+                label: const Text('Saját teszt küldése'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('debug-console-push-refresh'),
+                onPressed: _loadingPush ? null : _refreshPush,
+                icon: const Icon(Icons.refresh, size: 15),
+                label: const Text('Frissítés'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('debug-console-push-copy'),
+                onPressed: _copyPushDiagnostics,
+                icon: Icon(
+                  _pushCopied ? Icons.check : Icons.copy_outlined,
+                  size: 15,
+                ),
+                label: const Text('Diagnosztika másolása'),
+              ),
+              TextButton(
+                key: const ValueKey('debug-console-push-clear'),
+                onPressed: _clearPushDiagnostics,
+                child: const Text('Törlés'),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 2, 14, 8),
+          child: SelectableText(
+            'Értesítésfigyelő: ${snapshot.listenerConnected ? 'csatlakozva' : 'még nem csatlakozott'}\n'
+            'Build: ${snapshot.buildVersion ?? '—'} (${snapshot.buildCode ?? '—'}) · Android API ${snapshot.androidApi ?? '—'}\n'
+            'Saját értesítések: ${snapshot.postNotificationsGranted && snapshot.appNotificationsEnabled && snapshot.testChannelEnabled ? 'engedélyezve' : 'nem küldhető'}\n'
+            'Alkalmazáslista: ${snapshot.applicationListMode} · ${snapshot.applicationListFound} talált · ${snapshot.applicationListVisible} megjeleníthető\n'
+            'Utolsó próba: ${snapshot.lastTestStep ?? '—'} · ${snapshot.lastTestResult ?? '—'}'
+            '${snapshot.applicationListError == null ? '' : '\nAlkalmazáslista hiba: ${snapshot.applicationListError}'}',
+            key: const ValueKey('debug-console-push-status'),
+            style: const TextStyle(
+              color: Color(0xFFBAC2DE),
+              fontSize: 10.5,
+              height: 1.35,
+            ),
+          ),
+        ),
+        const Divider(height: 1, color: Color(0xFF313244)),
+        Expanded(
+          child: snapshot.events.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Még nincs push diagnosztikai esemény.',
+                    style: TextStyle(color: Color(0xFF94A3B8)),
+                  ),
+                )
+              : ListView.builder(
+                  key: const ValueKey('debug-console-push-events'),
+                  itemCount: snapshot.events.length,
+                  itemBuilder: (context, index) {
+                    final event = snapshot.events[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 4,
+                      ),
+                      child: SelectableText(
+                        '${DateTime.fromMillisecondsSinceEpoch(event.atUtcMs).toLocal().toIso8601String().substring(11, 19)} · ${event.code}\n${event.message}${event.sourcePackage == null ? '' : '\n${event.sourcePackage}'}',
+                        style: const TextStyle(
+                          color: Color(0xFFCDD6F4),
+                          fontSize: 11,
+                          height: 1.35,
+                        ),
+                      ),
+                    );
+                  },
+                ),
         ),
       ],
     );

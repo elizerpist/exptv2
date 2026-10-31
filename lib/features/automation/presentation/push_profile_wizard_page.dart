@@ -25,6 +25,7 @@ class _PushProfileWizardPageState extends State<PushProfileWizardPage>
   List<InstalledApplication> _apps = const [];
   InstalledApplication? _selected;
   String _search = '';
+  bool _showSystemApps = false;
   PushTransactionDirection _direction = PushTransactionDirection.automatic;
   bool _monitor = true;
   bool _loadingApps = true;
@@ -257,9 +258,10 @@ class _PushProfileWizardPageState extends State<PushProfileWizardPage>
     final shown = _apps
         .where(
           (app) =>
-              query.isEmpty ||
-              app.label.toLowerCase().contains(query) ||
-              app.packageName.toLowerCase().contains(query),
+              (_showSystemApps || !app.isSystemApp) &&
+              (query.isEmpty ||
+                  app.label.toLowerCase().contains(query) ||
+                  app.packageName.toLowerCase().contains(query)),
         )
         .toList();
     return Column(
@@ -282,23 +284,38 @@ class _PushProfileWizardPageState extends State<PushProfileWizardPage>
           ),
         ),
         const SizedBox(height: 12),
-        Expanded(
-          child: ListView.builder(
-            itemCount: shown.length,
-            itemBuilder: (_, index) {
-              final app = shown[index];
-              final selected = app.packageName == _selected?.packageName;
-              return ListTile(
-                onTap: () => setState(() => _selected = app),
-                leading: _AppIcon(app: app),
-                title: Text(app.label),
-                subtitle: Text(app.packageName),
-                trailing: selected
-                    ? const Icon(Icons.check_circle, color: Color(0xff328365))
-                    : null,
-              );
-            },
+        TextButton.icon(
+          onPressed: () => setState(() => _showSystemApps = !_showSystemApps),
+          icon: Icon(
+            _showSystemApps
+                ? Icons.check_box_outlined
+                : Icons.check_box_outline_blank,
+            size: 18,
           ),
+          label: const Text('Rendszeralkalmazások mutatása'),
+        ),
+        Expanded(
+          child: shown.isEmpty
+              ? const Center(child: Text('Nincs találat.'))
+              : ListView.builder(
+                  itemCount: shown.length,
+                  itemBuilder: (_, index) {
+                    final app = shown[index];
+                    final selected = app.packageName == _selected?.packageName;
+                    return ListTile(
+                      onTap: () => setState(() => _selected = app),
+                      leading: _AppIcon(app: app),
+                      title: Text(app.label),
+                      subtitle: Text(app.packageName),
+                      trailing: selected
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: Color(0xff328365),
+                            )
+                          : null,
+                    );
+                  },
+                ),
         ),
       ],
     );

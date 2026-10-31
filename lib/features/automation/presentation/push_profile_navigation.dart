@@ -95,6 +95,14 @@ abstract final class PushProfileNavigation {
               permissions: permissions,
               profileId: profileId,
               onlyReview: onlyReview,
+              onConfigureApplication: () async {
+                await PushProfileNavigation.openCreate(
+                  context,
+                  design: design,
+                  repository: repository,
+                  permissions: permissions,
+                );
+              },
             ),
     ),
   );
@@ -104,11 +112,16 @@ abstract final class PushProfileNavigation {
     required PushProfileUiDesign design,
     required AutomationRepository repository,
     required NotificationInboxItem item,
+    Future<void> Function(String ledgerEntryId)? onOpenLedgerEntry,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => design == PushProfileUiDesign.legacy
           ? ReviewPushNotificationPage(repository: repository, event: item)
-          : UnifiedPushInboxDetailPage(repository: repository, item: item),
+          : UnifiedPushInboxDetailPage(
+              repository: repository,
+              item: item,
+              onOpenLedgerEntry: onOpenLedgerEntry,
+            ),
     ),
   );
 

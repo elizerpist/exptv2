@@ -58,6 +58,15 @@ final class UnavailableAutomationRepository implements AutomationRepository {
     required List<PushFieldSpan> spans,
   }) async => _unavailable();
   @override
+  Future<PushRule> updateRule({
+    required String ruleId,
+    required int expectedVersion,
+    required String notificationId,
+    required String name,
+    required LedgerDirection direction,
+    required List<PushFieldSpan> spans,
+  }) async => _unavailable();
+  @override
   Future<PushRuleTestReport> backtest(String ruleId) async => _unavailable();
   @override
   Future<PushRule> activateRule(String ruleId) async => _unavailable();
@@ -213,11 +222,31 @@ final class UnavailableAutomationPermissionRepository
   @override
   Future<bool> openAppNotificationSettings() async => false;
   @override
+  Future<bool> openTestNotificationChannelSettings() async => false;
+  @override
   Future<bool> openAppInfoSettings() async => false;
   @override
   Future<bool> requestPostNotifications() async => false;
   @override
-  Future<bool> sendTestNotification() async => false;
+  Future<PushTestNotificationDispatch> sendTestNotification() async =>
+      const PushTestNotificationDispatch(
+        status: 'unsupported',
+        probeId: '',
+        message: 'A tesztértesítés csak Androidon érhető el.',
+      );
   @override
   Future<List<InstalledApplication>> listInstalledApps() async => const [];
+  @override
+  Future<String?> installedApplicationIcon(String packageName) async => null;
+  @override
+  Future<PushDiagnosticsSnapshot> pushDiagnostics() async =>
+      const PushDiagnosticsSnapshot(
+        listenerConnected: false,
+        applicationListMode: 'unsupported',
+        applicationListFound: 0,
+        applicationListVisible: 0,
+        events: [],
+      );
+  @override
+  Future<void> clearPushDiagnostics() async {}
 }

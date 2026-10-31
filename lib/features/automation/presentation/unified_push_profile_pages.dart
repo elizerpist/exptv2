@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import '../../dashboard/application/dashboard_presentation_preferences.dart';
 import '../../dashboard/query/domain/ledger_direction.dart';
 import '../domain/automation_models.dart';
 import '../domain/automation_repository.dart';
+import '../data/automation_update_bridge.dart';
 import 'push_profile_navigation.dart';
 
 const _pushInk = Color(0xff19264d);
@@ -348,6 +350,7 @@ final class _UnifiedPushApplicationPickerState
   List<InstalledApplication>? _apps;
   Set<String> _usedPackages = const {};
   String _query = '';
+  bool _showSystemApps = false;
   Object? _error;
 
   @override
@@ -405,6 +408,21 @@ final class _UnifiedPushApplicationPickerState
               ),
             ),
             const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('push-app-picker-system-toggle'),
+                onPressed: () =>
+                    setState(() => _showSystemApps = !_showSystemApps),
+                icon: Icon(
+                  _showSystemApps
+                      ? Icons.check_box_outlined
+                      : Icons.check_box_outline_blank,
+                  size: 18,
+                ),
+                label: const Text('Rendszeralkalmazások mutatása'),
+              ),
+            ),
             Expanded(
               child: apps == null
                   ? const Center(child: CircularProgressIndicator())
@@ -430,9 +448,10 @@ final class _UnifiedPushApplicationPickerState
     final apps = source
         .where(
           (app) =>
-              query.isEmpty ||
-              app.label.toLowerCase().contains(query) ||
-              app.packageName.toLowerCase().contains(query),
+              (_showSystemApps || !app.isSystemApp) &&
+              (query.isEmpty ||
+                  app.label.toLowerCase().contains(query) ||
+                  app.packageName.toLowerCase().contains(query)),
         )
         .toList(growable: false);
     if (apps.isEmpty) return const Center(child: Text('Nincs találat.'));
@@ -445,12 +464,21 @@ final class _UnifiedPushApplicationPickerState
             _usedPackages.contains(app.packageName) &&
             app.packageName != widget.selectedPackage;
         return ListTile(
-          leading: _PushAppAvatar(app: app),
+          leading: _LazyPushAppAvatar(
+            app: app,
+            permissions: widget.permissions,
+          ),
           title: Text(
             app.label,
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
-          subtitle: used ? const Text('Már beállítva') : null,
+          subtitle: used
+              ? const Text('Már beállítva')
+              : Text(
+                  app.enabled
+                      ? app.packageName
+                      : '${app.packageName} · letiltva',
+                ),
           trailing: used
               ? const Icon(Icons.check_circle_outline, color: _pushMuted)
               : null,
@@ -897,6 +925,7 @@ final class _UnifiedPushTrainingPickerPageState
   bool _loading = false;
   bool _hasMore = true;
   Object? _error;
+  StreamSubscription<void>? _automationUpdates;
 
   @override
   void initState() {
@@ -905,11 +934,16 @@ final class _UnifiedPushTrainingPickerPageState
       if (_scroll.position.extentAfter < 240) _loadMore();
     });
     _loadMore();
+    _automationUpdates = AutomationUpdateBridge.changes.listen(
+      (_) => _loadMore(reset: true),
+      onError: (_) {},
+    );
   }
 
   @override
   void dispose() {
     _scroll.dispose();
+    _automationUpdates?.cancel();
     super.dispose();
   }
 
@@ -1068,7 +1102,7 @@ final class _UnifiedPushTrainingEditorPageState
   TextSelection _selection = const TextSelection.collapsed(offset: -1);
   String? _message;
   bool _testing = false;
-  String? _createdRuleId;
+  PushRule? _trialRule;
 
   @override
   void dispose() {
@@ -1136,19 +1170,28 @@ final class _UnifiedPushTrainingEditorPageState
         if (mounted) Navigator.of(context).pop();
         return;
       }
-      final ruleId =
-          _createdRuleId ??
-          (await widget.repository.createRule(
-            profileId: widget.profile.profileId,
-            notificationId: widget.item.notificationId,
-            name: _name.text.trim().isEmpty
-                ? 'Új felismerési szabály'
-                : _name.text.trim(),
-            direction: _direction,
-            spans: _spans,
-          )).ruleId;
-      _createdRuleId = ruleId;
-      final report = await widget.repository.backtest(ruleId);
+      final name = _name.text.trim().isEmpty
+          ? 'Új felismerési szabály'
+          : _name.text.trim();
+      final existing = _trialRule;
+      final rule = existing == null
+          ? await widget.repository.createRule(
+              profileId: widget.profile.profileId,
+              notificationId: widget.item.notificationId,
+              name: name,
+              direction: _direction,
+              spans: _spans,
+            )
+          : await widget.repository.updateRule(
+              ruleId: existing.ruleId,
+              expectedVersion: existing.version,
+              notificationId: widget.item.notificationId,
+              name: name,
+              direction: _direction,
+              spans: _spans,
+            );
+      _trialRule = rule;
+      final report = await widget.repository.backtest(rule.ruleId);
       if (!mounted) return;
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
@@ -1156,7 +1199,7 @@ final class _UnifiedPushTrainingEditorPageState
             repository: widget.repository,
             profile: widget.profile,
             item: widget.item,
-            ruleId: ruleId,
+            ruleId: rule.ruleId,
             report: report,
           ),
         ),
@@ -1320,7 +1363,16 @@ final class _UnifiedPushTrainingEditorPageState
     ],
     selected: {_kind},
     showSelectedIcon: false,
-    onSelectionChanged: (value) => setState(() => _kind = value.first),
+    onSelectionChanged: (value) {
+      if (_trialRule != null && value.first != PushSampleKind.transaction) {
+        setState(
+          () => _message =
+              'A próbaszabály már létezik. Módosítsd a kijelöléseket, vagy lépj vissza a próba elvetéséhez.',
+        );
+        return;
+      }
+      setState(() => _kind = value.first);
+    },
   );
 
   Widget _roleButton(String label, PushFieldRole role) =>
@@ -1708,11 +1760,13 @@ final class UnifiedPushInboxPage extends StatefulWidget {
     required this.permissions,
     this.profileId,
     this.onlyReview = false,
+    this.onConfigureApplication,
   });
   final AutomationRepository repository;
   final AutomationPermissionRepository permissions;
   final String? profileId;
   final bool onlyReview;
+  final Future<void> Function()? onConfigureApplication;
 
   @override
   State<UnifiedPushInboxPage> createState() => _UnifiedPushInboxPageState();
@@ -1726,6 +1780,7 @@ final class _UnifiedPushInboxPageState extends State<UnifiedPushInboxPage> {
   bool _loading = false;
   bool _hasMore = true;
   Object? _error;
+  StreamSubscription<void>? _automationUpdates;
 
   @override
   void initState() {
@@ -1735,12 +1790,17 @@ final class _UnifiedPushInboxPageState extends State<UnifiedPushInboxPage> {
       if (_scroll.position.extentAfter < 240) _loadMore();
     });
     _loadMore();
+    _automationUpdates = AutomationUpdateBridge.changes.listen(
+      (_) => _loadMore(reset: true),
+      onError: (_) {},
+    );
   }
 
   @override
   void dispose() {
     _scroll.dispose();
     _search.dispose();
+    _automationUpdates?.cancel();
     super.dispose();
   }
 
@@ -1845,12 +1905,12 @@ final class _UnifiedPushInboxPageState extends State<UnifiedPushInboxPage> {
             child: shown.isEmpty && _loading
                 ? const Center(child: CircularProgressIndicator())
                 : shown.isEmpty
-                ? Center(
-                    child: Text(
-                      _error == null
-                          ? 'Nincs találat.'
-                          : 'Az értesítések nem tölthetők be.',
-                    ),
+                ? _InboxEmptyState(
+                    error: _error,
+                    canConfigure:
+                        widget.profileId == null && !widget.onlyReview,
+                    onConfigureApplication: widget.onConfigureApplication,
+                    onRetry: () => _loadMore(reset: true),
                   )
                 : RefreshIndicator(
                     onRefresh: () => _loadMore(reset: true),
@@ -1893,14 +1953,79 @@ final class _UnifiedPushInboxPageState extends State<UnifiedPushInboxPage> {
   }
 }
 
+final class _InboxEmptyState extends StatelessWidget {
+  const _InboxEmptyState({
+    required this.error,
+    required this.canConfigure,
+    required this.onConfigureApplication,
+    required this.onRetry,
+  });
+
+  final Object? error;
+  final bool canConfigure;
+  final Future<void> Function()? onConfigureApplication;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            error == null ? Icons.inbox_outlined : Icons.error_outline,
+            color: _pushMuted,
+            size: 34,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            error == null
+                ? 'Még nincs banki értesítés.'
+                : 'Az értesítések nem tölthetők be.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: _pushInk,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            error == null
+                ? 'Az első üzenethez válassz alkalmazást, majd kapcsold be a gyűjtést.'
+                : 'Próbáld újra, az eddigi adatok változatlanok maradnak.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _pushMuted, height: 1.35),
+          ),
+          const SizedBox(height: 16),
+          if (error != null)
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Újrapróbálás'),
+            )
+          else if (canConfigure && onConfigureApplication != null)
+            FilledButton.icon(
+              onPressed: () => onConfigureApplication!(),
+              icon: const Icon(Icons.add),
+              label: const Text('Alkalmazás beállítása'),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
 final class UnifiedPushInboxDetailPage extends StatefulWidget {
   const UnifiedPushInboxDetailPage({
     super.key,
     required this.repository,
     required this.item,
+    this.onOpenLedgerEntry,
   });
   final AutomationRepository repository;
   final NotificationInboxItem item;
+  final Future<void> Function(String ledgerEntryId)? onOpenLedgerEntry;
   @override
   State<UnifiedPushInboxDetailPage> createState() =>
       _UnifiedPushInboxDetailPageState();
@@ -1942,6 +2067,32 @@ final class _UnifiedPushInboxDetailPageState
   }
 
   int? get _minor => _parseMinor(_amount.text);
+  Future<void> _trainFromNotification() async {
+    final profileId = widget.item.profileId;
+    if (profileId == null || _saving) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final profile = await widget.repository.profile(profileId);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => UnifiedPushTrainingEditorPage(
+            repository: widget.repository,
+            profile: profile,
+            item: widget.item,
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _approve() async {
     final amount = _minor;
     if (amount == null || _partner.text.trim().isEmpty || _saving) {
@@ -2074,6 +2225,28 @@ final class _UnifiedPushInboxDetailPageState
               },
               cancelLabel: 'Kihagyás',
               onPrimary: _approve,
+            )
+          else if (!recorded &&
+              item.reviewStatus == PushReviewStatus.none &&
+              item.profileId != null)
+            _PushFooter(
+              primaryLabel: 'Felismerés tanítása ebből',
+              busy: _saving,
+              onCancel: () => Navigator.of(context).pop(),
+              cancelLabel: 'Vissza',
+              onPrimary: _trainFromNotification,
+            )
+          else if (recorded && widget.onOpenLedgerEntry != null)
+            _PushFooter(
+              primaryLabel: 'Kapcsolódó tranzakció megnyitása',
+              busy: false,
+              onCancel: () => Navigator.of(context).pop(),
+              cancelLabel: 'Vissza',
+              onPrimary: () async {
+                final entryId = item.ledgerEntryId;
+                if (entryId == null) return;
+                await widget.onOpenLedgerEntry!(entryId);
+              },
             ),
         ],
       ),
@@ -2456,6 +2629,61 @@ final class _PushAppAvatar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The package directory intentionally omits icons. Fetching an icon only for
+/// a visible picker row keeps a large installed-app list responsive and lets a
+/// single broken package icon fall back to the neutral avatar.
+final class _LazyPushAppAvatar extends StatefulWidget {
+  const _LazyPushAppAvatar({required this.app, required this.permissions});
+  final InstalledApplication app;
+  final AutomationPermissionRepository permissions;
+
+  @override
+  State<_LazyPushAppAvatar> createState() => _LazyPushAppAvatarState();
+}
+
+final class _LazyPushAppAvatarState extends State<_LazyPushAppAvatar> {
+  String? _icon;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LazyPushAppAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.app.packageName != widget.app.packageName) {
+      _icon = null;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final icon =
+        widget.app.iconPngBase64 ??
+        await widget.permissions.installedApplicationIcon(
+          widget.app.packageName,
+        );
+    if (mounted) setState(() => _icon = icon);
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 40,
+    height: 40,
+    child: _PushAppAvatar(
+      app: InstalledApplication(
+        packageName: widget.app.packageName,
+        label: widget.app.label,
+        iconPngBase64: _icon,
+        isSystemApp: widget.app.isSystemApp,
+        enabled: widget.app.enabled,
+      ),
+    ),
+  );
 }
 
 final class _PushRuleRow extends StatelessWidget {

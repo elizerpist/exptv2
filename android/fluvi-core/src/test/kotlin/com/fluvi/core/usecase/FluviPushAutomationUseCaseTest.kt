@@ -14,6 +14,7 @@ import com.fluvi.core.model.LedgerOriginKind
 import com.fluvi.core.model.PushFieldRole
 import com.fluvi.core.model.PushFieldSpan
 import com.fluvi.core.model.PushTransactionDirection
+import com.fluvi.core.model.UpdatePushRuleCommand
 import com.fluvi.core.model.RecurrenceAmountPolicy
 import com.fluvi.core.model.RecurrenceOccurrenceStatus
 import com.fluvi.core.model.RecurrenceTriggerKind
@@ -132,6 +133,103 @@ class FluviPushAutomationUseCaseTest {
         assertTrue(core.automation.capture(allowed) is com.fluvi.core.model.FluviPushCaptureResult.Stored)
         assertTrue(core.automation.capture(allowed) is com.fluvi.core.model.FluviPushCaptureResult.Duplicate)
         assertEquals(1, core.automation.inbox(profile.profileId, 10, 0).size)
+    }
+
+    @Test
+    fun repeatedTrialEditsKeepOneRuleAndInvalidateTheOldBacktest() = runBlocking {
+        val profile = core.automation.createProfile(
+            CreatePushProfileCommand(
+                packageName = "com.notification.test",
+                appLabel = "Notification Test",
+                displayName = "Notification Test",
+                defaultDirection = PushTransactionDirection.automatic,
+                monitoringRequested = true,
+                notificationAccessGranted = true,
+            ),
+        )
+        val text = "Vásárlás 8 500 Ft, partner SPAR."
+        core.automation.capture(
+            CapturedPushNotification(
+                packageName = profile.packageName,
+                appLabel = profile.appLabel,
+                title = "Teszt",
+                text = text,
+                notificationKey = "repeat-test",
+                receivedAtUtcMs = 1_700_000_000_000L,
+            ),
+        )
+        val sample = core.automation.inbox(profile.profileId, 10, 0).single()
+        val created = core.automation.createRule(
+            com.fluvi.core.model.CreatePushRuleCommand(
+                profileId = profile.profileId,
+                notificationId = sample.notificationId,
+                name = "SPAR",
+                direction = LedgerDirection.expense,
+                spans = listOf(
+                    PushFieldSpan(text.indexOf("8 500"), text.indexOf("8 500") + 5, PushFieldRole.amount),
+                    PushFieldSpan(text.indexOf("SPAR"), text.indexOf("SPAR") + 4, PushFieldRole.merchant),
+                ),
+            ),
+        )
+        core.automation.backtest(created.ruleId)
+        val updated = core.automation.updateRule(
+            UpdatePushRuleCommand(
+                ruleId = created.ruleId,
+                expectedVersion = created.version,
+                notificationId = sample.notificationId,
+                name = "SPAR vásárlás",
+                direction = LedgerDirection.expense,
+                spans = listOf(
+                    PushFieldSpan(text.indexOf("8 500"), text.indexOf("8 500") + 5, PushFieldRole.amount),
+                    PushFieldSpan(text.indexOf("SPAR"), text.indexOf("SPAR") + 4, PushFieldRole.merchant),
+                ),
+            ),
+        )
+        assertEquals(created.ruleId, updated.ruleId)
+        assertEquals(created.version + 1, updated.version)
+        assertEquals(1, core.automation.rules(profile.profileId).size)
+        assertTrue(runCatching { core.automation.activateRule(updated.ruleId) }.isFailure)
+    }
+
+    @Test
+    fun ruleAllowsSeveralIgnoredVariableFragmentsWithoutDuplicateRegexGroups() = runBlocking {
+        val profile = core.automation.createProfile(
+            CreatePushProfileCommand(
+                packageName = "com.variable.test",
+                appLabel = "Variable Test",
+                displayName = "Variable Test",
+                defaultDirection = PushTransactionDirection.automatic,
+                monitoringRequested = true,
+                notificationAccessGranted = true,
+            ),
+        )
+        val text = "Vásárlás 8 500 Ft, partner SPAR, egyenleg 50 000 Ft, azonosító ABC-42."
+        core.automation.capture(
+            CapturedPushNotification(
+                packageName = profile.packageName,
+                appLabel = profile.appLabel,
+                title = "Teszt",
+                text = text,
+                notificationKey = "variables",
+                receivedAtUtcMs = 1_700_000_100_000L,
+            ),
+        )
+        val sample = core.automation.inbox(profile.profileId, 10, 0).single()
+        val rule = core.automation.createRule(
+            com.fluvi.core.model.CreatePushRuleCommand(
+                profileId = profile.profileId,
+                notificationId = sample.notificationId,
+                name = "Változó részek",
+                direction = LedgerDirection.expense,
+                spans = listOf(
+                    PushFieldSpan(text.indexOf("8 500"), text.indexOf("8 500") + 5, PushFieldRole.amount),
+                    PushFieldSpan(text.indexOf("SPAR"), text.indexOf("SPAR") + 4, PushFieldRole.merchant),
+                    PushFieldSpan(text.indexOf("50 000"), text.indexOf("50 000") + 6, PushFieldRole.ignore),
+                    PushFieldSpan(text.indexOf("ABC-42"), text.indexOf("ABC-42") + 6, PushFieldRole.ignore),
+                ),
+            ),
+        )
+        assertTrue(core.automation.backtest(rule.ruleId).activationReady)
     }
 
     @Test

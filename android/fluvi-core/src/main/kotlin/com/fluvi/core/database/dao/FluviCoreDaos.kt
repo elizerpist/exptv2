@@ -717,6 +717,22 @@ internal interface FluviPushAutomationDao {
     @Query("UPDATE fluvi_push_rules SET state = :state, updated_at_utc_ms = :updatedAtUtcMs WHERE id = :ruleId")
     suspend fun updateRuleState(ruleId: String, state: PushRuleState, updatedAtUtcMs: Long): Int
 
+    @Query(
+        "UPDATE fluvi_push_rules SET name = :name, direction = :direction, " +
+            "compiled_representation = :representation, state = :state, " +
+            "version = version + 1, updated_at_utc_ms = :updatedAtUtcMs " +
+            "WHERE id = :ruleId AND version = :expectedVersion",
+    )
+    suspend fun updateRuleDraftIfVersion(
+        ruleId: String,
+        expectedVersion: Int,
+        name: String,
+        direction: com.fluvi.core.model.LedgerDirection,
+        representation: String,
+        state: PushRuleState,
+        updatedAtUtcMs: Long,
+    ): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSample(sample: FluviPushTrainingSampleEntity)
 

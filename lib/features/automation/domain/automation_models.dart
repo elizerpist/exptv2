@@ -25,6 +25,8 @@ final class InstalledApplication {
     required this.packageName,
     required this.label,
     this.iconPngBase64,
+    this.isSystemApp = false,
+    this.enabled = true,
   });
 
   factory InstalledApplication.fromMap(Map<Object?, Object?> map) =>
@@ -32,11 +34,15 @@ final class InstalledApplication {
         packageName: map['packageName']! as String,
         label: map['label']! as String,
         iconPngBase64: map['iconPngBase64'] as String?,
+        isSystemApp: map['isSystemApp'] as bool? ?? false,
+        enabled: map['enabled'] as bool? ?? true,
       );
 
   final String packageName;
   final String label;
   final String? iconPngBase64;
+  final bool isSystemApp;
+  final bool enabled;
 }
 
 final class AutomationPermissionStatus {
@@ -45,24 +51,162 @@ final class AutomationPermissionStatus {
     required this.postNotificationsGranted,
     required this.notificationListenerAvailable,
     required this.appNotificationSettingsAvailable,
+    this.appNotificationsEnabled = true,
+    this.testChannelEnabled = true,
+    this.listenerConnected = false,
   });
 
-  factory AutomationPermissionStatus.fromMap(Map<Object?, Object?> map) =>
-      AutomationPermissionStatus(
-        notificationListenerGranted:
-            map['notificationListenerGranted'] as bool? ?? false,
-        postNotificationsGranted:
-            map['postNotificationsGranted'] as bool? ?? false,
-        notificationListenerAvailable:
-            map['notificationListenerAvailable'] as bool? ?? false,
-        appNotificationSettingsAvailable:
-            map['appNotificationSettingsAvailable'] as bool? ?? false,
-      );
+  factory AutomationPermissionStatus.fromMap(
+    Map<Object?, Object?> map,
+  ) => AutomationPermissionStatus(
+    notificationListenerGranted:
+        map['notificationListenerGranted'] as bool? ?? false,
+    postNotificationsGranted: map['postNotificationsGranted'] as bool? ?? false,
+    notificationListenerAvailable:
+        map['notificationListenerAvailable'] as bool? ?? false,
+    appNotificationSettingsAvailable:
+        map['appNotificationSettingsAvailable'] as bool? ?? false,
+    appNotificationsEnabled: map['appNotificationsEnabled'] as bool? ?? true,
+    testChannelEnabled: map['testChannelEnabled'] as bool? ?? true,
+    listenerConnected: map['listenerConnected'] as bool? ?? false,
+  );
 
   final bool notificationListenerGranted;
   final bool postNotificationsGranted;
   final bool notificationListenerAvailable;
   final bool appNotificationSettingsAvailable;
+  final bool appNotificationsEnabled;
+  final bool testChannelEnabled;
+  final bool listenerConnected;
+}
+
+/// Android acknowledged the local probe submission. It deliberately does not
+/// imply that the notification listener has received the probe yet.
+final class PushTestNotificationDispatch {
+  const PushTestNotificationDispatch({
+    required this.status,
+    required this.probeId,
+    required this.message,
+  });
+
+  factory PushTestNotificationDispatch.fromMap(Map<Object?, Object?> map) =>
+      PushTestNotificationDispatch(
+        status: map['status'] as String? ?? 'error',
+        probeId: map['probeId'] as String? ?? '',
+        message: map['message'] as String? ?? 'A tesztértesítés nem sikerült.',
+      );
+
+  final String status;
+  final String probeId;
+  final String message;
+
+  bool get submitted => status == 'submitted';
+}
+
+final class PushDiagnosticEvent {
+  const PushDiagnosticEvent({
+    required this.code,
+    required this.message,
+    required this.atUtcMs,
+    this.sourcePackage,
+    this.probeId,
+  });
+
+  factory PushDiagnosticEvent.fromMap(Map<Object?, Object?> map) =>
+      PushDiagnosticEvent(
+        code: map['code'] as String? ?? 'UNKNOWN',
+        message: map['message'] as String? ?? '',
+        atUtcMs: (map['atUtcMs'] as num?)?.toInt() ?? 0,
+        sourcePackage: map['sourcePackage'] as String?,
+        probeId: map['probeId'] as String?,
+      );
+
+  final String code;
+  final String message;
+  final int atUtcMs;
+  final String? sourcePackage;
+  final String? probeId;
+}
+
+final class PushDiagnosticsSnapshot {
+  const PushDiagnosticsSnapshot({
+    required this.listenerConnected,
+    required this.applicationListMode,
+    required this.applicationListFound,
+    required this.applicationListVisible,
+    required this.events,
+    this.lastConnectedAtUtcMs,
+    this.lastDisconnectedAtUtcMs,
+    this.applicationListUpdatedAtUtcMs,
+    this.applicationListError,
+    this.lastTestProbeId,
+    this.lastTestSourcePackage,
+    this.lastTestStep,
+    this.lastTestAtUtcMs,
+    this.lastTestResult,
+    this.androidApi,
+    this.buildVersion,
+    this.buildCode,
+    this.notificationListenerGranted = false,
+    this.postNotificationsGranted = false,
+    this.appNotificationsEnabled = false,
+    this.testChannelEnabled = false,
+  });
+
+  factory PushDiagnosticsSnapshot.fromMap(
+    Map<Object?, Object?> map,
+  ) => PushDiagnosticsSnapshot(
+    listenerConnected: map['listenerConnected'] as bool? ?? false,
+    applicationListMode:
+        map['applicationListMode'] as String? ?? 'not_requested',
+    applicationListFound: (map['applicationListFound'] as num?)?.toInt() ?? 0,
+    applicationListVisible:
+        (map['applicationListVisible'] as num?)?.toInt() ?? 0,
+    events: ((map['events'] as List<Object?>?) ?? const <Object?>[])
+        .whereType<Map<Object?, Object?>>()
+        .map(PushDiagnosticEvent.fromMap)
+        .toList(growable: false),
+    lastConnectedAtUtcMs: (map['lastConnectedAtUtcMs'] as num?)?.toInt(),
+    lastDisconnectedAtUtcMs: (map['lastDisconnectedAtUtcMs'] as num?)?.toInt(),
+    applicationListUpdatedAtUtcMs:
+        (map['applicationListUpdatedAtUtcMs'] as num?)?.toInt(),
+    applicationListError: map['applicationListError'] as String?,
+    lastTestProbeId: map['lastTestProbeId'] as String?,
+    lastTestSourcePackage: map['lastTestSourcePackage'] as String?,
+    lastTestStep: map['lastTestStep'] as String?,
+    lastTestAtUtcMs: (map['lastTestAtUtcMs'] as num?)?.toInt(),
+    lastTestResult: map['lastTestResult'] as String?,
+    androidApi: (map['androidApi'] as num?)?.toInt(),
+    buildVersion: map['buildVersion'] as String?,
+    buildCode: (map['buildCode'] as num?)?.toInt(),
+    notificationListenerGranted:
+        map['notificationListenerGranted'] as bool? ?? false,
+    postNotificationsGranted: map['postNotificationsGranted'] as bool? ?? false,
+    appNotificationsEnabled: map['appNotificationsEnabled'] as bool? ?? false,
+    testChannelEnabled: map['testChannelEnabled'] as bool? ?? false,
+  );
+
+  final bool listenerConnected;
+  final String applicationListMode;
+  final int applicationListFound;
+  final int applicationListVisible;
+  final List<PushDiagnosticEvent> events;
+  final int? lastConnectedAtUtcMs;
+  final int? lastDisconnectedAtUtcMs;
+  final int? applicationListUpdatedAtUtcMs;
+  final String? applicationListError;
+  final String? lastTestProbeId;
+  final String? lastTestSourcePackage;
+  final String? lastTestStep;
+  final int? lastTestAtUtcMs;
+  final String? lastTestResult;
+  final int? androidApi;
+  final String? buildVersion;
+  final int? buildCode;
+  final bool notificationListenerGranted;
+  final bool postNotificationsGranted;
+  final bool appNotificationsEnabled;
+  final bool testChannelEnabled;
 }
 
 final class PushProfile {

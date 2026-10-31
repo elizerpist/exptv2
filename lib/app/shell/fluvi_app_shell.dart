@@ -1213,6 +1213,8 @@ class _FluviAppShellState extends State<FluviAppShell>
                         DebugFloatingButton(
                           physicalReportProvider: _physicalRailReport,
                           diagnosticStatusProvider: _diagnosticStatus,
+                          automationPermissions:
+                              _automationPermissionRepository,
                         ),
                     ],
                   ),

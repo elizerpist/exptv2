@@ -46,6 +46,14 @@ abstract interface class AutomationRepository {
     required LedgerDirection direction,
     required List<PushFieldSpan> spans,
   });
+  Future<PushRule> updateRule({
+    required String ruleId,
+    required int expectedVersion,
+    required String notificationId,
+    required String name,
+    required LedgerDirection direction,
+    required List<PushFieldSpan> spans,
+  });
   Future<PushRuleTestReport> backtest(String ruleId);
   Future<PushRule> activateRule(String ruleId);
   Future<String> approveReview({
@@ -170,8 +178,12 @@ abstract interface class AutomationPermissionRepository {
   Future<AutomationPermissionStatus> getPermissionStatus();
   Future<bool> openNotificationAccessSettings();
   Future<bool> openAppNotificationSettings();
+  Future<bool> openTestNotificationChannelSettings();
   Future<bool> openAppInfoSettings();
   Future<bool> requestPostNotifications();
-  Future<bool> sendTestNotification();
+  Future<PushTestNotificationDispatch> sendTestNotification();
   Future<List<InstalledApplication>> listInstalledApps();
+  Future<String?> installedApplicationIcon(String packageName);
+  Future<PushDiagnosticsSnapshot> pushDiagnostics();
+  Future<void> clearPushDiagnostics();
 }

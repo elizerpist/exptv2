@@ -80,6 +80,18 @@ data class CreatePushRuleCommand(
     val autoAcceptThreshold: Double = 0.90,
 )
 
+/** Updates one still-non-active trial rule in place so repeated tests do not
+ * leave duplicate parser rules behind. UTF-16 spans continue to target the
+ * original Inbox text. */
+data class UpdatePushRuleCommand(
+    val ruleId: String,
+    val expectedVersion: Int,
+    val notificationId: String,
+    val name: String,
+    val direction: LedgerDirection,
+    val spans: List<PushFieldSpan>,
+)
+
 data class CapturedPushNotification(
     val packageName: String,
     val appLabel: String?,

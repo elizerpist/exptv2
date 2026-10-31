@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="prototype-id" content="fluvi/push-listener-diagnostics">
+  <meta name="prototype-status" content="current">
+  <title>Fluvi – Push diagnosztika</title>
+  <style>
+    :root{--ink:#19264d;--muted:#718096;--line:#e5e9f0;--surface:#fff;--page:#f5f6fa;--soft:#f1f5f9;--ok:#e6faf2;--warn:#fff6df;--violet:#7552b8}*{box-sizing:border-box}body{margin:0;background:#dde1ea;color:var(--ink);font:15px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.phone{width:min(100%,430px);min-height:860px;margin:20px auto;padding:26px 20px 44px;border-radius:30px;background:var(--page);box-shadow:0 25px 80px #26345244}h1{margin:0;font-size:28px}.lead{margin:5px 0 20px;color:var(--muted);font-size:13px}.group{overflow:hidden;border-radius:18px;background:var(--surface);box-shadow:0 6px 18px #33415510}.row{display:flex;gap:13px;align-items:flex-start;padding:13px 12px}.row+.row{border-top:1px solid var(--line)}.icon{display:grid;place-items:center;flex:0 0 40px;height:40px;border-radius:12px;background:var(--soft);font-size:20px}.grow{flex:1}.title{font-size:15px;font-weight:800}.sub{margin-top:2px;color:var(--muted);font-size:12px;line-height:1.35}.state{font-size:12px;font-weight:800;white-space:nowrap}.ok{color:#087c62}.warn{color:#9a6700}h2{margin:24px 0 8px;font-size:18px}.task{margin-top:20px;padding:14px;background:var(--warn);border-radius:18px;display:flex;gap:13px;align-items:center}.console{margin-top:24px;padding:14px;border-radius:18px;background:#1e1e2e;color:#cdd6f4}.console h2{margin:0 0 10px;color:#cdd6f4}.status{font-size:12px;line-height:1.55;color:#bac2de}.event{border-top:1px solid #313244;padding:9px 0;font:11px ui-monospace,SFMono-Regular,monospace}.event b{color:#06b6d4}.actions{display:flex;gap:8px;margin-top:13px}.actions button{border:0;border-radius:12px;padding:10px;background:#313244;color:#fff;font-weight:800}.actions button.primary{background:var(--violet)}
+  </style>
+</head>
+<body><main class="phone">
+  <h1>Automatizálás</h1><p class="lead">A banki értesítések, az ismétlődések és a teendők áttekintése.</p>
+  <article class="task"><div class="icon">✓</div><div class="grow"><div class="title">Egy értesítés ellenőrzésre vár</div><div class="sub">A kétes találat még nem került a Ledgerbe.</div></div><span>›</span></article>
+  <h2>Kezelés</h2><section class="group"><div class="row"><div class="icon">↻</div><div class="grow"><div class="title">Ismétlődések</div><div class="sub">3 aktív szabály · 1 szünetel</div></div><span>›</span></div><div class="row"><div class="icon">♧</div><div class="grow"><div class="title">Push profilok</div><div class="sub">1 profil · az első értesítésre vár</div></div><span>›</span></div><div class="row"><div class="icon">⌑</div><div class="grow"><div class="title">Banki értesítések</div><div class="sub">Legutóbbi ma 07:41 · 2 ellenőrzésre vár</div></div><span>›</span></div></section>
+  <section class="console"><h2>Push diagnosztika</h2><div class="status">Saját értesítések: engedélyezve · csatorna aktív<br>Értesítésfigyelő: hozzáférés megadva · csatlakozva<br>Alkalmazáslista: teljes lista · 164 találat<br>Utolsó próba: Notification Test · Inboxba mentve</div><div class="event"><b>07:41:06 · LISTENER_RECEIVED</b><br>Külső értesítés megérkezett</div><div class="event"><b>07:41:06 · PROFILE_MATCHED</b><br>Forrásprofil egyezik</div><div class="event"><b>07:41:06 · INBOX_STORED</b><br>Inbox mentése sikeres</div><div class="actions"><button class="primary">Saját teszt küldése</button><button>Frissítés</button><button>Másolás</button></div></section>
+</main></body></html>

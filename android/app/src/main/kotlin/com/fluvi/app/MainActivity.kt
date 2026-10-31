@@ -20,6 +20,7 @@ import com.fluvi.core.model.UpdatePartnerCommand
 import com.fluvi.core.model.CreatePushProfileCommand
 import com.fluvi.core.model.UpdatePushProfileCommand
 import com.fluvi.core.model.CreatePushRuleCommand
+import com.fluvi.core.model.UpdatePushRuleCommand
 import com.fluvi.core.model.PushFieldSpan
 import com.fluvi.core.model.PushFieldRole
 import com.fluvi.core.model.PushProfileState
@@ -106,6 +107,8 @@ class MainActivity : FlutterActivity() {
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
     private var diagnosticEventSink: EventChannel.EventSink? = null
+    private var automationUpdateEventChannel: EventChannel? = null
+    private var pendingPostNotificationPermissionResult: MethodChannel.Result? = null
     private val preparedQueryGenerationOwner = DashboardPreparedIndexQueryGenerationOwner()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -122,24 +125,36 @@ class MainActivity : FlutterActivity() {
             "coreCreated instance=${System.identityHashCode(fluviCore)} " +
                 "dbPath=${applicationContext.getDatabasePath(DATABASE_FILE_NAME).absolutePath}",
         )
-        if (isDebuggable()) {
-            diagnosticEventChannel = EventChannel(
-                flutterEngine.dartExecutor.binaryMessenger,
-                DIAGNOSTIC_CHANNEL,
-            ).also { channel ->
-                channel.setStreamHandler(object : EventChannel.StreamHandler {
-                    override fun onListen(
-                        arguments: Any?,
-                        events: EventChannel.EventSink,
-                    ) {
-                        diagnosticEventSink = events
-                    }
+        diagnosticEventChannel = EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DIAGNOSTIC_CHANNEL,
+        ).also { channel ->
+            channel.setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(
+                    arguments: Any?,
+                    events: EventChannel.EventSink,
+                ) {
+                    diagnosticEventSink = events
+                }
 
-                    override fun onCancel(arguments: Any?) {
-                        diagnosticEventSink = null
-                    }
-                })
-            }
+                override fun onCancel(arguments: Any?) {
+                    diagnosticEventSink = null
+                }
+            })
+        }
+        automationUpdateEventChannel = EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            AUTOMATION_UPDATE_CHANNEL,
+        ).also { channel ->
+            channel.setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                    FluviAutomationUpdates.attach(events)
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    FluviAutomationUpdates.detach()
+                }
+            })
         }
         categoryChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -231,13 +246,26 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 val platform = FluviAutomationPlatform(this)
+                if (call.method == "requestPostNotifications") {
+                    if (platform.postNotificationsGranted()) {
+                        result.success(true)
+                    } else if (pendingPostNotificationPermissionResult != null) {
+                        result.error("permission_request_in_progress", "Az engedélykérés már folyamatban van.", null)
+                    } else {
+                        pendingPostNotificationPermissionResult = result
+                        platform.requestPostNotifications()
+                    }
+                    return@setMethodCallHandler
+                }
                 val value = when (call.method) {
                     "getPermissionStatus" -> platform.permissionStatus()
                     "openNotificationAccessSettings" -> platform.openNotificationAccessSettings()
                     "openAppNotificationSettings" -> platform.openAppNotificationSettings()
+                    "openTestNotificationChannelSettings" -> platform.openTestNotificationChannelSettings()
                     "openAppInfoSettings" -> platform.openAppInfoSettings()
-                    "requestPostNotifications" -> platform.requestPostNotifications()
                     "sendTestNotification" -> platform.sendTestNotification()
+                    "getPushDiagnostics" -> platform.pushDiagnostics()
+                    "clearPushDiagnostics" -> platform.clearPushDiagnostics()
                     "listInstalledApps" -> {
                         scope.launch {
                             runCatching { withContext(Dispatchers.IO) { platform.listInstalledApps() } }
@@ -246,9 +274,23 @@ class MainActivity : FlutterActivity() {
                         }
                         null
                     }
+                    "getInstalledAppIcon" -> {
+                        val packageName = call.argument<String>("packageName")
+                        if (packageName.isNullOrBlank()) {
+                            result.error("validation", "Hiányzó alkalmazásazonosító.", null)
+                        } else {
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) { platform.installedAppIcon(packageName) }
+                                }.onSuccess(result::success)
+                                    .onFailure { result.error("installed_app_icon_error", it.message, null) }
+                            }
+                        }
+                        null
+                    }
                     else -> return@setMethodCallHandler result.notImplemented()
                 }
-                if (call.method != "listInstalledApps") result.success(value)
+                if (call.method != "listInstalledApps" && call.method != "getInstalledAppIcon") result.success(value)
             }
         }
         financialLimitChannel = MethodChannel(
@@ -706,6 +748,19 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == FluviAutomationPlatform.REQUEST_POST_NOTIFICATIONS) {
+            val pending = pendingPostNotificationPermissionResult ?: return
+            pendingPostNotificationPermissionResult = null
+            pending.success(FluviAutomationPlatform(this).postNotificationsGranted())
+        }
+    }
+
     override fun onDestroy() {
         categoryChannel?.setMethodCallHandler(null)
         manualTransactionChannel?.setMethodCallHandler(null)
@@ -733,6 +788,10 @@ class MainActivity : FlutterActivity() {
         diagnosticEventSink = null
         diagnosticEventChannel?.setStreamHandler(null)
         diagnosticEventChannel = null
+        FluviAutomationUpdates.detach()
+        automationUpdateEventChannel?.setStreamHandler(null)
+        automationUpdateEventChannel = null
+        pendingPostNotificationPermissionResult = null
         core?.close()
         core = null
         preparedQueryGenerationOwner.clear()
@@ -945,6 +1004,22 @@ class MainActivity : FlutterActivity() {
                 name = requireArgument(call, "name"), direction = LedgerDirection.valueOf(requireArgument(call, "direction")),
                 priority = call.argument<Number>("priority")?.toInt() ?: 100,
                 autoAcceptThreshold = call.argument<Number>("autoAcceptThreshold")?.toDouble() ?: .90,
+                spans = requireArgument<List<Map<String, Any?>>>(call, "spans").map { span ->
+                    PushFieldSpan(
+                        start = (span["start"] as? Number)?.toInt() ?: throw IllegalArgumentException("Missing span start."),
+                        endExclusive = (span["endExclusive"] as? Number)?.toInt() ?: throw IllegalArgumentException("Missing span end."),
+                        role = PushFieldRole.valueOf(span["role"] as? String ?: throw IllegalArgumentException("Missing span role.")),
+                    )
+                },
+            ),
+        ))
+        "updateRule" -> pushRuleMap(fluviCore.automation.updateRule(
+            UpdatePushRuleCommand(
+                ruleId = requireArgument(call, "ruleId"),
+                expectedVersion = requireInt(call, "expectedVersion"),
+                notificationId = requireArgument(call, "notificationId"),
+                name = requireArgument(call, "name"),
+                direction = LedgerDirection.valueOf(requireArgument(call, "direction")),
                 spans = requireArgument<List<Map<String, Any?>>>(call, "spans").map { span ->
                     PushFieldSpan(
                         start = (span["start"] as? Number)?.toInt() ?: throw IllegalArgumentException("Missing span start."),
@@ -2720,6 +2795,7 @@ class MainActivity : FlutterActivity() {
         const val DASHBOARD_CORE_REVISION_STREAM_CHANNEL =
             "com.fluvi/dashboard_core_revision_stream"
         const val DIAGNOSTIC_CHANNEL = "com.fluvi/diagnostics"
+        const val AUTOMATION_UPDATE_CHANNEL = "com.fluvi/automation_updates"
         const val DATABASE_FILE_NAME = "fluvi_core.db"
         const val DEBUG_TAG = "FluviDashboard"
     }

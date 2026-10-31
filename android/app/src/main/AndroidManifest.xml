@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The diagnostic/local-phone build deliberately enumerates installed
+         applications so a notification source without a launcher activity is
+         still selectable. Play-distributed variants must be reviewed against
+         the applicable package-visibility policy separately. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />

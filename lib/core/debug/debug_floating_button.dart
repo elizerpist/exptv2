@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/dashboard_mode_palette.dart';
+import '../../features/automation/domain/automation_repository.dart';
 import 'debug_console.dart';
 
 typedef DebugPhysicalReportProvider = String Function();
@@ -12,10 +13,12 @@ class DebugFloatingButton extends StatelessWidget {
     super.key,
     this.physicalReportProvider,
     this.diagnosticStatusProvider,
+    this.automationPermissions,
   });
 
   final DebugPhysicalReportProvider? physicalReportProvider;
   final DebugDiagnosticStatusProvider? diagnosticStatusProvider;
+  final AutomationPermissionRepository? automationPermissions;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +39,7 @@ class DebugFloatingButton extends StatelessWidget {
             builder: (_) => DebugConsoleDialog(
               physicalReportProvider: physicalReportProvider,
               diagnosticStatusProvider: diagnosticStatusProvider,
+              automationPermissions: automationPermissions,
             ),
           ),
         ),

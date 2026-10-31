@@ -31,6 +31,7 @@ import com.fluvi.core.model.PushRuleTestReport
 import com.fluvi.core.model.PushSampleKind
 import com.fluvi.core.model.PushTransactionDirection
 import com.fluvi.core.model.UpdatePushProfileCommand
+import com.fluvi.core.model.UpdatePushRuleCommand
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneId
@@ -302,6 +303,32 @@ class FluviPushAutomationUseCase internal constructor(
         ruleModel(entity.copy(state = PushRuleState.testing))
     }
 
+    /** Replaces a trial representation in place, preserving its stable rule id
+     * and ensuring that an older test report cannot activate new spans. */
+    suspend fun updateRule(command: UpdatePushRuleCommand): FluviPushRule = database.withTransaction {
+        val dao = database.pushAutomationDao()
+        val existing = requireNotNull(dao.rule(command.ruleId)) { "Unknown push rule." }
+        require(existing.state != PushRuleState.active) { "An active rule must be edited as a separate draft." }
+        require(existing.version == command.expectedVersion) { "A szabály közben megváltozott. Töltsd újra a próbát." }
+        require(command.name.isNotBlank()) { "Rule name is required." }
+        val event = requireNotNull(dao.inbox(command.notificationId)) { "Unknown notification ID." }
+        require(event.profileId == existing.profileId) { "Training event belongs to another profile." }
+        val representation = templateFor(normalizeRuleText(event.rawNotificationText), command.spans)
+        val now = clock.nowUtcMs()
+        check(
+            dao.updateRuleDraftIfVersion(
+                ruleId = existing.id,
+                expectedVersion = command.expectedVersion,
+                name = command.name.trim(),
+                direction = command.direction,
+                representation = representation,
+                state = PushRuleState.testing,
+                updatedAtUtcMs = now,
+            ) == 1,
+        ) { "A szabály közben megváltozott. Töltsd újra a próbát." }
+        ruleModel(requireNotNull(dao.rule(existing.id)))
+    }
+
     suspend fun backtest(ruleId: String): PushRuleTestReport = database.withTransaction {
         val dao = database.pushAutomationDao()
         val rule = requireNotNull(dao.rule(ruleId)) { "Unknown push rule." }
@@ -331,6 +358,7 @@ class FluviPushAutomationUseCase internal constructor(
         val dao = database.pushAutomationDao()
         val rule = requireNotNull(dao.rule(ruleId)) { "Unknown push rule." }
         val test = requireNotNull(dao.latestTestResult(ruleId)) { "Run a backtest before activation." }
+        require(test.ruleVersion == rule.version) { "A szabály módosult az utolsó próba óta. Futtass új próbát." }
         require(test.activationReady) { "This rule has not passed its backtest." }
         dao.updateRuleState(ruleId, PushRuleState.active, clock.nowUtcMs())
         val profile = requireProfile(rule.profileId)
@@ -458,7 +486,15 @@ class FluviPushAutomationUseCase internal constructor(
                 "literal" -> regex.append(Pattern.quote(part.getString("value")))
                 "field" -> {
                     val role = part.getString("role")
-                    regex.append("(?<").append(role).append(">.+?)")
+                    // "ignore" marks an arbitrary variable fragment (balance,
+                    // reference, account suffix, …) which does not feed a
+                    // proposal. It may occur more than once, so it must not
+                    // create duplicate named regex groups.
+                    if (role == PushFieldRole.ignore.name) {
+                        regex.append("(?:.+?)")
+                    } else {
+                        regex.append("(?<").append(role).append(">.+?)")
+                    }
                 }
             }
         }
@@ -485,7 +521,13 @@ class FluviPushAutomationUseCase internal constructor(
         require(sorted.zipWithNext().all { (a, b) -> a.endExclusive <= b.start }) { "Field spans overlap." }
         require(sorted.count { it.role == PushFieldRole.amount } == 1) { "Exactly one transaction amount is required." }
         require(sorted.count { it.role == PushFieldRole.merchant } == 1) { "Exactly one merchant is required." }
-        require(sorted.groupingBy { it.role }.eachCount().values.all { it == 1 }) { "Each role can be selected once." }
+        require(
+            sorted.filter { it.role != PushFieldRole.ignore }
+                .groupingBy { it.role }
+                .eachCount()
+                .values
+                .all { it == 1 },
+        ) { "Each role can be selected once." }
         val parts = JSONArray(); var cursor = 0
         sorted.forEach { span ->
             if (span.start > cursor) parts.put(JSONObject().put("kind", "literal").put("value", text.substring(cursor, span.start)))

@@ -118,16 +118,19 @@ class _SettingsPageState extends State<SettingsPage>
                   subtitle: 'A Fluvi saját rendszerértesítését ellenőrzi.',
                   status: '',
                   onTap: () async {
-                    final sent = await widget.permissions
+                    final dispatch = await widget.permissions
                         .sendTestNotification();
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(
-                          sent
-                              ? 'Tesztértesítés elküldve.'
-                              : 'A Fluvi értesítési engedélye hiányzik.',
-                        ),
+                        content: Text(dispatch.message),
+                        action: dispatch.status == 'channelDisabled'
+                            ? SnackBarAction(
+                                label: 'Csatorna beállításai',
+                                onPressed: () => widget.permissions
+                                    .openTestNotificationChannelSettings(),
+                              )
+                            : null,
                       ),
                     );
                   },
