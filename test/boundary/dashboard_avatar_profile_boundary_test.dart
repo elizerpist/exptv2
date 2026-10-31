@@ -108,9 +108,10 @@ void main() {
     expect(source, contains("eventsFor('BUDGET_HEADER_PAINTED')"));
     expect(source, contains("eventsFor('BUDGET_PROGRESS_PAINTED')"));
     expect(source, isNot(contains('if (avatarPaints.isNotEmpty) return;')));
+    expect(source, contains('_hasExactVisibleAvatarTargetPaint'));
     expect(
       'DashboardProfileReport.hasExactNonemptyAvatarPaint('.allMatches(source),
-      hasLength(3),
+      hasLength(1),
     );
     expect(source, isNot(contains('.hasReadablePhaseAPaint')));
     for (final field in [
@@ -118,6 +119,7 @@ void main() {
       'exact_paint_exact_empty',
       'exact_paint_readable_phase_a_rows_painted',
       'exact_paint_rich_phase_b_rows_painted',
+      'exact_paint_source',
       'exact_paint_core_revision',
       'visible_core_revision',
     ]) {

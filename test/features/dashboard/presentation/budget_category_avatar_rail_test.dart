@@ -2714,9 +2714,10 @@ void main() {
   );
 
   testWidgets(
-    'FPA: the production Avatar rail correlates Budget progress build and paint with its current target',
+    'FPA: the production Avatar rail forwards only the selected progress canvas identity after paint',
     (tester) async {
       final harness = _InteractiveRailHarness();
+      final visiblePaints = <DashboardAvatarSelectedVisualPainted>[];
       addTearDown(harness.dispose);
       FluviDiagnosticLogger.clear();
       addTearDown(FluviDiagnosticLogger.clear);
@@ -2726,8 +2727,10 @@ void main() {
           harness.presentation,
           limitEditController: harness.edits,
           height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+          onSelectedAvatarVisualPainted: visiblePaints.add,
         ),
       );
+      await tester.pump();
       await tester.pump();
 
       final built = FluviDiagnosticLogger.entries
@@ -2742,6 +2745,9 @@ void main() {
       expect(built.last.scope, contains('targetHandle=0'));
       expect(painted.last.scope, contains('targetHandle=0'));
       expect(painted.last.scope, contains('visualProgress=0.5'));
+      expect(visiblePaints, isNotEmpty);
+      expect(visiblePaints.last.targetHandle, 0);
+      expect(visiblePaints.last.coreRevision, 1);
       expect(
         FluviDiagnosticLogger.entries.where(
           (event) => event.stage == 'BUDGET_PROGRESS_PAINT_STALE_REJECTED',
@@ -3224,6 +3230,8 @@ Widget _host(
   DashboardBudgetPresentationController presentation, {
   DashboardBudgetLimitEditController? limitEditController,
   bool enableQuickLimitEdit = true,
+  ValueChanged<DashboardAvatarSelectedVisualPainted>?
+  onSelectedAvatarVisualPainted,
   ValueChanged<BudgetLimitManagerRequest>?
   onSelectedBudgetTargetManagerRequested,
   double height = 72,
@@ -3237,6 +3245,7 @@ Widget _host(
           presentation: presentation,
           limitEditController: limitEditController,
           enableQuickLimitEdit: enableQuickLimitEdit,
+          onSelectedAvatarVisualPainted: onSelectedAvatarVisualPainted,
           onSelectedBudgetTargetManagerRequested:
               onSelectedBudgetTargetManagerRequested,
         ),

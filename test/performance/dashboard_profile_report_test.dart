@@ -303,6 +303,27 @@ void main() {
   });
 
   test(
+    'Avatar K accepts a selected Avatar canvas paint without claiming invisible LogBox rows',
+    () {
+      final evidence = _avatarFirstTargetEvidence()
+        ..['exact_paint_source'] = 'selectedAvatarProgress'
+        ..['exact_paint_readable_phase_a_rows_painted'] = 0
+        ..['exact_paint_rich_phase_b_rows_painted'] = 0;
+      for (final flight in evidence['flights']! as List) {
+        (flight as Map)
+          ..['exact_paint_source'] = 'selectedAvatarProgress'
+          ..['exact_paint_readable_phase_a_rows_painted'] = 0
+          ..['exact_paint_rich_phase_b_rows_painted'] = 0;
+      }
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        returnsNormally,
+      );
+    },
+  );
+
+  test(
     'Avatar K rejects a profile without target-correlated row-discovery evidence',
     () {
       final evidence = _avatarFirstTargetEvidence()

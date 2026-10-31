@@ -848,6 +848,15 @@ List<FluviDiagnosticEvent> _diagnosticEventsAfter(int sequence) =>
         .where((event) => (event.sequence ?? 0) > sequence)
         .toList(growable: false);
 
+bool _hasExactVisibleAvatarTargetPaint(DashboardAvatarTargetPainted paint) =>
+    paint.source == DashboardAvatarTargetPaintSource.selectedAvatarProgress
+    ? !paint.exactEmpty
+    : DashboardProfileReport.hasExactNonemptyAvatarPaint(
+        exactEmpty: paint.exactEmpty,
+        readablePhaseARowsPainted: paint.readablePhaseARowsPainted,
+        richPhaseBRowsPainted: paint.richPhaseBRowsPainted,
+      );
+
 /// Produces bounded, JSON-safe evidence for repeated real Avatar flings in the
 /// profile matrix. It only observes existing Core paint acknowledgement and
 /// bounded diagnostics; neither this harness nor the report owns selection,
@@ -877,13 +886,7 @@ Map<String, Object?> _avatarFirstTargetEvidence({
       .toList(growable: false);
 
   final exactRendererPaints = paints
-      .where(
-        (paint) => DashboardProfileReport.hasExactNonemptyAvatarPaint(
-          exactEmpty: paint.exactEmpty,
-          readablePhaseARowsPainted: paint.readablePhaseARowsPainted,
-          richPhaseBRowsPainted: paint.richPhaseBRowsPainted,
-        ),
-      )
+      .where(_hasExactVisibleAvatarTargetPaint)
       .toList(growable: false);
   final phaseAPaints = paints
       .where(
@@ -2401,11 +2404,7 @@ Map<String, Object?> _avatarFinalTargetEvidence(
       _scopeInt(event.scope, 'displayDenominatorScaled100') == denominator;
   final exactPainted =
       paint != null &&
-      DashboardProfileReport.hasExactNonemptyAvatarPaint(
-        exactEmpty: paint.exactEmpty,
-        readablePhaseARowsPainted: paint.readablePhaseARowsPainted,
-        richPhaseBRowsPainted: paint.richPhaseBRowsPainted,
-      ) &&
+      _hasExactVisibleAvatarTargetPaint(paint) &&
       paint.targetHandle == physical &&
       paint.queryKey == visible?.queryKey.value &&
       paint.coreRevision == visible?.coreRevision;
@@ -2464,13 +2463,7 @@ Map<String, Object?> _avatarFinalTargetEvidence(
       'AV|VISIBLE_PUBLICATION_ACCEPTED',
     ).where((event) => (event.entryCount ?? 0) > 0).length,
     'nonempty_preview_painted_count': paints
-        .where(
-          (paint) => DashboardProfileReport.hasExactNonemptyAvatarPaint(
-            exactEmpty: paint.exactEmpty,
-            readablePhaseARowsPainted: paint.readablePhaseARowsPainted,
-            richPhaseBRowsPainted: paint.richPhaseBRowsPainted,
-          ),
-        )
+        .where(_hasExactVisibleAvatarTargetPaint)
         .length,
     'final_target_row_count': payload?.logBox.previewRowCount,
     'final_target_exact_painted': exactPainted,
@@ -2516,6 +2509,7 @@ Map<String, Object?> _avatarFinalTargetEvidence(
     'exact_paint_focus_generation': paint?.focusGeneration,
     'exact_paint_presentation_epoch': paint?.presentationEpoch,
     'exact_paint_frame_generation': paint?.frameGeneration,
+    'exact_paint_source': paint?.source.name,
     'exact_paint_exact_empty': paint?.exactEmpty,
     'exact_paint_readable_phase_a_rows_painted':
         paint?.readablePhaseARowsPainted,

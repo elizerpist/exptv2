@@ -591,6 +591,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
           onPreparedTargetHotsetRequested: drilldown?.primeBudgetTargetHotset,
           liveTargetReadiness: drilldown?.liveTargetReadiness,
           liveTargetPainted: drilldown?.liveTargetPainted,
+          onSelectedAvatarVisualPainted:
+              drilldown?.recordSelectedAvatarVisualPaint,
           onMotionActiveChanged: onAvatarMotionActiveChanged,
           onDirectInputStarted: onAvatarDirectInputStarted,
           onSelectedBudgetTargetManagerRequested: limitEditController == null

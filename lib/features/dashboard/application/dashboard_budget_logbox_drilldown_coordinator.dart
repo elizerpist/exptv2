@@ -29,6 +29,10 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
   ValueListenable<DashboardAvatarTargetPainted?> get liveTargetPainted =>
       core.budgetAvatarTargetPainted;
 
+  void recordSelectedAvatarVisualPaint(
+    DashboardAvatarSelectedVisualPainted painted,
+  ) => core.recordBudgetAvatarSelectedVisualPaint(painted);
+
   /// Prepares only the rail's fixed local semantic horizon. This adapter owns
   /// target-to-facet translation; the Core remains the sole owner of the
   /// reusable prepared-focus cache and its validity boundary.
@@ -66,7 +70,7 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
 
   /// Production physical-rail counterpart of [previewBudgetTarget]. Its true
   /// result is intentionally stronger: the selected Budget target and exact
-  /// LogBox root have both reached the shared post-paint acknowledgement.
+  /// selected Avatar chrome has reached the shared post-paint acknowledgement.
   Future<bool> previewBudgetTargetPainted({
     int? targetHandle,
     DashboardBudgetPresentationState? state,

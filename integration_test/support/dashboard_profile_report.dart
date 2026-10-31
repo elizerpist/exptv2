@@ -575,6 +575,7 @@ abstract final class DashboardProfileReport {
       'coalescedBeforeResourceReady',
       'cancelledByNewPointer',
       'staleRejected',
+      'selectedAvatarProgressPainted',
     };
     if (outcomes is! List ||
         outcomes.isEmpty ||
@@ -771,6 +772,15 @@ abstract final class DashboardProfileReport {
     final exactEmpty = evidence['exact_paint_exact_empty'];
     final phaseARows = evidence['exact_paint_readable_phase_a_rows_painted'];
     final richRows = evidence['exact_paint_rich_phase_b_rows_painted'];
+    // Older reports use the LogBox painter.  Budget's production composition
+    // may intentionally keep that surface offscreen; in that case the exact
+    // selected Avatar chrome is the visible painter and is recorded under its
+    // own explicit source rather than pretending rows were painted.
+    final source = evidence['exact_paint_source'] ?? 'logBox';
+    if (source is! String ||
+        !const <String>{'logBox', 'selectedAvatarProgress'}.contains(source)) {
+      reject('exact_paint_source');
+    }
     if (exactEmpty is! bool) reject('exact_paint_exact_empty');
     if (phaseARows is! int || phaseARows < 0) {
       reject('exact_paint_readable_phase_a_rows_painted');
@@ -778,11 +788,14 @@ abstract final class DashboardProfileReport {
     if (richRows is! int || richRows < 0) {
       reject('exact_paint_rich_phase_b_rows_painted');
     }
-    if (!hasExactNonemptyAvatarPaint(
-      exactEmpty: exactEmpty,
-      readablePhaseARowsPainted: phaseARows,
-      richPhaseBRowsPainted: richRows,
-    )) {
+    final exactVisiblePaint = source == 'selectedAvatarProgress'
+        ? !exactEmpty
+        : hasExactNonemptyAvatarPaint(
+            exactEmpty: exactEmpty,
+            readablePhaseARowsPainted: phaseARows,
+            richPhaseBRowsPainted: richRows,
+          );
+    if (!exactVisiblePaint) {
       reject('final_target_exact_painted');
     }
     final visibleRevision = evidence['visible_core_revision'];

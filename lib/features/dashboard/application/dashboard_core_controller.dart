@@ -1117,7 +1117,7 @@ final class DashboardCoreController {
   );
 
   /// The Budget rail observes this bounded post-paint acknowledgement only to
-  /// reconcile its flight diagnostics with the exact LogBox paint domain.
+  /// reconcile its flight diagnostics with the exact visible paint domain.
   /// It is metadata, never an Avatar selection or visible-frame authority.
   final ValueNotifier<DashboardAvatarTargetPainted?> budgetAvatarTargetPainted =
       ValueNotifier<DashboardAvatarTargetPainted?>(null);
@@ -9450,8 +9450,8 @@ final class DashboardCoreController {
     _primeRequestedBudgetAvatarFocusHotset();
   }
 
-  /// Completes only after the exact Avatar target has passed the production
-  /// LogBox layout-and-paint acknowledgement. The rail may keep moving while
+  /// Completes only after the exact Avatar target has passed a production
+  /// visible-surface paint acknowledgement. The rail may keep moving while
   /// this is pending; a newer target or foreground interruption resolves the
   /// older waiter false instead of allowing it to settle stale ownership.
   Future<bool> awaitBudgetAvatarTargetPaint({required int targetHandle}) {
@@ -9470,7 +9470,7 @@ final class DashboardCoreController {
       );
       return Future<bool>.value(false);
     }
-    if (target.logBoxPainted) {
+    if (target.targetVisualPainted) {
       final accepted = _isCurrentExactAvatarTargetPainted(target);
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -9563,7 +9563,7 @@ final class DashboardCoreController {
       // order for the exact aggregate frame that is already on screen. This
       // records an existing matching visual rather than fabricating a future
       // paint acknowledgement from a callback that will never fire.
-      target.logBoxPainted = true;
+      target.targetVisualPainted = true;
       target.completePaint(true);
       budgetAvatarTargetPainted.value = DashboardAvatarTargetPainted(
         targetHandle: target.targetHandle,
@@ -9595,7 +9595,7 @@ final class DashboardCoreController {
     // asynchronous semantic-publication continuation arms its target. Reuse
     // only a recorded *actual* canvas paint with the same immutable identity;
     // never infer paint from the current visible frame or a layout callback.
-    if (!target.logBoxPainted) {
+    if (!target.targetVisualPainted) {
       final lastPaint = _lastLogBoxPaintedSnapshot;
       final lastPresentation = lastPaint?.presentation;
       if (lastPresentation != null &&
@@ -9683,7 +9683,7 @@ final class DashboardCoreController {
     final payload = visibleFrames.logBoxLane.value;
     final presentation = visibleFrames.logBoxPresentationLane.value;
     if (target == null ||
-        target.logBoxPainted ||
+        target.targetVisualPainted ||
         target.focusGeneration != focusGeneration ||
         target.targetHandle != targetHandle ||
         payload == null ||
@@ -9717,7 +9717,7 @@ final class DashboardCoreController {
   bool _isCurrentExactAvatarTargetPainted(_AvatarLiveRenderTarget target) {
     final presentation = visibleFrames.logBoxPresentationLane.value;
     final payload = visibleFrames.logBoxLane.value;
-    return target.logBoxPainted &&
+    return target.targetVisualPainted &&
         presentation != null &&
         payload != null &&
         presentation.queryKey.value == target.queryKey &&
@@ -14671,6 +14671,74 @@ final class DashboardCoreController {
     );
   }
 
+  /// Accepts the actual canvas acknowledgement from Budget's selected Avatar
+  /// chrome.  Budget may intentionally keep the LogBox outside its visible
+  /// composition, so waiting for a LogBox paint here would deadlock an
+  /// otherwise complete, user-visible target.  The immutable presentation
+  /// identity makes this a strict renderer acknowledgement, not a semantic
+  /// inference.
+  void recordBudgetAvatarSelectedVisualPaint(
+    DashboardAvatarSelectedVisualPainted painted,
+  ) {
+    final target = _avatarLiveRenderTarget;
+    if (target == null || target.targetVisualPainted) return;
+    final matches =
+        target.targetHandle == painted.targetHandle &&
+        target.coreRevision == painted.coreRevision &&
+        target.presentationEpoch == painted.presentationEpoch &&
+        target.frameGeneration == painted.frameGeneration;
+    if (!matches) {
+      if (target.paintIdentityRejectionReported) return;
+      target.paintIdentityRejectionReported = true;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|VISIBLE_TARGET_PAINT_IDENTITY_REJECTED',
+          queryKey: target.queryKey,
+          coreRevision: target.coreRevision,
+          scope:
+              'source=selectedAvatarProgress '
+              'expectedTargetHandle=${target.targetHandle} '
+              'expectedRevision=${target.coreRevision} '
+              'expectedEpoch=${target.presentationEpoch} '
+              'expectedFrameGeneration=${target.frameGeneration} '
+              'actualTargetHandle=${painted.targetHandle} '
+              'actualRevision=${painted.coreRevision} '
+              'actualEpoch=${painted.presentationEpoch} '
+              'actualFrameGeneration=${painted.frameGeneration}',
+        ),
+      );
+      return;
+    }
+    target.targetVisualPainted = true;
+    target.completePaint(true);
+    budgetAvatarTargetPainted.value = DashboardAvatarTargetPainted(
+      targetHandle: target.targetHandle,
+      focusGeneration: target.focusGeneration,
+      queryKey: target.queryKey,
+      coreRevision: target.coreRevision,
+      presentationEpoch: target.presentationEpoch,
+      frameGeneration: target.frameGeneration,
+      exactEmpty: target.exactEmpty,
+      readablePhaseARowsPainted: 0,
+      richPhaseBRowsPainted: 0,
+      source: DashboardAvatarTargetPaintSource.selectedAvatarProgress,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|VISIBLE_TARGET_PAINTED',
+        queryKey: target.queryKey,
+        coreRevision: target.coreRevision,
+        scope:
+            'source=selectedAvatarProgress '
+            'focusGeneration=${target.focusGeneration} '
+            'targetHandle=${target.targetHandle} '
+            'presentationEpoch=${target.presentationEpoch} '
+            'frameGeneration=${target.frameGeneration} '
+            'exactEmpty=${target.exactEmpty}',
+      ),
+    );
+  }
+
   /// The final Mind range value may be flushed from `onChangeEnd` in the same
   /// engine turn as pointer-up. Its in-memory publication is pre-frame, but
   /// canonical persistence still waits for this matching LogBox report so a
@@ -14949,7 +15017,7 @@ final class DashboardCoreController {
     required int richPhaseBRowsPainted,
   }) {
     final target = _avatarLiveRenderTarget;
-    if (target == null || presentation == null || target.logBoxPainted) {
+    if (target == null || presentation == null || target.targetVisualPainted) {
       return;
     }
     final exactPresentationIdentity =
@@ -15018,7 +15086,7 @@ final class DashboardCoreController {
       );
       return;
     }
-    target.logBoxPainted = true;
+    target.targetVisualPainted = true;
     target.completePaint(true);
     budgetAvatarTargetPainted.value = DashboardAvatarTargetPainted(
       targetHandle: target.targetHandle,
@@ -17659,7 +17727,7 @@ final class _AvatarLiveRenderTarget {
   final Completer<bool> paintCompletion = Completer<bool>();
   bool paintRejectionReported = false;
   bool paintIdentityRejectionReported = false;
-  bool logBoxPainted = false;
+  bool targetVisualPainted = false;
 
   void retarget({
     required String queryKey,

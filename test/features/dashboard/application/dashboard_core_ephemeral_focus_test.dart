@@ -6,6 +6,7 @@ import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_event.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_logbox_drilldown_coordinator.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_avatar_target_painted.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
@@ -9262,6 +9263,54 @@ void main() {
       core.recordLogBoxRenderExtent(_exactPaintSnapshot(reenteredFrame));
 
       expect(core.budgetAvatarTargetPainted.value?.targetHandle, 1);
+      expect(await core.awaitBudgetAvatarTargetPaint(targetHandle: 1), isTrue);
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  test(
+    'selected Avatar canvas paint completes the exact target when Budget keeps LogBox offscreen',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+      );
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+      final state = _budgetAvatarPreviewState(
+        categoryId: 'utilities',
+        displayName: 'Utilities',
+      );
+
+      core.beginBudgetAvatarMotion();
+      expect(await drilldown.previewBudgetTarget(state: state), isTrue);
+      final presentation = core.visibleFrames.logBoxPresentationLane.value!;
+      expect(core.budgetAvatarTargetPainted.value, isNull);
+
+      core.recordBudgetAvatarSelectedVisualPaint(
+        DashboardAvatarSelectedVisualPainted(
+          targetHandle: 1,
+          coreRevision: presentation.coreRevision,
+          presentationEpoch: presentation.presentationEpoch,
+          frameGeneration: presentation.frameGeneration,
+        ),
+      );
+
+      final painted = core.budgetAvatarTargetPainted.value;
+      expect(painted?.targetHandle, 1);
+      expect(
+        painted?.source,
+        DashboardAvatarTargetPaintSource.selectedAvatarProgress,
+      );
+      expect(painted?.readablePhaseARowsPainted, 0);
       expect(await core.awaitBudgetAvatarTargetPaint(targetHandle: 1), isTrue);
       core.endBudgetAvatarMotion();
     },

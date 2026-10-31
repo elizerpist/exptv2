@@ -54,6 +54,7 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     this.onPreparedTargetHotsetRequested,
     this.liveTargetReadiness,
     this.liveTargetPainted,
+    this.onSelectedAvatarVisualPainted,
     this.onDirectInputStarted,
     this.onMotionActiveChanged,
     this.onSelectedBudgetTargetManagerRequested,
@@ -96,6 +97,12 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// this only to account for actual Phase-A/Phase-B paint in a flight report;
   /// it never uses it to choose, settle, or replace a target.
   final ValueListenable<DashboardAvatarTargetPainted?>? liveTargetPainted;
+
+  /// One post-frame acknowledgement from the canvas painter of the selected
+  /// Avatar's visible progress chrome.  The owner validates its immutable
+  /// presentation identity before it can complete a target waiter.
+  final ValueChanged<DashboardAvatarSelectedVisualPainted>?
+  onSelectedAvatarVisualPainted;
 
   /// Raw Avatar contact gets the same input-priority boundary as the visual
   /// rail, but does not itself claim a motion lane. A tap/cancel must not
@@ -688,9 +695,14 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     }
     final paintSource = retainedAtExpectation
         ? 'retainedExactPaint'
-        : painted.hasRichPhaseBPaint
-        ? 'richPhaseB'
-        : 'preparedReadablePhaseA';
+        : switch (painted.source) {
+            DashboardAvatarTargetPaintSource.selectedAvatarProgress =>
+              'selectedAvatarProgress',
+            DashboardAvatarTargetPaintSource.logBox =>
+              painted.hasRichPhaseBPaint
+                  ? 'richPhaseB'
+                  : 'preparedReadablePhaseA',
+          };
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|LOGBOX_TARGET_PAINT_ACCOUNTED',
@@ -721,6 +733,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         firstTargetPipeline,
         terminalOutcome: painted.exactEmpty
             ? 'exactEmpty'
+            : painted.source ==
+                  DashboardAvatarTargetPaintSource.selectedAvatarProgress
+            ? 'selectedAvatarProgressPainted'
             : 'exactPhaseAPainted',
       );
     }
@@ -1314,7 +1329,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                         ? _recordBudgetProgressWidgetBuilt
                         : null,
                     onSelectionProgressPainted:
-                        _collectFrameTimingDiagnostics && metrics.isSelected
+                        metrics.isSelected &&
+                            (_collectFrameTimingDiagnostics ||
+                                widget.onSelectedAvatarVisualPainted != null)
                         ? _recordBudgetProgressPainted
                         : null,
                   ),
@@ -1538,9 +1555,11 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     BudgetCategoryAvatarSelectedLimitVisualState visual,
     int progressChromePaintMicros,
   ) {
-    if (!_collectFrameTimingDiagnostics || !mounted) return;
+    if (!mounted) return;
     final expectation = _currentBudgetProgressPaintExpectation(visual);
     if (expectation == null) return;
+    _publishSelectedAvatarVisualPaint(expectation);
+    if (!_collectFrameTimingDiagnostics) return;
     final signature = expectation.signature;
     if (_lastBudgetProgressPaintSignature == signature) return;
     _lastBudgetProgressPaintSignature = signature;
@@ -1569,6 +1588,45 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'progressChromePaintMicros=$progressChromePaintMicros',
       ),
     );
+  }
+
+  void _publishSelectedAvatarVisualPaint(
+    _BudgetProgressPaintExpectation expectation,
+  ) {
+    final callback = widget.onSelectedAvatarVisualPainted;
+    final coreRevision = expectation.coreRevision;
+    final presentationEpoch = expectation.visiblePresentationEpoch;
+    final frameGeneration = expectation.visibleFrameGeneration;
+    if (callback == null ||
+        coreRevision == null ||
+        presentationEpoch == null ||
+        frameGeneration == null) {
+      return;
+    }
+    // This callback originates in CustomPainter.paint.  Publishing a
+    // ValueNotifier synchronously there can dirty the owner while Flutter is
+    // painting, so carry only the immutable canvas identity to the frame
+    // boundary.  The callback still proves this selected chrome painted.
+    final painted = DashboardAvatarSelectedVisualPainted(
+      targetHandle: expectation.targetHandle,
+      coreRevision: coreRevision,
+      presentationEpoch: presentationEpoch,
+      frameGeneration: frameGeneration,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final current = _currentBudgetProgressPaintExpectation(
+        expectation.visual,
+      );
+      if (current == null ||
+          current.targetHandle != painted.targetHandle ||
+          current.coreRevision != painted.coreRevision ||
+          current.visiblePresentationEpoch != painted.presentationEpoch ||
+          current.visibleFrameGeneration != painted.frameGeneration) {
+        return;
+      }
+      callback(painted);
+    });
   }
 
   /// Resolves the editable context only when all of the existing visual and
