@@ -23,6 +23,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_performance_count
 import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recorder.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
@@ -152,6 +153,11 @@ void main() {
         reports[_ProfileScenario.tenthFling.reportKey]!,
         label: 'first/tenth fling',
         requireNoSlowdown: true,
+        // The warm path deliberately performs nine preceding real component
+        // flings. It therefore measures the same physical selector at a
+        // later date, rather than resetting production state through the
+        // removed Classic rail controller.
+        requireEquivalentSemanticTarget: false,
       );
       _expectEquivalentRailFlight(
         reports[_ProfileScenario.firstFling.reportKey]!,
@@ -305,7 +311,11 @@ Future<Map<String, dynamic>> _runScenario(
   }
   debugPrint('[PROFILE][SCENARIO_STABLE] ${scenario.reportKey}');
 
-  final carousel = controller.motion.carouselController;
+  // The production Summary is segmented-only.  Its currently visible
+  // carousel, rather than the retired Classic controller retained only for
+  // compatibility fixtures, owns the mounted ScrollPosition and receives the
+  // profile's physical flings.
+  final carousel = _visibleSegmentedSummaryCarousel(tester, controller);
   final scrollController = carousel.scrollController;
   final position = scrollController.position;
   final physics = controller.motion.dashboardPhysics;
@@ -318,23 +328,15 @@ Future<Map<String, dynamic>> _runScenario(
   };
   final semanticSequence = <int>[];
   final visibleSemanticSequence = <int>[];
-  var traversalCatalog = controller.motion.catalog;
   final rawStartIndex = carousel.selectedLogicalIndex;
   var previousRawIndex = rawStartIndex;
   void collectMotionTraversal() {
-    final currentCatalog = controller.motion.catalog;
     final currentRawIndex = carousel.selectedLogicalIndex;
-    if (!identical(currentCatalog, traversalCatalog)) {
-      traversalCatalog = currentCatalog;
-      previousRawIndex = currentRawIndex;
-      return;
-    }
     DashboardProfileReport.appendSemanticTraversal(
       semanticSequence,
       previousRawIndex: previousRawIndex,
       currentRawIndex: currentRawIndex,
-      normalize: (rawIndex) =>
-          currentCatalog.entryAtLogicalIndex(rawIndex).logicalIndex,
+      normalize: (rawIndex) => rawIndex,
     );
     previousRawIndex = currentRawIndex;
   }
@@ -408,9 +410,7 @@ Future<Map<String, dynamic>> _runScenario(
       controller.paging.stalePageRejectCount;
   final rssBefore = ProcessInfo.currentRss;
   final maxRssBefore = ProcessInfo.maxRss;
-  final startIndex = traversalCatalog
-      .entryAtLogicalIndex(rawStartIndex)
-      .logicalIndex;
+  final startIndex = rawStartIndex;
   // `_captureProfilePerformance` deliberately lets the dashboard settle
   // before it starts its trace.  Capture this boundary inside the traced
   // action, immediately before the measured gesture, so a completed
@@ -519,15 +519,9 @@ Future<Map<String, dynamic>> _runScenario(
       : null;
   final identitiesAfter = <String, int>{
     'motion_kernel': identityHashCode(controller.motion),
-    'carousel_controller': identityHashCode(
-      controller.motion.carouselController,
-    ),
-    'scroll_controller': identityHashCode(
-      controller.motion.carouselController.scrollController,
-    ),
-    'scroll_position': identityHashCode(
-      controller.motion.carouselController.scrollController.position,
-    ),
+    'carousel_controller': identityHashCode(carousel),
+    'scroll_controller': identityHashCode(scrollController),
+    'scroll_position': identityHashCode(position),
     'physics': identityHashCode(controller.motion.dashboardPhysics),
   };
   final repositoryAfter = repository.performanceReport();
@@ -657,8 +651,8 @@ Future<Map<String, dynamic>> _runScenario(
     'semantic_sequence': semanticSequence,
     'visible_semantic_sequence': visibleSemanticSequence,
     'rail_start_index': startIndex,
-    'rail_target_index': controller.motion.state.semanticIndex,
-    'rail_settle_index': controller.motion.state.semanticIndex,
+    'rail_target_index': carousel.selectedLogicalIndex,
+    'rail_settle_index': carousel.selectedLogicalIndex,
     'visible_publish_count':
         controller.visibleFrames.visiblePublishCount - visiblePublishesBefore,
     'coalesced_publish_count':
@@ -1147,22 +1141,25 @@ void _expectEquivalentMotion(
   Map<String, dynamic> second, {
   required String label,
   bool requireNoSlowdown = false,
+  bool requireEquivalentSemanticTarget = true,
 }) {
-  expect(
-    second['rail_target_index'],
-    first['rail_target_index'],
-    reason: '$label target drifted',
-  );
-  expect(
-    second['rail_settle_index'],
-    first['rail_settle_index'],
-    reason: '$label settle drifted',
-  );
-  expect(
-    second['semantic_sequence'],
-    first['semantic_sequence'],
-    reason: '$label semantic sequence drifted',
-  );
+  if (requireEquivalentSemanticTarget) {
+    expect(
+      second['rail_target_index'],
+      first['rail_target_index'],
+      reason: '$label target drifted',
+    );
+    expect(
+      second['rail_settle_index'],
+      first['rail_settle_index'],
+      reason: '$label settle drifted',
+    );
+    expect(
+      second['semantic_sequence'],
+      first['semantic_sequence'],
+      reason: '$label semantic sequence drifted',
+    );
+  }
   final firstDuration = (first['motion_duration_micros'] as num).toInt();
   final secondDuration = (second['motion_duration_micros'] as num).toInt();
   final tolerance = math.max(32_000, (firstDuration * .15).round());
@@ -2553,8 +2550,20 @@ Future<void> _flingSegmentedTemporalComponent(
   WidgetTester tester,
   DashboardCoreController controller,
 ) async {
+  final selectorKey = _segmentedTemporalComponentSelectorKey(controller);
+  await tester.fling(
+    find.byKey(ValueKey<String>(selectorKey)),
+    const Offset(0, -96),
+    1200,
+  );
+  await _settle(tester);
+}
+
+String _segmentedTemporalComponentSelectorKey(
+  DashboardCoreController controller,
+) {
   final state = controller.navigation.state;
-  final selectorKey = switch ((state.plane, state.isRailOpen)) {
+  return switch ((state.plane, state.isRailOpen)) {
     (TimePlane.year, _) => 'summary-pill-segmented-year-selector',
     (TimePlane.month, true) => 'summary-pill-segmented-day-selector',
     (TimePlane.month, false) => 'summary-pill-segmented-month-selector',
@@ -2562,12 +2571,40 @@ Future<void> _flingSegmentedTemporalComponent(
       'A Sum summary has no temporal component; change its level first.',
     ),
   };
-  await tester.fling(
-    find.byKey(ValueKey<String>(selectorKey)),
-    const Offset(0, -96),
-    1200,
+}
+
+/// Returns the mounted carousel that owns the real Summary input for this
+/// scenario.  The profile never reads the compatibility-only Classic
+/// controller: it must observe the exact ScrollPosition that receives the
+/// pointer in production.
+CenteredCarouselController _visibleSegmentedSummaryCarousel(
+  WidgetTester tester,
+  DashboardCoreController controller,
+) {
+  final state = controller.navigation.state;
+  if (state.plane == TimePlane.sum) {
+    final mode = find.byKey(
+      const ValueKey<String>('summary-pill-segmented-mode-selector'),
+    );
+    final carousel = find.descendant(
+      of: mode,
+      matching: find.byType(CenteredCarousel<SummaryPillExperimentLevel>),
+    );
+    expect(carousel, findsOneWidget);
+    return tester
+        .widget<CenteredCarousel<SummaryPillExperimentLevel>>(carousel)
+        .controller;
+  }
+
+  final component = find.byKey(
+    ValueKey<String>(_segmentedTemporalComponentSelectorKey(controller)),
   );
-  await _settle(tester);
+  final carousel = find.descendant(
+    of: component,
+    matching: find.byType(CenteredCarousel<int>),
+  );
+  expect(carousel, findsOneWidget);
+  return tester.widget<CenteredCarousel<int>>(carousel).controller;
 }
 
 /// Changes the Summary hierarchy itself.  Upwards moves towards finer time
