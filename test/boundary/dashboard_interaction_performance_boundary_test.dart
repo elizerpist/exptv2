@@ -224,43 +224,45 @@ void main() {
     );
     expect(
       profileHarness,
-      contains('await _resetRailToIndex(tester, controller, 13);'),
+      contains('await _flingSegmentedTemporalComponent(tester, controller);'),
       reason:
-          'First and tenth flings must start from one coherent physical and '
-          'visible child frame.',
+          'First and tenth flings must exercise the current segmented '
+          'temporal control instead of restoring a retired Classic rail.',
     );
     expect(
       profileHarness,
-      contains('await _waitForMotionIdle(controller);'),
+      contains('summary-pill-segmented-mode-selector'),
       reason:
-          'Repeated profile flings must wait for the motion owner, not a '
-          'renderer-dependent fixed delay.',
+          'Hierarchy navigation must be driven through the visible segmented '
+          'Summary control.',
     );
     expect(
       profileHarness,
-      contains('DashboardMotionActivity.idle'),
+      contains('summary-pill-segmented-day-selector'),
       reason:
-          'The profile harness must observe the canonical motion lifecycle.',
+          'The profile must include the Day component that replaces the '
+          'Classic rail while Month is expanded.',
     );
     expect(
       profileHarness,
-      contains('carousel.hasActiveScrollActivity'),
+      contains('await _settle(tester);'),
       reason:
-          'The profile reset must also reject a still-active Flutter '
-          'ScrollActivity before retargeting the rail.',
+          'Each segmented selector fling must reach a bounded stable frame '
+          'before the following measured interaction.',
     );
     expect(
       profileHarness,
-      contains('await _waitForVisibleReset(tester, controller, entry);'),
+      isNot(contains('dashboard-time-rail')),
       reason:
-          'A repeated-fling reset must await the frame-coalesced preview '
-          'before settle can be asserted as a visual no-op.',
+          'The production profile cannot accidentally revive the removed '
+          'Classic time rail.',
     );
     expect(
       profileHarness,
-      contains('!controller.frameCoalescer.hasPendingTarget'),
+      isNot(contains('dashboard-summary-shell-transform')),
       reason:
-          'The reset barrier must reject a still-pending display-frame target.',
+          'The production profile cannot take input through the removed '
+          'Classic Summary shell.',
     );
     expect(
       profileHarness,
