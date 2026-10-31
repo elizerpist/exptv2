@@ -154,7 +154,13 @@ final class DashboardHeaderTapWaveVisualUniformBank {
     required Duration elapsed,
   }) {
     state.writeOverlayFrame(timestamp: elapsed, into: overlay);
-    interactionOpacity = state.tuning.valueFor('interactionOpacity') / 100;
+    interactionOpacity =
+        (state.tuning.valueFor(
+                  DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId,
+                ) /
+                100)
+            .clamp(0.0, 3.0)
+            .toDouble();
     trailSize = state.tuning.valueFor('trailSize');
     var index = 0;
     for (final trail in state.trails) {

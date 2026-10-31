@@ -125,6 +125,7 @@ void main() {
         _sourcesExcept(root, 'lib/features/dashboard', const <String>[
           'lib/features/dashboard/presentation/core_modes/'
               'budget_limit_quick_edit_gesture.dart',
+          'lib/features/dashboard/presentation/core_dashboard.dart',
           'lib/features/dashboard/presentation/widgets/'
               'summary_pill_experiments.dart',
         ]);

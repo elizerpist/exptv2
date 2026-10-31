@@ -110,14 +110,32 @@ void main() {
         await tester.pump();
         await gesture.moveBy(const Offset(0, -36));
         await tester.pump();
+        expect(
+          core.expansion.progress,
+          0,
+          reason:
+              'A header is the touch-wave surface. Only the dedicated '
+              'collapse handle may own vertical expansion.',
+        );
+        stable();
+        await gesture.up();
+
+        final handle = find.byKey(const ValueKey('dashboard-collapse-handle'));
+        final handleGesture = await tester.startGesture(
+          tester.getCenter(handle),
+        );
+        await handleGesture.moveBy(const Offset(0, -25));
+        await tester.pump();
+        await handleGesture.moveBy(const Offset(0, -36));
+        await tester.pump();
         final partial = core.expansion.progress;
         expect(partial, greaterThan(0));
         stable();
-        await gesture.moveBy(const Offset(0, 18));
+        await handleGesture.moveBy(const Offset(0, 18));
         await tester.pump();
         expect(core.expansion.progress, lessThan(partial));
         stable();
-        await gesture.up();
+        await handleGesture.up();
         await tester.pump();
         core.expansion.setProgress(0);
         await tester.pump();

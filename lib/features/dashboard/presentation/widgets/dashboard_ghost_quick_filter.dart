@@ -49,7 +49,11 @@ final class DashboardGhostQuickFilter extends StatelessWidget {
         onModeSelected: onModeSelected ?? (_) async => false,
       );
     }
-    if (presentation == DashboardGhostQuickFilterPresentation.searchPillFling) {
+    if (presentation == DashboardGhostQuickFilterPresentation.searchPillFling ||
+        presentation ==
+            DashboardGhostQuickFilterPresentation.summaryPillLeadingFling ||
+        presentation ==
+            DashboardGhostQuickFilterPresentation.summaryPillTrailingFling) {
       // This presentation is installed by DashboardLogBoxHeader as a trailing
       // SearchPill control, never in the resolved quick-filter lane.
       return const SizedBox.shrink();
@@ -114,7 +118,7 @@ final class DashboardGhostQuickFilter extends StatelessWidget {
 /// It owns only the physical belt and the last user intent. [mode] remains
 /// Core-owned, so failed or superseded requests can never leave a local ghost
 /// filter state different from the prepared dashboard projection.
-final class DashboardGhostSearchPillFling extends StatefulWidget {
+final class DashboardGhostSearchPillFling extends StatelessWidget {
   const DashboardGhostSearchPillFling({
     super.key,
     required this.mode,
@@ -125,12 +129,45 @@ final class DashboardGhostSearchPillFling extends StatefulWidget {
   final Future<bool> Function(GhostFilterMode mode) onModeSelected;
 
   @override
-  State<DashboardGhostSearchPillFling> createState() =>
-      _DashboardGhostSearchPillFlingState();
+  Widget build(BuildContext context) => DashboardGhostFlingSelector(
+    mode: mode,
+    onModeSelected: onModeSelected,
+    semanticsKey: const ValueKey<String>(
+      'dashboard-ghost-searchpill-fling-semantics',
+    ),
+    viewportKey: const ValueKey<String>(
+      'dashboard-ghost-searchpill-fling-viewport',
+    ),
+    iconKeyPrefix: 'dashboard-ghost-searchpill-fling-icon',
+  );
 }
 
-final class _DashboardGhostSearchPillFlingState
-    extends State<DashboardGhostSearchPillFling> {
+/// Location-independent physical belt for the three ghost filter modes.
+/// SearchPill and Summary cells are deliberately thin adapters around this
+/// one ownership/rollback implementation.
+final class DashboardGhostFlingSelector extends StatefulWidget {
+  const DashboardGhostFlingSelector({
+    super.key,
+    required this.mode,
+    required this.onModeSelected,
+    required this.semanticsKey,
+    required this.viewportKey,
+    required this.iconKeyPrefix,
+  });
+
+  final GhostFilterMode mode;
+  final Future<bool> Function(GhostFilterMode mode) onModeSelected;
+  final Key semanticsKey;
+  final Key viewportKey;
+  final String iconKeyPrefix;
+
+  @override
+  State<DashboardGhostFlingSelector> createState() =>
+      _DashboardGhostFlingSelectorState();
+}
+
+final class _DashboardGhostFlingSelectorState
+    extends State<DashboardGhostFlingSelector> {
   static const _modes = <GhostFilterMode>[
     GhostFilterMode.both,
     GhostFilterMode.nonGhost,
@@ -148,7 +185,7 @@ final class _DashboardGhostSearchPillFlingState
       !_motionActive && _lastRequestedTarget == null;
 
   @override
-  void didUpdateWidget(covariant DashboardGhostSearchPillFling oldWidget) {
+  void didUpdateWidget(covariant DashboardGhostFlingSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.mode == widget.mode) return;
 
@@ -163,7 +200,7 @@ final class _DashboardGhostSearchPillFlingState
 
   @override
   Widget build(BuildContext context) => Semantics(
-    key: const ValueKey<String>('dashboard-ghost-searchpill-fling-semantics'),
+    key: widget.semanticsKey,
     label: 'Ghost gyorsszűrő: ${widget.mode.semanticLabel}',
     hint: 'Függőlegesen húzva válthat.',
     onIncrease: () => _moveBy(1),
@@ -205,9 +242,7 @@ final class _DashboardGhostSearchPillFlingState
                       clipBehavior: Clip.hardEdge,
                     ),
                     height: itemExtent,
-                    viewportKey: const ValueKey<String>(
-                      'dashboard-ghost-searchpill-fling-viewport',
-                    ),
+                    viewportKey: widget.viewportKey,
                     onSelectedChanged: _onSelectedChanged,
                     onMotionStarted: (_) => _setMotionActive(true),
                     onMotionIdle: (_) {
@@ -217,7 +252,7 @@ final class _DashboardGhostSearchPillFlingState
                     itemBuilder: (context, candidate, metrics) => Center(
                       key: !_showsCanonicalRestingIcon && metrics.isSelected
                           ? ValueKey<String>(
-                              'dashboard-ghost-searchpill-fling-icon-${candidate.name}',
+                              '${widget.iconKeyPrefix}-${candidate.name}',
                             )
                           : null,
                       child: DashboardGhostFilterReferenceIcon(
@@ -232,7 +267,7 @@ final class _DashboardGhostSearchPillFlingState
                   IgnorePointer(
                     child: Center(
                       key: ValueKey<String>(
-                        'dashboard-ghost-searchpill-fling-icon-${widget.mode.name}',
+                        '${widget.iconKeyPrefix}-${widget.mode.name}',
                       ),
                       child: DashboardGhostFilterReferenceIcon(
                         mode: widget.mode,

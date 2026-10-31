@@ -228,13 +228,6 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     widget.onVerticalExpansionDragBy(delta);
   }
 
-  void _onHeaderVerticalStart(DragStartDetails _) => _beginVerticalSequence();
-
-  void _onHeaderVerticalUpdate(DragUpdateDetails details) =>
-      _applyVerticalDelta(details.delta.dy);
-
-  void _onHeaderVerticalEnd(DragEndDetails _) => _finishPointerSequence();
-
   /// Content cards are an extension of Header vertical expansion, never a
   /// mode-switch surface. Keeping this separate from the Header's pan path
   /// keeps horizontal card motion outside both navigation and expansion.
@@ -300,6 +293,9 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
             children: <Widget>[
               DashboardHeaderTapWaveGestureLayer(
                 controller: widget.headerVisualController,
+                gestureKey: const ValueKey<String>(
+                  'dashboard-core-mode-header-gesture-region',
+                ),
                 onPointerDown: switch (mode.mode) {
                   DashboardMode.mind =>
                     _mindHeaderScoreChartPointers.observePointerDown,
@@ -328,17 +324,11 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
                     _balanceHeaderHistoryChartPointers.observePointerCancel,
                   DashboardMode.budget => null,
                 },
-                child: GestureDetector(
-                  key: const ValueKey(
-                    'dashboard-core-mode-header-gesture-region',
-                  ),
-                  behavior: HitTestBehavior.translucent,
-                  dragStartBehavior: DragStartBehavior.down,
-                  onVerticalDragStart: _onHeaderVerticalStart,
-                  onVerticalDragUpdate: _onHeaderVerticalUpdate,
-                  onVerticalDragEnd: _onHeaderVerticalEnd,
-                  onVerticalDragCancel: _finishPointerSequence,
-                ),
+                // Header drags belong exclusively to the water-wave surface.
+                // Collapsing remains available from the explicit handle and
+                // content region; it must never start behind this opaque hit
+                // target, even when a pointer later crosses the card edge.
+                child: const SizedBox.expand(),
               ),
               if (widget.pulseDeliveryCoordinator case final coordinator?)
                 PulseHeaderPresentationLayer(

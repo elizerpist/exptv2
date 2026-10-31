@@ -1560,8 +1560,7 @@ vec3 touchOverlay(vec2 uv, out float alpha) {
       .25 + max(aa, blur) - aa,
       .25 + max(aa, blur) + aa,
       t);
-  alpha = max(color.a, halo) * outerEdge * uTouchOverlayOpacity *
-      uTouchInteractionOpacity;
+  alpha = max(color.a, halo) * outerEdge * uTouchOverlayOpacity;
   return saturateColor(color.rgb, 1.85);
 }
 
@@ -1590,6 +1589,7 @@ vec2 displaceWaterTrail(vec2 uv, out float highlight, out float shadow) {
   vec2 point = vec2(uv.x * aspect, uv.y);
   vec2 offset = vec2(0.0);
   float accumulatedWeight = 0.0;
+  float trailStrength = clamp(uTouchInteractionOpacity, 0.0, 3.0);
   // `waterGaussian` is a standard-deviation-like falloff. Quartering the
   // persisted full width keeps the visible centre at the requested 12–18 px,
   // rather than turning its soft tail into a broad luminous tube.
@@ -1640,14 +1640,14 @@ vec2 displaceWaterTrail(vec2 uv, out float highlight, out float shadow) {
         brightEdge * (.72 + velocity * .28) -
         darkEdge * .24;
     vec2 candidateOffset = normal * crossSection *
-        mix(1.35, 2.45, velocity) / height * lifetime;
+        mix(1.35, 2.45, velocity) / height * lifetime * trailStrength;
     float localWeight = lifetime * max(center, max(brightEdge, darkEdge));
     float blend = localWeight / max(.0001, accumulatedWeight + localWeight);
     offset = mix(offset, candidateOffset, blend);
     accumulatedWeight = min(1.0, accumulatedWeight + localWeight);
-    highlight = max(highlight, brightEdge * lifetime * (.045 + velocity * .035));
+    highlight = max(highlight, brightEdge * lifetime * (.045 + velocity * .035) * trailStrength);
     shadow = max(shadow, (darkEdge * .90 + center * .22) *
-        lifetime * (.085 + velocity * .045));
+        lifetime * (.085 + velocity * .045) * trailStrength);
   }
 
   vec2 displaced = uv + vec2(offset.x / aspect, offset.y);
@@ -1657,8 +1657,7 @@ vec2 displaceWaterTrail(vec2 uv, out float highlight, out float shadow) {
       smooth01(0.0, .035, uv.y) *
       smooth01(0.0, .035, 1.0 - uv.x) *
       smooth01(0.0, .035, 1.0 - uv.y);
-  return mix(uv, clamp(displaced, vec2(0.0), vec2(1.0)),
-      edgeEnvelope * uTouchInteractionOpacity);
+  return mix(uv, clamp(displaced, vec2(0.0), vec2(1.0)), edgeEnvelope);
 }
 
 void main() {
@@ -1725,11 +1724,11 @@ void main() {
   composed = mix(
       composed,
       screenBlend(composed, vec3(1.0, .79, .98)),
-      saturate(waterHighlight) * uTouchInteractionOpacity);
+      saturate(waterHighlight));
   composed = mix(
       composed,
       composed * vec3(.84, .87, .96),
-      saturate(waterShadow) * uTouchInteractionOpacity);
+      saturate(waterShadow));
   float overlayAlpha;
   vec3 overlay = touchOverlay(uv, overlayAlpha);
   composed = mix(composed, screenBlend(composed, overlay), overlayAlpha);

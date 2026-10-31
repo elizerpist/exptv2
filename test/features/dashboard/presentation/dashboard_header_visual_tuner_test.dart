@@ -1,5 +1,6 @@
 import 'package:fluvi/features/dashboard/application/balance_daily_calculation_mode.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_tap_wave.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_mind_score_color.dart';
@@ -2146,7 +2147,7 @@ void main() {
   });
 
   testWidgets(
-    'tap-wave controls update the shared visual state without closing the tuner',
+    'tap-wave controls update the custom state and Current preview never overwrites it',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester);
       await tester.pumpWidget(
@@ -2163,7 +2164,7 @@ void main() {
       ]);
       final control = find.byKey(
         const ValueKey<String>(
-          'dashboard-header-tap-wave-control-interactionOpacity',
+          'dashboard-header-tap-wave-control-dynamicTrailStrengthPercent',
         ),
       );
       await tester.ensureVisible(control);
@@ -2171,9 +2172,57 @@ void main() {
       final slider = tester.widget<Slider>(
         find.descendant(of: control, matching: find.byType(Slider)),
       );
-      slider.onChanged!(64);
+      slider.onChanged!(300);
       await tester.pump();
-      expect(controller.tapWaveTuning.value.valueFor('interactionOpacity'), 64);
+      expect(
+        controller.tapWaveTuning.value.valueFor(
+          DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId,
+        ),
+        300,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dashboard-header-tap-wave-current')),
+      );
+      await tester.pump();
+      expect(controller.tapWaveReferencePreview.value, isTrue);
+      expect(
+        controller.effectiveTapWaveTuning.valueFor(
+          DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId,
+        ),
+        100,
+      );
+      final startSizeControl = find.byKey(
+        const ValueKey<String>(
+          'dashboard-header-tap-wave-control-tapStartSizePercent',
+        ),
+      );
+      await tester.ensureVisible(startSizeControl);
+      tester
+          .widget<Slider>(
+            find.descendant(
+              of: startSizeControl,
+              matching: find.byType(Slider),
+            ),
+          )
+          .onChanged!(65);
+      await tester.pump();
+      expect(controller.tapWaveReferencePreview.value, isFalse);
+      expect(
+        controller.tapWaveTuning.value.valueFor(
+          DashboardHeaderTapWaveCatalog.tapStartSizeId,
+        ),
+        65,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dashboard-header-tap-wave-custom')),
+      );
+      await tester.pump();
+      expect(
+        controller.effectiveTapWaveTuning.valueFor(
+          DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId,
+        ),
+        300,
+      );
       expect(
         find.byKey(
           const ValueKey<String>('dashboard-header-visual-tuner-list'),

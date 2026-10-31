@@ -37,6 +37,37 @@ void main() {
     },
   );
 
+  test('Header wave controls survive unrelated presentation writes', () async {
+    final store = InMemoryDashboardPresentationPreferencesStore();
+    final controller = DashboardPresentationPreferencesController(store: store);
+    addTearDown(controller.dispose);
+
+    controller.setPreferences(
+      controller.value.withHeaderTapWaveControls(
+        trailStrengthPercent: 300,
+        tapStartSizePercent: 25,
+        tapStrengthPercent: 0,
+      ),
+    );
+    controller.setPreferences(
+      controller.value.withGhostQuickFilterPresentation(
+        DashboardGhostQuickFilterPresentation.summaryPillTrailingFling,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final restored = DashboardPresentationPreferencesController(store: store);
+    addTearDown(restored.dispose);
+    await restored.restore();
+    expect(restored.value.headerTapWaveTrailStrengthPercent, 300);
+    expect(restored.value.headerTapWaveTapStartSizePercent, 25);
+    expect(restored.value.headerTapWaveTapStrengthPercent, 0);
+    expect(
+      restored.value.ghostQuickFilterPresentation,
+      DashboardGhostQuickFilterPresentation.summaryPillTrailingFling,
+    );
+  });
+
   test(
     'push and recurring UI choices persist independently from each other',
     () async {

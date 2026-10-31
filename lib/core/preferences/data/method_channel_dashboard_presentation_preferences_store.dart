@@ -213,6 +213,24 @@ final class MethodChannelDashboardPresentationPreferencesStore
           'legacy' => AutomationHomeUiDesign.legacy,
           _ => AutomationHomeUiDesign.unified,
         },
+        headerTapWaveTrailStrengthPercent: _steppedPercent(
+          values['headerTapWaveTrailStrengthPercent'],
+          min: 0,
+          max: 300,
+          fallback: 225,
+        ),
+        headerTapWaveTapStartSizePercent: _steppedPercent(
+          values['headerTapWaveTapStartSizePercent'],
+          min: 25,
+          max: 100,
+          fallback: 55,
+        ),
+        headerTapWaveTapStrengthPercent: _steppedPercent(
+          values['headerTapWaveTapStrengthPercent'],
+          min: 0,
+          max: 100,
+          fallback: 75,
+        ),
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -282,7 +300,27 @@ final class MethodChannelDashboardPresentationPreferencesStore
         'recurringUiDesign': preferences.recurringUiDesign.name,
         'pushProfileUiDesign': preferences.pushProfileUiDesign.name,
         'automationHomeUiDesign': preferences.automationHomeUiDesign.name,
+        'headerTapWaveTrailStrengthPercent': preferences
+            .headerTapWaveTrailStrengthPercent
+            .round(),
+        'headerTapWaveTapStartSizePercent': preferences
+            .headerTapWaveTapStartSizePercent
+            .round(),
+        'headerTapWaveTapStrengthPercent': preferences
+            .headerTapWaveTapStrengthPercent
+            .round(),
       });
+}
+
+double _steppedPercent(
+  Object? raw, {
+  required double min,
+  required double max,
+  required double fallback,
+}) {
+  final value = raw is num ? raw.toDouble() : fallback;
+  final snapped = (value / 5).round() * 5.0;
+  return snapped.clamp(min, max).toDouble();
 }
 
 T _enumValue<T extends Enum>(List<T> values, int? index, T fallback) =>

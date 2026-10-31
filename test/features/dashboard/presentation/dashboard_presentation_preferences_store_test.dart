@@ -616,6 +616,9 @@ void main() {
       'recurringUiDesign': 'unified',
       'pushProfileUiDesign': 'unified',
       'automationHomeUiDesign': 'unified',
+      'headerTapWaveTrailStrengthPercent': 225,
+      'headerTapWaveTapStartSizePercent': 55,
+      'headerTapWaveTapStrengthPercent': 75,
     });
   });
 
@@ -794,6 +797,37 @@ void main() {
         (await store.read()).ghostQuickFilterPresentation,
         DashboardGhostQuickFilterPresentation.searchPillFling,
       );
+    },
+  );
+
+  test(
+    'Header wave controls use stepped defaults and persist independently',
+    () async {
+      Map<String, Object?> stored = <String, Object?>{};
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      final defaults = await store.read();
+      expect(defaults.headerTapWaveTrailStrengthPercent, 225);
+      expect(defaults.headerTapWaveTapStartSizePercent, 55);
+      expect(defaults.headerTapWaveTapStrengthPercent, 75);
+
+      await store.write(
+        defaults.withHeaderTapWaveControls(
+          trailStrengthPercent: 300,
+          tapStartSizePercent: 25,
+          tapStrengthPercent: 0,
+        ),
+      );
+      expect(stored['headerTapWaveTrailStrengthPercent'], 300);
+      expect(stored['headerTapWaveTapStartSizePercent'], 25);
+      expect(stored['headerTapWaveTapStrengthPercent'], 0);
+      expect((await store.read()).headerTapWaveTrailStrengthPercent, 300);
     },
   );
 }

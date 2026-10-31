@@ -179,7 +179,13 @@ void main() {
           const Offset(0, -100),
         );
         await tester.pump();
-        expect(expansion.starts, 1);
+        expect(
+          expansion.starts,
+          0,
+          reason:
+              'A Header-originated drag remains the touch-wave gesture; only '
+              'the dedicated handle/content lane may expand the dashboard.',
+        );
         await tester.pumpWidget(const SizedBox.shrink());
       } finally {
         headerVisual.dispose();
@@ -559,8 +565,8 @@ void main() {
       expect(expansion.ends, 0);
 
       await _dragHeader(tester, const Offset(0, -80));
-      expect(expansion.starts, 1);
-      expect(expansion.ends, 1);
+      expect(expansion.starts, 0);
+      expect(expansion.ends, 0);
       expect(controller.committedMode, DashboardModeSpec.balance);
     },
   );
@@ -802,7 +808,7 @@ void main() {
     expect(_mountedModeRootCount(tester), 1);
   });
 
-  testWidgets('vertical header drag uses only expansion callbacks', (
+  testWidgets('vertical header drag stays on the Header wave surface', (
     tester,
   ) async {
     final controller = DashboardCoreModeController(
@@ -816,14 +822,14 @@ void main() {
 
     await _dragHeader(tester, const Offset(0, -180));
 
-    expect(expansion.starts, 1);
-    expect(expansion.ends, 1);
-    expect(expansion.totalDelta, lessThan(0));
+    expect(expansion.starts, 0);
+    expect(expansion.ends, 0);
+    expect(expansion.totalDelta, 0);
     expect(controller.committedMode.mode, DashboardMode.balance);
     expect(_mountedModeRootCount(tester), 1);
   });
 
-  testWidgets('diagonal Header movement only claims vertical expansion', (
+  testWidgets('diagonal Header movement never claims vertical expansion', (
     tester,
   ) async {
     final controller = DashboardCoreModeController(
@@ -838,7 +844,7 @@ void main() {
     final gesture = await _startHeaderGesture(tester);
     await gesture.moveBy(const Offset(-36, -31));
     await tester.pump();
-    expect(expansion.starts, 1);
+    expect(expansion.starts, 0);
     expect(controller.committedMode.mode, DashboardMode.balance);
     expect(_mountedModeRootCount(tester), 1);
 
@@ -846,7 +852,7 @@ void main() {
     await tester.pump();
     await gesture.up();
 
-    expect(expansion.starts, 1);
+    expect(expansion.starts, 0);
     expect(controller.committedMode.mode, DashboardMode.balance);
   });
 

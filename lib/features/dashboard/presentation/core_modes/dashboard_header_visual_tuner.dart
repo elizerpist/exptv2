@@ -4093,39 +4093,76 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 14),
-                        ValueListenableBuilder<DashboardHeaderTapWaveTuning>(
-                          valueListenable: controller.tapWaveTuning,
-                          builder: (context, tapWave, child) => _TunerSection(
-                            title: 'Header tap wave',
-                            children: <Widget>[
-                              Text(
-                                'Color Lab rózsaszín/magenta, több rétegű érintési hullám.',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              const SizedBox(height: 6),
-                              for (final control
-                                  in DashboardHeaderTapWaveCatalog.controls)
-                                _TunerSlider(
-                                  key: ValueKey<String>(
-                                    'dashboard-header-tap-wave-control-${control.id}',
-                                  ),
-                                  label: control.label,
-                                  valueLabel: _formatTapWaveControlValue(
-                                    tapWave.valueFor(control.id),
-                                    control,
-                                  ),
-                                  min: control.min,
-                                  max: control.max,
-                                  divisions:
-                                      ((control.max - control.min) /
-                                              control.step)
-                                          .round(),
-                                  value: tapWave.valueFor(control.id),
-                                  onChanged: (value) => controller
-                                      .setTapWaveControl(control.id, value),
+                        AnimatedBuilder(
+                          animation: Listenable.merge(<Listenable>[
+                            controller.tapWaveTuning,
+                            controller.tapWaveReferencePreview,
+                          ]),
+                          builder: (context, child) {
+                            final tapWave = controller.effectiveTapWaveTuning;
+                            final isReference =
+                                controller.tapWaveReferencePreview.value;
+                            return _TunerSection(
+                              title: 'Érintési hullám',
+                              children: <Widget>[
+                                Text(
+                                  'A Jelenlegi 100 / 100 / 100 értékkel ugyanazon a Headeren mutatja az eredeti látványt.',
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
-                            ],
-                          ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: ChoiceChip(
+                                        key: const ValueKey<String>(
+                                          'dashboard-header-tap-wave-current',
+                                        ),
+                                        label: const Text('Jelenlegi'),
+                                        selected: isReference,
+                                        onSelected: (_) => controller
+                                            .setTapWaveReferencePreview(true),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: ChoiceChip(
+                                        key: const ValueKey<String>(
+                                          'dashboard-header-tap-wave-custom',
+                                        ),
+                                        label: const Text('Saját'),
+                                        selected: !isReference,
+                                        onSelected: (_) => controller
+                                            .setTapWaveReferencePreview(false),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                for (final control
+                                    in DashboardHeaderTapWaveCatalog
+                                        .visualControls)
+                                  _TunerSlider(
+                                    key: ValueKey<String>(
+                                      'dashboard-header-tap-wave-control-${control.id}',
+                                    ),
+                                    label: control.label,
+                                    valueLabel: _formatTapWaveControlValue(
+                                      tapWave.valueFor(control.id),
+                                      control,
+                                    ),
+                                    min: control.min,
+                                    max: control.max,
+                                    divisions:
+                                        ((control.max - control.min) /
+                                                control.step)
+                                            .round(),
+                                    value: tapWave.valueFor(control.id),
+                                    onChanged: (value) => controller
+                                        .setTapWaveControl(control.id, value),
+                                  ),
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -5533,6 +5570,12 @@ final class _DashboardGhostQuickFilterPresentationSection
                     DashboardGhostQuickFilterPresentation.rail => 'Rail',
                     DashboardGhostQuickFilterPresentation.searchPillFling =>
                       'Searchpill · Fling',
+                    DashboardGhostQuickFilterPresentation
+                        .summaryPillLeadingFling =>
+                      'Summary pill – bal oldalon',
+                    DashboardGhostQuickFilterPresentation
+                        .summaryPillTrailingFling =>
+                      'Summary pill – jobb szélen',
                   }),
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: 5),
@@ -5639,6 +5682,42 @@ final class _GhostQuickFilterPresentationPreview extends StatelessWidget {
           ),
         ),
       ),
+      DashboardGhostQuickFilterPresentation.summaryPillLeadingFling =>
+        _summaryPreview(leading: true),
+      DashboardGhostQuickFilterPresentation.summaryPillTrailingFling =>
+        _summaryPreview(leading: false),
     };
   }
+
+  Widget _summaryPreview({required bool leading}) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: const Color(0xFFEDE9FE),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (leading) ...<Widget>[
+            const DashboardGhostFilterReferenceIcon(
+              mode: GhostFilterMode.both,
+              color: Color(0xFF6D28D9),
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+          ],
+          const Text('Összeg · Dátum · Idő'),
+          if (!leading) ...<Widget>[
+            const SizedBox(width: 10),
+            const DashboardGhostFilterReferenceIcon(
+              mode: GhostFilterMode.both,
+              color: Color(0xFF6D28D9),
+              size: 18,
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
 }

@@ -19,6 +19,8 @@ enum DashboardGhostQuickFilterPresentation {
   dropdown,
   rail,
   searchPillFling,
+  summaryPillLeadingFling,
+  summaryPillTrailingFling,
 }
 
 /// Chooses only the recurring-transaction surface family. It deliberately
@@ -78,6 +80,9 @@ final class DashboardPresentationPreferences {
     this.recurringUiDesign = RecurringUiDesign.unified,
     this.pushProfileUiDesign = PushProfileUiDesign.unified,
     this.automationHomeUiDesign = AutomationHomeUiDesign.unified,
+    this.headerTapWaveTrailStrengthPercent = 225,
+    this.headerTapWaveTapStartSizePercent = 55,
+    this.headerTapWaveTapStrengthPercent = 75,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -116,6 +121,11 @@ final class DashboardPresentationPreferences {
   final PushProfileUiDesign pushProfileUiDesign;
   final AutomationHomeUiDesign automationHomeUiDesign;
 
+  /// Personal (not the temporary A/B reference) Header touch-wave controls.
+  final double headerTapWaveTrailStrengthPercent;
+  final double headerTapWaveTapStartSizePercent;
+  final double headerTapWaveTapStrengthPercent;
+
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.sumA,
     showSumLayoutChooser: true,
@@ -145,6 +155,9 @@ final class DashboardPresentationPreferences {
     recurringUiDesign: RecurringUiDesign.unified,
     pushProfileUiDesign: PushProfileUiDesign.unified,
     automationHomeUiDesign: AutomationHomeUiDesign.unified,
+    headerTapWaveTrailStrengthPercent: 225,
+    headerTapWaveTapStartSizePercent: 55,
+    headerTapWaveTapStrengthPercent: 75,
   );
 
   @override
@@ -190,7 +203,12 @@ final class DashboardPresentationPreferences {
       other.ghostQuickFilterPresentation == ghostQuickFilterPresentation &&
       other.recurringUiDesign == recurringUiDesign &&
       other.pushProfileUiDesign == pushProfileUiDesign &&
-      other.automationHomeUiDesign == automationHomeUiDesign;
+      other.automationHomeUiDesign == automationHomeUiDesign &&
+      other.headerTapWaveTrailStrengthPercent ==
+          headerTapWaveTrailStrengthPercent &&
+      other.headerTapWaveTapStartSizePercent ==
+          headerTapWaveTapStartSizePercent &&
+      other.headerTapWaveTapStrengthPercent == headerTapWaveTapStrengthPercent;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -226,6 +244,9 @@ final class DashboardPresentationPreferences {
     recurringUiDesign,
     pushProfileUiDesign,
     automationHomeUiDesign,
+    headerTapWaveTrailStrengthPercent,
+    headerTapWaveTapStartSizePercent,
+    headerTapWaveTapStrengthPercent,
   ]);
 
   DashboardPresentationPreferences withGhostQuickFilterIconPack(
@@ -267,6 +288,9 @@ final class DashboardPresentationPreferences {
     recurringUiDesign: recurringUiDesign,
     pushProfileUiDesign: pushProfileUiDesign,
     automationHomeUiDesign: automationHomeUiDesign,
+    headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
+    headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
+    headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
   );
 
   DashboardPresentationPreferences withGhostQuickFilterPresentation(
@@ -308,6 +332,9 @@ final class DashboardPresentationPreferences {
     recurringUiDesign: recurringUiDesign,
     pushProfileUiDesign: pushProfileUiDesign,
     automationHomeUiDesign: automationHomeUiDesign,
+    headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
+    headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
+    headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
   );
 
   DashboardPresentationPreferences withRecurringUiDesign(
@@ -349,6 +376,9 @@ final class DashboardPresentationPreferences {
     recurringUiDesign: next,
     pushProfileUiDesign: pushProfileUiDesign,
     automationHomeUiDesign: automationHomeUiDesign,
+    headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
+    headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
+    headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
   );
 
   DashboardPresentationPreferences withPushProfileUiDesign(
@@ -390,6 +420,9 @@ final class DashboardPresentationPreferences {
     recurringUiDesign: recurringUiDesign,
     pushProfileUiDesign: next,
     automationHomeUiDesign: automationHomeUiDesign,
+    headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
+    headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
+    headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
   );
 
   DashboardPresentationPreferences withAutomationHomeUiDesign(
@@ -431,6 +464,55 @@ final class DashboardPresentationPreferences {
     recurringUiDesign: recurringUiDesign,
     pushProfileUiDesign: pushProfileUiDesign,
     automationHomeUiDesign: next,
+    headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
+    headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
+    headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
+  );
+
+  DashboardPresentationPreferences withHeaderTapWaveControls({
+    required double trailStrengthPercent,
+    required double tapStartSizePercent,
+    required double tapStrengthPercent,
+  }) => DashboardPresentationPreferences(
+    sumVisualStyle: sumVisualStyle,
+    showSumLayoutChooser: showSumLayoutChooser,
+    yearGridLayout: yearGridLayout,
+    yearMonthlyAmountPresentation: yearMonthlyAmountPresentation,
+    showDayContentViewChooser: showDayContentViewChooser,
+    balanceUsesChildCards: balanceUsesChildCards,
+    balanceHeaderGraphPresentation: balanceHeaderGraphPresentation,
+    balanceDayLayoutPresentation: balanceDayLayoutPresentation,
+    balanceDayFocusedPresentation: balanceDayFocusedPresentation,
+    balanceDayPerformanceVisualPresentation:
+        balanceDayPerformanceVisualPresentation,
+    balanceDayRatioViewPresentation: balanceDayRatioViewPresentation,
+    balanceDayRatioPresentation: balanceDayRatioPresentation,
+    balanceShowFocusedDayImpact: balanceShowFocusedDayImpact,
+    balanceSumLayoutPresentation: balanceSumLayoutPresentation,
+    balanceSumFocusedPresentation: balanceSumFocusedPresentation,
+    balanceShowSumFocusedSupplementaryStats:
+        balanceShowSumFocusedSupplementaryStats,
+    balanceMonthLayoutPresentation: balanceMonthLayoutPresentation,
+    balanceYearLayoutPresentation: balanceYearLayoutPresentation,
+    balanceDailyCalculationMode: balanceDailyCalculationMode,
+    balanceMonthlySpendingChartPresentation:
+        balanceMonthlySpendingChartPresentation,
+    balanceHeaderPartitionHeightPercent: balanceHeaderPartitionHeightPercent,
+    balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
+    balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
+    balanceHeaderPalette: balanceHeaderPalette,
+    balanceHeaderPaletteVariant: balanceHeaderPaletteVariant,
+    balanceHeaderPalettePositionPercent: balanceHeaderPalettePositionPercent,
+    balanceHeaderPaletteWindowWidthPercent:
+        balanceHeaderPaletteWindowWidthPercent,
+    ghostQuickFilterIconPack: ghostQuickFilterIconPack,
+    ghostQuickFilterPresentation: ghostQuickFilterPresentation,
+    recurringUiDesign: recurringUiDesign,
+    pushProfileUiDesign: pushProfileUiDesign,
+    automationHomeUiDesign: automationHomeUiDesign,
+    headerTapWaveTrailStrengthPercent: trailStrengthPercent,
+    headerTapWaveTapStartSizePercent: tapStartSizePercent,
+    headerTapWaveTapStrengthPercent: tapStrengthPercent,
   );
 }
 

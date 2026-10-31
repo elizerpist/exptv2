@@ -11,6 +11,8 @@ import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/motion/gesture_direction_arbiter.dart';
 import '../../application/dashboard_performance_counters.dart';
+import '../../application/dashboard_presentation_preferences.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import '../../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
@@ -23,6 +25,7 @@ import '../summary_navigation_motion_controller.dart';
 import 'summary_navigation_motion_region.dart';
 import 'dashboard_temporal_component_carousel.dart';
 import 'summary_pill_text_transition.dart';
+import 'dashboard_ghost_quick_filter.dart';
 
 /// Stable SummaryPill shell with independently listening navigation and amount
 /// leaves. Prepared amount text is consumed directly; preview frames never
@@ -46,6 +49,9 @@ final class DashboardSummaryPill extends StatefulWidget {
     required this.onMoveNext,
     this.onSelectionHaptic,
     this.performanceCounters,
+    this.ghostPresentation = DashboardGhostQuickFilterPresentation.current,
+    this.ghostMode = GhostFilterMode.both,
+    this.onGhostModeSelected,
   });
 
   final DashboardBounds bounds;
@@ -70,6 +76,9 @@ final class DashboardSummaryPill extends StatefulWidget {
   final VoidCallback onMoveNext;
   final VoidCallback? onSelectionHaptic;
   final DashboardPerformanceCounters? performanceCounters;
+  final DashboardGhostQuickFilterPresentation ghostPresentation;
+  final GhostFilterMode ghostMode;
+  final Future<bool> Function(GhostFilterMode mode)? onGhostModeSelected;
 
   @override
   State<DashboardSummaryPill> createState() => _DashboardSummaryPillState();
@@ -220,6 +229,66 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     final depth = DashboardShadowStyleScope.profileOf(
       context,
     ).depthFor(DashboardCornerSurfaceFamily.summaryPill);
+    final hasSummaryGhost =
+        widget.ghostPresentation ==
+            DashboardGhostQuickFilterPresentation.summaryPillLeadingFling ||
+        widget.ghostPresentation ==
+            DashboardGhostQuickFilterPresentation.summaryPillTrailingFling;
+    final ghostLeading =
+        widget.ghostPresentation ==
+        DashboardGhostQuickFilterPresentation.summaryPillLeadingFling;
+    final contentWidth = (widget.bounds.width - (hasSummaryGhost ? 48 : 0))
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final amountSlot = SummaryPillPreparedAmountSlot(
+      visibleFrames: widget.visibleFrames,
+      performanceCounters: widget.performanceCounters,
+      onMotionActiveChanged: widget.onAmountMotionActiveChanged,
+      alignment: Alignment.centerRight,
+      slotWidth: contentWidth * _amountSlotWidthFraction,
+    );
+    final coreContent = Row(
+      children: [
+        SizedBox(width: horizontalInset),
+        if (hasSummaryGhost) amountSlot,
+        const Icon(
+          Icons.calendar_month_outlined,
+          color: FluviVisualTokens.textSecondary,
+          size: FluviVisualTokens.iconSize,
+        ),
+        const SizedBox(width: FluviVisualTokens.controlInnerGap),
+        Expanded(
+          child: _SummaryNavigationTextSlot(
+            listenable: _navigationChanges,
+            presentation: () => _navigationPresentation,
+            motionController: widget.navigationMotionController,
+            performanceCounters: widget.performanceCounters,
+          ),
+        ),
+        if (!hasSummaryGhost) amountSlot,
+        _SummaryChevronSlot(
+          navigation: widget.navigation,
+          onTap: widget.onToggleRail,
+        ),
+        SizedBox(width: horizontalInset),
+      ],
+    );
+    final ghost = SizedBox(
+      width: 48,
+      height: widget.bounds.height,
+      child: DashboardGhostFlingSelector(
+        mode: widget.ghostMode,
+        onModeSelected: widget.onGhostModeSelected ?? (_) async => false,
+        semanticsKey: ValueKey<String>(
+          'dashboard-ghost-summary-${ghostLeading ? 'leading' : 'trailing'}-semantics',
+        ),
+        viewportKey: ValueKey<String>(
+          'dashboard-ghost-summary-${ghostLeading ? 'leading' : 'trailing'}-viewport',
+        ),
+        iconKeyPrefix:
+            'dashboard-ghost-summary-${ghostLeading ? 'leading' : 'trailing'}-icon',
+      ),
+    );
     final shell = FluviRoundedBox(
       color: depth.surfaceColor ?? FluviVisualTokens.surface,
       border: DashboardBorderScope.profileOf(
@@ -227,70 +296,50 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
       ).borderFor(DashboardBorderSurface.summary),
       borderRadius: borderRadius,
       boxShadow: depth.shadows,
-      child: Row(
-        children: [
-          SizedBox(width: horizontalInset),
-          const Icon(
-            Icons.calendar_month_outlined,
-            color: FluviVisualTokens.textSecondary,
-            size: FluviVisualTokens.iconSize,
-          ),
-          const SizedBox(width: FluviVisualTokens.controlInnerGap),
-          Expanded(
-            child: _SummaryNavigationTextSlot(
-              listenable: _navigationChanges,
-              presentation: () => _navigationPresentation,
-              motionController: widget.navigationMotionController,
-              performanceCounters: widget.performanceCounters,
-            ),
-          ),
-          SummaryPillPreparedAmountSlot(
-            visibleFrames: widget.visibleFrames,
-            performanceCounters: widget.performanceCounters,
-            onMotionActiveChanged: widget.onAmountMotionActiveChanged,
-            alignment: Alignment.centerRight,
-            slotWidth: widget.bounds.width * _amountSlotWidthFraction,
-          ),
-          _SummaryChevronSlot(
-            navigation: widget.navigation,
-            onTap: widget.onToggleRail,
-          ),
-          SizedBox(width: horizontalInset),
-        ],
-      ),
+      child: hasSummaryGhost
+          ? Row(
+              children: <Widget>[
+                if (ghostLeading) ghost,
+                Expanded(child: _gestureSurface(coreContent)),
+                if (!ghostLeading) ghost,
+              ],
+            )
+          : coreContent,
     );
     return SizedBox(
       width: widget.bounds.width,
       height: widget.bounds.height,
-      child: Listener(
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: (_) {
-          widget.onDirectInputStarted?.call();
-          widget.temporalCarouselCoordinator?.claim(this);
-          _gesturePreempted = false;
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanStart: (_) => _beginGesture(),
-          onPanUpdate: _updateGesture,
-          onPanEnd: _finishGesture,
-          onPanCancel: _startShellReturn,
-          child: ValueListenableBuilder<Offset>(
-            valueListenable: _shellOffset,
-            child: RepaintBoundary(
-              key: const ValueKey('dashboard-summary-shell-repaint-boundary'),
-              child: shell,
-            ),
-            builder: (context, offset, child) => Transform.translate(
-              key: const ValueKey('dashboard-summary-shell-transform'),
-              offset: offset,
-              child: child,
-            ),
-          ),
-        ),
-      ),
+      child: hasSummaryGhost ? shell : _gestureSurface(shell),
     );
   }
+
+  Widget _gestureSurface(Widget child) => Listener(
+    behavior: HitTestBehavior.opaque,
+    onPointerDown: (_) {
+      widget.onDirectInputStarted?.call();
+      widget.temporalCarouselCoordinator?.claim(this);
+      _gesturePreempted = false;
+    },
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanStart: (_) => _beginGesture(),
+      onPanUpdate: _updateGesture,
+      onPanEnd: _finishGesture,
+      onPanCancel: _startShellReturn,
+      child: ValueListenableBuilder<Offset>(
+        valueListenable: _shellOffset,
+        child: RepaintBoundary(
+          key: const ValueKey('dashboard-summary-shell-repaint-boundary'),
+          child: child,
+        ),
+        builder: (context, offset, child) => Transform.translate(
+          key: const ValueKey('dashboard-summary-shell-transform'),
+          offset: offset,
+          child: child,
+        ),
+      ),
+    ),
+  );
 
   void _beginGesture() {
     if (_gesturePreempted) return;

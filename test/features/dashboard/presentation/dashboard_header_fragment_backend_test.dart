@@ -161,6 +161,28 @@ void main() {
       },
     );
 
+    test('drag trail strength is clamped independently from the tap field', () {
+      final state = DashboardHeaderTapWaveState()
+        ..configure(
+          DashboardHeaderTapWaveTuning.defaults().copyWithValue(
+            DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId,
+            500,
+          ),
+        );
+      final visuals = DashboardHeaderTapWaveVisualUniformBank()
+        ..update(state: state, elapsed: Duration.zero);
+      expect(visuals.interactionOpacity, 3);
+
+      state.configure(
+        state.tuning.copyWithValue(
+          DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId,
+          0,
+        ),
+      );
+      visuals.update(state: state, elapsed: Duration.zero);
+      expect(visuals.interactionOpacity, 0);
+    });
+
     test(
       'Portal source profiles do not add a second mesh decimation at max',
       () {

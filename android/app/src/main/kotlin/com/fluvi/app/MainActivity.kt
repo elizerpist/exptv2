@@ -531,7 +531,10 @@ class MainActivity : FlutterActivity() {
                             "balanceHeaderPalettePositionPercent" to ((preferences.all["balanceHeaderPalettePositionPercent"] as? Number)?.toInt()?.takeIf { it in 0..100 } ?: 50),
                             "balanceHeaderPaletteWindowWidthPercent" to ((preferences.all["balanceHeaderPaletteWindowWidthPercent"] as? Number)?.toInt()?.takeIf { it in 10..100 } ?: 15),
                             "ghostQuickFilterIconPack" to ((preferences.all["ghostQuickFilterIconPack"] as? Number)?.toInt()?.takeIf { it in 0..1 } ?: 0),
-                            "ghostQuickFilterPresentation" to ((preferences.all["ghostQuickFilterPresentation"] as? Number)?.toInt()?.takeIf { it in 0..3 } ?: 3),
+                            "ghostQuickFilterPresentation" to ((preferences.all["ghostQuickFilterPresentation"] as? Number)?.toInt()?.takeIf { it in 0..5 } ?: 3),
+                            "headerTapWaveTrailStrengthPercent" to ((preferences.all["headerTapWaveTrailStrengthPercent"] as? Number)?.toInt()?.takeIf { it in 0..300 && it % 5 == 0 } ?: 225),
+                            "headerTapWaveTapStartSizePercent" to ((preferences.all["headerTapWaveTapStartSizePercent"] as? Number)?.toInt()?.takeIf { it in 25..100 && it % 5 == 0 } ?: 55),
+                            "headerTapWaveTapStrengthPercent" to ((preferences.all["headerTapWaveTapStrengthPercent"] as? Number)?.toInt()?.takeIf { it in 0..100 && it % 5 == 0 } ?: 75),
                             // New installs and pre-existing installations both
                             // enter the unified recurrence presentation. This
                             // is named rather than indexed so old numeric
@@ -635,7 +638,34 @@ class MainActivity : FlutterActivity() {
                         } else {
                             3
                         }
-                        require(ghostQuickFilterPresentation in 0..3) { "Invalid Ghost quick-filter presentation." }
+                        require(ghostQuickFilterPresentation in 0..5) { "Invalid Ghost quick-filter presentation." }
+                        val headerTapWaveTrailStrengthPercent = if (values.containsKey("headerTapWaveTrailStrengthPercent")) {
+                            (values["headerTapWaveTrailStrengthPercent"] as? Number)?.toInt()
+                                ?: throw IllegalArgumentException("Invalid Header trail strength.")
+                        } else {
+                            225
+                        }
+                        require(headerTapWaveTrailStrengthPercent in 0..300 && headerTapWaveTrailStrengthPercent % 5 == 0) {
+                            "Invalid Header trail strength."
+                        }
+                        val headerTapWaveTapStartSizePercent = if (values.containsKey("headerTapWaveTapStartSizePercent")) {
+                            (values["headerTapWaveTapStartSizePercent"] as? Number)?.toInt()
+                                ?: throw IllegalArgumentException("Invalid Header tap start size.")
+                        } else {
+                            55
+                        }
+                        require(headerTapWaveTapStartSizePercent in 25..100 && headerTapWaveTapStartSizePercent % 5 == 0) {
+                            "Invalid Header tap start size."
+                        }
+                        val headerTapWaveTapStrengthPercent = if (values.containsKey("headerTapWaveTapStrengthPercent")) {
+                            (values["headerTapWaveTapStrengthPercent"] as? Number)?.toInt()
+                                ?: throw IllegalArgumentException("Invalid Header tap strength.")
+                        } else {
+                            75
+                        }
+                        require(headerTapWaveTapStrengthPercent in 0..100 && headerTapWaveTapStrengthPercent % 5 == 0) {
+                            "Invalid Header tap strength."
+                        }
                         val recurringUiDesign = if (values.containsKey("recurringUiDesign")) {
                             values["recurringUiDesign"] as? String
                                 ?: throw IllegalArgumentException("Invalid recurring UI design.")
@@ -693,6 +723,9 @@ class MainActivity : FlutterActivity() {
                             .putInt("balanceHeaderPaletteWindowWidthPercent", balanceHeaderPaletteWindowWidthPercent)
                             .putInt("ghostQuickFilterIconPack", ghostQuickFilterIconPack)
                             .putInt("ghostQuickFilterPresentation", ghostQuickFilterPresentation)
+                            .putInt("headerTapWaveTrailStrengthPercent", headerTapWaveTrailStrengthPercent)
+                            .putInt("headerTapWaveTapStartSizePercent", headerTapWaveTapStartSizePercent)
+                            .putInt("headerTapWaveTapStrengthPercent", headerTapWaveTapStrengthPercent)
                             .putString("recurringUiDesign", recurringUiDesign)
                             .putString("pushProfileUiDesign", pushProfileUiDesign)
                             .putString("automationHomeUiDesign", automationHomeUiDesign)

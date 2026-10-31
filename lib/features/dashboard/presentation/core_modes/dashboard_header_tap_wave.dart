@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 
 /// Source/app-added tuning metadata for the shared Header touch wave.
 ///
-/// `interactionOpacity` is the single real Color Lab control. The remaining
-/// controls intentionally expose visually important source constants without
-/// changing their audited defaults.
+/// The first three controls are the stable user-facing visual profile. The
+/// retained source controls below them preserve the older effect-model
+/// contracts without appearing in the dashboard tuner.
 @immutable
 final class DashboardHeaderTapWaveControl {
   const DashboardHeaderTapWaveControl({
@@ -48,8 +48,42 @@ final class DashboardHeaderTapWaveControl {
 }
 
 abstract final class DashboardHeaderTapWaveCatalog {
+  static const dynamicTrailStrengthId = 'dynamicTrailStrengthPercent';
+  static const tapStartSizeId = 'tapStartSizePercent';
+  static const tapStrengthId = 'tapStrengthPercent';
+
   static const List<DashboardHeaderTapWaveControl> controls =
       <DashboardHeaderTapWaveControl>[
+        DashboardHeaderTapWaveControl(
+          id: dynamicTrailStrengthId,
+          label: 'Dinamikus nyomvonal erőssége',
+          min: 0,
+          max: 300,
+          step: 5,
+          defaultValue: 225,
+          unit: '%',
+          isSourceControl: false,
+        ),
+        DashboardHeaderTapWaveControl(
+          id: tapStartSizeId,
+          label: 'Tap-hullám indulómérete',
+          min: 25,
+          max: 100,
+          step: 5,
+          defaultValue: 55,
+          unit: '%',
+          isSourceControl: false,
+        ),
+        DashboardHeaderTapWaveControl(
+          id: tapStrengthId,
+          label: 'Tap-hullám erőssége',
+          min: 0,
+          max: 100,
+          step: 5,
+          defaultValue: 75,
+          unit: '%',
+          isSourceControl: false,
+        ),
         DashboardHeaderTapWaveControl(
           id: 'interactionOpacity',
           label: 'Interakció opacity',
@@ -112,6 +146,15 @@ abstract final class DashboardHeaderTapWaveCatalog {
         ),
       ];
 
+  static List<DashboardHeaderTapWaveControl> get visualControls => controls
+      .where(
+        (control) =>
+            control.id == dynamicTrailStrengthId ||
+            control.id == tapStartSizeId ||
+            control.id == tapStrengthId,
+      )
+      .toList(growable: false);
+
   static DashboardHeaderTapWaveControl controlFor(String id) =>
       controls.firstWhere(
         (control) => control.id == id,
@@ -153,6 +196,13 @@ final class DashboardHeaderTapWaveTuning {
       generation: generation + 1,
     );
   }
+
+  /// Keeps the source/audited 100% reference available without overwriting
+  /// the persisted personal profile.
+  DashboardHeaderTapWaveTuning asCurrentReference() =>
+      copyWithValue(DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId, 100)
+          .copyWithValue(DashboardHeaderTapWaveCatalog.tapStartSizeId, 100)
+          .copyWithValue(DashboardHeaderTapWaveCatalog.tapStrengthId, 100);
 }
 
 @immutable
@@ -482,8 +532,8 @@ final class DashboardHeaderTapWaveState {
       final dragFade = _dragOverlayFactor(timestamp);
       if (dragFade <= .0001) return null;
       return _overlay(
-        opacity: .96 * dragFade,
-        scale: _lerp(.8, 1, 1 - dragFade),
+        opacity: .96 * dragFade * _tapStrengthFactor,
+        scale: _heldTapScale(dragFade),
         blur: _lerp(7, 10, 1 - dragFade),
       );
     }
@@ -495,7 +545,6 @@ final class DashboardHeaderTapWaveState {
     // reappear as a second circle when the pointer is released.
     if (_dragging) return null;
     const initialOpacity = .96;
-    const initialScale = .8;
     const initialBlur = 7.0;
     final fade = _curveFraction(
       age,
@@ -508,8 +557,8 @@ final class DashboardHeaderTapWaveState {
       const Cubic(.19, 1, .22, 1),
     );
     return _overlay(
-      opacity: initialOpacity * (1 - fade),
-      scale: _lerp(initialScale, 1.42, transform),
+      opacity: initialOpacity * (1 - fade) * _tapStrengthFactor,
+      scale: _releasedTapScale(age, transform),
       blur: _lerp(initialBlur, 20, fade),
     );
   }
@@ -532,8 +581,8 @@ final class DashboardHeaderTapWaveState {
         return;
       }
       into
-        ..opacity = .96 * dragFade
-        ..scale = _lerp(.8, 1, 1 - dragFade)
+        ..opacity = .96 * dragFade * _tapStrengthFactor
+        ..scale = _heldTapScale(dragFade)
         ..blur = _lerp(7, 10, 1 - dragFade)
         ..active = 1;
       return;
@@ -553,7 +602,6 @@ final class DashboardHeaderTapWaveState {
       return;
     }
     const initialOpacity = .96;
-    const initialScale = .8;
     const initialBlur = 7.0;
     final fade = _curveFraction(
       age,
@@ -566,8 +614,8 @@ final class DashboardHeaderTapWaveState {
       const Cubic(.19, 1, .22, 1),
     );
     into
-      ..opacity = initialOpacity * (1 - fade)
-      ..scale = _lerp(initialScale, 1.42, transform)
+      ..opacity = initialOpacity * (1 - fade) * _tapStrengthFactor
+      ..scale = _releasedTapScale(age, transform)
       ..blur = _lerp(initialBlur, 20, fade)
       ..active = 1;
   }
@@ -634,7 +682,7 @@ final class DashboardHeaderTapWaveState {
     final lifetimeMicros = _rippleLifetime.inMicroseconds;
     final fadeMicros = _rippleFadeDuration.inMicroseconds;
     final radiusTravel = _tuning.valueFor('rippleRadiusTravel');
-    final intensity = _tuning.valueFor('rippleIntensity');
+    final intensity = _tuning.valueFor('rippleIntensity') * _tapStrengthFactor;
     for (final ripple in _ripples) {
       final elapsedMicros = (timestamp - ripple.startedAt).inMicroseconds;
       if (elapsedMicros < 0 || elapsedMicros >= lifetimeMicros) continue;
@@ -663,7 +711,7 @@ final class DashboardHeaderTapWaveState {
     into
       ..x = resolvedX.clamp(0.0, 1.0).toDouble()
       ..y = resolvedY.clamp(0.0, 1.0).toDouble()
-      ..pulseLight = pulse;
+      ..pulseLight = pulse * _tapStrengthFactor;
   }
 
   DashboardHeaderTapWaveOverlay _overlay({
@@ -678,6 +726,27 @@ final class DashboardHeaderTapWaveState {
     colors: DashboardHeaderTapWaveOverlay.sourceColors,
     stops: DashboardHeaderTapWaveOverlay.sourceStops,
   );
+
+  double get _tapStrengthFactor =>
+      (_tuning.valueFor(DashboardHeaderTapWaveCatalog.tapStrengthId) / 100)
+          .clamp(0.0, 1.0)
+          .toDouble();
+
+  double get _tapStartFactor =>
+      (_tuning.valueFor(DashboardHeaderTapWaveCatalog.tapStartSizeId) / 100)
+          .clamp(.25, 1.0)
+          .toDouble();
+
+  double _heldTapScale(double dragFade) {
+    final original = _lerp(.8, 1, 1 - dragFade);
+    return original - .8 * (1 - _tapStartFactor) * dragFade;
+  }
+
+  double _releasedTapScale(Duration age, double transform) {
+    final original = _lerp(.8, 1.42, transform);
+    final recovery = _smoothstep(age.inMilliseconds / 180);
+    return original - .8 * (1 - _tapStartFactor) * (1 - recovery);
+  }
 
   void _spawnRipple(Offset origin, Duration timestamp) {
     _ripples.add(
@@ -798,6 +867,11 @@ final class DashboardHeaderTapWaveState {
 
   static double _lerp(double from, double to, double amount) =>
       from + (to - from) * amount;
+
+  static double _smoothstep(double amount) {
+    final bounded = amount.clamp(0.0, 1.0).toDouble();
+    return bounded * bounded * (3 - 2 * bounded);
+  }
 
   static Duration get _rippleLifetime => Duration(
     microseconds: (_rippleFadeDuration.inMicroseconds * 1.08).round(),

@@ -2390,7 +2390,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       portalSettingsGeneration = ValueNotifier<int>(0),
       tapWaveTuning = ValueNotifier<DashboardHeaderTapWaveTuning>(
         DashboardHeaderTapWaveTuning.defaults(),
-      ) {
+      ),
+      tapWaveReferencePreview = ValueNotifier<bool>(false) {
     _tapWave.configure(tapWaveTuning.value);
     _ticker = vsync.createTicker(_onTick);
     _syncTicker();
@@ -2421,6 +2422,11 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   /// Source/app-added tap-wave settings rebuild only the respective tuner
   /// section. The one-shot state itself advances solely on the shared clock.
   final ValueNotifier<DashboardHeaderTapWaveTuning> tapWaveTuning;
+
+  /// Temporary A/B state owned by the visible tuner only. Personal values
+  /// always live in [tapWaveTuning] and are never overwritten by previewing
+  /// the original 100/100/100 source rendering.
+  final ValueNotifier<bool> tapWaveReferencePreview;
   late final Ticker _ticker;
   Duration _lastTickerElapsed = Duration.zero;
   Duration _elapsed = Duration.zero;
@@ -2444,6 +2450,10 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   DashboardHeaderPortalChannelState get portalBackgroundMorph =>
       _portalBackgroundMorph;
   DashboardHeaderTapWaveState get tapWave => _tapWave;
+  DashboardHeaderTapWaveTuning get effectiveTapWaveTuning =>
+      tapWaveReferencePreview.value
+      ? tapWaveTuning.value.asCurrentReference()
+      : tapWaveTuning.value;
   double get pulseAmount {
     final startedAt = _pulseStartedAt;
     if (startedAt == null) return 0;
@@ -3213,12 +3223,45 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     if (previous == normalized) return;
     final next = current.copyWithValue(controlId, normalized);
     tapWaveTuning.value = next;
-    _tapWave.configure(next);
+    if (tapWaveReferencePreview.value) tapWaveReferencePreview.value = false;
+    _tapWave.configure(effectiveTapWaveTuning);
     _record(
       'HEADER_TAP_WAVE_CONFIG_CHANGED',
       'parameterId=$controlId oldValue=$previous newValue=$normalized '
           'settingsGeneration=${next.generation}',
     );
+    notifyListeners();
+  }
+
+  void setTapWaveReferencePreview(bool isReference) {
+    if (_disposed || tapWaveReferencePreview.value == isReference) return;
+    tapWaveReferencePreview.value = isReference;
+    _tapWave.configure(effectiveTapWaveTuning);
+    notifyListeners();
+  }
+
+  void restoreTapWaveControls({
+    required double trailStrengthPercent,
+    required double tapStartSizePercent,
+    required double tapStrengthPercent,
+  }) {
+    if (_disposed) return;
+    var next = tapWaveTuning.value;
+    next = next.copyWithValue(
+      DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId,
+      trailStrengthPercent,
+    );
+    next = next.copyWithValue(
+      DashboardHeaderTapWaveCatalog.tapStartSizeId,
+      tapStartSizePercent,
+    );
+    next = next.copyWithValue(
+      DashboardHeaderTapWaveCatalog.tapStrengthId,
+      tapStrengthPercent,
+    );
+    tapWaveTuning.value = next;
+    tapWaveReferencePreview.value = false;
+    _tapWave.configure(next);
     notifyListeners();
   }
 
@@ -3301,12 +3344,16 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   void toggleTuner() {
     if (_disposed) return;
     tunerOpen.value = !tunerOpen.value;
+    if (!tunerOpen.value && tapWaveReferencePreview.value) {
+      setTapWaveReferencePreview(false);
+    }
     _record('HEADER_TUNER_VISIBILITY_CHANGED', 'visible=${tunerOpen.value}');
   }
 
   void closeTuner() {
     if (_disposed || !tunerOpen.value) return;
     tunerOpen.value = false;
+    if (tapWaveReferencePreview.value) setTapWaveReferencePreview(false);
     _record('HEADER_TUNER_VISIBILITY_CHANGED', 'visible=false');
   }
 
@@ -3403,6 +3450,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     expandedTunerSections.dispose();
     portalSettingsGeneration.dispose();
     tapWaveTuning.dispose();
+    tapWaveReferencePreview.dispose();
     tuning.dispose();
     super.dispose();
   }
@@ -5743,8 +5791,16 @@ final class _DashboardHeaderFragmentUniformCache {
       ),
       ripples: _tapRipples,
       tapRippleRadiusTravel: tapTuning.valueFor('rippleRadiusTravel'),
-      tapRippleIntensity: tapTuning.valueFor('rippleIntensity'),
-      tapPulseLight: tapTuning.valueFor('pulseLight'),
+      tapRippleIntensity:
+          tapTuning.valueFor('rippleIntensity') *
+          (tapTuning.valueFor(DashboardHeaderTapWaveCatalog.tapStrengthId) /
+                  100)
+              .clamp(0.0, 1.0),
+      tapPulseLight:
+          tapTuning.valueFor('pulseLight') *
+          (tapTuning.valueFor(DashboardHeaderTapWaveCatalog.tapStrengthId) /
+                  100)
+              .clamp(0.0, 1.0),
       tapVisuals: _tapVisuals,
     );
   }
@@ -5781,6 +5837,7 @@ final class DashboardHeaderTapWaveGestureLayer extends StatefulWidget {
     super.key,
     required this.controller,
     required this.child,
+    this.gestureKey,
     this.onPointerDown,
     this.onPointerMove,
     this.onPointerUp,
@@ -5789,6 +5846,7 @@ final class DashboardHeaderTapWaveGestureLayer extends StatefulWidget {
 
   final DashboardHeaderVisualController? controller;
   final Widget child;
+  final Key? gestureKey;
   final void Function(PointerDownEvent event)? onPointerDown;
   final void Function(PointerMoveEvent event)? onPointerMove;
   final void Function(PointerUpEvent event)? onPointerUp;
@@ -5845,7 +5903,11 @@ final class _DashboardHeaderTapWaveGestureLayerState
           }
         },
         child: Listener(
-          behavior: HitTestBehavior.translucent,
+          key: widget.gestureKey,
+          // This is the Header's actual input surface: an opaque Listener
+          // prevents a gesture started here from falling through into the
+          // body-wide expansion recognizer after it crosses a card boundary.
+          behavior: HitTestBehavior.opaque,
           onPointerDown: (event) {
             widget.onPointerDown?.call(event);
             // DOM `event.isPrimary === false` is ignored by the source.

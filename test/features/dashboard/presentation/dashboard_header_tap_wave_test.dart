@@ -25,7 +25,7 @@ void main() {
     });
 
     test(
-      'pointer-down retains the large tap wave but creates no dot trail',
+      'new personal defaults start smaller and softer while retaining one tap wave',
       () {
         final state = DashboardHeaderTapWaveState();
         state.pointerDown(
@@ -36,8 +36,8 @@ void main() {
 
         final overlay = state.overlayAt(Duration.zero)!;
         expect(overlay.origin, const Offset(.25, .75));
-        expect(overlay.opacity, .96);
-        expect(overlay.scale, .8);
+        expect(overlay.opacity, closeTo(.72, 1e-12));
+        expect(overlay.scale, closeTo(.44, 1e-12));
         expect(overlay.blur, 7);
         expect(overlay.stops, const <double>[0, .05, .11, .19, .25]);
         expect(state.rippleCount, 1);
@@ -46,6 +46,82 @@ void main() {
         expect(state.trails.single.connectsToPrevious, isFalse);
       },
     );
+
+    test('100 / 100 / 100 is the exact current-source reference', () {
+      final state = DashboardHeaderTapWaveState()
+        ..configure(
+          DashboardHeaderTapWaveTuning.defaults().asCurrentReference(),
+        )
+        ..pointerDown(
+          origin: const Offset(.25, .75),
+          timestamp: Duration.zero,
+          logicalSize: _headerSize,
+        );
+
+      final held = state.overlayAt(Duration.zero)!;
+      expect(held.opacity, .96);
+      expect(held.scale, .8);
+
+      state.pointerUp(timestamp: Duration.zero);
+      final referenceAt180 = state.overlayAt(
+        const Duration(milliseconds: 180),
+      )!;
+      final personal = DashboardHeaderTapWaveState()
+        ..pointerDown(
+          origin: const Offset(.25, .75),
+          timestamp: Duration.zero,
+          logicalSize: _headerSize,
+        )
+        ..pointerUp(timestamp: Duration.zero);
+      expect(
+        personal.overlayAt(const Duration(milliseconds: 180))!.scale,
+        closeTo(referenceAt180.scale, 1e-12),
+      );
+    });
+
+    test(
+      'zero tap strength removes overlay and field light without changing time',
+      () {
+        final state = DashboardHeaderTapWaveState()
+          ..configure(
+            DashboardHeaderTapWaveTuning.defaults().copyWithValue(
+              DashboardHeaderTapWaveCatalog.tapStrengthId,
+              0,
+            ),
+          )
+          ..pointerDown(
+            origin: const Offset(.5, .5),
+            timestamp: Duration.zero,
+            logicalSize: _headerSize,
+          );
+        final overlay = state.overlayAt(Duration.zero)!;
+        final field = state.fieldSampleAt(
+          point: const Offset(.6, .5),
+          timestamp: const Duration(milliseconds: 80),
+        );
+        expect(overlay.opacity, 0);
+        expect(field.coordinate, const Offset(.6, .5));
+        expect(field.pulseLight, 0);
+      },
+    );
+
+    test('allocated and retained overlay frames use one scale calculation', () {
+      final state = DashboardHeaderTapWaveState()
+        ..pointerDown(
+          origin: const Offset(.2, .3),
+          timestamp: Duration.zero,
+          logicalSize: _headerSize,
+        )
+        ..pointerUp(timestamp: Duration.zero);
+      final retained = DashboardHeaderTapWaveOverlayFrame();
+      state.writeOverlayFrame(
+        timestamp: const Duration(milliseconds: 96),
+        into: retained,
+      );
+      final allocated = state.overlayAt(const Duration(milliseconds: 96))!;
+      expect(retained.scale, closeTo(allocated.scale, 1e-12));
+      expect(retained.opacity, closeTo(allocated.opacity, 1e-12));
+    });
 
     test('hand tremor stays a tap and never retriggers circular ripples', () {
       final state = DashboardHeaderTapWaveState();

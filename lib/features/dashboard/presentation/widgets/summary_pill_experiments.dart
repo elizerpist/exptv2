@@ -11,6 +11,8 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_performance_counters.dart';
+import '../../application/dashboard_presentation_preferences.dart';
+import '../../query/domain/ghost_filter_mode.dart';
 import '../../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../../time_navigation/application/dashboard_segmented_target_acceptance.dart';
 import '../../time_navigation/application/dashboard_time_navigation_state.dart';
@@ -25,6 +27,7 @@ import '../dashboard_summary_presentation.dart';
 import '../dashboard_summary_auto_reset_controller.dart';
 import 'dashboard_summary_pill.dart';
 import 'dashboard_temporal_component_carousel.dart';
+import 'dashboard_ghost_quick_filter.dart';
 
 typedef SummaryPillComponentCandidateProjector =
     DashboardNavigationState? Function({
@@ -428,6 +431,9 @@ final class SummaryPillExperiment extends StatelessWidget {
     this.autoResetMotionRegistry,
     this.temporalCarouselCoordinator,
     this.presentation = const DashboardSummaryPresentationSettings.defaults(),
+    this.ghostPresentation = DashboardGhostQuickFilterPresentation.current,
+    this.ghostMode = GhostFilterMode.both,
+    this.onGhostModeSelected,
   }) : assert(variant == SummaryPillVariant.segmented);
 
   final SummaryPillVariant variant;
@@ -487,6 +493,9 @@ final class SummaryPillExperiment extends StatelessWidget {
   final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
   final DashboardTemporalCarouselCoordinator? temporalCarouselCoordinator;
   final DashboardSummaryPresentationSettings presentation;
+  final DashboardGhostQuickFilterPresentation ghostPresentation;
+  final GhostFilterMode ghostMode;
+  final Future<bool> Function(GhostFilterMode mode)? onGhostModeSelected;
 
   @override
   Widget build(BuildContext context) => _SegmentedMotionGateHost(
@@ -511,6 +520,29 @@ final class SummaryPillExperiment extends StatelessWidget {
             );
         final content = LayoutBuilder(
           builder: (context, constraints) {
+            final hasSummaryGhost =
+                ghostPresentation ==
+                    DashboardGhostQuickFilterPresentation
+                        .summaryPillLeadingFling ||
+                ghostPresentation ==
+                    DashboardGhostQuickFilterPresentation
+                        .summaryPillTrailingFling;
+            final ghostLeading =
+                ghostPresentation ==
+                DashboardGhostQuickFilterPresentation.summaryPillLeadingFling;
+            // Summary ghost positions have a documented physical ordering.
+            // Keep the user's normal/mirrored choice stored unchanged, but
+            // use the amount-first geometry locally while either cell is on.
+            final effectivePresentation = hasSummaryGhost
+                ? presentation.copyWith(
+                    segmentedOrientation: SummarySegmentedOrientation.mirrored,
+                  )
+                : presentation;
+            const ghostCellWidth = 48.0;
+            final contentWidth = math.max(
+              0.0,
+              constraints.maxWidth - (hasSummaryGhost ? ghostCellWidth : 0),
+            );
             final inset = bounds.width <= 320
                 ? 6.0
                 : FluviVisualTokens.controlHorizontalInset;
@@ -532,9 +564,9 @@ final class SummaryPillExperiment extends StatelessWidget {
                   height: bounds.height,
                   preRegressionInset: inset,
                 );
-            final preferredAmountWidth = constraints.maxWidth * .40;
+            final preferredAmountWidth = contentWidth * .40;
             final maximumAmountWidth = math
-                .max(0, constraints.maxWidth - inset - minimumNavigationWidth)
+                .max(0, contentWidth - inset - minimumNavigationWidth)
                 .toDouble();
             final amountWidth = math
                 .min(preferredAmountWidth, maximumAmountWidth)
@@ -543,29 +575,43 @@ final class SummaryPillExperiment extends StatelessWidget {
             // retained only as the measured pre-regression content-edge baseline
             // for the requested 50% gap—not as a visual or gesture lane.
             final preRegressionNavigationWidth =
-                constraints.maxWidth - amountWidth - inset * 2;
+                contentWidth - amountWidth - inset * 2;
             // Normal preserves the existing right-side amount zone; mirrored
             // swaps the two whole zones. In either orientation, navigation's
             // outer edge is the mode badge's equal horizontal/vertical inset.
-            final navigationWidth = constraints.maxWidth - amountWidth - inset;
+            final navigationWidth = contentWidth - amountWidth - inset;
             final selectorGeometry = SummarySegmentedTrackGeometry.resolve(
               width: navigationWidth,
               height: bounds.height,
               activeTrackIndices: activeTracks,
               preRegressionNavigationWidth: preRegressionNavigationWidth,
-              orientation: presentation.segmentedOrientation,
+              orientation: effectivePresentation.segmentedOrientation,
             );
+            final contentOffset = hasSummaryGhost && ghostLeading
+                ? ghostCellWidth
+                : 0.0;
             final navigationLeft =
-                presentation.segmentedOrientation ==
-                    SummarySegmentedOrientation.normal
-                ? 0.0
-                : inset + amountWidth;
-            bool isSelectorPosition(Offset localPosition) => activeTracks.any(
-              (track) => selectorGeometry
-                  .interactionCellRectForTrack(track)
-                  .shift(Offset(navigationLeft, 0))
-                  .contains(localPosition),
-            );
+                contentOffset +
+                (effectivePresentation.segmentedOrientation ==
+                        SummarySegmentedOrientation.normal
+                    ? 0.0
+                    : inset + amountWidth);
+            final ghostRect = hasSummaryGhost
+                ? Rect.fromLTWH(
+                    ghostLeading ? 0 : contentWidth,
+                    0,
+                    ghostCellWidth,
+                    bounds.height,
+                  )
+                : null;
+            bool isSelectorPosition(Offset localPosition) =>
+                activeTracks.any(
+                  (track) => selectorGeometry
+                      .interactionCellRectForTrack(track)
+                      .shift(Offset(navigationLeft, 0))
+                      .contains(localPosition),
+                ) ||
+                (ghostRect?.contains(localPosition) ?? false);
             void classifyPointer(PointerDownEvent event) {
               final trackRects = <int, SummarySegmentedTrackRects>{
                 for (final track in activeTracks)
@@ -610,7 +656,7 @@ final class SummaryPillExperiment extends StatelessWidget {
                 width: navigationWidth,
                 preRegressionNavigationWidth: preRegressionNavigationWidth,
                 navigation: navigation,
-                presentation: presentation,
+                presentation: effectivePresentation,
                 onLevelCrossed: onLevelCrossed,
                 onComponentCrossed: onComponentCrossed,
                 onComponentCrossingAccepted: onComponentCrossingAccepted,
@@ -634,7 +680,7 @@ final class SummaryPillExperiment extends StatelessWidget {
               height: bounds.height,
               child: Align(
                 alignment:
-                    presentation.segmentedOrientation ==
+                    effectivePresentation.segmentedOrientation ==
                         SummarySegmentedOrientation.normal
                     ? Alignment.centerRight
                     : Alignment.centerLeft,
@@ -644,29 +690,57 @@ final class SummaryPillExperiment extends StatelessWidget {
                   onMotionActiveChanged: onAmountMotionActiveChanged,
                   slotWidth: amountWidth,
                   alignment:
-                      presentation.segmentedOrientation ==
+                      effectivePresentation.segmentedOrientation ==
                           SummarySegmentedOrientation.normal
                       ? Alignment.centerRight
                       : Alignment.centerLeft,
                 ),
               ),
             );
-            final sections = switch (presentation.segmentedOrientation) {
-              SummarySegmentedOrientation.normal => Row(
-                children: <Widget>[
-                  navigationSurface,
-                  amountZone,
-                  SizedBox(width: inset),
-                ],
-              ),
-              SummarySegmentedOrientation.mirrored => Row(
-                children: <Widget>[
-                  SizedBox(width: inset),
-                  amountZone,
-                  navigationSurface,
-                ],
-              ),
-            };
+            final contentSections =
+                switch (effectivePresentation.segmentedOrientation) {
+                  SummarySegmentedOrientation.normal => Row(
+                    children: <Widget>[
+                      navigationSurface,
+                      amountZone,
+                      SizedBox(width: inset),
+                    ],
+                  ),
+                  SummarySegmentedOrientation.mirrored => Row(
+                    children: <Widget>[
+                      SizedBox(width: inset),
+                      amountZone,
+                      navigationSurface,
+                    ],
+                  ),
+                };
+            final ghostSelector = hasSummaryGhost
+                ? SizedBox(
+                    width: ghostCellWidth,
+                    height: bounds.height,
+                    child: DashboardGhostFlingSelector(
+                      mode: ghostMode,
+                      onModeSelected: onGhostModeSelected ?? (_) async => false,
+                      semanticsKey: ValueKey<String>(
+                        'dashboard-ghost-summary-${ghostLeading ? 'leading' : 'trailing'}-semantics',
+                      ),
+                      viewportKey: ValueKey<String>(
+                        'dashboard-ghost-summary-${ghostLeading ? 'leading' : 'trailing'}-viewport',
+                      ),
+                      iconKeyPrefix:
+                          'dashboard-ghost-summary-${ghostLeading ? 'leading' : 'trailing'}-icon',
+                    ),
+                  )
+                : null;
+            final sections = hasSummaryGhost
+                ? Row(
+                    children: <Widget>[
+                      if (ghostLeading) ghostSelector!,
+                      SizedBox(width: contentWidth, child: contentSections),
+                      if (!ghostLeading) ghostSelector!,
+                    ],
+                  )
+                : contentSections;
             // Selector sections are above this surface in the hit-test tree, so
             // temporal flings retain exact Rect ownership. The exposed surface
             // is the only Summary region that can tap-reset or drag Header.
@@ -679,19 +753,35 @@ final class SummaryPillExperiment extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
-                  GestureDetector(
-                    key: const ValueKey<String>(
-                      'summary-pill-background-gesture',
+                  Positioned(
+                    left: hasSummaryGhost && ghostLeading ? ghostCellWidth : 0,
+                    right: hasSummaryGhost && !ghostLeading
+                        ? ghostCellWidth
+                        : 0,
+                    top: 0,
+                    bottom: 0,
+                    child: GestureDetector(
+                      key: const ValueKey<String>(
+                        'summary-pill-background-gesture',
+                      ),
+                      behavior: HitTestBehavior.opaque,
+                      onTapUp: (details) {
+                        if (!isSelectorPosition(
+                          details.localPosition +
+                              Offset(
+                                hasSummaryGhost && ghostLeading
+                                    ? ghostCellWidth
+                                    : 0,
+                                0,
+                              ),
+                        )) {
+                          onBackgroundTap?.call();
+                        }
+                      },
+                      onVerticalDragStart: onBackgroundVerticalDragStart,
+                      onVerticalDragUpdate: onBackgroundVerticalDragUpdate,
+                      onVerticalDragEnd: onBackgroundVerticalDragEnd,
                     ),
-                    behavior: HitTestBehavior.opaque,
-                    onTapUp: (details) {
-                      if (!isSelectorPosition(details.localPosition)) {
-                        onBackgroundTap?.call();
-                      }
-                    },
-                    onVerticalDragStart: onBackgroundVerticalDragStart,
-                    onVerticalDragUpdate: onBackgroundVerticalDragUpdate,
-                    onVerticalDragEnd: onBackgroundVerticalDragEnd,
                   ),
                   sections,
                 ],

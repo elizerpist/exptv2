@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="prototype-id" content="fluvi/dashboard-header-wave-summary-controls">
+  <meta name="prototype-status" content="current">
+  <title>Fluvi – Header hullám és Summary ghost</title>
+  <style>
+    :root { color:#19264d; background:#f5f6fa; font:15px/1.35 system-ui,sans-serif; }
+    * { box-sizing:border-box } body{margin:0;min-height:100vh;padding:24px;display:grid;place-items:start center}
+    main{width:min(100%,740px)} h1{font-size:24px;margin:0 0 6px} p{color:#718096;margin:0 0 18px}
+    .phone{overflow:hidden;background:#fff;border:1px solid #dde2ec;border-radius:28px;box-shadow:0 18px 55px #19264d22}
+    .header{height:206px;position:relative;overflow:hidden;padding:22px 20px;background:linear-gradient(125deg,#fae8ff,#e9d5ff 48%,#c7d2fe);touch-action:none}
+    .header::before{content:"";position:absolute;inset:-45%;opacity:var(--trail-opacity,.65);background:radial-gradient(ellipse 34% 7% at var(--x,51%) var(--y,52%),#ffffffcc 0 24%,#7552b870 38%,transparent 70%);filter:blur(4px);transform:rotate(var(--angle,-12deg)) scale(1.4)}
+    .header>*{position:relative}.top{display:flex;align-items:center;justify-content:space-between;font-weight:800}.tuner{border:0;border-radius:50%;width:40px;height:40px;background:#ffffffbb;color:#19264d;font-size:20px}
+    .title{margin-top:42px;font-size:12px;font-weight:700;color:#475569}.balance{font-size:34px;font-weight:800;margin-top:2px}.hint{font-size:12px;margin-top:4px;color:#475569}
+    .ripple{position:absolute;left:var(--tap-x,50%);top:var(--tap-y,54%);width:var(--tap-size,90px);height:var(--tap-size,90px);border-radius:50%;transform:translate(-50%,-50%);background:radial-gradient(circle,#ff8bda9e 0 10%,#8b3eff65 32%,transparent 68%);opacity:var(--tap-opacity,.75);pointer-events:none}
+    .panel{padding:16px 20px 20px;border-bottom:1px solid #e5e9f0;background:#fff}.mode{display:grid;grid-template-columns:1fr 1fr;padding:3px;background:#eceef7;border-radius:13px}.mode button{border:0;background:transparent;padding:10px;border-radius:10px;color:#718096;font-weight:800}.mode button.active{background:#fff;color:#19264d;box-shadow:0 2px 8px #19264d16}
+    .control{margin-top:14px}.label{display:flex;justify-content:space-between;font-size:13px;font-weight:700}.control input{width:100%;accent-color:#7552b8}.summary-area{padding:18px 20px 26px;background:#f5f6fa}.summary-area h2{font-size:16px;margin:0 0 8px}.summary{display:flex;align-items:center;height:56px;border-radius:18px;background:#fff;box-shadow:0 7px 22px #19264d13;padding:4px 8px;gap:9px;min-width:0}.ghost{flex:0 0 48px;width:48px;height:48px;border:0;background:transparent;border-radius:14px;color:#475569;font-size:21px}.amount{min-width:0;flex:1;font-size:17px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.date{font-size:12px;color:#718096;white-space:nowrap}.time{height:42px;padding:0 10px;border:0;border-radius:12px;background:#f1f5f9;color:#19264d;font-weight:700}.summary.trailing .ghost{order:4}.summary.trailing .amount{order:1}.summary.trailing .date{order:2}.summary.trailing .time{order:3}.pick{display:flex;gap:8px;margin:12px 0 0}.pick button{flex:1;border:1px solid #dde2ec;border-radius:11px;background:#fff;padding:8px;color:#19264d;font-weight:700}.pick button.active{border-color:#7552b8;background:#f5f0ff}
+    .note{margin-top:20px;padding:12px 14px;background:#fff;border-radius:14px;color:#475569;font-size:13px}.note b{color:#19264d}
+  </style>
+</head>
+<body><main>
+  <h1>Header hullám · Summary ghost</h1>
+  <p>Viselkedési vázlat: a „Jelenlegi” csak ideiglenes effektív értéket ad, a Saját profil változatlanul megmarad. Húzd az ujjad a headeren; a hullám a headeré, nem az összecsukásé.</p>
+  <section class="phone">
+    <div class="header" id="header"><div class="top">Dashboard <button class="tuner" aria-label="Hangoló">☰</button></div><div class="title">EGYENLEG</div><div class="balance">124 900 Ft</div><div class="hint">A header-húzás csak víznyomot rajzol.</div><div class="ripple" id="ripple"></div></div>
+    <div class="panel"><div class="mode"><button id="current">Jelenlegi</button><button id="custom" class="active">Saját</button></div>
+      <div class="control"><div class="label"><span>Dinamikus nyomvonal erőssége</span><output id="trailOut">225%</output></div><input id="trail" type="range" min="0" max="300" step="5" value="225"></div>
+      <div class="control"><div class="label"><span>Tap-hullám indulómérete</span><output id="startOut">55%</output></div><input id="start" type="range" min="25" max="100" step="5" value="55"></div>
+      <div class="control"><div class="label"><span>Tap-hullám erőssége</span><output id="tapOut">75%</output></div><input id="tap" type="range" min="0" max="100" step="5" value="75"></div>
+    </div>
+    <div class="summary-area"><h2>Summary pill ghost-elhelyezése</h2><div class="summary" id="summary"><button class="ghost" aria-label="Ghost gyorsszűrő">♧</button><strong class="amount">24 900 Ft</strong><span class="date">MA · OKT. 31.</span><button class="time">Nap⌄</button></div><div class="pick"><button id="leading" class="active">Summary pill – bal oldalon</button><button id="trailing">Summary pill – jobb szélen</button></div><div class="note"><b>Cellabirtoklás:</b> a ghost és az időszint két külön, 48 dp-es hitbox. Egy húzás kezdeti cellája kapja a teljes mozdulatot.</div></div>
+  </section>
+</main><script>
+const h=document.querySelector('#header'), r=document.querySelector('#ripple');const ids=['trail','start','tap'];let custom={trail:225,start:55,tap:75}, current=false;
+function values(){return current?{trail:100,start:100,tap:100}:custom}function render(){let v=values(); ids.forEach(id=>{document.querySelector('#'+id).value=v[id];document.querySelector('#'+id+'Out').value=v[id]+'%'});h.style.setProperty('--trail-opacity',(v.trail/300).toFixed(2));r.style.setProperty('--tap-opacity',(v.tap/100*.75).toFixed(2));r.style.setProperty('--tap-size',(44*v.start/55)+'px');document.querySelector('#current').classList.toggle('active',current);document.querySelector('#custom').classList.toggle('active',!current)}
+ids.forEach(id=>document.querySelector('#'+id).addEventListener('input',e=>{custom[id]=+e.target.value;current=false;render()}));document.querySelector('#current').onclick=()=>{current=true;render()};document.querySelector('#custom').onclick=()=>{current=false;render()};
+h.addEventListener('pointerdown',e=>{h.setPointerCapture(e.pointerId);paint(e)});h.addEventListener('pointermove',e=>{if(e.buttons)paint(e)});function paint(e){const b=h.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*100,y=(e.clientY-b.top)/b.height*100;h.style.setProperty('--x',x+'%');h.style.setProperty('--y',y+'%');r.style.setProperty('--tap-x',x+'%');r.style.setProperty('--tap-y',y+'%')}
+['leading','trailing'].forEach(id=>document.querySelector('#'+id).onclick=()=>{const trailing=id==='trailing';document.querySelector('#summary').classList.toggle('trailing',trailing);document.querySelector('#leading').classList.toggle('active',!trailing);document.querySelector('#trailing').classList.toggle('active',trailing)});render();
+</script></body></html>

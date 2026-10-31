@@ -33,6 +33,7 @@ import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import '../application/dashboard_presentation_preferences.dart';
 import '../query/domain/ledger_direction.dart';
+import '../query/domain/ghost_filter_mode.dart';
 import '../query/domain/query_amount_range.dart';
 import '../query/application/dashboard_applied_query_facet_loader.dart';
 import '../query/presentation/query_amount_range_control.dart';
@@ -47,6 +48,7 @@ import 'core_modes/balance_presentation_settings.dart';
 import 'core_modes/balance_header_glass_configuration.dart';
 import 'core_modes/dashboard_header_balance_color_scale.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
+import 'core_modes/dashboard_header_tap_wave.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
 import 'core_modes/budget_category_distribution_visual_bank.dart';
 import 'core_modes/budget_distribution_pager.dart';
@@ -190,6 +192,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   _dashboardPresentationPreferences;
   late final bool _ownsDashboardPresentationPreferences;
   bool _applyingDashboardPresentationPreferences = false;
+  Timer? _tapWavePreferencePersistDebounce;
   late final DashboardBalanceHeaderColorPolicy _balanceHeaderColorPolicy;
   late final DashboardBudgetHeaderColorPolicy _budgetHeaderColorPolicy;
   late final DashboardMindHeaderColorPolicy _mindHeaderColorPolicy;
@@ -310,6 +313,9 @@ class _CoreDashboardState extends State<CoreDashboard>
         );
     _headerVisualController.tuning.addListener(
       _persistBalanceHeaderColorPreferences,
+    );
+    _headerVisualController.tapWaveTuning.addListener(
+      _scheduleTapWavePreferencePersist,
     );
     controller.mindYearHeatmapPresentation.addListener(
       _persistDashboardPresentationPreferences,
@@ -617,6 +623,11 @@ class _CoreDashboardState extends State<CoreDashboard>
           windowWidthPercent: restored.balanceHeaderPaletteWindowWidthPercent,
         ),
       );
+      _headerVisualController.restoreTapWaveControls(
+        trailStrengthPercent: restored.headerTapWaveTrailStrengthPercent,
+        tapStartSizePercent: restored.headerTapWaveTapStartSizePercent,
+        tapStrengthPercent: restored.headerTapWaveTapStrengthPercent,
+      );
     } finally {
       _applyingDashboardPresentationPreferences = false;
     }
@@ -692,7 +703,28 @@ class _CoreDashboardState extends State<CoreDashboard>
             _dashboardPresentationPreferences.value.pushProfileUiDesign,
         automationHomeUiDesign:
             _dashboardPresentationPreferences.value.automationHomeUiDesign,
+        headerTapWaveTrailStrengthPercent: _headerVisualController
+            .tapWaveTuning
+            .value
+            .valueFor(DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId),
+        headerTapWaveTapStartSizePercent: _headerVisualController
+            .tapWaveTuning
+            .value
+            .valueFor(DashboardHeaderTapWaveCatalog.tapStartSizeId),
+        headerTapWaveTapStrengthPercent: _headerVisualController
+            .tapWaveTuning
+            .value
+            .valueFor(DashboardHeaderTapWaveCatalog.tapStrengthId),
       ),
+    );
+  }
+
+  void _scheduleTapWavePreferencePersist() {
+    if (_applyingDashboardPresentationPreferences || !mounted) return;
+    _tapWavePreferencePersistDebounce?.cancel();
+    _tapWavePreferencePersistDebounce = Timer(
+      const Duration(milliseconds: 280),
+      _persistDashboardPresentationPreferences,
     );
   }
 
@@ -926,6 +958,7 @@ class _CoreDashboardState extends State<CoreDashboard>
 
   @override
   void dispose() {
+    _tapWavePreferencePersistDebounce?.cancel();
     _summaryAutoResetController.cancel();
     _summaryAutoResetMotions.cancelActiveResetMotion();
     _summaryAutoResetController.dispose();
@@ -963,6 +996,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     );
     _headerVisualController.tuning.removeListener(
       _persistBalanceHeaderColorPreferences,
+    );
+    _headerVisualController.tapWaveTuning.removeListener(
+      _scheduleTapWavePreferencePersist,
     );
     if (_ownsDashboardPresentationPreferences) {
       _dashboardPresentationPreferences.dispose();
@@ -1443,6 +1479,23 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               _recordSummaryPointerHit,
                                           onBackgroundVerticalDragStart:
                                               _beginSummaryBackgroundVerticalDrag,
+                                          ghostPresentation:
+                                              _dashboardPresentationPreferences
+                                                  .value
+                                                  .ghostQuickFilterPresentation,
+                                          ghostMode: controller.currentQuery
+                                              .scopeFor(
+                                                controller
+                                                            .transactionDirection
+                                                            .direction ==
+                                                        TransactionDirection
+                                                            .income
+                                                    ? LedgerDirection.income
+                                                    : LedgerDirection.expense,
+                                              )
+                                              .ghostFilterMode,
+                                          onGhostModeSelected:
+                                              controller.applyGhostFilterMode,
                                         ),
                                       ),
                                       _FramePosition(
@@ -1793,11 +1846,23 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                 frame.isExpansionDragging,
                                           ),
                                         ),
-                                      if (_dashboardPresentationPreferences
-                                                  .value
-                                                  .ghostQuickFilterPresentation !=
-                                              DashboardGhostQuickFilterPresentation
-                                                  .searchPillFling &&
+                                      if (switch (_dashboardPresentationPreferences
+                                              .value
+                                              .ghostQuickFilterPresentation) {
+                                            DashboardGhostQuickFilterPresentation
+                                                .current ||
+                                            DashboardGhostQuickFilterPresentation
+                                                .dropdown ||
+                                            DashboardGhostQuickFilterPresentation
+                                                .rail => true,
+                                            DashboardGhostQuickFilterPresentation
+                                                .searchPillFling ||
+                                            DashboardGhostQuickFilterPresentation
+                                                .summaryPillLeadingFling ||
+                                            DashboardGhostQuickFilterPresentation
+                                                .summaryPillTrailingFling =>
+                                              false,
+                                          } &&
                                           geometry
                                                   .ghostQuickFilterBounds
                                                   .height >=
@@ -2332,6 +2397,8 @@ class _CoreDashboardState extends State<CoreDashboard>
     DashboardGhostQuickFilterPresentation.dropdown => 144,
     DashboardGhostQuickFilterPresentation.rail => 144,
     DashboardGhostQuickFilterPresentation.searchPillFling => 48,
+    DashboardGhostQuickFilterPresentation.summaryPillLeadingFling => 0,
+    DashboardGhostQuickFilterPresentation.summaryPillTrailingFling => 0,
   };
 
   DashboardDayRhythmNavigation get _dayRhythmNavigation =>
@@ -2457,6 +2524,9 @@ class _DashboardSummaryRegion extends StatelessWidget {
     required this.upperVerticalGestures,
     required this.onPointerHitClassified,
     required this.onBackgroundVerticalDragStart,
+    required this.ghostPresentation,
+    required this.ghostMode,
+    required this.onGhostModeSelected,
   });
 
   final DashboardTemporalCarouselCoordinator temporalCarouselCoordinator;
@@ -2477,6 +2547,9 @@ class _DashboardSummaryRegion extends StatelessWidget {
   final DashboardUpperVerticalGestureCoordinator upperVerticalGestures;
   final ValueChanged<SummarySegmentedPointerHit> onPointerHitClassified;
   final GestureDragStartCallback onBackgroundVerticalDragStart;
+  final DashboardGhostQuickFilterPresentation ghostPresentation;
+  final GhostFilterMode ghostMode;
+  final Future<bool> Function(GhostFilterMode mode) onGhostModeSelected;
 
   @override
   Widget build(BuildContext context) =>
@@ -2584,6 +2657,9 @@ class _DashboardSummaryRegion extends StatelessWidget {
                       component: component,
                     ),
                 motionDiagnostics: controller.railFlightRecorder,
+                ghostPresentation: ghostPresentation,
+                ghostMode: ghostMode,
+                onGhostModeSelected: onGhostModeSelected,
               ),
             },
           );
@@ -2630,6 +2706,9 @@ class _DashboardSummaryRegion extends StatelessWidget {
           ),
         );
       },
+      ghostPresentation: ghostPresentation,
+      ghostMode: ghostMode,
+      onGhostModeSelected: onGhostModeSelected,
     );
   }
 

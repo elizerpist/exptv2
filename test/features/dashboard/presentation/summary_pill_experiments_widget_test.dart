@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
@@ -10,6 +11,8 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_auto_reset_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
+import 'package:fluvi/features/dashboard/query/domain/ghost_filter_mode.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
@@ -23,6 +26,8 @@ import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_f
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 void main() {
+  setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
+
   test(
     'narrow segmented Summary redistributes only the amount envelope before authored tracks clip',
     () {
@@ -230,6 +235,61 @@ void main() {
     );
     expect(shell.decoration.color, const Color(0xFFFEFEFF));
     expect(shell.decoration.border, isNull);
+  });
+
+  testWidgets('Summary ghost reserves a real leading or trailing cell', (
+    tester,
+  ) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+      initialPlane: TimePlane.month,
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
+
+    Future<void> pump(DashboardGhostQuickFilterPresentation placement) =>
+        tester.pumpWidget(
+          MaterialApp(
+            home: SummaryPillExperiment(
+              variant: SummaryPillVariant.segmented,
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visibleFrames,
+              onLevelCrossed: (_, _) {},
+              onComponentCrossed: (_, _) {},
+              ghostPresentation: placement,
+              ghostMode: GhostFilterMode.both,
+              onGhostModeSelected: (_) async => true,
+            ),
+          ),
+        );
+
+    await pump(DashboardGhostQuickFilterPresentation.summaryPillLeadingFling);
+    await tester.pump();
+    final leading = tester.getRect(
+      find.byKey(
+        const ValueKey<String>('dashboard-ghost-summary-leading-semantics'),
+      ),
+    );
+    final amount = tester.getRect(
+      find.byKey(const ValueKey<String>('summary-pill-experiment-amount-zone')),
+    );
+    expect(leading.width, 48);
+    expect(leading.right, lessThanOrEqualTo(amount.left));
+
+    await pump(DashboardGhostQuickFilterPresentation.summaryPillTrailingFling);
+    await tester.pump();
+    final trailing = tester.getRect(
+      find.byKey(
+        const ValueKey<String>('dashboard-ghost-summary-trailing-semantics'),
+      ),
+    );
+    final trailingAmount = tester.getRect(
+      find.byKey(const ValueKey<String>('summary-pill-experiment-amount-zone')),
+    );
+    expect(trailing.width, 48);
+    expect(trailing.left, greaterThanOrEqualTo(trailingAmount.right));
   });
 
   testWidgets(
