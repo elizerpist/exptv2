@@ -42,8 +42,6 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_sce
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
-import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -5111,13 +5109,6 @@ void main() {
       await tester.pump();
       expect(core.mindYearHeatmap.value!.identity.year, 2026);
 
-      tester
-          .widget<DashboardHeaderVisualTuner>(
-            find.byType(DashboardHeaderVisualTuner),
-          )
-          .summaryPillVariants!
-          .select(SummaryPillVariant.segmented);
-      await tester.pump();
       final selector = find.byKey(
         const ValueKey<String>('summary-pill-segmented-year-selector'),
       );
@@ -5367,13 +5358,6 @@ void main() {
       // accepted components, painted LogBox frames, renderer acknowledgement
       // and terminal settle; no parallel temporal/heatmap implementation is
       // introduced by the test.
-      tester
-          .widget<DashboardHeaderVisualTuner>(
-            find.byType(DashboardHeaderVisualTuner),
-          )
-          .summaryPillVariants!
-          .select(SummaryPillVariant.segmented);
-      await tester.pump();
       expect(
         find.byKey(
           const ValueKey<String>('summary-pill-segmented-year-selector'),
@@ -5531,13 +5515,6 @@ void main() {
         const LocalDate(year: 2026, month: 1, day: 1).epochDay,
       );
 
-      tester
-          .widget<DashboardHeaderVisualTuner>(
-            find.byType(DashboardHeaderVisualTuner),
-          )
-          .summaryPillVariants!
-          .select(SummaryPillVariant.segmented);
-      await tester.pump();
       final selector = find.byKey(
         const ValueKey<String>('summary-pill-segmented-year-selector'),
       );
@@ -5636,13 +5613,6 @@ void main() {
       expect(core.ensureMindYearHeatmapProjection(), isTrue);
       await tester.pump();
 
-      tester
-          .widget<DashboardHeaderVisualTuner>(
-            find.byType(DashboardHeaderVisualTuner),
-          )
-          .summaryPillVariants!
-          .select(SummaryPillVariant.segmented);
-      await tester.pump();
       final selector = find.byKey(
         const ValueKey<String>('summary-pill-segmented-year-selector'),
       );
@@ -5859,13 +5829,6 @@ void main() {
       );
       _installMindAmountDomain(core, LedgerDirection.income);
       expect(core.ensureMindYearHeatmapProjection(), isTrue);
-      await tester.pump();
-      tester
-          .widget<DashboardHeaderVisualTuner>(
-            find.byType(DashboardHeaderVisualTuner),
-          )
-          .summaryPillVariants!
-          .select(SummaryPillVariant.segmented);
       await tester.pump();
       final selector = find.byKey(
         const ValueKey<String>('summary-pill-segmented-year-selector'),
@@ -6084,13 +6047,6 @@ void main() {
       expect(core.ensureMindYearHeatmapProjection(), isTrue);
       await tester.pump();
 
-      tester
-          .widget<DashboardHeaderVisualTuner>(
-            find.byType(DashboardHeaderVisualTuner),
-          )
-          .summaryPillVariants!
-          .select(SummaryPillVariant.segmented);
-      await tester.pump();
       final selector = find.byKey(
         const ValueKey<String>('summary-pill-segmented-year-selector'),
       );

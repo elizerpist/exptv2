@@ -6,7 +6,6 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
-import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
@@ -36,7 +35,6 @@ void main() {
             controller: controller,
             modeController: modeController,
             categoryCollection: emptyTestCategoryCollection,
-            initialSummaryPillVariant: SummaryPillVariant.legacy,
           ),
         ),
       );

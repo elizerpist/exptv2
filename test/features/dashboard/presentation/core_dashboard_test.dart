@@ -17,7 +17,6 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
-import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
@@ -345,8 +344,10 @@ void main() {
       final tuner = tester.widget<DashboardHeaderVisualTuner>(
         find.byType(DashboardHeaderVisualTuner),
       );
-      expect(tuner.summaryPillVariants!.value, SummaryPillVariant.segmented);
-      expect(tuner.summaryPillVariants!.transitionEpoch, 0);
+      expect(
+        find.byKey(const ValueKey('summary-pill-experiment-segmented')),
+        findsOneWidget,
+      );
       expect(
         tuner.summaryPresentation!.value.segmentedOrientation,
         SummarySegmentedOrientation.mirrored,
@@ -567,7 +568,6 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.budget),
           categoryCollection: emptyTestCategoryCollection,
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
       await tester.pump();
@@ -661,7 +661,6 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.budget),
           categoryCollection: emptyTestCategoryCollection,
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 
@@ -709,96 +708,6 @@ void main() {
   );
 
   testWidgets(
-    'switching away from an active segmented Summary releases its shared motion lane',
-    (tester) async {
-      final controller = DashboardCoreController(initialCoreRevision: 1);
-      addTearDown(controller.dispose);
-      await controller.bootstrap();
-
-      await pumpDashboardSurface(
-        tester,
-        CoreDashboard(
-          controller: controller,
-          modeController: _modeControllerFor(DashboardModeSpec.budget),
-          categoryCollection: emptyTestCategoryCollection,
-        ),
-      );
-
-      final tuner = tester.widget<DashboardHeaderVisualTuner>(
-        find.byType(DashboardHeaderVisualTuner),
-      );
-      final variants = tuner.summaryPillVariants!;
-      final queryBefore = controller.currentQuery.scope.key;
-      final countBefore = controller.visibleFrames.countLane.value;
-      variants.select(SummaryPillVariant.segmented);
-      await tester.pump();
-      expect(controller.currentQuery.scope.key, queryBefore);
-      expect(controller.visibleFrames.countLane.value, same(countBefore));
-
-      final selector = find.byKey(
-        const ValueKey<String>('summary-pill-segmented-month-selector'),
-      );
-      expect(selector, findsOneWidget);
-      final gesture = await tester.startGesture(tester.getCenter(selector));
-      await gesture.moveBy(const Offset(0, -96));
-      await tester.pump();
-      expect(controller.foregroundInputMotion.value, isTrue);
-
-      FluviDiagnosticLogger.clear();
-      variants.select(SummaryPillVariant.legacy);
-      await tester.pump();
-
-      expect(
-        find.byKey(
-          const ValueKey<String>('summary-pill-segmented-month-selector'),
-        ),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('dashboard-summary-shell-transform')),
-        findsOneWidget,
-      );
-      expect(controller.foregroundInputMotion.value, isFalse);
-      expect(
-        controller.isMotionLaneActive(DashboardMotionLane.summaryShell),
-        isFalse,
-      );
-      expect(controller.currentQuery.scope.key, queryBefore);
-      expect(controller.visibleFrames.countLane.value, same(countBefore));
-      final transitionStarted = FluviDiagnosticLogger.entries
-          .where((event) => event.stage == 'SUMMARY_VARIANT_TRANSITION_STARTED')
-          .single;
-      expect(transitionStarted.scope, contains('interactionEpoch='));
-      expect(transitionStarted.scope, contains('producerLocalGeneration='));
-      expect(transitionStarted.scope, contains('targetHandle='));
-      expect(
-        FluviDiagnosticLogger.entries
-            .singleWhere(
-              (event) => event.stage == 'SUMMARY_VARIANT_OUTGOING_QUIESCED',
-            )
-            .scope,
-        contains('summaryShellMotionActive=false'),
-      );
-      expect(
-        FluviDiagnosticLogger.entries.where(
-          (event) => event.stage == 'SUMMARY_VARIANT_STALE_CALLBACK_REJECTED',
-        ),
-        hasLength(1),
-        reason:
-            'The outgoing segmented controller disposes after selection has '
-            'advanced the epoch; it must not re-own the current Summary lane.',
-      );
-      expect(
-        FluviDiagnosticLogger.entries.where(
-          (event) => event.stage == 'SUMMARY_VARIANT_TRANSITION_COMPLETED',
-        ),
-        hasLength(1),
-      );
-      await gesture.up();
-    },
-  );
-
-  testWidgets(
     'RED production Summary: an immediate second Day swipe keeps exclusive selector ownership',
     (tester) async {
       final controller = DashboardCoreController(
@@ -818,12 +727,6 @@ void main() {
           categoryCollection: emptyTestCategoryCollection,
         ),
       );
-      final tuner = tester.widget<DashboardHeaderVisualTuner>(
-        find.byType(DashboardHeaderVisualTuner),
-      );
-      tuner.summaryPillVariants!.select(SummaryPillVariant.segmented);
-      await tester.pump();
-
       final day = find.byKey(
         const ValueKey<String>('summary-pill-segmented-day-selector'),
       );
@@ -899,13 +802,6 @@ void main() {
           categoryCollection: emptyTestCategoryCollection,
         ),
       );
-      tester
-          .widget<DashboardHeaderVisualTuner>(
-            find.byType(DashboardHeaderVisualTuner),
-          )
-          .summaryPillVariants!
-          .select(SummaryPillVariant.segmented);
-      await tester.pump();
 
       final selector = find.byKey(
         const ValueKey<String>('summary-pill-segmented-year-selector'),
@@ -983,13 +879,6 @@ void main() {
           categoryCollection: emptyTestCategoryCollection,
         ),
       );
-      tester
-          .widget<DashboardHeaderVisualTuner>(
-            find.byType(DashboardHeaderVisualTuner),
-          )
-          .summaryPillVariants!
-          .select(SummaryPillVariant.segmented);
-      await tester.pump();
 
       for (final delay in <Duration>[
         Duration.zero,
@@ -1143,16 +1032,8 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
-      tester
-          .widget<DashboardHeaderVisualTuner>(
-            find.byType(DashboardHeaderVisualTuner),
-          )
-          .summaryPillVariants!
-          .select(SummaryPillVariant.segmented);
-      await tester.pump();
 
       final summary = tester.getRect(
         find.byKey(const ValueKey('summary-pill-experiment-segmented')),
@@ -1379,7 +1260,6 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.budget),
           categoryCollection: categories,
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
       await tester.pump();
@@ -1431,7 +1311,6 @@ void main() {
             controller: controller,
             modeController: _modeControllerFor(spec),
             categoryCollection: emptyTestCategoryCollection,
-            initialSummaryPillVariant: SummaryPillVariant.legacy,
           ),
         );
 
@@ -1524,7 +1403,6 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 
@@ -1561,7 +1439,6 @@ void main() {
         controller: controller,
         modeController: _modeControllerFor(DashboardModeSpec.balance),
         categoryCollection: emptyTestCategoryCollection,
-        initialSummaryPillVariant: SummaryPillVariant.legacy,
       ),
     );
 
@@ -1637,7 +1514,6 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 
@@ -1714,7 +1590,6 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 
@@ -1750,7 +1625,6 @@ void main() {
         controller: controller,
         modeController: _modeControllerFor(DashboardModeSpec.balance),
         categoryCollection: emptyTestCategoryCollection,
-        initialSummaryPillVariant: SummaryPillVariant.legacy,
       ),
     );
 
@@ -1797,7 +1671,6 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 
@@ -1946,7 +1819,6 @@ void main() {
           // This reduced-width geometry fixture predates the segmented
           // product default and exercises collapse travel, not Summary mode.
           // Keep its authored narrow legacy surface explicit.
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
         surfaceSize: halfSurface,
       );
