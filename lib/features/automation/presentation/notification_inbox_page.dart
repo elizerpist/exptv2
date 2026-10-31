@@ -38,6 +38,7 @@ class _NotificationInboxPageState extends State<NotificationInboxPage> {
     try {
       final events = await widget.repository.inbox(
         profileId: widget.profileId,
+        reviewStatus: widget.onlyReview ? PushReviewStatus.pending : null,
         limit: 100,
       );
       if (mounted) {

@@ -10,9 +10,70 @@ import '../../dashboard/query/domain/ledger_direction.dart';
 import '../../manual_transactions/application/manual_transaction_editor_preferences.dart';
 import 'recurring_navigation.dart';
 import 'push_profile_navigation.dart';
+import 'unified_automation_home_page.dart';
 
-class AutomationDashboardPage extends StatefulWidget {
+/// Chooses the Automation tab's overview only. The recurring and push
+/// callbacks remain independent route-family snapshots for child navigation.
+final class AutomationDashboardPage extends StatelessWidget {
   const AutomationDashboardPage({
+    super.key,
+    required this.repository,
+    required this.permissions,
+    this.manualRepository,
+    this.categories = const <FluviCategory>[],
+    this.categoryRepository,
+    this.preferencesStore,
+    this.recurringUiDesign,
+    this.pushProfileUiDesign,
+    this.automationHomeUiDesign = AutomationHomeUiDesign.unified,
+    this.direction = LedgerDirection.expense,
+    this.onOpenLedgerEntry,
+  });
+  final AutomationRepository repository;
+  final AutomationPermissionRepository permissions;
+  final ManualTransactionRepository? manualRepository;
+  final List<FluviCategory> categories;
+  final CategoryRepository? categoryRepository;
+  final ManualTransactionEditorPreferencesStore? preferencesStore;
+  final RecurringUiDesign Function()? recurringUiDesign;
+  final PushProfileUiDesign Function()? pushProfileUiDesign;
+  final AutomationHomeUiDesign automationHomeUiDesign;
+  final LedgerDirection direction;
+  final Future<void> Function(String entryId)? onOpenLedgerEntry;
+  @override
+  Widget build(BuildContext context) =>
+      automationHomeUiDesign == AutomationHomeUiDesign.legacy
+      ? LegacyAutomationDashboardPage(
+          repository: repository,
+          permissions: permissions,
+          manualRepository: manualRepository,
+          categories: categories,
+          categoryRepository: categoryRepository,
+          preferencesStore: preferencesStore,
+          recurringUiDesign: recurringUiDesign,
+          pushProfileUiDesign: pushProfileUiDesign,
+          direction: direction,
+          onOpenLedgerEntry: onOpenLedgerEntry,
+        )
+      : UnifiedAutomationHomePage(
+          repository: repository,
+          permissions: permissions,
+          manualRepository: manualRepository,
+          categories: categories,
+          categoryRepository: categoryRepository,
+          preferencesStore: preferencesStore,
+          recurringUiDesign:
+              recurringUiDesign?.call() ?? RecurringUiDesign.unified,
+          pushProfileUiDesign:
+              pushProfileUiDesign?.call() ?? PushProfileUiDesign.unified,
+          direction: direction,
+          onOpenLedgerEntry: onOpenLedgerEntry,
+        );
+}
+
+/// The original dashboard stays intact behind the explicit "Régi" chooser.
+final class LegacyAutomationDashboardPage extends StatefulWidget {
+  const LegacyAutomationDashboardPage({
     super.key,
     required this.repository,
     required this.permissions,
@@ -36,11 +97,12 @@ class AutomationDashboardPage extends StatefulWidget {
   final LedgerDirection direction;
   final Future<void> Function(String entryId)? onOpenLedgerEntry;
   @override
-  State<AutomationDashboardPage> createState() =>
-      _AutomationDashboardPageState();
+  State<LegacyAutomationDashboardPage> createState() =>
+      _LegacyAutomationDashboardPageState();
 }
 
-class _AutomationDashboardPageState extends State<AutomationDashboardPage>
+class _LegacyAutomationDashboardPageState
+    extends State<LegacyAutomationDashboardPage>
     with WidgetsBindingObserver {
   AutomationDashboardSnapshot? _snapshot;
   AutomationPermissionStatus? _permissions;

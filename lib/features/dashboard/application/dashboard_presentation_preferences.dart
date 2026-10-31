@@ -30,6 +30,10 @@ enum RecurringUiDesign { legacy, unified }
 /// profile state, rules or transactions.
 enum PushProfileUiDesign { legacy, unified }
 
+/// Chooses only the Automation tab's overview surface. It is deliberately
+/// independent from the recurring and push-profile flow selectors.
+enum AutomationHomeUiDesign { legacy, unified }
+
 /// Persisted presentation-only choices. Financial membership, query state,
 /// selected time and prepared data are deliberately outside this value.
 final class DashboardPresentationPreferences {
@@ -73,6 +77,7 @@ final class DashboardPresentationPreferences {
         DashboardGhostQuickFilterPresentation.searchPillFling,
     this.recurringUiDesign = RecurringUiDesign.unified,
     this.pushProfileUiDesign = PushProfileUiDesign.unified,
+    this.automationHomeUiDesign = AutomationHomeUiDesign.unified,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -109,6 +114,7 @@ final class DashboardPresentationPreferences {
   final DashboardGhostQuickFilterPresentation ghostQuickFilterPresentation;
   final RecurringUiDesign recurringUiDesign;
   final PushProfileUiDesign pushProfileUiDesign;
+  final AutomationHomeUiDesign automationHomeUiDesign;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.sumA,
@@ -138,6 +144,7 @@ final class DashboardPresentationPreferences {
         DashboardGhostQuickFilterPresentation.searchPillFling,
     recurringUiDesign: RecurringUiDesign.unified,
     pushProfileUiDesign: PushProfileUiDesign.unified,
+    automationHomeUiDesign: AutomationHomeUiDesign.unified,
   );
 
   @override
@@ -182,7 +189,8 @@ final class DashboardPresentationPreferences {
       other.ghostQuickFilterIconPack == ghostQuickFilterIconPack &&
       other.ghostQuickFilterPresentation == ghostQuickFilterPresentation &&
       other.recurringUiDesign == recurringUiDesign &&
-      other.pushProfileUiDesign == pushProfileUiDesign;
+      other.pushProfileUiDesign == pushProfileUiDesign &&
+      other.automationHomeUiDesign == automationHomeUiDesign;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -217,6 +225,7 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterPresentation,
     recurringUiDesign,
     pushProfileUiDesign,
+    automationHomeUiDesign,
   ]);
 
   DashboardPresentationPreferences withGhostQuickFilterIconPack(
@@ -257,6 +266,7 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterPresentation: ghostQuickFilterPresentation,
     recurringUiDesign: recurringUiDesign,
     pushProfileUiDesign: pushProfileUiDesign,
+    automationHomeUiDesign: automationHomeUiDesign,
   );
 
   DashboardPresentationPreferences withGhostQuickFilterPresentation(
@@ -297,6 +307,7 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterPresentation: next,
     recurringUiDesign: recurringUiDesign,
     pushProfileUiDesign: pushProfileUiDesign,
+    automationHomeUiDesign: automationHomeUiDesign,
   );
 
   DashboardPresentationPreferences withRecurringUiDesign(
@@ -337,6 +348,7 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterPresentation: ghostQuickFilterPresentation,
     recurringUiDesign: next,
     pushProfileUiDesign: pushProfileUiDesign,
+    automationHomeUiDesign: automationHomeUiDesign,
   );
 
   DashboardPresentationPreferences withPushProfileUiDesign(
@@ -377,6 +389,48 @@ final class DashboardPresentationPreferences {
     ghostQuickFilterPresentation: ghostQuickFilterPresentation,
     recurringUiDesign: recurringUiDesign,
     pushProfileUiDesign: next,
+    automationHomeUiDesign: automationHomeUiDesign,
+  );
+
+  DashboardPresentationPreferences withAutomationHomeUiDesign(
+    AutomationHomeUiDesign next,
+  ) => DashboardPresentationPreferences(
+    sumVisualStyle: sumVisualStyle,
+    showSumLayoutChooser: showSumLayoutChooser,
+    yearGridLayout: yearGridLayout,
+    yearMonthlyAmountPresentation: yearMonthlyAmountPresentation,
+    showDayContentViewChooser: showDayContentViewChooser,
+    balanceUsesChildCards: balanceUsesChildCards,
+    balanceHeaderGraphPresentation: balanceHeaderGraphPresentation,
+    balanceDayLayoutPresentation: balanceDayLayoutPresentation,
+    balanceDayFocusedPresentation: balanceDayFocusedPresentation,
+    balanceDayPerformanceVisualPresentation:
+        balanceDayPerformanceVisualPresentation,
+    balanceDayRatioViewPresentation: balanceDayRatioViewPresentation,
+    balanceDayRatioPresentation: balanceDayRatioPresentation,
+    balanceShowFocusedDayImpact: balanceShowFocusedDayImpact,
+    balanceSumLayoutPresentation: balanceSumLayoutPresentation,
+    balanceSumFocusedPresentation: balanceSumFocusedPresentation,
+    balanceShowSumFocusedSupplementaryStats:
+        balanceShowSumFocusedSupplementaryStats,
+    balanceMonthLayoutPresentation: balanceMonthLayoutPresentation,
+    balanceYearLayoutPresentation: balanceYearLayoutPresentation,
+    balanceDailyCalculationMode: balanceDailyCalculationMode,
+    balanceMonthlySpendingChartPresentation:
+        balanceMonthlySpendingChartPresentation,
+    balanceHeaderPartitionHeightPercent: balanceHeaderPartitionHeightPercent,
+    balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
+    balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
+    balanceHeaderPalette: balanceHeaderPalette,
+    balanceHeaderPaletteVariant: balanceHeaderPaletteVariant,
+    balanceHeaderPalettePositionPercent: balanceHeaderPalettePositionPercent,
+    balanceHeaderPaletteWindowWidthPercent:
+        balanceHeaderPaletteWindowWidthPercent,
+    ghostQuickFilterIconPack: ghostQuickFilterIconPack,
+    ghostQuickFilterPresentation: ghostQuickFilterPresentation,
+    recurringUiDesign: recurringUiDesign,
+    pushProfileUiDesign: pushProfileUiDesign,
+    automationHomeUiDesign: next,
   );
 }
 

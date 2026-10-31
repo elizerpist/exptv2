@@ -1161,7 +1161,10 @@ class _FluviAppShellState extends State<FluviAppShell>
                               // income/expense side instead of the old shell
                               // build's default.
                               AnimatedBuilder(
-                                animation: _controller.transactionDirection,
+                                animation: Listenable.merge([
+                                  _controller.transactionDirection,
+                                  _dashboardPresentationPreferences,
+                                ]),
                                 builder: (context, _) => AutomationDashboardPage(
                                   repository: _automationRepository,
                                   permissions: _automationPermissionRepository,
@@ -1180,6 +1183,10 @@ class _FluviAppShellState extends State<FluviAppShell>
                                       _dashboardPresentationPreferences
                                           .value
                                           .pushProfileUiDesign,
+                                  automationHomeUiDesign:
+                                      _dashboardPresentationPreferences
+                                          .value
+                                          .automationHomeUiDesign,
                                   direction:
                                       _controller
                                               .transactionDirection

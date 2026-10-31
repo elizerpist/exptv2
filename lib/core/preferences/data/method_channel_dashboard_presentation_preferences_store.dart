@@ -207,6 +207,12 @@ final class MethodChannelDashboardPresentationPreferencesStore
           'legacy' => PushProfileUiDesign.legacy,
           _ => PushProfileUiDesign.unified,
         },
+        // Keep this named independently from the two child-flow choices. An
+        // old dashboard enum must never be reinterpreted as an overview UI.
+        automationHomeUiDesign: switch (values['automationHomeUiDesign']) {
+          'legacy' => AutomationHomeUiDesign.legacy,
+          _ => AutomationHomeUiDesign.unified,
+        },
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -275,6 +281,7 @@ final class MethodChannelDashboardPresentationPreferencesStore
             preferences.ghostQuickFilterPresentation.index,
         'recurringUiDesign': preferences.recurringUiDesign.name,
         'pushProfileUiDesign': preferences.pushProfileUiDesign.name,
+        'automationHomeUiDesign': preferences.automationHomeUiDesign.name,
       });
 }
 

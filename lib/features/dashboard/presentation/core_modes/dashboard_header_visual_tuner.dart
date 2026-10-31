@@ -3129,6 +3129,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                     _RecurringUiDesignSection(controller: preferences),
                     const SizedBox(height: 14),
                     _PushProfileUiDesignSection(controller: preferences),
+                    const SizedBox(height: 14),
+                    _AutomationHomeUiDesignSection(controller: preferences),
                   ],
                 ],
               ),
@@ -5301,6 +5303,104 @@ final class _PushProfileUiDesignOption extends StatelessWidget {
             child: Center(
               child: Text(
                 design == PushProfileUiDesign.legacy ? 'Régi' : 'Új',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected
+                      ? FluviVisualTokens.textPrimary
+                      : FluviVisualTokens.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// This third independent selector is intentionally only about the surface
+/// shown inside the bottom-navigation Automation tab. It does not select the
+/// recurring or push child flows and never writes automation data.
+final class _AutomationHomeUiDesignSection extends StatelessWidget {
+  const _AutomationHomeUiDesignSection({required this.controller});
+
+  final DashboardPresentationPreferencesController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardPresentationPreferences>(
+        valueListenable: controller,
+        builder: (context, preferences, _) => _TunerSection(
+          title: 'Automatizálás főoldal',
+          children: <Widget>[
+            const Text('Az Automat. fül kezdőképernyőjének elrendezése.'),
+            const SizedBox(height: 10),
+            Semantics(
+              label: 'Automatizálás főoldal felülete',
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: FluviVisualTokens.surfaceMuted,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: FluviVisualTokens.border),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: Row(
+                    children: [
+                      for (final design in AutomationHomeUiDesign.values)
+                        Expanded(
+                          child: _AutomationHomeUiDesignOption(
+                            design: design,
+                            selected:
+                                preferences.automationHomeUiDesign == design,
+                            onTap: () => controller.setPreferences(
+                              preferences.withAutomationHomeUiDesign(design),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+final class _AutomationHomeUiDesignOption extends StatelessWidget {
+  const _AutomationHomeUiDesignOption({
+    required this.design,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AutomationHomeUiDesign design;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: design == AutomationHomeUiDesign.legacy ? 'Régi' : 'Új',
+    child: Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        key: ValueKey<String>('dashboard-automation-home-${design.name}'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Center(
+              child: Text(
+                design == AutomationHomeUiDesign.legacy ? 'Régi' : 'Új',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: selected
                       ? FluviVisualTokens.textPrimary

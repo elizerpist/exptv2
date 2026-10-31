@@ -4,11 +4,17 @@ import 'automation_models.dart';
 
 abstract interface class AutomationRepository {
   Future<AutomationDashboardSnapshot> dashboard();
+
+  /// A bounded, read-only summary for the daily Automation home. Unlike the
+  /// legacy dashboard, it never scans a large inbox merely to calculate a
+  /// 30-day statistic.
+  Future<AutomationDashboardSnapshot> homeDashboard();
   Future<List<PushProfile>> listProfiles();
   Future<PushProfile> profile(String profileId);
   Future<List<PushRule>> rules(String profileId);
   Future<List<NotificationInboxItem>> inbox({
     String? profileId,
+    PushReviewStatus? reviewStatus,
     int limit = 50,
     int offset = 0,
   });
@@ -55,6 +61,14 @@ abstract interface class AutomationRepository {
   });
   Future<void> ignoreReview(String notificationId);
   Future<RecurrenceDashboardSnapshot> recurrenceDashboard();
+
+  /// Bounded active, non-archived pending occurrences for the Automation
+  /// overview. This deliberately does not depend on Ledger ghost visibility.
+  Future<List<RecurrenceOccurrence>> upcomingRecurrenceOccurrences({
+    required int fromUtcMs,
+    required int toUtcMs,
+    int limit = 3,
+  });
   Future<List<RecurrenceRule>> recurringRules();
   Future<RecurrenceRule> recurringRule(String ruleId);
   Future<List<RecurrenceOccurrence>> recurrenceOccurrences({

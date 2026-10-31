@@ -62,6 +62,19 @@ class FluviRecurrenceUseCase internal constructor(
         )
     }
 
+    /** Read-only projection for the Automation home, independent of Ledger's
+     * presentation preference for pending ghost rows. */
+    suspend fun upcomingPendingOccurrences(
+        fromUtcMs: Long,
+        toUtcMs: Long,
+        limit: Int,
+    ): List<FluviRecurrenceOccurrence> = database.withTransaction {
+        require(limit in 1..20) { "Upcoming occurrence page size must be 1..20." }
+        database.recurrenceDao()
+            .activePendingBetweenPage(fromUtcMs, toUtcMs, limit)
+            .map(::occurrenceModel)
+    }
+
     suspend fun rules(): List<FluviRecurrenceRule> = database.withTransaction {
         ensureRollingWindowInTransaction()
         database.recurrenceDao().rules().map { ruleModel(it) }

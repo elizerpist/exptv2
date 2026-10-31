@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="prototype-id" content="fluvi/automation-home-unified-overview">
+  <meta name="prototype-status" content="current">
+  <title>Fluvi – Automatizálás áttekintő</title>
+  <style>
+    :root { --ink:#19264d; --muted:#718096; --line:#e5e9f0; --surface:#fff; --page:#f5f6fa; --soft:#f1f5f9; --mint:#e6faf2; --amber:#fff6df; }
+    * { box-sizing:border-box } body { margin:0; background:#dde1ea; font:15px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink) }
+    .phone { width:min(100%,430px); min-height:850px; margin:24px auto; padding:32px 20px 118px; background:var(--page); border-radius:30px; box-shadow:0 25px 80px #26345244 }
+    header { display:flex; align-items:center; justify-content:space-between; margin-bottom:23px } h1 { font-size:29px; line-height:1; margin:0; letter-spacing:-.7px } button { font:inherit; cursor:pointer } .more { width:46px;height:46px;border:0;border-radius:14px;background:var(--surface);font-size:24px;color:var(--ink) }
+    .controls { display:flex;gap:8px; margin:0 0 20px } .controls button { flex:1;border:1px solid var(--line);border-radius:12px;background:#fff;padding:9px;color:var(--muted);font-weight:700 } .controls button.on { background:#eceef7;color:var(--ink);border-color:#d8dced }
+    .task,.group { background:var(--surface);border-radius:18px;box-shadow:0 6px 18px #33415510 } .task { display:none; padding:14px; align-items:center; gap:13px; background:var(--amber) }.task.show{display:flex}.icon { flex:0 0 40px; height:40px;border-radius:12px;display:grid;place-items:center;background:var(--soft);font-size:21px }.task .icon{background:#ffedbd}.grow{flex:1}.title{font-weight:800;font-size:16px;line-height:1.25}.sub{margin-top:2px;color:var(--muted);font-size:12.5px;line-height:1.35}.chev{font-size:23px;color:var(--muted)}
+    section { margin-top:24px } .heading { display:flex;align-items:center;justify-content:space-between;margin:0 0 8px } h2 { font-size:18px;margin:0;letter-spacing:-.25px } a { color:#7552b8;font-weight:800;text-decoration:none;font-size:13px }.row { min-height:74px;padding:12px;display:flex;align-items:center;gap:13px;position:relative }.row + .row:before { content:"";height:1px;background:var(--line);left:65px;right:12px;top:0;position:absolute }.row .value { margin-left:auto;align-self:flex-start;padding-top:2px;text-align:right;font-weight:800;white-space:nowrap }.row .value.muted { color:var(--muted);font-weight:700;font-size:13px }.row .ghost { color:var(--muted);font-size:12px }.empty{padding:17px 14px;color:var(--muted);font-size:13px}.starter { display:none }.starter.show { display:block }.starter .row{min-height:91px}.starter .icon{background:#eceef7}.bottom{position:absolute;bottom:0;left:0;right:0;height:82px;background:#fff;border-radius:23px 23px 0 0;display:flex;justify-content:center;align-items:center;color:var(--muted);letter-spacing:22px;font-size:24px}
+  </style>
+</head>
+<body>
+  <main class="phone">
+    <header><h1>Automatizálás</h1><button class="more" aria-label="Működési információk és engedélyek">⋯</button></header>
+    <nav class="controls" aria-label="Megjelenítési állapot"><button class="on" data-state="calm">Nyugodt nap</button><button data-state="pending">Teendő</button><button data-state="first">Első használat</button></nav>
+    <article class="task" id="task"><div class="icon">✓</div><div class="grow"><div class="title">Egy értesítés ellenőrzésre vár</div><div class="sub">A kétes találat még nem került a Ledgerbe.</div></div><div class="chev">›</div></article>
+    <section id="manage"><div class="heading"><h2>Kezelés</h2></div><div class="group"><div class="row"><div class="icon">↻</div><div class="grow"><div class="title">Ismétlődések</div><div class="sub">3 aktív szabály · 1 szünetel</div></div><div class="chev">›</div></div><div class="row"><div class="icon">♧</div><div class="grow"><div class="title">Push profilok</div><div class="sub">2 profil · 1 beállításra vár</div></div><div class="chev">›</div></div></div></section>
+    <section id="upcoming"><div class="heading"><h2>Következő 7 nap</h2><a href="#">Összes</a></div><div class="group"><div class="row"><div class="icon" style="background:#efe9ff">◈</div><div class="grow"><div class="title">Netflix</div><div class="sub"><span class="ghost">◌</span> Holnap · 08:00</div></div><div class="value muted">3 990 Ft</div></div><div class="row"><div class="icon" style="background:#e6faf2">⌂</div><div class="grow"><div class="title">Lakbér</div><div class="sub"><span class="ghost">◌</span> NOV. 15. · 09:00</div></div><div class="value muted">kb. 180 000 Ft</div></div></div></section>
+    <section id="notifications"><div class="heading"><h2>Legutóbbi értesítések</h2><a href="#">Összes</a></div><div class="group"><div class="row"><div class="icon">♧</div><div class="grow"><div class="title">Kártyás vásárlás</div><div class="sub">Banki alkalmazás · Ma 10:42</div></div><div class="value muted">Rögzítve</div></div><div class="row"><div class="icon">♧</div><div class="grow"><div class="title">Netflix</div><div class="sub">Banki alkalmazás · Tegnap 08:00</div></div><div class="value muted">Beérkezett</div></div></div></section>
+    <section class="starter" id="starter"><div class="group"><div class="row"><div class="icon">↻</div><div class="grow"><div class="title">Rendszeres tranzakció beállítása</div><div class="sub">Például havi előfizetés, lakbér vagy fizetés.</div></div><div class="chev">›</div></div><div class="row"><div class="icon">♧</div><div class="grow"><div class="title">Banki értesítések felismerése</div><div class="sub">Válassz alkalmazást, majd tanítsd meg a Fluvi számára az értesítések felismerését.</div></div><div class="chev">›</div></div></div></section>
+    <div class="bottom">⌂ ◌ ＋ ◫ ◉</div>
+  </main>
+  <script>
+    const $=id=>document.getElementById(id); document.querySelectorAll('[data-state]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-state]').forEach(x=>x.classList.remove('on'));b.classList.add('on');const s=b.dataset.state; $('task').classList.toggle('show',s==='pending');$('manage').style.display=s==='first'?'none':'';$('upcoming').style.display=s==='first'?'none':'';$('notifications').style.display=s==='first'?'none':'';$('starter').classList.toggle('show',s==='first')});
+  </script>
+</body>
+</html>

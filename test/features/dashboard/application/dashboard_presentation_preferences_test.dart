@@ -62,6 +62,40 @@ void main() {
     },
   );
 
+  test(
+    'Automation home UI choice persists independently from recurring and push choices',
+    () async {
+      final store = InMemoryDashboardPresentationPreferencesStore();
+      final controller = DashboardPresentationPreferencesController(
+        store: store,
+      );
+      addTearDown(controller.dispose);
+
+      controller.setPreferences(
+        controller.value.withAutomationHomeUiDesign(
+          AutomationHomeUiDesign.legacy,
+        ),
+      );
+      controller.setPreferences(
+        controller.value.withRecurringUiDesign(RecurringUiDesign.legacy),
+      );
+      controller.setPreferences(
+        controller.value.withPushProfileUiDesign(PushProfileUiDesign.unified),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final restored = DashboardPresentationPreferencesController(store: store);
+      addTearDown(restored.dispose);
+      await restored.restore();
+      expect(
+        restored.value.automationHomeUiDesign,
+        AutomationHomeUiDesign.legacy,
+      );
+      expect(restored.value.recurringUiDesign, RecurringUiDesign.legacy);
+      expect(restored.value.pushProfileUiDesign, PushProfileUiDesign.unified);
+    },
+  );
+
   test('a delayed restore cannot undo a current dashboard selection', () async {
     final store = _DelayedPreferencesStore();
     final controller = DashboardPresentationPreferencesController(store: store);

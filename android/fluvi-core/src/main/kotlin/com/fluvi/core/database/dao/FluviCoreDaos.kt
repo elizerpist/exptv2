@@ -744,6 +744,24 @@ internal interface FluviPushAutomationDao {
     @Query("SELECT * FROM fluvi_notification_inbox ORDER BY received_at_utc_ms DESC, id DESC LIMIT :limit OFFSET :offset")
     suspend fun inboxPage(limit: Int, offset: Int): List<FluviNotificationInboxEntity>
 
+    /**
+     * Filters before paging. This is intentionally not a client-side filter:
+     * a pending review that happens to be older than the first page must still
+     * be reachable from both the Automation home and the Inbox.
+     */
+    @Query(
+        "SELECT * FROM fluvi_notification_inbox " +
+            "WHERE (:profileId IS NULL OR profile_id = :profileId) " +
+            "AND (:reviewStatus IS NULL OR review_status = :reviewStatus) " +
+            "ORDER BY received_at_utc_ms DESC, id DESC LIMIT :limit OFFSET :offset",
+    )
+    suspend fun inboxPageFiltered(
+        profileId: String?,
+        reviewStatus: PushReviewStatus?,
+        limit: Int,
+        offset: Int,
+    ): List<FluviNotificationInboxEntity>
+
     @Query("SELECT COUNT(*) FROM fluvi_notification_inbox WHERE review_status = :status")
     suspend fun inboxCountByReviewStatus(status: PushReviewStatus): Long
 
@@ -1046,6 +1064,21 @@ internal interface FluviRecurrenceDao {
     suspend fun activePendingBetween(
         fromUtcMs: Long,
         toUtcMs: Long,
+    ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
+
+    /** A bounded version for daily overview surfaces. */
+    @Query(
+        "SELECT occurrence.* FROM fluvi_recurrence_occurrences AS occurrence " +
+            "JOIN fluvi_recurrence_rules AS rule ON rule.id = occurrence.rule_id " +
+            "WHERE occurrence.status = 'pending' AND rule.is_active = 1 " +
+            "AND rule.archived_at_utc_ms IS NULL " +
+            "AND occurrence.expected_at_utc_ms BETWEEN :fromUtcMs AND :toUtcMs " +
+            "ORDER BY occurrence.expected_at_utc_ms ASC, occurrence.id ASC LIMIT :limit",
+    )
+    suspend fun activePendingBetweenPage(
+        fromUtcMs: Long,
+        toUtcMs: Long,
+        limit: Int,
     ): List<com.fluvi.core.database.entity.FluviRecurrenceOccurrenceEntity>
 
     @Query("SELECT * FROM fluvi_recurrence_occurrences ORDER BY expected_at_utc_ms ASC, id ASC LIMIT :limit OFFSET :offset")

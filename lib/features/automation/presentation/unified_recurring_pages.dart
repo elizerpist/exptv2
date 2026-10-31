@@ -1201,6 +1201,10 @@ final class UnifiedRecurringManagerPage extends StatefulWidget {
     this.preferencesStore,
     this.permissions,
     this.onOpenLedgerEntry,
+    this.initialRulesTab = true,
+    this.initialOccurrenceFilter = RecurrenceOccurrenceStatus.pending,
+    this.initialOccurrenceFromUtcMs,
+    this.initialOccurrenceToUtcMs,
   });
   final AutomationRepository repository;
   final ManualTransactionRepository manualRepository;
@@ -1210,6 +1214,9 @@ final class UnifiedRecurringManagerPage extends StatefulWidget {
   final ManualTransactionEditorPreferencesStore? preferencesStore;
   final AutomationPermissionRepository? permissions;
   final Future<void> Function(String entryId)? onOpenLedgerEntry;
+  final bool initialRulesTab;
+  final RecurrenceOccurrenceStatus? initialOccurrenceFilter;
+  final int? initialOccurrenceFromUtcMs, initialOccurrenceToUtcMs;
   @override
   State<UnifiedRecurringManagerPage> createState() =>
       _UnifiedRecurringManagerPageState();
@@ -1220,15 +1227,17 @@ final class _UnifiedRecurringManagerPageState
   static const _occurrencePageSize = 100;
   List<RecurrenceRule>? _rules;
   List<RecurrenceOccurrence>? _occurrences;
-  bool _rulesTab = true;
+  late bool _rulesTab;
   String _query = '';
-  RecurrenceOccurrenceStatus? _filter = RecurrenceOccurrenceStatus.pending;
+  late RecurrenceOccurrenceStatus? _filter;
   final ScrollController _occurrencesScroll = ScrollController();
   bool _loadingMoreOccurrences = false;
   bool _hasMoreOccurrences = true;
   @override
   void initState() {
     super.initState();
+    _rulesTab = widget.initialRulesTab;
+    _filter = widget.initialOccurrenceFilter;
     _occurrencesScroll.addListener(_onOccurrenceScroll);
     _load();
   }
@@ -1257,6 +1266,8 @@ final class _UnifiedRecurringManagerPageState
         widget.repository.recurringRules(),
         widget.repository.recurrenceOccurrences(
           status: _filter,
+          fromUtcMs: widget.initialOccurrenceFromUtcMs,
+          toUtcMs: widget.initialOccurrenceToUtcMs,
           limit: _occurrencePageSize,
         ),
       ]);
@@ -1287,6 +1298,8 @@ final class _UnifiedRecurringManagerPageState
     try {
       final next = await widget.repository.recurrenceOccurrences(
         status: _filter,
+        fromUtcMs: widget.initialOccurrenceFromUtcMs,
+        toUtcMs: widget.initialOccurrenceToUtcMs,
         limit: _occurrencePageSize,
         offset: current.length,
       );

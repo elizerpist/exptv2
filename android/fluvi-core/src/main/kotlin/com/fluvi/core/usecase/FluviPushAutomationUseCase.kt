@@ -65,6 +65,18 @@ class FluviPushAutomationUseCase internal constructor(
         )
     }
 
+    /** A bounded read model for the daily Automation tab. */
+    suspend fun homeDashboard(): FluviPushDashboardSnapshot = database.withTransaction {
+        FluviPushDashboardSnapshot(
+            profiles = database.pushAutomationDao().allProfiles().map { profileModel(it) },
+            pendingReviewCount = database.pushAutomationDao().inboxCountByReviewStatus(PushReviewStatus.pending),
+            // This legacy-only statistic is intentionally not computed for the
+            // home overview, where a 10k-row scan would add no visible value.
+            capturedLast30Days = 0,
+            recentInbox = database.pushAutomationDao().inboxPage(limit = 2, offset = 0).map(::inboxModel),
+        )
+    }
+
     suspend fun listProfiles(): List<FluviPushProfile> = database.withTransaction {
         database.pushAutomationDao().allProfiles().map { profileModel(it) }
     }
@@ -78,12 +90,18 @@ class FluviPushAutomationUseCase internal constructor(
         database.pushAutomationDao().rulesForProfile(profileId).map(::ruleModel)
     }
 
-    suspend fun inbox(profileId: String?, limit: Int, offset: Int): List<FluviNotificationInboxItem> =
+    suspend fun inbox(
+        profileId: String?,
+        limit: Int,
+        offset: Int,
+        reviewStatus: PushReviewStatus? = null,
+    ): List<FluviNotificationInboxItem> =
         database.withTransaction {
             require(limit in 1..200) { "Inbox page size must be 1..200." }
             require(offset >= 0) { "Inbox offset must be non-negative." }
-            (if (profileId == null) database.pushAutomationDao().inboxPage(limit, offset)
-            else database.pushAutomationDao().inboxForProfile(profileId, limit, offset)).map(::inboxModel)
+            database.pushAutomationDao()
+                .inboxPageFiltered(profileId, reviewStatus, limit, offset)
+                .map(::inboxModel)
         }
 
     /** Does not create a profile twice for a source package. */

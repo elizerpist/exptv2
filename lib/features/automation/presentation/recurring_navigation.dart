@@ -8,6 +8,7 @@ import '../../dashboard/application/dashboard_presentation_preferences.dart';
 import '../../dashboard/query/domain/ledger_direction.dart';
 import '../../manual_transactions/application/manual_transaction_editor_preferences.dart';
 import '../../manual_transactions/domain/manual_transaction_repository.dart';
+import '../domain/automation_models.dart';
 import '../domain/automation_repository.dart';
 import 'ghost_manager_page.dart';
 import 'recurring_rule_manager_page.dart';
@@ -66,15 +67,26 @@ abstract final class RecurringNavigation {
     ManualTransactionEditorPreferencesStore? preferencesStore,
     AutomationPermissionRepository? permissions,
     Future<void> Function(String entryId)? onOpenLedgerEntry,
+    bool initialRulesTab = true,
+    RecurrenceOccurrenceStatus? initialOccurrenceFilter,
+    int? initialOccurrenceFromUtcMs,
+    int? initialOccurrenceToUtcMs,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => design == RecurringUiDesign.legacy
-          ? RecurringRuleManagerPage(
-              repository: repository,
-              manualRepository: manualRepository,
-              categories: categories,
-              onOpenLedgerEntry: onOpenLedgerEntry,
-            )
+          ? (initialRulesTab
+                ? RecurringRuleManagerPage(
+                    repository: repository,
+                    manualRepository: manualRepository,
+                    categories: categories,
+                    onOpenLedgerEntry: onOpenLedgerEntry,
+                  )
+                : GhostManagerPage(
+                    repository: repository,
+                    manualRepository: manualRepository,
+                    categories: categories,
+                    onOpenLedgerEntry: onOpenLedgerEntry,
+                  ))
           : UnifiedRecurringManagerPage(
               repository: repository,
               manualRepository: manualRepository,
@@ -84,6 +96,10 @@ abstract final class RecurringNavigation {
               preferencesStore: preferencesStore,
               permissions: permissions,
               onOpenLedgerEntry: onOpenLedgerEntry,
+              initialRulesTab: initialRulesTab,
+              initialOccurrenceFilter: initialOccurrenceFilter,
+              initialOccurrenceFromUtcMs: initialOccurrenceFromUtcMs,
+              initialOccurrenceToUtcMs: initialOccurrenceToUtcMs,
             ),
     ),
   );

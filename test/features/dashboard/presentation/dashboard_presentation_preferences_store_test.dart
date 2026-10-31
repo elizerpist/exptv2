@@ -615,6 +615,7 @@ void main() {
           DashboardGhostQuickFilterPresentation.searchPillFling.index,
       'recurringUiDesign': 'unified',
       'pushProfileUiDesign': 'unified',
+      'automationHomeUiDesign': 'unified',
     });
   });
 
@@ -693,6 +694,38 @@ void main() {
         (await store.read()).withRecurringUiDesign(RecurringUiDesign.legacy),
       );
       expect(stored['pushProfileUiDesign'], 'legacy');
+    },
+  );
+
+  test(
+    'Automation home UI defaults to unified and uses only named values',
+    () async {
+      Map<String, Object?> stored = <String, Object?>{
+        'automationHomeUiDesign': 0,
+      };
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'writeDashboardPresentationSettings') {
+          stored = Map<String, Object?>.from(call.arguments as Map);
+          return null;
+        }
+        return stored;
+      });
+      final store = MethodChannelDashboardPresentationPreferencesStore();
+      expect(
+        (await store.read()).automationHomeUiDesign,
+        AutomationHomeUiDesign.unified,
+      );
+      stored['automationHomeUiDesign'] = 'legacy';
+      expect(
+        (await store.read()).automationHomeUiDesign,
+        AutomationHomeUiDesign.legacy,
+      );
+      await store.write(
+        (await store.read()).withPushProfileUiDesign(
+          PushProfileUiDesign.legacy,
+        ),
+      );
+      expect(stored['automationHomeUiDesign'], 'legacy');
     },
   );
 

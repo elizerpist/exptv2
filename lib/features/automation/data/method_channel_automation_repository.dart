@@ -15,6 +15,13 @@ final class MethodChannelAutomationRepository implements AutomationRepository {
         _map(await _channel.invokeMethod<Object?>('getDashboard')),
       );
   @override
+  Future<AutomationDashboardSnapshot> homeDashboard() async =>
+      AutomationDashboardSnapshot.fromMap(
+        _map(
+          await _channel.invokeMethod<Object?>('getAutomationHomeDashboard'),
+        ),
+      );
+  @override
   Future<List<PushProfile>> listProfiles() async => _maps(
     await _channel.invokeMethod<List<Object?>>('listProfiles'),
   ).map(PushProfile.fromMap).toList(growable: false);
@@ -29,11 +36,13 @@ final class MethodChannelAutomationRepository implements AutomationRepository {
   @override
   Future<List<NotificationInboxItem>> inbox({
     String? profileId,
+    PushReviewStatus? reviewStatus,
     int limit = 50,
     int offset = 0,
   }) async => _maps(
     await _channel.invokeMethod<List<Object?>>('listInbox', {
       'profileId': profileId,
+      'reviewStatus': reviewStatus?.name,
       'limit': limit,
       'offset': offset,
     }),
@@ -152,6 +161,17 @@ final class MethodChannelAutomationRepository implements AutomationRepository {
       RecurrenceDashboardSnapshot.fromMap(
         _map(await _channel.invokeMethod<Object?>('getRecurrenceDashboard')),
       );
+  @override
+  Future<List<RecurrenceOccurrence>> upcomingRecurrenceOccurrences({
+    required int fromUtcMs,
+    required int toUtcMs,
+    int limit = 3,
+  }) async => _maps(
+    await _channel.invokeMethod<List<Object?>>(
+      'listUpcomingRecurrenceOccurrences',
+      {'fromUtcMs': fromUtcMs, 'toUtcMs': toUtcMs, 'limit': limit},
+    ),
+  ).map(RecurrenceOccurrence.fromMap).toList(growable: false);
   @override
   Future<List<RecurrenceRule>> recurringRules() async => _maps(
     await _channel.invokeMethod<List<Object?>>('listRecurringRules'),

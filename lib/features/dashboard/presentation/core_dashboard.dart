@@ -690,6 +690,8 @@ class _CoreDashboardState extends State<CoreDashboard>
             _dashboardPresentationPreferences.value.recurringUiDesign,
         pushProfileUiDesign:
             _dashboardPresentationPreferences.value.pushProfileUiDesign,
+        automationHomeUiDesign:
+            _dashboardPresentationPreferences.value.automationHomeUiDesign,
       ),
     );
   }

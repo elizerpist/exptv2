@@ -1757,6 +1757,7 @@ final class _UnifiedPushInboxPageState extends State<UnifiedPushInboxPage> {
     try {
       final page = await widget.repository.inbox(
         profileId: widget.profileId,
+        reviewStatus: _filter,
         offset: _items.length,
         limit: 50,
       );
@@ -1781,13 +1782,12 @@ final class _UnifiedPushInboxPageState extends State<UnifiedPushInboxPage> {
     final query = _search.text.trim().toLowerCase();
     final shown = _items
         .where((item) {
-          final matchesFilter = _filter == null || item.reviewStatus == _filter;
           final matchesSearch =
               query.isEmpty ||
               item.rawText.toLowerCase().contains(query) ||
               (item.title?.toLowerCase().contains(query) ?? false) ||
               (item.sourceAppLabel?.toLowerCase().contains(query) ?? false);
-          return matchesFilter && matchesSearch;
+          return matchesSearch;
         })
         .toList(growable: false);
     return Scaffold(
@@ -1831,7 +1831,11 @@ final class _UnifiedPushInboxPageState extends State<UnifiedPushInboxPage> {
                       selected: _filter == status,
                       onSelected: widget.onlyReview
                           ? null
-                          : (_) => setState(() => _filter = status),
+                          : (_) {
+                              if (_filter == status) return;
+                              setState(() => _filter = status);
+                              _loadMore(reset: true);
+                            },
                     ),
                   ),
               ],

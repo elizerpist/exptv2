@@ -23,6 +23,7 @@ import com.fluvi.core.model.CreatePushRuleCommand
 import com.fluvi.core.model.PushFieldSpan
 import com.fluvi.core.model.PushFieldRole
 import com.fluvi.core.model.PushProfileState
+import com.fluvi.core.model.PushReviewStatus
 import com.fluvi.core.model.PushSampleKind
 import com.fluvi.core.model.PushTransactionDirection
 import com.fluvi.core.model.ApprovePushReviewCommand
@@ -495,6 +496,7 @@ class MainActivity : FlutterActivity() {
                             // settings cannot accidentally change it.
                             "recurringUiDesign" to preferences.getString("recurringUiDesign", "unified"),
                             "pushProfileUiDesign" to preferences.getString("pushProfileUiDesign", "unified"),
+                            "automationHomeUiDesign" to preferences.getString("automationHomeUiDesign", "unified"),
                         ),
                     )
                     "writeDashboardPresentationSettings" -> {
@@ -610,6 +612,15 @@ class MainActivity : FlutterActivity() {
                         require(pushProfileUiDesign == "legacy" || pushProfileUiDesign == "unified") {
                             "Invalid push profile UI design."
                         }
+                        val automationHomeUiDesign = if (values.containsKey("automationHomeUiDesign")) {
+                            values["automationHomeUiDesign"] as? String
+                                ?: throw IllegalArgumentException("Invalid automation home UI design.")
+                        } else {
+                            "unified"
+                        }
+                        require(automationHomeUiDesign == "legacy" || automationHomeUiDesign == "unified") {
+                            "Invalid automation home UI design."
+                        }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
@@ -642,6 +653,7 @@ class MainActivity : FlutterActivity() {
                             .putInt("ghostQuickFilterPresentation", ghostQuickFilterPresentation)
                             .putString("recurringUiDesign", recurringUiDesign)
                             .putString("pushProfileUiDesign", pushProfileUiDesign)
+                            .putString("automationHomeUiDesign", automationHomeUiDesign)
                             .apply()
                         result.success(null)
                     }
@@ -896,11 +908,15 @@ class MainActivity : FlutterActivity() {
         fluviCore: FluviCore,
     ): Any? = when (call.method) {
         "getDashboard" -> automationDashboardMap(fluviCore.automation.dashboard())
+        "getAutomationHomeDashboard" -> automationDashboardMap(fluviCore.automation.homeDashboard())
         "listProfiles" -> fluviCore.automation.listProfiles().map(::pushProfileMap)
         "getProfile" -> pushProfileMap(fluviCore.automation.profile(requireArgument(call, "profileId")))
         "listRules" -> fluviCore.automation.rules(requireArgument(call, "profileId")).map(::pushRuleMap)
         "listInbox" -> fluviCore.automation.inbox(
-            call.argument<String>("profileId"), requireInt(call, "limit"), requireInt(call, "offset"),
+            call.argument<String>("profileId"),
+            requireInt(call, "limit"),
+            requireInt(call, "offset"),
+            call.argument<String>("reviewStatus")?.let(PushReviewStatus::valueOf),
         ).map(::pushInboxMap)
         "createProfile" -> pushProfileMap(fluviCore.automation.createProfile(
             CreatePushProfileCommand(
@@ -951,6 +967,11 @@ class MainActivity : FlutterActivity() {
         ))
         "ignoreReview" -> fluviCore.automation.ignoreReview(requireArgument(call, "notificationId"))
         "getRecurrenceDashboard" -> recurrenceDashboardMap(fluviCore.recurrences.dashboard())
+        "listUpcomingRecurrenceOccurrences" -> fluviCore.recurrences.upcomingPendingOccurrences(
+            requireLong(call, "fromUtcMs"),
+            requireLong(call, "toUtcMs"),
+            call.argument<Number>("limit")?.toInt() ?: 3,
+        ).map(::recurrenceOccurrenceMap)
         "listRecurringRules" -> fluviCore.recurrences.rules().map(::recurrenceRuleMap)
         "getRecurringRule" -> recurrenceRuleMap(
             fluviCore.recurrences.rule(requireArgument(call, "ruleId")),

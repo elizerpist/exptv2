@@ -10,6 +10,8 @@ final class UnavailableAutomationRepository implements AutomationRepository {
   @override
   Future<AutomationDashboardSnapshot> dashboard() async => _unavailable();
   @override
+  Future<AutomationDashboardSnapshot> homeDashboard() async => _unavailable();
+  @override
   Future<List<PushProfile>> listProfiles() async => _unavailable();
   @override
   Future<PushProfile> profile(String profileId) async => _unavailable();
@@ -18,6 +20,7 @@ final class UnavailableAutomationRepository implements AutomationRepository {
   @override
   Future<List<NotificationInboxItem>> inbox({
     String? profileId,
+    PushReviewStatus? reviewStatus,
     int limit = 50,
     int offset = 0,
   }) async => _unavailable();
@@ -75,6 +78,12 @@ final class UnavailableAutomationRepository implements AutomationRepository {
   @override
   Future<RecurrenceDashboardSnapshot> recurrenceDashboard() async =>
       _unavailable();
+  @override
+  Future<List<RecurrenceOccurrence>> upcomingRecurrenceOccurrences({
+    required int fromUtcMs,
+    required int toUtcMs,
+    int limit = 3,
+  }) async => _unavailable();
   @override
   Future<List<RecurrenceRule>> recurringRules() async => _unavailable();
   @override
