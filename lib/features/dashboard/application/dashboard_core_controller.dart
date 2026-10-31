@@ -9546,15 +9546,15 @@ final class DashboardCoreController {
     _avatarLiveRenderTarget = _AvatarLiveRenderTarget(
       targetHandle: targetHandle,
       focusGeneration: focusGeneration,
-      // A same-visual target may only retag its metadata epoch while retaining
-      // the exact payload-lane object. Paint acknowledgement must follow the
-      // authoritative presentation lane, not the intentionally stable payload
-      // reference, or re-entry can wait on an identity the renderer no longer
-      // owns.
+      // A same-visual target may only retag ownership metadata while retaining
+      // the exact payload-lane object. Keep both identities: the presentation
+      // lane protects current semantic ownership, while the viewport id lets a
+      // later retag reuse a recorded paint of that exact immutable payload.
       queryKey: presentation.queryKey.value,
       coreRevision: presentation.coreRevision,
       presentationEpoch: presentation.presentationEpoch,
       frameGeneration: presentation.frameGeneration,
+      payloadViewportId: payload.logBox.viewportId,
       exactEmpty: payload.logBox.previewRowCount == 0,
     );
     final target = _avatarLiveRenderTarget!;
@@ -9601,11 +9601,11 @@ final class DashboardCoreController {
       if (lastPresentation != null &&
           lastPresentation.queryKey.value == target.queryKey &&
           lastPresentation.coreRevision == target.coreRevision &&
-          lastPresentation.presentationEpoch == target.presentationEpoch &&
-          lastPresentation.frameGeneration == target.frameGeneration) {
+          lastPaint!.payloadViewportId == target.payloadViewportId) {
         _recordAvatarLiveTargetPaintEvidence(
           presentation: lastPresentation,
-          payloadRowCount: lastPaint!.payloadRowCount,
+          payloadViewportId: lastPaint.payloadViewportId,
+          payloadRowCount: lastPaint.payloadRowCount,
           drawableRowCount: lastPaint.drawableRowCount,
           paintedRowCount: lastPaint.paintedRowCount,
           readablePhaseARowsPainted: lastPaint.readablePhaseARowsPainted,
@@ -9697,6 +9697,7 @@ final class DashboardCoreController {
       coreRevision: presentation.coreRevision,
       presentationEpoch: presentation.presentationEpoch,
       frameGeneration: presentation.frameGeneration,
+      payloadViewportId: payload.logBox.viewportId,
       exactEmpty: payload.logBox.previewRowCount == 0,
     );
     FluviDiagnosticLogger.log(
@@ -9715,12 +9716,15 @@ final class DashboardCoreController {
 
   bool _isCurrentExactAvatarTargetPainted(_AvatarLiveRenderTarget target) {
     final presentation = visibleFrames.logBoxPresentationLane.value;
+    final payload = visibleFrames.logBoxLane.value;
     return target.logBoxPainted &&
         presentation != null &&
+        payload != null &&
         presentation.queryKey.value == target.queryKey &&
         presentation.coreRevision == target.coreRevision &&
         presentation.presentationEpoch == target.presentationEpoch &&
-        presentation.frameGeneration == target.frameGeneration;
+        presentation.frameGeneration == target.frameGeneration &&
+        payload.logBox.viewportId == target.payloadViewportId;
   }
 
   bool _hasCurrentExactAvatarTargetPaint({required int? targetHandle}) {
@@ -14658,6 +14662,7 @@ final class DashboardCoreController {
     _lastLogBoxPaintedSnapshot = snapshot;
     _recordAvatarLiveTargetPaintEvidence(
       presentation: snapshot.presentation,
+      payloadViewportId: snapshot.payloadViewportId,
       payloadRowCount: snapshot.payloadRowCount,
       drawableRowCount: snapshot.drawableRowCount,
       paintedRowCount: snapshot.paintedRowCount,
@@ -14925,6 +14930,7 @@ final class DashboardCoreController {
   ) {
     _recordAvatarLiveTargetPaintEvidence(
       presentation: snapshot.presentation,
+      payloadViewportId: snapshot.payloadViewportId,
       payloadRowCount: snapshot.payloadRowCount,
       drawableRowCount: snapshot.drawableRowCount,
       paintedRowCount: snapshot.paintedRowCount,
@@ -14935,6 +14941,7 @@ final class DashboardCoreController {
 
   void _recordAvatarLiveTargetPaintEvidence({
     required DashboardLogBoxPresentationBinding? presentation,
+    required int? payloadViewportId,
     required int payloadRowCount,
     required int drawableRowCount,
     required int paintedRowCount,
@@ -14945,11 +14952,23 @@ final class DashboardCoreController {
     if (target == null || presentation == null || target.logBoxPainted) {
       return;
     }
-    final matchingIdentity =
+    final exactPresentationIdentity =
         presentation.queryKey.value == target.queryKey &&
         presentation.coreRevision == target.coreRevision &&
         presentation.presentationEpoch == target.presentationEpoch &&
         presentation.frameGeneration == target.frameGeneration;
+    // Canonical installation can advance only ownership metadata after the
+    // stable LogBox canvas has already painted the same payload. The payload
+    // viewport id is allocated with that immutable visual input, so admitting
+    // this case reuses a recorded canvas paint rather than inferring one from
+    // the current semantic frame.
+    final exactVisualPayloadIdentity =
+        payloadViewportId != null &&
+        payloadViewportId == target.payloadViewportId &&
+        presentation.queryKey.value == target.queryKey &&
+        presentation.coreRevision == target.coreRevision;
+    final matchingIdentity =
+        exactPresentationIdentity || exactVisualPayloadIdentity;
     if (!matchingIdentity) {
       if (target.paintIdentityRejectionReported) return;
       target.paintIdentityRejectionReported = true;
@@ -14963,10 +14982,12 @@ final class DashboardCoreController {
               'targetHandle=${target.targetHandle} '
               'expectedEpoch=${target.presentationEpoch} '
               'expectedFrameGeneration=${target.frameGeneration} '
+              'expectedPayloadViewportId=${target.payloadViewportId} '
               'actualQueryKey=${presentation.queryKey.value} '
               'actualRevision=${presentation.coreRevision} '
               'actualEpoch=${presentation.presentationEpoch} '
-              'actualFrameGeneration=${presentation.frameGeneration}',
+              'actualFrameGeneration=${presentation.frameGeneration} '
+              'actualPayloadViewportId=${payloadViewportId ?? '-'}',
         ),
       );
       return;
@@ -15021,6 +15042,8 @@ final class DashboardCoreController {
             'targetHandle=${target.targetHandle} '
             'presentationEpoch=${target.presentationEpoch} '
             'frameGeneration=${target.frameGeneration} '
+            'payloadViewportId=${target.payloadViewportId} '
+            'acknowledgement=${exactPresentationIdentity ? 'presentation' : 'stablePayload'} '
             'exactEmpty=${target.exactEmpty} '
             'drawableRows=$drawableRowCount '
             'paintedRows=$paintedRowCount',
@@ -17621,6 +17644,7 @@ final class _AvatarLiveRenderTarget {
     required this.coreRevision,
     required this.presentationEpoch,
     required this.frameGeneration,
+    required this.payloadViewportId,
     required this.exactEmpty,
   });
 
@@ -17630,6 +17654,7 @@ final class _AvatarLiveRenderTarget {
   int coreRevision;
   int presentationEpoch;
   int frameGeneration;
+  int payloadViewportId;
   bool exactEmpty;
   final Completer<bool> paintCompletion = Completer<bool>();
   bool paintRejectionReported = false;
@@ -17641,12 +17666,14 @@ final class _AvatarLiveRenderTarget {
     required int coreRevision,
     required int presentationEpoch,
     required int frameGeneration,
+    required int payloadViewportId,
     required bool exactEmpty,
   }) {
     this.queryKey = queryKey;
     this.coreRevision = coreRevision;
     this.presentationEpoch = presentationEpoch;
     this.frameGeneration = frameGeneration;
+    this.payloadViewportId = payloadViewportId;
     this.exactEmpty = exactEmpty;
     paintRejectionReported = false;
     paintIdentityRejectionReported = false;
