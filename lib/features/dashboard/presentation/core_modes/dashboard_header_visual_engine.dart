@@ -3244,6 +3244,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     required double trailStrengthPercent,
     required double tapStartSizePercent,
     required double tapStrengthPercent,
+    required double tapSpeedPercent,
+    required double dragRippleLifetimeSeconds,
   }) {
     if (_disposed) return;
     var next = tapWaveTuning.value;
@@ -3258,6 +3260,14 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     next = next.copyWithValue(
       DashboardHeaderTapWaveCatalog.tapStrengthId,
       tapStrengthPercent,
+    );
+    next = next.copyWithValue(
+      DashboardHeaderTapWaveCatalog.tapSpeedId,
+      tapSpeedPercent,
+    );
+    next = next.copyWithValue(
+      DashboardHeaderTapWaveCatalog.dragRippleLifetimeId,
+      dragRippleLifetimeSeconds,
     );
     tapWaveTuning.value = next;
     tapWaveReferencePreview.value = false;
@@ -3312,9 +3322,17 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     _tapWave.breakPath();
   }
 
-  void endTapWave({Duration? pointerTimestamp}) {
+  void endTapWave({
+    Duration? pointerTimestamp,
+    Offset? releaseOrigin,
+    bool emitReleaseRipple = false,
+  }) {
     if (_disposed) return;
-    _tapWave.pointerUp(timestamp: _tapTimestamp(pointerTimestamp));
+    _tapWave.pointerUp(
+      timestamp: _tapTimestamp(pointerTimestamp),
+      releaseOrigin: releaseOrigin,
+      emitReleaseRipple: emitReleaseRipple,
+    );
     _tapPointerEpoch = null;
     _tapEffectEpoch = null;
     _syncTicker();
@@ -5941,15 +5959,11 @@ final class _DashboardHeaderTapWaveGestureLayerState
           },
           onPointerUp: (event) {
             widget.onPointerUp?.call(event);
-            if (visual != null) {
-              _endPointer(visual, event.pointer, event.timeStamp);
-            }
+            if (visual != null) _endPointer(visual, event, emitRelease: true);
           },
           onPointerCancel: (event) {
             widget.onPointerCancel?.call(event);
-            if (visual != null) {
-              _endPointer(visual, event.pointer, event.timeStamp);
-            }
+            if (visual != null) _endPointer(visual, event, emitRelease: false);
           },
           child: widget.child,
         ),
@@ -5959,20 +5973,41 @@ final class _DashboardHeaderTapWaveGestureLayerState
 
   void _endPointer(
     DashboardHeaderVisualController visual,
-    int pointer,
-    Duration timestamp,
-  ) {
-    if (pointer != _activePointer) return;
-    _endActivePointer(visual, timestamp);
+    PointerEvent event, {
+    required bool emitRelease,
+  }) {
+    if (event.pointer != _activePointer) return;
+    final box = context.findRenderObject() as RenderBox?;
+    final local = box?.globalToLocal(event.position);
+    final size = box?.size;
+    final inBounds =
+        local != null &&
+        size != null &&
+        local.dx >= 0 &&
+        local.dx <= size.width &&
+        local.dy >= 0 &&
+        local.dy <= size.height;
+    _endActivePointer(
+      visual,
+      event.timeStamp,
+      inBounds ? Offset(local.dx / size.width, local.dy / size.height) : null,
+      emitRelease && inBounds,
+    );
   }
 
   void _endActivePointer(
     DashboardHeaderVisualController visual, [
     Duration? timestamp,
+    Offset? releaseOrigin,
+    bool emitRelease = false,
   ]) {
     if (_activePointer == null) return;
     _activePointer = null;
-    visual.endTapWave(pointerTimestamp: timestamp);
+    visual.endTapWave(
+      pointerTimestamp: timestamp,
+      releaseOrigin: releaseOrigin,
+      emitReleaseRipple: emitRelease,
+    );
   }
 }
 

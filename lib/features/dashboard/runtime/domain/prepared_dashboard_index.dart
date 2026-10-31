@@ -1264,7 +1264,12 @@ final class PreparedDashboardIndex {
       origins: focusedOrigins,
       compactZeroFrames: focusedCompactZeros,
       verticalGeometrySeed: focusedGeometrySeed,
-      focusMembershipSeed: null,
+      // List overlays intentionally materialize only compact visible frames.
+      // Retain the neutral source membership as well: Mind derives its own
+      // current direction/filter selection from this immutable source.
+      focusMembershipSeed: base
+          .partitionFor(focusedDirection)
+          .focusMembershipSeed,
     );
     final focusedCatalogsByScope = <LedgerTimeScope, DashboardSemanticCatalog>{
       for (final catalog in focusedPartition.catalogs.values)

@@ -535,6 +535,8 @@ class MainActivity : FlutterActivity() {
                             "headerTapWaveTrailStrengthPercent" to ((preferences.all["headerTapWaveTrailStrengthPercent"] as? Number)?.toInt()?.takeIf { it in 0..300 && it % 5 == 0 } ?: 225),
                             "headerTapWaveTapStartSizePercent" to ((preferences.all["headerTapWaveTapStartSizePercent"] as? Number)?.toInt()?.takeIf { it in 25..100 && it % 5 == 0 } ?: 55),
                             "headerTapWaveTapStrengthPercent" to ((preferences.all["headerTapWaveTapStrengthPercent"] as? Number)?.toInt()?.takeIf { it in 0..100 && it % 5 == 0 } ?: 75),
+                            "headerTapWaveTapSpeedPercent" to ((preferences.all["headerTapWaveTapSpeedPercent"] as? Number)?.toInt()?.takeIf { it in 50..200 && it % 5 == 0 } ?: 100),
+                            "headerTapWaveDragRippleLifetimeSeconds" to ((preferences.all["headerTapWaveDragRippleLifetimeSeconds"] as? Number)?.toDouble()?.takeIf { it in .40..2.0 && kotlin.math.abs(((it - .40) / .05) - kotlin.math.round((it - .40) / .05)) < .0001 } ?: 1.20),
                             // New installs and pre-existing installations both
                             // enter the unified recurrence presentation. This
                             // is named rather than indexed so old numeric
@@ -666,6 +668,28 @@ class MainActivity : FlutterActivity() {
                         require(headerTapWaveTapStrengthPercent in 0..100 && headerTapWaveTapStrengthPercent % 5 == 0) {
                             "Invalid Header tap strength."
                         }
+                        val headerTapWaveTapSpeedPercent = if (values.containsKey("headerTapWaveTapSpeedPercent")) {
+                            (values["headerTapWaveTapSpeedPercent"] as? Number)?.toInt()
+                                ?: throw IllegalArgumentException("Invalid Header tap speed.")
+                        } else {
+                            100
+                        }
+                        require(headerTapWaveTapSpeedPercent in 50..200 && headerTapWaveTapSpeedPercent % 5 == 0) {
+                            "Invalid Header tap speed."
+                        }
+                        val headerTapWaveDragRippleLifetimeSeconds = if (values.containsKey("headerTapWaveDragRippleLifetimeSeconds")) {
+                            (values["headerTapWaveDragRippleLifetimeSeconds"] as? Number)?.toDouble()
+                                ?: throw IllegalArgumentException("Invalid Header drag ripple lifetime.")
+                        } else {
+                            1.20
+                        }
+                        require(
+                            headerTapWaveDragRippleLifetimeSeconds in .40..2.0 &&
+                                kotlin.math.abs(
+                                    ((headerTapWaveDragRippleLifetimeSeconds - .40) / .05) -
+                                        kotlin.math.round((headerTapWaveDragRippleLifetimeSeconds - .40) / .05),
+                                ) < .0001,
+                        ) { "Invalid Header drag ripple lifetime." }
                         val recurringUiDesign = if (values.containsKey("recurringUiDesign")) {
                             values["recurringUiDesign"] as? String
                                 ?: throw IllegalArgumentException("Invalid recurring UI design.")
@@ -726,6 +750,8 @@ class MainActivity : FlutterActivity() {
                             .putInt("headerTapWaveTrailStrengthPercent", headerTapWaveTrailStrengthPercent)
                             .putInt("headerTapWaveTapStartSizePercent", headerTapWaveTapStartSizePercent)
                             .putInt("headerTapWaveTapStrengthPercent", headerTapWaveTapStrengthPercent)
+                            .putInt("headerTapWaveTapSpeedPercent", headerTapWaveTapSpeedPercent)
+                            .putFloat("headerTapWaveDragRippleLifetimeSeconds", headerTapWaveDragRippleLifetimeSeconds.toFloat())
                             .putString("recurringUiDesign", recurringUiDesign)
                             .putString("pushProfileUiDesign", pushProfileUiDesign)
                             .putString("automationHomeUiDesign", automationHomeUiDesign)

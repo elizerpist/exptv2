@@ -83,6 +83,8 @@ final class DashboardPresentationPreferences {
     this.headerTapWaveTrailStrengthPercent = 225,
     this.headerTapWaveTapStartSizePercent = 55,
     this.headerTapWaveTapStrengthPercent = 75,
+    this.headerTapWaveTapSpeedPercent = 100,
+    this.headerTapWaveDragRippleLifetimeSeconds = 1.20,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -125,6 +127,8 @@ final class DashboardPresentationPreferences {
   final double headerTapWaveTrailStrengthPercent;
   final double headerTapWaveTapStartSizePercent;
   final double headerTapWaveTapStrengthPercent;
+  final double headerTapWaveTapSpeedPercent;
+  final double headerTapWaveDragRippleLifetimeSeconds;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.sumA,
@@ -158,6 +162,8 @@ final class DashboardPresentationPreferences {
     headerTapWaveTrailStrengthPercent: 225,
     headerTapWaveTapStartSizePercent: 55,
     headerTapWaveTapStrengthPercent: 75,
+    headerTapWaveTapSpeedPercent: 100,
+    headerTapWaveDragRippleLifetimeSeconds: 1.20,
   );
 
   @override
@@ -208,7 +214,11 @@ final class DashboardPresentationPreferences {
           headerTapWaveTrailStrengthPercent &&
       other.headerTapWaveTapStartSizePercent ==
           headerTapWaveTapStartSizePercent &&
-      other.headerTapWaveTapStrengthPercent == headerTapWaveTapStrengthPercent;
+      other.headerTapWaveTapStrengthPercent ==
+          headerTapWaveTapStrengthPercent &&
+      other.headerTapWaveTapSpeedPercent == headerTapWaveTapSpeedPercent &&
+      other.headerTapWaveDragRippleLifetimeSeconds ==
+          headerTapWaveDragRippleLifetimeSeconds;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -247,6 +257,8 @@ final class DashboardPresentationPreferences {
     headerTapWaveTrailStrengthPercent,
     headerTapWaveTapStartSizePercent,
     headerTapWaveTapStrengthPercent,
+    headerTapWaveTapSpeedPercent,
+    headerTapWaveDragRippleLifetimeSeconds,
   ]);
 
   DashboardPresentationPreferences withGhostQuickFilterIconPack(
@@ -291,6 +303,9 @@ final class DashboardPresentationPreferences {
     headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
     headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
     headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
+    headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
+    headerTapWaveDragRippleLifetimeSeconds:
+        headerTapWaveDragRippleLifetimeSeconds,
   );
 
   DashboardPresentationPreferences withGhostQuickFilterPresentation(
@@ -335,6 +350,9 @@ final class DashboardPresentationPreferences {
     headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
     headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
     headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
+    headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
+    headerTapWaveDragRippleLifetimeSeconds:
+        headerTapWaveDragRippleLifetimeSeconds,
   );
 
   DashboardPresentationPreferences withRecurringUiDesign(
@@ -379,6 +397,9 @@ final class DashboardPresentationPreferences {
     headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
     headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
     headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
+    headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
+    headerTapWaveDragRippleLifetimeSeconds:
+        headerTapWaveDragRippleLifetimeSeconds,
   );
 
   DashboardPresentationPreferences withPushProfileUiDesign(
@@ -423,6 +444,9 @@ final class DashboardPresentationPreferences {
     headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
     headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
     headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
+    headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
+    headerTapWaveDragRippleLifetimeSeconds:
+        headerTapWaveDragRippleLifetimeSeconds,
   );
 
   DashboardPresentationPreferences withAutomationHomeUiDesign(
@@ -467,12 +491,17 @@ final class DashboardPresentationPreferences {
     headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
     headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
     headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
+    headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
+    headerTapWaveDragRippleLifetimeSeconds:
+        headerTapWaveDragRippleLifetimeSeconds,
   );
 
   DashboardPresentationPreferences withHeaderTapWaveControls({
     required double trailStrengthPercent,
     required double tapStartSizePercent,
     required double tapStrengthPercent,
+    double? tapSpeedPercent,
+    double? dragRippleLifetimeSeconds,
   }) => DashboardPresentationPreferences(
     sumVisualStyle: sumVisualStyle,
     showSumLayoutChooser: showSumLayoutChooser,
@@ -513,6 +542,10 @@ final class DashboardPresentationPreferences {
     headerTapWaveTrailStrengthPercent: trailStrengthPercent,
     headerTapWaveTapStartSizePercent: tapStartSizePercent,
     headerTapWaveTapStrengthPercent: tapStrengthPercent,
+    headerTapWaveTapSpeedPercent:
+        tapSpeedPercent ?? headerTapWaveTapSpeedPercent,
+    headerTapWaveDragRippleLifetimeSeconds:
+        dragRippleLifetimeSeconds ?? headerTapWaveDragRippleLifetimeSeconds,
   );
 }
 

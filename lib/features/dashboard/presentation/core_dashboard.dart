@@ -627,6 +627,9 @@ class _CoreDashboardState extends State<CoreDashboard>
         trailStrengthPercent: restored.headerTapWaveTrailStrengthPercent,
         tapStartSizePercent: restored.headerTapWaveTapStartSizePercent,
         tapStrengthPercent: restored.headerTapWaveTapStrengthPercent,
+        tapSpeedPercent: restored.headerTapWaveTapSpeedPercent,
+        dragRippleLifetimeSeconds:
+            restored.headerTapWaveDragRippleLifetimeSeconds,
       );
     } finally {
       _applyingDashboardPresentationPreferences = false;
@@ -715,6 +718,14 @@ class _CoreDashboardState extends State<CoreDashboard>
             .tapWaveTuning
             .value
             .valueFor(DashboardHeaderTapWaveCatalog.tapStrengthId),
+        headerTapWaveTapSpeedPercent: _headerVisualController
+            .tapWaveTuning
+            .value
+            .valueFor(DashboardHeaderTapWaveCatalog.tapSpeedId),
+        headerTapWaveDragRippleLifetimeSeconds: _headerVisualController
+            .tapWaveTuning
+            .value
+            .valueFor(DashboardHeaderTapWaveCatalog.dragRippleLifetimeId),
       ),
     );
   }

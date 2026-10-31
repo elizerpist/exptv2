@@ -1650,6 +1650,29 @@ vec2 displaceWaterTrail(vec2 uv, out float highlight, out float shadow) {
         lifetime * (.085 + velocity * .045) * trailStrength);
   }
 
+  // Every retained path vertex also leaves a small, thin outward ring.  This
+  // is intentionally independent from the connected displacement above: a
+  // slow finger therefore shows discrete water circles behind its still-live
+  // touch point, while a fast one keeps the original continuous wake.
+  for (int index = 0; index < 25; index++) {
+    if (float(index) >= uTrailCount) break;
+    vec4 vertex = trailAt(index);
+    if (vertex.z < 0.0 || vertex.z >= .8) continue;
+    vec2 source = vec2(vertex.x * aspect, vertex.y);
+    float distanceToSource = length(point - source);
+    float phase = saturate(vertex.z / .8);
+    float ringRadius = (2.0 + phase * 20.0) / height;
+    float ringWidth = (1.15 + phase * .35) / height;
+    float thinRing = waterGaussian(distanceToSource - ringRadius, ringWidth);
+    float ringLifetime = 1.0 - smooth01(.46, .8, vertex.z);
+    highlight = max(
+        highlight,
+        thinRing * ringLifetime * .050 * trailStrength);
+    shadow = max(
+        shadow,
+        thinRing * ringLifetime * .038 * trailStrength);
+  }
+
   vec2 displaced = uv + vec2(offset.x / aspect, offset.y);
   // The Header shell clips final pixels, while this envelope also avoids
   // dragging material sampling into a hard stripe right at its rounded edge.

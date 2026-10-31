@@ -51,6 +51,8 @@ abstract final class DashboardHeaderTapWaveCatalog {
   static const dynamicTrailStrengthId = 'dynamicTrailStrengthPercent';
   static const tapStartSizeId = 'tapStartSizePercent';
   static const tapStrengthId = 'tapStrengthPercent';
+  static const tapSpeedId = 'tapSpeedPercent';
+  static const dragRippleLifetimeId = 'dragRippleLifetimeSeconds';
 
   static const List<DashboardHeaderTapWaveControl> controls =
       <DashboardHeaderTapWaveControl>[
@@ -82,6 +84,26 @@ abstract final class DashboardHeaderTapWaveCatalog {
           step: 5,
           defaultValue: 75,
           unit: '%',
+          isSourceControl: false,
+        ),
+        DashboardHeaderTapWaveControl(
+          id: tapSpeedId,
+          label: 'Tap-hullám sebessége',
+          min: 50,
+          max: 200,
+          step: 5,
+          defaultValue: 100,
+          unit: '%',
+          isSourceControl: false,
+        ),
+        DashboardHeaderTapWaveControl(
+          id: dragRippleLifetimeId,
+          label: 'Húzási hullámok életideje',
+          min: .40,
+          max: 2,
+          step: .05,
+          defaultValue: 1.20,
+          unit: ' s',
           isSourceControl: false,
         ),
         DashboardHeaderTapWaveControl(
@@ -151,7 +173,9 @@ abstract final class DashboardHeaderTapWaveCatalog {
         (control) =>
             control.id == dynamicTrailStrengthId ||
             control.id == tapStartSizeId ||
-            control.id == tapStrengthId,
+            control.id == tapStrengthId ||
+            control.id == tapSpeedId ||
+            control.id == dragRippleLifetimeId,
       )
       .toList(growable: false);
 
@@ -202,7 +226,12 @@ final class DashboardHeaderTapWaveTuning {
   DashboardHeaderTapWaveTuning asCurrentReference() =>
       copyWithValue(DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId, 100)
           .copyWithValue(DashboardHeaderTapWaveCatalog.tapStartSizeId, 100)
-          .copyWithValue(DashboardHeaderTapWaveCatalog.tapStrengthId, 100);
+          .copyWithValue(DashboardHeaderTapWaveCatalog.tapStrengthId, 100)
+          .copyWithValue(DashboardHeaderTapWaveCatalog.tapSpeedId, 100)
+          .copyWithValue(
+            DashboardHeaderTapWaveCatalog.dragRippleLifetimeId,
+            .80,
+          );
 }
 
 @immutable
@@ -352,12 +381,13 @@ final class DashboardHeaderTapWaveTrailFrame {
 /// Bounded one-shot source state advanced by the existing shared Header clock.
 /// It intentionally owns neither a [Ticker] nor any Dashboard semantic state.
 final class DashboardHeaderTapWaveState {
-  static const Duration _trailLifetime = Duration(milliseconds: 800);
+  static const Duration _referenceTrailLifetime = Duration(milliseconds: 800);
   static const Duration _rippleFadeDuration = Duration(milliseconds: 1560);
   static const Duration _releaseCleanup = Duration(milliseconds: 1740);
   static const Duration _tapToDragTransition = Duration(milliseconds: 80);
   static const double _dragThresholdLogicalPixels = 5;
-  static const double _sampleSpacingLogicalPixels = 6;
+  static const double _sampleSpacingLogicalPixels = 12;
+  static const Duration _slowDragEmissionInterval = Duration(milliseconds: 210);
   static const double _maximumVelocityLogicalPixelsPerSecond = 1200;
   static const int _maxRipples = 10;
   static const int _maxTrailSegments = 24;
@@ -376,6 +406,7 @@ final class DashboardHeaderTapWaveState {
   Duration? _releaseStartedAt;
   Duration? _dragStartedAt;
   Duration? _lastPointerTimestamp;
+  Duration? _lastTrailEmissionAt;
   Size _pathLogicalSize = Size.zero;
   Offset _pendingMovement = Offset.zero;
   double _smoothedVelocity = 0;
@@ -393,7 +424,10 @@ final class DashboardHeaderTapWaveState {
   static int get maxTrailSamples => _maxTrails;
 
   bool get requiresFrames =>
-      _releaseStartedAt != null || _ripples.isNotEmpty || _trails.isNotEmpty;
+      _pointerActive ||
+      _releaseStartedAt != null ||
+      _ripples.isNotEmpty ||
+      _trails.isNotEmpty;
 
   void configure(DashboardHeaderTapWaveTuning value) => _tuning = value;
 
@@ -409,6 +443,7 @@ final class DashboardHeaderTapWaveState {
     _releaseStartedAt = null;
     _dragStartedAt = null;
     _lastPointerTimestamp = timestamp;
+    _lastTrailEmissionAt = timestamp;
     _pathLogicalSize = _safeLogicalSize(logicalSize);
     _pendingMovement = Offset.zero;
     _smoothedVelocity = 0;
@@ -419,7 +454,6 @@ final class DashboardHeaderTapWaveState {
       connectsToPrevious: false,
       force: true,
     );
-    _spawnRipple(_origin, timestamp);
   }
 
   void pointerMove({
@@ -463,6 +497,11 @@ final class DashboardHeaderTapWaveState {
       _pathBreakPending = true;
     }
 
+    // The live point is not a trail sample.  It follows even a sub-threshold
+    // or stationary drag, so a deliberately slow finger never loses the
+    // immediate under-finger acknowledgement while historical rings fade.
+    _origin = nextOrigin;
+
     if (!_dragging) {
       _pendingMovement += logicalDelta;
       if (_pendingMovement.distance < _dragThresholdLogicalPixels) return;
@@ -491,10 +530,22 @@ final class DashboardHeaderTapWaveState {
     _origin = nextOrigin;
   }
 
-  void pointerUp({required Duration timestamp}) {
+  void pointerUp({
+    required Duration timestamp,
+    Offset? releaseOrigin,
+    bool emitReleaseRipple = true,
+  }) {
     if (!_pointerActive) return;
+    if (releaseOrigin != null) _origin = _clampPoint(releaseOrigin);
     _pointerActive = false;
-    _releaseStartedAt = timestamp;
+    // Only an actual in-surface PointerUp creates the large release ring.
+    // Cancels, disposal and off-surface endings merely close the live touch.
+    if (emitReleaseRipple) {
+      _releaseStartedAt = timestamp;
+      _spawnRipple(_origin, timestamp);
+    } else {
+      _releaseStartedAt = null;
+    }
     _lastPointerTimestamp = null;
   }
 
@@ -509,7 +560,7 @@ final class DashboardHeaderTapWaveState {
 
   void advance(Duration timestamp) {
     _ripples.removeWhere(
-      (ripple) => timestamp - ripple.startedAt >= _rippleLifetime,
+      (ripple) => _tapAge(timestamp - ripple.startedAt) >= _rippleLifetime,
     );
     var trimmedTrailHead = false;
     while (_trails.isNotEmpty &&
@@ -522,7 +573,7 @@ final class DashboardHeaderTapWaveState {
     }
     final releaseStartedAt = _releaseStartedAt;
     if (releaseStartedAt != null &&
-        timestamp - releaseStartedAt >= _releaseCleanup) {
+        _tapAge(timestamp - releaseStartedAt) >= _releaseCleanup) {
       _releaseStartedAt = null;
     }
   }
@@ -530,20 +581,21 @@ final class DashboardHeaderTapWaveState {
   DashboardHeaderTapWaveOverlay? overlayAt(Duration timestamp) {
     if (_pointerActive) {
       final dragFade = _dragOverlayFactor(timestamp);
-      if (dragFade <= .0001) return null;
+      final activeStrength = _dragging
+          ? _dynamicTrailStrengthFactor
+          : _tapStrengthFactor;
+      final visibleFactor = _dragging ? math.max(.26, dragFade) : dragFade;
+      if (visibleFactor <= .0001) return null;
       return _overlay(
-        opacity: .96 * dragFade * _tapStrengthFactor,
-        scale: _heldTapScale(dragFade),
-        blur: _lerp(7, 10, 1 - dragFade),
+        opacity: .96 * visibleFactor * activeStrength,
+        scale: _heldTapScale(visibleFactor),
+        blur: _lerp(7, 10, 1 - visibleFactor),
       );
     }
     final releaseStartedAt = _releaseStartedAt;
     if (releaseStartedAt == null) return null;
-    final age = timestamp - releaseStartedAt;
+    final age = _tapAge(timestamp - releaseStartedAt);
     if (age >= _releaseCleanup) return null;
-    // A real drag has already retracted the large tap overlay. It must not
-    // reappear as a second circle when the pointer is released.
-    if (_dragging) return null;
     const initialOpacity = .96;
     const initialBlur = 7.0;
     final fade = _curveFraction(
@@ -576,14 +628,18 @@ final class DashboardHeaderTapWaveState {
       ..y = _origin.dy;
     if (_pointerActive) {
       final dragFade = _dragOverlayFactor(timestamp);
-      if (dragFade <= .0001) {
+      final activeStrength = _dragging
+          ? _dynamicTrailStrengthFactor
+          : _tapStrengthFactor;
+      final visibleFactor = _dragging ? math.max(.26, dragFade) : dragFade;
+      if (visibleFactor <= .0001) {
         into.clear();
         return;
       }
       into
-        ..opacity = .96 * dragFade * _tapStrengthFactor
-        ..scale = _heldTapScale(dragFade)
-        ..blur = _lerp(7, 10, 1 - dragFade)
+        ..opacity = .96 * visibleFactor * activeStrength
+        ..scale = _heldTapScale(visibleFactor)
+        ..blur = _lerp(7, 10, 1 - visibleFactor)
         ..active = 1;
       return;
     }
@@ -592,12 +648,8 @@ final class DashboardHeaderTapWaveState {
       into.clear();
       return;
     }
-    final age = timestamp - releaseStartedAt;
+    final age = _tapAge(timestamp - releaseStartedAt);
     if (age >= _releaseCleanup) {
-      into.clear();
-      return;
-    }
-    if (_dragging) {
       into.clear();
       return;
     }
@@ -643,11 +695,35 @@ final class DashboardHeaderTapWaveState {
   }) {
     final age = timestamp - trail.startedAt;
     if (age >= _trailLifetime) return null;
+    // The fragment ABI's retained trail phase is intentionally normalized to
+    // its historical 0…0.8 interval.  The persisted lifetime only changes
+    // how quickly real time travels through that phase; CPU expiry and shader
+    // visibility therefore agree at both slider limits.
     return DashboardHeaderTapWaveTrailSample(
-      age: math.max(0, age.inMicroseconds) / Duration.microsecondsPerSecond,
+      age:
+          (math.max(0, age.inMicroseconds) /
+                  math.max(1, _trailLifetime.inMicroseconds) *
+                  _referenceTrailLifetime.inMicroseconds /
+                  Duration.microsecondsPerSecond)
+              .clamp(0.0, .8)
+              .toDouble(),
       velocity: trail.velocity,
       connectsToPrevious: trail.connectsToPrevious,
     );
+  }
+
+  /// The fragment ripple bank must follow the exact same local tap clock as
+  /// the overlay, otherwise a 50%/200% setting would split one release into
+  /// two visibly different animations.
+  double? ripplePhaseAt({
+    required DashboardHeaderTapWaveRipple ripple,
+    required Duration timestamp,
+  }) {
+    final age = _tapAge(timestamp - ripple.startedAt);
+    if (age.isNegative || age >= _rippleLifetime) return null;
+    return (age.inMicroseconds / _rippleLifetime.inMicroseconds)
+        .clamp(0.0, 1.0)
+        .toDouble();
   }
 
   /// Writes a vertex of the time-decaying, connected water path into retained
@@ -684,7 +760,9 @@ final class DashboardHeaderTapWaveState {
     final radiusTravel = _tuning.valueFor('rippleRadiusTravel');
     final intensity = _tuning.valueFor('rippleIntensity') * _tapStrengthFactor;
     for (final ripple in _ripples) {
-      final elapsedMicros = (timestamp - ripple.startedAt).inMicroseconds;
+      final elapsedMicros = _tapAge(
+        timestamp - ripple.startedAt,
+      ).inMicroseconds;
       if (elapsedMicros < 0 || elapsedMicros >= lifetimeMicros) continue;
       final age = elapsedMicros / lifetimeMicros;
       final dx = resolvedX - ripple.origin.dx;
@@ -705,7 +783,9 @@ final class DashboardHeaderTapWaveState {
         : math
               .max(
                 0,
-                1 - (timestamp - newest.startedAt).inMicroseconds / fadeMicros,
+                1 -
+                    _tapAge(timestamp - newest.startedAt).inMicroseconds /
+                        fadeMicros,
               )
               .toDouble();
     into
@@ -736,6 +816,27 @@ final class DashboardHeaderTapWaveState {
       (_tuning.valueFor(DashboardHeaderTapWaveCatalog.tapStartSizeId) / 100)
           .clamp(.25, 1.0)
           .toDouble();
+
+  double get _dynamicTrailStrengthFactor =>
+      (_tuning.valueFor(DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId) /
+              100)
+          .clamp(0.0, 3.0)
+          .toDouble();
+
+  Duration get _trailLifetime => Duration(
+    microseconds:
+        (_tuning.valueFor(DashboardHeaderTapWaveCatalog.dragRippleLifetimeId) *
+                Duration.microsecondsPerSecond)
+            .round(),
+  );
+
+  Duration _tapAge(Duration actualAge) => Duration(
+    microseconds:
+        (actualAge.inMicroseconds *
+                (_tuning.valueFor(DashboardHeaderTapWaveCatalog.tapSpeedId) /
+                    100))
+            .round(),
+  );
 
   double _heldTapScale(double dragFade) {
     final original = _lerp(.8, 1, 1 - dragFade);
@@ -774,7 +875,15 @@ final class DashboardHeaderTapWaveState {
     final from = _trails.last;
     final distance = _logicalDistance(from.origin, to, _pathLogicalSize);
     if (distance <= .001) return;
-    final pieces = math.max(1, (distance / _sampleSpacingLogicalPixels).ceil());
+    final elapsed = timestamp - (_lastTrailEmissionAt ?? timestamp);
+    final requiresSlowEmission =
+        elapsed >= _slowDragEmissionInterval && distance >= 1;
+    final pieces = math.max(
+      1,
+      requiresSlowEmission
+          ? 1
+          : (distance / _sampleSpacingLogicalPixels).ceil(),
+    );
     for (var index = 1; index <= pieces; index += 1) {
       final progress = index / pieces;
       _appendTrail(
@@ -784,6 +893,7 @@ final class DashboardHeaderTapWaveState {
         connectsToPrevious: true,
       );
     }
+    _lastTrailEmissionAt = timestamp;
   }
 
   void _appendTrail({

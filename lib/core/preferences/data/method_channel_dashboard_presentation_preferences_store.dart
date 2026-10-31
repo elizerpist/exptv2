@@ -231,6 +231,19 @@ final class MethodChannelDashboardPresentationPreferencesStore
           max: 100,
           fallback: 75,
         ),
+        headerTapWaveTapSpeedPercent: _steppedPercent(
+          values['headerTapWaveTapSpeedPercent'],
+          min: 50,
+          max: 200,
+          fallback: 100,
+        ),
+        headerTapWaveDragRippleLifetimeSeconds: _steppedValue(
+          values['headerTapWaveDragRippleLifetimeSeconds'],
+          min: .40,
+          max: 2,
+          step: .05,
+          fallback: 1.20,
+        ),
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -309,6 +322,10 @@ final class MethodChannelDashboardPresentationPreferencesStore
         'headerTapWaveTapStrengthPercent': preferences
             .headerTapWaveTapStrengthPercent
             .round(),
+        'headerTapWaveTapSpeedPercent': preferences.headerTapWaveTapSpeedPercent
+            .round(),
+        'headerTapWaveDragRippleLifetimeSeconds':
+            preferences.headerTapWaveDragRippleLifetimeSeconds,
       });
 }
 
@@ -321,6 +338,18 @@ double _steppedPercent(
   final value = raw is num ? raw.toDouble() : fallback;
   final snapped = (value / 5).round() * 5.0;
   return snapped.clamp(min, max).toDouble();
+}
+
+double _steppedValue(
+  Object? raw, {
+  required double min,
+  required double max,
+  required double step,
+  required double fallback,
+}) {
+  final value = raw is num ? raw.toDouble() : fallback;
+  final snapped = min + ((value - min) / step).round() * step;
+  return double.parse(snapped.clamp(min, max).toStringAsFixed(2));
 }
 
 T _enumValue<T extends Enum>(List<T> values, int? index, T fallback) =>

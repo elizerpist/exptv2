@@ -4106,7 +4106,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                               title: 'Érintési hullám',
                               children: <Widget>[
                                 Text(
-                                  'A Jelenlegi 100 / 100 / 100 értékkel ugyanazon a Headeren mutatja az eredeti látványt.',
+                                  'A Jelenlegi az eredeti erősséget, méretet és időzítést mutatja ugyanazon a Headeren.',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                                 const SizedBox(height: 6),

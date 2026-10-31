@@ -86,14 +86,12 @@ final class DashboardHeaderTapRippleUniformBank {
     var index = 0;
     for (final ripple in state.ripples) {
       if (index == _slots.length) break;
-      final age = elapsed - ripple.startedAt;
-      if (age < Duration.zero || age >= const Duration(milliseconds: 1685)) {
-        continue;
-      }
+      final age = state.ripplePhaseAt(ripple: ripple, timestamp: elapsed);
+      if (age == null) continue;
       _slots[index++].set(
         x: ripple.origin.dx,
         y: ripple.origin.dy,
-        age: age.inMicroseconds / 1684800,
+        age: age,
       );
     }
     for (var clearIndex = index; clearIndex < _slots.length; clearIndex += 1) {

@@ -5161,6 +5161,7 @@ final class DashboardCoreController {
       categoryId: activeFocus?.category?.id,
       partnerId: activeFocus?.partner?.id,
       normalizedSearch: activeFocus?.normalizedSearch,
+      ghostFilterMode: appliedScope.ghostFilterMode,
     );
     final stopwatch = Stopwatch()..start();
     final projection = MindBehavioralScoreProjection.build(
@@ -5641,6 +5642,7 @@ final class DashboardCoreController {
       categoryId: activeFocus?.category?.id,
       partnerId: activeFocus?.partner?.id,
       normalizedSearch: activeFocus?.normalizedSearch,
+      ghostFilterMode: appliedScope.ghostFilterMode,
     );
     // This separate twelve-month value is the bounded inspection read model
     // for an active category/partner/search membership. It is intentionally
@@ -5677,6 +5679,9 @@ final class DashboardCoreController {
           'sourceRows=${projection.sourceWorkCounter.sourceRowTouches} '
           'preparedContributions=${projection.sourceWorkCounter.preparedContributionTouches} '
           'matchingRows=${memberships.entryIndices.length} '
+          'financialOrdinals=${memberships.entryIndices.length} '
+          'presentationOrdinals=${memberships.presentationEntryIndices.length} '
+          'ghostFilter=${appliedScope.ghostFilterMode.name} '
           'buildMicros=${stopwatch.elapsedMicroseconds}',
     );
     // The identity is fully derived from current immutable state. Recheck it
@@ -5714,6 +5719,7 @@ final class DashboardCoreController {
       scope:
           'cause=$identityCause projectionInstall sourceRows=${projection.sourceWorkCounter.sourceRowTouches} '
           'preparedContributions=${projection.sourceWorkCounter.preparedContributionTouches} '
+          'ghostFilter=${appliedScope.ghostFilterMode.name} '
           'buildMicros=${stopwatch.elapsedMicroseconds}',
     );
     _completeMindHeatmapDirectionTrace(direction);
@@ -5749,6 +5755,8 @@ final class DashboardCoreController {
     final elapsed = trace == null
         ? null
         : developer.Timeline.now - trace.requestedAtMicros;
+    final partition = base?.partitionFor(direction);
+    final sourceSeed = partition?.focusMembershipSeed;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'MIND_HEATMAP|$stage',
@@ -5759,6 +5767,7 @@ final class DashboardCoreController {
             '${identity == null ? '' : 'year=${identity.year} identity=${FluviDiagnosticKeyDigest.of(identity.upstreamScopeKey)} indexGeneration=${identity.indexGeneration} '}'
             '${identity == null ? '' : 'temporalGeneration=${identity.navigationEpoch} '}'
             '${elapsed == null ? '' : 'requestTo${stage}Micros=$elapsed '}'
+            '${base == null ? '' : 'sourceIndexGeneration=${base.generation} overlay=${base.focusedTemporalOverlay != null} sourceSeedAvailable=${sourceSeed != null} sourceSeedEntries=${sourceSeed?.entryCount ?? 0} '}'
             '$scope',
       ),
     );
@@ -5838,9 +5847,8 @@ final class DashboardCoreController {
     };
     final heatmapPublished = ensureMindTemporalHeatmapProjection();
     final scorePublished = ensureMindBehavioralScoreProjection();
-    if (heatmapPublished || navigation.state.plane == TimePlane.month) {
-      if (!scorePublished) _clearCurrentMindTemporalHeatmap();
-    }
+    // A valid body may remain visible while its sibling score catches up.
+    // Clearing it here made a compact ghost-filter overlay appear empty.
     final published =
         heatmapPublished && scorePublished && mindTemporalHeatmap.value != null;
     final trace = _pendingMindTemporalEntryTrace;
@@ -6078,12 +6086,15 @@ final class DashboardCoreController {
       categoryId: activeFocus?.category?.id,
       partnerId: activeFocus?.partner?.id,
       normalizedSearch: activeFocus?.normalizedSearch,
+      ghostFilterMode: appliedScope.ghostFilterMode,
     );
     // Sum's overlay comparison is presentation-only, but its gray bars need
     // the whole selected-direction month total. Keep both memberships resident
     // and immutable at this one existing projection admission; range previews
     // continue to visit only the selected scope's bounded month buckets.
-    final fullDirection = seed.select();
+    final fullDirection = seed.select(
+      ghostFilterMode: appliedScope.ghostFilterMode,
+    );
     final stopwatch = Stopwatch()..start();
     final projection = MindSumHeatmapProjection.build(
       identity: identity,
@@ -6187,6 +6198,7 @@ final class DashboardCoreController {
       categoryId: activeFocus?.category?.id,
       partnerId: activeFocus?.partner?.id,
       normalizedSearch: activeFocus?.normalizedSearch,
+      ghostFilterMode: appliedScope.ghostFilterMode,
     );
     final stopwatch = Stopwatch()..start();
     final projection = MindMonthHeatmapProjection.build(
@@ -6290,6 +6302,7 @@ final class DashboardCoreController {
       categoryId: activeFocus?.category?.id,
       partnerId: activeFocus?.partner?.id,
       normalizedSearch: activeFocus?.normalizedSearch,
+      ghostFilterMode: appliedScope.ghostFilterMode,
     );
     final stopwatch = Stopwatch()..start();
     final projection = MindDayHeatmapProjection.build(

@@ -619,6 +619,8 @@ void main() {
       'headerTapWaveTrailStrengthPercent': 225,
       'headerTapWaveTapStartSizePercent': 55,
       'headerTapWaveTapStrengthPercent': 75,
+      'headerTapWaveTapSpeedPercent': 100,
+      'headerTapWaveDragRippleLifetimeSeconds': 1.20,
     });
   });
 
@@ -816,18 +818,26 @@ void main() {
       expect(defaults.headerTapWaveTrailStrengthPercent, 225);
       expect(defaults.headerTapWaveTapStartSizePercent, 55);
       expect(defaults.headerTapWaveTapStrengthPercent, 75);
+      expect(defaults.headerTapWaveTapSpeedPercent, 100);
+      expect(defaults.headerTapWaveDragRippleLifetimeSeconds, 1.20);
 
       await store.write(
         defaults.withHeaderTapWaveControls(
           trailStrengthPercent: 300,
           tapStartSizePercent: 25,
           tapStrengthPercent: 0,
+          tapSpeedPercent: 200,
+          dragRippleLifetimeSeconds: 2,
         ),
       );
       expect(stored['headerTapWaveTrailStrengthPercent'], 300);
       expect(stored['headerTapWaveTapStartSizePercent'], 25);
       expect(stored['headerTapWaveTapStrengthPercent'], 0);
+      expect(stored['headerTapWaveTapSpeedPercent'], 200);
+      expect(stored['headerTapWaveDragRippleLifetimeSeconds'], 2);
       expect((await store.read()).headerTapWaveTrailStrengthPercent, 300);
+      expect((await store.read()).headerTapWaveTapSpeedPercent, 200);
+      expect((await store.read()).headerTapWaveDragRippleLifetimeSeconds, 2);
     },
   );
 }

@@ -25,7 +25,7 @@ void main() {
     });
 
     test(
-      'new personal defaults start smaller and softer while retaining one tap wave',
+      'new personal defaults show the held point and defer the one large wave until release',
       () {
         final state = DashboardHeaderTapWaveState();
         state.pointerDown(
@@ -40,10 +40,12 @@ void main() {
         expect(overlay.scale, closeTo(.44, 1e-12));
         expect(overlay.blur, 7);
         expect(overlay.stops, const <double>[0, .05, .11, .19, .25]);
-        expect(state.rippleCount, 1);
+        expect(state.rippleCount, 0);
         expect(state.trailCount, 1);
         expect(state.isDragging, isFalse);
         expect(state.trails.single.connectsToPrevious, isFalse);
+        state.pointerUp(timestamp: const Duration(milliseconds: 10));
+        expect(state.rippleCount, 1);
       },
     );
 
@@ -123,6 +125,88 @@ void main() {
       expect(retained.opacity, closeTo(allocated.opacity, 1e-12));
     });
 
+    test('tap speed scales one local release clock without changing its path', () {
+      DashboardHeaderTapWaveState releaseAt(double speed) =>
+          DashboardHeaderTapWaveState()
+            ..configure(
+              DashboardHeaderTapWaveTuning.defaults().copyWithValue(
+                DashboardHeaderTapWaveCatalog.tapSpeedId,
+                speed,
+              ),
+            )
+            ..pointerDown(
+              origin: const Offset(.5, .5),
+              timestamp: Duration.zero,
+              logicalSize: _headerSize,
+            )
+            ..pointerUp(timestamp: Duration.zero);
+
+      final slow = releaseAt(50).overlayAt(const Duration(milliseconds: 120))!;
+      final normal =
+          releaseAt(100).overlayAt(const Duration(milliseconds: 120))!;
+      final fast = releaseAt(200).overlayAt(const Duration(milliseconds: 120))!;
+
+      expect(slow.scale, lessThan(normal.scale));
+      expect(normal.scale, lessThan(fast.scale));
+      expect(slow.opacity, greaterThan(normal.opacity));
+      expect(normal.opacity, greaterThan(fast.opacity));
+    });
+
+    test('drag-ring lifetime owns both CPU expiry and normalized shader age', () {
+      DashboardHeaderTapWaveState dragged(double lifetime) {
+        final state = DashboardHeaderTapWaveState()
+          ..configure(
+            DashboardHeaderTapWaveTuning.defaults().copyWithValue(
+              DashboardHeaderTapWaveCatalog.dragRippleLifetimeId,
+              lifetime,
+            ),
+          )
+          ..pointerDown(
+            origin: const Offset(.1, .5),
+            timestamp: Duration.zero,
+            logicalSize: _headerSize,
+          )
+          ..pointerMove(
+            origin: const Offset(.3, .5),
+            logicalDelta: const Offset(64, 0),
+            logicalSize: _headerSize,
+            timestamp: const Duration(milliseconds: 80),
+          );
+        return state;
+      }
+
+      final short = dragged(.40);
+      final long = dragged(2);
+      final sample = long.trails.last;
+      short.advance(const Duration(milliseconds: 600));
+      long.advance(const Duration(milliseconds: 600));
+
+      expect(short.trailCount, 0);
+      expect(
+        long.trailSampleAt(
+          trail: sample,
+          timestamp: const Duration(milliseconds: 600),
+        ),
+        isNotNull,
+      );
+    });
+
+    test('cancel closes the live touch without creating a release ripple', () {
+      final state = DashboardHeaderTapWaveState()
+        ..pointerDown(
+          origin: const Offset(.5, .5),
+          timestamp: Duration.zero,
+          logicalSize: _headerSize,
+        )
+        ..pointerUp(
+          timestamp: const Duration(milliseconds: 20),
+          emitReleaseRipple: false,
+        );
+
+      expect(state.rippleCount, 0);
+      expect(state.overlayAt(const Duration(milliseconds: 21)), isNull);
+    });
+
     test('hand tremor stays a tap and never retriggers circular ripples', () {
       final state = DashboardHeaderTapWaveState();
       state.pointerDown(
@@ -144,7 +228,7 @@ void main() {
       );
 
       expect(state.isDragging, isFalse);
-      expect(state.rippleCount, 1);
+      expect(state.rippleCount, 0);
       expect(state.trailCount, 1);
       expect(state.overlayAt(const Duration(milliseconds: 36)), isNotNull);
     });
@@ -182,8 +266,8 @@ void main() {
 
         expect(sparse.isDragging, isTrue);
         expect(dense.isDragging, isTrue);
-        expect(sparse.rippleCount, 1);
-        expect(dense.rippleCount, 1);
+        expect(sparse.rippleCount, 0);
+        expect(dense.rippleCount, 0);
         expect(sparse.trailCount, greaterThan(2));
         expect(dense.trailCount, greaterThan(2));
         for (final state in <DashboardHeaderTapWaveState>[sparse, dense]) {
@@ -194,7 +278,7 @@ void main() {
             expect(current.connectsToPrevious, isTrue);
             expect(
               (current.origin - previous.origin).distance * _headerSize.width,
-              lessThanOrEqualTo(6.01),
+              lessThanOrEqualTo(12.01),
             );
             expect(current.startedAt, greaterThanOrEqualTo(previous.startedAt));
           }
@@ -338,29 +422,35 @@ void main() {
           logicalSize: _headerSize,
         );
         expect(state.trails.last.connectsToPrevious, isFalse);
-        expect(state.rippleCount, 2);
+        // The previous contact generated one release wave; a new press does
+        // not erase it and does not create another until its own release.
+        expect(state.rippleCount, 1);
       },
     );
 
-    test('drag retracts the tap overlay and never restarts it on release', () {
-      final state = DashboardHeaderTapWaveState();
-      state.pointerDown(
-        origin: const Offset(.2, .5),
-        timestamp: Duration.zero,
-        logicalSize: _headerSize,
-      );
-      state.pointerMove(
-        origin: const Offset(.4, .5),
-        logicalDelta: const Offset(64, 0),
-        logicalSize: _headerSize,
-        timestamp: const Duration(milliseconds: 20),
-      );
+    test(
+      'drag keeps its live point and release starts exactly one large wave',
+      () {
+        final state = DashboardHeaderTapWaveState();
+        state.pointerDown(
+          origin: const Offset(.2, .5),
+          timestamp: Duration.zero,
+          logicalSize: _headerSize,
+        );
+        state.pointerMove(
+          origin: const Offset(.4, .5),
+          logicalDelta: const Offset(64, 0),
+          logicalSize: _headerSize,
+          timestamp: const Duration(milliseconds: 20),
+        );
 
-      expect(state.overlayAt(const Duration(milliseconds: 20)), isNotNull);
-      expect(state.overlayAt(const Duration(milliseconds: 105)), isNull);
-      state.pointerUp(timestamp: const Duration(milliseconds: 110));
-      expect(state.overlayAt(const Duration(milliseconds: 111)), isNull);
-    });
+        expect(state.overlayAt(const Duration(milliseconds: 20)), isNotNull);
+        expect(state.overlayAt(const Duration(milliseconds: 105)), isNotNull);
+        state.pointerUp(timestamp: const Duration(milliseconds: 110));
+        expect(state.overlayAt(const Duration(milliseconds: 111)), isNotNull);
+        expect(state.rippleCount, 1);
+      },
+    );
 
     test(
       'capacity remains at 24 connected segments and all state cleans up',

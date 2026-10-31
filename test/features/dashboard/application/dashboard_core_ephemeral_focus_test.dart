@@ -1011,6 +1011,15 @@ void main() {
       final repository = _FocusSeedRepository(
         rows: const <DashboardLedgerEntry>[
           DashboardLedgerEntry(
+            id: 'expense-ordinary-july',
+            partnerId: 'partner-market',
+            categoryId: 'food',
+            direction: 'expense',
+            amountMinor: 689000,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 540,
+          ),
+          DashboardLedgerEntry(
             id: 'expense-realized-ghost',
             partnerId: 'partner-recurring',
             categoryId: 'utilities',
@@ -1062,13 +1071,28 @@ void main() {
         reason: 'zero income is still financial data',
       );
       expect(nonGhost!.incomeTotalMinor, 0);
-      expect(nonGhost.expenseTotalMinor, 0);
-      expect(nonGhost.netTotalMinor, 0);
+      expect(nonGhost.expenseTotalMinor, 689000);
+      expect(nonGhost.netTotalMinor, -689000);
+
+      // The list can use the compact nonGhost overlay, but Mind must retain
+      // the neutral source membership and explicitly reselect it with the
+      // active filter.  This is the phone path Balance → Kiadás → nonGhost →
+      // Mind, not a hand-built heatmap fixture.
+      final nonGhostSeed = core.preparedIndex!
+          .partitionFor(LedgerDirection.expense)
+          .focusMembershipSeed;
+      expect(nonGhostSeed, isNotNull);
+      expect(
+        nonGhostSeed!
+            .select(ghostFilterMode: GhostFilterMode.nonGhost)
+            .entryIds,
+        <String>['expense-ordinary-july'],
+      );
 
       expect(await core.applyGhostFilterMode(GhostFilterMode.both), isTrue);
       final both = core.balancePresentation.value;
       expect(both, isNotNull);
-      expect(both!.expenseTotalMinor, 50000);
+      expect(both!.expenseTotalMinor, 739000);
       expect(both.latestTransaction?.entryId, 'expense-realized-ghost');
       expect(repository.prepareCalls, 1);
     },
