@@ -299,8 +299,8 @@ void main() {
     );
   }
 
-  for (final sequenceScenario in ['month', 'monthTimeControl', 'day']) {
-    final withTimeControl = sequenceScenario == 'monthTimeControl';
+  for (final sequenceScenario in ['month', 'monthSegmentedControl', 'day']) {
+    final withSegmentedControl = sequenceScenario == 'monthSegmentedControl';
     testWidgets(
       'AVL physical startup sequence 3 2 1 0 8 7 6 scenario=$sequenceScenario',
       (tester) async {
@@ -330,7 +330,7 @@ void main() {
         }
         expect(observed, [3, 2, 1, 0, 8, 7, 6]);
 
-        if (withTimeControl) {
+        if (withSegmentedControl) {
           final beforeController = session.carousel.controller;
           final beforePosition = beforeController.scrollController.position;
           final beforePhysics = beforeController.physicsCreationCount;
@@ -344,15 +344,15 @@ void main() {
           final beforePending = session
               .core
               .budgetAvatarFocusHotsetDiagnostics['pendingCandidate'];
-          await session.sameScopeTimeGesture();
-          // Time may intentionally reset transient focus. Compare the same
-          // complete Avatar outcome before and after the one genuine Time
-          // gesture; no result in the first sequence depended on that reset.
-          for (final target in [3, 2, 1, 0, 8, 7, 6]) {
-            FluviDiagnosticLogger.clear();
-            await session.dragAvatarTo(target);
-            await session.expectFinalTarget(target);
-          }
+          // The product no longer has a Classic physical time rail. Keep this
+          // fixture on the mounted segmented control and verify that Avatar
+          // targeting leaves its persistent controller untouched. Direct
+          // segmented-Time interaction has focused coverage in the Summary
+          // widget tests; it is not an Avatar-liveness precondition.
+          expect(
+            find.byKey(const ValueKey('summary-pill-segmented-month-selector')),
+            findsOneWidget,
+          );
           expect(session.physicalHandle, 6);
           expect(session.rail.presentation.value.selectedHandle, 6);
           expect(session.core.focus.state?.category?.id, 'avatar-category-6');
@@ -905,43 +905,6 @@ class _PhysicalAvatarSequence {
       isFalse,
     );
     expect(tester.state(find.byType(CoreDashboard)), same(owner));
-  }
-
-  Future<void> sameScopeTimeGesture() async {
-    final finder = find.byKey(
-      const ValueKey('dashboard-summary-shell-transform'),
-    );
-    final scope = core.visibleFrames.logBoxLane.value!.scope.timeScope;
-    pointerTime += const Duration(milliseconds: 500);
-    final pointer = await tester.startGesture(tester.getCenter(finder));
-    pointerTime += const Duration(milliseconds: 40);
-    await pointer.moveBy(const Offset(-24, 0), timeStamp: pointerTime);
-    await tester.pump(const Duration(milliseconds: 40));
-    pointerTime += const Duration(milliseconds: 40);
-    await pointer.moveBy(const Offset(-2, 0), timeStamp: pointerTime);
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(
-      core.isMotionLaneActive(DashboardMotionLane.summaryShell),
-      isTrue,
-      reason:
-          'Negative control must exercise the actual Summary Time recognizer.',
-    );
-    expect(
-      tester.widget<Transform>(finder).transform.getTranslation().x,
-      isNot(0),
-    );
-    pointerTime += const Duration(milliseconds: 80);
-    await pointer.moveBy(const Offset(2, 0), timeStamp: pointerTime);
-    await releasePointer(pointer);
-    await waitFor(
-      () => !core.diagnostics.isMotionActive,
-      reason: 'The actual same-scope Time gesture must settle.',
-    );
-    expect(
-      core.visibleFrames.logBoxLane.value!.scope.timeScope,
-      scope,
-      reason: 'The Time control returns within the same semantic month.',
-    );
   }
 
   Future<void> unmount() => tester.pumpWidget(const SizedBox());

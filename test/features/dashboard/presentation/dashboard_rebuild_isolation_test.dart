@@ -6,6 +6,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
@@ -16,7 +18,7 @@ void main() {
   setUpAll(prepareDashboardTestRenderResources);
 
   testWidgets(
-    'structural dashboard changes preserve the rail controller, position and physics',
+    'structural dashboard changes preserve the segmented selector controller, position and physics',
     (tester) async {
       final controller = DashboardCoreController(
         initialDate: DateTime(2026, 7, 14),
@@ -39,12 +41,20 @@ void main() {
         ),
       );
       await tester.pump();
-      final rail = find.byKey(const ValueKey('dashboard-time-rail'));
-      final railState = tester.state(rail);
-      final carousel = controller.motion.carouselController;
+      final selector = find.byKey(
+        const ValueKey('summary-pill-segmented-mode-selector'),
+      );
+      final selectorState = tester.state(selector);
+      final carouselFinder = find.descendant(
+        of: selector,
+        matching: find.byType(CenteredCarousel<SummaryPillExperimentLevel>),
+      );
+      final carousel = tester
+          .widget<CenteredCarousel<SummaryPillExperimentLevel>>(carouselFinder)
+          .controller;
       final scrollController = carousel.scrollController;
       final position = scrollController.position;
-      final physics = controller.motion.dashboardPhysics;
+      final physicsCreationCount = carousel.physicsCreationCount;
 
       for (var index = 0; index < 16; index += 1) {
         switch (index % 4) {
@@ -72,12 +82,21 @@ void main() {
         await tester.pump();
       }
 
-      expect(identical(tester.state(rail), railState), isTrue);
-      expect(identical(controller.motion.carouselController, carousel), isTrue);
+      expect(identical(tester.state(selector), selectorState), isTrue);
+      expect(
+        identical(
+          tester
+              .widget<CenteredCarousel<SummaryPillExperimentLevel>>(
+                carouselFinder,
+              )
+              .controller,
+          carousel,
+        ),
+        isTrue,
+      );
       expect(identical(carousel.scrollController, scrollController), isTrue);
       expect(identical(scrollController.position, position), isTrue);
-      expect(identical(controller.motion.dashboardPhysics, physics), isTrue);
-      expect(carousel.physicsCreationCount, 1);
+      expect(carousel.physicsCreationCount, physicsCreationCount);
       expect(
         controller.performanceCounters.value(
           DashboardPerformanceMetric.controllerRecreation,
