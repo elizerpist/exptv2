@@ -1615,16 +1615,13 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final current = _currentBudgetProgressPaintExpectation(
-        expectation.visual,
-      );
-      if (current == null ||
-          current.targetHandle != painted.targetHandle ||
-          current.coreRevision != painted.coreRevision ||
-          current.visiblePresentationEpoch != painted.presentationEpoch ||
-          current.visibleFrameGeneration != painted.frameGeneration) {
-        return;
-      }
+      // The identity above was captured by the selected chrome's actual
+      // [CustomPainter.paint] invocation.  A presentation retag can happen
+      // before this post-frame callback runs; re-reading the mutable rail
+      // here would incorrectly discard that real paint.  The Core is the
+      // authoritative recipient and rejects it unless its active target still
+      // has the same immutable identity, so forwarding the captured snapshot
+      // cannot acknowledge a stale visual.
       callback(painted);
     });
   }
