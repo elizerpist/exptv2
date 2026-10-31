@@ -184,6 +184,7 @@ final class BudgetTargetAvatarCarouselItem {
     Listenable? selectedLiveSelectionListenable,
     BudgetCategoryAvatarSelectedLimitVisualState Function()?
     selectedLimitVisualForLiveSelection,
+    Object? Function()? selectedProgressPaintIdentityForLiveSelection,
     VoidCallback? onSelectionVisualIdentityMismatch,
     ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
     onSelectionProgressBuilt,
@@ -201,6 +202,8 @@ final class BudgetTargetAvatarCarouselItem {
     selectedLimitVisualListenable: selectedLimitVisualListenable,
     selectedLiveSelectionListenable: selectedLiveSelectionListenable,
     selectedLimitVisualForLiveSelection: selectedLimitVisualForLiveSelection,
+    selectedProgressPaintIdentityForLiveSelection:
+        selectedProgressPaintIdentityForLiveSelection,
     onSelectionVisualIdentityMismatch: onSelectionVisualIdentityMismatch,
     onSelectionProgressBuilt: onSelectionProgressBuilt,
     onSelectionProgressPainted: onSelectionProgressPainted,

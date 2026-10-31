@@ -1322,6 +1322,15 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                     selectedLimitVisualForLiveSelection: metrics.isSelected
                         ? () => widget.presentation.value.selectedLimitVisual
                         : null,
+                    // A canonical visible-frame retag can preserve every
+                    // financial ring value.  Keep its immutable renderer
+                    // identity alongside the live visual so the selected
+                    // CustomPainter repaints and can acknowledge that exact
+                    // frame instead of leaving an earlier canvas paint alive.
+                    selectedProgressPaintIdentityForLiveSelection:
+                        metrics.isSelected
+                        ? _currentBudgetProgressPaintIdentity
+                        : null,
                     onSelectionVisualIdentityMismatch: () =>
                         _recordProgressIdentityMismatch(item.targetHandle),
                     onSelectionProgressBuilt:
@@ -1519,6 +1528,18 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
           widget.presentation.visibleFrameGenerationForDiagnostics,
       visual: visual,
       paintVsyncMicros: 0,
+    );
+  }
+
+  _BudgetProgressRendererPaintIdentity _currentBudgetProgressPaintIdentity() {
+    final presentation = widget.presentation;
+    final selection = presentation.value.liveSelection;
+    return _BudgetProgressRendererPaintIdentity(
+      targetHandle: selection.target.handle,
+      coreRevision: selection.coreRevision,
+      visiblePresentationEpoch:
+          presentation.visiblePresentationEpochForDiagnostics,
+      visibleFrameGeneration: presentation.visibleFrameGenerationForDiagnostics,
     );
   }
 
@@ -1807,4 +1828,39 @@ final class _BudgetProgressPaintExpectation {
         visual: visual,
         paintVsyncMicros: value,
       );
+}
+
+/// Immutable paint-only revision propagated into the selected Avatar's
+/// CustomPainter.  It is intentionally narrower than the Budget presentation
+/// state: a retag changes neither the selected target nor its financial
+/// values, but it must not reuse an earlier canvas acknowledgement.
+@immutable
+final class _BudgetProgressRendererPaintIdentity {
+  const _BudgetProgressRendererPaintIdentity({
+    required this.targetHandle,
+    required this.coreRevision,
+    required this.visiblePresentationEpoch,
+    required this.visibleFrameGeneration,
+  });
+
+  final int targetHandle;
+  final int? coreRevision;
+  final int? visiblePresentationEpoch;
+  final int? visibleFrameGeneration;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BudgetProgressRendererPaintIdentity &&
+      other.targetHandle == targetHandle &&
+      other.coreRevision == coreRevision &&
+      other.visiblePresentationEpoch == visiblePresentationEpoch &&
+      other.visibleFrameGeneration == visibleFrameGeneration;
+
+  @override
+  int get hashCode => Object.hash(
+    targetHandle,
+    coreRevision,
+    visiblePresentationEpoch,
+    visibleFrameGeneration,
+  );
 }

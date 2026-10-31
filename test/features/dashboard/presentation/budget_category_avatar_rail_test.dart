@@ -2714,6 +2714,46 @@ void main() {
   );
 
   testWidgets(
+    'FPA: a visible-frame retag repaints unchanged selected Avatar chrome',
+    (tester) async {
+      final visual = BudgetCategoryAvatarSelectedLimitVisualState.available(
+        targetHandle: 1,
+        limitKey: null,
+        displayNumeratorScaled100: 25,
+        displayDenominatorScaled100: 100,
+      );
+      final painted = <BudgetCategoryAvatarSelectedLimitVisualState>[];
+
+      Widget host(Object rendererPaintIdentity) => MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: BudgetCategoryAvatarSelectionChrome(
+              categoryColor: const Color(0xff2374ab),
+              progressColor: const Color(0xff2374ab),
+              sourceProgress: visual.visualProgress,
+              visualIdentity: visual,
+              rendererPaintIdentity: rendererPaintIdentity,
+              onProgressPainted: (paintedVisual, _) =>
+                  painted.add(paintedVisual),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(host(const <int>[48, 266]));
+      expect(painted, hasLength(1));
+
+      // The financial projection is intentionally unchanged.  The new frame
+      // identity must nevertheless execute CustomPainter.paint once, so the
+      // Core can acknowledge the current visible presentation rather than a
+      // stale predecessor.
+      await tester.pumpWidget(host(const <int>[49, 268]));
+      expect(painted, hasLength(2));
+      expect(painted.last.sameVisualAs(visual), isTrue);
+    },
+  );
+
+  testWidgets(
     'FPA: the production Avatar rail forwards only the selected progress canvas identity after paint',
     (tester) async {
       final harness = _InteractiveRailHarness();
@@ -2754,6 +2794,46 @@ void main() {
         ),
         isEmpty,
       );
+    },
+  );
+
+  testWidgets(
+    'FPA: the production Avatar rail repaints selected chrome after a visible-frame retag with unchanged progress',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      final visiblePaints = <DashboardAvatarSelectedVisualPainted>[];
+      addTearDown(harness.dispose);
+
+      await tester.pumpWidget(
+        _host(
+          harness.presentation,
+          limitEditController: harness.edits,
+          height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+          onSelectedAvatarVisualPainted: visiblePaints.add,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(visiblePaints, isNotEmpty);
+      expect(visiblePaints.last.presentationEpoch, 1);
+      expect(visiblePaints.last.frameGeneration, 1);
+
+      // The prepared values and selected target are deliberately identical.
+      // Only the visible-frame publication changed, which used to leave the
+      // CustomPainter at the old frame identity.
+      harness.visibleFrame.value = _interactiveFrame(
+        presentationEpoch: 2,
+        frameGeneration: 2,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(visiblePaints, hasLength(2));
+      expect(visiblePaints.last.targetHandle, 0);
+      expect(visiblePaints.last.coreRevision, 1);
+      expect(visiblePaints.last.presentationEpoch, 2);
+      expect(visiblePaints.last.frameGeneration, 2);
     },
   );
 
@@ -3606,7 +3686,11 @@ PreparedBudgetLimitSnapshot _nonAggregateMonthCircleSnapshot() {
   );
 }
 
-DashboardVisibleFrame _interactiveFrame({int coreRevision = 1}) {
+DashboardVisibleFrame _interactiveFrame({
+  int coreRevision = 1,
+  int presentationEpoch = 1,
+  int? frameGeneration,
+}) {
   final scope = CurrentLedgerQueryScope(
     direction: LedgerDirection.expense,
     timeScope: MonthScope(const YearMonth(year: 2026, month: 1)),
@@ -3637,8 +3721,8 @@ DashboardVisibleFrame _interactiveFrame({int coreRevision = 1}) {
     semanticIndex: 0,
     childLabel: 'January',
     navigationEpoch: 1,
-    presentationEpoch: 1,
-    frameGeneration: coreRevision,
+    presentationEpoch: presentationEpoch,
+    frameGeneration: frameGeneration ?? coreRevision,
     mode: DashboardVisibleMode.committed,
   );
 }

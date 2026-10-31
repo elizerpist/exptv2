@@ -768,6 +768,7 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
     this.selectedLimitVisualListenable,
     this.selectedLiveSelectionListenable,
     this.selectedLimitVisualForLiveSelection,
+    this.selectedProgressPaintIdentityForLiveSelection,
     this.onSelectionVisualIdentityMismatch,
     this.onSelectionProgressBuilt,
     this.onSelectionProgressPainted,
@@ -802,6 +803,13 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
   final Listenable? selectedLiveSelectionListenable;
   final BudgetCategoryAvatarSelectedLimitVisualState Function()?
   selectedLimitVisualForLiveSelection;
+
+  /// Renderer-only identity for the visible frame that owns the selected
+  /// chrome.  It deliberately remains separate from [selectedLimitVisual]: a
+  /// canonical frame can be retagged without changing the financial values,
+  /// and the CustomPainter must still produce one paint for that new visible
+  /// identity.
+  final Object? Function()? selectedProgressPaintIdentityForLiveSelection;
   final VoidCallback? onSelectionVisualIdentityMismatch;
 
   /// Narrow renderer-only acknowledgements for the selected progress chrome.
@@ -825,6 +833,8 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
         selectedLiveSelectionListenable: selectedLiveSelectionListenable,
         selectedLimitVisualForLiveSelection:
             selectedLimitVisualForLiveSelection,
+        selectedProgressPaintIdentityForLiveSelection:
+            selectedProgressPaintIdentityForLiveSelection,
         onSelectionVisualIdentityMismatch: onSelectionVisualIdentityMismatch,
         onSelectionProgressBuilt: onSelectionProgressBuilt,
         onSelectionProgressPainted: onSelectionProgressPainted,
@@ -858,6 +868,7 @@ final class _BudgetCategoryAvatarSelectedComposition extends StatefulWidget {
     required this.selectedLimitVisualListenable,
     required this.selectedLiveSelectionListenable,
     required this.selectedLimitVisualForLiveSelection,
+    required this.selectedProgressPaintIdentityForLiveSelection,
     required this.onSelectionVisualIdentityMismatch,
     required this.onSelectionProgressBuilt,
     required this.onSelectionProgressPainted,
@@ -874,6 +885,7 @@ final class _BudgetCategoryAvatarSelectedComposition extends StatefulWidget {
   final Listenable? selectedLiveSelectionListenable;
   final BudgetCategoryAvatarSelectedLimitVisualState Function()?
   selectedLimitVisualForLiveSelection;
+  final Object? Function()? selectedProgressPaintIdentityForLiveSelection;
   final VoidCallback? onSelectionVisualIdentityMismatch;
   final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
   onSelectionProgressBuilt;
@@ -966,6 +978,8 @@ final class _BudgetCategoryAvatarSelectedCompositionState
                 widget.selectedLiveSelectionListenable,
             selectedLimitVisualForLiveSelection:
                 widget.selectedLimitVisualForLiveSelection,
+            selectedProgressPaintIdentityForLiveSelection:
+                widget.selectedProgressPaintIdentityForLiveSelection,
             onSelectionVisualIdentityMismatch:
                 widget.onSelectionVisualIdentityMismatch,
             onSelectionProgressBuilt: widget.onSelectionProgressBuilt,
@@ -991,6 +1005,7 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
     required this.selectedLimitVisualListenable,
     required this.selectedLiveSelectionListenable,
     required this.selectedLimitVisualForLiveSelection,
+    required this.selectedProgressPaintIdentityForLiveSelection,
     required this.onSelectionVisualIdentityMismatch,
     required this.onSelectionProgressBuilt,
     required this.onSelectionProgressPainted,
@@ -1003,6 +1018,7 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
   final Listenable? selectedLiveSelectionListenable;
   final BudgetCategoryAvatarSelectedLimitVisualState Function()?
   selectedLimitVisualForLiveSelection;
+  final Object? Function()? selectedProgressPaintIdentityForLiveSelection;
   final VoidCallback? onSelectionVisualIdentityMismatch;
   final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
   onSelectionProgressBuilt;
@@ -1021,6 +1037,8 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
       }
       if (!visual.paintsProgressChrome) return const SizedBox();
       onSelectionProgressBuilt?.call(visual);
+      final paintIdentity = selectedProgressPaintIdentityForLiveSelection
+          ?.call();
       return OverflowBox(
         alignment: Alignment.center,
         minWidth: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
@@ -1040,6 +1058,7 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
           annualSegments: visual.annualSegments,
           typicalMarkerPosition: visual.typicalMarkerPosition,
           visualIdentity: visual,
+          rendererPaintIdentity: paintIdentity,
           onProgressPainted: onSelectionProgressPainted,
         ),
       );
@@ -1116,6 +1135,7 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
     this.annualSegments = const <BudgetProgressRingAnnualSegment>[],
     this.typicalMarkerPosition,
     this.visualIdentity,
+    this.rendererPaintIdentity,
     this.onProgressPainted,
     super.key,
   }) : faceColor = BudgetCategoryAvatarGeometry.selectionFaceColor;
@@ -1128,6 +1148,12 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   final List<BudgetProgressRingAnnualSegment> annualSegments;
   final double? typicalMarkerPosition;
   final BudgetCategoryAvatarSelectedLimitVisualState? visualIdentity;
+
+  /// A visible-frame retag must produce a fresh canvas paint even when the
+  /// selected category's financial projection did not change.  This value is
+  /// renderer metadata only; it neither changes the ring geometry nor holds
+  /// any selection authority.
+  final Object? rendererPaintIdentity;
   final BudgetCategoryAvatarProgressPainted? onProgressPainted;
   final Color faceColor;
 
@@ -1186,6 +1212,7 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
             sumRingStyle: ringPresentation.sumRingStyle,
             healthyColorMode: ringPresentation.healthyColorMode,
             progressVisual: visualIdentity,
+            rendererPaintIdentity: rendererPaintIdentity,
             onProgressPainted: onProgressPainted,
           ),
         ),
@@ -1240,6 +1267,7 @@ final class _SelectionChromePainter extends CustomPainter {
     required this.sumRingStyle,
     required this.healthyColorMode,
     this.progressVisual,
+    this.rendererPaintIdentity,
     this.onProgressPainted,
   });
 
@@ -1258,6 +1286,7 @@ final class _SelectionChromePainter extends CustomPainter {
   final BudgetSumRingStyle sumRingStyle;
   final BudgetHealthyColorMode healthyColorMode;
   final BudgetCategoryAvatarSelectedLimitVisualState? progressVisual;
+  final Object? rendererPaintIdentity;
   final BudgetCategoryAvatarProgressPainted? onProgressPainted;
 
   @override
@@ -1671,7 +1700,8 @@ final class _SelectionChromePainter extends CustomPainter {
       oldDelegate.typicalMarkerPosition != typicalMarkerPosition ||
       oldDelegate.sumRingStyle != sumRingStyle ||
       oldDelegate.healthyColorMode != healthyColorMode ||
-      !_sameProgressVisual(oldDelegate.progressVisual, progressVisual);
+      !_sameProgressVisual(oldDelegate.progressVisual, progressVisual) ||
+      oldDelegate.rendererPaintIdentity != rendererPaintIdentity;
 
   static bool _sameProgressVisual(
     BudgetCategoryAvatarSelectedLimitVisualState? left,
