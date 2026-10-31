@@ -23,6 +23,7 @@ import '../../manual_transactions/application/manual_transaction_editor_preferen
 import '../../manual_transactions/domain/manual_transaction_models.dart';
 import '../../manual_transactions/domain/manual_transaction_repository.dart';
 import '../../manual_transactions/presentation/category_dropdown.dart';
+import '../../manual_transactions/presentation/creation_direction_toggle.dart';
 import '../../manual_transactions/presentation/manual_transaction_editor_field_rows.dart';
 import '../../manual_transactions/presentation/partner_selector.dart';
 import '../domain/automation_models.dart';
@@ -107,6 +108,7 @@ final class _UnifiedRecurringTransactionEditorPageState
   bool _partnerExpanded = false;
   bool _categoryExpanded = false;
   bool _showMetadataSurfaces = true;
+  late LedgerDirection _createDirection;
   String? _amountError;
   String? _partnerError;
   String? _nameError;
@@ -114,7 +116,10 @@ final class _UnifiedRecurringTransactionEditorPageState
 
   bool get _editing => widget.existingRule != null;
   LedgerDirection get _direction =>
-      widget.existingRule?.direction ?? widget.initialDirection!;
+      widget.existingRule?.direction ?? _createDirection;
+  bool get _showEffectiveMetadataSurfaces => !_editing || _showMetadataSurfaces;
+  bool get _hasCompleteBankLink =>
+      _pushProfileId != null && _pushRuleId != null;
   int get _epochDay => _firstDate.difference(DateTime(1970)).inDays;
   int get _minutes => _time.hour * 60 + _time.minute;
   int? get _amountScaled100 => _parseMoney(_amount.text);
@@ -123,6 +128,10 @@ final class _UnifiedRecurringTransactionEditorPageState
   @override
   void initState() {
     super.initState();
+    _createDirection =
+        widget.initialDirection ??
+        widget.existingRule?.direction ??
+        LedgerDirection.expense;
     _categories = List<FluviCategory>.of(widget.categories);
     final existing = widget.existingRule;
     _trigger = existing?.triggerKind ?? RecurrenceTriggerKind.time;
@@ -359,6 +368,24 @@ final class _UnifiedRecurringTransactionEditorPageState
     });
   }
 
+  void _changeCreateDirection(LedgerDirection direction) {
+    if (_editing || _saving || direction == _createDirection) return;
+    final selectedRule = _pushRules
+        .where((rule) => rule.ruleId == _pushRuleId)
+        .firstOrNull;
+    setState(() {
+      _createDirection = direction;
+      // A profile/rule pair is atomic. Keeping only the profile after an
+      // incompatible rule has been cleared would defer an avoidable Core
+      // validation failure until Save.
+      if (_pushRuleId != null &&
+          (selectedRule == null || selectedRule.direction != direction)) {
+        _pushProfileId = null;
+        _pushRuleId = null;
+      }
+    });
+  }
+
   Future<void> _configureBankLink() async {
     final result = await showFluviChildEditorSheet<_BankLinkDraft>(
       context,
@@ -457,10 +484,12 @@ final class _UnifiedRecurringTransactionEditorPageState
               startLocalEpochDay: _epochDay,
               endLocalEpochDay: _endDate?.difference(DateTime(1970)).inDays,
               timezoneId: _timezoneId,
-              pushProfileId: _trigger == RecurrenceTriggerKind.push
+              pushProfileId:
+                  _trigger == RecurrenceTriggerKind.push && _hasCompleteBankLink
                   ? _pushProfileId
                   : null,
-              pushRuleId: _trigger == RecurrenceTriggerKind.push
+              pushRuleId:
+                  _trigger == RecurrenceTriggerKind.push && _hasCompleteBankLink
                   ? _pushRuleId
                   : null,
               amountToleranceScaled100: _toleranceScaled100,
@@ -480,10 +509,12 @@ final class _UnifiedRecurringTransactionEditorPageState
               startLocalEpochDay: _epochDay,
               endLocalEpochDay: _endDate?.difference(DateTime(1970)).inDays,
               timezoneId: _timezoneId,
-              pushProfileId: _trigger == RecurrenceTriggerKind.push
+              pushProfileId:
+                  _trigger == RecurrenceTriggerKind.push && _hasCompleteBankLink
                   ? _pushProfileId
                   : null,
-              pushRuleId: _trigger == RecurrenceTriggerKind.push
+              pushRuleId:
+                  _trigger == RecurrenceTriggerKind.push && _hasCompleteBankLink
                   ? _pushRuleId
                   : null,
               amountToleranceScaled100: _toleranceScaled100,
@@ -600,8 +631,8 @@ final class _UnifiedRecurringTransactionEditorPageState
                     Row(
                       children: [
                         SizedBox(
-                          width: 48,
-                          height: 48,
+                          width: 44,
+                          height: 44,
                           child: IconButton(
                             tooltip: 'Vissza',
                             padding: EdgeInsets.zero,
@@ -626,10 +657,18 @@ final class _UnifiedRecurringTransactionEditorPageState
                                 ),
                           ),
                         ),
-                        _MetadataToggle(
-                          showSurface: _showMetadataSurfaces,
-                          onTap: _saving ? null : _toggleMetadataSurfaces,
-                        ),
+                        if (!_editing)
+                          CreationDirectionToggle(
+                            direction: _direction,
+                            colorProfile: widget.directionColorProfile,
+                            enabled: !_saving,
+                            onChanged: _changeCreateDirection,
+                          )
+                        else
+                          _MetadataToggle(
+                            showSurface: _showMetadataSurfaces,
+                            onTap: _saving ? null : _toggleMetadataSurfaces,
+                          ),
                       ],
                     ),
                     const SizedBox(height: 18),
@@ -967,7 +1006,7 @@ final class _UnifiedRecurringTransactionEditorPageState
             ManualEditorIconSurface(
               icon: icon,
               background: _recurringNeutral,
-              showBackground: _showMetadataSurfaces,
+              showBackground: _showEffectiveMetadataSurfaces,
             ),
             const SizedBox(width: ManualEditorFieldMetrics.leadingToText),
             Expanded(
@@ -1009,7 +1048,7 @@ final class _UnifiedRecurringTransactionEditorPageState
         ManualEditorIconSurface(
           icon: Icons.notes_rounded,
           background: _recurringNeutral,
-          showBackground: _showMetadataSurfaces,
+          showBackground: _showEffectiveMetadataSurfaces,
         ),
         const SizedBox(width: ManualEditorFieldMetrics.leadingToText),
         Expanded(
@@ -1130,7 +1169,7 @@ final class _UnifiedRecurringTransactionEditorPageState
         .where((item) => item.ruleId == _pushRuleId)
         .firstOrNull;
     return profile == null || rule == null
-        ? 'Beállításra vár'
+        ? 'Válassz ${_direction == LedgerDirection.income ? 'bevételi' : 'kiadási'} felismerési szabályt.'
         : '${profile.displayName} · ${rule.name}';
   }
 
@@ -1205,6 +1244,7 @@ final class UnifiedRecurringManagerPage extends StatefulWidget {
     this.initialOccurrenceFilter = RecurrenceOccurrenceStatus.pending,
     this.initialOccurrenceFromUtcMs,
     this.initialOccurrenceToUtcMs,
+    this.directionColorProfile = FluviDirectionColorProfile.original,
   });
   final AutomationRepository repository;
   final ManualTransactionRepository manualRepository;
@@ -1217,6 +1257,7 @@ final class UnifiedRecurringManagerPage extends StatefulWidget {
   final bool initialRulesTab;
   final RecurrenceOccurrenceStatus? initialOccurrenceFilter;
   final int? initialOccurrenceFromUtcMs, initialOccurrenceToUtcMs;
+  final FluviDirectionColorProfile directionColorProfile;
   @override
   State<UnifiedRecurringManagerPage> createState() =>
       _UnifiedRecurringManagerPageState();
@@ -1409,6 +1450,7 @@ final class _UnifiedRecurringManagerPageState
                   preferencesStore: widget.preferencesStore,
                   permissions: widget.permissions,
                   initialDirection: widget.direction,
+                  directionColorProfile: widget.directionColorProfile,
                 ),
               ),
             );

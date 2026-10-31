@@ -2414,27 +2414,19 @@ void main() {
     expect(find.byType(BudgetCategoryAvatarArtwork), findsWidgets);
   });
 
-  testWidgets(
-    'first avatar frame already owns the prepared category face while SVG resolves',
-    (tester) async {
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: _artwork(),
-        ),
-      );
+  testWidgets('first avatar frame keeps the authored SVG silhouette', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      Directionality(textDirection: TextDirection.ltr, child: _artwork()),
+    );
 
-      final immediateFaces = tester
-          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
-          .map((widget) => widget.decoration)
-          .whereType<BoxDecoration>()
-          .where((decoration) => decoration.color == const Color(0xffd834c9))
-          .toList(growable: false);
-
-      expect(immediateFaces, isNotEmpty);
-      expect(find.byType(SvgPicture), findsOneWidget);
-    },
-  );
+    expect(find.byType(SvgPicture), findsOneWidget);
+    expect(
+      tester.widget<SvgPicture>(find.byType(SvgPicture)).bytesLoader.toString(),
+      contains('SvgStringLoader'),
+    );
+  });
 
   testWidgets('zero real categories still leaves the aggregate target', (
     tester,

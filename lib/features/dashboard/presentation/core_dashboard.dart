@@ -4,13 +4,11 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
 import '../../../core/categories/domain/category_repository.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
-import '../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../../core/financial_limits/presentation/budget_ring_presentation.dart';
@@ -76,16 +74,13 @@ import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/domain/year_month.dart';
-import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_ghost_quick_filter.dart';
 import 'widgets/dashboard_logbox_viewport.dart';
 import 'widgets/dashboard_render_phase_probe.dart';
 import 'widgets/dashboard_render_diagnostic_probe.dart';
-import 'widgets/dashboard_summary_pill.dart';
 import 'widgets/summary_pill_experiments.dart';
 import 'widgets/fluvi_brand_lockup.dart';
-import 'widgets/summary_pill_text_transition.dart';
 import 'widgets/transaction_direction_toggle.dart';
 import '../../pulse/application/pulse_delivery_coordinator.dart';
 
@@ -111,7 +106,6 @@ class CoreDashboard extends StatefulWidget {
     this.headerVisualController,
     this.mindQueryFacetLoader,
     this.dashboardPresentationPreferences,
-    this.initialSummaryPillVariant = SummaryPillVariant.segmented,
     this.pulseDeliveryCoordinator,
     this.onOpenPulse,
     this.onHeaderInteractionChanged,
@@ -147,7 +141,6 @@ class CoreDashboard extends StatefulWidget {
   final DashboardAppliedQueryFacetLoader? mindQueryFacetLoader;
   final DashboardPresentationPreferencesController?
   dashboardPresentationPreferences;
-  final SummaryPillVariant initialSummaryPillVariant;
   final PulseDeliveryCoordinator? pulseDeliveryCoordinator;
   final VoidCallback? onOpenPulse;
   final ValueChanged<bool>? onHeaderInteractionChanged;
@@ -159,7 +152,6 @@ class CoreDashboard extends StatefulWidget {
 class _CoreDashboardState extends State<CoreDashboard>
     with TickerProviderStateMixin {
   late final SummaryNavigationMotionController _summaryMotionController;
-  late final SummaryPillVariantController _summaryPillVariantController;
   late final DashboardBodyOrderController _bodyOrderController;
   late final BudgetContentCardStyleController _budgetContentCardStyle;
   late final BudgetSectionOrderController _budgetSectionOrderController;
@@ -206,9 +198,6 @@ class _CoreDashboardState extends State<CoreDashboard>
   bool _mindAmountInteractionActive = false;
   int? _lastLayerStackDiagnosticSignature;
   late FluviGlobalAppearance _globalAppearance;
-  late SummaryPillVariant _lastSummaryPillVariant;
-  int _lastSummaryVariantTransitionLayoutEpoch = 0;
-  int? _lastRejectedSummaryVariantCallbackEpoch;
   double _mindModeContentExtraHeight = 0;
   DashboardCoreController get controller => widget.controller;
   DashboardCoreModeController get modeController => widget.modeController;
@@ -240,10 +229,6 @@ class _CoreDashboardState extends State<CoreDashboard>
     _mindModeContentExtraHeight = _resolveMindModeContentExtraHeight();
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
-    _summaryPillVariantController = SummaryPillVariantController(
-      initialVariant: widget.initialSummaryPillVariant,
-    );
-    _lastSummaryPillVariant = _summaryPillVariantController.value;
     _bodyOrderController = DashboardBodyOrderController();
     _budgetContentCardStyle = BudgetContentCardStyleController();
     _budgetSectionOrderController = BudgetSectionOrderController();
@@ -266,7 +251,6 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetRingPresentationController = BudgetRingPresentationController();
     _logBoxHeightController.addListener(_onLogBoxHeightChanged);
     _logBoxSearchPillController.addListener(_onLayoutPresentationChanged);
-    _summaryPillVariantController.addListener(_onSummaryPillVariantChanged);
     _bodyOrderController.addListener(_onLayoutPresentationChanged);
     _budgetSectionOrderController.addListener(_onLayoutPresentationChanged);
     widget.shellPresentation?.addListener(_onShellPresentationChanged);
@@ -1018,11 +1002,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
-    _summaryPillVariantController.removeListener(_onSummaryPillVariantChanged);
     _bodyOrderController.removeListener(_onLayoutPresentationChanged);
     _budgetSectionOrderController.removeListener(_onLayoutPresentationChanged);
     widget.shellPresentation?.removeListener(_onShellPresentationChanged);
-    _summaryPillVariantController.dispose();
     _bodyOrderController.dispose();
     _budgetContentCardStyle.dispose();
     _budgetSectionOrderController.dispose();
@@ -1085,8 +1067,9 @@ class _CoreDashboardState extends State<CoreDashboard>
             DashboardBodyComponent.summary,
           ])
         : _bodyOrderController.value;
-    final hasPhysicalRail =
-        _summaryPillVariantController.value == SummaryPillVariant.legacy;
+    // Product navigation has one physical implementation: the segmented
+    // Summary owns the time controls, so no second rail is laid out beside it.
+    const hasPhysicalRail = false;
     final baselineGeometry = DashboardGeometryResolver.resolve(
       metrics: viewportMetrics,
       mode: modeController.committedMode,
@@ -1168,7 +1151,6 @@ class _CoreDashboardState extends State<CoreDashboard>
             ? 0
             : (geometry.collapseProgress / collapseTravel * 20).round();
         _recordLayerStack(frame);
-        _recordSummaryVariantTransitionPresentation(frame);
         _upperVerticalGestures.updateViewportMapper(
           geometry.mapViewportVerticalDragToController,
         );
@@ -1466,14 +1448,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               _temporalCarouselCoordinator,
                                           bounds: geometry.summaryBounds,
                                           controller: controller,
-                                          summaryPillVariants:
-                                              _summaryPillVariantController,
                                           summaryPresentation:
                                               _summaryPresentationController,
-                                          motionController:
-                                              _summaryMotionController,
-                                          onVariantMotionActiveChanged:
-                                              _onSummaryVariantMotionActiveChanged,
                                           onAmountMotionActiveChanged:
                                               (active) => controller
                                                   .setMotionLaneActive(
@@ -1507,69 +1483,6 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               .ghostFilterMode,
                                           onGhostModeSelected:
                                               controller.applyGhostFilterMode,
-                                        ),
-                                      ),
-                                      _FramePosition(
-                                        bounds: geometry.railBounds,
-                                        child: ValueListenableBuilder<SummaryPillVariant>(
-                                          valueListenable:
-                                              _summaryPillVariantController,
-                                          builder: (context, variant, _) {
-                                            if (variant !=
-                                                SummaryPillVariant.legacy) {
-                                              // DAY remains the canonical month child query in
-                                              // an experiment, but its legacy rail must not add
-                                              // a second visible control surface.
-                                              return const SizedBox.expand();
-                                            }
-                                            return Opacity(
-                                              opacity: frame.railReveal,
-                                              child: IgnorePointer(
-                                                ignoring:
-                                                    !geometry.isRailExpanded,
-                                                child: profileRenderProbe(
-                                                  layoutMetric:
-                                                      DashboardPerformanceMetric
-                                                          .railLayout,
-                                                  paintMetric:
-                                                      DashboardPerformanceMetric
-                                                          .railPaint,
-                                                  layoutDurationMetric:
-                                                      DashboardPerformanceMetric
-                                                          .railLayoutMicros,
-                                                  paintDurationMetric:
-                                                      DashboardPerformanceMetric
-                                                          .railPaintMicros,
-                                                  child: TimeRefinementRail(
-                                                    bounds: geometry.railBounds,
-                                                    motion: controller.motion,
-                                                    onPreviewLogicalIndexChanged:
-                                                        (
-                                                          oldIndex,
-                                                          newIndex,
-                                                        ) => _summaryMotionController
-                                                            .triggerRailTick(
-                                                              oldLogicalIndex:
-                                                                  oldIndex,
-                                                              newLogicalIndex:
-                                                                  newIndex,
-                                                            ),
-                                                    onMotionBaselineEstablished:
-                                                        _summaryMotionController
-                                                            .resetRailTickBaseline,
-                                                    onMotionStarted: controller
-                                                        .beginRailMotion,
-                                                    performanceCounters:
-                                                        controller
-                                                            .performanceCounters,
-                                                    motionDiagnostics:
-                                                        controller
-                                                            .railFlightRecorder,
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-                                          },
                                         ),
                                       ),
                                       Positioned(
@@ -1929,8 +1842,6 @@ class _CoreDashboardState extends State<CoreDashboard>
                                         ),
                                       _DashboardHeaderVisualTunerOverlay(
                                         controller: _headerVisualController,
-                                        summaryPillVariants:
-                                            _summaryPillVariantController,
                                         bodyOrder: _bodyOrderController,
                                         budgetContentCardStyle:
                                             _budgetContentCardStyle,
@@ -2212,191 +2123,6 @@ class _CoreDashboardState extends State<CoreDashboard>
     unawaited(controller.commitMindAmountRange(values));
   }
 
-  void _onSummaryPillVariantChanged() {
-    final outgoing = _lastSummaryPillVariant;
-    final incoming = _summaryPillVariantController.value;
-    if (outgoing == incoming) {
-      _onLayoutPresentationChanged();
-      return;
-    }
-    final transitionEpoch = _summaryPillVariantController.transitionEpoch;
-    final visible =
-        controller.visibleFrames.countLane.value ??
-        controller.visibleFrames.value;
-    final queryKey =
-        visible?.queryKey.value ?? controller.currentQuery.scope.key.value;
-    final coreRevision =
-        visible?.coreRevision ?? controller.preparedIndex?.coreRevision;
-    final outgoingSummaryMotionActive = controller.isMotionLaneActive(
-      DashboardMotionLane.summaryShell,
-    );
-    _lastSummaryPillVariant = incoming;
-
-    // The controller owns one shared shell lane. Quiesce it synchronously at
-    // the adapter boundary, before the outgoing element disposes and before a
-    // new adapter can report a current motion. This does not alter either
-    // adapter's gesture physics or navigation state.
-    controller.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'SUMMARY_VARIANT_TRANSITION_STARTED',
-        queryKey: queryKey,
-        coreRevision: coreRevision,
-        scope:
-            'fromVariant=${outgoing.name} toVariant=${incoming.name} '
-            'variantTransitionEpoch=$transitionEpoch '
-            'outgoingAdapter=${_summaryAdapterName(outgoing)} '
-            'incomingAdapter=${_summaryAdapterName(incoming)} '
-            'outgoingSummaryMotionActive=$outgoingSummaryMotionActive '
-            'hasPhysicalRailBefore=${outgoing == SummaryPillVariant.legacy} '
-            'hasPhysicalRailAfter=${incoming == SummaryPillVariant.legacy} '
-            'queryDigest=${FluviDiagnosticKeyDigest.of(queryKey)} '
-            '${_summaryVariantLiveIdentityScope()}',
-      ),
-    );
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'SUMMARY_VARIANT_OUTGOING_QUIESCED',
-        queryKey: queryKey,
-        coreRevision: coreRevision,
-        scope:
-            'fromVariant=${outgoing.name} '
-            'variantTransitionEpoch=$transitionEpoch '
-            'summaryShellMotionActive=${controller.isMotionLaneActive(DashboardMotionLane.summaryShell)} '
-            'activeMotionLanes=${controller.activeMotionLaneNames}',
-      ),
-    );
-    _onLayoutPresentationChanged();
-  }
-
-  void _onSummaryVariantMotionActiveChanged(
-    SummaryPillVariant variant,
-    int transitionEpoch,
-    bool active,
-  ) {
-    if (!mounted ||
-        _summaryPillVariantController.value != variant ||
-        _summaryPillVariantController.transitionEpoch != transitionEpoch) {
-      final visible =
-          controller.visibleFrames.countLane.value ??
-          controller.visibleFrames.value;
-      final queryKey =
-          visible?.queryKey.value ?? controller.currentQuery.scope.key.value;
-      if (_lastRejectedSummaryVariantCallbackEpoch != transitionEpoch) {
-        _lastRejectedSummaryVariantCallbackEpoch = transitionEpoch;
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'SUMMARY_VARIANT_STALE_CALLBACK_REJECTED',
-            queryKey: queryKey,
-            coreRevision: visible?.coreRevision,
-            scope:
-                'callbackVariant=${variant.name} '
-                'callbackEpoch=$transitionEpoch '
-                'currentVariant=${_summaryPillVariantController.value.name} '
-                'currentEpoch=${_summaryPillVariantController.transitionEpoch} '
-                'active=$active '
-                'mounted=$mounted '
-                '${_summaryVariantLiveIdentityScope()}',
-          ),
-        );
-      }
-      return;
-    }
-    switch (variant) {
-      case SummaryPillVariant.legacy:
-        controller.setMotionLaneActive(
-          DashboardMotionLane.summaryShell,
-          active,
-        );
-      case SummaryPillVariant.segmented:
-        if (active) {
-          controller.beginSegmentedSummaryMotion();
-        } else {
-          controller.endSegmentedSummaryMotion();
-        }
-    }
-  }
-
-  void _recordSummaryVariantTransitionPresentation(DashboardVisualFrame frame) {
-    final transitionEpoch = _summaryPillVariantController.transitionEpoch;
-    if (transitionEpoch == _lastSummaryVariantTransitionLayoutEpoch) return;
-    _lastSummaryVariantTransitionLayoutEpoch = transitionEpoch;
-    final geometry = frame.geometry;
-    final variant = _summaryPillVariantController.value;
-    final visible =
-        controller.visibleFrames.countLane.value ??
-        controller.visibleFrames.value;
-    final queryKey =
-        visible?.queryKey.value ?? controller.currentQuery.scope.key.value;
-    String bounds(DashboardBounds value) =>
-        '${value.left.toStringAsFixed(1)},${value.top.toStringAsFixed(1)} '
-        '${value.width.toStringAsFixed(1)}x${value.height.toStringAsFixed(1)}';
-    final geometryDigest = Object.hash(
-      geometry.summaryBounds,
-      geometry.railBounds,
-      geometry.modeContentBounds,
-      geometry.logBoxHeaderBounds,
-      geometry.collapseHandleBounds,
-    );
-    final scope =
-        'variant=${variant.name} '
-        'variantTransitionEpoch=$transitionEpoch '
-        'adapter=${_summaryAdapterName(variant)} '
-        'hasPhysicalRail=${geometry.hasPhysicalRail} '
-        'geometryDigest=$geometryDigest '
-        'summaryBounds=${bounds(geometry.summaryBounds)} '
-        'railBounds=${bounds(geometry.railBounds)} '
-        'modeContentBounds=${bounds(geometry.modeContentBounds)} '
-        'logBoxBounds=${bounds(geometry.logBoxHeaderBounds)} '
-        'collapseHandleBounds=${bounds(geometry.collapseHandleBounds)} '
-        '${_summaryVariantLiveIdentityScope()}';
-    FluviDiagnosticLogger.log(
-      FluviDiagnosticEvent(
-        stage: 'SUMMARY_VARIANT_INCOMING_READY',
-        queryKey: queryKey,
-        coreRevision: visible?.coreRevision,
-        scope: '$scope state=presentationBound',
-      ),
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          _summaryPillVariantController.transitionEpoch != transitionEpoch) {
-        return;
-      }
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'SUMMARY_VARIANT_TRANSITION_COMPLETED',
-          queryKey: queryKey,
-          coreRevision: visible?.coreRevision,
-          scope: '$scope state=postFrameNoPaintClaim',
-        ),
-      );
-    });
-  }
-
-  String _summaryAdapterName(SummaryPillVariant variant) => switch (variant) {
-    SummaryPillVariant.legacy => 'DashboardSummaryPill',
-    SummaryPillVariant.segmented => 'SummaryPillExperiment',
-  };
-
-  /// Bounded shared-authority context for a presentation-only adapter swap.
-  ///
-  /// A Summary variant does not own this identity. Recording it on both sides
-  /// of the boundary lets a physical trace distinguish an obsolete adapter
-  /// callback from a changed Core/Avatar/Mind intent without logging a query
-  /// payload or individual rows.
-  String _summaryVariantLiveIdentityScope() {
-    final live = controller.liveInteractions.frame;
-    return 'visibleProducer=${live?.source.name ?? 'none'} '
-        'liveInteractionGeneration=${live?.generation ?? 0} '
-        'interactionEpoch=${live?.interactionPublicationEpoch ?? 0} '
-        'producerLocalGeneration=${live?.producerLocalGeneration ?? 0} '
-        'targetHandle=${live?.budgetTargetHandle ?? '-'} '
-        'presentationEpoch=${live?.presentationEpoch ?? -1} '
-        'frameGeneration=${live?.visibleFrameGeneration ?? -1} '
-        'activeMotionLanes=${controller.activeMotionLaneNames}';
-  }
-
   void _onLayoutPresentationChanged() {
     if (mounted) setState(() {});
   }
@@ -2477,7 +2203,6 @@ class _CoreDashboardState extends State<CoreDashboard>
               'semantics=${rect(entry.value.semantics)}',
         )
         .join('|');
-    final variantEpoch = _summaryPillVariantController.transitionEpoch;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'SUMMARY_POINTER_HIT_CLASSIFIED',
@@ -2490,8 +2215,7 @@ class _CoreDashboardState extends State<CoreDashboard>
             'level=${hit.level.name} '
             'owner=${hit.selectorTrack == null ? 'summaryBackground' : 'selector'} '
             'selectorTrack=${hit.selectorTrack ?? '-'} '
-            'variant=${_summaryPillVariantController.value.name} '
-            'variantTransitionEpoch=$variantEpoch '
+            'variant=segmented '
             'visibleFrameGeneration=${controller.visibleFrames.value?.frameGeneration ?? '-'} '
             'upperVerticalHandling=${_upperVerticalGestures.isHandlingPointer} '
             'tracks=$tracks',
@@ -2511,8 +2235,7 @@ class _CoreDashboardState extends State<CoreDashboard>
         scope:
             'global=${details.globalPosition.dx.toStringAsFixed(1)},${details.globalPosition.dy.toStringAsFixed(1)} '
             'local=${details.localPosition.dx.toStringAsFixed(1)},${details.localPosition.dy.toStringAsFixed(1)} '
-            'variant=${_summaryPillVariantController.value.name} '
-            'variantTransitionEpoch=${_summaryPillVariantController.transitionEpoch} '
+            'variant=segmented '
             'upperVerticalHandlingBefore=${_upperVerticalGestures.isHandlingPointer}',
       ),
     );
@@ -2525,10 +2248,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
     required this.temporalCarouselCoordinator,
     required this.bounds,
     required this.controller,
-    required this.summaryPillVariants,
     required this.summaryPresentation,
-    required this.motionController,
-    required this.onVariantMotionActiveChanged,
     required this.onAmountMotionActiveChanged,
     required this.autoResetController,
     required this.autoResetMotions,
@@ -2543,15 +2263,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
   final DashboardTemporalCarouselCoordinator temporalCarouselCoordinator;
   final DashboardBounds bounds;
   final DashboardCoreController controller;
-  final SummaryPillVariantController summaryPillVariants;
   final DashboardSummaryPresentationController summaryPresentation;
-  final SummaryNavigationMotionController motionController;
-  final void Function(
-    SummaryPillVariant variant,
-    int transitionEpoch,
-    bool active,
-  )
-  onVariantMotionActiveChanged;
   final ValueChanged<bool> onAmountMotionActiveChanged;
   final DashboardSummaryAutoResetController autoResetController;
   final DashboardSummaryAutoResetMotionRegistry autoResetMotions;
@@ -2564,180 +2276,107 @@ class _DashboardSummaryRegion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      ValueListenableBuilder<SummaryPillVariant>(
-        valueListenable: summaryPillVariants,
-        builder: (context, variant, _) {
-          final transitionEpoch = summaryPillVariants.transitionEpoch;
-          return ValueListenableBuilder<DashboardSummaryPresentationSettings>(
-            valueListenable: summaryPresentation,
-            builder: (context, presentation, _) => switch (variant) {
-              SummaryPillVariant.legacy => _legacyPill(transitionEpoch),
-              SummaryPillVariant.segmented => SummaryPillExperiment(
-                temporalCarouselCoordinator: temporalCarouselCoordinator,
-                variant: variant,
-                bounds: bounds,
-                navigation: controller.navigation,
-                visibleFrames: controller.visibleFrames,
-                performanceCounters: controller.performanceCounters,
-                onAmountMotionActiveChanged: onAmountMotionActiveChanged,
-                presentation: presentation,
-                onSelectorMotionActiveChanged: (active) {
-                  if (active) {
-                    if (!autoResetMotions.isExecuting) {
-                      autoResetController.cancel();
-                    }
-                  }
-                  onVariantMotionActiveChanged(
-                    SummaryPillVariant.segmented,
-                    transitionEpoch,
-                    active,
-                  );
-                },
-                onSelectorDirectInputStarted: () {
-                  // The Segmented selector must receive the exact same
-                  // foreground preemption boundary as Classic.  Otherwise
-                  // a ballistic/scene callback can outlive a new pointer
-                  // until its own asynchronous cleanup happens.
-                  controller.noteSummaryDirectPointerDown();
-                  temporalCarouselCoordinator.preemptAll();
-                  autoResetController.cancel();
-                  autoResetMotions.cancelActiveResetMotion();
-                },
-                onSelectorPointerDownDecision:
-                    controller.recordSegmentedPointerDown,
-                onPointerHitClassified: onPointerHitClassified,
-                onBackgroundTap: () {
-                  // A second background tap supersedes even a reset that
-                  // is currently waiting for a selector to mount.
-                  autoResetMotions.cancelActiveResetMotion();
-                  final navigation = controller.navigation.state;
-                  final plan = DashboardSummaryAutoResetPlan.resolve(
-                    plane: navigation.plane,
-                    isRailOpen: navigation.isRailOpen,
-                    year: navigation.yearCursor,
-                    month: navigation.monthCursor.month,
-                    logicalToday: controller.logicalAsOfDate,
-                  );
-                  unawaited(
-                    autoResetController.start(
-                      plan: plan,
-                      runStep: autoResetMotions.run,
-                    ),
-                  );
-                },
-                onBackgroundVerticalDragStart: onBackgroundVerticalDragStart,
-                onBackgroundVerticalDragUpdate: (details) =>
-                    upperVerticalGestures.dragByViewport(details.delta.dy),
-                onBackgroundVerticalDragEnd: (_) => upperVerticalGestures.end(),
-                autoResetMotionRegistry: autoResetMotions,
-                componentCandidateProjector:
-                    ({
-                      required base,
-                      required plane,
-                      required isRailOpen,
-                      required component,
-                      required offset,
-                    }) =>
-                        controller.experimentalTemporalComponentOffsetCandidate(
-                          plane: plane,
-                          isRailOpen: isRailOpen,
-                          component: component,
-                          offset: offset,
-                          base: base,
-                        ),
-                onLevelCrossed: (plane, isRailOpen) =>
-                    controller.navigateExperimentalTemporalSelection(
-                      plane: plane,
-                      isRailOpen: isRailOpen,
-                    ),
-                onComponentCrossed: (_, _) {},
-                onComponentCrossingAccepted: (candidate, component) =>
-                    controller.navigateExperimentalTemporalComponentCandidate(
-                      candidate: candidate,
-                      component: component,
-                    ),
-                onComponentVisualTargetPainted: (candidate, component) =>
-                    controller.noteSegmentedSummaryComponentVisualTargetPainted(
-                      candidate: candidate,
-                      component: component,
-                    ),
-                componentPaintedTarget: controller.segmentedTargetPainted,
-                onComponentSettled: (candidate, component) =>
-                    controller.settleExperimentalTemporalComponentCandidate(
-                      candidate: candidate,
-                      component: component,
-                    ),
-                motionDiagnostics: controller.railFlightRecorder,
-                ghostPresentation: ghostPresentation,
-                ghostMode: ghostMode,
-                onGhostModeSelected: onGhostModeSelected,
+      ValueListenableBuilder<DashboardSummaryPresentationSettings>(
+        valueListenable: summaryPresentation,
+        builder: (context, presentation, _) => SummaryPillExperiment(
+          temporalCarouselCoordinator: temporalCarouselCoordinator,
+          variant: SummaryPillVariant.segmented,
+          bounds: bounds,
+          navigation: controller.navigation,
+          visibleFrames: controller.visibleFrames,
+          performanceCounters: controller.performanceCounters,
+          onAmountMotionActiveChanged: onAmountMotionActiveChanged,
+          presentation: presentation,
+          onSelectorMotionActiveChanged: (active) {
+            if (active) {
+              if (!autoResetMotions.isExecuting) {
+                autoResetController.cancel();
+              }
+            }
+            if (active) {
+              controller.beginSegmentedSummaryMotion();
+            } else {
+              controller.endSegmentedSummaryMotion();
+            }
+          },
+          onSelectorDirectInputStarted: () {
+            // The Segmented selector must receive the exact same
+            // foreground preemption boundary as Classic.  Otherwise
+            // a ballistic/scene callback can outlive a new pointer
+            // until its own asynchronous cleanup happens.
+            controller.noteSummaryDirectPointerDown();
+            temporalCarouselCoordinator.preemptAll();
+            autoResetController.cancel();
+            autoResetMotions.cancelActiveResetMotion();
+          },
+          onSelectorPointerDownDecision: controller.recordSegmentedPointerDown,
+          onPointerHitClassified: onPointerHitClassified,
+          onBackgroundTap: () {
+            // A second background tap supersedes even a reset that
+            // is currently waiting for a selector to mount.
+            autoResetMotions.cancelActiveResetMotion();
+            final navigation = controller.navigation.state;
+            final plan = DashboardSummaryAutoResetPlan.resolve(
+              plane: navigation.plane,
+              isRailOpen: navigation.isRailOpen,
+              year: navigation.yearCursor,
+              month: navigation.monthCursor.month,
+              logicalToday: controller.logicalAsOfDate,
+            );
+            unawaited(
+              autoResetController.start(
+                plan: plan,
+                runStep: autoResetMotions.run,
               ),
-            },
-          );
-        },
+            );
+          },
+          onBackgroundVerticalDragStart: onBackgroundVerticalDragStart,
+          onBackgroundVerticalDragUpdate: (details) =>
+              upperVerticalGestures.dragByViewport(details.delta.dy),
+          onBackgroundVerticalDragEnd: (_) => upperVerticalGestures.end(),
+          autoResetMotionRegistry: autoResetMotions,
+          componentCandidateProjector:
+              ({
+                required base,
+                required plane,
+                required isRailOpen,
+                required component,
+                required offset,
+              }) => controller.experimentalTemporalComponentOffsetCandidate(
+                plane: plane,
+                isRailOpen: isRailOpen,
+                component: component,
+                offset: offset,
+                base: base,
+              ),
+          onLevelCrossed: (plane, isRailOpen) =>
+              controller.navigateExperimentalTemporalSelection(
+                plane: plane,
+                isRailOpen: isRailOpen,
+              ),
+          onComponentCrossed: (_, _) {},
+          onComponentCrossingAccepted: (candidate, component) =>
+              controller.navigateExperimentalTemporalComponentCandidate(
+                candidate: candidate,
+                component: component,
+              ),
+          onComponentVisualTargetPainted: (candidate, component) =>
+              controller.noteSegmentedSummaryComponentVisualTargetPainted(
+                candidate: candidate,
+                component: component,
+              ),
+          componentPaintedTarget: controller.segmentedTargetPainted,
+          onComponentSettled: (candidate, component) =>
+              controller.settleExperimentalTemporalComponentCandidate(
+                candidate: candidate,
+                component: component,
+              ),
+          motionDiagnostics: controller.railFlightRecorder,
+          ghostPresentation: ghostPresentation,
+          ghostMode: ghostMode,
+          onGhostModeSelected: onGhostModeSelected,
+        ),
       );
-
-  Widget _legacyPill(int transitionEpoch) {
-    return DashboardSummaryPill(
-      temporalCarouselCoordinator: temporalCarouselCoordinator,
-      bounds: bounds,
-      navigation: controller.navigation,
-      visibleFrames: controller.visibleFrames,
-      navigationMotionController: motionController,
-      onMotionActiveChanged: (active) => onVariantMotionActiveChanged(
-        SummaryPillVariant.legacy,
-        transitionEpoch,
-        active,
-      ),
-      onAmountMotionActiveChanged: onAmountMotionActiveChanged,
-      onDirectInputStarted: () {
-        controller.noteSummaryDirectPointerDown();
-        temporalCarouselCoordinator.preemptAll();
-      },
-      horizontalCandidateBuilder: _horizontalCandidate,
-      performanceCounters: controller.performanceCounters,
-      onToggleRail: controller.toggleRail,
-      onMoveFiner: () {
-        controller.navigatePlane(finer: true);
-      },
-      onMoveBroader: () {
-        controller.navigatePlane(finer: false);
-      },
-      onMovePrevious: () {
-        unawaited(
-          controller.navigateParent(
-            DashboardTimeNavigationChangeDirection.backward,
-          ),
-        );
-      },
-      onMoveNext: () {
-        unawaited(
-          controller.navigateParent(
-            DashboardTimeNavigationChangeDirection.forward,
-          ),
-        );
-      },
-      ghostPresentation: ghostPresentation,
-      ghostMode: ghostMode,
-      onGhostModeSelected: onGhostModeSelected,
-    );
-  }
-
-  SummaryTextContent? _horizontalCandidate(
-    SummaryTransitionDirection direction,
-  ) {
-    final preview = controller.previewParent(
-      direction == SummaryTransitionDirection.forward
-          ? DashboardTimeNavigationChangeDirection.forward
-          : DashboardTimeNavigationChangeDirection.backward,
-    );
-    if (preview == null) return null;
-    final presentation = SummaryNavigationProjector.project(preview);
-    return SummaryTextContent(
-      title: presentation.planeTitle,
-      subtitle: presentation.subtitle,
-    );
-  }
 }
 
 class _FramePosition extends StatelessWidget {
@@ -2764,7 +2403,6 @@ class _FramePosition extends StatelessWidget {
 final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   const _DashboardHeaderVisualTunerOverlay({
     required this.controller,
-    required this.summaryPillVariants,
     required this.bodyOrder,
     required this.budgetContentCardStyle,
     required this.budgetSectionOrder,
@@ -2787,7 +2425,6 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   });
 
   final DashboardHeaderVisualController controller;
-  final SummaryPillVariantController summaryPillVariants;
   final DashboardBodyOrderController bodyOrder;
   final BudgetContentCardStyleController budgetContentCardStyle;
   final BudgetSectionOrderController budgetSectionOrder;
@@ -2863,7 +2500,6 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
                         height: math.min(640, placement.maxHeight),
                         child: DashboardHeaderVisualTuner(
                           controller: controller,
-                          summaryPillVariants: summaryPillVariants,
                           bodyOrder: bodyOrder,
                           budgetContentCardStyle: budgetContentCardStyle,
                           budgetSectionOrder: budgetSectionOrder,

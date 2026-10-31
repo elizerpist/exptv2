@@ -19,6 +19,7 @@ import '../domain/manual_transaction_impact_repository.dart';
 import '../domain/manual_transaction_models.dart';
 import '../domain/manual_transaction_repository.dart';
 import 'category_dropdown.dart';
+import 'creation_direction_toggle.dart';
 import 'manual_transaction_budget_impact.dart';
 import 'manual_transaction_editor_field_rows.dart';
 import 'partner_selector.dart';
@@ -128,7 +129,8 @@ final class _ManualTransactionEditorState
   bool get _dirty {
     final entry = _entry;
     if (!_editing || entry == null) {
-      return _amount.text.isNotEmpty ||
+      return _direction != widget.direction ||
+          _amount.text.isNotEmpty ||
           _note.text.isNotEmpty ||
           _partnerSelection != null ||
           _categorySelection.mode ==
@@ -286,6 +288,12 @@ final class _ManualTransactionEditorState
         setState(() => _impactLoading = false);
       }
     }
+  }
+
+  void _changeCreateDirection(LedgerDirection value) {
+    if (_editing || _saving || _direction == value) return;
+    setState(() => _direction = value);
+    _reloadImpact();
   }
 
   Future<void> _acceptPartner(ManualPartnerSelection selected) async {
@@ -632,6 +640,9 @@ final class _ManualTransactionEditorState
       widget.headerVisualTuning?.value.globalAppearance.directionColorProfile ??
       FluviDirectionColorProfile.original;
 
+  bool get _showMetadataIconBackgrounds =>
+      !_editing || _preferences!.showMetadataIconBackgrounds;
+
   Widget _heroHeader(BuildContext context) => DecoratedBox(
     key: const ValueKey('manual-editor-hero'),
     decoration: BoxDecoration(gradient: _heroGradient),
@@ -700,26 +711,41 @@ final class _ManualTransactionEditorState
                             ),
                       ),
                     ),
-                    _headerToggle(
-                      key: const ValueKey(
-                        'manual-metadata-icon-background-toggle',
-                      ),
-                      tooltip: _preferences!.showMetadataIconBackgrounds
-                          ? 'Ikonhátterek elrejtése'
-                          : 'Ikonhátterek megjelenítése',
-                      toggled: _preferences!.showMetadataIconBackgrounds,
-                      icon: _MetadataIconBackgroundToggleIcon(
-                        showSurface: _preferences!.showMetadataIconBackgrounds,
-                      ),
-                      onTap: _saving
-                          ? null
-                          : () => _setPreferences(
-                              _preferences!.copyWith(
-                                showMetadataIconBackgrounds:
-                                    !_preferences!.showMetadataIconBackgrounds,
+                    if (!_editing)
+                      SizedBox(
+                        width: 92,
+                        height: 44,
+                        child: Center(
+                          child: CreationDirectionToggle(
+                            direction: direction,
+                            colorProfile: _directionColorProfile,
+                            enabled: !_saving,
+                            onChanged: _changeCreateDirection,
+                          ),
+                        ),
+                      )
+                    else
+                      _headerToggle(
+                        key: const ValueKey(
+                          'manual-metadata-icon-background-toggle',
+                        ),
+                        tooltip: _preferences!.showMetadataIconBackgrounds
+                            ? 'Ikonhátterek elrejtése'
+                            : 'Ikonhátterek megjelenítése',
+                        toggled: _preferences!.showMetadataIconBackgrounds,
+                        icon: _MetadataIconBackgroundToggleIcon(
+                          showSurface:
+                              _preferences!.showMetadataIconBackgrounds,
+                        ),
+                        onTap: _saving
+                            ? null
+                            : () => _setPreferences(
+                                _preferences!.copyWith(
+                                  showMetadataIconBackgrounds: !_preferences!
+                                      .showMetadataIconBackgrounds,
+                                ),
                               ),
-                            ),
-                    ),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -992,7 +1018,7 @@ final class _ManualTransactionEditorState
               icon: Icons.edit_outlined,
               color: FluviVisualTokens.textPrimary,
               background: Color(0xfff1f5f9),
-              showBackground: _preferences!.showMetadataIconBackgrounds,
+              showBackground: _showMetadataIconBackgrounds,
             ),
             const SizedBox(width: ManualEditorFieldMetrics.leadingToText),
             Expanded(
@@ -1062,7 +1088,7 @@ final class _ManualTransactionEditorState
                 icon: icon,
                 color: const Color(0xff64748b),
                 background: const Color(0xfff1f5f9),
-                showBackground: _preferences!.showMetadataIconBackgrounds,
+                showBackground: _showMetadataIconBackgrounds,
               ),
               const SizedBox(width: ManualEditorFieldMetrics.leadingToText),
               Expanded(

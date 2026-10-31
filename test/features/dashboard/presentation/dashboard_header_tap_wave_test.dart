@@ -25,7 +25,7 @@ void main() {
     });
 
     test(
-      'new personal defaults show the held point and defer the one large wave until release',
+      'new personal defaults keep the large overlay inactive until release',
       () {
         final state = DashboardHeaderTapWaveState();
         state.pointerDown(
@@ -34,17 +34,18 @@ void main() {
           logicalSize: _headerSize,
         );
 
-        final overlay = state.overlayAt(Duration.zero)!;
-        expect(overlay.origin, const Offset(.25, .75));
-        expect(overlay.opacity, closeTo(.72, 1e-12));
-        expect(overlay.scale, closeTo(.44, 1e-12));
-        expect(overlay.blur, 7);
-        expect(overlay.stops, const <double>[0, .05, .11, .19, .25]);
+        expect(state.overlayAt(Duration.zero), isNull);
         expect(state.rippleCount, 0);
         expect(state.trailCount, 1);
         expect(state.isDragging, isFalse);
         expect(state.trails.single.connectsToPrevious, isFalse);
         state.pointerUp(timestamp: const Duration(milliseconds: 10));
+        final overlay = state.overlayAt(const Duration(milliseconds: 10))!;
+        expect(overlay.origin, const Offset(.25, .75));
+        expect(overlay.opacity, closeTo(.72, 1e-12));
+        expect(overlay.scale, closeTo(.44, 1e-12));
+        expect(overlay.blur, 7);
+        expect(overlay.stops, const <double>[0, .05, .11, .19, .25]);
         expect(state.rippleCount, 1);
       },
     );
@@ -60,9 +61,7 @@ void main() {
           logicalSize: _headerSize,
         );
 
-      final held = state.overlayAt(Duration.zero)!;
-      expect(held.opacity, .96);
-      expect(held.scale, .8);
+      expect(state.overlayAt(Duration.zero), isNull);
 
       state.pointerUp(timestamp: Duration.zero);
       final referenceAt180 = state.overlayAt(
@@ -96,6 +95,7 @@ void main() {
             timestamp: Duration.zero,
             logicalSize: _headerSize,
           );
+        state.pointerUp(timestamp: Duration.zero);
         final overlay = state.overlayAt(Duration.zero)!;
         final field = state.fieldSampleAt(
           point: const Offset(.6, .5),
@@ -125,71 +125,82 @@ void main() {
       expect(retained.opacity, closeTo(allocated.opacity, 1e-12));
     });
 
-    test('tap speed scales one local release clock without changing its path', () {
-      DashboardHeaderTapWaveState releaseAt(double speed) =>
-          DashboardHeaderTapWaveState()
+    test(
+      'tap speed scales one local release clock without changing its path',
+      () {
+        DashboardHeaderTapWaveState releaseAt(double speed) =>
+            DashboardHeaderTapWaveState()
+              ..configure(
+                DashboardHeaderTapWaveTuning.defaults().copyWithValue(
+                  DashboardHeaderTapWaveCatalog.tapSpeedId,
+                  speed,
+                ),
+              )
+              ..pointerDown(
+                origin: const Offset(.5, .5),
+                timestamp: Duration.zero,
+                logicalSize: _headerSize,
+              )
+              ..pointerUp(timestamp: Duration.zero);
+
+        final slow = releaseAt(
+          50,
+        ).overlayAt(const Duration(milliseconds: 120))!;
+        final normal = releaseAt(
+          100,
+        ).overlayAt(const Duration(milliseconds: 120))!;
+        final fast = releaseAt(
+          200,
+        ).overlayAt(const Duration(milliseconds: 120))!;
+
+        expect(slow.scale, lessThan(normal.scale));
+        expect(normal.scale, lessThan(fast.scale));
+        expect(slow.opacity, greaterThan(normal.opacity));
+        expect(normal.opacity, greaterThan(fast.opacity));
+      },
+    );
+
+    test(
+      'drag-ring lifetime owns both CPU expiry and normalized shader age',
+      () {
+        DashboardHeaderTapWaveState dragged(double lifetime) {
+          final state = DashboardHeaderTapWaveState()
             ..configure(
               DashboardHeaderTapWaveTuning.defaults().copyWithValue(
-                DashboardHeaderTapWaveCatalog.tapSpeedId,
-                speed,
+                DashboardHeaderTapWaveCatalog.dragRippleLifetimeId,
+                lifetime,
               ),
             )
             ..pointerDown(
-              origin: const Offset(.5, .5),
+              origin: const Offset(.1, .5),
               timestamp: Duration.zero,
               logicalSize: _headerSize,
             )
-            ..pointerUp(timestamp: Duration.zero);
+            ..pointerMove(
+              origin: const Offset(.3, .5),
+              logicalDelta: const Offset(64, 0),
+              logicalSize: _headerSize,
+              timestamp: const Duration(milliseconds: 80),
+            );
+          return state;
+        }
 
-      final slow = releaseAt(50).overlayAt(const Duration(milliseconds: 120))!;
-      final normal =
-          releaseAt(100).overlayAt(const Duration(milliseconds: 120))!;
-      final fast = releaseAt(200).overlayAt(const Duration(milliseconds: 120))!;
+        final short = dragged(.40);
+        final long = dragged(2);
+        final sample = long.trails.last;
+        short.advance(const Duration(milliseconds: 600));
+        long.advance(const Duration(milliseconds: 600));
 
-      expect(slow.scale, lessThan(normal.scale));
-      expect(normal.scale, lessThan(fast.scale));
-      expect(slow.opacity, greaterThan(normal.opacity));
-      expect(normal.opacity, greaterThan(fast.opacity));
-    });
-
-    test('drag-ring lifetime owns both CPU expiry and normalized shader age', () {
-      DashboardHeaderTapWaveState dragged(double lifetime) {
-        final state = DashboardHeaderTapWaveState()
-          ..configure(
-            DashboardHeaderTapWaveTuning.defaults().copyWithValue(
-              DashboardHeaderTapWaveCatalog.dragRippleLifetimeId,
-              lifetime,
-            ),
-          )
-          ..pointerDown(
-            origin: const Offset(.1, .5),
-            timestamp: Duration.zero,
-            logicalSize: _headerSize,
-          )
-          ..pointerMove(
-            origin: const Offset(.3, .5),
-            logicalDelta: const Offset(64, 0),
-            logicalSize: _headerSize,
-            timestamp: const Duration(milliseconds: 80),
-          );
-        return state;
-      }
-
-      final short = dragged(.40);
-      final long = dragged(2);
-      final sample = long.trails.last;
-      short.advance(const Duration(milliseconds: 600));
-      long.advance(const Duration(milliseconds: 600));
-
-      expect(short.trailCount, 0);
-      expect(
-        long.trailSampleAt(
-          trail: sample,
-          timestamp: const Duration(milliseconds: 600),
-        ),
-        isNotNull,
-      );
-    });
+        expect(short.trailCount, 0);
+        expect(
+          long.trailSampleAt(
+            trail: sample,
+            timestamp: const Duration(milliseconds: 600),
+          ),
+          isNotNull,
+        );
+      },
+    );
 
     test('cancel closes the live touch without creating a release ripple', () {
       final state = DashboardHeaderTapWaveState()
@@ -230,7 +241,7 @@ void main() {
       expect(state.isDragging, isFalse);
       expect(state.rippleCount, 0);
       expect(state.trailCount, 1);
-      expect(state.overlayAt(const Duration(milliseconds: 36)), isNotNull);
+      expect(state.overlayAt(const Duration(milliseconds: 36)), isNull);
     });
 
     test(
@@ -444,11 +455,51 @@ void main() {
           timestamp: const Duration(milliseconds: 20),
         );
 
-        expect(state.overlayAt(const Duration(milliseconds: 20)), isNotNull);
-        expect(state.overlayAt(const Duration(milliseconds: 105)), isNotNull);
+        expect(state.overlayAt(const Duration(milliseconds: 20)), isNull);
+        expect(state.overlayAt(const Duration(milliseconds: 105)), isNull);
         state.pointerUp(timestamp: const Duration(milliseconds: 110));
         expect(state.overlayAt(const Duration(milliseconds: 111)), isNotNull);
         expect(state.rippleCount, 1);
+      },
+    );
+
+    test(
+      'retained production overlay is release-only and keeps its origin across a new press',
+      () {
+        final state = DashboardHeaderTapWaveState()
+          ..pointerDown(
+            origin: const Offset(.2, .3),
+            timestamp: Duration.zero,
+            logicalSize: _headerSize,
+          );
+        final frame = DashboardHeaderTapWaveOverlayFrame();
+        state.writeOverlayFrame(timestamp: Duration.zero, into: frame);
+        expect(frame.active, 0);
+
+        state.pointerUp(
+          timestamp: const Duration(milliseconds: 20),
+          releaseOrigin: const Offset(.7, .8),
+        );
+        state.writeOverlayFrame(
+          timestamp: const Duration(milliseconds: 21),
+          into: frame,
+        );
+        expect(frame.active, 1);
+        expect(frame.x, closeTo(.7, 1e-12));
+        expect(frame.y, closeTo(.8, 1e-12));
+
+        state.pointerDown(
+          origin: const Offset(.1, .1),
+          timestamp: const Duration(milliseconds: 30),
+          logicalSize: _headerSize,
+        );
+        state.writeOverlayFrame(
+          timestamp: const Duration(milliseconds: 31),
+          into: frame,
+        );
+        expect(frame.active, 1);
+        expect(frame.x, closeTo(.7, 1e-12));
+        expect(frame.y, closeTo(.8, 1e-12));
       },
     );
 

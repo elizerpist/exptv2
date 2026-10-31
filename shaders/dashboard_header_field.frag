@@ -106,6 +106,10 @@ uniform float uTouchOverlayOpacity;
 uniform float uTouchOverlayScale;
 uniform float uTouchOverlayBlur;
 uniform float uTouchInteractionOpacity;
+uniform float uLiveTouchPointActive;
+uniform vec2 uLiveTouchPointOrigin;
+uniform float uLiveTouchPointRadius;
+uniform float uLiveTouchPointOpacity;
 uniform float uTrailCount;
 uniform float uTrailSize;
 uniform vec4 uTrail0;
@@ -1683,6 +1687,26 @@ vec2 displaceWaterTrail(vec2 uv, out float highlight, out float shadow) {
   return mix(uv, clamp(displaced, vec2(0.0), vec2(1.0)), edgeEnvelope);
 }
 
+// The immediate under-finger acknowledgement has a deliberately small,
+// logical-pixel radius. It remains independent from the large release field
+// so a held press or drag cannot paint the pink farthest-corner overlay.
+vec3 liveTouchPoint(vec2 uv, out float alpha) {
+  alpha = 0.0;
+  if (uLiveTouchPointActive < .5 || uLiveTouchPointOpacity <= .0001) {
+    return vec3(0.0);
+  }
+  float aspect = uSize.x / max(1.0, uSize.y);
+  vec2 delta = vec2((uv.x - uLiveTouchPointOrigin.x) * aspect,
+      uv.y - uLiveTouchPointOrigin.y);
+  float distancePixels = length(delta) * max(1.0, uSize.y);
+  float radius = max(1.0, uLiveTouchPointRadius);
+  float core = exp(-.5 * pow(distancePixels / max(1.0, radius * .48), 2.0));
+  float ring = exp(-.5 * pow((distancePixels - radius) /
+      max(1.0, radius * .24), 2.0));
+  alpha = saturate((core * .46 + ring * .34) * uLiveTouchPointOpacity);
+  return vec3(1.0, .84, .97);
+}
+
 void main() {
   vec2 uv = FlutterFragCoord().xy / max(uSize, vec2(1.0));
   float waterHighlight;
@@ -1752,6 +1776,9 @@ void main() {
       composed,
       composed * vec3(.84, .87, .96),
       saturate(waterShadow));
+  float liveTouchAlpha;
+  vec3 liveTouch = liveTouchPoint(uv, liveTouchAlpha);
+  composed = mix(composed, screenBlend(composed, liveTouch), liveTouchAlpha);
   float overlayAlpha;
   vec3 overlay = touchOverlay(uv, overlayAlpha);
   composed = mix(composed, screenBlend(composed, overlay), overlayAlpha);

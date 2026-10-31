@@ -358,6 +358,21 @@ final class DashboardHeaderTapWaveOverlayFrame {
   }
 }
 
+/// Retained live-finger marker. It is intentionally distinct from the
+/// release overlay: holding a finger must not create the large pink field.
+final class DashboardHeaderTapWaveLivePointFrame {
+  double x = .5;
+  double y = .5;
+  double radius = 7;
+  double opacity = 0;
+  double active = 0;
+
+  void clear() {
+    opacity = 0;
+    active = 0;
+  }
+}
+
 /// Mutable projection for one retained water-path vertex.
 ///
 /// The fragment ABI intentionally keeps the historic vec4 capacity, but its
@@ -384,7 +399,6 @@ final class DashboardHeaderTapWaveState {
   static const Duration _referenceTrailLifetime = Duration(milliseconds: 800);
   static const Duration _rippleFadeDuration = Duration(milliseconds: 1560);
   static const Duration _releaseCleanup = Duration(milliseconds: 1740);
-  static const Duration _tapToDragTransition = Duration(milliseconds: 80);
   static const double _dragThresholdLogicalPixels = 5;
   static const double _sampleSpacingLogicalPixels = 12;
   static const Duration _slowDragEmissionInterval = Duration(milliseconds: 210);
@@ -399,12 +413,15 @@ final class DashboardHeaderTapWaveState {
       <DashboardHeaderTapWaveTrail>[];
   DashboardHeaderTapWaveTuning _tuning =
       DashboardHeaderTapWaveTuning.defaults();
+  // `_origin` belongs to the live pointer.  A release wave deliberately owns
+  // a second origin: a following touch must not drag an already released
+  // large field to the new finger position.
   Offset _origin = const Offset(.5, .5);
+  Offset _releaseOrigin = const Offset(.5, .5);
   bool _pointerActive = false;
   bool _dragging = false;
   bool _pathBreakPending = false;
   Duration? _releaseStartedAt;
-  Duration? _dragStartedAt;
   Duration? _lastPointerTimestamp;
   Duration? _lastTrailEmissionAt;
   Size _pathLogicalSize = Size.zero;
@@ -440,8 +457,6 @@ final class DashboardHeaderTapWaveState {
     _pointerActive = true;
     _dragging = false;
     _pathBreakPending = false;
-    _releaseStartedAt = null;
-    _dragStartedAt = null;
     _lastPointerTimestamp = timestamp;
     _lastTrailEmissionAt = timestamp;
     _pathLogicalSize = _safeLogicalSize(logicalSize);
@@ -506,7 +521,6 @@ final class DashboardHeaderTapWaveState {
       _pendingMovement += logicalDelta;
       if (_pendingMovement.distance < _dragThresholdLogicalPixels) return;
       _dragging = true;
-      _dragStartedAt = timestamp;
     }
 
     if (_pathBreakPending) {
@@ -541,10 +555,9 @@ final class DashboardHeaderTapWaveState {
     // Only an actual in-surface PointerUp creates the large release ring.
     // Cancels, disposal and off-surface endings merely close the live touch.
     if (emitReleaseRipple) {
+      _releaseOrigin = _origin;
       _releaseStartedAt = timestamp;
       _spawnRipple(_origin, timestamp);
-    } else {
-      _releaseStartedAt = null;
     }
     _lastPointerTimestamp = null;
   }
@@ -579,19 +592,6 @@ final class DashboardHeaderTapWaveState {
   }
 
   DashboardHeaderTapWaveOverlay? overlayAt(Duration timestamp) {
-    if (_pointerActive) {
-      final dragFade = _dragOverlayFactor(timestamp);
-      final activeStrength = _dragging
-          ? _dynamicTrailStrengthFactor
-          : _tapStrengthFactor;
-      final visibleFactor = _dragging ? math.max(.26, dragFade) : dragFade;
-      if (visibleFactor <= .0001) return null;
-      return _overlay(
-        opacity: .96 * visibleFactor * activeStrength,
-        scale: _heldTapScale(visibleFactor),
-        blur: _lerp(7, 10, 1 - visibleFactor),
-      );
-    }
     final releaseStartedAt = _releaseStartedAt;
     if (releaseStartedAt == null) return null;
     final age = _tapAge(timestamp - releaseStartedAt);
@@ -609,6 +609,7 @@ final class DashboardHeaderTapWaveState {
       const Cubic(.19, 1, .22, 1),
     );
     return _overlay(
+      origin: _releaseOrigin,
       opacity: initialOpacity * (1 - fade) * _tapStrengthFactor,
       scale: _releasedTapScale(age, transform),
       blur: _lerp(initialBlur, 20, fade),
@@ -624,25 +625,8 @@ final class DashboardHeaderTapWaveState {
     required DashboardHeaderTapWaveOverlayFrame into,
   }) {
     into
-      ..x = _origin.dx
-      ..y = _origin.dy;
-    if (_pointerActive) {
-      final dragFade = _dragOverlayFactor(timestamp);
-      final activeStrength = _dragging
-          ? _dynamicTrailStrengthFactor
-          : _tapStrengthFactor;
-      final visibleFactor = _dragging ? math.max(.26, dragFade) : dragFade;
-      if (visibleFactor <= .0001) {
-        into.clear();
-        return;
-      }
-      into
-        ..opacity = .96 * visibleFactor * activeStrength
-        ..scale = _heldTapScale(visibleFactor)
-        ..blur = _lerp(7, 10, 1 - visibleFactor)
-        ..active = 1;
-      return;
-    }
+      ..x = _releaseOrigin.dx
+      ..y = _releaseOrigin.dy;
     final releaseStartedAt = _releaseStartedAt;
     if (releaseStartedAt == null) {
       into.clear();
@@ -747,6 +731,22 @@ final class DashboardHeaderTapWaveState {
           : -math.max(.0001, sample.velocity);
   }
 
+  void writeLivePointFrame({
+    required DashboardHeaderTapWaveLivePointFrame into,
+  }) {
+    into
+      ..x = _origin.dx
+      ..y = _origin.dy
+      ..radius = 7;
+    if (!_pointerActive || _dynamicTrailStrengthFactor <= .0001) {
+      into.clear();
+      return;
+    }
+    into
+      ..opacity = (.28 + .24 * _dynamicTrailStrengthFactor).clamp(0.0, .8)
+      ..active = 1;
+  }
+
   void writeFieldSample({
     required double x,
     required double y,
@@ -795,11 +795,12 @@ final class DashboardHeaderTapWaveState {
   }
 
   DashboardHeaderTapWaveOverlay _overlay({
+    required Offset origin,
     required double opacity,
     required double scale,
     required double blur,
   }) => DashboardHeaderTapWaveOverlay(
-    origin: _origin,
+    origin: origin,
     opacity: opacity,
     scale: scale,
     blur: blur,
@@ -837,11 +838,6 @@ final class DashboardHeaderTapWaveState {
                     100))
             .round(),
   );
-
-  double _heldTapScale(double dragFade) {
-    final original = _lerp(.8, 1, 1 - dragFade);
-    return original - .8 * (1 - _tapStartFactor) * dragFade;
-  }
 
   double _releasedTapScale(Duration age, double transform) {
     final original = _lerp(.8, 1.42, transform);
@@ -929,16 +925,6 @@ final class DashboardHeaderTapWaveState {
       (_smoothedVelocity / _maximumVelocityLogicalPixelsPerSecond)
           .clamp(0.0, 1.0)
           .toDouble();
-
-  double _dragOverlayFactor(Duration timestamp) {
-    final startedAt = _dragStartedAt;
-    if (startedAt == null) return 1;
-    final age = timestamp - startedAt;
-    final progress =
-        age.inMicroseconds / math.max(1, _tapToDragTransition.inMicroseconds);
-    final smooth = progress.clamp(0.0, 1.0).toDouble();
-    return 1 - smooth * smooth * (3 - 2 * smooth);
-  }
 
   static Size _safeLogicalSize(Size value) => Size(
     value.width.isFinite && value.width > 0 ? value.width : 1,

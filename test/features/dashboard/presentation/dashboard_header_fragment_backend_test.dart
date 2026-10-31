@@ -144,16 +144,13 @@ void main() {
         final visuals = DashboardHeaderTapWaveVisualUniformBank()
           ..update(state: state, elapsed: const Duration(milliseconds: 180));
 
-        // The same one shared touch state feeds three independently
-        // inspectable shader lanes: tap field deformation, radial optics, and
-        // the connected water path. None needs a Canvas/offscreen source image.
-        expect(ripples.activeCount, greaterThan(0));
-        expect(ripples.activeCount, 1);
-        // A true drag retracts the large overlay, while the water-path source
-        // follows the latest input and retains its original source vertex.
+        // A held drag feeds the live-point and connected water lanes, but the
+        // large release field/ripple bank remains inactive until PointerUp.
+        expect(ripples.activeCount, 0);
         expect(visuals.overlay.active, 0);
-        expect(visuals.overlay.x, closeTo(.55, 1e-12));
-        expect(visuals.overlay.y, closeTo(.40, 1e-12));
+        expect(visuals.livePoint.active, 1);
+        expect(visuals.livePoint.x, closeTo(.55, 1e-12));
+        expect(visuals.livePoint.y, closeTo(.40, 1e-12));
         expect(visuals.activeTrailCount, greaterThan(0));
         expect(visuals.trails.first.signedVelocity, lessThan(0));
         expect(visuals.trails[1].signedVelocity, greaterThan(0));
@@ -229,7 +226,7 @@ void main() {
           },
         );
 
-        expect(DashboardHeaderFragmentUniformLayout.version, 4);
+        expect(DashboardHeaderFragmentUniformLayout.version, 5);
         expect(DashboardHeaderFragmentUniformLayout.gradientColorStart, 9);
         expect(DashboardHeaderFragmentUniformLayout.gradientStopStart, 49);
         expect(DashboardHeaderFragmentUniformLayout.commonSettingsStart, 61);
@@ -403,7 +400,7 @@ void main() {
     );
 
     testWidgets(
-      'the pinned runtime-stage compiler retains every v4 uniform-bank slot',
+      'the pinned runtime-stage compiler retains every v5 uniform-bank slot',
       (tester) async {
         final program = await FragmentProgram.fromAsset(
           DashboardHeaderFragmentBackend.asset,

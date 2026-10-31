@@ -56,7 +56,6 @@ import '../../features/dashboard/application/dashboard_render_readiness_diagnost
 import '../../features/dashboard/presentation/core_dashboard.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import '../../features/dashboard/presentation/dashboard_shell_presentation.dart';
-import '../../features/dashboard/presentation/summary_pill_variant.dart';
 import '../../features/dashboard/query/application/query_menu_data_controller.dart';
 import '../../features/dashboard/query/application/dashboard_applied_query_facet_loader.dart';
 import '../../features/dashboard/query/application/saved_query_controller.dart';
@@ -118,7 +117,6 @@ class FluviAppShell extends StatefulWidget {
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
     this.initialDirection = LedgerDirection.income,
-    this.initialSummaryPillVariant,
     this.shellPresentation,
   });
 
@@ -135,7 +133,6 @@ class FluviAppShell extends StatefulWidget {
   final TimePlane initialPlane;
   final bool initialRailOpen;
   final LedgerDirection initialDirection;
-  final SummaryPillVariant? initialSummaryPillVariant;
   final DashboardShellPresentationController? shellPresentation;
 
   @override
@@ -1106,9 +1103,6 @@ class _FluviAppShellState extends State<FluviAppShell>
                                     onHeaderInteractionChanged:
                                         _onHeaderInteractionChanged,
                                     mindQueryFacetLoader: _appliedQueryFacets,
-                                    initialSummaryPillVariant:
-                                        widget.initialSummaryPillVariant ??
-                                        SummaryPillVariant.segmented,
                                     onLogBoxWarmupSurfaceAttached:
                                         (viewportId) {
                                           _readiness.markLogBoxSurfaceAttached(
@@ -1194,6 +1188,9 @@ class _FluviAppShellState extends State<FluviAppShell>
                                           TransactionDirection.income
                                       ? LedgerDirection.income
                                       : LedgerDirection.expense,
+                                  directionColorProfile: tuning
+                                      .globalAppearance
+                                      .directionColorProfile,
                                   onOpenLedgerEntry: _openEditTransaction,
                                 ),
                               ),

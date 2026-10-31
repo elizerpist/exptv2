@@ -6,6 +6,7 @@ import '../../../core/categories/catalog/category_catalog.dart';
 import '../../../core/categories/domain/category_repository.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
 import '../../../core/categories/presentation/category_visual_badge.dart';
+import '../../../core/design/fluvi_global_appearance.dart';
 import '../../dashboard/application/dashboard_presentation_preferences.dart';
 import '../../dashboard/query/domain/ledger_direction.dart';
 import '../../manual_transactions/application/manual_transaction_editor_preferences.dart';
@@ -36,6 +37,7 @@ final class UnifiedAutomationHomePage extends StatefulWidget {
     required this.recurringUiDesign,
     required this.pushProfileUiDesign,
     required this.direction,
+    this.directionColorProfile = FluviDirectionColorProfile.original,
     this.onOpenLedgerEntry,
   });
 
@@ -48,6 +50,7 @@ final class UnifiedAutomationHomePage extends StatefulWidget {
   final RecurringUiDesign recurringUiDesign;
   final PushProfileUiDesign pushProfileUiDesign;
   final LedgerDirection direction;
+  final FluviDirectionColorProfile directionColorProfile;
   final Future<void> Function(String entryId)? onOpenLedgerEntry;
 
   @override
@@ -169,6 +172,7 @@ final class _UnifiedAutomationHomePageState
       preferencesStore: widget.preferencesStore,
       permissions: widget.permissions,
       direction: widget.direction,
+      directionColorProfile: widget.directionColorProfile,
       pushProfileUiDesign: widget.pushProfileUiDesign,
     );
     if (mounted) _refresh();
@@ -188,6 +192,7 @@ final class _UnifiedAutomationHomePageState
       preferencesStore: widget.preferencesStore,
       permissions: widget.permissions,
       direction: widget.direction,
+      directionColorProfile: widget.directionColorProfile,
       onOpenLedgerEntry: widget.onOpenLedgerEntry,
       initialRulesTab: !occurrences,
       initialOccurrenceFilter: RecurrenceOccurrenceStatus.pending,

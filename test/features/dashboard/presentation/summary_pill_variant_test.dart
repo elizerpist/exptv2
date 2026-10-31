@@ -5,50 +5,8 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shell_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
-import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 
 void main() {
-  test(
-    'SummaryPill active experiment catalog is Legacy and Segmented only',
-    () {
-      expect(SummaryPillVariant.values, <SummaryPillVariant>[
-        SummaryPillVariant.legacy,
-        SummaryPillVariant.segmented,
-      ]);
-      expect(SummaryPillVariant.legacy.label, 'Klasszikus');
-      expect(SummaryPillVariant.segmented.label, 'Szekciós');
-    },
-  );
-
-  test(
-    'SUMMARY-DEFAULT-01: the experiment controller starts segmented at transition epoch zero',
-    () {
-      final controller = SummaryPillVariantController();
-      addTearDown(controller.dispose);
-
-      expect(controller.value, SummaryPillVariant.segmented);
-      expect(controller.transitionEpoch, 0);
-    },
-  );
-
-  test(
-    'variant selection has a monotonic epoch without duplicate transitions',
-    () {
-      final controller = SummaryPillVariantController(
-        initialVariant: SummaryPillVariant.legacy,
-      );
-      addTearDown(controller.dispose);
-
-      expect(controller.transitionEpoch, 0);
-      controller.select(SummaryPillVariant.segmented);
-      expect(controller.transitionEpoch, 1);
-      controller.select(SummaryPillVariant.segmented);
-      expect(controller.transitionEpoch, 1);
-      controller.select(SummaryPillVariant.legacy);
-      expect(controller.transitionEpoch, 2);
-    },
-  );
-
   test('body-order state rejects missing or duplicate body blocks', () {
     expect(
       () => DashboardBodyOrder(const <DashboardBodyComponent>[
@@ -103,47 +61,22 @@ void main() {
   );
 
   testWidgets(
-    'the existing Header menu selects only the active SummaryPill variants',
+    'the Header menu no longer exposes a Summary implementation choice',
     (tester) async {
       final headerController = DashboardHeaderVisualController(vsync: tester);
-      final variants = SummaryPillVariantController();
-      addTearDown(variants.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
           home: SizedBox(
             width: 360,
             height: 520,
-            child: DashboardHeaderVisualTuner(
-              controller: headerController,
-              summaryPillVariants: variants,
-            ),
+            child: DashboardHeaderVisualTuner(controller: headerController),
           ),
         ),
       );
-      await tester.tap(find.text('Időnavigáció / SummaryPill').first);
-      await tester.pump();
-
-      for (final variant in SummaryPillVariant.values) {
-        expect(
-          find.byKey(ValueKey<String>('summary-pill-variant-${variant.name}')),
-          findsOneWidget,
-        );
-      }
-      expect(
-        find.byKey(const ValueKey<String>('summary-pill-variant-swipeMode')),
-        findsNothing,
-      );
-      await tester.tap(
-        find.byKey(const ValueKey<String>('summary-pill-variant-legacy')),
-      );
-      await tester.pump();
-      expect(variants.value, SummaryPillVariant.legacy);
-      await tester.tap(
-        find.byKey(const ValueKey<String>('summary-pill-variant-segmented')),
-      );
-      await tester.pump();
-      expect(variants.value, SummaryPillVariant.segmented);
+      expect(find.text('Időnavigáció / SummaryPill'), findsNothing);
+      expect(find.text('Klasszikus'), findsNothing);
+      expect(find.text('Szekciós'), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
       headerController.dispose();
     },

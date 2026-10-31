@@ -88,11 +88,7 @@ final class DashboardHeaderTapRippleUniformBank {
       if (index == _slots.length) break;
       final age = state.ripplePhaseAt(ripple: ripple, timestamp: elapsed);
       if (age == null) continue;
-      _slots[index++].set(
-        x: ripple.origin.dx,
-        y: ripple.origin.dy,
-        age: age,
-      );
+      _slots[index++].set(x: ripple.origin.dx, y: ripple.origin.dy, age: age);
     }
     for (var clearIndex = index; clearIndex < _slots.length; clearIndex += 1) {
       _slots[clearIndex].clear();
@@ -139,6 +135,8 @@ final class DashboardHeaderTapWaveVisualUniformBank {
 
   final DashboardHeaderTapWaveOverlayFrame overlay =
       DashboardHeaderTapWaveOverlayFrame();
+  final DashboardHeaderTapWaveLivePointFrame livePoint =
+      DashboardHeaderTapWaveLivePointFrame();
   final List<DashboardHeaderTapWaveTrailFrame> _trails;
   var _activeTrailCount = 0;
   var interactionOpacity = 1.0;
@@ -152,6 +150,7 @@ final class DashboardHeaderTapWaveVisualUniformBank {
     required Duration elapsed,
   }) {
     state.writeOverlayFrame(timestamp: elapsed, into: overlay);
+    state.writeLivePointFrame(into: livePoint);
     interactionOpacity =
         (state.tuning.valueFor(
                   DashboardHeaderTapWaveCatalog.dynamicTrailStrengthId,
@@ -254,10 +253,11 @@ final class DashboardHeaderFragmentPortalInput {
 /// owns the entire palette field; keeping this layout explicit prevents a
 /// later bank insertion from silently redirecting Portal values.
 abstract final class DashboardHeaderFragmentUniformLayout {
-  // v4 retains the scalar count but changes every trail vec4 from an isolated
+  // v5 adds a logically-pixel-sized live touch point. v4 changed every trail
+  // vec4 from an isolated
   // dot's `(x, y, opacity, scale)` to a connected-path vertex's
   // `(x, y, ageSeconds, signedVelocity)`.
-  static const int version = 4;
+  static const int version = 5;
   static const int canonicalGradientStopCapacity = 10;
   // The v3 uniform bank reserves ten colour positions for index stability,
   // but the accepted Budget Header projects the authored Cool scale into its
@@ -302,8 +302,9 @@ abstract final class DashboardHeaderFragmentUniformLayout {
   static const int portalSettingsFloatCount = 12;
   static const int rippleCount = 211;
   static const int tapVisualStart = 255;
-  static const int trailStart = 264;
-  static const int floatCount = 368;
+  static const int liveTouchStart = 262;
+  static const int trailStart = 269;
+  static const int floatCount = 373;
 
   /// Emits exactly the scalar order declared in
   /// `dashboard_header_field.frag`. The production writer supplies
@@ -409,6 +410,12 @@ abstract final class DashboardHeaderFragmentUniformLayout {
     f(input.tapVisuals.overlay.scale);
     f(input.tapVisuals.overlay.blur);
     f(input.tapVisuals.interactionOpacity);
+    assert(index == liveTouchStart);
+    f(input.tapVisuals.livePoint.active);
+    f(input.tapVisuals.livePoint.x);
+    f(input.tapVisuals.livePoint.y);
+    f(input.tapVisuals.livePoint.radius);
+    f(input.tapVisuals.livePoint.opacity);
     f(input.tapVisuals.activeTrailCount.toDouble());
     f(input.tapVisuals.trailSize);
     assert(index == trailStart);

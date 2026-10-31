@@ -66,7 +66,6 @@ extension DashboardHeaderAnimationFamilyPresentation
 /// The dashboard-lifetime Header tuner owns only this compact UI chrome state.
 enum DashboardHeaderTunerSection {
   appearance,
-  summaryPillVariants,
   summaryPresentation,
   bodyOrder,
   budgetContentCardStyle,

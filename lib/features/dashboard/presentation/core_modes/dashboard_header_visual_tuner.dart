@@ -21,7 +21,6 @@ import '../dashboard_logbox_search_pill_visibility.dart';
 import '../dashboard_budget_header_presentation.dart';
 import '../dashboard_shell_presentation.dart';
 import '../dashboard_shadow_style.dart';
-import '../summary_pill_variant.dart';
 import '../dashboard_summary_presentation.dart';
 import '../../mind/domain/mind_behavioral_score_settings.dart';
 import '../../mind/domain/mind_header_score_chart_presentation.dart';
@@ -3004,7 +3003,6 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   const DashboardHeaderVisualTuner({
     super.key,
     required this.controller,
-    this.summaryPillVariants,
     this.bodyOrder,
     this.budgetContentCardStyle,
     this.budgetSectionOrder,
@@ -3026,7 +3024,6 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   });
 
   final DashboardHeaderVisualController controller;
-  final SummaryPillVariantController? summaryPillVariants;
   final DashboardBodyOrderController? bodyOrder;
   final BudgetContentCardStyleController? budgetContentCardStyle;
   final BudgetSectionOrderController? budgetSectionOrder;
@@ -3134,21 +3131,6 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                   ],
                 ],
               ),
-              const SizedBox(height: 14),
-              if (summaryPillVariants case final variants?) ...<Widget>[
-                _DashboardHeaderTunerTopic(
-                  key: const ValueKey<String>(
-                    'dashboard-header-tuner-section-summary-pill-variants',
-                  ),
-                  controller: controller,
-                  section: DashboardHeaderTunerSection.summaryPillVariants,
-                  title: 'Időnavigáció / SummaryPill',
-                  children: <Widget>[
-                    _SummaryPillExperimentSection(controller: variants),
-                  ],
-                ),
-                const SizedBox(height: 14),
-              ],
               if (summaryPresentation case final summary?) ...<Widget>[
                 _DashboardHeaderTunerTopic(
                   key: const ValueKey<String>(
@@ -4412,46 +4394,6 @@ final class _BudgetSectionOrderSection extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   title: Text(order.label),
                   value: order,
-                ),
-            ],
-          ),
-        ),
-      );
-}
-
-/// The Header menu owns only the runtime selection chrome. The selected
-/// SummaryPill remains a presentation adapter over canonical dashboard state.
-final class _SummaryPillExperimentSection extends StatelessWidget {
-  const _SummaryPillExperimentSection({required this.controller});
-
-  final SummaryPillVariantController controller;
-
-  @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<SummaryPillVariant>(
-        valueListenable: controller,
-        builder: (context, selected, _) => RadioGroup<SummaryPillVariant>(
-          groupValue: selected,
-          onChanged: (variant) {
-            if (variant != null) controller.select(variant);
-          },
-          child: _TunerSection(
-            title: 'Időnavigáció / SummaryPill',
-            children: <Widget>[
-              for (final variant in SummaryPillVariant.values)
-                Semantics(
-                  selected: selected == variant,
-                  inMutuallyExclusiveGroup: true,
-                  label: 'SummaryPill ${variant.label}',
-                  child: RadioListTile<SummaryPillVariant>(
-                    key: ValueKey<String>(
-                      'summary-pill-variant-${variant.name}',
-                    ),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(variant.label),
-                    value: variant,
-                  ),
                 ),
             ],
           ),

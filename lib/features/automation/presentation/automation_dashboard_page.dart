@@ -5,6 +5,7 @@ import '../domain/automation_repository.dart';
 import '../../manual_transactions/domain/manual_transaction_repository.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
 import '../../../core/categories/domain/category_repository.dart';
+import '../../../core/design/fluvi_global_appearance.dart';
 import '../../dashboard/application/dashboard_presentation_preferences.dart';
 import '../../dashboard/query/domain/ledger_direction.dart';
 import '../../manual_transactions/application/manual_transaction_editor_preferences.dart';
@@ -27,6 +28,7 @@ final class AutomationDashboardPage extends StatelessWidget {
     this.pushProfileUiDesign,
     this.automationHomeUiDesign = AutomationHomeUiDesign.unified,
     this.direction = LedgerDirection.expense,
+    this.directionColorProfile = FluviDirectionColorProfile.original,
     this.onOpenLedgerEntry,
   });
   final AutomationRepository repository;
@@ -39,6 +41,7 @@ final class AutomationDashboardPage extends StatelessWidget {
   final PushProfileUiDesign Function()? pushProfileUiDesign;
   final AutomationHomeUiDesign automationHomeUiDesign;
   final LedgerDirection direction;
+  final FluviDirectionColorProfile directionColorProfile;
   final Future<void> Function(String entryId)? onOpenLedgerEntry;
   @override
   Widget build(BuildContext context) =>
@@ -53,6 +56,7 @@ final class AutomationDashboardPage extends StatelessWidget {
           recurringUiDesign: recurringUiDesign,
           pushProfileUiDesign: pushProfileUiDesign,
           direction: direction,
+          directionColorProfile: directionColorProfile,
           onOpenLedgerEntry: onOpenLedgerEntry,
         )
       : UnifiedAutomationHomePage(
@@ -67,6 +71,7 @@ final class AutomationDashboardPage extends StatelessWidget {
           pushProfileUiDesign:
               pushProfileUiDesign?.call() ?? PushProfileUiDesign.unified,
           direction: direction,
+          directionColorProfile: directionColorProfile,
           onOpenLedgerEntry: onOpenLedgerEntry,
         );
 }
@@ -84,6 +89,7 @@ final class LegacyAutomationDashboardPage extends StatefulWidget {
     this.recurringUiDesign,
     this.pushProfileUiDesign,
     this.direction = LedgerDirection.expense,
+    this.directionColorProfile = FluviDirectionColorProfile.original,
     this.onOpenLedgerEntry,
   });
   final AutomationRepository repository;
@@ -95,6 +101,7 @@ final class LegacyAutomationDashboardPage extends StatefulWidget {
   final RecurringUiDesign Function()? recurringUiDesign;
   final PushProfileUiDesign Function()? pushProfileUiDesign;
   final LedgerDirection direction;
+  final FluviDirectionColorProfile directionColorProfile;
   final Future<void> Function(String entryId)? onOpenLedgerEntry;
   @override
   State<LegacyAutomationDashboardPage> createState() =>
@@ -200,6 +207,7 @@ class _LegacyAutomationDashboardPageState
       preferencesStore: widget.preferencesStore,
       permissions: widget.permissions,
       direction: widget.direction,
+      directionColorProfile: widget.directionColorProfile,
       pushProfileUiDesign:
           widget.pushProfileUiDesign?.call() ?? PushProfileUiDesign.unified,
     );
@@ -388,6 +396,7 @@ class _LegacyAutomationDashboardPageState
                             preferencesStore: widget.preferencesStore,
                             permissions: widget.permissions,
                             direction: widget.direction,
+                            directionColorProfile: widget.directionColorProfile,
                             onOpenLedgerEntry: widget.onOpenLedgerEntry,
                           );
                           if (mounted) _refresh();

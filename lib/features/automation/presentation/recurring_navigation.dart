@@ -71,6 +71,8 @@ abstract final class RecurringNavigation {
     RecurrenceOccurrenceStatus? initialOccurrenceFilter,
     int? initialOccurrenceFromUtcMs,
     int? initialOccurrenceToUtcMs,
+    FluviDirectionColorProfile directionColorProfile =
+        FluviDirectionColorProfile.original,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => design == RecurringUiDesign.legacy
@@ -100,6 +102,7 @@ abstract final class RecurringNavigation {
               initialOccurrenceFilter: initialOccurrenceFilter,
               initialOccurrenceFromUtcMs: initialOccurrenceFromUtcMs,
               initialOccurrenceToUtcMs: initialOccurrenceToUtcMs,
+              directionColorProfile: directionColorProfile,
             ),
     ),
   );

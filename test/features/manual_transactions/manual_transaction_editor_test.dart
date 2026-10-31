@@ -148,7 +148,43 @@ void main() {
   });
 
   testWidgets(
-    'metadata icon-background switch retains the live draft and text geometry',
+    'create save submits the direction selected by the shared capsule',
+    (tester) async {
+      final repository = _FakeManualRepository();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ManualTransactionEditor.create(
+            repository: repository,
+            categories: categories,
+            direction: LedgerDirection.expense,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('manual-amount-field')),
+        '20 000',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-partner-partner-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('creation-direction-income')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mentés'));
+      await tester.pumpAndSettle();
+
+      expect(repository.createCalls, 1);
+      expect(repository.lastDirection, LedgerDirection.income);
+      expect(repository.lastAmount, 2000000);
+    },
+  );
+
+  testWidgets(
+    'create direction switch retains the live draft and text geometry',
     (tester) async {
       final preferences = _MemoryEditorPreferencesStore();
       await tester.pumpWidget(
@@ -175,9 +211,11 @@ void main() {
       await tester.pumpAndSettle();
 
       final dateLabelBefore = tester.getRect(find.text('Dátum'));
-      await tester.tap(
+      expect(
         find.byKey(const ValueKey('manual-metadata-icon-background-toggle')),
+        findsNothing,
       );
+      await tester.tap(find.byKey(const ValueKey('creation-direction-income')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('manual-editor-hero')), findsOneWidget);
       expect(find.byKey(const ValueKey('manual-editor-islands')), findsNothing);
@@ -201,12 +239,7 @@ void main() {
         find.byKey(const ValueKey('manual-partner-dropdown-anchor')),
         findsOneWidget,
       );
-      expect(
-        preferences.value,
-        const ManualTransactionEditorPreferences(
-          showMetadataIconBackgrounds: false,
-        ),
-      );
+      expect(preferences.value, const ManualTransactionEditorPreferences());
       expect(tester.getRect(find.text('Dátum')), dateLabelBefore);
 
       await tester.tap(find.byKey(const ValueKey('manual-quick-5000')));
@@ -231,7 +264,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Ikonhátterek megjelenítése'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('creation-direction-toggle')),
+        findsOneWidget,
+      );
+      expect(find.text('Új bevétel'), findsOneWidget);
     },
   );
 
@@ -1185,37 +1222,41 @@ void main() {
     },
   );
 
-  testWidgets('hero metadata backgrounds hidden visual reference', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      RepaintBoundary(
-        key: const ValueKey<String>('manual-metadata-hidden-visual-boundary'),
-        child: MaterialApp(
-          home: ManualTransactionEditor.create(
-            repository: _FakeManualRepository(),
-            categories: categories,
-            direction: LedgerDirection.expense,
-            impactRepository: const _FakeImpactRepository(),
+  testWidgets(
+    'create editor keeps metadata icon surfaces even with a hidden preference',
+    (tester) async {
+      final preferences = _MemoryEditorPreferencesStore()
+        ..value = const ManualTransactionEditorPreferences(
+          showMetadataIconBackgrounds: false,
+        );
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: const ValueKey<String>('manual-create-icon-surface-boundary'),
+          child: MaterialApp(
+            home: ManualTransactionEditor.create(
+              repository: _FakeManualRepository(),
+              categories: categories,
+              direction: LedgerDirection.expense,
+              preferencesStore: preferences,
+              impactRepository: const _FakeImpactRepository(),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('manual-metadata-icon-background-toggle')),
-    );
-    await tester.pumpAndSettle();
-
-    await expectLater(
-      find.byKey(const ValueKey('manual-metadata-hidden-visual-boundary')),
-      matchesGoldenFile(
-        '../../goldens/manual_transaction_editor_metadata_hidden.png',
-      ),
-    );
-  });
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('manual-metadata-icon-background-toggle')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('creation-direction-toggle')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.calendar_month_outlined), findsOneWidget);
+    },
+  );
 
   testWidgets('hero income editor visual reference', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));

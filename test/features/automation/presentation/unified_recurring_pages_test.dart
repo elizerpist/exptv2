@@ -81,6 +81,39 @@ void main() {
     expect(find.text('0 Ft'), findsNothing);
   });
 
+  testWidgets(
+    'create editor uses the shared direction capsule without hiding metadata surfaces',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UnifiedRecurringTransactionEditorPage.create(
+            repository: _AutomationFake(),
+            manualRepository: _ManualFake(),
+            categories: const <FluviCategory>[],
+            initialDirection: LedgerDirection.expense,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('creation-direction-toggle')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('creation-direction-expense')),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('Ikonhátterek elrejtése'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('creation-direction-income')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('creation-direction-income')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('legacy and unified creation routes stay genuinely separate', (
     tester,
   ) async {
@@ -104,6 +137,11 @@ void main() {
   });
 
   testWidgets('unified timed editor visual reference', (tester) async {
+    // Keep the raster hero artwork on the same cold-cache path as the
+    // standalone golden run. Earlier interaction cases deliberately load a
+    // different direction image, and their retained image frame otherwise
+    // makes this visual reference dependent on test order.
+    PaintingBinding.instance.imageCache.clear();
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(

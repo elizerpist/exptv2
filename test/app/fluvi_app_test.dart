@@ -17,7 +17,6 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
-import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
@@ -206,9 +205,6 @@ void main() {
       final originalLogBoxState = tester.state(
         find.byType(DashboardLogBoxViewport),
       );
-      final originalBalanceCarouselState = tester.state(
-        find.byKey(const ValueKey<String>('balance-carousel')),
-      );
       final preparedAtlas = PreparedVectorAssetAtlas.instance;
       final decodeCount = preparedAtlas.pictureDecodeCount;
       final rasterBuildCount = preparedAtlas.logBoxRasterBuildCount;
@@ -243,10 +239,6 @@ void main() {
         expect(
           tester.state(find.byType(DashboardLogBoxViewport)),
           same(originalLogBoxState),
-        );
-        expect(
-          tester.state(find.byKey(const ValueKey<String>('balance-carousel'))),
-          same(originalBalanceCarouselState),
         );
         expect(find.byType(ErrorWidget), findsNothing);
         expect(
@@ -389,18 +381,21 @@ void main() {
   );
 
   testWidgets(
-    'a Legacy profile fixture explicitly mounts its protected Time rail',
+    'the app always mounts the segmented Summary without the retired Time rail',
     (tester) async {
       await tester.pumpWidget(
         const FluviApp(
           dashboardRepository: EmptyDashboardDataRuntimeRepository(),
           initialRailOpen: true,
-          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
       await _pumpInteractiveDashboard(tester);
 
-      expect(find.byKey(const ValueKey('dashboard-time-rail')), findsOneWidget);
+      expect(find.byKey(const ValueKey('dashboard-time-rail')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('summary-pill-segmented-mode-selector')),
+        findsOneWidget,
+      );
     },
   );
 

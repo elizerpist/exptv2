@@ -834,7 +834,6 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
       dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
       child: _BudgetCategoryAvatarDisc(
         source: svgSource,
-        fallbackColor: color,
         icon: icon,
         semanticLabel: semanticsLabel,
         canvasSize: BudgetCategoryAvatarGeometry.avatarCanvasSize,
@@ -974,7 +973,6 @@ final class _BudgetCategoryAvatarSelectedCompositionState
           ),
           _BudgetCategoryAvatarDisc(
             source: source,
-            fallbackColor: widget.color,
             icon: widget.icon,
             semanticLabel: widget.semanticsLabel,
             canvasSize: BudgetCategoryAvatarGeometry.avatarCanvasSize,
@@ -1067,7 +1065,6 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
 final class _BudgetCategoryAvatarDisc extends StatelessWidget {
   const _BudgetCategoryAvatarDisc({
     required this.source,
-    required this.fallbackColor,
     required this.icon,
     required this.semanticLabel,
     required this.canvasSize,
@@ -1075,12 +1072,6 @@ final class _BudgetCategoryAvatarDisc extends StatelessWidget {
   });
 
   final String source;
-
-  /// `SvgPicture.string` resolves its vector picture after this first build.
-  /// The prepared catalog already owns the true category colour, so paint a
-  /// real category face immediately instead of exposing the rail's neutral
-  /// shell during that decode frame.
-  final Color fallbackColor;
   final PreparedVectorPicture icon;
   final String semanticLabel;
   final double canvasSize;
@@ -1096,14 +1087,6 @@ final class _BudgetCategoryAvatarDisc extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: <Widget>[
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: fallbackColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
           Positioned.fill(
             child: ExcludeSemantics(
               child: SvgPicture.string(
