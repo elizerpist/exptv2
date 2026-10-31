@@ -1206,6 +1206,12 @@ final class DashboardCoreController {
   int _logBoxTextLayoutEstimatedBytes = 0;
   DashboardLogBoxRenderExtentSnapshot? _lastLogBoxRenderExtent;
   DashboardLogBoxPaintedSnapshot? _lastLogBoxPaintedSnapshot;
+  // Budget's selected Avatar can complete its real CustomPainter pass in the
+  // same frame that starts an asynchronous semantic-publication continuation.
+  // Retain one immutable canvas acknowledgement so that continuation can bind
+  // it later, but only when every part of the identity matches exactly.
+  // This is evidence of an already visible frame, never a semantic fallback.
+  DashboardAvatarSelectedVisualPainted? _lastBudgetAvatarSelectedVisualPaint;
   _MindAmountSemanticRangeTarget? _mindAmountSemanticRangeTarget;
   _MindAmountRenderTarget? _mindAmountRenderTarget;
   _AvatarLiveRenderTarget? _avatarLiveRenderTarget;
@@ -9613,6 +9619,19 @@ final class DashboardCoreController {
         );
       }
     }
+    if (!target.targetVisualPainted) {
+      // The selected Avatar's progress ring is itself a visible Budget
+      // surface. It can have painted before this target is armed, just as the
+      // stable LogBox can. Reuse only its immutable canvas identity; a stale
+      // previous selection cannot satisfy the strict comparison below.
+      final lastSelectedPaint = _lastBudgetAvatarSelectedVisualPaint;
+      if (lastSelectedPaint != null) {
+        _recordBudgetAvatarSelectedVisualPaintForTarget(
+          target,
+          lastSelectedPaint,
+        );
+      }
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: acknowledgementSource == 'semanticPublication'
@@ -14680,8 +14699,21 @@ final class DashboardCoreController {
   void recordBudgetAvatarSelectedVisualPaint(
     DashboardAvatarSelectedVisualPainted painted,
   ) {
+    // Store the actual CustomPainter event before looking up a currently
+    // armed target. A target can be installed only after an asynchronous
+    // semantic fan-out, while Flutter is free to paint the selected Avatar in
+    // the frame that initiated that fan-out.
+    _lastBudgetAvatarSelectedVisualPaint = painted;
     final target = _avatarLiveRenderTarget;
     if (target == null || target.targetVisualPainted) return;
+    _recordBudgetAvatarSelectedVisualPaintForTarget(target, painted);
+  }
+
+  void _recordBudgetAvatarSelectedVisualPaintForTarget(
+    _AvatarLiveRenderTarget target,
+    DashboardAvatarSelectedVisualPainted painted,
+  ) {
+    if (target.targetVisualPainted) return;
     final matches =
         target.targetHandle == painted.targetHandle &&
         target.coreRevision == painted.coreRevision &&

@@ -9317,6 +9317,60 @@ void main() {
   );
 
   test(
+    'selected Avatar canvas paint is bound when it arrives before the replacement target is armed',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+      );
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+      final state = _budgetAvatarPreviewState(
+        categoryId: 'utilities',
+        displayName: 'Utilities',
+      );
+
+      core.beginBudgetAvatarMotion();
+      expect(await drilldown.previewBudgetTarget(state: state), isTrue);
+      final firstPresentation =
+          core.visibleFrames.logBoxPresentationLane.value!;
+
+      // A new raw contact retires the former unresolved acknowledgement. The
+      // previous selected Avatar can still finish its actual canvas pass in
+      // this gap, before the same exact target is armed again.
+      core.noteBudgetAvatarDirectPointerDown();
+      core.recordBudgetAvatarSelectedVisualPaint(
+        DashboardAvatarSelectedVisualPainted(
+          targetHandle: 1,
+          coreRevision: firstPresentation.coreRevision,
+          presentationEpoch: firstPresentation.presentationEpoch,
+          frameGeneration: firstPresentation.frameGeneration,
+        ),
+      );
+      expect(core.budgetAvatarTargetPainted.value, isNull);
+
+      expect(await drilldown.previewBudgetTarget(state: state), isTrue);
+
+      final painted = core.budgetAvatarTargetPainted.value;
+      expect(painted?.targetHandle, 1);
+      expect(
+        painted?.source,
+        DashboardAvatarTargetPaintSource.selectedAvatarProgress,
+      );
+      expect(await core.awaitBudgetAvatarTargetPaint(targetHandle: 1), isTrue);
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  test(
     'RG-G2: Avatar crossings publish prepared semantic frames without starting rich scene work during motion',
     () async {
       final repository = _FocusSeedRepository();
