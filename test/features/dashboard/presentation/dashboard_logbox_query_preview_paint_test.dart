@@ -1623,13 +1623,10 @@ void main() {
               renderDiagnostics: core.renderReadinessDiagnostics,
               renderDiagnosticContextProvider: () =>
                   core.renderDiagnosticContext,
-              onExtentPublished: (snapshot) {
-                // Match the production Dashboard parent: the visible viewport
-                // both retains its test evidence and acknowledges the exact
-                // post-layout root to the interaction coordinator.
-                core.recordLogBoxRenderExtent(snapshot);
-                snapshots.add(snapshot);
-              },
+              // Retain layout evidence independently. The actual canvas paint
+              // is the acknowledgement that must complete the Avatar target.
+              onExtentPublished: snapshots.add,
+              onPainted: core.recordLogBoxRenderedPaint,
             ),
           ),
         ),

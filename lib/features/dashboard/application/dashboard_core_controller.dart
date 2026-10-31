@@ -63,6 +63,7 @@ import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/domain/year_month.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
+import '../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
 import 'dashboard_avatar_target_painted.dart';
@@ -1204,6 +1205,7 @@ final class DashboardCoreController {
   int _logBoxTextLayoutPreparedDayHeaders = 0;
   int _logBoxTextLayoutEstimatedBytes = 0;
   DashboardLogBoxRenderExtentSnapshot? _lastLogBoxRenderExtent;
+  DashboardLogBoxPaintedSnapshot? _lastLogBoxPaintedSnapshot;
   _MindAmountSemanticRangeTarget? _mindAmountSemanticRangeTarget;
   _MindAmountRenderTarget? _mindAmountRenderTarget;
   _AvatarLiveRenderTarget? _avatarLiveRenderTarget;
@@ -9589,6 +9591,28 @@ final class DashboardCoreController {
         ),
       );
     }
+    // A stable CustomPaint can finish the matching frame before this
+    // asynchronous semantic-publication continuation arms its target. Reuse
+    // only a recorded *actual* canvas paint with the same immutable identity;
+    // never infer paint from the current visible frame or a layout callback.
+    if (!target.logBoxPainted) {
+      final lastPaint = _lastLogBoxPaintedSnapshot;
+      final lastPresentation = lastPaint?.presentation;
+      if (lastPresentation != null &&
+          lastPresentation.queryKey.value == target.queryKey &&
+          lastPresentation.coreRevision == target.coreRevision &&
+          lastPresentation.presentationEpoch == target.presentationEpoch &&
+          lastPresentation.frameGeneration == target.frameGeneration) {
+        _recordAvatarLiveTargetPaintEvidence(
+          presentation: lastPresentation,
+          payloadRowCount: lastPaint!.payloadRowCount,
+          drawableRowCount: lastPaint.drawableRowCount,
+          paintedRowCount: lastPaint.paintedRowCount,
+          readablePhaseARowsPainted: lastPaint.readablePhaseARowsPainted,
+          richPhaseBRowsPainted: lastPaint.richPhaseBRowsPainted,
+        );
+      }
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: acknowledgementSource == 'semanticPublication'
@@ -14623,6 +14647,25 @@ final class DashboardCoreController {
     unawaited(paging.prepareReadyAheadAtIdle(reason: 'postLayout'));
   }
 
+  /// Receives the bounded acknowledgement emitted by the production
+  /// [DashboardLogBoxRenderSurface] immediately after its canvas has painted.
+  ///
+  /// Layout/scroll extent reports remain the owner of paging and geometry
+  /// maintenance. This is strictly a paint-identity acknowledgement, so a
+  /// Budget Avatar target cannot be left waiting when the stable render
+  /// surface has already drawn before the next layout callback is scheduled.
+  void recordLogBoxRenderedPaint(DashboardLogBoxPaintedSnapshot snapshot) {
+    _lastLogBoxPaintedSnapshot = snapshot;
+    _recordAvatarLiveTargetPaintEvidence(
+      presentation: snapshot.presentation,
+      payloadRowCount: snapshot.payloadRowCount,
+      drawableRowCount: snapshot.drawableRowCount,
+      paintedRowCount: snapshot.paintedRowCount,
+      readablePhaseARowsPainted: snapshot.readablePhaseARowsPainted,
+      richPhaseBRowsPainted: snapshot.richPhaseBRowsPainted,
+    );
+  }
+
   /// The final Mind range value may be flushed from `onChangeEnd` in the same
   /// engine turn as pointer-up. Its in-memory publication is pre-frame, but
   /// canonical persistence still waits for this matching LogBox report so a
@@ -14880,8 +14923,25 @@ final class DashboardCoreController {
   void _recordAvatarLiveTargetPaint(
     DashboardLogBoxRenderExtentSnapshot snapshot,
   ) {
+    _recordAvatarLiveTargetPaintEvidence(
+      presentation: snapshot.presentation,
+      payloadRowCount: snapshot.payloadRowCount,
+      drawableRowCount: snapshot.drawableRowCount,
+      paintedRowCount: snapshot.paintedRowCount,
+      readablePhaseARowsPainted: snapshot.readablePhaseARowsPainted,
+      richPhaseBRowsPainted: snapshot.richPhaseBRowsPainted,
+    );
+  }
+
+  void _recordAvatarLiveTargetPaintEvidence({
+    required DashboardLogBoxPresentationBinding? presentation,
+    required int payloadRowCount,
+    required int drawableRowCount,
+    required int paintedRowCount,
+    required int readablePhaseARowsPainted,
+    required int richPhaseBRowsPainted,
+  }) {
     final target = _avatarLiveRenderTarget;
-    final presentation = snapshot.presentation;
     if (target == null || presentation == null || target.logBoxPainted) {
       return;
     }
@@ -14912,12 +14972,10 @@ final class DashboardCoreController {
       return;
     }
     final exactPaint = target.exactEmpty
-        ? snapshot.payloadRowCount == 0 &&
-              snapshot.drawableRowCount == 0 &&
-              snapshot.paintedRowCount == 0
-        : snapshot.payloadRowCount > 0 &&
-              snapshot.drawableRowCount == snapshot.payloadRowCount &&
-              snapshot.paintedRowCount > 0;
+        ? payloadRowCount == 0 && drawableRowCount == 0 && paintedRowCount == 0
+        : payloadRowCount > 0 &&
+              drawableRowCount == payloadRowCount &&
+              paintedRowCount > 0;
     if (!exactPaint) {
       if (target.paintRejectionReported) return;
       target.paintRejectionReported = true;
@@ -14932,9 +14990,9 @@ final class DashboardCoreController {
               'presentationEpoch=${target.presentationEpoch} '
               'frameGeneration=${target.frameGeneration} '
               'exactEmpty=${target.exactEmpty} '
-              'payloadRows=${snapshot.payloadRowCount} '
-              'drawableRows=${snapshot.drawableRowCount} '
-              'paintedRows=${snapshot.paintedRowCount}',
+              'payloadRows=$payloadRowCount '
+              'drawableRows=$drawableRowCount '
+              'paintedRows=$paintedRowCount',
         ),
       );
       return;
@@ -14949,23 +15007,23 @@ final class DashboardCoreController {
       presentationEpoch: target.presentationEpoch,
       frameGeneration: target.frameGeneration,
       exactEmpty: target.exactEmpty,
-      readablePhaseARowsPainted: snapshot.readablePhaseARowsPainted,
-      richPhaseBRowsPainted: snapshot.richPhaseBRowsPainted,
+      readablePhaseARowsPainted: readablePhaseARowsPainted,
+      richPhaseBRowsPainted: richPhaseBRowsPainted,
     );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|LOGBOX_TARGET_PAINTED',
         queryKey: target.queryKey,
         coreRevision: target.coreRevision,
-        entryCount: snapshot.payloadRowCount,
+        entryCount: payloadRowCount,
         scope:
             'focusGeneration=${target.focusGeneration} '
             'targetHandle=${target.targetHandle} '
             'presentationEpoch=${target.presentationEpoch} '
             'frameGeneration=${target.frameGeneration} '
             'exactEmpty=${target.exactEmpty} '
-            'drawableRows=${snapshot.drawableRowCount} '
-            'paintedRows=${snapshot.paintedRowCount}',
+            'drawableRows=$drawableRowCount '
+            'paintedRows=$paintedRowCount',
       ),
     );
   }

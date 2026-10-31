@@ -120,3 +120,34 @@ final class DashboardLogBoxRenderExtentSnapshot {
     'scrollExtentMismatch': isMismatch,
   };
 }
+
+/// One exact paint acknowledgement emitted from the LogBox [CustomPainter].
+///
+/// Unlike [DashboardLogBoxRenderExtentSnapshot], this does not wait for a
+/// subsequent layout callback or depend on an attached [ScrollPosition]. It
+/// is deliberately small: the Core uses it only to correlate an already
+/// visible presentation identity with the rows that the production canvas just
+/// drew. It owns neither scrolling nor query selection.
+final class DashboardLogBoxPaintedSnapshot {
+  const DashboardLogBoxPaintedSnapshot({
+    required this.presentation,
+    required this.payloadViewportId,
+    required this.renderDomain,
+    required this.payloadRowCount,
+    required this.drawableRowCount,
+    required this.paintedRowCount,
+    required this.readablePhaseARowCount,
+    required this.readablePhaseARowsPainted,
+    required this.richPhaseBRowsPainted,
+  });
+
+  final DashboardLogBoxPresentationBinding? presentation;
+  final int? payloadViewportId;
+  final DashboardLogBoxRenderDomain renderDomain;
+  final int payloadRowCount;
+  final int drawableRowCount;
+  final int paintedRowCount;
+  final int readablePhaseARowCount;
+  final int readablePhaseARowsPainted;
+  final int richPhaseBRowsPainted;
+}

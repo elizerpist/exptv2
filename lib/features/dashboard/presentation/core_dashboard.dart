@@ -1606,6 +1606,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               },
                                               onExtentPublished: controller
                                                   .recordLogBoxRenderExtent,
+                                              onPainted: controller
+                                                  .recordLogBoxRenderedPaint,
                                               onCommittedScopeReset: controller
                                                   .recordVerticalCommittedScopeReset,
                                               currentQuery:

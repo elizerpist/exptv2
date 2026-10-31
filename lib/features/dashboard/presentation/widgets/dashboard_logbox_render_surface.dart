@@ -168,6 +168,7 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
     this.initialLogBoxReadinessActive = false,
     this.onTextLayoutsPrepared,
     this.onExtentPublished,
+    this.onPainted,
     this.performanceCounters,
     this.renderDiagnostics,
     this.renderDiagnosticContextProvider,
@@ -199,6 +200,12 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
   final bool initialLogBoxReadinessActive;
   final DashboardLogBoxTextLayoutPreparedCallback? onTextLayoutsPrepared;
   final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
+
+  /// Reports the exact canvas output immediately after [CustomPainter.paint].
+  /// This complements the later layout/extent report: a visible Budget target
+  /// must not wait for an unrelated scroll/layout transition to acknowledge
+  /// that its prepared LogBox rows have already drawn.
+  final ValueChanged<DashboardLogBoxPaintedSnapshot>? onPainted;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final DashboardRenderDiagnosticContextProvider?
@@ -841,6 +848,23 @@ final class _DashboardLogBoxRenderSurfaceState
     if (!mounted) return;
     final payload = binding.payload;
     if (payload == null) return;
+    // This callback is deliberately outside the deduplicated diagnostic path:
+    // a newly armed Core target may match a canvas that has the same row
+    // digest as the preceding diagnostic event. The Core correlates the full
+    // immutable presentation identity and accepts it only once.
+    widget.onPainted?.call(
+      DashboardLogBoxPaintedSnapshot(
+        presentation: binding.presentation,
+        payloadViewportId: payload.viewportId,
+        renderDomain: binding.renderDomain,
+        payloadRowCount: payload.previewRowCount,
+        drawableRowCount: snapshot.drawableRowCount,
+        paintedRowCount: snapshot.paintedRowCount,
+        readablePhaseARowCount: snapshot.readablePhaseARowCount,
+        readablePhaseARowsPainted: snapshot.readablePhaseARowsPainted,
+        richPhaseBRowsPainted: snapshot.richPhaseBRowsPainted,
+      ),
+    );
     final context = binding.renderedIdentityContext;
     final selectedDirection = context?.selectedDirection ?? payload.direction;
     final canonicalDirection = context?.canonicalDirection ?? payload.direction;
@@ -1524,6 +1548,11 @@ final class _DashboardLogBoxPaintedRowsSnapshot {
     required this.lastRowDigest,
     required this.incomeCount,
     required this.expenseCount,
+    required this.drawableRowCount,
+    required this.paintedRowCount,
+    required this.readablePhaseARowCount,
+    required this.readablePhaseARowsPainted,
+    required this.richPhaseBRowsPainted,
   });
 
   final int paintGeneration;
@@ -1535,6 +1564,11 @@ final class _DashboardLogBoxPaintedRowsSnapshot {
   final String lastRowDigest;
   final int incomeCount;
   final int expenseCount;
+  final int drawableRowCount;
+  final int paintedRowCount;
+  final int readablePhaseARowCount;
+  final int readablePhaseARowsPainted;
+  final int richPhaseBRowsPainted;
 }
 
 final class _DashboardLogBoxSurfacePainter extends CustomPainter {
@@ -1821,6 +1855,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
               : FluviDiagnosticKeyDigest.of(_lastPaintedRowId!),
           incomeCount: _paintedIncomeCount,
           expenseCount: _paintedExpenseCount,
+          drawableRowCount: _lastDrawableRowCount,
+          paintedRowCount: _lastPaintedRowCount,
+          readablePhaseARowCount: _lastReadablePhaseARowCount,
+          readablePhaseARowsPainted: _lastReadablePhaseARowsPainted,
+          richPhaseBRowsPainted: _lastRichPhaseBRowsPainted,
         ),
       );
     }

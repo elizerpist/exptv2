@@ -79,6 +79,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.renderDiagnosticContextProvider,
     this.renderedIdentityContextProvider,
     this.onExtentPublished,
+    this.onPainted,
     this.onCommittedScopeReset,
     this.currentQuery,
     this.onRemoveQueryCategory,
@@ -129,6 +130,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardLogBoxRenderedIdentityContextProvider?
   renderedIdentityContextProvider;
   final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
+  final ValueChanged<DashboardLogBoxPaintedSnapshot>? onPainted;
   final VoidCallback? onCommittedScopeReset;
   final CurrentQueryController? currentQuery;
   final ValueChanged<String>? onRemoveQueryCategory;
@@ -745,6 +747,7 @@ final class _DashboardLogBoxViewportState
                               renderedIdentityContextProvider:
                                   widget.renderedIdentityContextProvider,
                               onExtentPublished: widget.onExtentPublished,
+                              onPainted: widget.onPainted,
                             ),
                           ),
                         ],
@@ -1725,6 +1728,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.renderDiagnosticContextProvider,
     required this.renderedIdentityContextProvider,
     required this.onExtentPublished,
+    required this.onPainted,
   });
 
   final double staticContentLeftInset;
@@ -1766,6 +1770,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final DashboardLogBoxRenderedIdentityContextProvider?
   renderedIdentityContextProvider;
   final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
+  final ValueChanged<DashboardLogBoxPaintedSnapshot>? onPainted;
 
   @override
   Widget build(BuildContext context) {
@@ -2236,6 +2241,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                   renderedIdentityContextProvider:
                       renderedIdentityContextProvider,
                   onExtentPublished: onExtentPublished,
+                  onPainted: onPainted,
                 ),
               ),
             ),
