@@ -5,9 +5,10 @@ import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/fluvi_surface_fill.dart';
 
 /// Renders the existing four-path Fluvi asset with the one shared brand fill
-/// model. The unchanged default stays on the supplied vector asset (or its
-/// prepared atlas); personalised fills use the generated four-path document
-/// below so a custom gradient boundary changes the rendered logo as well.
+/// model. The unchanged default stays on the prepared atlas whenever it is
+/// ready; its exact source document is retained below for startup before that
+/// atlas is available. Personalised fills use the same four-path geometry, so
+/// a custom gradient boundary changes the rendered logo as well.
 final class FluviBrandMark extends StatelessWidget {
   const FluviBrandMark({
     super.key,
@@ -37,27 +38,17 @@ final class FluviBrandMark extends StatelessWidget {
         height: height,
       );
     }
-    if (appearance.hasDefaultLogoFills) {
-      return RepaintBoundary(
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: SvgPicture.asset(
-            'assets/fluvi/brand/fluvi_mark.svg',
-            key: const ValueKey('fluvi-brand-mark-default-svg'),
-            fit: fit,
-            excludeFromSemantics: true,
-          ),
-        ),
-      );
-    }
     return RepaintBoundary(
       child: SizedBox(
         width: width,
         height: height,
         child: SvgPicture.string(
           _FluviBrandMarkSvg.document(appearance),
-          key: ValueKey('fluvi-brand-mark-custom-${appearance.hashCode}'),
+          key: ValueKey(
+            appearance.hasDefaultLogoFills
+                ? 'fluvi-brand-mark-default-svg'
+                : 'fluvi-brand-mark-custom-${appearance.hashCode}',
+          ),
           fit: fit,
           excludeFromSemantics: true,
         ),
@@ -82,6 +73,7 @@ abstract final class _FluviBrandMarkSvg {
       'M334.576 729.683C335.301 726.885 339.781 716.897 341.125 714.025C353.979 686.522 371.316 661.346 392.426 639.528C433.799 596.846 487.893 568.728 546.598 559.388C556.274 557.767 571.169 555.686 580.957 555.501C583.893 556.081 585.767 555.788 588.154 557.616C588.444 558.321 589.022 559.042 588.481 559.65C585.34 563.178 580.389 567.405 576.498 570.111C504.942 619.865 433.748 670.148 362.1 719.769C352.689 726.286 342.86 731.067 333.397 737.213C333.562 733.668 335.244 733.57 334.576 729.683Z';
 
   static String document(FluviBrandSurfaceAppearance appearance) {
+    if (appearance.hasDefaultLogoFills) return _defaultDocument();
     final top = appearance.logoTop;
     final bottom = appearance.logoBottom;
     return '''<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254"><defs>
@@ -90,6 +82,13 @@ ${_gradient('top-detail', '947.67224', '400.28369', '786.27338', '290.30493', to
 ${_gradient('bottom-main', '646.13593', '875.57263', '476.02341', '635.0304', bottom)}
 </defs><path fill="url(#top-main)" d="$_top"/><path fill="url(#top-detail)" d="$_topDetail"/><path fill="url(#bottom-main)" d="$_bottom"/><path fill="${_hex(bottom.effectiveMiddle)}" d="$_bottomDetail"/></svg>''';
   }
+
+  /// The factory document mirrors the supplied source exactly for the first
+  /// Flutter splash frame, before the prepared vector atlas is guaranteed to
+  /// be usable. The second top detail and lower accent deliberately keep
+  /// their authored colours in this one default-only path.
+  static String _defaultDocument() =>
+      '''<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254"><defs><linearGradient id="gradient_0" gradientUnits="userSpaceOnUse" x1="383.18964" y1="302.21951" x2="653.67139" y2="488.26709"><stop offset="0" stop-color="#00EDF5"/><stop offset="1" stop-color="#5385FF"/></linearGradient><linearGradient id="gradient_1" gradientUnits="userSpaceOnUse" x1="947.67224" y1="400.28369" x2="786.27338" y2="290.30493"><stop offset="0" stop-color="#9A4EFD"/><stop offset="1" stop-color="#5785FF"/></linearGradient><linearGradient id="gradient_2" gradientUnits="userSpaceOnUse" x1="646.13593" y1="875.57263" x2="476.02341" y2="635.0304"><stop offset="0" stop-color="#CE51FA"/><stop offset="1" stop-color="#2E6AFE"/></linearGradient></defs><path fill="url(#gradient_0)" d="$_top"/><path fill="url(#gradient_1)" d="$_topDetail"/><path fill="url(#gradient_2)" d="$_bottom"/><path fill="#246EFB" d="$_bottomDetail"/></svg>''';
 
   static String _gradient(
     String id,
