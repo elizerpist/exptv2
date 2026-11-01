@@ -7,6 +7,7 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/design/fluvi_global_appearance.dart';
 import '../../core/design/fluvi_highlight.dart';
+import '../../core/design/fluvi_surface_fill.dart';
 import '../../features/dashboard/application/transaction_direction_controller.dart';
 import '../../features/dashboard/presentation/dashboard_shell_presentation.dart';
 
@@ -294,18 +295,30 @@ final class Bnb03BottomNavigationContour {
 }
 
 class _Bnb03BarSurfacePainter extends CustomPainter {
-  const _Bnb03BarSurfacePainter({required this.contour});
+  const _Bnb03BarSurfacePainter({required this.contour, required this.fill});
 
   final Bnb03BottomNavigationContour contour;
+  final FluviSurfaceFill fill;
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawPath(contour.physicalPath(size), Paint()..color = Colors.white);
+    // Preserve the exact historical raster for a solid default surface. A
+    // shader is needed only for a user-selected gradient; using one for white
+    // too subtly changes the anti-aliased contour edge.
+    final paint = Paint()..isAntiAlias = true;
+    if (fill.isSolid) {
+      paint.color = fill.left;
+    } else {
+      paint.shader = fill
+          .gradient(begin: Alignment.centerLeft, end: Alignment.centerRight)
+          .createShader(Offset.zero & size);
+    }
+    canvas.drawPath(contour.physicalPath(size), paint);
   }
 
   @override
   bool shouldRepaint(covariant _Bnb03BarSurfacePainter oldDelegate) =>
-      oldDelegate.contour != contour;
+      oldDelegate.contour != contour || oldDelegate.fill != fill;
 }
 
 /// Drawn after the FAB, so the one canonical contour is never hidden by the
@@ -413,6 +426,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
     this.fabIconPresentation = FluviFabIconPresentation.legacyWhiteStore,
     this.fabVectorPrimaryArgb = 0xFF715EFB,
     this.fabVectorHighlightArgb = 0xFFE2D7FF,
+    this.bottomNavigationFill = const FluviSurfaceFill.solid(0xFFFFFFFF),
   });
 
   final Bnb03Item selected;
@@ -432,6 +446,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
   final FluviFabIconPresentation fabIconPresentation;
   final int fabVectorPrimaryArgb;
   final int fabVectorHighlightArgb;
+  final FluviSurfaceFill bottomNavigationFill;
 
   static const double _figmaWidth =
       DashboardFlatBottomNavStretchLayout.referenceBottomNavWidth;
@@ -500,7 +515,10 @@ class Bnb03BottomNavigation extends StatelessWidget {
                 height: s(_barHeight),
                 child: CustomPaint(
                   key: const ValueKey('bnb03-physical-bar-surface'),
-                  painter: _Bnb03BarSurfacePainter(contour: contour),
+                  painter: _Bnb03BarSurfacePainter(
+                    contour: contour,
+                    fill: bottomNavigationFill,
+                  ),
                 ),
               ),
 
@@ -523,6 +541,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                       iconLeft: 20,
                       textLeft: 15,
                       fontFamily: fontFamily,
+                      surfaceFill: bottomNavigationFill,
                       onTap: () => onChanged(Bnb03Item.home),
                     ),
                     SizedBox(width: s(8)),
@@ -537,6 +556,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                       iconLeft: 23,
                       textLeft: 15,
                       fontFamily: fontFamily,
+                      surfaceFill: bottomNavigationFill,
                       onTap: () => onChanged(Bnb03Item.search),
                     ),
                   ],
@@ -563,6 +583,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                       iconLeft: 15.5,
                       textLeft: 11,
                       fontFamily: fontFamily,
+                      surfaceFill: bottomNavigationFill,
                       onTap: () => onChanged(Bnb03Item.cart),
                     ),
                     SizedBox(width: s(8)),
@@ -577,6 +598,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                       iconLeft: 21.5,
                       textLeft: 15,
                       fontFamily: fontFamily,
+                      surfaceFill: bottomNavigationFill,
                       onTap: () => onChanged(Bnb03Item.profile),
                     ),
                   ],
@@ -756,6 +778,7 @@ class _NavItem extends StatelessWidget {
     required this.iconLeft,
     required this.textLeft,
     required this.fontFamily,
+    required this.surfaceFill,
     required this.onTap,
   });
 
@@ -769,6 +792,7 @@ class _NavItem extends StatelessWidget {
   final double iconLeft;
   final double textLeft;
   final String? fontFamily;
+  final FluviSurfaceFill surfaceFill;
   final VoidCallback onTap;
 
   @override
@@ -776,9 +800,15 @@ class _NavItem extends StatelessWidget {
     double s(double value) => value * scale;
     final resolvedFontFamily =
         fontFamily ?? Theme.of(context).textTheme.labelSmall?.fontFamily;
+    final usesLightForeground =
+        surfaceFill.effectiveMiddle.computeLuminance() < .36;
     final color = selected
-        ? FluviVisualTokens.appHighlightPressedColor
-        : Bnb03BottomNavigation._unselected;
+        ? (usesLightForeground
+              ? Colors.white
+              : FluviVisualTokens.appHighlightPressedColor)
+        : (usesLightForeground
+              ? Colors.white.withValues(alpha: .72)
+              : Bnb03BottomNavigation._unselected);
 
     return SizedBox(
       width: s(width),
@@ -798,7 +828,7 @@ class _NavItem extends StatelessWidget {
                   top: s(12.5),
                   width: s(24),
                   height: s(24),
-                  child: selected
+                  child: selected && !usesLightForeground
                       ? FluviHighlightMask(
                           child: Icon(
                             boldIcon,
@@ -812,7 +842,7 @@ class _NavItem extends StatelessWidget {
                   left: s(textLeft),
                   top: s(48.5),
                   height: s(14),
-                  child: selected
+                  child: selected && !usesLightForeground
                       ? FluviHighlightMask(
                           child: Text(
                             label,

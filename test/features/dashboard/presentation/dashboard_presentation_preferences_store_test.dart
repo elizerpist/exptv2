@@ -1,4 +1,5 @@
 import 'package:fluvi/features/dashboard/application/balance_daily_calculation_mode.dart';
+import 'package:fluvi/core/design/fluvi_surface_fill.dart';
 import 'package:fluvi/core/preferences/data/method_channel_dashboard_presentation_preferences_store.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
@@ -621,6 +622,8 @@ void main() {
       'headerTapWaveTapStrengthPercent': 75,
       'headerTapWaveTapSpeedPercent': 100,
       'headerTapWaveDragRippleLifetimeSeconds': 1.20,
+      'brandSurfaceAppearanceJson': FluviBrandSurfaceAppearance.defaults
+          .encode(),
     });
   });
 

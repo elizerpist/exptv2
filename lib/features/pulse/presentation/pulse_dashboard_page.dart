@@ -4,16 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/design/dashboard_mode_palette.dart';
+import '../../../core/navigation/creation_slide_up_route.dart';
 import '../application/pulse_dashboard_controller.dart';
 import '../domain/pulse_models.dart';
 import '../domain/pulse_repository.dart';
+import 'pulse_delivery_settings_page.dart';
+import 'pulse_priority_inspector_page.dart';
 import 'pulse_signal_detail_page.dart';
 import 'pulse_triage_inspector_page.dart';
-import 'pulse_priority_inspector_page.dart';
-import 'pulse_delivery_settings_page.dart';
-import 'widgets/pulse_charts.dart';
 import 'widgets/pulse_indicator_card.dart';
 
+const _pulseInk = Color(0xFF19264D);
+const _pulseMuted = Color(0xFF718096);
+const _pulseLine = Color(0xFFE5E9F0);
+const _pulseIconSurface = Color(0xFFF1F5F9);
+const _pulseSegmentSurface = Color(0xFFECEEF7);
+
+/// The two everyday views share one native snapshot. Switching view or
+/// filtering indicators never asks Core to calculate a second data set.
 class PulseDashboardPage extends StatefulWidget {
   const PulseDashboardPage({
     super.key,
@@ -23,12 +31,10 @@ class PulseDashboardPage extends StatefulWidget {
     this.headerStory,
     this.headerDeliveryKey,
   });
+
   final PulseRepository repository;
   final Stream<Object?>? coreRevisions;
   final bool fullscreen;
-
-  /// Immutable copy of the Story that was actually visible when the user
-  /// tapped the dashboard header. It is not replaced by a newer ranking.
   final PulseStoryDraft? headerStory;
   final String? headerDeliveryKey;
 
@@ -36,18 +42,28 @@ class PulseDashboardPage extends StatefulWidget {
   State<PulseDashboardPage> createState() => _PulseDashboardPageState();
 }
 
+enum _PulseView { overview, indicators }
+
 class _PulseDashboardPageState extends State<PulseDashboardPage>
     with WidgetsBindingObserver {
   late final PulseDashboardController _controller;
+  final _search = TextEditingController();
   StreamSubscription<Object?>? _coreRevisionSubscription;
   Timer? _revisionDebounce;
+  _PulseView _view = _PulseView.overview;
+  bool _headerStoryOpened = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Do not invoke [load] in the assigning cascade: a synchronous loading
+    // notification would otherwise reach the listener before the late field
+    // itself has received the controller instance.
     _controller = PulseDashboardController(repository: widget.repository);
-    _controller.load();
+    _controller.addListener(_onControllerChanged);
+    unawaited(_controller.load());
+    _search.addListener(_onSearchChanged);
     final revisions =
         widget.coreRevisions ??
         const EventChannel(
@@ -61,12 +77,37 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
     });
   }
 
+  void _onControllerChanged() {
+    if (!mounted) return;
+    setState(() {});
+    final story = widget.headerStory;
+    final snapshot = _controller.snapshot;
+    if (_headerStoryOpened || story == null || snapshot == null) return;
+    final situation = snapshot.situations
+        .where((item) => item.situationKey == story.situationKey)
+        .firstOrNull;
+    if (situation == null) return;
+    _headerStoryOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openSituation(situation, initialStory: story);
+    });
+  }
+
+  void _onSearchChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _revisionDebounce?.cancel();
     _coreRevisionSubscription?.cancel();
-    _controller.dispose();
+    _search
+      ..removeListener(_onSearchChanged)
+      ..dispose();
+    _controller
+      ..removeListener(_onControllerChanged)
+      ..dispose();
     super.dispose();
   }
 
@@ -77,7 +118,7 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
 
   Future<void> _openDetail(PulseIndicatorSnapshot indicator) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
+      creationSlideUpRoute<void>(
         builder: (_) => PulseSignalDetailPage(
           indicator: indicator,
           repository: widget.repository,
@@ -90,16 +131,20 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
     if (mounted) _controller.load();
   }
 
-  Future<void> _openSituation(PulseSituationSnapshot situation) async {
+  Future<void> _openSituation(
+    PulseSituationSnapshot situation, {
+    PulseStoryDraft? initialStory,
+  }) async {
     final snapshot = _controller.snapshot;
     if (snapshot == null) return;
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
+      creationSlideUpRoute<void>(
         builder: (_) => PulseTriageInspectorPage(
           repository: widget.repository,
           scope: _controller.scope,
           situation: situation,
           indicators: snapshot.indicators,
+          initialStory: initialStory,
         ),
       ),
     );
@@ -108,7 +153,7 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
 
   Future<void> _openSituations(PulseDashboardSnapshot snapshot) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
+      creationSlideUpRoute<void>(
         builder: (_) => PulseSituationsPage(
           repository: widget.repository,
           scope: _controller.scope,
@@ -120,11 +165,11 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
     if (mounted) _controller.load();
   }
 
-  Future<void> _openPriority(PulseDashboardSnapshot snapshot) async {
+  Future<void> _openPriorityDiagnostics(PulseDashboardSnapshot snapshot) async {
     final priority = snapshot.priority;
     if (priority == null) return;
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
+      creationSlideUpRoute<void>(
         builder: (_) => PulsePriorityInspectorPage(
           repository: widget.repository,
           scope: _controller.scope,
@@ -134,214 +179,174 @@ class _PulseDashboardPageState extends State<PulseDashboardPage>
         ),
       ),
     );
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push<void>(
+      creationSlideUpRoute<void>(
+        builder: (_) =>
+            PulseDeliverySettingsPage(repository: widget.repository),
+      ),
+    );
     if (mounted) _controller.load();
   }
 
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _controller,
-    builder: (context, _) {
-      final snapshot = _controller.snapshot;
-      return Material(
-        color: FluviVisualTokens.pageBackground,
-        child: SafeArea(
-          bottom: false,
-          child: RefreshIndicator(
-            onRefresh: _controller.load,
-            child: CustomScrollView(
-              key: const ValueKey('pulse-dashboard-page'),
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 104),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate.fixed([
-                      _PulseHeader(
-                        onInfo: _showAbout,
-                        onSettings: _openSettings,
-                        onBack: widget.fullscreen
-                            ? () => Navigator.of(context).maybePop()
-                            : null,
-                      ),
-                      if (widget.headerStory case final story?) ...[
-                        const SizedBox(height: 12),
-                        _HeaderStoryContextCard(
-                          story: story,
-                          deliveryKey: widget.headerDeliveryKey,
-                        ),
-                      ],
-                      const SizedBox(height: 14),
-                      _PeriodRow(
-                        scope: _controller.scope,
-                        onPrevious: () => _controller.shiftMonth(-1),
-                        onNext: () => _controller.shiftMonth(1),
-                      ),
-                      const SizedBox(height: 14),
-                      if (snapshot == null && _controller.loading)
-                        const _LoadingPanel()
-                      else if (snapshot == null && _controller.error != null)
-                        _ErrorPanel(onRetry: _controller.load)
-                      else if (snapshot != null) ...[
-                        _TrajectoryCard(
-                          indicator: snapshot.byId('PULSE-004'),
-                          onTap: () {
-                            final indicator = snapshot.byId('PULSE-004');
-                            if (indicator != null) _openDetail(indicator);
-                          },
-                        ),
-                        const SizedBox(height: 18),
-                        _SituationOverview(
-                          situations: snapshot.situations,
-                          historical: snapshot.triageHistorical,
-                          priority: snapshot.priority,
-                          onOpen: _openSituation,
-                          onOpenAll: () => _openSituations(snapshot),
-                          onOpenPriority: () => _openPriority(snapshot),
-                        ),
-                        const SizedBox(height: 18),
-                        _GroupRail(
-                          group: _controller.group,
-                          onChanged: _controller.selectGroup,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                    ]),
-                  ),
-                ),
-                if (snapshot != null)
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 104),
-                    sliver: _IndicatorGrid(
-                      indicators: snapshot.inGroup(_controller.group),
-                      onTap: _openDetail,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      );
-    },
-  );
-
   void _showAbout() => showDialog<void>(
     context: context,
-    builder: (context) => const AlertDialog(
-      title: Text('Pulse mérőműszerek'),
+    builder: (_) => const AlertDialog(
+      title: Text('A Pulse működése'),
       content: Text(
-        'A Pulse a Fluvi Core valós Ledger-, Budget-, ismétlődési és Inbox-adataiból számol. A triggerpontok ebben a fázisban csak megjelenítési referenciák: nem küldenek értesítést és nem indítanak automatikus műveletet.',
+        'A Pulse a Fluvi Core valós Ledger-, Budget-, ismétlődési és Inbox-adataiból számol. A határértékek csak megjelenítési referenciák: nem indítanak automatikus műveletet.',
       ),
     ),
   );
 
-  Future<void> _openSettings() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            PulseDeliverySettingsPage(repository: widget.repository),
+  @override
+  Widget build(BuildContext context) {
+    final snapshot = _controller.snapshot;
+    final hasCurrent = _controller.hasSnapshotForScope;
+    // The shell publishes the measured BottomNavigation obstruction through
+    // this body's MediaQuery when it extends beneath it. A fullscreen Pulse
+    // route has no shell bar, so it keeps only its natural terminal space.
+    final contentBottomInset = widget.fullscreen
+        ? 28.0
+        : MediaQuery.paddingOf(context).bottom + 28;
+    return Scaffold(
+      backgroundColor: FluviVisualTokens.pageBackground,
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: _controller.load,
+          child: CustomScrollView(
+            key: const PageStorageKey('pulse-dashboard-page'),
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(20, 16, 20, contentBottomInset),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate.fixed([
+                    _PulseHeader(
+                      fullscreen: widget.fullscreen,
+                      onBack: () => Navigator.of(context).maybePop(),
+                      onAction: (action) => switch (action) {
+                        _PulseMenuAction.settings => _openSettings(),
+                        _PulseMenuAction.about => _showAbout(),
+                        _PulseMenuAction.diagnostics =>
+                          snapshot == null
+                              ? null
+                              : _openPriorityDiagnostics(snapshot),
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    _PeriodRow(
+                      scope: _controller.scope,
+                      onPrevious: () => _controller.shiftMonth(-1),
+                      onNext: () => _controller.shiftMonth(1),
+                    ),
+                    const SizedBox(height: 14),
+                    _PulseSegmentedControl(
+                      view: _view,
+                      onChanged: (value) => setState(() => _view = value),
+                    ),
+                    const SizedBox(height: 22),
+                    if (!hasCurrent && _controller.loading)
+                      const _LoadingPanel()
+                    else if (!hasCurrent && _controller.error != null)
+                      _ErrorPanel(onRetry: _controller.load)
+                    else if (snapshot != null && _view == _PulseView.overview)
+                      _OverviewContent(
+                        snapshot: snapshot,
+                        headerStory: widget.headerStory,
+                        onOpenSituation: _openSituation,
+                        onOpenAll: () => _openSituations(snapshot),
+                      )
+                    else if (snapshot != null)
+                      _IndicatorList(
+                        searchController: _search,
+                        indicators: snapshot.indicators,
+                        onTap: _openDetail,
+                      )
+                    else
+                      const _QuietEmpty(
+                        text: 'Ehhez az időszakhoz még nincs Pulse-adat.',
+                      ),
+                    if (hasCurrent && _controller.loading)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 14),
+                        child: Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
+                  ]),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
+enum _PulseMenuAction { settings, about, diagnostics }
+
 class _PulseHeader extends StatelessWidget {
   const _PulseHeader({
-    required this.onInfo,
-    required this.onSettings,
-    this.onBack,
+    required this.fullscreen,
+    required this.onBack,
+    required this.onAction,
   });
-  final VoidCallback onInfo;
-  final VoidCallback onSettings;
-  final VoidCallback? onBack;
+  final bool fullscreen;
+  final VoidCallback onBack;
+  final ValueChanged<_PulseMenuAction> onAction;
+
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      if (onBack != null)
+      if (fullscreen)
         IconButton(
-          tooltip: 'Vissza a Ledgerhez',
+          tooltip: 'Vissza',
           onPressed: onBack,
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(Icons.arrow_back_rounded, color: _pulseInk),
         ),
       const Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Pulse',
-              style: TextStyle(
-                fontSize: 29,
-                fontWeight: FontWeight.w800,
-                color: FluviVisualTokens.textPrimary,
-              ),
-            ),
-            SizedBox(height: 1),
-            Text(
-              'Pénzügyi indikátorok',
-              style: TextStyle(
-                fontSize: 13,
-                color: FluviVisualTokens.textSecondary,
-              ),
-            ),
-          ],
+        child: Text(
+          'Pulse',
+          style: TextStyle(
+            color: _pulseInk,
+            fontSize: 29,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
-      IconButton(
-        tooltip: 'Pulse beállításai és adatforrásai',
-        onPressed: onSettings,
-        icon: const Icon(Icons.tune_outlined),
-      ),
-      IconButton(
-        tooltip: 'A Pulse működéséről',
-        onPressed: onInfo,
-        icon: const Icon(Icons.info_outline_rounded),
-      ),
-    ],
-  );
-}
-
-class _HeaderStoryContextCard extends StatelessWidget {
-  const _HeaderStoryContextCard({required this.story, this.deliveryKey});
-
-  final PulseStoryDraft story;
-  final String? deliveryKey;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    key: const ValueKey('pulse-header-story-context'),
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF7F5FF),
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: FluviVisualTokens.border),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'A fejlécben megnyitott történet',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          story.headline,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        if (story.detail case final detail?) ...[
-          const SizedBox(height: 4),
-          Text(detail, style: const TextStyle(fontSize: 13)),
-        ],
-        if (deliveryKey != null) ...[
-          const SizedBox(height: 5),
-          const Text(
-            'A történet azóta frissülhet; ez a megnyitáskori példány.',
-            style: TextStyle(
-              fontSize: 11,
-              color: FluviVisualTokens.textSecondary,
-            ),
+      PopupMenuButton<_PulseMenuAction>(
+        tooltip: 'Pulse műveletek',
+        onSelected: onAction,
+        itemBuilder: (_) => const [
+          PopupMenuItem(
+            value: _PulseMenuAction.settings,
+            child: Text('Pulse beállításai'),
+          ),
+          PopupMenuItem(
+            value: _PulseMenuAction.about,
+            child: Text('A Pulse működése'),
+          ),
+          PopupMenuItem(
+            value: _PulseMenuAction.diagnostics,
+            child: Text('Részletes diagnosztika'),
           ),
         ],
-      ],
-    ),
+        child: const SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(Icons.more_horiz_rounded, color: _pulseInk),
+        ),
+      ),
+    ],
   );
 }
 
@@ -354,697 +359,526 @@ class _PeriodRow extends StatelessWidget {
   final DateTime scope;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
+
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+  Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(15),
-      border: Border.all(color: FluviVisualTokens.border),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: _pulseLine),
     ),
     child: Row(
       children: [
         IconButton(
           tooltip: 'Előző hónap',
           onPressed: onPrevious,
-          icon: const Icon(Icons.chevron_left),
+          icon: const Icon(Icons.chevron_left_rounded),
         ),
         Expanded(
           child: Text(
             '${_monthName(scope.month)} ${scope.year}',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              color: _pulseInk,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         IconButton(
           tooltip: 'Következő hónap',
           onPressed: onNext,
-          icon: const Icon(Icons.chevron_right),
-        ),
-        const SizedBox(width: 4),
-        const Text(
-          '21 mutató',
-          style: TextStyle(
-            color: FluviVisualTokens.textSecondary,
-            fontSize: 12,
-          ),
+          icon: const Icon(Icons.chevron_right_rounded),
         ),
       ],
     ),
   );
 }
 
-class _TrajectoryCard extends StatelessWidget {
-  const _TrajectoryCard({required this.indicator, required this.onTap});
-  final PulseIndicatorSnapshot? indicator;
+class _PulseSegmentedControl extends StatelessWidget {
+  const _PulseSegmentedControl({required this.view, required this.onChanged});
+  final _PulseView view;
+  final ValueChanged<_PulseView> onChanged;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: _pulseSegmentSurface,
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          _PulseSegment(
+            label: 'Áttekintés',
+            selected: view == _PulseView.overview,
+            onTap: () => onChanged(_PulseView.overview),
+          ),
+          _PulseSegment(
+            label: 'Mutatók',
+            selected: view == _PulseView.indicators,
+            onTap: () => onChanged(_PulseView.indicators),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _PulseSegment extends StatelessWidget {
+  const _PulseSegment({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) {
-    if (indicator == null) return const SizedBox.shrink();
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
+  Widget build(BuildContext context) => Expanded(
+    child: Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(17, 16, 17, 14),
+        borderRadius: BorderRadius.circular(10),
+        child: DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: FluviVisualTokens.cardSurfaceShadows,
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Pénzügyi pálya',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    pulseFormatValue(indicator!),
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected ? _pulseInk : _pulseMuted,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
               ),
-              const SizedBox(height: 5),
-              Text(
-                indicator!.summary,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: FluviVisualTokens.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 9),
-              SizedBox(
-                height: 144,
-                width: double.infinity,
-                child: PulseForecastChart(
-                  indicator: indicator!,
-                  size: PulseChartSize.expanded,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Row(
-                children: [
-                  _Legend(
-                    color: Color(0xFF6E5CF1),
-                    label: 'Tényleges / baseline',
-                  ),
-                  SizedBox(width: 12),
-                  _Legend(color: Color(0x88715EFB), label: 'Momentum'),
-                  SizedBox(width: 12),
-                  _Legend(color: Color(0xFF94A3B8), label: 'Keret'),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),
+    ),
+  );
+}
+
+class _OverviewContent extends StatelessWidget {
+  const _OverviewContent({
+    required this.snapshot,
+    required this.headerStory,
+    required this.onOpenSituation,
+    required this.onOpenAll,
+  });
+  final PulseDashboardSnapshot snapshot;
+  final PulseStoryDraft? headerStory;
+  final ValueChanged<PulseSituationSnapshot> onOpenSituation;
+  final VoidCallback onOpenAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final situationsByKey = <String, PulseSituationSnapshot>{
+      for (final situation in snapshot.situations)
+        situation.situationKey: situation,
+    };
+    final selected = snapshot.priority?.selected;
+    // A Header tap carries an immutable Story reservation. It wins over a
+    // newer Priority result so the exact text that was tapped cannot turn into
+    // a different situation while the route is opening.
+    final highlighted = headerStory == null
+        ? (selected == null
+              ? snapshot.situations
+                        .where(
+                          (item) => item.state == PulseSituationState.ready,
+                        )
+                        .firstOrNull ??
+                    snapshot.situations.firstOrNull
+              : situationsByKey[selected.situationKey])
+        : situationsByKey[headerStory!.situationKey];
+    final rankedKeys =
+        snapshot.priority?.rankedCandidates
+            .map((candidate) => candidate.situationKey)
+            .toList(growable: false) ??
+        const <String>[];
+    final ordered = <PulseSituationSnapshot>[
+      for (final key in rankedKeys)
+        if (situationsByKey[key] != null) situationsByKey[key]!,
+      ...snapshot.situations.where(
+        (situation) => !rankedKeys.contains(situation.situationKey),
+      ),
+    ];
+    final previewKeys = <String>{};
+    final previews = ordered
+        .where(
+          (situation) => situation.situationKey != highlighted?.situationKey,
+        )
+        .where((situation) => previewKeys.add(situation.situationKey))
+        .take(3)
+        .toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeading(title: 'Kiemelt helyzet'),
+        const SizedBox(height: 8),
+        if (highlighted == null)
+          const _QuietEmpty(text: 'Nincs kiemelt helyzet ebben az időszakban.')
+        else
+          _SituationFocusRow(
+            situation: highlighted,
+            story: headerStory?.situationKey == highlighted.situationKey
+                ? headerStory
+                : null,
+            onTap: () => onOpenSituation(highlighted),
+          ),
+        const SizedBox(height: 24),
+        _SectionHeading(
+          title: 'További helyzetek',
+          action: snapshot.situations.isEmpty ? null : 'Összes',
+          onTap: onOpenAll,
+        ),
+        const SizedBox(height: 8),
+        if (previews.isEmpty)
+          const _QuietEmpty(text: 'Nincs további megjeleníthető helyzet.')
+        else
+          _PulseGroup(
+            children: [
+              for (final situation in previews)
+                _SituationCompactRow(
+                  situation: situation,
+                  onTap: () => onOpenSituation(situation),
+                ),
+            ],
+          ),
+      ],
     );
   }
 }
 
-class _Legend extends StatelessWidget {
-  const _Legend({required this.color, required this.label});
-  final Color color;
-  final String label;
+class _SituationFocusRow extends StatelessWidget {
+  const _SituationFocusRow({
+    required this.situation,
+    required this.story,
+    required this.onTap,
+  });
+  final PulseSituationSnapshot situation;
+  final PulseStoryDraft? story;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => KeyedSubtree(
+    key: ValueKey('pulse-situation-${situation.situationKey}'),
+    child: _PulseGroup(
+      children: [
+        _PulseRow(
+          icon: Icons.auto_awesome_outlined,
+          title: story?.headline ?? situation.title,
+          subtitle:
+              story?.detail ??
+              situation.formationRule ??
+              _stateLabel(situation.state),
+          trailing: const Icon(Icons.chevron_right_rounded, color: _pulseMuted),
+          onTap: onTap,
+          tall: true,
+        ),
+      ],
+    ),
+  );
+}
+
+class _SituationCompactRow extends StatelessWidget {
+  const _SituationCompactRow({required this.situation, required this.onTap});
+  final PulseSituationSnapshot situation;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => KeyedSubtree(
+    key: ValueKey('pulse-situation-${situation.situationKey}'),
+    child: _PulseRow(
+      icon: _situationIcon(situation.state),
+      title: situation.title,
+      subtitle: situation.formationRule ?? _stateLabel(situation.state),
+      trailing: const Icon(Icons.chevron_right_rounded, color: _pulseMuted),
+      onTap: onTap,
+    ),
+  );
+}
+
+class _IndicatorList extends StatelessWidget {
+  const _IndicatorList({
+    required this.searchController,
+    required this.indicators,
+    required this.onTap,
+  });
+  final TextEditingController searchController;
+  final List<PulseIndicatorSnapshot> indicators;
+  final ValueChanged<PulseIndicatorSnapshot> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final query = searchController.text.trim().toLowerCase();
+    final visible = indicators
+        .where(
+          (indicator) =>
+              query.isEmpty ||
+              indicator.title.toLowerCase().contains(query) ||
+              indicator.summary.toLowerCase().contains(query),
+        )
+        .toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: searchController,
+          key: const ValueKey('pulse-indicator-search'),
+          decoration: InputDecoration(
+            hintText: 'Mutató keresése',
+            prefixIcon: const Icon(Icons.search_rounded),
+            filled: true,
+            fillColor: _pulseIconSurface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        const SizedBox(height: 22),
+        if (visible.isEmpty)
+          const _QuietEmpty(text: 'Nincs a keresésnek megfelelő mutató.')
+        else
+          for (final group in PulseGroup.values) ...[
+            if (visible.any((indicator) => indicator.group == group)) ...[
+              _SectionHeading(title: _groupLabel(group)),
+              const SizedBox(height: 8),
+              _PulseGroup(
+                children: [
+                  for (final indicator in visible.where(
+                    (item) => item.group == group,
+                  ))
+                    _IndicatorRow(
+                      indicator: indicator,
+                      onTap: () => onTap(indicator),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+            ],
+          ],
+      ],
+    );
+  }
+}
+
+class _IndicatorRow extends StatelessWidget {
+  const _IndicatorRow({required this.indicator, required this.onTap});
+  final PulseIndicatorSnapshot indicator;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => KeyedSubtree(
+    key: ValueKey('pulse-indicator-${indicator.id}'),
+    child: _PulseRow(
+      icon: _indicatorIcon(indicator.chartKind),
+      title: indicator.title,
+      subtitle: indicator.summary,
+      trailing: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            pulseFormatValue(indicator),
+            style: const TextStyle(
+              color: _pulseInk,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Icon(Icons.chevron_right_rounded, size: 18, color: _pulseMuted),
+        ],
+      ),
+      onTap: onTap,
+    ),
+  );
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.title, this.action, this.onTap});
+  final String title;
+  final String? action;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
     children: [
-      Container(
-        width: 7,
-        height: 7,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      ),
-      const SizedBox(width: 4),
-      Text(
-        label,
-        style: const TextStyle(
-          fontSize: 10,
-          color: FluviVisualTokens.textSecondary,
+      Expanded(
+        child: Text(
+          title,
+          style: const TextStyle(
+            color: _pulseInk,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
+      if (action != null) TextButton(onPressed: onTap, child: Text(action!)),
     ],
   );
 }
 
-class _SituationOverview extends StatelessWidget {
-  const _SituationOverview({
-    required this.situations,
-    required this.historical,
-    required this.priority,
-    required this.onOpen,
-    required this.onOpenAll,
-    required this.onOpenPriority,
-  });
-  final List<PulseSituationSnapshot> situations;
-  final bool historical;
-  final PulsePriorityFrame? priority;
-  final ValueChanged<PulseSituationSnapshot> onOpen;
-  final VoidCallback onOpenAll;
-  final VoidCallback onOpenPriority;
-
+class _PulseGroup extends StatelessWidget {
+  const _PulseGroup({required this.children});
+  final List<Widget> children;
   @override
-  Widget build(BuildContext context) {
-    final ready = situations
-        .where((item) => item.state == PulseSituationState.ready)
-        .toList(growable: false);
-    final forming = situations
-        .where((item) => item.state == PulseSituationState.forming)
-        .toList(growable: false);
-    final selected = priority?.selected;
-    final previews = [
-      ...ready.where((item) => item.situationKey != selected?.situationKey),
-      ...forming,
-    ].take(2).toList(growable: false);
-    final otherReady =
-        priority?.rankedCandidates
-            .where((candidate) => candidate.rank > 1)
-            .take(2)
-            .toList(growable: false) ??
-        const <PulsePriorityCandidate>[];
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: FluviVisualTokens.border),
-        boxShadow: FluviVisualTokens.cardSurfaceShadows,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Pénzügyi helyzetek',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
-                      ),
-                    ),
-                    SizedBox(height: 1),
-                    Text(
-                      'Triage áttekintés',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: FluviVisualTokens.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.account_tree_outlined,
-                color: FluviVisualTokens.textSecondary,
-              ),
-            ],
-          ),
-          if (historical)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text(
-                'Történeti kiértékelés',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: FluviVisualTokens.textSecondary,
-                ),
-              ),
-            ),
-          const SizedBox(height: 13),
-          Row(
-            children: [
-              _SituationCount(label: 'Kész helyzetek', value: ready.length),
-              const SizedBox(width: 10),
-              _SituationCount(
-                label: 'Alakuló helyzetek',
-                value: forming.length,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (selected != null) ...[
-            _PriorityFocusCard(
-              candidate: selected,
-              situation: _situationByKey(situations, selected.situationKey),
-              onTap: onOpenPriority,
-            ),
-            if (otherReady.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              const Text(
-                'További helyzetek',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-              ...otherReady.map(
-                (candidate) => _PriorityCompactRow(
-                  candidate: candidate,
-                  situation: _situationByKey(
-                    situations,
-                    candidate.situationKey,
-                  ),
-                  onTap: () {
-                    final situation = situations.firstWhere(
-                      (item) => item.situationKey == candidate.situationKey,
-                    );
-                    onOpen(situation);
-                  },
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-          ] else if (!historical) ...[
-            const _PriorityEmptyState(),
-            const SizedBox(height: 12),
-          ],
-          if (previews.isEmpty)
-            const Text(
-              'Jelenleg nincs kialakuló vagy kész pénzügyi helyzet.',
-              style: TextStyle(
-                fontSize: 12,
-                color: FluviVisualTokens.textSecondary,
-              ),
-            )
-          else
-            ...previews.map(
-              (situation) => Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: Material(
-                  color: const Color(0xFFF9F9FD),
-                  borderRadius: BorderRadius.circular(14),
-                  child: InkWell(
-                    key: ValueKey('pulse-situation-${situation.situationKey}'),
-                    onTap: () => onOpen(situation),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  situation.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                Text(
-                                  '${situation.independentEvidenceCount} független bizonyíték · ${situation.formationRule ?? 'feltétel még nem teljesült'}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: FluviVisualTokens.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            situation.state == PulseSituationState.ready
-                                ? 'Kész'
-                                : 'Alakuló',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right, size: 18),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          if (situations.length > 2)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: onOpenAll,
-                child: const Text('Összes helyzet'),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-PulseSituationSnapshot? _situationByKey(
-  List<PulseSituationSnapshot> situations,
-  String key,
-) {
-  for (final situation in situations) {
-    if (situation.situationKey == key) return situation;
-  }
-  return null;
-}
-
-class _PriorityFocusCard extends StatelessWidget {
-  const _PriorityFocusCard({
-    required this.candidate,
-    required this.situation,
-    required this.onTap,
-  });
-  final PulsePriorityCandidate candidate;
-  final PulseSituationSnapshot? situation;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: const Color(0xFFF7F6FD),
-    borderRadius: BorderRadius.circular(16),
-    child: InkWell(
-      key: const ValueKey('pulse-priority-focus'),
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Aktuális fókusz',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                Text(
-                  '1. hely',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: FluviVisualTokens.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 7),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    situation?.title ?? candidate.situationKey,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                Text(
-                  '${candidate.finalScore}',
-                  style: const TextStyle(
-                    fontSize: 29,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-            Text(
-              '/ 100 pont',
-              style: const TextStyle(
-                fontSize: 11,
-                color: FluviVisualTokens.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 7),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(5),
-              child: LinearProgressIndicator(
-                value: candidate.finalScore / 100,
-                minHeight: 7,
-                color: const Color(0xFF8B85B5),
-                backgroundColor: const Color(0xFFE7E5F0),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 5,
-              children: [
-                _PriorityPill('Alap ${candidate.basePriority}'),
-                ...candidate.modifiers
-                    .where((item) => item.applied)
-                    .map(
-                      (item) => _PriorityPill(
-                        '${_priorityModifierLabel(item.id)} +${item.value}',
-                      ),
-                    ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Miért ez az első?',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                Icon(Icons.chevron_right, size: 18),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _PriorityPill extends StatelessWidget {
-  const _PriorityPill(this.label);
-  final String label;
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+  Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x10334155),
+          blurRadius: 18,
+          offset: Offset(0, 6),
+        ),
+      ],
     ),
-    child: Text(
-      label,
-      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+    child: Column(
+      children: [
+        for (var index = 0; index < children.length; index++) ...[
+          if (index > 0)
+            const Divider(
+              height: 1,
+              indent: 65,
+              endIndent: 12,
+              color: _pulseLine,
+            ),
+          children[index],
+        ],
+      ],
     ),
   );
 }
 
-class _PriorityCompactRow extends StatelessWidget {
-  const _PriorityCompactRow({
-    required this.candidate,
-    required this.situation,
+class _PulseRow extends StatelessWidget {
+  const _PulseRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
     required this.onTap,
+    this.tall = false,
   });
-  final PulsePriorityCandidate candidate;
-  final PulseSituationSnapshot? situation;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget trailing;
   final VoidCallback onTap;
+  final bool tall;
   @override
   Widget build(BuildContext context) => Material(
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(18),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: tall ? 16 : 12),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${candidate.rank}.',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: _pulseIconSurface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 22, color: _pulseMuted),
             ),
-            const SizedBox(width: 7),
+            const SizedBox(width: 13),
             Expanded(
-              child: Text(
-                situation?.title ?? candidate.situationKey,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: _pulseInk,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: tall ? 3 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _pulseMuted,
+                        fontSize: 12.5,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            Text(
-              '${candidate.finalScore}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-            ),
-            const Icon(Icons.chevron_right, size: 17),
+            const SizedBox(width: 8),
+            Padding(padding: const EdgeInsets.only(top: 2), child: trailing),
           ],
         ),
       ),
     ),
-  );
-}
-
-class _PriorityEmptyState extends StatelessWidget {
-  const _PriorityEmptyState();
-  @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.symmetric(vertical: 4),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Nincs kiválasztott fókuszhelyzet.',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-        ),
-        SizedBox(height: 3),
-        Text(
-          'Jelenleg nincs olyan kész pénzügyi helyzet, amelyet a Priority Engine rangsorolhatna.',
-          style: TextStyle(
-            fontSize: 11,
-            color: FluviVisualTokens.textSecondary,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-String _priorityModifierLabel(String id) => switch (id) {
-  'material-impact' => 'Hatás',
-  'due-soon' => 'Esedékesség',
-  'independent-evidence' => 'Bizonyíték',
-  _ => id,
-};
-
-class _SituationCount extends StatelessWidget {
-  const _SituationCount({required this.label, required this.value});
-  final String label;
-  final int value;
-  @override
-  Widget build(BuildContext context) => Expanded(
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F4FC),
-        borderRadius: BorderRadius.circular(13),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: FluviVisualTokens.textSecondary,
-            ),
-          ),
-          Text(
-            '$value',
-            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _GroupRail extends StatelessWidget {
-  const _GroupRail({required this.group, required this.onChanged});
-  final PulseGroup group;
-  final ValueChanged<PulseGroup> onChanged;
-  @override
-  Widget build(BuildContext context) => Row(
-    children: PulseGroup.values
-        .map(
-          (candidate) => Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(
-                right: candidate == PulseGroup.systems ? 0 : 7,
-              ),
-              child: ChoiceChip(
-                key: ValueKey('pulse-group-${candidate.name}'),
-                label: Text(
-                  switch (candidate) {
-                    PulseGroup.spending => 'Költés',
-                    PulseGroup.cashflow => 'Cashflow',
-                    PulseGroup.systems => 'Rendszerek',
-                  },
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                selected: candidate == group,
-                onSelected: (_) => onChanged(candidate),
-              ),
-            ),
-          ),
-        )
-        .toList(growable: false),
-  );
-}
-
-class _IndicatorGrid extends StatelessWidget {
-  const _IndicatorGrid({required this.indicators, required this.onTap});
-  final List<PulseIndicatorSnapshot> indicators;
-  final ValueChanged<PulseIndicatorSnapshot> onTap;
-  @override
-  Widget build(BuildContext context) => SliverLayoutBuilder(
-    builder: (context, constraints) {
-      final columns = constraints.crossAxisExtent >= 840
-          ? 3
-          : constraints.crossAxisExtent >= 560
-          ? 2
-          : 1;
-      return SliverGrid(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) => PulseIndicatorCard(
-            indicator: indicators[index],
-            onTap: () => onTap(indicators[index]),
-          ),
-          childCount: indicators.length,
-        ),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          mainAxisExtent: 194,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-      );
-    },
   );
 }
 
 class _LoadingPanel extends StatelessWidget {
   const _LoadingPanel();
   @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.all(48),
+  Widget build(BuildContext context) => const SizedBox(
+    height: 180,
     child: Center(child: CircularProgressIndicator()),
   );
 }
 
 class _ErrorPanel extends StatelessWidget {
   const _ErrorPanel({required this.onRetry});
-  final Future<void> Function() onRetry;
+  final VoidCallback onRetry;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 48),
-    child: Column(
-      children: [
-        const Text(
-          'A Pulse adatai nem tölthetők be.',
-          textAlign: TextAlign.center,
+  Widget build(BuildContext context) => _PulseGroup(
+    children: [
+      _PulseRow(
+        icon: Icons.error_outline_rounded,
+        title: 'A Pulse adatai nem tölthetők be',
+        subtitle: 'Ellenőrizd a helyi adatokat, majd próbáld újra.',
+        trailing: TextButton(
+          onPressed: onRetry,
+          child: const Text('Újrapróbálás'),
         ),
-        const SizedBox(height: 10),
-        FilledButton(onPressed: onRetry, child: const Text('Újrapróbálás')),
-      ],
+        onTap: onRetry,
+        tall: true,
+      ),
+    ],
+  );
+}
+
+class _QuietEmpty extends StatelessWidget {
+  const _QuietEmpty({required this.text});
+  final String text;
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        text,
+        style: const TextStyle(color: _pulseMuted, fontSize: 13),
+      ),
     ),
   );
 }
@@ -1063,3 +897,34 @@ String _monthName(int month) => const [
   'november',
   'december',
 ][month - 1];
+
+String _groupLabel(PulseGroup group) => switch (group) {
+  PulseGroup.spending => 'Költések',
+  PulseGroup.cashflow => 'Pénzáramlás',
+  PulseGroup.systems => 'Rendszer és tervek',
+};
+
+String _stateLabel(PulseSituationState state) => switch (state) {
+  PulseSituationState.forming => 'Alakuló helyzet',
+  PulseSituationState.ready => 'Aktív helyzet',
+  PulseSituationState.improving => 'Javuló helyzet',
+  PulseSituationState.resolved => 'Lezárt helyzet',
+  PulseSituationState.suspended => 'Szüneteltetett helyzet',
+};
+
+IconData _situationIcon(PulseSituationState state) => switch (state) {
+  PulseSituationState.forming => Icons.hourglass_top_rounded,
+  PulseSituationState.ready => Icons.auto_awesome_outlined,
+  PulseSituationState.improving => Icons.trending_down_rounded,
+  PulseSituationState.resolved => Icons.check_circle_outline_rounded,
+  PulseSituationState.suspended => Icons.pause_circle_outline_rounded,
+};
+
+IconData _indicatorIcon(PulseChartKind kind) => switch (kind) {
+  PulseChartKind.arcGauge => Icons.speed_outlined,
+  PulseChartKind.thresholdBar => Icons.view_stream_outlined,
+  PulseChartKind.trend => Icons.show_chart_rounded,
+  PulseChartKind.forecast => Icons.timeline_outlined,
+  PulseChartKind.ratio => Icons.pie_chart_outline_rounded,
+  PulseChartKind.timeline => Icons.more_time_outlined,
+};

@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 
+import '../../design/fluvi_surface_fill.dart';
 import '../../../features/dashboard/application/balance_daily_calculation_mode.dart';
 import '../../../features/dashboard/application/dashboard_presentation_preferences.dart';
 import '../../../features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
@@ -244,6 +245,9 @@ final class MethodChannelDashboardPresentationPreferencesStore
           step: .05,
           fallback: 1.20,
         ),
+        brandSurfaceAppearance: FluviBrandSurfaceAppearance.decode(
+          values['brandSurfaceAppearanceJson'],
+        ),
       );
     } on PlatformException {
       return DashboardPresentationPreferences.defaults;
@@ -253,80 +257,82 @@ final class MethodChannelDashboardPresentationPreferencesStore
   }
 
   @override
-  Future<void> write(DashboardPresentationPreferences preferences) =>
-      _channel.invokeMethod<void>('writeDashboardPresentationSettings', <
-        String,
-        Object
-      >{
-        'sumVisualStyle': preferences.sumVisualStyle.index,
-        'showSumLayoutChooser': preferences.showSumLayoutChooser,
-        'yearGridLayout': preferences.yearGridLayout.index,
-        'yearMonthlyAmountPresentation':
-            preferences.yearMonthlyAmountPresentation.index,
-        'showDayContentViewChooser': preferences.showDayContentViewChooser,
-        'balanceDayLayoutPresentation':
-            preferences.balanceDayLayoutPresentation.index,
-        'balanceDayFocusedPresentation':
-            preferences.balanceDayFocusedPresentation.index,
-        'balanceDayPerformanceVisualPresentation':
-            preferences.balanceDayPerformanceVisualPresentation.index,
-        'balanceDayRatioViewPresentation':
-            preferences.balanceDayRatioViewPresentation.index,
-        'balanceDayRatioPresentation':
-            preferences.balanceDayRatioPresentation.index,
-        'balanceShowFocusedDayImpact': preferences.balanceShowFocusedDayImpact,
-        'balanceSumLayoutPresentation':
-            preferences.balanceSumLayoutPresentation.index,
-        'balanceSumFocusedPresentation':
-            preferences.balanceSumFocusedPresentation.index,
-        'balanceShowSumFocusedSupplementaryStats':
-            preferences.balanceShowSumFocusedSupplementaryStats,
-        'balanceMonthLayoutPresentation':
-            preferences.balanceMonthLayoutPresentation.index,
-        'balanceYearLayoutPresentation':
-            preferences.balanceYearLayoutPresentation.index,
-        'balanceDailyCalculationMode':
-            preferences.balanceDailyCalculationMode.index,
-        'balanceUsesChildCards': preferences.balanceUsesChildCards,
-        'balanceHeaderGraphPresentation':
-            preferences.balanceHeaderGraphPresentation.index,
-        'balanceMonthlySpendingChartPresentation':
-            preferences.balanceMonthlySpendingChartPresentation.index,
-        'balanceHeaderPartitionHeightPercent':
-            preferences.balanceHeaderPartitionHeightPercent,
-        'balanceMonthCombinedCardPresentation':
-            preferences.balanceMonthCombinedCardPresentation.index,
-        'balanceHeaderGlassConfigurationJson':
-            preferences.balanceHeaderGlassConfigurationJson,
-        'balanceHeaderPalette': preferences.balanceHeaderPalette.index,
-        'balanceHeaderPaletteVariant':
-            preferences.balanceHeaderPaletteVariant.index,
-        'balanceHeaderPalettePositionPercent': preferences
-            .balanceHeaderPalettePositionPercent
-            .round(),
-        'balanceHeaderPaletteWindowWidthPercent': preferences
-            .balanceHeaderPaletteWindowWidthPercent
-            .round(),
-        'ghostQuickFilterIconPack': preferences.ghostQuickFilterIconPack.index,
-        'ghostQuickFilterPresentation':
-            preferences.ghostQuickFilterPresentation.index,
-        'recurringUiDesign': preferences.recurringUiDesign.name,
-        'pushProfileUiDesign': preferences.pushProfileUiDesign.name,
-        'automationHomeUiDesign': preferences.automationHomeUiDesign.name,
-        'headerTapWaveTrailStrengthPercent': preferences
-            .headerTapWaveTrailStrengthPercent
-            .round(),
-        'headerTapWaveTapStartSizePercent': preferences
-            .headerTapWaveTapStartSizePercent
-            .round(),
-        'headerTapWaveTapStrengthPercent': preferences
-            .headerTapWaveTapStrengthPercent
-            .round(),
-        'headerTapWaveTapSpeedPercent': preferences.headerTapWaveTapSpeedPercent
-            .round(),
-        'headerTapWaveDragRippleLifetimeSeconds':
-            preferences.headerTapWaveDragRippleLifetimeSeconds,
-      });
+  Future<void> write(
+    DashboardPresentationPreferences preferences,
+  ) => _channel.invokeMethod<void>(
+    'writeDashboardPresentationSettings',
+    <String, Object>{
+      'sumVisualStyle': preferences.sumVisualStyle.index,
+      'showSumLayoutChooser': preferences.showSumLayoutChooser,
+      'yearGridLayout': preferences.yearGridLayout.index,
+      'yearMonthlyAmountPresentation':
+          preferences.yearMonthlyAmountPresentation.index,
+      'showDayContentViewChooser': preferences.showDayContentViewChooser,
+      'balanceDayLayoutPresentation':
+          preferences.balanceDayLayoutPresentation.index,
+      'balanceDayFocusedPresentation':
+          preferences.balanceDayFocusedPresentation.index,
+      'balanceDayPerformanceVisualPresentation':
+          preferences.balanceDayPerformanceVisualPresentation.index,
+      'balanceDayRatioViewPresentation':
+          preferences.balanceDayRatioViewPresentation.index,
+      'balanceDayRatioPresentation':
+          preferences.balanceDayRatioPresentation.index,
+      'balanceShowFocusedDayImpact': preferences.balanceShowFocusedDayImpact,
+      'balanceSumLayoutPresentation':
+          preferences.balanceSumLayoutPresentation.index,
+      'balanceSumFocusedPresentation':
+          preferences.balanceSumFocusedPresentation.index,
+      'balanceShowSumFocusedSupplementaryStats':
+          preferences.balanceShowSumFocusedSupplementaryStats,
+      'balanceMonthLayoutPresentation':
+          preferences.balanceMonthLayoutPresentation.index,
+      'balanceYearLayoutPresentation':
+          preferences.balanceYearLayoutPresentation.index,
+      'balanceDailyCalculationMode':
+          preferences.balanceDailyCalculationMode.index,
+      'balanceUsesChildCards': preferences.balanceUsesChildCards,
+      'balanceHeaderGraphPresentation':
+          preferences.balanceHeaderGraphPresentation.index,
+      'balanceMonthlySpendingChartPresentation':
+          preferences.balanceMonthlySpendingChartPresentation.index,
+      'balanceHeaderPartitionHeightPercent':
+          preferences.balanceHeaderPartitionHeightPercent,
+      'balanceMonthCombinedCardPresentation':
+          preferences.balanceMonthCombinedCardPresentation.index,
+      'balanceHeaderGlassConfigurationJson':
+          preferences.balanceHeaderGlassConfigurationJson,
+      'balanceHeaderPalette': preferences.balanceHeaderPalette.index,
+      'balanceHeaderPaletteVariant':
+          preferences.balanceHeaderPaletteVariant.index,
+      'balanceHeaderPalettePositionPercent': preferences
+          .balanceHeaderPalettePositionPercent
+          .round(),
+      'balanceHeaderPaletteWindowWidthPercent': preferences
+          .balanceHeaderPaletteWindowWidthPercent
+          .round(),
+      'ghostQuickFilterIconPack': preferences.ghostQuickFilterIconPack.index,
+      'ghostQuickFilterPresentation':
+          preferences.ghostQuickFilterPresentation.index,
+      'recurringUiDesign': preferences.recurringUiDesign.name,
+      'pushProfileUiDesign': preferences.pushProfileUiDesign.name,
+      'automationHomeUiDesign': preferences.automationHomeUiDesign.name,
+      'headerTapWaveTrailStrengthPercent': preferences
+          .headerTapWaveTrailStrengthPercent
+          .round(),
+      'headerTapWaveTapStartSizePercent': preferences
+          .headerTapWaveTapStartSizePercent
+          .round(),
+      'headerTapWaveTapStrengthPercent': preferences
+          .headerTapWaveTapStrengthPercent
+          .round(),
+      'headerTapWaveTapSpeedPercent': preferences.headerTapWaveTapSpeedPercent
+          .round(),
+      'headerTapWaveDragRippleLifetimeSeconds':
+          preferences.headerTapWaveDragRippleLifetimeSeconds,
+      'brandSurfaceAppearanceJson': preferences.brandSurfaceAppearance.encode(),
+    },
+  );
 }
 
 double _steppedPercent(

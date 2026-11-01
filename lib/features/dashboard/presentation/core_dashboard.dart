@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
@@ -13,6 +14,7 @@ import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
+import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/design/dashboard_geometry_resolver.dart';
 import '../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../core/design/fluvi_global_appearance.dart';
@@ -80,6 +82,7 @@ import 'widgets/dashboard_logbox_viewport.dart';
 import 'widgets/dashboard_render_phase_probe.dart';
 import 'widgets/dashboard_render_diagnostic_probe.dart';
 import 'widgets/summary_pill_experiments.dart';
+import 'widgets/fluvi_brand_editor_sheet.dart';
 import 'widgets/fluvi_brand_lockup.dart';
 import 'widgets/transaction_direction_toggle.dart';
 import '../../pulse/application/pulse_delivery_coordinator.dart';
@@ -198,6 +201,8 @@ class _CoreDashboardState extends State<CoreDashboard>
   bool _mindAmountInteractionActive = false;
   int? _lastLayerStackDiagnosticSignature;
   late FluviGlobalAppearance _globalAppearance;
+  bool _brandEditorOpen = false;
+  bool _brandAppearancePreviewActive = false;
   double _mindModeContentExtraHeight = 0;
   DashboardCoreController get controller => widget.controller;
   DashboardCoreModeController get modeController => widget.modeController;
@@ -551,6 +556,36 @@ class _CoreDashboardState extends State<CoreDashboard>
     }
   }
 
+  void _openBrandEditor() {
+    if (_brandEditorOpen || !mounted) return;
+    _brandEditorOpen = true;
+    HapticFeedback.selectionClick();
+    unawaited(
+      showFluviBrandEditorSheet(
+        context: context,
+        appearance: _globalAppearance.brandSurfaceAppearance,
+        onChanged: (next, {required bool persist}) {
+          _brandAppearancePreviewActive = !persist;
+          _headerVisualController.setBrandSurfaceAppearance(next);
+          // A Slider's final callback can carry the exact same material as
+          // its final live preview, so it may not publish a second notifier
+          // update. Persist explicitly at that semantic commit boundary.
+          if (persist) _persistDashboardPresentationPreferences();
+        },
+      ).whenComplete(() {
+        if (!mounted) return;
+        _brandEditorOpen = false;
+        // Covers an interrupted drag/dismiss path where Slider cannot deliver
+        // its final semantic change callback. The visible material has
+        // already been applied, so closing must never roll it back.
+        if (_brandAppearancePreviewActive) {
+          _brandAppearancePreviewActive = false;
+          _persistDashboardPresentationPreferences();
+        }
+      }),
+    );
+  }
+
   void _applyDashboardPresentationPreferences() {
     if (!mounted) return;
     final restored = _dashboardPresentationPreferences.value;
@@ -614,6 +649,9 @@ class _CoreDashboardState extends State<CoreDashboard>
         tapSpeedPercent: restored.headerTapWaveTapSpeedPercent,
         dragRippleLifetimeSeconds:
             restored.headerTapWaveDragRippleLifetimeSeconds,
+      );
+      _headerVisualController.setBrandSurfaceAppearance(
+        restored.brandSurfaceAppearance,
       );
     } finally {
       _applyingDashboardPresentationPreferences = false;
@@ -710,6 +748,11 @@ class _CoreDashboardState extends State<CoreDashboard>
             .tapWaveTuning
             .value
             .valueFor(DashboardHeaderTapWaveCatalog.dragRippleLifetimeId),
+        brandSurfaceAppearance: _headerVisualController
+            .tuning
+            .value
+            .globalAppearance
+            .brandSurfaceAppearance,
       ),
     );
   }
@@ -727,7 +770,11 @@ class _CoreDashboardState extends State<CoreDashboard>
   /// dashboard preference store owns persistence. This listener intentionally
   /// observes only semantic tuning publications, never the shared paint clock.
   void _persistBalanceHeaderColorPreferences() {
-    if (_applyingDashboardPresentationPreferences || !mounted) return;
+    if (_applyingDashboardPresentationPreferences ||
+        _brandAppearancePreviewActive ||
+        !mounted) {
+      return;
+    }
     _persistDashboardPresentationPreferences();
   }
 
@@ -1190,9 +1237,14 @@ class _CoreDashboardState extends State<CoreDashboard>
                         controller: _cornerRoundnessController,
                         child: DashboardRenderPhaseProbe(
                           counters: controller.performanceCounters,
-                          child: ColoredBox(
+                          child: DecoratedBox(
                             key: const ValueKey('core-dashboard'),
-                            color: frame.palette.pageBackground,
+                            decoration: BoxDecoration(
+                              gradient: _globalAppearance
+                                  .brandSurfaceAppearance
+                                  .pageBackground
+                                  .gradient(),
+                            ),
                             child: Padding(
                               key: const ValueKey('dashboard-content-inset'),
                               padding: EdgeInsets.only(top: contentTopPadding),
@@ -1205,10 +1257,18 @@ class _CoreDashboardState extends State<CoreDashboard>
                                     fit: StackFit.expand,
                                     clipBehavior: Clip.none,
                                     children: [
+                                      // The decorative lockup stays under the
+                                      // header's complete hit target.  Its
+                                      // editor affordance is added as the
+                                      // exact mark-sized overlay below, so
+                                      // inert wordmark pixels cannot steal
+                                      // header swipes or taps.
                                       _FramePosition(
                                         bounds: geometry.brandLockupBounds,
                                         child: FluviBrandLockup(
                                           bounds: geometry.brandLockupBounds,
+                                          appearance: _globalAppearance
+                                              .brandSurfaceAppearance,
                                         ),
                                       ),
                                       DashboardCoreModeHost(
@@ -1386,6 +1446,15 @@ class _CoreDashboardState extends State<CoreDashboard>
                                         onOpenPulse: widget.onOpenPulse,
                                         onHeaderInteractionChanged:
                                             widget.onHeaderInteractionChanged,
+                                      ),
+                                      Positioned(
+                                        left: geometry.brandLockupBounds.left,
+                                        top: geometry.brandLockupBounds.top,
+                                        width: FluviVisualTokens.brandMarkSize,
+                                        height: FluviVisualTokens.brandMarkSize,
+                                        child: FluviBrandEditorTapTarget(
+                                          onActivate: _openBrandEditor,
+                                        ),
                                       ),
                                       _FramePosition(
                                         bounds: geometry.actionBounds,

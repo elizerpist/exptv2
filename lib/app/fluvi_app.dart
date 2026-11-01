@@ -4,6 +4,7 @@ import '../core/categories/domain/category_repository.dart';
 import '../core/financial_limits/domain/financial_limit_repository.dart';
 import '../core/design/dashboard_mode_palette.dart';
 import '../features/dashboard/query/domain/ledger_direction.dart';
+import '../features/dashboard/application/dashboard_presentation_preferences.dart';
 import '../features/dashboard/presentation/dashboard_shell_presentation.dart';
 import '../features/dashboard/query/data/query_menu_repository.dart';
 import '../features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
@@ -22,6 +23,7 @@ class FluviApp extends StatelessWidget {
     this.initialRailOpen = false,
     this.initialDirection = LedgerDirection.income,
     this.shellPresentation,
+    this.initialDashboardPresentationPreferences,
   });
 
   final DashboardDataRuntimeRepository? dashboardRepository;
@@ -36,6 +38,8 @@ class FluviApp extends StatelessWidget {
   /// Optional explicit shell presentation owner for an embedding host. The
   /// normal application shell retains its session-local owner when omitted.
   final DashboardShellPresentationController? shellPresentation;
+  final DashboardPresentationPreferences?
+  initialDashboardPresentationPreferences;
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +56,8 @@ class FluviApp extends StatelessWidget {
         initialRailOpen: initialRailOpen,
         initialDirection: initialDirection,
         shellPresentation: shellPresentation,
+        initialDashboardPresentationPreferences:
+            initialDashboardPresentationPreferences,
       ),
     );
   }

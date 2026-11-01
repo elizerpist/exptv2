@@ -1,0 +1,106 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
+import '../../../../core/assets/prepared_vector_asset_atlas.dart';
+import '../../../../core/design/fluvi_surface_fill.dart';
+
+/// Renders the existing four-path Fluvi asset with the one shared brand fill
+/// model. The unchanged default stays on the supplied vector asset (or its
+/// prepared atlas); personalised fills use the generated four-path document
+/// below so a custom gradient boundary changes the rendered logo as well.
+final class FluviBrandMark extends StatelessWidget {
+  const FluviBrandMark({
+    super.key,
+    required this.appearance,
+    required this.width,
+    required this.height,
+    this.fit = BoxFit.contain,
+    this.preferPreparedAsset = true,
+  });
+
+  final FluviBrandSurfaceAppearance appearance;
+  final double width;
+  final double height;
+  final BoxFit fit;
+  final bool preferPreparedAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    final atlas = PreparedVectorAssetAtlas.instance;
+    if (appearance.hasDefaultLogoFills &&
+        preferPreparedAsset &&
+        atlas.isReady) {
+      return PreparedVectorPictureView(
+        key: const ValueKey('fluvi-brand-mark-default-vector'),
+        picture: atlas.picture(PreparedVectorAssetAtlas.brandMarkHandle),
+        width: width,
+        height: height,
+      );
+    }
+    if (appearance.hasDefaultLogoFills) {
+      return RepaintBoundary(
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: SvgPicture.asset(
+            'assets/fluvi/brand/fluvi_mark.svg',
+            key: const ValueKey('fluvi-brand-mark-default-svg'),
+            fit: fit,
+            excludeFromSemantics: true,
+          ),
+        ),
+      );
+    }
+    return RepaintBoundary(
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: SvgPicture.string(
+          _FluviBrandMarkSvg.document(appearance),
+          key: ValueKey('fluvi-brand-mark-custom-${appearance.hashCode}'),
+          fit: fit,
+          excludeFromSemantics: true,
+        ),
+      ),
+    );
+  }
+}
+
+/// A generated copy of the supplied four-path asset for personalised fills.
+/// The default deliberately stays on the prepared original asset above.  This
+/// document preserves its user-space gradient axes and its two detail paths,
+/// while the middle stop belongs to the shared fill model, so the custom
+/// boundary slider changes the actual mark rather than only its swatch.
+abstract final class _FluviBrandMarkSvg {
+  static const _top =
+      'M827.071 222.566C867.441 220.307 905.996 216.764 944.661 203.669C957.62 199.28 970.011 194.564 982.738 189.482C1032.96 169.429 1027.14 223.139 1021.63 254.053C1013.22 302.705 990.869 347.868 957.282 384.055C905.742 439.828 832.643 464.519 758.23 466.522C737.783 467.072 716.642 466.722 696.142 466.807C689.224 466.836 669.456 467.365 663.975 466.645C643.142 467.841 621.912 466.703 601.016 467.191C496.938 469.62 396.477 514.156 346.889 609.766C342.21 618.799 338.009 628.073 334.304 637.548C332.622 641.835 330.96 650.719 326.684 652.483C322.056 650.621 318.313 634.88 317.096 630.312C308.28 598.465 303.085 565.725 301.608 532.713C297.765 450.971 319.169 379.589 374.653 318.029C426.719 260.263 498.035 230.539 574.659 224.087C600.086 221.947 624.115 222.772 649.611 222.719L776.282 222.621C791.351 222.554 812.598 223.237 827.071 222.566Z';
+  static const _topDetail =
+      'M827.071 222.566C867.441 220.307 905.996 216.764 944.661 203.669C957.62 199.28 970.011 194.564 982.738 189.482C1032.96 169.429 1027.14 223.139 1021.63 254.053C1013.22 302.705 990.869 347.868 957.282 384.055C905.742 439.828 832.643 464.519 758.23 466.522C737.783 467.072 716.642 466.722 696.142 466.807C689.224 466.836 669.456 467.365 663.975 466.645L664.362 466.257C671.682 465.063 674.321 454.639 678.966 449.776C688.052 440.263 695.473 426.841 702.984 415.746C719.083 392.459 735.001 369.047 750.737 345.512L807.33 262.485C816.42 249.392 824.717 239.117 834.04 225.12C832.02 223.824 829.673 224.305 827.071 222.566Z';
+  static const _bottom =
+      'M580.957 555.501C603.481 553.186 630.781 553.787 653.518 554.109C701.647 554.791 746.678 555.63 794.311 547.189C799.266 546.356 804.173 545.262 809.013 543.911C818.088 541.424 838.136 533.957 846.033 540.025C850.888 543.755 853.158 551.617 853.548 557.551C856.125 596.749 835.773 643.253 811.602 672.83C779.765 712.316 731.261 737.425 681.478 744.904C641.619 750.892 603.748 751.765 569.908 777.151C517.459 816.497 507.336 882.348 486.57 939.828C472.448 978.917 446.102 1017.96 412.628 1042.65C397.595 1053.67 379.751 1064.51 360.909 1066.83C351.041 1068.04 336.822 1064.8 336.289 1052.69C335.786 1041.28 339.522 1029.86 341.266 1018.58C343.876 1001.71 344.547 984.607 343.264 967.592C340.884 938.185 332.307 916.114 324.361 888.398C310.428 839.801 314.598 776.353 334.576 729.683C335.301 726.885 339.781 716.897 341.125 714.025C353.979 686.522 371.316 661.346 392.426 639.528C433.799 596.846 487.893 568.728 546.598 559.388C556.274 557.767 571.169 555.686 580.957 555.501Z';
+  static const _bottomDetail =
+      'M334.576 729.683C335.301 726.885 339.781 716.897 341.125 714.025C353.979 686.522 371.316 661.346 392.426 639.528C433.799 596.846 487.893 568.728 546.598 559.388C556.274 557.767 571.169 555.686 580.957 555.501C583.893 556.081 585.767 555.788 588.154 557.616C588.444 558.321 589.022 559.042 588.481 559.65C585.34 563.178 580.389 567.405 576.498 570.111C504.942 619.865 433.748 670.148 362.1 719.769C352.689 726.286 342.86 731.067 333.397 737.213C333.562 733.668 335.244 733.57 334.576 729.683Z';
+
+  static String document(FluviBrandSurfaceAppearance appearance) {
+    final top = appearance.logoTop;
+    final bottom = appearance.logoBottom;
+    return '''<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254"><defs>
+${_gradient('top-main', '383.18964', '302.21951', '653.67139', '488.26709', top)}
+${_gradient('top-detail', '947.67224', '400.28369', '786.27338', '290.30493', top)}
+${_gradient('bottom-main', '646.13593', '875.57263', '476.02341', '635.0304', bottom)}
+</defs><path fill="url(#top-main)" d="$_top"/><path fill="url(#top-detail)" d="$_topDetail"/><path fill="url(#bottom-main)" d="$_bottom"/><path fill="${_hex(bottom.effectiveMiddle)}" d="$_bottomDetail"/></svg>''';
+  }
+
+  static String _gradient(
+    String id,
+    String x1,
+    String y1,
+    String x2,
+    String y2,
+    FluviSurfaceFill fill,
+  ) =>
+      '<linearGradient id="$id" gradientUnits="userSpaceOnUse" x1="$x1" y1="$y1" x2="$x2" y2="$y2"><stop offset="0%" stop-color="${_hex(fill.left)}"/><stop offset="${fill.boundaryPercent}%" stop-color="${_hex(fill.effectiveMiddle)}"/><stop offset="100%" stop-color="${_hex(fill.right)}"/></linearGradient>';
+
+  static String _hex(Color color) =>
+      '#${(color.toARGB32() & 0x00ffffff).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+}

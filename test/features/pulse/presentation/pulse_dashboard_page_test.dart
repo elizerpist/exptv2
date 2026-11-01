@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('Pulse situation overview opens the typed Triage Inspector', (
+  testWidgets('Pulse overview opens the highlighted situation directly', (
     tester,
   ) async {
     final situation = _situation();
@@ -22,7 +22,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Pénzügyi helyzetek'), findsOneWidget);
+    expect(find.text('Kiemelt helyzet'), findsOneWidget);
     final situationCard = find.byKey(
       const ValueKey('pulse-situation-monthly-budget/2026-10'),
     );
@@ -34,7 +34,7 @@ void main() {
     expect(find.text('Helyzetképzési szabályok'), findsOneWidget);
   });
 
-  testWidgets('native Priority focus opens the Priority Inspector', (
+  testWidgets('priority selects one situation without exposing its score', (
     tester,
   ) async {
     final situation = _situation();
@@ -51,25 +51,16 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final focus = find.byKey(const ValueKey('pulse-priority-focus'));
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
-    await tester.pumpAndSettle();
-    await tester.tap(focus);
-    await tester.pumpAndSettle();
-    expect(find.text('Fontossági sorrend'), findsOneWidget);
-    expect(find.text('Pontszám részletezése'), findsOneWidget);
+    expect(find.text('Kiemelt helyzet'), findsOneWidget);
+    expect(find.text(situation.title), findsOneWidget);
+    expect(find.text('/ 100 pont'), findsNothing);
+    expect(find.text('Alap + Hatás + Bizonyíték'), findsNothing);
   });
 
-  testWidgets('native Story preview opens its Copy Map inspector', (
+  testWidgets('Pulse metrics has one local searchable list across all groups', (
     tester,
   ) async {
-    final situation = _situation();
-    final repository = _Repository(
-      _snapshot(
-        situations: [situation],
-        priority: _priority(situation.situationKey),
-      ),
-    );
+    final repository = _Repository(_snapshot());
     await tester.pumpWidget(
       MaterialApp(
         home: PulseDashboardPage(
@@ -79,21 +70,25 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -360));
+    await tester.tap(find.text('Mutatók'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('pulse-priority-focus')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Üzenet előnézete'), findsOneWidget);
-    expect(find.text('A hónap végére túllépheted a kereted.'), findsOneWidget);
-    await tester.tap(find.text('Üzenet előnézete'));
-    await tester.pumpAndSettle();
-    expect(find.text('Story Inspector'), findsOneWidget);
-    expect(find.text('Mondatrészek és források'), findsOneWidget);
+    expect(find.text('Költések'), findsOneWidget);
+    expect(find.text('Pénzáramlás'), findsOneWidget);
+    expect(find.text('Rendszer és tervek'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('pulse-indicator-search')),
+      'Költési ütem',
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('pulse-indicator-PULSE-003')),
+      findsOneWidget,
+    );
+    expect(find.text('Pénzáramlás'), findsNothing);
   });
 
   testWidgets(
-    'Pulse renders seven cards per group and persists a detail threshold only on save',
+    'Pulse opens a compact metric detail and persists a threshold only on save',
     (tester) async {
       final repository = _Repository(_snapshot());
       await tester.pumpWidget(
@@ -107,66 +102,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Pulse'), findsOneWidget);
-      expect(find.byKey(const ValueKey('pulse-card-PULSE-008')), findsNothing);
-      final scrollable = find.byType(Scrollable);
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('pulse-card-PULSE-001')),
-        240,
-        scrollable: scrollable,
-      );
-      expect(
-        find.byKey(const ValueKey('pulse-card-PULSE-001')),
-        findsOneWidget,
-      );
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('pulse-card-PULSE-007')),
-        240,
-        scrollable: scrollable,
-      );
-      expect(
-        find.byKey(const ValueKey('pulse-card-PULSE-007')),
-        findsOneWidget,
-      );
-
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('pulse-group-cashflow')),
-        -240,
-        scrollable: scrollable,
-      );
-      await tester.tap(find.byKey(const ValueKey('pulse-group-cashflow')));
+      await tester.tap(find.text('Mutatók'));
       await tester.pump();
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('pulse-card-PULSE-008')),
-        240,
-        scrollable: scrollable,
-      );
-      expect(
-        find.byKey(const ValueKey('pulse-card-PULSE-008')),
-        findsOneWidget,
-      );
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('pulse-card-PULSE-014')),
-        240,
-        scrollable: scrollable,
-      );
-      expect(
-        find.byKey(const ValueKey('pulse-card-PULSE-014')),
-        findsOneWidget,
-      );
-
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('pulse-group-spending')),
-        -240,
-        scrollable: scrollable,
-      );
-      await tester.tap(find.byKey(const ValueKey('pulse-group-spending')));
-      await tester.pump();
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('pulse-card-PULSE-003')),
-        240,
-        scrollable: scrollable,
-      );
-      await tester.tap(find.byKey(const ValueKey('pulse-card-PULSE-003')));
+      final target = find.byKey(const ValueKey('pulse-indicator-PULSE-003'));
+      await tester.ensureVisible(target);
+      await tester.tap(target);
       await tester.pumpAndSettle();
       expect(find.text('Költési ütem'), findsWidgets);
       expect(find.text('Triggerpontok'), findsOneWidget);

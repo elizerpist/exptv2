@@ -4,9 +4,11 @@ import '../domain/pulse_models.dart';
 import '../domain/pulse_repository.dart';
 
 final class PulseDashboardController extends ChangeNotifier {
-  PulseDashboardController({required PulseRepository repository, DateTime? initialDate})
-    : _repository = repository,
-      _scope = initialDate ?? DateTime.now();
+  PulseDashboardController({
+    required PulseRepository repository,
+    DateTime? initialDate,
+  }) : _repository = repository,
+       _scope = initialDate ?? DateTime.now();
 
   final PulseRepository _repository;
   DateTime _scope;
@@ -21,6 +23,11 @@ final class PulseDashboardController extends ChangeNotifier {
   PulseDashboardSnapshot? get snapshot => _snapshot;
   Object? get error => _error;
   bool get loading => _loading;
+
+  /// A snapshot belongs to the month it was requested for.  The view must not
+  /// silently render an older month while a different scope is loading.
+  bool get hasSnapshotForScope =>
+      _snapshot?.year == _scope.year && _snapshot?.month == _scope.month;
 
   Future<void> load() async {
     final request = ++_request;

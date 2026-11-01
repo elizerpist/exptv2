@@ -136,11 +136,16 @@ class PulseTriageInspectorPage extends StatefulWidget {
     required this.scope,
     required this.situation,
     required this.indicators,
+    this.initialStory,
   });
   final PulseRepository repository;
   final DateTime scope;
   final PulseSituationSnapshot situation;
   final List<PulseIndicatorSnapshot> indicators;
+
+  /// Immutable copy from the Header reservation. It remains the first visible
+  /// copy even when a newer priority snapshot arrives in the background.
+  final PulseStoryDraft? initialStory;
 
   @override
   State<PulseTriageInspectorPage> createState() =>
@@ -214,7 +219,7 @@ class _PulseTriageInspectorPageState extends State<PulseTriageInspectorPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(situation.title),
+            Text(widget.initialStory?.headline ?? situation.title),
             Text(situation.periodKey, style: const TextStyle(fontSize: 12)),
           ],
         ),
@@ -238,6 +243,10 @@ class _PulseTriageInspectorPageState extends State<PulseTriageInspectorPage> {
               restorationId: 'triage-${situation.situationKey}',
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               children: [
+                if (widget.initialStory case final story?) ...[
+                  _HeaderStoryPanel(story: story),
+                  const SizedBox(height: 18),
+                ],
                 if (situation.historicalInspection) const _HistoricalNotice(),
                 _SummaryPanel(situation: situation),
                 const SizedBox(height: 18),
@@ -314,6 +323,48 @@ class _PulseTriageInspectorPageState extends State<PulseTriageInspectorPage> {
       ),
     );
   }
+}
+
+/// The Header reservation is display data, not a fresh Dart-side financial
+/// claim. Keeping it in this small panel preserves the immutable visible copy
+/// that initiated navigation while the inspection below refreshes normally.
+class _HeaderStoryPanel extends StatelessWidget {
+  const _HeaderStoryPanel({required this.story});
+  final PulseStoryDraft story;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: _surface(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'KIEMELT HELYZET',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+            letterSpacing: .6,
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          story.headline,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+        if (story.detail case final detail?) ...[
+          const SizedBox(height: 5),
+          Text(
+            detail,
+            style: const TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 class _SummaryPanel extends StatelessWidget {

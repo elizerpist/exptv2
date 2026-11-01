@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'dashboard_mode_palette.dart';
+import 'fluvi_surface_fill.dart';
 
 /// One session-lifetime user choice for the active income/expense treatment.
 enum FluviDirectionColorProfile { original, pastel, saturated, vivid }
@@ -168,6 +169,7 @@ final class FluviGlobalAppearance {
     this.showsHeaderModeLabelAboveValue = false,
     this.mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.seamlessCard,
     this.budgetAvatarContentStyle = BudgetAvatarContentStyle.separate,
+    this.brandSurfaceAppearance = FluviBrandSurfaceAppearance.defaults,
   });
 
   const FluviGlobalAppearance.defaults()
@@ -184,7 +186,8 @@ final class FluviGlobalAppearance {
       inactiveDirectionLabelTone = FluviInactiveDirectionLabelTone.softenedGray,
       showsHeaderModeLabelAboveValue = false,
       mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.seamlessCard,
-      budgetAvatarContentStyle = BudgetAvatarContentStyle.separate;
+      budgetAvatarContentStyle = BudgetAvatarContentStyle.separate,
+      brandSurfaceAppearance = FluviBrandSurfaceAppearance.defaults;
 
   final FluviDirectionColorProfile directionColorProfile;
   final CategoryAvatarColorProfile avatarColorProfile;
@@ -204,6 +207,11 @@ final class FluviGlobalAppearance {
   final MindExpandedSurfaceStyle mindExpandedSurfaceStyle;
   final BudgetAvatarContentStyle budgetAvatarContentStyle;
 
+  /// The editable Fluvi mark, page and bottom-navigation materials.  It is a
+  /// value model shared by the logo editor, shell painters and startup splash;
+  /// no renderer keeps its own mutable copy.
+  final FluviBrandSurfaceAppearance brandSurfaceAppearance;
+
   FluviGlobalAppearance copyWith({
     FluviDirectionColorProfile? directionColorProfile,
     CategoryAvatarColorProfile? avatarColorProfile,
@@ -219,6 +227,7 @@ final class FluviGlobalAppearance {
     bool? showsHeaderModeLabelAboveValue,
     MindExpandedSurfaceStyle? mindExpandedSurfaceStyle,
     BudgetAvatarContentStyle? budgetAvatarContentStyle,
+    FluviBrandSurfaceAppearance? brandSurfaceAppearance,
   }) => FluviGlobalAppearance(
     directionColorProfile: directionColorProfile ?? this.directionColorProfile,
     avatarColorProfile: avatarColorProfile ?? this.avatarColorProfile,
@@ -240,6 +249,8 @@ final class FluviGlobalAppearance {
         mindExpandedSurfaceStyle ?? this.mindExpandedSurfaceStyle,
     budgetAvatarContentStyle:
         budgetAvatarContentStyle ?? this.budgetAvatarContentStyle,
+    brandSurfaceAppearance:
+        brandSurfaceAppearance ?? this.brandSurfaceAppearance,
   );
 
   @override
@@ -258,7 +269,8 @@ final class FluviGlobalAppearance {
       inactiveDirectionLabelTone == other.inactiveDirectionLabelTone &&
       showsHeaderModeLabelAboveValue == other.showsHeaderModeLabelAboveValue &&
       mindExpandedSurfaceStyle == other.mindExpandedSurfaceStyle &&
-      budgetAvatarContentStyle == other.budgetAvatarContentStyle;
+      budgetAvatarContentStyle == other.budgetAvatarContentStyle &&
+      brandSurfaceAppearance == other.brandSurfaceAppearance;
 
   @override
   int get hashCode => Object.hash(
@@ -276,6 +288,7 @@ final class FluviGlobalAppearance {
     showsHeaderModeLabelAboveValue,
     mindExpandedSurfaceStyle,
     budgetAvatarContentStyle,
+    brandSurfaceAppearance,
   );
 }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/design/fluvi_surface_fill.dart';
 import 'balance_daily_calculation_mode.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../presentation/core_modes/balance_presentation_settings.dart';
@@ -85,6 +86,7 @@ final class DashboardPresentationPreferences {
     this.headerTapWaveTapStrengthPercent = 75,
     this.headerTapWaveTapSpeedPercent = 100,
     this.headerTapWaveDragRippleLifetimeSeconds = 1.20,
+    this.brandSurfaceAppearance = FluviBrandSurfaceAppearance.defaults,
   });
 
   final MindSumVisualStyle sumVisualStyle;
@@ -130,6 +132,11 @@ final class DashboardPresentationPreferences {
   final double headerTapWaveTapSpeedPercent;
   final double headerTapWaveDragRippleLifetimeSeconds;
 
+  /// Value-only user material shared by the editable mark, page and bottom
+  /// navigation. It lives with other presentation preferences so a change to
+  /// any unrelated preference cannot reset the applied fills.
+  final FluviBrandSurfaceAppearance brandSurfaceAppearance;
+
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.sumA,
     showSumLayoutChooser: true,
@@ -164,6 +171,7 @@ final class DashboardPresentationPreferences {
     headerTapWaveTapStrengthPercent: 75,
     headerTapWaveTapSpeedPercent: 100,
     headerTapWaveDragRippleLifetimeSeconds: 1.20,
+    brandSurfaceAppearance: FluviBrandSurfaceAppearance.defaults,
   );
 
   @override
@@ -218,7 +226,8 @@ final class DashboardPresentationPreferences {
           headerTapWaveTapStrengthPercent &&
       other.headerTapWaveTapSpeedPercent == headerTapWaveTapSpeedPercent &&
       other.headerTapWaveDragRippleLifetimeSeconds ==
-          headerTapWaveDragRippleLifetimeSeconds;
+          headerTapWaveDragRippleLifetimeSeconds &&
+      other.brandSurfaceAppearance == brandSurfaceAppearance;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -259,6 +268,7 @@ final class DashboardPresentationPreferences {
     headerTapWaveTapStrengthPercent,
     headerTapWaveTapSpeedPercent,
     headerTapWaveDragRippleLifetimeSeconds,
+    brandSurfaceAppearance,
   ]);
 
   DashboardPresentationPreferences withGhostQuickFilterIconPack(
@@ -306,6 +316,7 @@ final class DashboardPresentationPreferences {
     headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
     headerTapWaveDragRippleLifetimeSeconds:
         headerTapWaveDragRippleLifetimeSeconds,
+    brandSurfaceAppearance: brandSurfaceAppearance,
   );
 
   DashboardPresentationPreferences withGhostQuickFilterPresentation(
@@ -353,6 +364,7 @@ final class DashboardPresentationPreferences {
     headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
     headerTapWaveDragRippleLifetimeSeconds:
         headerTapWaveDragRippleLifetimeSeconds,
+    brandSurfaceAppearance: brandSurfaceAppearance,
   );
 
   DashboardPresentationPreferences withRecurringUiDesign(
@@ -400,6 +412,7 @@ final class DashboardPresentationPreferences {
     headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
     headerTapWaveDragRippleLifetimeSeconds:
         headerTapWaveDragRippleLifetimeSeconds,
+    brandSurfaceAppearance: brandSurfaceAppearance,
   );
 
   DashboardPresentationPreferences withPushProfileUiDesign(
@@ -447,6 +460,7 @@ final class DashboardPresentationPreferences {
     headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
     headerTapWaveDragRippleLifetimeSeconds:
         headerTapWaveDragRippleLifetimeSeconds,
+    brandSurfaceAppearance: brandSurfaceAppearance,
   );
 
   DashboardPresentationPreferences withAutomationHomeUiDesign(
@@ -494,6 +508,7 @@ final class DashboardPresentationPreferences {
     headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
     headerTapWaveDragRippleLifetimeSeconds:
         headerTapWaveDragRippleLifetimeSeconds,
+    brandSurfaceAppearance: brandSurfaceAppearance,
   );
 
   DashboardPresentationPreferences withHeaderTapWaveControls({
@@ -546,6 +561,55 @@ final class DashboardPresentationPreferences {
         tapSpeedPercent ?? headerTapWaveTapSpeedPercent,
     headerTapWaveDragRippleLifetimeSeconds:
         dragRippleLifetimeSeconds ?? headerTapWaveDragRippleLifetimeSeconds,
+    brandSurfaceAppearance: brandSurfaceAppearance,
+  );
+
+  DashboardPresentationPreferences withBrandSurfaceAppearance(
+    FluviBrandSurfaceAppearance next,
+  ) => DashboardPresentationPreferences(
+    sumVisualStyle: sumVisualStyle,
+    showSumLayoutChooser: showSumLayoutChooser,
+    yearGridLayout: yearGridLayout,
+    yearMonthlyAmountPresentation: yearMonthlyAmountPresentation,
+    showDayContentViewChooser: showDayContentViewChooser,
+    balanceUsesChildCards: balanceUsesChildCards,
+    balanceHeaderGraphPresentation: balanceHeaderGraphPresentation,
+    balanceDayLayoutPresentation: balanceDayLayoutPresentation,
+    balanceDayFocusedPresentation: balanceDayFocusedPresentation,
+    balanceDayPerformanceVisualPresentation:
+        balanceDayPerformanceVisualPresentation,
+    balanceDayRatioViewPresentation: balanceDayRatioViewPresentation,
+    balanceDayRatioPresentation: balanceDayRatioPresentation,
+    balanceShowFocusedDayImpact: balanceShowFocusedDayImpact,
+    balanceSumLayoutPresentation: balanceSumLayoutPresentation,
+    balanceSumFocusedPresentation: balanceSumFocusedPresentation,
+    balanceShowSumFocusedSupplementaryStats:
+        balanceShowSumFocusedSupplementaryStats,
+    balanceMonthLayoutPresentation: balanceMonthLayoutPresentation,
+    balanceYearLayoutPresentation: balanceYearLayoutPresentation,
+    balanceDailyCalculationMode: balanceDailyCalculationMode,
+    balanceMonthlySpendingChartPresentation:
+        balanceMonthlySpendingChartPresentation,
+    balanceHeaderPartitionHeightPercent: balanceHeaderPartitionHeightPercent,
+    balanceMonthCombinedCardPresentation: balanceMonthCombinedCardPresentation,
+    balanceHeaderGlassConfigurationJson: balanceHeaderGlassConfigurationJson,
+    balanceHeaderPalette: balanceHeaderPalette,
+    balanceHeaderPaletteVariant: balanceHeaderPaletteVariant,
+    balanceHeaderPalettePositionPercent: balanceHeaderPalettePositionPercent,
+    balanceHeaderPaletteWindowWidthPercent:
+        balanceHeaderPaletteWindowWidthPercent,
+    ghostQuickFilterIconPack: ghostQuickFilterIconPack,
+    ghostQuickFilterPresentation: ghostQuickFilterPresentation,
+    recurringUiDesign: recurringUiDesign,
+    pushProfileUiDesign: pushProfileUiDesign,
+    automationHomeUiDesign: automationHomeUiDesign,
+    headerTapWaveTrailStrengthPercent: headerTapWaveTrailStrengthPercent,
+    headerTapWaveTapStartSizePercent: headerTapWaveTapStartSizePercent,
+    headerTapWaveTapStrengthPercent: headerTapWaveTapStrengthPercent,
+    headerTapWaveTapSpeedPercent: headerTapWaveTapSpeedPercent,
+    headerTapWaveDragRippleLifetimeSeconds:
+        headerTapWaveDragRippleLifetimeSeconds,
+    brandSurfaceAppearance: next,
   );
 }
 
@@ -558,13 +622,20 @@ final class DashboardPresentationPreferencesController
     extends ValueNotifier<DashboardPresentationPreferences> {
   DashboardPresentationPreferencesController({
     required DashboardPresentationPreferencesStore store,
+    DashboardPresentationPreferences? initialPreferences,
   }) : _store = store,
-       super(DashboardPresentationPreferences.defaults);
+       _hasBootstrapValue = initialPreferences != null,
+       super(initialPreferences ?? DashboardPresentationPreferences.defaults);
 
   final DashboardPresentationPreferencesStore _store;
+  final bool _hasBootstrapValue;
   int _mutationRevision = 0;
 
   Future<void> restore() async {
+    // The production entrypoint already did the small appearance read before
+    // Flutter's first frame. A second asynchronous read could otherwise
+    // repaint the personalised splash after it becomes visible.
+    if (_hasBootstrapValue) return;
     final restoreRevision = _mutationRevision;
     try {
       final restored = await _store.read();

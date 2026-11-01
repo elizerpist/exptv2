@@ -656,8 +656,8 @@ void main() {
       expect(carousel, findsOneWidget);
 
       await tester.drag(
-        find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
-        const Offset(-260, 0),
+        find.byKey(const ValueKey('dashboard-header-mode-selector-input-gain')),
+        const Offset(0, -260),
       );
       await tester.pump();
       expect(
@@ -665,8 +665,8 @@ void main() {
         findsOneWidget,
       );
       await tester.drag(
-        find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
-        const Offset(260, 0),
+        find.byKey(const ValueKey('dashboard-header-mode-selector-input-gain')),
+        const Offset(0, 260),
       );
       await tester.pump();
       expect(carousel, findsOneWidget);

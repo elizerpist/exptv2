@@ -537,6 +537,7 @@ class MainActivity : FlutterActivity() {
                             "headerTapWaveTapStrengthPercent" to ((preferences.all["headerTapWaveTapStrengthPercent"] as? Number)?.toInt()?.takeIf { it in 0..100 && it % 5 == 0 } ?: 75),
                             "headerTapWaveTapSpeedPercent" to ((preferences.all["headerTapWaveTapSpeedPercent"] as? Number)?.toInt()?.takeIf { it in 50..200 && it % 5 == 0 } ?: 100),
                             "headerTapWaveDragRippleLifetimeSeconds" to ((preferences.all["headerTapWaveDragRippleLifetimeSeconds"] as? Number)?.toDouble()?.takeIf { it in .40..2.0 && kotlin.math.abs(((it - .40) / .05) - kotlin.math.round((it - .40) / .05)) < .0001 } ?: 1.20),
+                            "brandSurfaceAppearanceJson" to preferences.getString("brandSurfaceAppearanceJson", ""),
                             // New installs and pre-existing installations both
                             // enter the unified recurrence presentation. This
                             // is named rather than indexed so old numeric
@@ -717,6 +718,15 @@ class MainActivity : FlutterActivity() {
                         require(automationHomeUiDesign == "legacy" || automationHomeUiDesign == "unified") {
                             "Invalid automation home UI design."
                         }
+                        val brandSurfaceAppearanceJson = if (values.containsKey("brandSurfaceAppearanceJson")) {
+                            values["brandSurfaceAppearanceJson"] as? String
+                                ?: throw IllegalArgumentException("Invalid brand surface appearance.")
+                        } else {
+                            ""
+                        }
+                        require(brandSurfaceAppearanceJson.length <= 8192) {
+                            "Brand surface appearance is too large."
+                        }
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
@@ -755,6 +765,7 @@ class MainActivity : FlutterActivity() {
                             .putString("recurringUiDesign", recurringUiDesign)
                             .putString("pushProfileUiDesign", pushProfileUiDesign)
                             .putString("automationHomeUiDesign", automationHomeUiDesign)
+                            .putString("brandSurfaceAppearanceJson", brandSurfaceAppearanceJson)
                             .apply()
                         result.success(null)
                     }

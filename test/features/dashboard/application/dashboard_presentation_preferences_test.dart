@@ -1,12 +1,53 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/fluvi_surface_fill.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_presentation_preferences.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 
 void main() {
+  test(
+    'brand surfaces survive unrelated dashboard preference writes',
+    () async {
+      final store = InMemoryDashboardPresentationPreferencesStore();
+      final controller = DashboardPresentationPreferencesController(
+        store: store,
+      );
+      addTearDown(controller.dispose);
+      final appearance = DashboardPresentationPreferences
+          .defaults
+          .brandSurfaceAppearance
+          .copyWith(
+            logoTop: const FluviSurfaceFill(
+              leftArgb: 0xFF112233,
+              rightArgb: 0xFF445566,
+              boundaryPercent: 64,
+            ),
+          );
+
+      controller.setPreferences(
+        controller.value.withBrandSurfaceAppearance(appearance),
+      );
+      controller.setPreferences(
+        controller.value.withGhostQuickFilterPresentation(
+          DashboardGhostQuickFilterPresentation.summaryPillLeadingFling,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final restored = DashboardPresentationPreferencesController(store: store);
+      addTearDown(restored.dispose);
+      await restored.restore();
+      expect(restored.value.brandSurfaceAppearance, appearance);
+      expect(
+        restored.value.ghostQuickFilterPresentation,
+        DashboardGhostQuickFilterPresentation.summaryPillLeadingFling,
+      );
+    },
+  );
+
   test(
     'recurring UI choice persists independently from other dashboard presentation writes',
     () async {

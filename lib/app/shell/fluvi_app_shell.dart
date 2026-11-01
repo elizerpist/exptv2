@@ -14,8 +14,8 @@ import '../../core/categories/domain/category_repository.dart';
 import '../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../core/financial_limits/data/method_channel_financial_limit_repository.dart';
 import '../../core/financial_limits/domain/financial_limit_repository.dart';
-import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/design/fluvi_global_appearance.dart';
+import '../../core/design/fluvi_surface_fill.dart';
 import '../../core/design/fluvi_typography_scope.dart';
 import '../../core/debug/debug_floating_button.dart';
 import '../../core/diagnostics/fluvi_build_identity.dart';
@@ -56,6 +56,7 @@ import '../../features/dashboard/application/dashboard_render_readiness_diagnost
 import '../../features/dashboard/presentation/core_dashboard.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import '../../features/dashboard/presentation/dashboard_shell_presentation.dart';
+import '../../features/dashboard/presentation/widgets/fluvi_brand_mark.dart';
 import '../../features/dashboard/query/application/query_menu_data_controller.dart';
 import '../../features/dashboard/query/application/dashboard_applied_query_facet_loader.dart';
 import '../../features/dashboard/query/application/saved_query_controller.dart';
@@ -73,9 +74,10 @@ import 'bnb03_bottom_navigation.dart';
 import '../../shared/presentation/fluvi_slide_up_sheet.dart';
 
 class _BottomNavigationSafeArea extends StatelessWidget {
-  const _BottomNavigationSafeArea({required this.child});
+  const _BottomNavigationSafeArea({required this.child, required this.fill});
 
   final Widget child;
+  final FluviSurfaceFill fill;
 
   @override
   Widget build(BuildContext context) {
@@ -89,10 +91,20 @@ class _BottomNavigationSafeArea extends StatelessWidget {
           right: 0,
           bottom: 0,
           height: bottomInset,
-          child: const ColoredBox(
-            key: ValueKey('fluvi-bottom-safe-area-background'),
-            color: Colors.white,
-          ),
+          child: fill.isSolid
+              ? ColoredBox(
+                  key: const ValueKey('fluvi-bottom-safe-area-background'),
+                  color: fill.left,
+                )
+              : DecoratedBox(
+                  key: const ValueKey('fluvi-bottom-safe-area-background'),
+                  decoration: BoxDecoration(
+                    gradient: fill.gradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                  ),
+                ),
         ),
         SafeArea(top: false, child: child),
       ],
@@ -118,6 +130,7 @@ class FluviAppShell extends StatefulWidget {
     this.initialRailOpen = false,
     this.initialDirection = LedgerDirection.income,
     this.shellPresentation,
+    this.initialDashboardPresentationPreferences,
   });
 
   final DashboardModeSpec mode;
@@ -134,56 +147,87 @@ class FluviAppShell extends StatefulWidget {
   final bool initialRailOpen;
   final LedgerDirection initialDirection;
   final DashboardShellPresentationController? shellPresentation;
+  final DashboardPresentationPreferences?
+  initialDashboardPresentationPreferences;
 
   @override
   State<FluviAppShell> createState() => _FluviAppShellState();
 }
 
-class _DashboardBootstrapSurface extends StatelessWidget {
-  const _DashboardBootstrapSurface();
+enum _StartupSurfacePhase { loading, revealing, interactive, failed }
 
-  @override
-  Widget build(BuildContext context) {
-    return const ColoredBox(
-      key: ValueKey('dashboard-bootstrap-surface'),
-      color: FluviVisualTokens.pageBackground,
-      child: Center(
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
-    );
-  }
-}
+/// Covers the single, already-mounted production shell until its bounded
+/// readiness contract and one final normal layout frame are complete. It is
+/// not a second dashboard or an offstage warm-up surface.
+final class _FluviStartupSplash extends StatelessWidget {
+  const _FluviStartupSplash({
+    required this.appearance,
+    required this.failed,
+    required this.onRetry,
+  });
 
-class _DashboardBootstrapFailureSurface extends StatelessWidget {
-  const _DashboardBootstrapFailureSurface({required this.onRetry});
-
+  final FluviBrandSurfaceAppearance appearance;
+  final bool failed;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) => ColoredBox(
-    key: const ValueKey('dashboard-bootstrap-failure-surface'),
-    color: FluviVisualTokens.pageBackground,
-    child: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'A dashboard adatai nem tölthetők be.',
-              textAlign: TextAlign.center,
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    label: failed ? 'Fluvi betöltési hiba' : 'Fluvi betöltése',
+    child: Listener(
+      behavior: HitTestBehavior.opaque,
+      child: ColoredBox(
+        key: ValueKey(
+          failed
+              ? 'dashboard-bootstrap-failure-surface'
+              : 'dashboard-bootstrap-surface',
+        ),
+        color: const Color(0xFFF8FAFC),
+        child: Center(
+          child: Transform.translate(
+            offset: const Offset(0, -20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  SizedBox(
+                    width: 208,
+                    height: 208,
+                    child: FluviBrandMark(
+                      key: const ValueKey('fluvi-startup-brand-mark'),
+                      appearance: appearance,
+                      width: 208,
+                      height: 208,
+                      preferPreparedAsset: false,
+                    ),
+                  ),
+                  const SizedBox(height: 26),
+                  if (failed) ...<Widget>[
+                    const Text(
+                      'A kezdőképernyő nem készíthető elő.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF19264D),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      key: const ValueKey('dashboard-bootstrap-retry'),
+                      onPressed: onRetry,
+                      child: const Text('Újrapróbálás'),
+                    ),
+                  ] else
+                    const SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            FilledButton(
-              key: const ValueKey('dashboard-bootstrap-retry'),
-              onPressed: onRetry,
-              child: const Text('Újrapróbálás'),
-            ),
-          ],
+          ),
         ),
       ),
     ),
@@ -231,6 +275,8 @@ class _FluviAppShellState extends State<FluviAppShell>
   bool _routeObstructed = false;
   bool _openingPulseFromHeader = false;
   bool _openingCreationSelector = false;
+  _StartupSurfacePhase _startupSurfacePhase = _StartupSurfacePhase.loading;
+  bool _startupHandoffScheduled = false;
 
   @override
   void initState() {
@@ -239,8 +285,22 @@ class _FluviAppShellState extends State<FluviAppShell>
     _dashboardPresentationPreferences =
         DashboardPresentationPreferencesController(
           store: MethodChannelDashboardPresentationPreferencesStore(),
+          initialPreferences: widget.initialDashboardPresentationPreferences,
         );
-    unawaited(_dashboardPresentationPreferences.restore());
+    final startupPreferences = widget.initialDashboardPresentationPreferences;
+    if (startupPreferences != null) {
+      _headerVisualController.setBrandSurfaceAppearance(
+        startupPreferences.brandSurfaceAppearance,
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'STARTUP_APPEARANCE_RESTORED',
+          scope: 'source=bootstrap',
+        ),
+      );
+    } else {
+      unawaited(_dashboardPresentationPreferences.restore());
+    }
     _seedDemo = !kIsWeb && const bool.fromEnvironment('FLUVI_SEED_DEMO');
     final repository = kIsWeb
         ? const EmptyDashboardDataRuntimeRepository()
@@ -665,7 +725,7 @@ class _FluviAppShellState extends State<FluviAppShell>
     _syncPulseDeliverySurface();
     if (_readiness.isReady) {
       _controller.renderReadinessDiagnostics.markReady();
-      unawaited(_appliedQueryFacets.start());
+      unawaited(_prepareStartupHandoff());
       final attemptGeneration = _activeStartupAttemptGeneration;
       if (attemptGeneration != null &&
           _lastStartupReadyAttemptGeneration != attemptGeneration) {
@@ -679,10 +739,20 @@ class _FluviAppShellState extends State<FluviAppShell>
                 'stage=ready readinessTask=-',
           ),
         );
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'STARTUP_CONTENT_READY',
+            coreRevision: _readiness.frame?.coreRevision,
+            scope: 'attemptGeneration=$attemptGeneration',
+          ),
+        );
       }
       return;
     }
     if (_readiness.phase == DashboardInteractionReadinessPhase.failed) {
+      if (_startupSurfacePhase != _StartupSurfacePhase.failed && mounted) {
+        setState(() => _startupSurfacePhase = _StartupSurfacePhase.failed);
+      }
       final attemptGeneration = _activeStartupAttemptGeneration;
       if (attemptGeneration == null ||
           _lastStartupFailureAttemptGeneration == attemptGeneration) {
@@ -697,6 +767,88 @@ class _FluviAppShellState extends State<FluviAppShell>
         readinessTask: _readiness.failedTask,
       );
     }
+  }
+
+  Future<void> _prepareStartupHandoff() async {
+    if (_startupHandoffScheduled ||
+        _startupSurfacePhase != _StartupSurfacePhase.loading ||
+        !_readiness.isReady) {
+      return;
+    }
+    _startupHandoffScheduled = true;
+    try {
+      // The applied amount domain is only render-critical for Mind. Starting
+      // it here still keeps Balance/Budget warm without holding their first
+      // usable screen behind an unrelated transport request.
+      if (_modeController.committedMode.mode == DashboardMode.mind) {
+        await _appliedQueryFacets.start();
+      } else {
+        unawaited(_appliedQueryFacets.start());
+      }
+      // CoreDashboard is already mounted behind the splash at this point.
+      // Wait for its actual Header renderer to settle on either the retained
+      // fragment program or the accepted native static renderer; a generic
+      // post-frame alone would release a transient field-loading state.
+      await _headerVisualController.waitForHeaderVisualTerminal();
+      if (!mounted || !_readiness.isReady) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            !_readiness.isReady ||
+            _startupSurfacePhase != _StartupSurfacePhase.loading) {
+          return;
+        }
+        if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+          setState(
+            () => _startupSurfacePhase = _StartupSurfacePhase.interactive,
+          );
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'STARTUP_INTERACTION_OPENED',
+              coreRevision: _readiness.frame?.coreRevision,
+              scope: 'motion=reduced',
+            ),
+          );
+          _syncPulseDeliverySurface();
+          return;
+        }
+        setState(() => _startupSurfacePhase = _StartupSurfacePhase.revealing);
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'STARTUP_HANDOFF_FRAME_READY',
+            coreRevision: _readiness.frame?.coreRevision,
+          ),
+        );
+      });
+    } finally {
+      _startupHandoffScheduled = false;
+    }
+  }
+
+  void _completeStartupReveal() {
+    if (!mounted || _startupSurfacePhase != _StartupSurfacePhase.revealing) {
+      return;
+    }
+    setState(() => _startupSurfacePhase = _StartupSurfacePhase.interactive);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'STARTUP_SPLASH_REVEALED',
+        coreRevision: _readiness.frame?.coreRevision,
+      ),
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'STARTUP_INTERACTION_OPENED',
+        coreRevision: _readiness.frame?.coreRevision,
+        scope: 'motion=normal',
+      ),
+    );
+    _syncPulseDeliverySurface();
+  }
+
+  void _retryStartup() {
+    if (_startupSurfacePhase != _StartupSurfacePhase.failed) return;
+    setState(() => _startupSurfacePhase = _StartupSurfacePhase.loading);
+    unawaited(_startDashboard());
   }
 
   void _recordStartupStageFailure({
@@ -842,7 +994,9 @@ class _FluviAppShellState extends State<FluviAppShell>
   void _syncPulseDeliverySurface() {
     if (!mounted) return;
     final ledgerVisible =
-        _selectedNavigationItem == Bnb03Item.home && _readiness.isInteractive;
+        _selectedNavigationItem == Bnb03Item.home &&
+        _readiness.isInteractive &&
+        _startupSurfacePhase == _StartupSurfacePhase.interactive;
     _pulseDelivery.updateSurface(
       appActive: _appActive,
       ledgerVisible: ledgerVisible,
@@ -900,7 +1054,10 @@ class _FluviAppShellState extends State<FluviAppShell>
   }
 
   void _openQueryMenu() {
-    if (!_readiness.isInteractive) return;
+    if (!_readiness.isInteractive ||
+        _startupSurfacePhase != _StartupSurfacePhase.interactive) {
+      return;
+    }
     final editingDirection =
         _controller.presentation.navigation.state.parentQueryScope.direction;
     _controller.queryComposer.open(editingDirection);
@@ -1055,233 +1212,300 @@ class _FluviAppShellState extends State<FluviAppShell>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Scaffold(
-                  key: const ValueKey('fluvi-app-shell'),
-                  // The body intentionally reaches the shell-owned bottom navigation.
-                  // Scaffold then publishes that measured obstruction through the
-                  // body's MediaQuery; the LogBox uses it only as terminal scroll
-                  // content, never by shortening its viewport.
-                  extendBody: true,
-                  backgroundColor: FluviVisualTokens.pageBackground,
-                  body: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      AnimatedBuilder(
-                        animation: _readiness,
-                        builder: (context, _) {
-                          final mountsDashboard = _readiness.mountsDashboard;
-                          final dashboard = Stack(
+                IgnorePointer(
+                  ignoring:
+                      _startupSurfacePhase != _StartupSurfacePhase.interactive,
+                  child: ExcludeSemantics(
+                    excluding:
+                        _startupSurfacePhase !=
+                        _StartupSurfacePhase.interactive,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Scaffold(
+                          key: const ValueKey('fluvi-app-shell'),
+                          // The body intentionally reaches the shell-owned bottom navigation.
+                          // Scaffold then publishes that measured obstruction through the
+                          // body's MediaQuery; the LogBox uses it only as terminal scroll
+                          // content, never by shortening its viewport.
+                          extendBody: true,
+                          backgroundColor: tuning
+                              .globalAppearance
+                              .brandSurfaceAppearance
+                              .pageBackground
+                              .left,
+                          body: Stack(
                             fit: StackFit.expand,
                             children: [
-                              if (mountsDashboard)
-                                AbsorbPointer(
-                                  key: const ValueKey(
-                                    'dashboard-interaction-readiness-gate',
-                                  ),
-                                  absorbing: !_readiness.isInteractive,
-                                  child: CoreDashboard(
-                                    key: const ValueKey('ready-core-dashboard'),
-                                    controller: _controller,
-                                    modeController: _modeController,
-                                    categoryCollection: _categoryCollection,
-                                    categoryRepository: _categoryRepository,
-                                    financialLimitRepository:
-                                        _financialLimitRepository,
-                                    onBudgetCategoryInputUpdated:
-                                        _recordBudgetCategoryRailInputUpdated,
-                                    onEditEntry: _openEditTransaction,
-                                    onOpenQueryMenu: _openQueryMenu,
-                                    preparedLogBoxRasters:
-                                        _preparedLogBoxRasters!,
-                                    shellPresentation: _shellPresentation,
-                                    headerVisualController:
-                                        _headerVisualController,
-                                    dashboardPresentationPreferences:
-                                        _dashboardPresentationPreferences,
-                                    pulseDeliveryCoordinator: _pulseDelivery,
-                                    onOpenPulse: _openPulseFromHeader,
-                                    onHeaderInteractionChanged:
-                                        _onHeaderInteractionChanged,
-                                    mindQueryFacetLoader: _appliedQueryFacets,
-                                    onLogBoxWarmupSurfaceAttached:
-                                        (viewportId) {
-                                          _readiness.markLogBoxSurfaceAttached(
-                                            viewportId: viewportId,
-                                          );
-                                        },
-                                    onLogBoxWarmupSurfaceLaidOut: (viewportId) {
-                                      _readiness.markLogBoxSurfaceLaidOut(
-                                        viewportId: viewportId,
-                                      );
-                                    },
-                                    onLogBoxWarmupTextLayoutsPrepared:
-                                        (viewportId) {
-                                          _readiness
-                                              .markLogBoxTextLayoutsPrepared(
-                                                viewportId: viewportId,
-                                              );
-                                        },
-                                    onLogBoxWarmupError: (error, _) {
-                                      _readiness.fail(error);
-                                    },
-                                    initialLogBoxReadinessActive:
-                                        !_readiness.isReady,
-                                  ),
-                                )
-                              else if (_readiness.phase ==
-                                  DashboardInteractionReadinessPhase.failed)
-                                _DashboardBootstrapFailureSurface(
-                                  onRetry: () => unawaited(_startDashboard()),
-                                )
-                              else
-                                const _DashboardBootstrapSurface(),
-                              if (mountsDashboard && !_readiness.isReady)
-                                const _DashboardBootstrapSurface(),
-                            ],
-                          );
-                          return IndexedStack(
-                            index: switch (_selectedNavigationItem) {
-                              Bnb03Item.search => 1,
-                              Bnb03Item.cart => 2,
-                              Bnb03Item.profile => 3,
-                              _ => 0,
-                            },
-                            children: [
-                              dashboard,
-                              // IndexedStack retains this route while the
-                              // dashboard direction pill changes.  Rebuild its
-                              // configuration from the notifier so "Új
-                              // ismétlődés" snapshots the currently visible
-                              // income/expense side instead of the old shell
-                              // build's default.
                               AnimatedBuilder(
-                                animation: Listenable.merge([
-                                  _controller.transactionDirection,
-                                  _dashboardPresentationPreferences,
-                                ]),
-                                builder: (context, _) => AutomationDashboardPage(
-                                  repository: _automationRepository,
-                                  permissions: _automationPermissionRepository,
-                                  manualRepository:
-                                      _manualTransactionRepository,
-                                  categories: _categoryCollection.value,
-                                  categoryRepository: _categoryRepository,
-                                  preferencesStore: kIsWeb
-                                      ? null
-                                      : MethodChannelManualTransactionEditorPreferencesStore(),
-                                  recurringUiDesign: () =>
-                                      _dashboardPresentationPreferences
-                                          .value
-                                          .recurringUiDesign,
-                                  pushProfileUiDesign: () =>
-                                      _dashboardPresentationPreferences
-                                          .value
-                                          .pushProfileUiDesign,
-                                  automationHomeUiDesign:
-                                      _dashboardPresentationPreferences
-                                          .value
-                                          .automationHomeUiDesign,
-                                  direction:
-                                      _controller
-                                              .transactionDirection
-                                              .direction ==
-                                          TransactionDirection.income
-                                      ? LedgerDirection.income
-                                      : LedgerDirection.expense,
-                                  directionColorProfile: tuning
-                                      .globalAppearance
-                                      .directionColorProfile,
-                                  onOpenLedgerEntry: _openEditTransaction,
+                                animation: _readiness,
+                                builder: (context, _) {
+                                  final mountsDashboard =
+                                      _readiness.mountsDashboard;
+                                  final dashboard = Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      if (mountsDashboard)
+                                        AbsorbPointer(
+                                          key: const ValueKey(
+                                            'dashboard-interaction-readiness-gate',
+                                          ),
+                                          absorbing: !_readiness.isInteractive,
+                                          child: CoreDashboard(
+                                            key: const ValueKey(
+                                              'ready-core-dashboard',
+                                            ),
+                                            controller: _controller,
+                                            modeController: _modeController,
+                                            categoryCollection:
+                                                _categoryCollection,
+                                            categoryRepository:
+                                                _categoryRepository,
+                                            financialLimitRepository:
+                                                _financialLimitRepository,
+                                            onBudgetCategoryInputUpdated:
+                                                _recordBudgetCategoryRailInputUpdated,
+                                            onEditEntry: _openEditTransaction,
+                                            onOpenQueryMenu: _openQueryMenu,
+                                            preparedLogBoxRasters:
+                                                _preparedLogBoxRasters!,
+                                            shellPresentation:
+                                                _shellPresentation,
+                                            headerVisualController:
+                                                _headerVisualController,
+                                            dashboardPresentationPreferences:
+                                                _dashboardPresentationPreferences,
+                                            pulseDeliveryCoordinator:
+                                                _pulseDelivery,
+                                            onOpenPulse: _openPulseFromHeader,
+                                            onHeaderInteractionChanged:
+                                                _onHeaderInteractionChanged,
+                                            mindQueryFacetLoader:
+                                                _appliedQueryFacets,
+                                            onLogBoxWarmupSurfaceAttached:
+                                                (viewportId) {
+                                                  _readiness
+                                                      .markLogBoxSurfaceAttached(
+                                                        viewportId: viewportId,
+                                                      );
+                                                },
+                                            onLogBoxWarmupSurfaceLaidOut:
+                                                (viewportId) {
+                                                  _readiness
+                                                      .markLogBoxSurfaceLaidOut(
+                                                        viewportId: viewportId,
+                                                      );
+                                                },
+                                            onLogBoxWarmupTextLayoutsPrepared:
+                                                (viewportId) {
+                                                  _readiness
+                                                      .markLogBoxTextLayoutsPrepared(
+                                                        viewportId: viewportId,
+                                                      );
+                                                },
+                                            onLogBoxWarmupError: (error, _) {
+                                              _readiness.fail(error);
+                                            },
+                                            initialLogBoxReadinessActive:
+                                                !_readiness.isReady,
+                                          ),
+                                        )
+                                      else
+                                        const SizedBox.expand(),
+                                    ],
+                                  );
+                                  return IndexedStack(
+                                    index: switch (_selectedNavigationItem) {
+                                      Bnb03Item.search => 1,
+                                      Bnb03Item.cart => 2,
+                                      Bnb03Item.profile => 3,
+                                      _ => 0,
+                                    },
+                                    children: [
+                                      dashboard,
+                                      // IndexedStack retains this route while the
+                                      // dashboard direction pill changes.  Rebuild its
+                                      // configuration from the notifier so "Új
+                                      // ismétlődés" snapshots the currently visible
+                                      // income/expense side instead of the old shell
+                                      // build's default.
+                                      AnimatedBuilder(
+                                        animation: Listenable.merge([
+                                          _controller.transactionDirection,
+                                          _dashboardPresentationPreferences,
+                                        ]),
+                                        builder: (context, _) => AutomationDashboardPage(
+                                          repository: _automationRepository,
+                                          permissions:
+                                              _automationPermissionRepository,
+                                          manualRepository:
+                                              _manualTransactionRepository,
+                                          categories: _categoryCollection.value,
+                                          categoryRepository:
+                                              _categoryRepository,
+                                          preferencesStore: kIsWeb
+                                              ? null
+                                              : MethodChannelManualTransactionEditorPreferencesStore(),
+                                          recurringUiDesign: () =>
+                                              _dashboardPresentationPreferences
+                                                  .value
+                                                  .recurringUiDesign,
+                                          pushProfileUiDesign: () =>
+                                              _dashboardPresentationPreferences
+                                                  .value
+                                                  .pushProfileUiDesign,
+                                          automationHomeUiDesign:
+                                              _dashboardPresentationPreferences
+                                                  .value
+                                                  .automationHomeUiDesign,
+                                          direction:
+                                              _controller
+                                                      .transactionDirection
+                                                      .direction ==
+                                                  TransactionDirection.income
+                                              ? LedgerDirection.income
+                                              : LedgerDirection.expense,
+                                          directionColorProfile: tuning
+                                              .globalAppearance
+                                              .directionColorProfile,
+                                          onOpenLedgerEntry:
+                                              _openEditTransaction,
+                                        ),
+                                      ),
+                                      _pulseInitialized
+                                          ? PulseDashboardPage(
+                                              repository: _pulseRepository,
+                                            )
+                                          : const SizedBox.shrink(),
+                                      SettingsPage(
+                                        permissions:
+                                            _automationPermissionRepository,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              if (kFluviOnscreenDiagnosticsEnabled)
+                                DebugFloatingButton(
+                                  physicalReportProvider: _physicalRailReport,
+                                  diagnosticStatusProvider: _diagnosticStatus,
+                                  automationPermissions:
+                                      _automationPermissionRepository,
                                 ),
-                              ),
-                              _pulseInitialized
-                                  ? PulseDashboardPage(
-                                      repository: _pulseRepository,
-                                    )
-                                  : const SizedBox.shrink(),
-                              SettingsPage(
-                                permissions: _automationPermissionRepository,
-                              ),
                             ],
-                          );
-                        },
-                      ),
-                      if (kFluviOnscreenDiagnosticsEnabled)
-                        DebugFloatingButton(
-                          physicalReportProvider: _physicalRailReport,
-                          diagnosticStatusProvider: _diagnosticStatus,
-                          automationPermissions:
-                              _automationPermissionRepository,
+                          ),
+                          bottomNavigationBar: _BottomNavigationSafeArea(
+                            fill: tuning
+                                .globalAppearance
+                                .brandSurfaceAppearance
+                                .bottomNavigation,
+                            child:
+                                ValueListenableBuilder<
+                                  DashboardShellPresentationSettings
+                                >(
+                                  valueListenable: _shellPresentation,
+                                  builder: (context, settings, _) =>
+                                      AnimatedBuilder(
+                                        animation:
+                                            _controller.transactionDirection,
+                                        builder: (context, _) =>
+                                            Bnb03BottomNavigation(
+                                              selected: _selectedNavigationItem,
+                                              edgeShape:
+                                                  settings.bottomNavEdgeShape,
+                                              topBorder:
+                                                  settings.bottomNavTopBorder,
+                                              layoutStyle:
+                                                  settings.bottomNavLayoutStyle,
+                                              transactionDirection: _controller
+                                                  .transactionDirection
+                                                  .direction,
+                                              directionColorProfile: tuning
+                                                  .globalAppearance
+                                                  .directionColorProfile,
+                                              fabIconPresentation: tuning
+                                                  .globalAppearance
+                                                  .fabIconPresentation,
+                                              fabVectorPrimaryArgb: tuning
+                                                  .globalAppearance
+                                                  .fabVectorPrimaryArgb,
+                                              fabVectorHighlightArgb: tuning
+                                                  .globalAppearance
+                                                  .fabVectorHighlightArgb,
+                                              bottomNavigationFill: tuning
+                                                  .globalAppearance
+                                                  .brandSurfaceAppearance
+                                                  .bottomNavigation,
+                                              onChanged: (item) {
+                                                if (item == Bnb03Item.shop) {
+                                                  _openCreationSelector();
+                                                  return;
+                                                }
+                                                if (item == Bnb03Item.cart) {
+                                                  _pulseInitialized = true;
+                                                }
+                                                setState(
+                                                  () =>
+                                                      _selectedNavigationItem =
+                                                          item,
+                                                );
+                                                _syncPulseDeliverySurface();
+                                              },
+                                            ),
+                                      ),
+                                ),
+                          ),
                         ),
-                    ],
-                  ),
-                  bottomNavigationBar: _BottomNavigationSafeArea(
-                    child:
-                        ValueListenableBuilder<
-                          DashboardShellPresentationSettings
-                        >(
-                          valueListenable: _shellPresentation,
-                          builder: (context, settings, _) => AnimatedBuilder(
-                            animation: _controller.transactionDirection,
-                            builder: (context, _) => Bnb03BottomNavigation(
-                              selected: _selectedNavigationItem,
-                              edgeShape: settings.bottomNavEdgeShape,
-                              topBorder: settings.bottomNavTopBorder,
-                              layoutStyle: settings.bottomNavLayoutStyle,
-                              transactionDirection:
-                                  _controller.transactionDirection.direction,
-                              directionColorProfile:
-                                  tuning.globalAppearance.directionColorProfile,
-                              fabIconPresentation:
-                                  tuning.globalAppearance.fabIconPresentation,
-                              fabVectorPrimaryArgb:
-                                  tuning.globalAppearance.fabVectorPrimaryArgb,
-                              fabVectorHighlightArgb: tuning
-                                  .globalAppearance
-                                  .fabVectorHighlightArgb,
-                              onChanged: (item) {
-                                if (item == Bnb03Item.shop) {
-                                  _openCreationSelector();
-                                  return;
-                                }
-                                if (item == Bnb03Item.cart) {
-                                  _pulseInitialized = true;
-                                }
-                                setState(() => _selectedNavigationItem = item);
-                                _syncPulseDeliverySurface();
-                              },
+                        FluviSlideUpSheet(
+                          isOpen: _queryMenuOpen,
+                          onDismiss: _closeQueryMenu,
+                          onDismissTransitionStarted: _controller
+                              .notifyQuerySheetReverseTransitionStarted,
+                          onDismissTransitionCompleted:
+                              _controller.notifyQuerySheetDismissed,
+                          stickyFooter: QueryMenuStickyFooter(
+                            composer: _controller.queryComposer,
+                            dataController: _queryData,
+                            applying: _queryApplying,
+                            onApply: _applyQuery,
+                            onClear: _clearQueryDraft,
+                          ),
+                          child: QueryMenuSheet(
+                            composer: _controller.queryComposer,
+                            dataController: _queryData,
+                            savedQueries: _savedQueries,
+                            onDraftChanged: _queryDraftChanged,
+                            onClose: _closeQueryMenu,
+                            onSavedPanelRequested: () => unawaited(
+                              _savedQueries.refresh(
+                                _controller.queryComposer.draft.direction,
+                              ),
                             ),
                           ),
                         ),
-                  ),
-                ),
-                FluviSlideUpSheet(
-                  isOpen: _queryMenuOpen,
-                  onDismiss: _closeQueryMenu,
-                  onDismissTransitionStarted:
-                      _controller.notifyQuerySheetReverseTransitionStarted,
-                  onDismissTransitionCompleted:
-                      _controller.notifyQuerySheetDismissed,
-                  stickyFooter: QueryMenuStickyFooter(
-                    composer: _controller.queryComposer,
-                    dataController: _queryData,
-                    applying: _queryApplying,
-                    onApply: _applyQuery,
-                    onClear: _clearQueryDraft,
-                  ),
-                  child: QueryMenuSheet(
-                    composer: _controller.queryComposer,
-                    dataController: _queryData,
-                    savedQueries: _savedQueries,
-                    onDraftChanged: _queryDraftChanged,
-                    onClose: _closeQueryMenu,
-                    onSavedPanelRequested: () => unawaited(
-                      _savedQueries.refresh(
-                        _controller.queryComposer.draft.direction,
-                      ),
+                      ],
                     ),
                   ),
                 ),
+                if (_startupSurfacePhase != _StartupSurfacePhase.interactive)
+                  Positioned.fill(
+                    child: AnimatedOpacity(
+                      opacity:
+                          _startupSurfacePhase == _StartupSurfacePhase.revealing
+                          ? 0
+                          : 1,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      onEnd: _completeStartupReveal,
+                      child: _FluviStartupSplash(
+                        appearance:
+                            tuning.globalAppearance.brandSurfaceAppearance,
+                        failed:
+                            _startupSurfacePhase == _StartupSurfacePhase.failed,
+                        onRetry: _retryStartup,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

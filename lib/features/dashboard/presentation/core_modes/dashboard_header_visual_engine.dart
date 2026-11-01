@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/scheduler.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../core/design/fluvi_global_appearance.dart';
+import '../../../../core/design/fluvi_surface_fill.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../mind/domain/mind_behavioral_score_projection.dart';
 import 'dashboard_header_budget_cool_source.dart';
@@ -44,6 +46,11 @@ enum DashboardHeaderEffectId {
   breathingMetric,
   tidalCurvature,
 }
+
+/// A first-frame renderer is terminal only after the Header has either painted
+/// through its retained fragment program or deliberately committed to the
+/// native static renderer. This is visual readiness, not financial state.
+enum DashboardHeaderVisualTerminal { pending, fragmentShader, staticRenderer }
 
 /// User-visible animation lanes own their own semantic selection while sharing
 /// the one dashboard-lifetime Header phase controller.
@@ -2390,7 +2397,10 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       tapWaveTuning = ValueNotifier<DashboardHeaderTapWaveTuning>(
         DashboardHeaderTapWaveTuning.defaults(),
       ),
-      tapWaveReferencePreview = ValueNotifier<bool>(false) {
+      tapWaveReferencePreview = ValueNotifier<bool>(false),
+      headerVisualTerminal = ValueNotifier<DashboardHeaderVisualTerminal>(
+        DashboardHeaderVisualTerminal.pending,
+      ) {
     _tapWave.configure(tapWaveTuning.value);
     _ticker = vsync.createTicker(_onTick);
     _syncTicker();
@@ -2426,6 +2436,28 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   /// always live in [tapWaveTuning] and are never overwritten by previewing
   /// the original 100/100/100 source rendering.
   final ValueNotifier<bool> tapWaveReferencePreview;
+
+  /// Completes at the renderer boundary actually used by the first visible
+  /// Header. Shell startup waits on this finite condition instead of treating
+  /// an arbitrary first Flutter frame as shader readiness.
+  final ValueNotifier<DashboardHeaderVisualTerminal> headerVisualTerminal;
+  final Completer<void> _headerVisualTerminalCompleter = Completer<void>();
+
+  Future<void> waitForHeaderVisualTerminal() =>
+      _headerVisualTerminalCompleter.future;
+
+  void reportHeaderVisualTerminal(DashboardHeaderVisualTerminal terminal) {
+    if (_disposed ||
+        headerVisualTerminal.value != DashboardHeaderVisualTerminal.pending) {
+      return;
+    }
+    headerVisualTerminal.value = terminal;
+    if (!_headerVisualTerminalCompleter.isCompleted) {
+      _headerVisualTerminalCompleter.complete();
+    }
+    _record('HEADER_VISUAL_TERMINAL', 'renderer=${terminal.name}');
+  }
+
   late final Ticker _ticker;
   Duration _lastTickerElapsed = Duration.zero;
   Duration _elapsed = Duration.zero;
@@ -2794,6 +2826,16 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     );
   }
 
+  /// Applies the one shared editable brand/surface material value.  This does
+  /// not participate in any dashboard query, header palette or animation
+  /// calculation; it only republishes visual paint inputs to the shell.
+  void setBrandSurfaceAppearance(FluviBrandSurfaceAppearance value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(brandSurfaceAppearance: value),
+      'BRAND_SURFACE_APPEARANCE_CHANGED',
+    );
+  }
+
   void _setGlobalAppearance(FluviGlobalAppearance next, String stage) {
     if (_disposed || tuning.value.globalAppearance == next) return;
     tuning.value = tuning.value.copyWith(globalAppearance: next);
@@ -2813,6 +2855,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       'headerModeLabel=${next.showsHeaderModeLabelAboveValue} '
       'mindExpandedSurface=${next.mindExpandedSurfaceStyle.name} '
       'budgetAvatarContent=${next.budgetAvatarContentStyle.name} '
+      'brandSurfaceCustom=${!next.brandSurfaceAppearance.hasDefaultLogoFills} '
       'settingsGeneration=${tuning.value.generation}',
     );
     notifyListeners();
@@ -3468,6 +3511,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     portalSettingsGeneration.dispose();
     tapWaveTuning.dispose();
     tapWaveReferencePreview.dispose();
+    headerVisualTerminal.dispose();
     tuning.dispose();
     super.dispose();
   }
@@ -6119,6 +6163,9 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
     // overlays retain their existing separate effect path.
     if (_usesNativeStaticBase(tuning)) {
       resources.recordStaticColorRendererBinding(frame: frame);
+      controller.reportHeaderVisualTerminal(
+        DashboardHeaderVisualTerminal.staticRenderer,
+      );
       _paintStatic(canvas, size);
       return;
     }
@@ -6151,6 +6198,9 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
       plan: fragmentPlan,
       input: fragmentInput,
     )) {
+      controller.reportHeaderVisualTerminal(
+        DashboardHeaderVisualTerminal.fragmentShader,
+      );
       resources.recordSpaceFabricLiveness(
         controller: controller,
         tuning: tuning,
@@ -6167,6 +6217,9 @@ final class _DashboardHeaderVisualPainter extends CustomPainter {
     }
     // Failure never degrades colour fidelity to a sparse endpoint field.
     // The accepted native static field is the sole fail-soft rendering path.
+    controller.reportHeaderVisualTerminal(
+      DashboardHeaderVisualTerminal.staticRenderer,
+    );
     _paintStatic(canvas, size);
   }
 
