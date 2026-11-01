@@ -13,9 +13,11 @@ import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
+import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import com.fluvi.app.R
@@ -29,6 +31,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -148,28 +151,34 @@ internal class FluviOrbConfigurationStore(context: Context) {
 }
 
 /**
- * This capability gate makes the Android 15 limitation explicit. It does not
- * substitute a bitmap loop or a static header for the required host-local,
- * continuous header material renderer.
+ * The AppWidget backend works on every supported Fluvi API level: a bounded
+ * bitmap sequence is delivered once and ViewFlipper repeats it inside the
+ * launcher. This is intentionally separate from the still-unavailable
+ * Flutter FragmentProgram parity contract.
  */
 internal object OrbRendererCapabilities {
-    data class State(val liveHeaderSupported: Boolean, val reason: String)
+    data class State(
+        val liveHeaderSupported: Boolean,
+        val reason: String,
+        val backend: String,
+        val isShaderIdentical: Boolean,
+    )
 
     fun current(): State = forAndroidApi(Build.VERSION.SDK_INT)
 
-    /**
-     * A platform level alone does not prove the launcher has a compatible
-     * Remote Compose player, therefore there is intentionally no true branch
-     * until a document/host prototype is added and verified on-device.
-     */
-    internal fun forAndroidApi(androidApi: Int): State = when {
-        androidApi < 36 -> State(
-            liveHeaderSupported = false,
-            reason = "Ezen az Android-verzión nincs igazolt élő orb-renderer.",
+    internal fun forAndroidApi(androidApi: Int): State = if (androidApi >= 24) {
+        State(
+            liveHeaderSupported = true,
+            reason = "Kompatibilitási hullámanyag · ViewFlipper helyi lejátszással.",
+            backend = "remoteviews-viewflipper-v1",
+            isShaderIdentical = false,
         )
-        else -> State(
+    } else {
+        State(
             liveHeaderSupported = false,
-            reason = "A launcher Remote Compose material-profilja nincs eszközön igazolva.",
+            reason = "Az orb Android 7.0 vagy újabb rendszert igényel.",
+            backend = "unsupported",
+            isShaderIdentical = false,
         )
     }
 }
@@ -190,7 +199,7 @@ internal object FluviOrbUpdateCoordinator {
         FluviOrbRevisionObserver.reconcile(context)
         updateGeneration.incrementAndGet()
         FluviRuntimeCoordinator.onWidgetRefreshRequested(context)
-        FluviOrbWidgetProvider.render(context, manager, ids, reason)
+        FluviOrbWidgetProvider.renderAsync(context, manager, ids, reason)
     }
 }
 
@@ -230,9 +239,22 @@ internal object FluviOrbRevisionObserver {
 }
 
 class FluviOrbWidgetProvider : AppWidgetProvider() {
+    override fun onEnabled(context: Context) {
+        FluviOrbRevisionObserver.reconcile(context)
+        super.onEnabled(context)
+    }
+
+    override fun onDisabled(context: Context) {
+        // After the final provider instance disappears, reconcile cancels the
+        // Core revision collector instead of retaining a widget-only resource.
+        FluviOrbRevisionObserver.reconcile(context)
+        super.onDisabled(context)
+    }
+
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         FluviOrbRevisionObserver.reconcile(context)
-        render(context, manager, ids, reason = "systemUpdate")
+        val pending = goAsync()
+        renderAsync(context, manager, ids, reason = "systemUpdate") { pending.finish() }
     }
 
     override fun onDeleted(context: Context, ids: IntArray) {
@@ -244,12 +266,13 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
     override fun onRestored(context: Context, oldIds: IntArray, newIds: IntArray) {
         FluviOrbConfigurationStore(context).remap(oldIds, newIds)
         FluviOrbRevisionObserver.reconcile(context)
-        render(
+        val pending = goAsync()
+        renderAsync(
             context,
             AppWidgetManager.getInstance(context),
             newIds,
             reason = "restored",
-        )
+        ) { pending.finish() }
         super.onRestored(context, oldIds, newIds)
     }
 
@@ -259,50 +282,123 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int,
         newOptions: Bundle,
     ) {
-        render(context, manager, intArrayOf(appWidgetId), reason = "optionsChanged")
+        val pending = goAsync()
+        renderAsync(context, manager, intArrayOf(appWidgetId), reason = "optionsChanged") {
+            pending.finish()
+        }
     }
 
     companion object {
-        fun render(context: Context, manager: AppWidgetManager, ids: IntArray, reason: String) {
+        private val renderScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        private val renderGenerations = ConcurrentHashMap<Int, AtomicLong>()
+
+        fun renderAsync(
+            context: Context,
+            manager: AppWidgetManager,
+            ids: IntArray,
+            reason: String,
+            onFinished: () -> Unit = {},
+        ) {
+            val application = context.applicationContext
+            val requestedGenerations = ids.associateWith { id ->
+                renderGenerations.getOrPut(id) { AtomicLong(0) }.incrementAndGet()
+            }
+            renderScope.launch {
+                try {
+                    render(application, manager, ids, reason) { id ->
+                        renderGenerations[id]?.get() == requestedGenerations[id]
+                    }
+                } finally {
+                    onFinished()
+                }
+            }
+        }
+
+        private fun render(
+            context: Context,
+            manager: AppWidgetManager,
+            ids: IntArray,
+            reason: String,
+            isCurrentGeneration: (Int) -> Boolean,
+        ) {
             val store = FluviOrbConfigurationStore(context)
             val capability = OrbRendererCapabilities.current()
             ids.forEach { id ->
-                val configuration = store.get(id)
-                val view = android.widget.RemoteViews(context.packageName, R.layout.fluvi_orb_widget)
-                val accessibilityLabel = if (configuration == null) {
-                    "Fluvi élő orb: beállítás szükséges"
-                } else if (!capability.liveHeaderSupported) {
-                    "Fluvi élő orb: ${capability.reason}"
-                } else {
-                    "Fluvi élő orb"
+                runCatching {
+                    if (!isCurrentGeneration(id)) return@runCatching
+                    // Android launches the configure Activity before a newly
+                    // added widget is committed.  Keep its XML shell empty
+                    // until that Activity returns RESULT_OK instead of
+                    // briefly publishing an arbitrary default target.
+                    val configuration = store.get(id) ?: return@runCatching
+                    val profile = OrbCompatibilityVisualProfileResolver.resolve(context, configuration)
+                    val sequence = OrbCompatibilityFrameRenderer.sequenceFor(
+                        profile,
+                        framePlanFor(context, manager, id),
+                    )
+                    val view = android.widget.RemoteViews(context.packageName, R.layout.fluvi_orb_widget)
+                    view.removeAllViews(R.id.fluvi_orb_frame_flipper)
+                    sequence.frames.forEach { frame ->
+                        val child = android.widget.RemoteViews(
+                            context.packageName,
+                            R.layout.fluvi_orb_widget_frame,
+                        )
+                        child.setImageViewBitmap(R.id.fluvi_orb_frame_image, frame)
+                        view.addView(R.id.fluvi_orb_frame_flipper, child)
+                    }
+                    view.setContentDescription(
+                        R.id.fluvi_orb_root,
+                        "Fluvi élő orb · ${configuration.mode.name} · ${capability.backend}",
+                    )
+                    view.setOnClickPendingIntent(
+                        R.id.fluvi_orb_root,
+                        android.app.PendingIntent.getActivity(
+                            context,
+                            id,
+                            Intent(context, FluviOrbConfigurationActivity::class.java).apply {
+                                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                                data = android.net.Uri.parse("fluvi-orb://configure/$id/$reason")
+                            },
+                            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+                        ),
+                    )
+                    if (!isCurrentGeneration(id)) return@runCatching
+                    manager.updateAppWidget(id, view)
+                    OrbFrameRenderDiagnostics.published(context, id, profile, sequence)
+                }.onFailure { failure ->
+                    // Do not replace a previous good orb with a text/error
+                    // placeholder while a transient frame build fails.
+                    OrbFrameRenderDiagnostics.failed(context, id, failure)
                 }
-                view.setContentDescription(R.id.fluvi_orb_root, accessibilityLabel)
-                view.setViewVisibility(
-                    R.id.fluvi_orb_renderer_unavailable,
-                    if (capability.liveHeaderSupported) View.GONE else View.VISIBLE,
-                )
-                view.setOnClickPendingIntent(
-                    R.id.fluvi_orb_root,
-                    android.app.PendingIntent.getActivity(
-                        context,
-                        id,
-                        Intent(context, FluviOrbConfigurationActivity::class.java).apply {
-                            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                            data = android.net.Uri.parse("fluvi-orb://configure/$id/$reason")
-                        },
-                        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
-                    ),
-                )
-                manager.updateAppWidget(id, view)
             }
+        }
+
+        private fun framePlanFor(
+            context: Context,
+            manager: AppWidgetManager,
+            widgetId: Int,
+        ): OrbFramePlan {
+            val options = manager.getAppWidgetOptions(widgetId)
+            val widthDp = options.getInt(
+                AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH,
+                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 56),
+            )
+            val heightDp = options.getInt(
+                AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT,
+                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 56),
+            )
+            val shortSidePx = (minOf(widthDp, heightDp).coerceAtLeast(1) *
+                context.resources.displayMetrics.density).toInt()
+            return OrbCompatibilityFrameRenderer.planFor(shortSidePx)
         }
     }
 }
 
 /**
  * Deliberately light native configure Activity: it neither starts Flutter nor
- * mounts the dashboard. Its preview is a configuration identity, not a false
- * claim that a static bitmap is the animated header material.
+ * mounts the dashboard. Its still preview is the first frame of the exact
+ * bounded sequence delivered to the launcher; the installed widget itself is
+ * where the ViewFlipper owns playback.
  */
 class FluviOrbConfigurationActivity : Activity() {
     private var appWidgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -311,8 +407,11 @@ class FluviOrbConfigurationActivity : Activity() {
     private lateinit var direction: RadioGroup
     private lateinit var category: Spinner
     private lateinit var categoryHint: TextView
+    private lateinit var preview: ImageView
+    private lateinit var baselineConfiguration: FluviOrbConfiguration
     private val configurationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var categoryOptions: List<OrbCategoryOption> = emptyList()
+    private val categoryLoadGeneration = AtomicLong(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -327,7 +426,9 @@ class FluviOrbConfigurationActivity : Activity() {
         }
         val existing = FluviOrbConfigurationStore(this).get(appWidgetId)
             ?: FluviOrbConfiguration.initial(appWidgetId)
+        baselineConfiguration = existing
         setContentView(buildContent(existing))
+        updatePreview()
         loadBudgetCategories(existing.categoryId, existing.direction)
     }
 
@@ -340,7 +441,7 @@ class FluviOrbConfigurationActivity : Activity() {
         val axisLabels = listOf("SUM", "Év", "Hónap", "Nap")
         val capability = OrbRendererCapabilities.current()
         val padding = (24 * resources.displayMetrics.density).toInt()
-        return LinearLayout(this).apply {
+        val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(padding, padding, padding, padding)
             addView(TextView(context).apply {
@@ -349,19 +450,30 @@ class FluviOrbConfigurationActivity : Activity() {
                 setTextColor(0xff19264d.toInt())
             })
             addView(TextView(context).apply {
-                text = if (capability.liveHeaderSupported) {
-                    "A kiválasztott headeranyag élő előnézete."
-                } else {
-                    capability.reason
-                }
+                text = capability.reason
                 setPadding(0, padding / 2, 0, padding / 2)
             })
+            preview = ImageView(context).apply {
+                contentDescription = "Az orb animációjának első képkockája"
+                adjustViewBounds = true
+                layoutParams = LinearLayout.LayoutParams(
+                    (128 * resources.displayMetrics.density).toInt(),
+                    (128 * resources.displayMetrics.density).toInt(),
+                ).apply { gravity = Gravity.CENTER_HORIZONTAL }
+            }
+            addView(preview)
             addView(TextView(context).apply { text = "Mód" })
             mode = spinner(modeLabels, modeLabels[existing.mode.ordinal])
             addView(mode)
             addView(TextView(context).apply { text = "Időtengely" })
             axis = spinner(axisLabels, axisLabels[existing.timeAxis.ordinal])
             addView(axis)
+            axis.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) =
+                    updatePreview()
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
             addView(TextView(context).apply { text = "További beállítások · irány" })
             direction = RadioGroup(context).apply {
                 orientation = RadioGroup.HORIZONTAL
@@ -392,6 +504,15 @@ class FluviOrbConfigurationActivity : Activity() {
             mode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     updateBudgetCategoryVisibility()
+                    if (position == FluviOrbConfiguration.Mode.budget.ordinal) {
+                        val selected = if (direction.checkedRadioButtonId == R.id.fluvi_orb_income) {
+                            FluviOrbConfiguration.Direction.income
+                        } else {
+                            FluviOrbConfiguration.Direction.expense
+                        }
+                        loadBudgetCategories(null, selected)
+                    }
+                    updatePreview()
                 }
 
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -404,10 +525,16 @@ class FluviOrbConfigurationActivity : Activity() {
                     FluviOrbConfiguration.Direction.expense
                 }
                 loadBudgetCategories(null, selected)
+                updatePreview()
+            }
+            category.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) =
+                    updatePreview()
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
             addView(Button(context).apply {
                 text = when {
-                    !capability.liveHeaderSupported -> "Élő orb nem támogatott"
                     FluviOrbConfigurationStore(this@FluviOrbConfigurationActivity).get(appWidgetId) == null -> "Orb hozzáadása"
                     else -> "Mentés"
                 }
@@ -419,14 +546,38 @@ class FluviOrbConfigurationActivity : Activity() {
                 setOnClickListener { finish() }
             })
         }
+        return ScrollView(this).apply {
+            isFillViewport = true
+            addView(content)
+        }
+    }
+
+    private fun updatePreview() {
+        if (!::preview.isInitialized || !::mode.isInitialized || !::axis.isInitialized || !::direction.isInitialized) return
+        val draft = baselineConfiguration.copy(
+            mode = FluviOrbConfiguration.Mode.entries[mode.selectedItemPosition],
+            timeAxis = FluviOrbConfiguration.TimeAxis.entries[axis.selectedItemPosition],
+            direction = if (direction.checkedRadioButtonId == R.id.fluvi_orb_income) {
+                FluviOrbConfiguration.Direction.income
+            } else {
+                FluviOrbConfiguration.Direction.expense
+            },
+            categoryId = if (::category.isInitialized) {
+                categoryOptions.getOrNull(category.selectedItemPosition)?.id
+            } else {
+                null
+            },
+        )
+        val firstFrame = runCatching {
+            OrbCompatibilityFrameRenderer.sequenceFor(
+                OrbCompatibilityVisualProfileResolver.resolve(this, draft),
+            ).frames.first()
+        }.getOrNull()
+        preview.setImageBitmap(firstFrame)
     }
 
     private fun save(existing: FluviOrbConfiguration) {
-        val capability = OrbRendererCapabilities.current()
-        if (!capability.liveHeaderSupported) {
-            categoryHint.error = capability.reason
-            return
-        }
+        if (!OrbRendererCapabilities.current().liveHeaderSupported) return
         val selectedMode = FluviOrbConfiguration.Mode.entries[mode.selectedItemPosition]
         val categoryId = categoryOptions.getOrNull(category.selectedItemPosition)?.id
         if (selectedMode == FluviOrbConfiguration.Mode.budget && categoryId == null) {
@@ -445,9 +596,20 @@ class FluviOrbConfigurationActivity : Activity() {
             categoryId = categoryId,
             updatedAtUtcMs = System.currentTimeMillis(),
         )
+        // The configuration result is not reported as successful until the
+        // bounded launcher frame package can actually be prepared.
+        val framesPrepared = runCatching {
+            OrbCompatibilityFrameRenderer.sequenceFor(
+                OrbCompatibilityVisualProfileResolver.resolve(this, updated),
+            )
+        }.isSuccess
+        if (!framesPrepared) {
+            categoryHint.error = "Az orb képkockái nem készültek el. Próbáld újra."
+            return
+        }
         FluviOrbConfigurationStore(this).save(updated)
         FluviOrbRevisionObserver.reconcile(this)
-        FluviOrbWidgetProvider.render(
+        FluviOrbWidgetProvider.renderAsync(
             this,
             AppWidgetManager.getInstance(this),
             intArrayOf(appWidgetId),
@@ -461,6 +623,7 @@ class FluviOrbConfigurationActivity : Activity() {
         selectedCategoryId: String?,
         selectedDirection: FluviOrbConfiguration.Direction,
     ) {
+        val generation = categoryLoadGeneration.incrementAndGet()
         category.isEnabled = false
         categoryHint.text = "Budget kategória · betöltés…"
         configurationScope.launch {
@@ -489,6 +652,7 @@ class FluviOrbConfigurationActivity : Activity() {
             }.getOrDefault(emptyList())
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != categoryLoadGeneration.get()) return@runOnUiThread
                 categoryOptions = options
                 val labels = if (options.isEmpty()) {
                     listOf("Nincs beállított kategóriakeret")

@@ -869,6 +869,15 @@ class MainActivity : FlutterActivity() {
                             .putString("automationHomeUiDesign", automationHomeUiDesign)
                             .putString("brandSurfaceAppearanceJson", brandSurfaceAppearanceJson)
                             .apply()
+                        // Header-palette preferences do not change the Core
+                        // revision. Notify the independent AppWidget path so
+                        // its next bounded frame bundle follows the new
+                        // persisted visual profile without requiring a
+                        // dashboard remount.
+                        FluviOrbUpdateCoordinator.requestRefresh(
+                            applicationContext,
+                            "dashboardPresentation",
+                        )
                         result.success(null)
                     }
                     else -> result.notImplemented()
