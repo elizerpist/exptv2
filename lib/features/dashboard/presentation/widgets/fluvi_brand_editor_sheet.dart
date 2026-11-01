@@ -14,7 +14,7 @@ typedef FluviBrandAppearanceChanged =
       required bool persist,
     });
 
-/// The compact three-target adaptation of the approved Spendee mark editor.
+/// The compact three-target adaptation of the approved mark editor.
 /// Choosing a swatch is intentionally separate from applying it: the target
 /// preview is the explicit apply surface, so accidental palette browsing never
 /// overwrites an already personalised logo or app surface.
