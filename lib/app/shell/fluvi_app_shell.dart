@@ -42,6 +42,8 @@ import '../../features/automation/presentation/recurring_navigation.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../../features/runtime_monitoring/data/method_channel_runtime_monitoring_repository.dart';
 import '../../features/runtime_monitoring/domain/runtime_monitoring_repository.dart';
+import '../../features/notification_appearance/data/method_channel_notification_appearance_repository.dart';
+import '../../features/notification_appearance/domain/notification_appearance_repository.dart';
 import '../../features/pulse/data/method_channel_pulse_repository.dart';
 import '../../features/pulse/data/unavailable_pulse_repository.dart';
 import '../../features/pulse/domain/pulse_repository.dart';
@@ -126,6 +128,7 @@ class FluviAppShell extends StatefulWidget {
     this.manualTransactionRepository,
     this.automationRepository,
     this.automationPermissionRepository,
+    this.notificationAppearanceRepository,
     this.pulseRepository,
     this.initialDate,
     this.initialPlane = TimePlane.month,
@@ -143,6 +146,7 @@ class FluviAppShell extends StatefulWidget {
   final ManualTransactionRepository? manualTransactionRepository;
   final AutomationRepository? automationRepository;
   final AutomationPermissionRepository? automationPermissionRepository;
+  final NotificationAppearanceRepository? notificationAppearanceRepository;
   final PulseRepository? pulseRepository;
   final DateTime? initialDate;
   final TimePlane initialPlane;
@@ -257,6 +261,8 @@ class _FluviAppShellState extends State<FluviAppShell>
   late final AutomationRepository _automationRepository;
   late final AutomationPermissionRepository _automationPermissionRepository;
   late final RuntimeMonitoringRepository? _runtimeMonitoringRepository;
+  late final NotificationAppearanceRepository?
+  _notificationAppearanceRepository;
   late final PulseRepository _pulseRepository;
   late final PulseDeliveryCoordinator _pulseDelivery;
   late final bool _seedDemo;
@@ -356,6 +362,10 @@ class _FluviAppShellState extends State<FluviAppShell>
     _runtimeMonitoringRepository = kIsWeb
         ? null
         : MethodChannelRuntimeMonitoringRepository();
+    _notificationAppearanceRepository = kIsWeb
+        ? null
+        : widget.notificationAppearanceRepository ??
+              MethodChannelNotificationAppearanceRepository();
     _categoryCollection = CategoryCollectionController(
       repository: _categoryRepository,
       onDiagnostic: _recordCategoryCollectionDiagnostic,
@@ -1387,6 +1397,8 @@ class _FluviAppShellState extends State<FluviAppShell>
                                         permissions:
                                             _automationPermissionRepository,
                                         runtime: _runtimeMonitoringRepository,
+                                        notificationAppearance:
+                                            _notificationAppearanceRepository,
                                       ),
                                     ],
                                   );

@@ -99,6 +99,7 @@ class MainActivity : FlutterActivity() {
     private var automationChannel: MethodChannel? = null
     private var automationPermissionChannel: MethodChannel? = null
     private var runtimeMonitoringChannel: MethodChannel? = null
+    private var notificationAppearanceChannel: MethodChannel? = null
     private var financialLimitChannel: MethodChannel? = null
     private var pulseChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
@@ -352,6 +353,35 @@ class MainActivity : FlutterActivity() {
                     result.error(
                         "runtime_monitoring_error",
                         error.message ?: "A futási mód nem módosítható.",
+                        null,
+                    )
+                }
+            }
+        }
+        notificationAppearanceChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            NOTIFICATION_APPEARANCE_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                try {
+                    val style = when (call.method) {
+                        "getNotificationSmallIconStyle" ->
+                            FluviNotificationIconResolver.style(applicationContext)
+                        "setNotificationSmallIconStyle" -> {
+                            val requested = call.argument<String>("style")
+                                ?: throw IllegalArgumentException("Hiányzó ikonstílus.")
+                            val selected = FluviNotificationSmallIconStyle.entries.firstOrNull {
+                                it.persistedValue == requested
+                            } ?: throw IllegalArgumentException("Ismeretlen ikonstílus.")
+                            FluviNotificationIconResolver.setStyle(applicationContext, selected)
+                        }
+                        else -> return@setMethodCallHandler result.notImplemented()
+                    }
+                    result.success(mapOf("style" to style.persistedValue))
+                } catch (error: Throwable) {
+                    result.error(
+                        "notification_appearance_error",
+                        error.message ?: "Az értesítési ikon nem módosítható.",
                         null,
                     )
                 }
@@ -923,9 +953,11 @@ class MainActivity : FlutterActivity() {
         automationChannel?.setMethodCallHandler(null)
         automationPermissionChannel?.setMethodCallHandler(null)
         runtimeMonitoringChannel?.setMethodCallHandler(null)
+        notificationAppearanceChannel?.setMethodCallHandler(null)
         automationChannel = null
         automationPermissionChannel = null
         runtimeMonitoringChannel = null
+        notificationAppearanceChannel = null
         categoryChannel = null
         financialLimitChannel?.setMethodCallHandler(null)
         financialLimitChannel = null
@@ -2957,6 +2989,7 @@ class MainActivity : FlutterActivity() {
         const val AUTOMATION_CHANNEL = "com.fluvi/automation"
         const val AUTOMATION_PERMISSION_CHANNEL = "com.fluvi/automation_permissions"
         const val RUNTIME_MONITORING_CHANNEL = "com.fluvi/runtime_monitoring"
+        const val NOTIFICATION_APPEARANCE_CHANNEL = "com.fluvi/notification_appearance"
         const val FINANCIAL_LIMIT_CHANNEL = "com.fluvi/financial_limits"
         const val PULSE_CHANNEL = "com.fluvi/pulse"
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"

@@ -91,7 +91,7 @@ internal class FluviAutomationPlatform(private val activity: Activity) {
             manager.notify(
                 TEST_NOTIFICATION_ID,
                 builder
-                    .setSmallIcon(R.drawable.ic_stat_fluvi)
+                    .setSmallIcon(FluviNotificationIconResolver.smallIconRes(activity))
                     .setContentTitle("Fluvi tesztértesítés")
                     .setContentText(text)
                     .setStyle(Notification.BigTextStyle().bigText("A Fluvi saját tesztértesítése. $text"))
@@ -231,5 +231,52 @@ internal class FluviAutomationPlatform(private val activity: Activity) {
         const val REQUEST_POST_NOTIFICATIONS = 8051
         const val TEST_CHANNEL = "fluvi_test_notifications"
         const val TEST_NOTIFICATION_ID = 4051
+
+        /**
+         * Restyle an already visible probe in place. It never calls
+         * [FluviPushDiagnostics.beginTest], so choosing an icon cannot become
+         * a new listener-delivery or financial-processing test.
+         */
+        fun refreshVisibleTestNotificationIcon(context: Context) {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val active = manager.activeNotifications.firstOrNull { notification ->
+                notification.packageName == context.packageName &&
+                    notification.id == TEST_NOTIFICATION_ID &&
+                    (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                        notification.notification.channelId == TEST_CHANNEL)
+            } ?: return
+            val extras = active.notification.extras
+            val title = extras?.getCharSequence(Notification.EXTRA_TITLE)
+                ?.toString()
+                ?.ifBlank { null }
+                ?: "Fluvi tesztértesítés"
+            val text = extras?.getCharSequence(Notification.EXTRA_TEXT)
+                ?.toString()
+                ?.ifBlank { null }
+                ?: "A Fluvi saját tesztértesítése."
+            val bigText = extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)
+                ?.toString()
+                ?.ifBlank { null }
+                ?: text
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(context, TEST_CHANNEL)
+            } else {
+                Notification.Builder(context)
+            }
+            val replacement = builder
+                .setSmallIcon(FluviNotificationIconResolver.smallIconRes(context))
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(Notification.BigTextStyle().bigText(bigText))
+                .setWhen(active.postTime)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .build()
+            if (active.tag == null) {
+                manager.notify(TEST_NOTIFICATION_ID, replacement)
+            } else {
+                manager.notify(active.tag, TEST_NOTIFICATION_ID, replacement)
+            }
+        }
     }
 }

@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.widget.AdapterView
 import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
@@ -154,14 +155,21 @@ internal class FluviOrbConfigurationStore(context: Context) {
 internal object OrbRendererCapabilities {
     data class State(val liveHeaderSupported: Boolean, val reason: String)
 
-    fun current(): State = when {
-        Build.VERSION.SDK_INT < 36 -> State(
+    fun current(): State = forAndroidApi(Build.VERSION.SDK_INT)
+
+    /**
+     * A platform level alone does not prove the launcher has a compatible
+     * Remote Compose player, therefore there is intentionally no true branch
+     * until a document/host prototype is added and verified on-device.
+     */
+    internal fun forAndroidApi(androidApi: Int): State = when {
+        androidApi < 36 -> State(
             liveHeaderSupported = false,
-            reason = "Az élő header-orb Android 16+ launcher rendererét igényli.",
+            reason = "Ezen az Android-verzión nincs igazolt élő orb-renderer.",
         )
         else -> State(
             liveHeaderSupported = false,
-            reason = "A launcher Remote Compose material-profilja még nincs eszközön igazolva.",
+            reason = "A launcher Remote Compose material-profilja nincs eszközön igazolva.",
         )
     }
 }
@@ -261,16 +269,18 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
             ids.forEach { id ->
                 val configuration = store.get(id)
                 val view = android.widget.RemoteViews(context.packageName, R.layout.fluvi_orb_widget)
-                val label = if (configuration == null) {
-                    "Orb beállítása"
+                val accessibilityLabel = if (configuration == null) {
+                    "Fluvi élő orb: beállítás szükséges"
                 } else if (!capability.liveHeaderSupported) {
-                    "Élő orb\n${capability.reason}"
+                    "Fluvi élő orb: ${capability.reason}"
                 } else {
-                    // Kept intentionally unreachable until an actual launcher
-                    // host proves the full header renderer contract.
-                    "Élő orb"
+                    "Fluvi élő orb"
                 }
-                view.setTextViewText(R.id.fluvi_orb_status, label)
+                view.setContentDescription(R.id.fluvi_orb_root, accessibilityLabel)
+                view.setViewVisibility(
+                    R.id.fluvi_orb_renderer_unavailable,
+                    if (capability.liveHeaderSupported) View.GONE else View.VISIBLE,
+                )
                 view.setOnClickPendingIntent(
                     R.id.fluvi_orb_root,
                     android.app.PendingIntent.getActivity(
@@ -326,6 +336,9 @@ class FluviOrbConfigurationActivity : Activity() {
             adapter = ArrayAdapter(this@FluviOrbConfigurationActivity, android.R.layout.simple_spinner_dropdown_item, values)
             setSelection(values.indexOf(selected).coerceAtLeast(0))
         }
+        val modeLabels = listOf("Mind", "Balance", "Budget")
+        val axisLabels = listOf("SUM", "Év", "Hónap", "Nap")
+        val capability = OrbRendererCapabilities.current()
         val padding = (24 * resources.displayMetrics.density).toInt()
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -336,14 +349,18 @@ class FluviOrbConfigurationActivity : Activity() {
                 setTextColor(0xff19264d.toInt())
             })
             addView(TextView(context).apply {
-                text = "Az élő header renderer ezen a rendszeren még nem elérhető. A mentett célbeállítás megmarad, és támogatott hoston használható."
+                text = if (capability.liveHeaderSupported) {
+                    "A kiválasztott headeranyag élő előnézete."
+                } else {
+                    capability.reason
+                }
                 setPadding(0, padding / 2, 0, padding / 2)
             })
             addView(TextView(context).apply { text = "Mód" })
-            mode = spinner(FluviOrbConfiguration.Mode.entries.map { it.name }, existing.mode.name)
+            mode = spinner(modeLabels, modeLabels[existing.mode.ordinal])
             addView(mode)
             addView(TextView(context).apply { text = "Időtengely" })
-            axis = spinner(FluviOrbConfiguration.TimeAxis.entries.map { it.name }, existing.timeAxis.name)
+            axis = spinner(axisLabels, axisLabels[existing.timeAxis.ordinal])
             addView(axis)
             addView(TextView(context).apply { text = "További beállítások · irány" })
             direction = RadioGroup(context).apply {
@@ -367,6 +384,19 @@ class FluviOrbConfigurationActivity : Activity() {
             category = spinner(listOf("Kategóriák betöltése…"), "Kategóriák betöltése…")
             category.isEnabled = false
             addView(category)
+            fun updateBudgetCategoryVisibility() {
+                val visible = mode.selectedItemPosition == FluviOrbConfiguration.Mode.budget.ordinal
+                categoryHint.visibility = if (visible) View.VISIBLE else View.GONE
+                category.visibility = if (visible) View.VISIBLE else View.GONE
+            }
+            mode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    updateBudgetCategoryVisibility()
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+            updateBudgetCategoryVisibility()
             direction.setOnCheckedChangeListener { _, checkedId ->
                 val selected = if (checkedId == R.id.fluvi_orb_income) {
                     FluviOrbConfiguration.Direction.income
@@ -376,8 +406,13 @@ class FluviOrbConfigurationActivity : Activity() {
                 loadBudgetCategories(null, selected)
             }
             addView(Button(context).apply {
-                text = if (FluviOrbConfigurationStore(this@FluviOrbConfigurationActivity).get(appWidgetId) == null) "Orb hozzáadása" else "Mentés"
-                setOnClickListener { save(existing) }
+                text = when {
+                    !capability.liveHeaderSupported -> "Élő orb nem támogatott"
+                    FluviOrbConfigurationStore(this@FluviOrbConfigurationActivity).get(appWidgetId) == null -> "Orb hozzáadása"
+                    else -> "Mentés"
+                }
+                isEnabled = capability.liveHeaderSupported
+                if (capability.liveHeaderSupported) setOnClickListener { save(existing) }
             })
             addView(Button(context).apply {
                 text = "Mégse"
@@ -387,7 +422,12 @@ class FluviOrbConfigurationActivity : Activity() {
     }
 
     private fun save(existing: FluviOrbConfiguration) {
-        val selectedMode = FluviOrbConfiguration.Mode.valueOf(mode.selectedItem as String)
+        val capability = OrbRendererCapabilities.current()
+        if (!capability.liveHeaderSupported) {
+            categoryHint.error = capability.reason
+            return
+        }
+        val selectedMode = FluviOrbConfiguration.Mode.entries[mode.selectedItemPosition]
         val categoryId = categoryOptions.getOrNull(category.selectedItemPosition)?.id
         if (selectedMode == FluviOrbConfiguration.Mode.budget && categoryId == null) {
             categoryHint.error = "Ehhez a nézethez még nincs beállított kategóriakeret."
@@ -396,7 +436,7 @@ class FluviOrbConfigurationActivity : Activity() {
         val updated = existing.copy(
             configurationRevision = existing.configurationRevision + 1,
             mode = selectedMode,
-            timeAxis = FluviOrbConfiguration.TimeAxis.valueOf(axis.selectedItem as String),
+            timeAxis = FluviOrbConfiguration.TimeAxis.entries[axis.selectedItemPosition],
             direction = if (direction.checkedRadioButtonId == R.id.fluvi_orb_income) {
                 FluviOrbConfiguration.Direction.income
             } else {

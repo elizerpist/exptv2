@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../automation/domain/automation_models.dart';
 import '../../automation/domain/automation_repository.dart';
+import '../../notification_appearance/domain/notification_appearance_repository.dart';
 import '../../runtime_monitoring/domain/runtime_monitoring_repository.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, required this.permissions, this.runtime});
+  const SettingsPage({
+    super.key,
+    required this.permissions,
+    this.runtime,
+    this.notificationAppearance,
+  });
 
   final AutomationPermissionRepository permissions;
   final RuntimeMonitoringRepository? runtime;
+  final NotificationAppearanceRepository? notificationAppearance;
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -17,8 +25,10 @@ class _SettingsPageState extends State<SettingsPage>
     with WidgetsBindingObserver {
   AutomationPermissionStatus? _status;
   RuntimeMonitoringStatus? _runtimeStatus;
+  NotificationSmallIconStyle? _smallIconStyle;
   bool _loading = true;
   bool _runtimeUpdating = false;
+  bool _smallIconUpdating = false;
   @override
   void initState() {
     super.initState();
@@ -42,6 +52,7 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _refresh() async {
     AutomationPermissionStatus? permissions;
     RuntimeMonitoringStatus? runtime;
+    NotificationSmallIconStyle? smallIconStyle;
     try {
       permissions = await widget.permissions.getPermissionStatus();
     } catch (_) {
@@ -53,10 +64,17 @@ class _SettingsPageState extends State<SettingsPage>
     } catch (_) {
       // The switch state must never be guessed from a failed platform call.
     }
+    try {
+      smallIconStyle = await widget.notificationAppearance?.smallIconStyle();
+    } catch (_) {
+      // The native preference remains authoritative; do not pretend a style
+      // was saved if the method channel is currently unavailable.
+    }
     if (mounted) {
       setState(() {
         _status = permissions ?? _status;
         _runtimeStatus = runtime ?? _runtimeStatus;
+        _smallIconStyle = smallIconStyle ?? _smallIconStyle;
         _loading = false;
       });
     }
@@ -70,6 +88,27 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _stopMonitoring() =>
       _changeRuntime(() => widget.runtime!.stopMonitoring());
+
+  Future<void> _changeSmallIconStyle(NotificationSmallIconStyle style) async {
+    if (_smallIconUpdating || widget.notificationAppearance == null) return;
+    setState(() => _smallIconUpdating = true);
+    try {
+      final persisted = await widget.notificationAppearance!.setSmallIconStyle(
+        style,
+      );
+      if (mounted) setState(() => _smallIconStyle = persisted);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Az értesítési ikon módosítása nem sikerült.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _smallIconUpdating = false);
+    }
+  }
 
   Future<void> _changeRuntime(
     Future<RuntimeMonitoringStatus> Function() operation,
@@ -249,6 +288,45 @@ class _SettingsPageState extends State<SettingsPage>
               ),
             ),
           ],
+          if (widget.notificationAppearance != null) ...[
+            const SizedBox(height: 22),
+            const Text(
+              'Értesítések megjelenése',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Column(
+                children: [
+                  const ListTile(
+                    leading: Icon(Icons.notifications_outlined),
+                    title: Text('Értesítési ikon'),
+                    subtitle: Text(
+                      'A statusbarban és a Fluvi értesítéseiben megjelenő ikon.',
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  _NotificationIconStyleTile(
+                    key: const ValueKey('notification-small-icon-outline'),
+                    style: NotificationSmallIconStyle.outline,
+                    selected:
+                        _smallIconStyle ?? NotificationSmallIconStyle.outline,
+                    enabled: !_smallIconUpdating,
+                    onSelected: _changeSmallIconStyle,
+                  ),
+                  const Divider(height: 1),
+                  _NotificationIconStyleTile(
+                    key: const ValueKey('notification-small-icon-filled'),
+                    style: NotificationSmallIconStyle.filled,
+                    selected:
+                        _smallIconStyle ?? NotificationSmallIconStyle.outline,
+                    enabled: !_smallIconUpdating,
+                    onSelected: _changeSmallIconStyle,
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 22),
           const Text(
             'Adatkezelés',
@@ -259,6 +337,61 @@ class _SettingsPageState extends State<SettingsPage>
             'A Fluvi kizárólag az általad kiválasztott és megfigyelésre engedélyezett alkalmazások értesítéseit tárolja. Az értesítések helyben maradnak; az alkalmazás nem küldi el őket külső szolgáltatásnak.',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _NotificationIconStyleTile extends StatelessWidget {
+  const _NotificationIconStyleTile({
+    super.key,
+    required this.style,
+    required this.selected,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final NotificationSmallIconStyle style;
+  final NotificationSmallIconStyle selected;
+  final bool enabled;
+  final ValueChanged<NotificationSmallIconStyle> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = style == selected;
+    final asset = switch (style) {
+      NotificationSmallIconStyle.outline =>
+        'assets/fluvi/brand/fluvi_notification_outline.svg',
+      NotificationSmallIconStyle.filled =>
+        'assets/fluvi/brand/fluvi_notification_filled.svg',
+    };
+    final title = switch (style) {
+      NotificationSmallIconStyle.outline => 'Jelenlegi · outline',
+      NotificationSmallIconStyle.filled => 'Kitöltött',
+    };
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: 'Értesítési ikon: $title',
+      child: ListTile(
+        enabled: enabled,
+        onTap: enabled ? () => onSelected(style) : null,
+        leading: Container(
+          width: 40,
+          height: 40,
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: const Color(0xff19264d),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: SvgPicture.asset(asset, excludeFromSemantics: true),
+        ),
+        title: Text(title),
+        trailing: Radio<NotificationSmallIconStyle>(
+          value: style,
+          groupValue: selected,
+          onChanged: enabled ? (value) => onSelected(value!) : null,
+        ),
       ),
     );
   }

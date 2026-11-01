@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A neutral capability marker, never a substitute for the live material. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12,2.75A9.25,9.25 0,1 0,12,21.25A9.25,9.25 0,1 0,12,2.75"
+        android:strokeColor="#9919264D"
+        android:strokeWidth="1.4" />
+    <path
+        android:fillColor="#9919264D"
+        android:pathData="M6.2,16.8L16.8,6.2L17.8,7.2L7.2,17.8Z" />
+</vector>

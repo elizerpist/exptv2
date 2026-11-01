@@ -6,13 +6,13 @@
     android:background="@android:color/transparent"
     android:foregroundGravity="center">
 
-    <TextView
-        android:id="@+id/fluvi_orb_status"
+    <!-- Explicit unsupported-renderer state. This is not a faux static orb. -->
+    <ImageView
+        android:id="@+id/fluvi_orb_renderer_unavailable"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        android:padding="4dp"
-        android:textAlignment="center"
-        android:textColor="#19264D"
-        android:textSize="9sp" />
+        android:contentDescription="@null"
+        android:padding="12dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/ic_orb_renderer_unavailable" />
 </FrameLayout>

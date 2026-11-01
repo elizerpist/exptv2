@@ -19,9 +19,9 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
+import com.fluvi.app.FluviNotificationIconResolver
 import com.fluvi.app.FluviPushNotificationListenerService
 import com.fluvi.app.MainActivity
-import com.fluvi.app.R
 
 /**
  * Persistent user intent for notification monitoring. It deliberately lives
@@ -371,7 +371,11 @@ internal object FluviRuntimeNotificationController {
     const val ACTION_STOP = "com.fluvi.app.runtime.STOP"
     const val ACTION_OPEN = "com.fluvi.app.runtime.OPEN"
 
-    fun notification(context: Context, status: FluviRuntimeStatus): Notification {
+    fun notification(
+        context: Context,
+        status: FluviRuntimeStatus,
+        originalPostTimeUtcMs: Long? = null,
+    ): Notification {
         ensureChannel(context)
         val content = when {
             status.foregroundRequested && status.foregroundServiceRunning -> "Előtérszolgáltatás aktív"
@@ -395,14 +399,15 @@ internal object FluviRuntimeNotificationController {
             Intent(context, FluviRuntimeActionReceiver::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val publicVersion = builder(context)
-            .setSmallIcon(R.drawable.ic_stat_fluvi)
+        val publicVersionBuilder = builder(context)
+            .setSmallIcon(FluviNotificationIconResolver.smallIconRes(context))
             .setContentTitle("Fluvi · Háttérfigyelés engedélyezve")
             .setContentText("A Fluvi figyelési állapota aktív.")
             .setCategory(Notification.CATEGORY_SERVICE)
-            .build()
-        return builder(context)
-            .setSmallIcon(R.drawable.ic_stat_fluvi)
+        originalPostTimeUtcMs?.let(publicVersionBuilder::setWhen)
+        val publicVersion = publicVersionBuilder.build()
+        val notificationBuilder = builder(context)
+            .setSmallIcon(FluviNotificationIconResolver.smallIconRes(context))
             .setContentTitle(
                 if (status.foregroundRequested) "Fluvi · Értesítésfigyelés" else "Fluvi · Háttérfigyelés",
             )
@@ -416,12 +421,16 @@ internal object FluviRuntimeNotificationController {
             .setContentIntent(open)
             .addAction(
                 Notification.Action.Builder(
-                    Icon.createWithResource(context, R.drawable.ic_stat_fluvi),
+                    Icon.createWithResource(
+                        context,
+                        FluviNotificationIconResolver.smallIconRes(context),
+                    ),
                     "Figyelés leállítása",
                     stop,
                 ).build(),
             )
-            .build()
+        originalPostTimeUtcMs?.let(notificationBuilder::setWhen)
+        return notificationBuilder.build()
     }
 
     fun publish(context: Context, status: FluviRuntimeStatus) {
@@ -436,6 +445,27 @@ internal object FluviRuntimeNotificationController {
     fun cancel(context: Context) {
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(NOTIFICATION_ID)
+    }
+
+    /** Updates only an existing status notification, never reviving one. */
+    fun refreshVisibleIcon(context: Context) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val active = manager.activeNotifications.firstOrNull { notification ->
+            notification.packageName == context.packageName &&
+                notification.id == NOTIFICATION_ID &&
+                (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                    notification.notification.channelId == CHANNEL_ID)
+        } ?: return
+        val replacement = notification(
+            context,
+            FluviRuntimeCoordinator.status(context),
+            originalPostTimeUtcMs = active.postTime,
+        )
+        if (active.tag == null) {
+            manager.notify(NOTIFICATION_ID, replacement)
+        } else {
+            manager.notify(active.tag, NOTIFICATION_ID, replacement)
+        }
     }
 
     fun statusChannelEnabled(context: Context): Boolean =
