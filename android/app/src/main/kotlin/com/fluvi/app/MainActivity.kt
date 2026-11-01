@@ -64,6 +64,8 @@ import com.fluvi.app.dashboard.DashboardPreparedIndexAcquisitionReasons
 import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.app.query.QueryMenuMethodBridge
+import com.fluvi.app.runtime.FluviRuntimeCoordinator
+import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.StandardMethodCodec
@@ -96,6 +98,7 @@ class MainActivity : FlutterActivity() {
     private var manualTransactionChannel: MethodChannel? = null
     private var automationChannel: MethodChannel? = null
     private var automationPermissionChannel: MethodChannel? = null
+    private var runtimeMonitoringChannel: MethodChannel? = null
     private var financialLimitChannel: MethodChannel? = null
     private var pulseChannel: MethodChannel? = null
     private var queryChannel: MethodChannel? = null
@@ -110,6 +113,13 @@ class MainActivity : FlutterActivity() {
     private var automationUpdateEventChannel: EventChannel? = null
     private var pendingPostNotificationPermissionResult: MethodChannel.Result? = null
     private val preparedQueryGenerationOwner = DashboardPreparedIndexQueryGenerationOwner()
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Apply the persisted recents choice before Flutter constructs the
+        // shell, including a launch originating from a notification/widget.
+        FluviRuntimeCoordinator.applyRecentsVisibility(this)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -172,7 +182,15 @@ class MainActivity : FlutterActivity() {
                             handleCategoryCall(call, fluviCore)
                         }
                     }
-                        .onSuccess(result::success)
+                        .onSuccess { value ->
+                            if (call.method in ORB_CATEGORY_MUTATIONS) {
+                                FluviOrbUpdateCoordinator.requestRefresh(
+                                    applicationContext,
+                                    reason = "category:${call.method}",
+                                )
+                            }
+                            result.success(value)
+                        }
                         .onFailure { error ->
                             result.error(
                                 if (error is IllegalArgumentException) {
@@ -197,7 +215,15 @@ class MainActivity : FlutterActivity() {
                         withContext(Dispatchers.IO) {
                             handleManualTransactionCall(call, fluviCore)
                         }
-                    }.onSuccess(result::success).onFailure { error ->
+                    }.onSuccess { value ->
+                        if (call.method in ORB_MANUAL_TRANSACTION_MUTATIONS) {
+                            FluviOrbUpdateCoordinator.requestRefresh(
+                                applicationContext,
+                                reason = "ledger:${call.method}",
+                            )
+                        }
+                        result.success(value)
+                    }.onFailure { error ->
                         result.error(
                             when (error) {
                                 is com.fluvi.core.model.LedgerRevisionConflictException -> "revision_conflict"
@@ -220,6 +246,12 @@ class MainActivity : FlutterActivity() {
                     val response = try {
                         val nativeResult = withContext(Dispatchers.IO) {
                             handleAutomationCall(call, fluviCore)
+                        }
+                        if (call.method in ORB_AUTOMATION_MUTATIONS) {
+                            FluviOrbUpdateCoordinator.requestRefresh(
+                                applicationContext,
+                                reason = "automation:${call.method}",
+                            )
                         }
                         automationMethodChannelResponse(nativeResult)
                     } catch (error: Throwable) {
@@ -293,6 +325,38 @@ class MainActivity : FlutterActivity() {
                 if (call.method != "listInstalledApps" && call.method != "getInstalledAppIcon") result.success(value)
             }
         }
+        runtimeMonitoringChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            RUNTIME_MONITORING_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                try {
+                    val status = when (call.method) {
+                        "getRuntimeStatus" -> FluviRuntimeCoordinator.status(applicationContext)
+                        "setForegroundRequested" -> FluviRuntimeCoordinator.setForegroundRequested(
+                            applicationContext,
+                            call.argument<Boolean>("requested")
+                                ?: throw IllegalArgumentException("Missing foreground request."),
+                        )
+                        "setBackgroundRequested" -> FluviRuntimeCoordinator.setBackgroundRequested(
+                            applicationContext,
+                            call.argument<Boolean>("requested")
+                                ?: throw IllegalArgumentException("Missing background request."),
+                        )
+                        "stopMonitoring" -> FluviRuntimeCoordinator.stopMonitoring(applicationContext)
+                        else -> return@setMethodCallHandler result.notImplemented()
+                    }
+                    FluviRuntimeCoordinator.applyRecentsVisibility(this)
+                    result.success(status.toMap())
+                } catch (error: Throwable) {
+                    result.error(
+                        "runtime_monitoring_error",
+                        error.message ?: "A futási mód nem módosítható.",
+                        null,
+                    )
+                }
+            }
+        }
         financialLimitChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             FINANCIAL_LIMIT_CHANNEL,
@@ -301,7 +365,15 @@ class MainActivity : FlutterActivity() {
                 scope.launch {
                     runCatching {
                         withContext(Dispatchers.IO) { handleFinancialLimitCall(call, fluviCore) }
-                    }.onSuccess(result::success).onFailure { error ->
+                    }.onSuccess { value ->
+                        if (call.method in ORB_FINANCIAL_LIMIT_MUTATIONS) {
+                            FluviOrbUpdateCoordinator.requestRefresh(
+                                applicationContext,
+                                reason = "limit:${call.method}",
+                            )
+                        }
+                        result.success(value)
+                    }.onFailure { error ->
                         result.error(
                             if (error is IllegalArgumentException) "validation" else "financial_limit_error",
                             error.message ?: "Financial limit operation failed.",
@@ -809,6 +881,9 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        FluviRuntimeCoordinator.reconcileHistoricalUserStop(applicationContext)
+        FluviRuntimeCoordinator.onAppSurfaceVisibilityChanged(applicationContext, true)
+        FluviRuntimeCoordinator.applyRecentsVisibility(this)
         // Signal and triage state are diagnostic data. Re-evaluate after a
         // lifecycle return without changing the financial Core revision.
         core?.let { fluviCore ->
@@ -816,6 +891,17 @@ class MainActivity : FlutterActivity() {
                 runCatching { fluviCore.pulsePriority.reevaluateCurrent() }
             }
         }
+    }
+
+    override fun onStop() {
+        FluviRuntimeCoordinator.onAppSurfaceVisibilityChanged(applicationContext, false)
+        super.onStop()
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        FluviRuntimeCoordinator.applyRecentsVisibility(this)
     }
 
     override fun onRequestPermissionsResult(
@@ -836,8 +922,10 @@ class MainActivity : FlutterActivity() {
         manualTransactionChannel?.setMethodCallHandler(null)
         automationChannel?.setMethodCallHandler(null)
         automationPermissionChannel?.setMethodCallHandler(null)
+        runtimeMonitoringChannel?.setMethodCallHandler(null)
         automationChannel = null
         automationPermissionChannel = null
+        runtimeMonitoringChannel = null
         categoryChannel = null
         financialLimitChannel?.setMethodCallHandler(null)
         financialLimitChannel = null
@@ -2851,10 +2939,24 @@ class MainActivity : FlutterActivity() {
         requireNotNull(call.argument<T>(key)) { "Missing category argument: $key" }
 
     companion object {
+        private val ORB_CATEGORY_MUTATIONS = setOf("createCategory", "updateCategory", "deleteCategory")
+        private val ORB_MANUAL_TRANSACTION_MUTATIONS = setOf("createManualTransaction", "updateTransaction")
+        private val ORB_FINANCIAL_LIMIT_MUTATIONS = setOf(
+            "upsertFinancialLimit",
+            "upsertFinancialLimitsBatch",
+            "deleteFinancialLimit",
+        )
+        private val ORB_AUTOMATION_MUTATIONS = setOf(
+            "approveReview",
+            "updateRecurrenceOccurrence",
+            "skipRecurrenceOccurrence",
+            "realizeDueRecurrences",
+        )
         const val CATEGORY_CHANNEL = "com.fluvi/category_repository"
         const val MANUAL_TRANSACTION_CHANNEL = "com.fluvi/manual_transactions"
         const val AUTOMATION_CHANNEL = "com.fluvi/automation"
         const val AUTOMATION_PERMISSION_CHANNEL = "com.fluvi/automation_permissions"
+        const val RUNTIME_MONITORING_CHANNEL = "com.fluvi/runtime_monitoring"
         const val FINANCIAL_LIMIT_CHANNEL = "com.fluvi/financial_limits"
         const val PULSE_CHANNEL = "com.fluvi/pulse"
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"

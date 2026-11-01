@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../automation/domain/automation_models.dart';
 import '../../automation/domain/automation_repository.dart';
+import '../../runtime_monitoring/domain/runtime_monitoring_repository.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, required this.permissions});
+  const SettingsPage({super.key, required this.permissions, this.runtime});
 
   final AutomationPermissionRepository permissions;
+  final RuntimeMonitoringRepository? runtime;
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -14,7 +16,9 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage>
     with WidgetsBindingObserver {
   AutomationPermissionStatus? _status;
+  RuntimeMonitoringStatus? _runtimeStatus;
   bool _loading = true;
+  bool _runtimeUpdating = false;
   @override
   void initState() {
     super.initState();
@@ -36,18 +40,57 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Future<void> _refresh() async {
+    AutomationPermissionStatus? permissions;
+    RuntimeMonitoringStatus? runtime;
     try {
-      final status = await widget.permissions.getPermissionStatus();
-      if (mounted) {
-        setState(() {
-          _status = status;
-          _loading = false;
-        });
-      }
+      permissions = await widget.permissions.getPermissionStatus();
+    } catch (_) {
+      // Keep the settings page useful if the permission bridge is temporarily
+      // unavailable; runtime state has a separate native source of truth.
+    }
+    try {
+      runtime = await widget.runtime?.status();
+    } catch (_) {
+      // The switch state must never be guessed from a failed platform call.
+    }
+    if (mounted) {
+      setState(() {
+        _status = permissions ?? _status;
+        _runtimeStatus = runtime ?? _runtimeStatus;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _changeForeground(bool requested) =>
+      _changeRuntime(() => widget.runtime!.setForegroundRequested(requested));
+
+  Future<void> _changeBackground(bool requested) =>
+      _changeRuntime(() => widget.runtime!.setBackgroundRequested(requested));
+
+  Future<void> _stopMonitoring() =>
+      _changeRuntime(() => widget.runtime!.stopMonitoring());
+
+  Future<void> _changeRuntime(
+    Future<RuntimeMonitoringStatus> Function() operation,
+  ) async {
+    if (_runtimeUpdating || widget.runtime == null) return;
+    setState(() => _runtimeUpdating = true);
+    try {
+      final status = await operation();
+      if (mounted) setState(() => _runtimeStatus = status);
     } catch (_) {
       if (mounted) {
-        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'A futási mód módosítása nem sikerült. Próbáld újra.',
+            ),
+          ),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _runtimeUpdating = false);
     }
   }
 
@@ -146,6 +189,66 @@ class _SettingsPageState extends State<SettingsPage>
               ],
             ),
           ),
+          if (widget.runtime != null) ...[
+            const SizedBox(height: 22),
+            const Text(
+              'Futás és háttérfigyelés',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile.adaptive(
+                    key: const ValueKey('runtime-foreground-switch'),
+                    value: _runtimeStatus?.foregroundRequested ?? false,
+                    onChanged: _runtimeUpdating ? null : _changeForeground,
+                    secondary: const Icon(Icons.visibility_outlined),
+                    title: const Text('Előtérszolgáltatás'),
+                    subtitle: const Text(
+                      'Bekapcsolva az értesítésfigyelés előtérszolgáltatással működik, és állapotértesítést jelenít meg.',
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile.adaptive(
+                    key: const ValueKey('runtime-background-switch'),
+                    value: _runtimeStatus?.backgroundRequested ?? false,
+                    onChanged: _runtimeUpdating ? null : _changeBackground,
+                    secondary: const Icon(Icons.hide_source_outlined),
+                    title: const Text('Háttérmód'),
+                    subtitle: const Text(
+                      'Figyelés a Fluvi felületének bezárása után is. A Fluvi kártyája elrejtőzik a legutóbbi alkalmazások közül.',
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    onTap: () =>
+                        widget.permissions.openAppNotificationSettings(),
+                    leading: Icon(
+                      _runtimeStatus?.captureAllowed == true
+                          ? Icons.check_circle_outline
+                          : Icons.info_outline,
+                    ),
+                    title: const Text('Tényleges állapot'),
+                    subtitle: Text(
+                      _runtimeStatus?.message ?? 'Állapot ellenőrzése…',
+                    ),
+                    trailing:
+                        (_runtimeStatus?.foregroundRequested == true ||
+                            _runtimeStatus?.backgroundRequested == true)
+                        ? TextButton(
+                            key: const ValueKey('runtime-stop-monitoring'),
+                            onPressed: _runtimeUpdating
+                                ? null
+                                : _stopMonitoring,
+                            child: const Text('Leállítás'),
+                          )
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 22),
           const Text(
             'Adatkezelés',

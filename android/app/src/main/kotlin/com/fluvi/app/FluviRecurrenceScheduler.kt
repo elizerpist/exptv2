@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import com.fluvi.core.FluviCore
 import com.fluvi.core.FluviCoreFactory
+import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -63,7 +64,13 @@ class FluviRecurrenceDueReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             val core = FluviCoreFactory.create(context.applicationContext)
             try {
-                core.recurrences.realizeDueTimeOccurrences()
+                val realized = core.recurrences.realizeDueTimeOccurrences()
+                if (realized.isNotEmpty()) {
+                    FluviOrbUpdateCoordinator.requestRefresh(
+                        context.applicationContext,
+                        reason = "scheduledRecurrence",
+                    )
+                }
                 FluviRecurrenceScheduler.scheduleNext(context.applicationContext, core)
             } finally {
                 core.close()
@@ -77,5 +84,12 @@ class FluviRecurrenceDueReceiver : BroadcastReceiver() {
 class FluviRecurrenceSystemEventReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         FluviRecurrenceScheduler.scheduleNextFromFreshCore(context.applicationContext)
+        // Every first-version orb binds Year/Month/Day to the current local
+        // calendar scope, so clock and timezone changes invalidate its scene
+        // independently of a financial write.
+        FluviOrbUpdateCoordinator.requestRefresh(
+            context.applicationContext,
+            reason = "systemTimeChanged",
+        )
     }
 }

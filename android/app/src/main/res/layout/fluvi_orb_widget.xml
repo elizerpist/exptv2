@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/fluvi_orb_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:foregroundGravity="center">
+
+    <TextView
+        android:id="@+id/fluvi_orb_status"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:padding="4dp"
+        android:textAlignment="center"
+        android:textColor="#19264D"
+        android:textSize="9sp" />
+</FrameLayout>

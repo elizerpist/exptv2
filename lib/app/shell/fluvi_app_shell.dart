@@ -40,6 +40,8 @@ import '../../features/automation/presentation/automation_dashboard_page.dart';
 import '../../features/automation/presentation/push_profile_navigation.dart';
 import '../../features/automation/presentation/recurring_navigation.dart';
 import '../../features/settings/presentation/settings_page.dart';
+import '../../features/runtime_monitoring/data/method_channel_runtime_monitoring_repository.dart';
+import '../../features/runtime_monitoring/domain/runtime_monitoring_repository.dart';
 import '../../features/pulse/data/method_channel_pulse_repository.dart';
 import '../../features/pulse/data/unavailable_pulse_repository.dart';
 import '../../features/pulse/domain/pulse_repository.dart';
@@ -254,6 +256,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   late final ManualTransactionRepository _manualTransactionRepository;
   late final AutomationRepository _automationRepository;
   late final AutomationPermissionRepository _automationPermissionRepository;
+  late final RuntimeMonitoringRepository? _runtimeMonitoringRepository;
   late final PulseRepository _pulseRepository;
   late final PulseDeliveryCoordinator _pulseDelivery;
   late final bool _seedDemo;
@@ -350,6 +353,9 @@ class _FluviAppShellState extends State<FluviAppShell>
         (kIsWeb
             ? const UnavailableAutomationPermissionRepository()
             : MethodChannelAutomationPermissionRepository());
+    _runtimeMonitoringRepository = kIsWeb
+        ? null
+        : MethodChannelRuntimeMonitoringRepository();
     _categoryCollection = CategoryCollectionController(
       repository: _categoryRepository,
       onDiagnostic: _recordCategoryCollectionDiagnostic,
@@ -1380,6 +1386,7 @@ class _FluviAppShellState extends State<FluviAppShell>
                                       SettingsPage(
                                         permissions:
                                             _automationPermissionRepository,
+                                        runtime: _runtimeMonitoringRepository,
                                       ),
                                     ],
                                   );

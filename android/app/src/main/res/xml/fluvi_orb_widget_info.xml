@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="56dp"
+    android:minHeight="56dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:initialLayout="@layout/fluvi_orb_widget"
+    android:configure="com.fluvi.app.widget.orb.FluviOrbConfigurationActivity"
+    android:widgetCategory="home_screen"
+    android:resizeMode="none"
+    android:widgetFeatures="reconfigurable"
+    android:description="@string/fluvi_orb_widget_description" />

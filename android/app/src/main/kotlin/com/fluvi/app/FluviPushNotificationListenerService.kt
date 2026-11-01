@@ -7,6 +7,9 @@ import android.service.notification.StatusBarNotification
 import com.fluvi.core.FluviCoreFactory
 import com.fluvi.core.model.CapturedPushNotification
 import com.fluvi.core.model.FluviPushCaptureResult
+import com.fluvi.app.runtime.FluviRuntimeCoordinator
+import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,22 +28,30 @@ class FluviPushNotificationListenerService : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         FluviPushDiagnostics.listenerConnected(applicationContext)
+        FluviRuntimeCoordinator.onListenerConnected(applicationContext)
     }
 
     override fun onListenerDisconnected() {
         FluviPushDiagnostics.listenerDisconnected(applicationContext)
+        FluviRuntimeCoordinator.onListenerDisconnected(applicationContext)
         super.onListenerDisconnected()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
+        val notification = sbn.notification
+        // Runtime-status notifications are self-observation only. They never
+        // enter diagnostics/capture, so publishing state cannot feed itself.
+        if (packageName == applicationContext.packageName &&
+            notificationIdIsRuntimeStatus(sbn)
+        ) return
         FluviPushDiagnostics.record(
             applicationContext,
             "LISTENER_RECEIVED",
             "Értesítés megérkezett a listenerhez.",
             packageName,
         )
-        val notification = sbn.notification
+        FluviRuntimeCoordinator.onNotificationReceived(applicationContext)
         val extras = notification.extras
         if (extras == null) {
             FluviPushDiagnostics.record(applicationContext, "EMPTY_BODY", "Az értesítéshez nincs feldolgozható extra.", packageName)
@@ -77,6 +88,18 @@ class FluviPushNotificationListenerService : NotificationListenerService() {
             )
             return
         }
+        // The test probe above intentionally remains observable even if the
+        // user disabled monitoring. All business capture is gated here rather
+        // than by persisting a stale listenerConnected flag.
+        if (!FluviRuntimeCoordinator.mayCapture(applicationContext)) {
+            FluviPushDiagnostics.record(
+                applicationContext,
+                "RUNTIME_DISABLED",
+                "A figyelés jelenlegi futási módja nem fogad új üzleti eseményt.",
+                packageName,
+            )
+            return
+        }
         val label = runCatching {
             packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
         }.getOrNull()
@@ -105,26 +128,40 @@ class FluviPushNotificationListenerService : NotificationListenerService() {
                     is FluviPushCaptureResult.Stored -> {
                         FluviPushDiagnostics.record(applicationContext, "PROFILE_MATCHED", "A forrás push profilja illeszkedik.", packageName)
                         FluviPushDiagnostics.record(applicationContext, "INBOX_STORED", "Az értesítés bekerült az Inboxba.", packageName)
+                        FluviRuntimeCoordinator.onNotificationProcessed(applicationContext)
                     }
                     is FluviPushCaptureResult.ReviewRequired -> {
                         FluviPushDiagnostics.record(applicationContext, "PROFILE_MATCHED", "A forrás push profilja illeszkedik.", packageName)
                         FluviPushDiagnostics.record(applicationContext, "INBOX_STORED", "Az értesítés bekerült az Inboxba.", packageName)
                         FluviPushDiagnostics.record(applicationContext, "REVIEW_REQUIRED", "Az értesítés ellenőrzést igényel.", packageName)
+                        FluviRuntimeCoordinator.onNotificationProcessed(applicationContext)
                     }
                     is FluviPushCaptureResult.Booked -> {
                         FluviPushDiagnostics.record(applicationContext, "PROFILE_MATCHED", "A forrás push profilja illeszkedik.", packageName)
                         FluviPushDiagnostics.record(applicationContext, "INBOX_STORED", "Az értesítés bekerült az Inboxba.", packageName)
                         FluviPushDiagnostics.record(applicationContext, "BOOKED", "Az értesítésből tranzakció rögzült.", packageName)
+                        FluviRuntimeCoordinator.onNotificationProcessed(applicationContext)
+                        // A Booked result is the sole automation result that
+                        // changes financial projections. Inbox storage and a
+                        // review requirement deliberately do not repaint an orb.
+                        FluviOrbUpdateCoordinator.requestRefresh(
+                            applicationContext,
+                            reason = "pushBooked",
+                        )
                     }
                 }
                 FluviRecurrenceScheduler.scheduleNext(applicationContext, core)
-            } catch (_: Throwable) {
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
                 FluviPushDiagnostics.record(applicationContext, "CAPTURE_ERROR", "Az értesítés feldolgozása hibával leállt.", packageName)
             } finally {
                 core.close()
             }
         }
     }
+
+    private fun notificationIdIsRuntimeStatus(sbn: StatusBarNotification): Boolean =
+        sbn.id == com.fluvi.app.runtime.FluviRuntimeNotificationController.notificationId()
 
     private fun extractBody(extras: Bundle): String? {
         val lines = extras.getCharSequenceArray("android.textLines")

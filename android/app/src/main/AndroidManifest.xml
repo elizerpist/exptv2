@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The service is opt-in from the visible Settings UI. It is only a
+         user-visible monitoring-session companion; notification capture stays
+         in Android's NotificationListenerService. specialUse eligibility is
+         distribution-policy dependent and documented with the implementation. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- The diagnostic/local-phone build deliberately enumerates installed
          applications so a notification source without a launcher activity is
          still selectable. Play-distributed variants must be reviewed against
@@ -41,6 +47,39 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+        <service
+            android:name=".runtime.FluviMonitoringForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-requested notification monitoring session with a visible status notification; it does not duplicate notification capture." />
+        </service>
+        <receiver
+            android:name=".runtime.FluviRuntimeActionReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".widget.orb.FluviOrbWidgetProvider"
+            android:exported="false"
+            android:label="Fluvi · Élő orb">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.appwidget.action.APPWIDGET_OPTIONS_CHANGED" />
+                <action android:name="android.appwidget.action.APPWIDGET_RESTORED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/fluvi_orb_widget_info" />
+        </receiver>
+        <activity
+            android:name=".widget.orb.FluviOrbConfigurationActivity"
+            android:exported="true"
+            android:label="Orb beállításai"
+            android:theme="@style/NormalTheme">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
         <receiver
             android:name=".FluviRecurrenceDueReceiver"
             android:exported="false" />
