@@ -93,7 +93,13 @@ internal object KeyguardCardDiagnostics {
         val state = "$event|$reason|${attached ?: "-"}"
         if (prefs.getString(LAST_EVENT, null) == state) return
         val line = "${android.os.SystemClock.elapsedRealtime()}|$state"
-        val old = prefs.getString(EVENTS, "").orEmpty().lineSequence().filter(String::isNotBlank).takeLast(15).toList()
+        // Sequence has no takeLast extension on the Kotlin version used by
+        // this project. The diagnostic buffer is deliberately tiny, so make
+        // the bounded list explicit before retaining the most recent lines.
+        val old = prefs.getString(EVENTS, "").orEmpty().lineSequence()
+            .filter(String::isNotBlank)
+            .toList()
+            .takeLast(15)
         prefs.edit()
             .putString(EVENTS, (old + line).joinToString("\n"))
             .putString(LAST_REASON, reason)
