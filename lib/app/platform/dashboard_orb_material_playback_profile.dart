@@ -1,71 +1,67 @@
 /// The finite, launcher-owned playback contract for a Dashboard orb export.
 ///
-/// The launcher gets the complete sequence in one RemoteViews update. It then
-/// blends neighbouring source frames locally, so [frameCount] describes real
-/// shader renders rather than display refreshes. Keeping this decision here
-/// makes the Dart exporter and the native package validator use the same
-/// bounded format.
-const int dashboardOrbMaterialCacheVersion = 3;
+/// Each displayed frame is rendered by the Dashboard shader at its real time
+/// offset. The launcher only flips those complete frames: it never blends two
+/// material states, because that creates both a brightness pulse and ghosting
+/// on directional effects such as Deep Drift and Portal.
+const int dashboardOrbMaterialCacheVersion = 4;
 
 final class DashboardOrbMaterialPlaybackProfile {
   const DashboardOrbMaterialPlaybackProfile._({
     required this.cacheVersion,
     required this.frameCount,
     required this.frameSizePx,
-    required this.displaySizePx,
     required this.intervalMs,
-    required this.transitionDurationMs,
     required this.targetCycleMs,
     required this.loopDurationMs,
     required this.usesDenseShaderSampling,
     required this.applyCircularAlphaMask,
   });
 
-  /// v3 invalidates the former binary-circle / 24-frame payload only after a
-  /// complete replacement has been written. Native keeps a v2 package alive
-  /// until then.
+  /// v4 invalidates v3's cross-faded payload. Native keeps an old package
+  /// visible only until a fully validated v4 package is committed.
   final int cacheVersion;
   final int frameCount;
 
-  /// Texture resolution. It may be lower than [displaySizePx] for dense
-  /// motion; the launcher-owned geometric clip preserves the circle edge.
+  /// Internal square colour texture resolution. It is deliberately separate
+  /// from the AppWidget's physical diameter, which native derives from the
+  /// current launcher cell at render time.
   final int frameSizePx;
-  final int displaySizePx;
   final int intervalMs;
-  final int transitionDurationMs;
   final int targetCycleMs;
   final int loopDurationMs;
   final bool usesDenseShaderSampling;
 
-  /// API < 31 does not have the RemoteViews outline APIs used by the normal
+  /// API < 31 does not expose the RemoteViews outline APIs used by the normal
   /// path, so its source pixels retain an anti-aliased circular alpha mask.
   final bool applyCircularAlphaMask;
 
+  int get transitionDurationMs => 0;
   int get decodedBitmapBytes => frameSizePx * frameSizePx * frameCount * 4;
   int get oneWidgetDecodedBytes => decodedBitmapBytes;
   int get threeWidgetDecodedBytes => decodedBitmapBytes * 3;
   double get realShaderSamplesPerSecond => 1000 / intervalMs;
 
-  /// Resolves source sampling and texture size together under the exact raw
-  /// bitmap budget that Android validates on receipt.
+  /// Resolves source sampling and texture size under the exact raw bitmap
+  /// budget Android validates on receipt. Animated profiles target thirty
+  /// real shader renders per second whenever a full cycle fits the package;
+  /// no synthetic cross-fade fills gaps.
   factory DashboardOrbMaterialPlaybackProfile.resolve({
     required bool isAnimated,
     required bool requiresDenseShaderSampling,
     required int characteristicCycleMs,
-    required int preferredDisplaySizePx,
+    required int preferredTextureSizePx,
     required int maximumFrameCount,
     required int maximumDecodedBytes,
     required bool applyCircularAlphaMask,
   }) {
-    final displaySize = preferredDisplaySizePx.clamp(32, 128).toInt();
+    final preferredTexture = preferredTextureSizePx.clamp(32, 128).toInt();
     if (!isAnimated) {
       return DashboardOrbMaterialPlaybackProfile._(
         cacheVersion: dashboardOrbMaterialCacheVersion,
         frameCount: 1,
-        frameSizePx: displaySize,
-        displaySizePx: displaySize,
+        frameSizePx: preferredTexture,
         intervalMs: 1000,
-        transitionDurationMs: 0,
         targetCycleMs: 1000,
         loopDurationMs: 1000,
         usesDenseShaderSampling: false,
@@ -74,11 +70,14 @@ final class DashboardOrbMaterialPlaybackProfile {
     }
 
     final targetCycle = characteristicCycleMs.clamp(1000, 3600000).toInt();
-    final sampleTargetMs = requiresDenseShaderSampling ? 80 : 200;
-    final desiredFrameCount = (targetCycle / sampleTargetMs).ceil();
+    const targetSampleMs = 1000 / 30;
+    final desiredFrameCount = (targetCycle / targetSampleMs)
+        .round()
+        .clamp(2, maximumFrameCount)
+        .toInt();
     final sizes =
         <int>{
-            displaySize,
+            preferredTexture,
             96,
             80,
             72,
@@ -87,7 +86,7 @@ final class DashboardOrbMaterialPlaybackProfile {
             48,
             40,
             32,
-          }.where((size) => size <= displaySize).toList()
+          }.where((size) => size <= preferredTexture).toList()
           ..sort((a, b) => b.compareTo(a));
 
     var frameSize = sizes.last;
@@ -106,100 +105,38 @@ final class DashboardOrbMaterialPlaybackProfile {
       }
     }
 
-    final selected = _selectFrameTiming(
-      targetCycleMs: targetCycle,
-      desiredSampleMs: sampleTargetMs,
-      maximumFrameCount: frameLimit,
-    );
+    // Prefer an integer cadence at or above 30 Hz that closes the authored
+    // cycle exactly.  4.8 s therefore becomes 150 × 32 ms, not 144 × 33 ms
+    // (which would visibly speed the orbit up by 1%).
+    final exactIntervalMs = Iterable<int>.generate(18, (index) => 33 - index)
+        .firstWhere(
+          (interval) =>
+              targetCycle % interval == 0 &&
+              targetCycle ~/ interval >= 2 &&
+              targetCycle ~/ interval <= frameLimit,
+          orElse: () => 0,
+        );
+    final frameCount = exactIntervalMs > 0
+        ? targetCycle ~/ exactIntervalMs
+        : desiredFrameCount.clamp(2, frameLimit).toInt();
+    // The source's i-th sample is rendered at i × dt, then shown for that
+    // same dt. An uncommon cycle without an integer cadence reports its
+    // closest representable loop duration through diagnostics.
+    final intervalMs =
+        (exactIntervalMs > 0
+                ? exactIntervalMs
+                : (targetCycle / frameCount).round())
+            .clamp(16, 60000)
+            .toInt();
     return DashboardOrbMaterialPlaybackProfile._(
       cacheVersion: dashboardOrbMaterialCacheVersion,
-      frameCount: selected.frameCount,
+      frameCount: frameCount,
       frameSizePx: frameSize,
-      displaySizePx: displaySize,
-      intervalMs: selected.intervalMs,
-      transitionDurationMs: _transitionAtMost(selected.intervalMs),
+      intervalMs: intervalMs,
       targetCycleMs: targetCycle,
-      loopDurationMs: selected.frameCount * selected.intervalMs,
-      usesDenseShaderSampling: requiresDenseShaderSampling,
+      loopDurationMs: frameCount * intervalMs,
+      usesDenseShaderSampling: true,
       applyCircularAlphaMask: applyCircularAlphaMask,
     );
   }
-
-  /// These are actual XML animation durations. The selected value is never
-  /// longer than its ViewFlipper interval, so an outgoing layer cannot be
-  /// resurrected by the next flip. 200 ms is exact for the 4.8 s / 24-frame
-  /// Balance reference package.
-  static const List<int> _transitionDurationsMs = <int>[
-    40,
-    60,
-    80,
-    100,
-    120,
-    140,
-    160,
-    180,
-    190,
-    200,
-    220,
-    240,
-    280,
-    320,
-    400,
-    500,
-    600,
-    800,
-    1000,
-    2000,
-    4000,
-    8000,
-    16000,
-    32000,
-    60000,
-  ];
-
-  static int _transitionAtMost(int intervalMs) {
-    for (final duration in _transitionDurationsMs.reversed) {
-      if (duration <= intervalMs) return duration;
-    }
-    return 0;
-  }
-
-  static _FrameTiming _selectFrameTiming({
-    required int targetCycleMs,
-    required int desiredSampleMs,
-    required int maximumFrameCount,
-  }) {
-    final minimum = (targetCycleMs / (desiredSampleMs * 1.25))
-        .ceil()
-        .clamp(2, maximumFrameCount)
-        .toInt();
-    final maximum = (targetCycleMs / (desiredSampleMs * .75))
-        .floor()
-        .clamp(minimum, maximumFrameCount)
-        .toInt();
-    _FrameTiming? winner;
-    var winnerScore = double.infinity;
-    for (var count = minimum; count <= maximum; count += 1) {
-      final interval = (targetCycleMs / count).round().clamp(16, 60000).toInt();
-      final loop = interval * count;
-      // Preserving the Header cycle dominates. The remaining terms select a
-      // useful source density and a transition that almost fills each slot.
-      final score =
-          (loop - targetCycleMs).abs() * 1000000 +
-          (interval - desiredSampleMs).abs() * 100 +
-          (interval - _transitionAtMost(interval)).abs();
-      if (score < winnerScore) {
-        winner = _FrameTiming(frameCount: count, intervalMs: interval);
-        winnerScore = score.toDouble();
-      }
-    }
-    return winner!;
-  }
-}
-
-final class _FrameTiming {
-  const _FrameTiming({required this.frameCount, required this.intervalMs});
-
-  final int frameCount;
-  final int intervalMs;
 }

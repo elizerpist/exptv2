@@ -8,6 +8,7 @@ import com.fluvi.core.FluviCoreFactory
 import com.fluvi.core.model.CapturedPushNotification
 import com.fluvi.core.model.FluviPushCaptureResult
 import com.fluvi.app.runtime.FluviRuntimeCoordinator
+import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -141,6 +142,7 @@ class FluviPushNotificationListenerService : NotificationListenerService() {
                         FluviPushDiagnostics.record(applicationContext, "INBOX_STORED", "Az értesítés bekerült az Inboxba.", packageName)
                         FluviPushDiagnostics.record(applicationContext, "BOOKED", "Az értesítésből tranzakció rögzült.", packageName)
                         FluviRuntimeCoordinator.onNotificationProcessed(applicationContext)
+                        FluviLockScreenCardCoordinator.refreshAsync(applicationContext, "pushBooked")
                         // A Booked result is the sole automation result that
                         // changes financial projections. Inbox storage and a
                         // review requirement deliberately do not repaint an orb.

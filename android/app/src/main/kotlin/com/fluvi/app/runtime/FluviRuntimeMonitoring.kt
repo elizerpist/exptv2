@@ -50,6 +50,9 @@ internal data class FluviRuntimeStatus(
     val lastReceivedAtUtcMs: Long?,
     val lastProcessedAtUtcMs: Long?,
     val lastWidgetRefreshAtUtcMs: Long?,
+    val lockScreenCardEnabled: Boolean,
+    val lockScreenCardValid: Boolean,
+    val lockScreenCardPrivacy: String,
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "foregroundRequested" to foregroundRequested,
@@ -67,6 +70,9 @@ internal data class FluviRuntimeStatus(
         "lastReceivedAtUtcMs" to lastReceivedAtUtcMs,
         "lastProcessedAtUtcMs" to lastProcessedAtUtcMs,
         "lastWidgetRefreshAtUtcMs" to lastWidgetRefreshAtUtcMs,
+        "lockScreenCardEnabled" to lockScreenCardEnabled,
+        "lockScreenCardValid" to lockScreenCardValid,
+        "lockScreenCardPrivacy" to lockScreenCardPrivacy,
     )
 }
 
@@ -144,6 +150,7 @@ internal object FluviRuntimeCoordinator {
     fun status(context: Context): FluviRuntimeStatus {
         val preferenceStore = preferences(context)
         val preferences = preferenceStore.read()
+        val lockScreenCard = FluviLockScreenCardCoordinator.configuration(context)
         val listenerGranted = notificationListenerGranted(context)
         val postGranted = postNotificationsGranted(context)
         val channelEnabled = FluviRuntimeNotificationController.statusChannelEnabled(context)
@@ -173,6 +180,9 @@ internal object FluviRuntimeCoordinator {
             lastReceivedAtUtcMs = preferenceStore.store.getLong(LAST_RECEIVED, 0).takeIf { it > 0 },
             lastProcessedAtUtcMs = preferenceStore.store.getLong(LAST_PROCESSED, 0).takeIf { it > 0 },
             lastWidgetRefreshAtUtcMs = preferenceStore.store.getLong(LAST_WIDGET_REFRESH, 0).takeIf { it > 0 },
+            lockScreenCardEnabled = lockScreenCard.enabled,
+            lockScreenCardValid = lockScreenCard.isValid,
+            lockScreenCardPrivacy = lockScreenCard.privacy.name,
         )
     }
 
@@ -201,7 +211,7 @@ internal object FluviRuntimeCoordinator {
         foregroundStartFailed = false
         context.stopService(Intent(context, FluviMonitoringForegroundService::class.java))
         requestListenerUnbind(context)
-        FluviRuntimeNotificationController.cancel(context)
+        FluviRuntimeNotificationController.reconcileVisible(context, status(context))
         return status(context)
     }
 
@@ -304,7 +314,9 @@ internal object FluviRuntimeCoordinator {
             requestListenerUnbind(context)
         }
 
-        if (settings.foregroundRequested || settings.backgroundRequested) {
+        if (settings.foregroundRequested || settings.backgroundRequested ||
+            FluviLockScreenCardCoordinator.configuration(context).enabled
+        ) {
             FluviRuntimeNotificationController.publish(context, status(context))
         } else {
             FluviRuntimeNotificationController.cancel(context)
@@ -377,6 +389,10 @@ internal object FluviRuntimeNotificationController {
         originalPostTimeUtcMs: Long? = null,
     ): Notification {
         ensureChannel(context)
+        val lockScreen = FluviLockScreenCardCoordinator.configuration(context)
+        if (lockScreen.enabled) {
+            return lockScreenNotification(context, status, lockScreen, originalPostTimeUtcMs)
+        }
         val content = when {
             status.foregroundRequested && status.foregroundServiceRunning -> "Előtérszolgáltatás aktív"
             status.backgroundRequested && status.notificationListenerGranted -> status.lastProcessedAtUtcMs
@@ -434,7 +450,7 @@ internal object FluviRuntimeNotificationController {
     }
 
     fun publish(context: Context, status: FluviRuntimeStatus) {
-        if (!status.foregroundRequested && !status.backgroundRequested) return
+        if (!status.foregroundRequested && !status.backgroundRequested && !status.lockScreenCardEnabled) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return
@@ -445,6 +461,17 @@ internal object FluviRuntimeNotificationController {
     fun cancel(context: Context) {
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(NOTIFICATION_ID)
+    }
+
+    /** Applies the single visible-notification decision after a switch change:
+     * a standalone financial card survives monitoring shutdown, while an off
+     * card never revives a monitoring-only notification. */
+    fun reconcileVisible(context: Context, status: FluviRuntimeStatus) {
+        if (status.foregroundRequested || status.backgroundRequested || status.lockScreenCardEnabled) {
+            publish(context, status)
+        } else {
+            cancel(context)
+        }
     }
 
     /** Updates only an existing status notification, never reviving one. */
@@ -492,6 +519,83 @@ internal object FluviRuntimeNotificationController {
             )
         }
     }
+
+    private fun lockScreenNotification(
+        context: Context,
+        status: FluviRuntimeStatus,
+        configuration: FluviLockScreenCardConfiguration,
+        originalPostTimeUtcMs: Long?,
+    ): Notification {
+        val content = FluviLockScreenCardContentStore(context).read()
+        val isFull = configuration.privacy == FluviLockScreenCardConfiguration.Privacy.full &&
+            content != null && configuration.isValid
+        val open = PendingIntent.getActivity(
+            context,
+            4052,
+            Intent(context, MainActivity::class.java).apply {
+                action = ACTION_OPEN
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val discreetEvent = content?.event?.substringAfterLast("·")?.trim()
+        val discreetText = discreetEvent?.takeIf { it.matches(Regex("[0-2][0-9]:[0-5][0-9]")) }
+            ?.let { "Új tranzakció könyvelve · $it" }
+            ?: "Nincs új könyvelt tranzakció"
+        val publicVersion = builder(context)
+            .setSmallIcon(FluviNotificationIconResolver.smallIconRes(context))
+            .setContentTitle("Fluvi · Pénzügyi pillanatkép")
+            .setContentText(discreetText)
+            .setStyle(Notification.BigTextStyle().bigText(discreetText))
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+        originalPostTimeUtcMs?.let(publicVersion::setWhen)
+        val title = if (isFull) content!!.focus else "Fluvi · Pénzügyi pillanatkép"
+        val text = if (isFull) content!!.primary else discreetText
+        val expanded = if (isFull) buildString {
+            append(content!!.secondary)
+            content.event?.let { event ->
+                append("\n")
+                append(content.eventLabel ?: "Utolsó könyvelt tranzakció")
+                append(": ")
+                append(event)
+            }
+            monitoringExpansion(status)?.let { state -> append("\nFigyelés: ").append(state) }
+        } else monitoringExpansion(status)?.let { "$discreetText\nFigyelés: $it" } ?: discreetText
+        val notification = builder(context)
+            .setSmallIcon(FluviNotificationIconResolver.smallIconRes(context))
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(expanded))
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setOnlyAlertOnce(true)
+            .setOngoing(status.foregroundRequested && status.foregroundServiceRunning)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicVersion.build())
+            .setContentIntent(open)
+        if (isFull) notification.setLargeIcon(content!!.orbBitmap())
+        if (status.foregroundRequested || status.backgroundRequested) {
+            notification.addAction(stopAction(context))
+        }
+        originalPostTimeUtcMs?.let(notification::setWhen)
+        return notification.build()
+    }
+
+    private fun monitoringExpansion(status: FluviRuntimeStatus): String? = when {
+        status.foregroundRequested || status.backgroundRequested -> status.message
+        else -> null
+    }
+
+    private fun stopAction(context: Context): Notification.Action = Notification.Action.Builder(
+        Icon.createWithResource(context, FluviNotificationIconResolver.smallIconRes(context)),
+        "Figyelés leállítása",
+        PendingIntent.getBroadcast(
+            context,
+            4053,
+            Intent(context, FluviRuntimeActionReceiver::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        ),
+    ).build()
 
     private fun builder(context: Context): Notification.Builder =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

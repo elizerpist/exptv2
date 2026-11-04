@@ -5,6 +5,8 @@ import '../../automation/domain/automation_models.dart';
 import '../../automation/domain/automation_repository.dart';
 import '../../notification_appearance/domain/notification_appearance_repository.dart';
 import '../../runtime_monitoring/domain/runtime_monitoring_repository.dart';
+import '../../lock_screen_card/domain/lock_screen_card_repository.dart';
+import '../../lock_screen_card/presentation/lock_screen_card_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -12,11 +14,13 @@ class SettingsPage extends StatefulWidget {
     required this.permissions,
     this.runtime,
     this.notificationAppearance,
+    this.lockScreenCard,
   });
 
   final AutomationPermissionRepository permissions;
   final RuntimeMonitoringRepository? runtime;
   final NotificationAppearanceRepository? notificationAppearance;
+  final LockScreenCardRepository? lockScreenCard;
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -26,6 +30,7 @@ class _SettingsPageState extends State<SettingsPage>
   AutomationPermissionStatus? _status;
   RuntimeMonitoringStatus? _runtimeStatus;
   NotificationSmallIconStyle? _smallIconStyle;
+  LockScreenCardStatus? _lockScreenCardStatus;
   bool _loading = true;
   bool _runtimeUpdating = false;
   bool _smallIconUpdating = false;
@@ -53,11 +58,17 @@ class _SettingsPageState extends State<SettingsPage>
     AutomationPermissionStatus? permissions;
     RuntimeMonitoringStatus? runtime;
     NotificationSmallIconStyle? smallIconStyle;
+    LockScreenCardStatus? lockScreenCardStatus;
     try {
       permissions = await widget.permissions.getPermissionStatus();
     } catch (_) {
       // Keep the settings page useful if the permission bridge is temporarily
       // unavailable; runtime state has a separate native source of truth.
+    }
+    try {
+      lockScreenCardStatus = await widget.lockScreenCard?.load();
+    } catch (_) {
+      // A failed optional preview must not obscure the other settings.
     }
     try {
       runtime = await widget.runtime?.status();
@@ -75,6 +86,7 @@ class _SettingsPageState extends State<SettingsPage>
         _status = permissions ?? _status;
         _runtimeStatus = runtime ?? _runtimeStatus;
         _smallIconStyle = smallIconStyle ?? _smallIconStyle;
+        _lockScreenCardStatus = lockScreenCardStatus ?? _lockScreenCardStatus;
         _loading = false;
       });
     }
@@ -176,6 +188,28 @@ class _SettingsPageState extends State<SettingsPage>
                     await widget.permissions.openNotificationAccessSettings();
                   },
                 ),
+                if (widget.lockScreenCard != null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    key: const ValueKey('settings-lock-screen-card'),
+                    leading: const Icon(Icons.lock_outline),
+                    title: const Text('Zárképernyő'),
+                    subtitle: Text(_lockScreenSubtitle(_lockScreenCardStatus)),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      await Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => LockScreenCardPage(
+                            repository: widget.lockScreenCard!,
+                            openAndroidNotificationSettings:
+                                widget.permissions.openAppNotificationSettings,
+                          ),
+                        ),
+                      );
+                      _refresh();
+                    },
+                  ),
+                ],
                 const Divider(height: 1),
                 _PermissionTile(
                   icon: Icons.notifications_outlined,
@@ -395,6 +429,35 @@ class _NotificationIconStyleTile extends StatelessWidget {
       ),
     );
   }
+}
+
+String _lockScreenSubtitle(LockScreenCardStatus? status) {
+  final configuration = status?.configuration;
+  if (configuration == null || !configuration.enabled) {
+    return 'Pénzügyi kártya kikapcsolva';
+  }
+  final mode = switch (configuration.mode) {
+    LockScreenCardMode.mind => 'Mind',
+    LockScreenCardMode.balance => 'Balance',
+    LockScreenCardMode.budget => 'Budget',
+  };
+  final axis = switch (configuration.timeAxis) {
+    LockScreenCardTimeAxis.sum => 'SUM',
+    LockScreenCardTimeAxis.year => 'Év',
+    LockScreenCardTimeAxis.month => 'Hónap',
+    LockScreenCardTimeAxis.day => 'Nap',
+  };
+  String? category;
+  for (final item in status!.categories) {
+    if (item.id == configuration.categoryId) {
+      category = item.name;
+      break;
+    }
+  }
+  final privacy = configuration.privacy == LockScreenCardPrivacy.discreet
+      ? 'Diszkrét'
+      : 'Teljes';
+  return [mode, axis, if (category != null) category, privacy].join(' · ');
 }
 
 class _PermissionTile extends StatelessWidget {

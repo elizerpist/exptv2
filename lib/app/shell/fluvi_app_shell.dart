@@ -42,6 +42,7 @@ import '../../features/automation/presentation/recurring_navigation.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../../features/runtime_monitoring/data/method_channel_runtime_monitoring_repository.dart';
 import '../../features/runtime_monitoring/domain/runtime_monitoring_repository.dart';
+import '../../features/lock_screen_card/data/method_channel_lock_screen_card_repository.dart';
 import '../../features/notification_appearance/data/method_channel_notification_appearance_repository.dart';
 import '../../features/notification_appearance/domain/notification_appearance_repository.dart';
 import '../../features/pulse/data/method_channel_pulse_repository.dart';
@@ -1399,6 +1400,9 @@ class _FluviAppShellState extends State<FluviAppShell>
                                         runtime: _runtimeMonitoringRepository,
                                         notificationAppearance:
                                             _notificationAppearanceRepository,
+                                        lockScreenCard: kIsWeb
+                                            ? null
+                                            : MethodChannelLockScreenCardRepository(),
                                       ),
                                     ],
                                   );

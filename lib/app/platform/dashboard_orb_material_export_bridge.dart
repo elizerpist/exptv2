@@ -21,6 +21,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
   }) : _controller = controller,
        _channel = channel ?? const MethodChannel(_channelName) {
     _controller.tuning.addListener(schedule);
+    _controller.portalSettingsGeneration.addListener(schedule);
     balanceFrame.addListener(schedule);
     budgetFrame.addListener(schedule);
     mindFrame.addListener(schedule);
@@ -39,6 +40,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
   double _devicePixelRatio = 1;
   var _exporting = false;
   var _requestedWhileExporting = false;
+  var _requestedGeneration = 0;
   var _disposed = false;
 
   /// Uses Dashboard's actual Header bounds. The orb mapper later maps the
@@ -59,17 +61,18 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
 
   void schedule() {
     if (_disposed) return;
+    _requestedGeneration += 1;
     if (_exporting) {
       _requestedWhileExporting = true;
       return;
     }
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 180), () {
-      unawaited(_export());
+      unawaited(_export(_requestedGeneration));
     });
   }
 
-  Future<void> _export() async {
+  Future<void> _export(int generation) async {
     final size = _headerSize;
     if (_disposed || size == null || _exporting) return;
     _exporting = true;
@@ -77,9 +80,18 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       final scenes = await _channel.invokeListMethod<Object?>(
         'configuredScenes',
       );
-      if (scenes == null || scenes.isEmpty || _disposed) return;
+      if (scenes == null ||
+          scenes.isEmpty ||
+          _disposed ||
+          !_isCurrent(generation)) {
+        return;
+      }
       for (final raw in scenes) {
-        if (_disposed || raw is! Map<Object?, Object?>) continue;
+        if (_disposed ||
+            !_isCurrent(generation) ||
+            raw is! Map<Object?, Object?>) {
+          return;
+        }
         final widgetId = raw['widgetId'] as int?;
         final revision = raw['configurationRevision'] as int?;
         final mode = raw['mode'] as String?;
@@ -116,6 +128,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
           maximumFrameCount: maximumFrameCount,
           maximumDecodedBytes: maximumDecodedBytes,
           requiresAlphaMask: requiresAlphaMask,
+          isCurrent: () => _isCurrent(generation),
           frame: frame,
           headerSize: size,
         );
@@ -133,6 +146,9 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     }
   }
 
+  bool _isCurrent(int generation) =>
+      !_disposed && generation == _requestedGeneration;
+
   Future<void> _publishScene({
     required int widgetId,
     required int configurationRevision,
@@ -141,6 +157,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     required int maximumFrameCount,
     required int maximumDecodedBytes,
     required bool requiresAlphaMask,
+    required bool Function() isCurrent,
     required DashboardHeaderVisualFrame frame,
     required Size headerSize,
   }) async {
@@ -152,7 +169,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       isAnimated: snapshot.isAnimated,
       requiresDenseShaderSampling: snapshot.requiresDenseOrbSampling,
       characteristicCycleMs: snapshot.characteristicCycleMs,
-      preferredDisplaySizePx: targetSizePx,
+      preferredTextureSizePx: targetSizePx,
       maximumFrameCount: maximumFrameCount,
       maximumDecodedBytes: maximumDecodedBytes,
       applyCircularAlphaMask: requiresAlphaMask,
@@ -162,6 +179,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       final frames = <Uint8List>[];
       Uint8List? firstOrbRgba;
       for (var index = 0; index < playback.frameCount; index += 1) {
+        if (!isCurrent()) return;
         final header = await renderer.render(
           snapshot: snapshot,
           headerSize: headerSize,
@@ -207,6 +225,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
               loopDuration: Duration(milliseconds: playback.loopDurationMs),
             )
           : 0.0;
+      if (!isCurrent()) return;
       final seamDescription = snapshot.isAnimated
           ? seamMeanRgbDelta >= 2
                 ? 'repeat=visible-sampling-seam'
@@ -217,8 +236,6 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
         'configurationRevision': configurationRevision,
         'cacheVersion': playback.cacheVersion,
         'intervalMs': playback.intervalMs,
-        'transitionDurationMs': playback.transitionDurationMs,
-        'displaySizePx': playback.displaySizePx,
         'sourceDescription':
             'DashboardHeaderMaterialFrameRenderer/v${playback.cacheVersion}; mode=$mode; '
             'effect=${snapshot.tuning.effect.name}; '
@@ -227,9 +244,9 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
             'realShaderSamples=${playback.frameCount}; '
             'sampling=${playback.frameCount}x${playback.intervalMs}ms; '
             'sourceHz=${playback.realShaderSamplesPerSecond.toStringAsFixed(2)}; '
-            'crossfadeMs=${playback.transitionDurationMs}; '
+            'launcherFlipMs=${playback.intervalMs}; '
             'denseShaderSampling=${playback.usesDenseShaderSampling}; '
-            'texture=${playback.frameSizePx}px; display=${playback.displaySizePx}px; '
+            'texture=${playback.frameSizePx}px; display=current-widget-short-side; '
             'decoded1=${playback.oneWidgetDecodedBytes}; '
             'decoded3=${playback.threeWidgetDecodedBytes}; '
             'channelPng=$channelPngBytes; '
@@ -299,6 +316,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     _disposed = true;
     _debounce?.cancel();
     _controller.tuning.removeListener(schedule);
+    _controller.portalSettingsGeneration.removeListener(schedule);
     balanceFrame.removeListener(schedule);
     budgetFrame.removeListener(schedule);
     mindFrame.removeListener(schedule);

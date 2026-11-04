@@ -212,14 +212,15 @@ internal object OrbBalancePaletteCompatibility {
         colors.map { Color.parseColor("#$it") }.toIntArray()
 }
 
-/** v3 is the first package whose edge is clipped by the host, not rasterised
- * into each frame. Keep v2 readable so an already-installed widget remains
- * visible until Flutter has successfully committed a complete v3 package. */
+/** v4 removes crossfades and decouples physical diameter from texture size.
+ * Keep earlier packages readable so an already-installed widget remains
+ * visible until Flutter has successfully committed a complete v4 package. */
 internal object OrbMaterialPlaybackContract {
-    const val cacheVersion = 3
+    const val cacheVersion = 4
     const val legacyCacheVersion = 2
     const val minimumFrameCount = 1
-    const val maximumFrameCount = 160
+    // 175 × 32² × 4 = 716,800 bytes, exactly the 700 KiB decoded cap.
+    const val maximumFrameCount = 175
     const val minimumFrameSizePx = 32
     const val maximumFrameSizePx = 128
     const val minimumFlipIntervalMs = 16
@@ -227,12 +228,6 @@ internal object OrbMaterialPlaybackContract {
     const val maximumEncodedBytes = 2 * 1024 * 1024
     const val maximumDecodedBytes = 700L * 1024L
 
-    /** Every value has a matching fixed XML alpha animation. */
-    val transitionDurationsMs = setOf(
-        40, 60, 80, 100, 120, 140, 160, 180, 190, 200, 220, 240,
-        280, 320, 400, 500, 600, 800, 1000, 2000, 4000, 8000,
-        16000, 32000, 60000,
-    )
 }
 
 internal data class OrbFramePlan(
@@ -331,11 +326,9 @@ internal object OrbMaterialFrameStore {
         require(intervalMs in OrbMaterialPlaybackContract.minimumFlipIntervalMs..OrbMaterialPlaybackContract.maximumFlipIntervalMs) {
             "Orb material interval is outside its launcher-safe range."
         }
-        require(
-            transitionDurationMs == 0 ||
-                (transitionDurationMs in OrbMaterialPlaybackContract.transitionDurationsMs &&
-                    transitionDurationMs <= intervalMs),
-        ) { "Orb material transition does not fit its frame interval." }
+        require(transitionDurationMs == 0) {
+            "Orb v4 plays opaque complete frames and does not support crossfades."
+        }
         val application = context.applicationContext
         val directory = File(application.filesDir, directoryName).apply { mkdirs() }
         val preferences = application.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
@@ -390,11 +383,11 @@ internal object OrbMaterialFrameStore {
             .putInt("$widgetId.format", cacheVersion)
             .putInt("$widgetId.count", frames.size)
             .putInt("$widgetId.interval", intervalMs)
-            .putInt("$widgetId.transition", transitionDurationMs)
-            .putInt("$widgetId.displaySize", displaySizePx.coerceIn(
-                OrbMaterialPlaybackContract.minimumFrameSizePx,
-                OrbMaterialPlaybackContract.maximumFrameSizePx,
-            ))
+            .putInt("$widgetId.transition", 0)
+            // A package never owns physical display geometry. Keep this key
+            // only for v2/v3 preference compatibility; rendering derives the
+            // current cell's unmodified short side on every update.
+            .putInt("$widgetId.displaySize", displaySizePx)
             .putLong("$widgetId.encodedBytes", frames.sumOf { it.size.toLong() })
             .putString("$widgetId.source", sourceDescription)
             .putLong("$widgetId.renderedAt", System.currentTimeMillis())
@@ -446,28 +439,14 @@ internal object OrbMaterialFrameStore {
                 OrbMaterialPlaybackContract.minimumFlipIntervalMs,
                 OrbMaterialPlaybackContract.maximumFlipIntervalMs,
             )
-        val transition = if (cacheVersion == OrbMaterialPlaybackContract.cacheVersion) {
-            preferences.getInt("${configuration.appWidgetId}.transition", 0)
-        } else {
-            0
-        }
-        if (
-            transition != 0 &&
-                (transition !in OrbMaterialPlaybackContract.transitionDurationsMs || transition > interval)
-        ) return null
-        val displaySize = preferences.getInt("${configuration.appWidgetId}.displaySize", size)
-            .coerceIn(
-                OrbMaterialPlaybackContract.minimumFrameSizePx,
-                OrbMaterialPlaybackContract.maximumFrameSizePx,
-            )
         return OrbFrameSequence(
             profileKey = "stored|${configuration.appWidgetId}|${configuration.configurationRevision}|$packageId",
             plan = OrbFramePlan(
                 sizePx = size,
                 frameCount = count,
                 intervalMs = interval,
-                transitionDurationMs = transition,
-                displaySizePx = displaySize,
+                transitionDurationMs = 0,
+                displaySizePx = size,
                 cacheVersion = cacheVersion,
             ),
             frames = bitmaps,
@@ -512,7 +491,16 @@ internal object OrbMaterialFrameStore {
     private fun framePlanFor(
         context: Context,
         options: android.os.Bundle,
-    ): OrbFramePlan {
+    ): OrbFramePlan = OrbCompatibilityFrameRenderer.planFor(
+        OrbWidgetDisplayDimensions.shortSidePx(context, options),
+    )
+}
+
+/** AppWidget options are already the host's usable cell dimensions. Never
+ * subtract launcher padding again and never clamp this physical diameter to
+ * the smaller internal texture budget. */
+internal object OrbWidgetDisplayDimensions {
+    fun shortSidePx(context: Context, options: android.os.Bundle): Int {
         val widthDp = options.getInt(
             AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH,
             options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 56),
@@ -521,9 +509,8 @@ internal object OrbMaterialFrameStore {
             AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT,
             options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 56),
         )
-        val shortSidePx = (minOf(widthDp, heightDp).coerceAtLeast(1) *
-            context.resources.displayMetrics.density).toInt()
-        return OrbCompatibilityFrameRenderer.planFor(shortSidePx)
+        return (minOf(widthDp, heightDp).coerceAtLeast(1) *
+            context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
     }
 }
 

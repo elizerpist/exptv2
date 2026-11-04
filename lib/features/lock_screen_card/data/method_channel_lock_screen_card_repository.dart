@@ -1,0 +1,30 @@
+import 'package:flutter/services.dart';
+
+import '../domain/lock_screen_card_repository.dart';
+
+final class MethodChannelLockScreenCardRepository
+    implements LockScreenCardRepository {
+  MethodChannelLockScreenCardRepository({MethodChannel? channel})
+    : _channel = channel ?? const MethodChannel('com.fluvi/runtime_monitoring');
+
+  final MethodChannel _channel;
+
+  @override
+  Future<LockScreenCardStatus> load() => _read('getLockScreenCard');
+
+  @override
+  Future<LockScreenCardStatus> save(
+    LockScreenCardConfiguration configuration,
+  ) => _read('setLockScreenCard', configuration.toMap());
+
+  Future<LockScreenCardStatus> _read(
+    String method, [
+    Map<String, Object?>? arguments,
+  ]) async {
+    final value = await _channel.invokeMethod<Object?>(method, arguments);
+    final map = value is Map<Object?, Object?>
+        ? value
+        : Map<Object?, Object?>.from(value! as Map);
+    return LockScreenCardStatus.fromMap(map);
+  }
+}

@@ -8,20 +8,21 @@ void main() {
         isAnimated: true,
         requiresDenseShaderSampling: false,
         characteristicCycleMs: 4800,
-        preferredDisplaySizePx: 80,
-        maximumFrameCount: 160,
+        preferredTextureSizePx: 80,
+        maximumFrameCount: 175,
         maximumDecodedBytes: 700 * 1024,
         applyCircularAlphaMask: false,
       );
 
       expect(profile.cacheVersion, dashboardOrbMaterialCacheVersion);
-      expect(profile.frameCount, 24);
-      expect(profile.intervalMs, 200);
-      expect(profile.transitionDurationMs, 200);
+      expect(profile.frameCount, 150);
+      expect(profile.intervalMs, 32);
+      expect(profile.transitionDurationMs, 0);
       expect(profile.loopDurationMs, 4800);
-      expect(profile.frameSizePx, 80);
-      expect(profile.decodedBitmapBytes, 24 * 80 * 80 * 4);
-      expect(profile.threeWidgetDecodedBytes, 3 * 24 * 80 * 80 * 4);
+      expect(profile.frameSizePx, 32);
+      expect(profile.decodedBitmapBytes, 150 * 32 * 32 * 4);
+      expect(profile.threeWidgetDecodedBytes, 3 * 150 * 32 * 32 * 4);
+      expect(profile.realShaderSamplesPerSecond, 31.25);
     });
 
     test(
@@ -31,19 +32,19 @@ void main() {
           isAnimated: true,
           requiresDenseShaderSampling: true,
           characteristicCycleMs: 4800,
-          preferredDisplaySizePx: 80,
-          maximumFrameCount: 160,
+          preferredTextureSizePx: 80,
+          maximumFrameCount: 175,
           maximumDecodedBytes: 700 * 1024,
           applyCircularAlphaMask: false,
         );
 
-        expect(profile.frameCount, 60);
-        expect(profile.intervalMs, 80);
-        expect(profile.transitionDurationMs, 80);
+        expect(profile.frameCount, 150);
+        expect(profile.intervalMs, 32);
+        expect(profile.transitionDurationMs, 0);
         expect(profile.loopDurationMs, 4800);
-        expect(profile.frameSizePx, 48);
+        expect(profile.frameSizePx, 32);
         expect(profile.decodedBitmapBytes, lessThanOrEqualTo(700 * 1024));
-        expect(profile.realShaderSamplesPerSecond, 12.5);
+        expect(profile.realShaderSamplesPerSecond, 31.25);
       },
     );
 
@@ -54,8 +55,8 @@ void main() {
           isAnimated: false,
           requiresDenseShaderSampling: false,
           characteristicCycleMs: 4800,
-          preferredDisplaySizePx: 80,
-          maximumFrameCount: 160,
+          preferredTextureSizePx: 80,
+          maximumFrameCount: 175,
           maximumDecodedBytes: 700 * 1024,
           applyCircularAlphaMask: true,
         );

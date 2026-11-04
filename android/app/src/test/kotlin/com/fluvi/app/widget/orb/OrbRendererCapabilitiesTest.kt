@@ -10,7 +10,7 @@ class OrbRendererCapabilitiesTest {
         val state = OrbRendererCapabilities.forAndroidApi(35)
 
         assertTrue(state.liveHeaderSupported)
-        assertEquals("remoteviews-flutter-material-v3", state.backend)
+        assertEquals("remoteviews-flutter-material-v4-opaque-frames", state.backend)
         assertTrue(state.reason.contains("ViewFlipper"))
         assertTrue(!state.isShaderIdentical)
     }
@@ -62,14 +62,9 @@ class OrbRendererCapabilitiesTest {
     }
 
     @Test
-    fun `v3 has XML transition resources for every accepted duration`() {
-        assertEquals(
-            OrbMaterialPlaybackContract.transitionDurationsMs.size + 1,
-            OrbWidgetFrameFlippers.allIds.size,
-        )
-        assertTrue(OrbWidgetFrameFlippers.allIds.contains(OrbWidgetFrameFlippers.idFor(0)))
-        OrbMaterialPlaybackContract.transitionDurationsMs.forEach { duration ->
-            assertTrue(OrbWidgetFrameFlippers.allIds.contains(OrbWidgetFrameFlippers.idFor(duration)))
-        }
+    fun `v4 has one opaque frame flipper and a 175 frame raw budget`() {
+        assertEquals(175, OrbMaterialPlaybackContract.maximumFrameCount)
+        assertEquals(0, OrbFramePlan(32, 150, 32).transitionDurationMs)
+        assertEquals(150 * 32 * 32 * 4L, OrbFramePlan(32, 150, 32).estimatedRawBytes)
     }
 }

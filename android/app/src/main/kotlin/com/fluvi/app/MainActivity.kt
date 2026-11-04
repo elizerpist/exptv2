@@ -65,6 +65,7 @@ import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.app.query.QueryMenuMethodBridge
 import com.fluvi.app.runtime.FluviRuntimeCoordinator
+import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
 import com.fluvi.app.widget.orb.OrbMaterialFrameStore
 import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
@@ -123,6 +124,7 @@ class MainActivity : FlutterActivity() {
         // Apply the persisted recents choice before Flutter constructs the
         // shell, including a launch originating from a notification/widget.
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
+        FluviLockScreenCardCoordinator.reconcileCoreObserver(applicationContext)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -334,6 +336,34 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
+                if (call.method == "getLockScreenCard") {
+                    scope.launch {
+                        runCatching {
+                            FluviLockScreenCardCoordinator.preview(applicationContext)
+                        }.onSuccess(result::success)
+                            .onFailure { error ->
+                                result.error("lock_screen_card_error", error.message, null)
+                            }
+                    }
+                    return@setMethodCallHandler
+                }
+                if (call.method == "setLockScreenCard") {
+                    val values = call.arguments as? Map<*, *>
+                    if (values == null) {
+                        result.error("validation", "Hiányzó zárképernyő-beállítás.", null)
+                        return@setMethodCallHandler
+                    }
+                    scope.launch {
+                        runCatching {
+                            FluviLockScreenCardCoordinator.update(applicationContext, values)
+                            FluviLockScreenCardCoordinator.preview(applicationContext)
+                        }.onSuccess(result::success)
+                            .onFailure { error ->
+                                result.error("lock_screen_card_error", error.message, null)
+                            }
+                    }
+                    return@setMethodCallHandler
+                }
                 try {
                     val status = when (call.method) {
                         "getRuntimeStatus" -> FluviRuntimeCoordinator.status(applicationContext)
@@ -922,10 +952,11 @@ class MainActivity : FlutterActivity() {
                                         ?: throw IllegalArgumentException("Missing orb material cache version.")
                                     val intervalMs = (values["intervalMs"] as? Number)?.toInt()
                                         ?: throw IllegalArgumentException("Missing frame interval.")
-                                    val transitionDurationMs = (values["transitionDurationMs"] as? Number)?.toInt()
-                                        ?: throw IllegalArgumentException("Missing frame transition duration.")
-                                    val displaySizePx = (values["displaySizePx"] as? Number)?.toInt()
-                                        ?: throw IllegalArgumentException("Missing orb display size.")
+                                    // v4 is intentionally opaque-frame only.
+                                    // Display geometry belongs to the current
+                                    // AppWidget options, never this package.
+                                    val transitionDurationMs = 0
+                                    val displaySizePx = 0
                                     val description = values["sourceDescription"] as? String
                                         ?: "flutter-header-material"
                                     val frames = (values["frames"] as? List<*>)

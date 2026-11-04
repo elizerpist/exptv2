@@ -169,7 +169,7 @@ internal object OrbRendererCapabilities {
         State(
             liveHeaderSupported = true,
             reason = "Header-anyag képkockacsomag · ViewFlipper helyi lejátszással.",
-            backend = "remoteviews-flutter-material-v3",
+            backend = "remoteviews-flutter-material-v4-opaque-frames",
             isShaderIdentical = false,
         )
     } else {
@@ -180,49 +180,6 @@ internal object OrbRendererCapabilities {
             isShaderIdentical = false,
         )
     }
-}
-
-/**
- * RemoteViews cannot mutate an Animation's duration after inflation. Each
- * supported duration therefore owns one stock ViewFlipper in the XML shell;
- * the provider exposes exactly one and adds the finite frame package there.
- * This keeps both the timer and the crossfade entirely launcher-side.
- */
-internal object OrbWidgetFrameFlippers {
-    private val idsByDuration = mapOf(
-        0 to R.id.fluvi_orb_frame_flipper,
-        40 to R.id.fluvi_orb_frame_flipper_40,
-        60 to R.id.fluvi_orb_frame_flipper_60,
-        80 to R.id.fluvi_orb_frame_flipper_80,
-        100 to R.id.fluvi_orb_frame_flipper_100,
-        120 to R.id.fluvi_orb_frame_flipper_120,
-        140 to R.id.fluvi_orb_frame_flipper_140,
-        160 to R.id.fluvi_orb_frame_flipper_160,
-        180 to R.id.fluvi_orb_frame_flipper_180,
-        190 to R.id.fluvi_orb_frame_flipper_190,
-        200 to R.id.fluvi_orb_frame_flipper_200,
-        220 to R.id.fluvi_orb_frame_flipper_220,
-        240 to R.id.fluvi_orb_frame_flipper_240,
-        280 to R.id.fluvi_orb_frame_flipper_280,
-        320 to R.id.fluvi_orb_frame_flipper_320,
-        400 to R.id.fluvi_orb_frame_flipper_400,
-        500 to R.id.fluvi_orb_frame_flipper_500,
-        600 to R.id.fluvi_orb_frame_flipper_600,
-        800 to R.id.fluvi_orb_frame_flipper_800,
-        1000 to R.id.fluvi_orb_frame_flipper_1000,
-        2000 to R.id.fluvi_orb_frame_flipper_2000,
-        4000 to R.id.fluvi_orb_frame_flipper_4000,
-        8000 to R.id.fluvi_orb_frame_flipper_8000,
-        16000 to R.id.fluvi_orb_frame_flipper_16000,
-        32000 to R.id.fluvi_orb_frame_flipper_32000,
-        60000 to R.id.fluvi_orb_frame_flipper_60000,
-    )
-
-    val allIds: Collection<Int> get() = idsByDuration.values
-
-    fun idFor(transitionDurationMs: Int): Int =
-        idsByDuration[transitionDurationMs]
-            ?: error("No ViewFlipper animation for $transitionDurationMs ms")
 }
 
 /**
@@ -381,13 +338,10 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
                             framePlanFor(context, manager, id),
                         )
                     val view = android.widget.RemoteViews(context.packageName, R.layout.fluvi_orb_widget)
-                    val flipperId = OrbWidgetFrameFlippers.idFor(sequence.plan.transitionDurationMs)
-                    OrbWidgetFrameFlippers.allIds.forEach { candidate ->
-                        view.setViewVisibility(
-                            candidate,
-                            if (candidate == flipperId) View.VISIBLE else View.GONE,
-                        )
-                    }
+                    // One active ViewFlipper switches opaque, completed shader
+                    // frames. There is no outgoing/incoming alpha layer which
+                    // could expose wallpaper or pulse the orb brightness.
+                    val flipperId = R.id.fluvi_orb_frame_flipper
                     view.removeAllViews(flipperId)
                     view.setInt(
                         flipperId,
@@ -395,7 +349,10 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
                         sequence.plan.intervalMs,
                     )
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val displaySize = sequence.plan.displaySizePx.toFloat()
+                        val displaySize = OrbWidgetDisplayDimensions.shortSidePx(
+                            context,
+                            manager.getAppWidgetOptions(id),
+                        ).toFloat()
                         view.setViewLayoutWidth(
                             R.id.fluvi_orb_circle_container,
                             displaySize,
@@ -452,18 +409,12 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
             manager: AppWidgetManager,
             widgetId: Int,
         ): OrbFramePlan {
-            val options = manager.getAppWidgetOptions(widgetId)
-            val widthDp = options.getInt(
-                AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH,
-                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 56),
+            return OrbCompatibilityFrameRenderer.planFor(
+                OrbWidgetDisplayDimensions.shortSidePx(
+                    context,
+                    manager.getAppWidgetOptions(widgetId),
+                ),
             )
-            val heightDp = options.getInt(
-                AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT,
-                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 56),
-            )
-            val shortSidePx = (minOf(widthDp, heightDp).coerceAtLeast(1) *
-                context.resources.displayMetrics.density).toInt()
-            return OrbCompatibilityFrameRenderer.planFor(shortSidePx)
         }
     }
 }
