@@ -66,6 +66,7 @@ import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.app.query.QueryMenuMethodBridge
 import com.fluvi.app.runtime.FluviRuntimeCoordinator
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
+import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
 import com.fluvi.app.widget.orb.OrbMaterialFrameStore
 import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
@@ -125,6 +126,7 @@ class MainActivity : FlutterActivity() {
         // shell, including a launch originating from a notification/widget.
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
         FluviLockScreenCardCoordinator.reconcileCoreObserver(applicationContext)
+        FluviFinancialSnapshotWidgetCoordinator.reconcileCoreObserver(applicationContext)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -194,6 +196,10 @@ class MainActivity : FlutterActivity() {
                                     applicationContext,
                                     reason = "category:${call.method}",
                                 )
+                                FluviFinancialSnapshotWidgetCoordinator.refreshAsync(
+                                    applicationContext,
+                                    reason = "category:${call.method}",
+                                )
                             }
                             result.success(value)
                         }
@@ -227,6 +233,10 @@ class MainActivity : FlutterActivity() {
                                 applicationContext,
                                 reason = "ledger:${call.method}",
                             )
+                            FluviFinancialSnapshotWidgetCoordinator.refreshAsync(
+                                applicationContext,
+                                reason = "ledger:${call.method}",
+                            )
                         }
                         result.success(value)
                     }.onFailure { error ->
@@ -255,6 +265,10 @@ class MainActivity : FlutterActivity() {
                         }
                         if (call.method in ORB_AUTOMATION_MUTATIONS) {
                             FluviOrbUpdateCoordinator.requestRefresh(
+                                applicationContext,
+                                reason = "automation:${call.method}",
+                            )
+                            FluviFinancialSnapshotWidgetCoordinator.refreshAsync(
                                 applicationContext,
                                 reason = "automation:${call.method}",
                             )
@@ -336,10 +350,14 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
+                if (call.method == "getFinancialSnapshotWidgetLaunch") {
+                    result.success(financialSnapshotWidgetLaunch())
+                    return@setMethodCallHandler
+                }
                 if (call.method == "getLockScreenCard") {
                     scope.launch {
                         runCatching {
-                            FluviLockScreenCardCoordinator.preview(applicationContext)
+                            lockScreenCardStatus()
                         }.onSuccess(result::success)
                             .onFailure { error ->
                                 result.error("lock_screen_card_error", error.message, null)
@@ -356,10 +374,27 @@ class MainActivity : FlutterActivity() {
                     scope.launch {
                         runCatching {
                             FluviLockScreenCardCoordinator.update(applicationContext, values)
-                            FluviLockScreenCardCoordinator.preview(applicationContext)
+                            lockScreenCardStatus()
                         }.onSuccess(result::success)
                             .onFailure { error ->
                                 result.error("lock_screen_card_error", error.message, null)
+                            }
+                    }
+                    return@setMethodCallHandler
+                }
+                if (call.method == "setFinancialSnapshotWidget") {
+                    val values = call.arguments as? Map<*, *>
+                    if (values == null) {
+                        result.error("validation", "Hiányzó pénzügyi widget-beállítás.", null)
+                        return@setMethodCallHandler
+                    }
+                    scope.launch {
+                        runCatching {
+                            FluviFinancialSnapshotWidgetCoordinator.update(applicationContext, values)
+                            lockScreenCardStatus()
+                        }.onSuccess(result::success)
+                            .onFailure { error ->
+                                result.error("financial_snapshot_widget_error", error.message, null)
                             }
                     }
                     return@setMethodCallHandler
@@ -448,6 +483,10 @@ class MainActivity : FlutterActivity() {
                     }.onSuccess { value ->
                         if (call.method in ORB_FINANCIAL_LIMIT_MUTATIONS) {
                             FluviOrbUpdateCoordinator.requestRefresh(
+                                applicationContext,
+                                reason = "limit:${call.method}",
+                            )
+                            FluviFinancialSnapshotWidgetCoordinator.refreshAsync(
                                 applicationContext,
                                 reason = "limit:${call.method}",
                             )
@@ -1084,6 +1123,21 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
+    }
+
+    private suspend fun lockScreenCardStatus(): Map<String, Any?> =
+        FluviLockScreenCardCoordinator.preview(applicationContext).toMutableMap().apply {
+            put("widget", FluviFinancialSnapshotWidgetCoordinator.preview(applicationContext))
+        }
+
+    private fun financialSnapshotWidgetLaunch(): Map<String, Any?>? {
+        if (intent?.action != "com.fluvi.app.widget.financial.OPEN") return null
+        return mapOf(
+            "mode" to intent.getStringExtra("com.fluvi.app.widget.financial.MODE"),
+            "timeAxis" to intent.getStringExtra("com.fluvi.app.widget.financial.AXIS"),
+            "direction" to FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext).direction.name,
+            "categoryId" to intent.getStringExtra("com.fluvi.app.widget.financial.CATEGORY"),
+        )
     }
 
     override fun onRequestPermissionsResult(

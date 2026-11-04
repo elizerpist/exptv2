@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/fluvi_financial_snapshot_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:minWidth="180dp"
+    android:minHeight="88dp"
+    android:background="@drawable/fluvi_financial_snapshot_background"
+    android:contentDescription="Fluvi · Pénzügyi pillanatkép"
+    android:padding="14dp">
+
+    <ImageView
+        android:id="@+id/fluvi_financial_snapshot_orb"
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentTop="true"
+        android:contentDescription="@null" />
+
+    <TextView
+        android:id="@+id/fluvi_financial_snapshot_focus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_toStartOf="@id/fluvi_financial_snapshot_orb"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#D7E1F7"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/fluvi_financial_snapshot_primary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/fluvi_financial_snapshot_focus"
+        android:layout_toStartOf="@id/fluvi_financial_snapshot_orb"
+        android:layout_marginTop="5dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#FFFFFFFF"
+        android:textSize="23sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/fluvi_financial_snapshot_secondary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/fluvi_financial_snapshot_primary"
+        android:layout_toStartOf="@id/fluvi_financial_snapshot_orb"
+        android:layout_marginTop="3dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#B9C8E6"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/fluvi_financial_snapshot_event"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_toStartOf="@id/fluvi_financial_snapshot_toggle"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#D7E1F7"
+        android:textSize="11sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/fluvi_financial_snapshot_toggle"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:background="@drawable/fluvi_financial_snapshot_toggle_background"
+        android:gravity="center"
+        android:minWidth="88dp"
+        android:paddingStart="9dp"
+        android:paddingEnd="9dp"
+        android:textColor="#FFFFFFFF"
+        android:textSize="11sp"
+        android:visibility="gone" />
+</RelativeLayout>

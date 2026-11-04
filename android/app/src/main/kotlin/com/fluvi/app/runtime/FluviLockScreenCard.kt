@@ -244,7 +244,7 @@ internal object FluviLockScreenCardCoordinator {
         )
     }
 
-    private suspend fun categories(
+    internal suspend fun categories(
         context: Context,
         direction: FluviLockScreenCardConfiguration.Direction,
     ): List<Map<String, Any?>> {
@@ -268,7 +268,12 @@ internal object FluviLockScreenCardCoordinator {
         }
     }
 
-    private suspend fun resolve(
+    /**
+     * Canonical native financial projection shared by the optional Android
+     * notification and by AppWidget hosts.  Presentation privacy is applied
+     * only after this value is read, at each output boundary.
+     */
+    internal suspend fun resolve(
         context: Context,
         configuration: FluviLockScreenCardConfiguration,
     ): FluviLockScreenCardContent {

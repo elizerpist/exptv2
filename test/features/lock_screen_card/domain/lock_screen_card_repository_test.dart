@@ -25,4 +25,34 @@ void main() {
 
     expect(status.statusChannelLockscreenVisibility, 'Rendszer szerinti');
   });
+
+  test('reads independent discreet widget configuration and host count', () {
+    final status = LockScreenCardStatus.fromMap(<Object?, Object?>{
+      'configuration': <Object?, Object?>{'enabled': false},
+      'content': <Object?, Object?>{},
+      'widget': <Object?, Object?>{
+        'configuration': <Object?, Object?>{
+          'mode': 'balance',
+          'timeAxis': 'month',
+          'direction': 'expense',
+          'eventLine': 'related',
+          'privacy': 'discreet',
+          'valid': true,
+        },
+        'content': <Object?, Object?>{
+          'focus': 'Balance · Hónap',
+          'primary': '+33 200 Ft',
+          'secondary': 'Hónap nettó',
+          'available': true,
+        },
+        'hostWidgetCount': 2,
+        'lockscreenPlacementVerified': false,
+      },
+    });
+
+    expect(status.configuration.enabled, isFalse);
+    expect(status.widget.configuration.privacy, LockScreenCardPrivacy.discreet);
+    expect(status.widget.hostWidgetCount, 2);
+    expect(status.widget.lockscreenPlacementVerified, isFalse);
+  });
 }

@@ -18,6 +18,11 @@ final class MethodChannelLockScreenCardRepository
   ) => _read('setLockScreenCard', configuration.toMap());
 
   @override
+  Future<LockScreenCardStatus> saveWidget(
+    FinancialSnapshotWidgetConfiguration configuration,
+  ) => _read('setFinancialSnapshotWidget', configuration.toMap());
+
+  @override
   Future<void> openRuntimeNotificationChannelSettings() =>
       _channel.invokeMethod<void>('openRuntimeNotificationChannelSettings');
 

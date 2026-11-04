@@ -19,6 +19,7 @@ class LockScreenCardPage extends StatefulWidget {
 class _LockScreenCardPageState extends State<LockScreenCardPage> {
   LockScreenCardStatus? _status;
   bool _saving = false;
+  bool _savingWidget = false;
 
   @override
   void initState() {
@@ -50,6 +51,23 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
     }
   }
 
+  Future<void> _saveWidget(FinancialSnapshotWidgetConfiguration next) async {
+    if (_savingWidget) return;
+    setState(() => _savingWidget = true);
+    try {
+      final status = await widget.repository.saveWidget(next);
+      if (mounted) setState(() => _status = status);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('A pénzügyi widget mentése nem sikerült.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingWidget = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = _status;
@@ -58,12 +76,28 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
     }
     final config = status.configuration;
     return Scaffold(
-      appBar: AppBar(title: const Text('Zárképernyős értesítés')),
+      appBar: AppBar(title: const Text('Zárképernyő')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
         children: [
-          _PreviewCard(status: status),
+          _WidgetPreviewCard(status: status),
           const SizedBox(height: 18),
+          const Text(
+            'Pénzügyi widget',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          _FinancialSnapshotWidgetSettings(
+            status: status,
+            saving: _savingWidget,
+            onSave: _saveWidget,
+          ),
+          const SizedBox(height: 28),
+          const Text(
+            'Pénzügyi értesítés',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
           Card(
             child: SwitchListTile.adaptive(
               key: const ValueKey('lock-screen-card-enabled'),
@@ -72,7 +106,7 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
                   ? null
                   : (value) => _save(config.copyWith(enabled: value)),
               secondary: const Icon(Icons.lock_outline),
-              title: const Text('Zárképernyős értesítés'),
+              title: const Text('Pénzügyi értesítés'),
               subtitle: Text(
                 config.enabled
                     ? 'A kiválasztott pénzügyi fókusz Android-értesítésként jelenik meg.'
@@ -82,7 +116,7 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
           ),
           const SizedBox(height: 22),
           const Text(
-            'Mit kövessen?',
+            'Értesítés: mit kövessen?',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
@@ -228,11 +262,10 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
           const Card(
             child: ListTile(
               leading: Icon(Icons.info_outline),
-              title: Text('Zárképernyős értesítés, nem önálló widget'),
+              title: Text('Ez az opcionális rendszerértesítés'),
               subtitle: Text(
-                'A Fluvi pillanatképe jelenleg rendszerértesítésként jelenhet '
-                'meg a zárolt képernyőn. A külső Android-zárképernyőwidgetek '
-                'tényleges támogatását a telefon widgetválasztója dönti el.',
+                'A fenti Pénzügyi widget ettől független. A widgethez nem kell '
+                'értesítési engedély vagy Fluvi-háttérszolgáltatás.',
               ),
             ),
           ),
@@ -293,14 +326,208 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
   }
 }
 
-class _PreviewCard extends StatelessWidget {
-  const _PreviewCard({required this.status});
+class _FinancialSnapshotWidgetSettings extends StatelessWidget {
+  const _FinancialSnapshotWidgetSettings({
+    required this.status,
+    required this.saving,
+    required this.onSave,
+  });
+
+  final LockScreenCardStatus status;
+  final bool saving;
+  final ValueChanged<FinancialSnapshotWidgetConfiguration> onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final config = status.widget.configuration;
+    return Column(
+      children: [
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: Icon(
+                  config.valid
+                      ? Icons.check_circle_outline
+                      : Icons.info_outline,
+                ),
+                title: const Text('Widget konfigurálva'),
+                subtitle: Text(
+                  config.valid
+                      ? 'A kiválasztott fókusz mentve van.'
+                      : 'Budget módhoz válassz érvényes, kerettel rendelkező kategóriát.',
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.widgets_outlined),
+                title: const Text('Widgetpéldány a widgetgazdánál'),
+                subtitle: Text(
+                  status.widget.hostWidgetCount == 0
+                      ? 'Még nincs kihelyezett példány.'
+                      : '${status.widget.hostWidgetCount} példányt lát a Fluvi. Ez nem igazolja, hogy zárképernyőn vannak.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Dropdown<LockScreenCardMode>(
+                  label: 'Mód',
+                  value: config.mode,
+                  values: LockScreenCardMode.values,
+                  text: _modeLabel,
+                  onChanged: saving
+                      ? (_) {}
+                      : (value) => onSave(config.copyWith(mode: value)),
+                ),
+                const SizedBox(height: 12),
+                _Dropdown<LockScreenCardTimeAxis>(
+                  label: 'Időtengely',
+                  value: config.timeAxis,
+                  values: LockScreenCardTimeAxis.values,
+                  text: _axisLabel,
+                  onChanged: saving
+                      ? (_) {}
+                      : (value) => onSave(config.copyWith(timeAxis: value)),
+                ),
+                if (config.mode == LockScreenCardMode.budget) ...[
+                  const SizedBox(height: 12),
+                  _Dropdown<LockScreenCardDirection>(
+                    label: 'Irány',
+                    value: config.direction,
+                    values: LockScreenCardDirection.values,
+                    text: (value) =>
+                        value == LockScreenCardDirection.expense
+                        ? 'Kiadás'
+                        : 'Bevétel',
+                    onChanged: saving
+                        ? (_) {}
+                        : (value) => onSave(
+                            config.copyWith(
+                              direction: value,
+                              clearCategory: true,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (status.widget.categories.isEmpty)
+                    const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.account_balance_wallet_outlined),
+                      title: Text('Nincs választható keret'),
+                      subtitle: Text(
+                        'A Budget-kategóriához előbb hozz létre keretet.',
+                      ),
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      key: const ValueKey('financial-snapshot-widget-category'),
+                      value: status.widget.categories.any(
+                        (item) => item.id == config.categoryId,
+                      )
+                          ? config.categoryId
+                          : null,
+                      decoration: const InputDecoration(labelText: 'Kategória'),
+                      items: status.widget.categories
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item.id,
+                              child: Text(item.name),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: saving
+                          ? null
+                          : (value) => onSave(config.copyWith(categoryId: value)),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Column(
+            children: LockScreenCardEventLine.values
+                .map(
+                  (value) => RadioListTile<LockScreenCardEventLine>(
+                    value: value,
+                    groupValue: config.eventLine,
+                    onChanged: saving
+                        ? null
+                        : (next) => onSave(config.copyWith(eventLine: next)),
+                    title: Text(_eventLineLabel(value)),
+                    subtitle: value == LockScreenCardEventLine.related
+                        ? const Text('Csak a fókuszhoz tartozó utolsó könyvelt tétel.')
+                        : value == LockScreenCardEventLine.processed
+                        ? const Text('A globálisan legutóbbi könyvelt tranzakció.')
+                        : null,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Column(
+            children: [
+              RadioListTile<LockScreenCardPrivacy>(
+                value: LockScreenCardPrivacy.discreet,
+                groupValue: config.privacy,
+                onChanged: saving
+                    ? null
+                    : (value) => onSave(config.copyWith(privacy: value)),
+                title: const Text('Diszkrét'),
+                subtitle: const Text(
+                  'A widgetgazda nem kap összeget, partnert, kategóriát, pontszámot vagy állapotot eláruló színt.',
+                ),
+              ),
+              RadioListTile<LockScreenCardPrivacy>(
+                value: LockScreenCardPrivacy.full,
+                groupValue: config.privacy,
+                onChanged: saving
+                    ? null
+                    : (value) => onSave(config.copyWith(privacy: value)),
+                title: const Text('Pénzügyi részletek megjelenítése a widgeten'),
+                subtitle: const Text(
+                  'Csak a feloldott Fluvi alkalmazásban engedélyezhető. A widgetgazda megkapja az értékeket, és lezárt telefonon is láthatóvá teheti őket.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Card(
+          child: ListTile(
+            leading: Icon(Icons.add_to_home_screen_outlined),
+            title: Text('Kihelyezés a telefonon'),
+            subtitle: Text(
+              'Ha a telefon zárképernyő-szerkesztője alkalmazáswidgeteket kínál, válaszd a „Fluvi · Pénzügyi pillanatkép” elemet. '
+              'Külső widgetgazdánál, például Widgets Anywhere használatakor add ezt a widgetet a gazda zárképernyős keretéhez. '
+              'A rendszer zárképernyő-értesítéseit mindkét esetben kikapcsolva hagyhatod. A Fluvi nem kér kisegítő lehetőségi engedélyt.',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WidgetPreviewCard extends StatelessWidget {
+  const _WidgetPreviewCard({required this.status});
   final LockScreenCardStatus status;
 
   @override
   Widget build(BuildContext context) {
-    final content = status.content;
-    final config = status.configuration;
+    final content = status.widget.content;
+    final config = status.widget.configuration;
     final discreet = config.privacy == LockScreenCardPrivacy.discreet;
     return Card(
       color: const Color(0xff17233d),

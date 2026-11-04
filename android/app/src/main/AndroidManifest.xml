@@ -71,6 +71,19 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/fluvi_orb_widget_info" />
         </receiver>
+        <receiver
+            android:name=".widget.financial.FluviFinancialSnapshotWidgetProvider"
+            android:exported="false"
+            android:label="Fluvi · Pénzügyi pillanatkép">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.appwidget.action.APPWIDGET_OPTIONS_CHANGED" />
+                <action android:name="android.appwidget.action.APPWIDGET_RESTORED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/fluvi_financial_snapshot_widget_info" />
+        </receiver>
         <activity
             android:name=".widget.orb.FluviOrbConfigurationActivity"
             android:exported="true"
