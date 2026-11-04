@@ -517,6 +517,21 @@ internal object FluviRuntimeNotificationController {
         }
     }
 
+    /** This is the channel's requested Android policy, not a claim that a
+     * particular keyguard host will render the notification. */
+    fun statusChannelLockscreenVisibilityLabel(context: Context): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "A rendszer kezeli"
+        val visibility = (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .getNotificationChannel(CHANNEL_ID)?.lockscreenVisibility
+            ?: return "Ismeretlen"
+        return when (visibility) {
+            Notification.VISIBILITY_PUBLIC -> "Nyilvános"
+            Notification.VISIBILITY_PRIVATE -> "Érzékeny tartalom szerint"
+            Notification.VISIBILITY_SECRET -> "Rejtett"
+            else -> "Rendszer szerinti"
+        }
+    }
+
     private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -531,7 +546,11 @@ internal object FluviRuntimeNotificationController {
                     setSound(null, null)
                     enableVibration(false)
                     setShowBadge(false)
-                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                    // A full financial card remains private per notification;
+                    // the channel may safely expose its data-free public
+                    // version on a locked screen. Existing user choices are
+                    // intentionally left to Android and are never reset here.
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 },
             )
         }
@@ -544,8 +563,11 @@ internal object FluviRuntimeNotificationController {
         originalPostTimeUtcMs: Long?,
     ): Notification {
         val content = FluviLockScreenCardContentStore(context).read()
-        val isFull = configuration.privacy == FluviLockScreenCardConfiguration.Privacy.full &&
-            content != null && configuration.isValid
+        val presentation = FluviLockScreenNotificationPresentation.create(
+            configuration = configuration,
+            content = content,
+            monitoring = monitoringExpansion(status),
+        )
         val open = PendingIntent.getActivity(
             context,
             4052,
@@ -555,42 +577,28 @@ internal object FluviRuntimeNotificationController {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val discreetEvent = content?.event?.substringAfterLast("·")?.trim()
-        val discreetText = discreetEvent?.takeIf { it.matches(Regex("[0-2][0-9]:[0-5][0-9]")) }
-            ?.let { "Új tranzakció könyvelve · $it" }
-            ?: "Nincs új könyvelt tranzakció"
         val publicVersion = builder(context)
             .setSmallIcon(FluviNotificationIconResolver.smallIconRes(context))
             .setContentTitle("Fluvi · Pénzügyi pillanatkép")
-            .setContentText(discreetText)
-            .setStyle(Notification.BigTextStyle().bigText(discreetText))
+            .setContentText(presentation.publicText)
+            .setStyle(Notification.BigTextStyle().bigText(presentation.publicText))
             .setCategory(Notification.CATEGORY_SERVICE)
-            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
         originalPostTimeUtcMs?.let(publicVersion::setWhen)
-        val title = if (isFull) content!!.focus else "Fluvi · Pénzügyi pillanatkép"
-        val text = if (isFull) content!!.primary else discreetText
-        val expanded = if (isFull) buildString {
-            append(content!!.secondary)
-            content.event?.let { event ->
-                append("\n")
-                append(content.eventLabel ?: "Utolsó könyvelt tranzakció")
-                append(": ")
-                append(event)
-            }
-            monitoringExpansion(status)?.let { state -> append("\nFigyelés: ").append(state) }
-        } else monitoringExpansion(status)?.let { "$discreetText\nFigyelés: $it" } ?: discreetText
         val notification = builder(context)
             .setSmallIcon(FluviNotificationIconResolver.smallIconRes(context))
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(Notification.BigTextStyle().bigText(expanded))
+            .setContentTitle(presentation.title)
+            .setContentText(presentation.text)
+            .setStyle(Notification.BigTextStyle().bigText(presentation.expanded))
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOnlyAlertOnce(true)
             .setOngoing(status.foregroundRequested && status.foregroundServiceRunning)
-            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setVisibility(
+                if (presentation.isFull) Notification.VISIBILITY_PRIVATE else Notification.VISIBILITY_PUBLIC,
+            )
             .setPublicVersion(publicVersion.build())
             .setContentIntent(open)
-        if (isFull) notification.setLargeIcon(content!!.orbBitmap())
+        if (presentation.isFull) notification.setLargeIcon(requireNotNull(content).orbBitmap())
         if (status.foregroundRequested || status.backgroundRequested) {
             notification.addAction(stopAction(context))
         }
@@ -622,6 +630,62 @@ internal object FluviRuntimeNotificationController {
         }
 
     fun notificationId(): Int = NOTIFICATION_ID
+}
+
+/** One content decision drives collapsed, expanded, and public notification
+ * fields. Keeping it pure makes it impossible for the expanded Balance card
+ * to accidentally omit its primary net amount. */
+internal data class FluviLockScreenNotificationPresentation(
+    val title: String,
+    val text: String,
+    val expanded: String,
+    val publicText: String,
+    val isFull: Boolean,
+) {
+    companion object {
+        fun create(
+            configuration: FluviLockScreenCardConfiguration,
+            content: FluviLockScreenCardContent?,
+            monitoring: String?,
+        ): FluviLockScreenNotificationPresentation {
+            val isFull = configuration.privacy == FluviLockScreenCardConfiguration.Privacy.full &&
+                content != null && configuration.isValid
+            val discreetEvent = content?.event?.substringAfterLast("·")?.trim()
+            val publicText = discreetEvent
+                ?.takeIf { it.matches(Regex("[0-2][0-9]:[0-5][0-9]")) }
+                ?.let { "Új tranzakció könyvelve · $it" }
+                ?: "Nincs új könyvelt tranzakció"
+            if (!isFull) {
+                val expanded = monitoring?.let { "$publicText\nFigyelés: $it" } ?: publicText
+                return FluviLockScreenNotificationPresentation(
+                    title = "Fluvi · Pénzügyi pillanatkép",
+                    text = publicText,
+                    expanded = expanded,
+                    publicText = publicText,
+                    isFull = false,
+                )
+            }
+            val fullContent = requireNotNull(content)
+            val expanded = buildString {
+                append(fullContent.primary)
+                if (fullContent.secondary.isNotBlank()) append("\n").append(fullContent.secondary)
+                fullContent.event?.let { event ->
+                    append("\n")
+                    append(fullContent.eventLabel ?: "Utolsó könyvelt tranzakció")
+                    append(": ")
+                    append(event)
+                }
+                monitoring?.let { state -> append("\nFigyelés: ").append(state) }
+            }
+            return FluviLockScreenNotificationPresentation(
+                title = fullContent.focus,
+                text = fullContent.primary,
+                expanded = expanded,
+                publicText = publicText,
+                isFull = true,
+            )
+        }
+    }
 }
 
 /** User-started status companion. It never receives notification payloads. */

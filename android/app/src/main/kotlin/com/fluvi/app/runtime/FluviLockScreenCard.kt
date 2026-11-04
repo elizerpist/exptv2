@@ -240,6 +240,7 @@ internal object FluviLockScreenCardCoordinator {
             "postNotificationsGranted" to FluviRuntimeCoordinator.status(context).postNotificationsGranted,
             "statusChannelEnabled" to FluviRuntimeNotificationController.statusChannelEnabled(context),
             "statusChannelImportance" to FluviRuntimeNotificationController.statusChannelImportanceLabel(context),
+            "statusChannelLockscreenVisibility" to FluviRuntimeNotificationController.statusChannelLockscreenVisibilityLabel(context),
         )
     }
 

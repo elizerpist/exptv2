@@ -193,7 +193,7 @@ class _SettingsPageState extends State<SettingsPage>
                   ListTile(
                     key: const ValueKey('settings-lock-screen-card'),
                     leading: const Icon(Icons.lock_outline),
-                    title: const Text('Zárképernyő'),
+                    title: const Text('Zárképernyős értesítés'),
                     subtitle: Text(_lockScreenSubtitle(_lockScreenCardStatus)),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
@@ -434,7 +434,7 @@ class _NotificationIconStyleTile extends StatelessWidget {
 String _lockScreenSubtitle(LockScreenCardStatus? status) {
   final configuration = status?.configuration;
   if (configuration == null || !configuration.enabled) {
-    return 'Pénzügyi kártya kikapcsolva';
+    return 'Pénzügyi értesítés kikapcsolva';
   }
   final mode = switch (configuration.mode) {
     LockScreenCardMode.mind => 'Mind',

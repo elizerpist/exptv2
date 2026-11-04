@@ -41,7 +41,7 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('A zárképernyő-kártya mentése nem sikerült.'),
+            content: Text('A zárképernyős értesítés mentése nem sikerült.'),
           ),
         );
       }
@@ -58,7 +58,7 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
     }
     final config = status.configuration;
     return Scaffold(
-      appBar: AppBar(title: const Text('Zárképernyő')),
+      appBar: AppBar(title: const Text('Zárképernyős értesítés')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
         children: [
@@ -72,10 +72,10 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
                   ? null
                   : (value) => _save(config.copyWith(enabled: value)),
               secondary: const Icon(Icons.lock_outline),
-              title: const Text('Zárképernyő-kártya'),
+              title: const Text('Zárképernyős értesítés'),
               subtitle: Text(
                 config.enabled
-                    ? 'A kiválasztott pénzügyi fókusz jelenik meg.'
+                    ? 'A kiválasztott pénzügyi fókusz Android-értesítésként jelenik meg.'
                     : 'Kikapcsolva; a választott fókusz megmarad.',
               ),
             ),
@@ -225,6 +225,18 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
             ),
           ),
           const SizedBox(height: 22),
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.info_outline),
+              title: Text('Nem önálló Nothing-zárképernyőwidget'),
+              subtitle: Text(
+                'A Nothing OS zárképernyős widgetfelülete nem kínál fel '
+                'külső Android AppWidgetProvidert. A Fluvi pillanatképe '
+                'ezért rendszerértesítésként jelenhet meg a zárolt képernyőn.',
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           const Text(
             'Megjelenés a telefonon',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
@@ -256,11 +268,14 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
                         ? Icons.settings_outlined
                         : Icons.error_outline,
                   ),
-                  title: const Text('Pénzügyi kártya csatornája'),
+                  title: const Text('Pénzügyi értesítés csatornája'),
                   subtitle: Text(
                     'Csatornafontosság: ${status.statusChannelImportance}. '
+                    'Zárolt képernyő: ${status.statusChannelLockscreenVisibility}. '
                     '${status.statusChannelEnabled ? '' : 'A csatorna ki van kapcsolva. '}'
-                    'A zárolt képernyőn való megjelenést a telefon beállításai szabályozzák.',
+                    'A Néma csatornát a Nothing nem teszi ki biztosan a zárolt képernyőre. '
+                    'A Csatorna oldalon válassz normál (Alapértelmezett) megjelenítést, '
+                    'és engedélyezd az értesítéseket a zárolt képernyőn.',
                   ),
                   trailing: TextButton(
                     onPressed: widget

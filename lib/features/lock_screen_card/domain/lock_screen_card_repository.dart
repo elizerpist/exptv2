@@ -103,6 +103,7 @@ final class LockScreenCardStatus {
     required this.postNotificationsGranted,
     required this.statusChannelEnabled,
     required this.statusChannelImportance,
+    required this.statusChannelLockscreenVisibility,
   });
 
   factory LockScreenCardStatus.fromMap(Map<Object?, Object?> map) {
@@ -123,6 +124,9 @@ final class LockScreenCardStatus {
       statusChannelEnabled: map['statusChannelEnabled'] as bool? ?? true,
       statusChannelImportance:
           map['statusChannelImportance'] as String? ?? 'Ismeretlen',
+      statusChannelLockscreenVisibility:
+          map['statusChannelLockscreenVisibility'] as String? ??
+          'Rendszer szerinti',
     );
   }
 
@@ -132,6 +136,7 @@ final class LockScreenCardStatus {
   final bool postNotificationsGranted;
   final bool statusChannelEnabled;
   final String statusChannelImportance;
+  final String statusChannelLockscreenVisibility;
 }
 
 final class LockScreenCardContent {
