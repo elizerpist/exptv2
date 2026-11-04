@@ -747,6 +747,7 @@ final class DashboardCoreController {
     TimePlane initialPlane = TimePlane.month,
     bool initialRailOpen = false,
     LedgerDirection initialDirection = LedgerDirection.income,
+    Set<String> initialCategoryIds = const <String>{},
     bool seedReady = true,
     int? initialCoreRevision,
     this.pageSize = 24,
@@ -824,6 +825,7 @@ final class DashboardCoreController {
       initialPlane: initialPlane,
       initialRailOpen: initialRailOpen,
       initialDirection: initialDirection,
+      initialCategoryIds: initialCategoryIds,
       initialCoreRevision: initialCoreRevision ?? 0,
       displayFrameScheduler: displayFrameScheduler,
       onMotionActiveChanged: (active) {

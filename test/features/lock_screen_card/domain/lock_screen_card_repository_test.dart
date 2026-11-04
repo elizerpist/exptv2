@@ -55,4 +55,39 @@ void main() {
     expect(status.widget.hostWidgetCount, 2);
     expect(status.widget.lockscreenPlacementVerified, isFalse);
   });
+
+  test(
+    'native accessibility overlay starts opt-in and discreet after migration',
+    () {
+      final status = LockScreenCardStatus.fromMap(<Object?, Object?>{
+        'configuration': <Object?, Object?>{},
+        'content': <Object?, Object?>{},
+        'nativeCard': <Object?, Object?>{},
+      });
+
+      expect(status.nativeCard.configuration.requested, isFalse);
+      expect(status.nativeCard.configuration.showFinancialDetails, isFalse);
+      expect(status.nativeCard.systemServiceEnabled, isFalse);
+      expect(status.nativeCard.serviceConnected, isFalse);
+    },
+  );
+
+  test('native service status is distinct from user request', () {
+    final status = LockScreenCardStatus.fromMap(<Object?, Object?>{
+      'configuration': <Object?, Object?>{},
+      'content': <Object?, Object?>{},
+      'nativeCard': <Object?, Object?>{
+        'requested': true,
+        'showFinancialDetails': false,
+        'systemServiceEnabled': true,
+        'serviceConnected': false,
+        'lastDecisionReason': 'HIDDEN_DISCONNECTED',
+      },
+    });
+
+    expect(status.nativeCard.configuration.requested, isTrue);
+    expect(status.nativeCard.systemServiceEnabled, isTrue);
+    expect(status.nativeCard.serviceConnected, isFalse);
+    expect(status.nativeCard.configuration.showFinancialDetails, isFalse);
+  });
 }

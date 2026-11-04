@@ -16,28 +16,49 @@ class LockScreenCardPage extends StatefulWidget {
   State<LockScreenCardPage> createState() => _LockScreenCardPageState();
 }
 
-class _LockScreenCardPageState extends State<LockScreenCardPage> {
+class _LockScreenCardPageState extends State<LockScreenCardPage>
+    with WidgetsBindingObserver {
   LockScreenCardStatus? _status;
   bool _saving = false;
   bool _savingWidget = false;
+  bool _savingNative = false;
+  int _statusGeneration = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load();
+  }
+
   Future<void> _load() async {
+    final generation = ++_statusGeneration;
     final status = await widget.repository.load();
-    if (mounted) setState(() => _status = status);
+    if (mounted && generation == _statusGeneration) {
+      setState(() => _status = status);
+    }
   }
 
   Future<void> _save(LockScreenCardConfiguration next) async {
     if (_saving) return;
+    final generation = ++_statusGeneration;
     setState(() => _saving = true);
     try {
       final status = await widget.repository.save(next);
-      if (mounted) setState(() => _status = status);
+      if (mounted && generation == _statusGeneration) {
+        setState(() => _status = status);
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -53,18 +74,111 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
 
   Future<void> _saveWidget(FinancialSnapshotWidgetConfiguration next) async {
     if (_savingWidget) return;
+    final generation = ++_statusGeneration;
     setState(() => _savingWidget = true);
     try {
       final status = await widget.repository.saveWidget(next);
-      if (mounted) setState(() => _status = status);
+      if (mounted && generation == _statusGeneration) {
+        setState(() => _status = status);
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('A pénzügyi widget mentése nem sikerült.')),
+          const SnackBar(
+            content: Text('A pénzügyi widget mentése nem sikerült.'),
+          ),
         );
       }
     } finally {
       if (mounted) setState(() => _savingWidget = false);
+    }
+  }
+
+  Future<void> _saveNative(NativeKeyguardCardConfiguration next) async {
+    if (_savingNative) return;
+    final generation = ++_statusGeneration;
+    setState(() => _savingNative = true);
+    try {
+      final status = await widget.repository.saveNativeKeyguardCard(next);
+      if (mounted && generation == _statusGeneration) {
+        setState(() => _status = status);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('A natív zárképernyőkártya mentése nem sikerült.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingNative = false);
+    }
+  }
+
+  Future<void> _changeNativeRequested(bool value) async {
+    final native = _status!.nativeCard.configuration;
+    if (!value) {
+      await _saveNative(native.copyWith(requested: false));
+      return;
+    }
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Fluvi-kártya a zárképernyőn'),
+        content: const Text(
+          'A Fluvi a saját pénzügyi kártyáját jeleníti meg a felébresztett zárképernyő fölött. '
+          'A kisegítő szolgáltatás a rendszerablakok szerkezetéből ismeri fel a zárképernyőt, '
+          'a PIN-bevitelt és a gyorsbeállításokat. Az alkalmazások szövegét nem olvassa vagy menti. '
+          'A kártya kezdetben elrejti a pénzügyi részleteket.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Folytatás az Android beállításaiban'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true) return;
+    await _saveNative(
+      native.copyWith(requested: true, showFinancialDetails: false),
+    );
+    if (mounted) await widget.repository.openNativeKeyguardSettings();
+  }
+
+  Future<void> _changeNativeDetails(bool value) async {
+    final native = _status!.nativeCard.configuration;
+    if (!value) {
+      await _saveNative(native.copyWith(showFinancialDetails: false));
+      return;
+    }
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pénzügyi részletek a zárolt képernyőn'),
+        content: const Text(
+          'Aki felébreszti a telefonodat, láthatja az összeget, a kategóriát és a kiválasztott tranzakciós sort. '
+          'Az értesítések elrejtése erre a külön Fluvi-kártyára nem vonatkozik.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Engedélyezés'),
+          ),
+        ],
+      ),
+    );
+    if (accepted == true) {
+      await _saveNative(native.copyWith(showFinancialDetails: true));
     }
   }
 
@@ -75,6 +189,7 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final config = status.configuration;
+    final native = status.nativeCard;
     return Scaffold(
       appBar: AppBar(title: const Text('Zárképernyő')),
       body: ListView(
@@ -83,7 +198,96 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
           _WidgetPreviewCard(status: status),
           const SizedBox(height: 18),
           const Text(
-            'Pénzügyi widget',
+            'Fluvi-kártya a zárképernyőn',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile.adaptive(
+                  key: const ValueKey('native-keyguard-card-requested'),
+                  value: native.configuration.requested,
+                  onChanged: _savingNative ? null : _changeNativeRequested,
+                  secondary: const Icon(Icons.lock_outline),
+                  title: const Text('Fluvi-kártya a zárképernyőn'),
+                  subtitle: const Text(
+                    'A telefon felébresztésekor mutatja a kiválasztott pénzügyi fókuszt.',
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(
+                    native.systemServiceEnabled
+                        ? Icons.verified_outlined
+                        : Icons.pending_outlined,
+                  ),
+                  title: const Text('Android kisegítő szolgáltatás'),
+                  subtitle: Text(
+                    !native.configuration.requested
+                        ? 'Kikapcsolva'
+                        : !native.systemServiceEnabled
+                        ? 'Android-engedély szükséges — keresd: Fluvi · Zárképernyőkártya'
+                        : !native.serviceConnected
+                        ? 'Engedélyezve, kapcsolódás folyamatban'
+                        : 'Szolgáltatás csatlakoztatva',
+                  ),
+                  trailing: TextButton(
+                    onPressed: widget.repository.openNativeKeyguardSettings,
+                    child: const Text('Android-beállítások'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (native.configuration.requested) ...[
+            const SizedBox(height: 10),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile.adaptive(
+                    key: const ValueKey('native-keyguard-card-details'),
+                    value: native.configuration.showFinancialDetails,
+                    onChanged: _savingNative ? null : _changeNativeDetails,
+                    title: const Text('Pénzügyi részletek a zárolt képernyőn'),
+                    subtitle: const Text(
+                      'Külön beleegyezés: az összeg, a kategória és az eseménysor a háttérképen is látható lehet.',
+                    ),
+                  ),
+                  ListTile(
+                    title: const Text('Függőleges pozíció'),
+                    subtitle: Slider(
+                      value: native.configuration.verticalOffsetDp.toDouble(),
+                      min: -96,
+                      max: 96,
+                      divisions: 12,
+                      label: '${native.configuration.verticalOffsetDp} dp',
+                      onChanged: _savingNative
+                          ? null
+                          : (value) => _saveNative(
+                              native.configuration.copyWith(
+                                verticalOffsetDp: value.round(),
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.bug_report_outlined),
+                title: const Text('Zárképernyő-diagnosztika'),
+                subtitle: Text(
+                  'Utolsó döntés: ${native.lastDecisionReason}\nCsatolás: ${native.lastAttachResult}',
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 28),
+          const Text(
+            'A kártya fókusza',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
@@ -351,7 +555,7 @@ class _FinancialSnapshotWidgetSettings extends StatelessWidget {
                       ? Icons.check_circle_outline
                       : Icons.info_outline,
                 ),
-                title: const Text('Widget konfigurálva'),
+                title: const Text('Hagyományos pénzügyi widget konfigurálva'),
                 subtitle: Text(
                   config.valid
                       ? 'A kiválasztott fókusz mentve van.'
@@ -403,8 +607,7 @@ class _FinancialSnapshotWidgetSettings extends StatelessWidget {
                     label: 'Irány',
                     value: config.direction,
                     values: LockScreenCardDirection.values,
-                    text: (value) =>
-                        value == LockScreenCardDirection.expense
+                    text: (value) => value == LockScreenCardDirection.expense
                         ? 'Kiadás'
                         : 'Bevétel',
                     onChanged: saving
@@ -429,9 +632,10 @@ class _FinancialSnapshotWidgetSettings extends StatelessWidget {
                   else
                     DropdownButtonFormField<String>(
                       key: const ValueKey('financial-snapshot-widget-category'),
-                      value: status.widget.categories.any(
-                        (item) => item.id == config.categoryId,
-                      )
+                      value:
+                          status.widget.categories.any(
+                            (item) => item.id == config.categoryId,
+                          )
                           ? config.categoryId
                           : null,
                       decoration: const InputDecoration(labelText: 'Kategória'),
@@ -445,7 +649,8 @@ class _FinancialSnapshotWidgetSettings extends StatelessWidget {
                           .toList(growable: false),
                       onChanged: saving
                           ? null
-                          : (value) => onSave(config.copyWith(categoryId: value)),
+                          : (value) =>
+                                onSave(config.copyWith(categoryId: value)),
                     ),
                 ],
               ],
@@ -465,9 +670,13 @@ class _FinancialSnapshotWidgetSettings extends StatelessWidget {
                         : (next) => onSave(config.copyWith(eventLine: next)),
                     title: Text(_eventLineLabel(value)),
                     subtitle: value == LockScreenCardEventLine.related
-                        ? const Text('Csak a fókuszhoz tartozó utolsó könyvelt tétel.')
+                        ? const Text(
+                            'Csak a fókuszhoz tartozó utolsó könyvelt tétel.',
+                          )
                         : value == LockScreenCardEventLine.processed
-                        ? const Text('A globálisan legutóbbi könyvelt tranzakció.')
+                        ? const Text(
+                            'A globálisan legutóbbi könyvelt tranzakció.',
+                          )
                         : null,
                   ),
                 )
@@ -495,7 +704,9 @@ class _FinancialSnapshotWidgetSettings extends StatelessWidget {
                 onChanged: saving
                     ? null
                     : (value) => onSave(config.copyWith(privacy: value)),
-                title: const Text('Pénzügyi részletek megjelenítése a widgeten'),
+                title: const Text(
+                  'Pénzügyi részletek megjelenítése a widgeten',
+                ),
                 subtitle: const Text(
                   'Csak a feloldott Fluvi alkalmazásban engedélyezhető. A widgetgazda megkapja az értékeket, és lezárt telefonon is láthatóvá teheti őket.',
                 ),
@@ -506,12 +717,11 @@ class _FinancialSnapshotWidgetSettings extends StatelessWidget {
         const SizedBox(height: 12),
         const Card(
           child: ListTile(
-            leading: Icon(Icons.add_to_home_screen_outlined),
-            title: Text('Kihelyezés a telefonon'),
+            leading: Icon(Icons.widgets_outlined),
+            title: Text('Hagyományos widget (opcionális)'),
             subtitle: Text(
-              'Ha a telefon zárképernyő-szerkesztője alkalmazáswidgeteket kínál, válaszd a „Fluvi · Pénzügyi pillanatkép” elemet. '
-              'Külső widgetgazdánál, például Widgets Anywhere használatakor add ezt a widgetet a gazda zárképernyős keretéhez. '
-              'A rendszer zárképernyő-értesítéseit mindkét esetben kikapcsolva hagyhatod. A Fluvi nem kér kisegítő lehetőségi engedélyt.',
+              'Ez a kezdőképernyős AppWidget külön felület. A fenti beépített Fluvi-kártyához nem kell widgetgazda vagy kihelyezett példány; '
+              'egyszer az Android kisegítő lehetőségein kell engedélyezni a „Fluvi · Zárképernyőkártya” szolgáltatást.',
             ),
           ),
         ),
@@ -527,8 +737,7 @@ class _WidgetPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = status.widget.content;
-    final config = status.widget.configuration;
-    final discreet = config.privacy == LockScreenCardPrivacy.discreet;
+    final discreet = !status.nativeCard.configuration.showFinancialDetails;
     return Card(
       color: const Color(0xff17233d),
       child: Padding(

@@ -66,6 +66,8 @@ import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.app.query.QueryMenuMethodBridge
 import com.fluvi.app.runtime.FluviRuntimeCoordinator
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
+import com.fluvi.app.lockscreen.FluviKeyguardCardSettings
+import com.fluvi.app.lockscreen.FluviKeyguardCardService
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
 import com.fluvi.app.widget.orb.OrbMaterialFrameStore
 import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
@@ -118,10 +120,12 @@ class MainActivity : FlutterActivity() {
     private var diagnosticEventSink: EventChannel.EventSink? = null
     private var automationUpdateEventChannel: EventChannel? = null
     private var pendingPostNotificationPermissionResult: MethodChannel.Result? = null
+    private var pendingFinancialSnapshotLaunch: Map<String, Any?>? = null
     private val preparedQueryGenerationOwner = DashboardPreparedIndexQueryGenerationOwner()
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingFinancialSnapshotLaunch = financialSnapshotWidgetLaunch(intent)
         // Apply the persisted recents choice before Flutter constructs the
         // shell, including a launch originating from a notification/widget.
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
@@ -351,7 +355,7 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 if (call.method == "getFinancialSnapshotWidgetLaunch") {
-                    result.success(financialSnapshotWidgetLaunch())
+                    result.success(consumeFinancialSnapshotWidgetLaunch())
                     return@setMethodCallHandler
                 }
                 if (call.method == "getLockScreenCard") {
@@ -397,6 +401,28 @@ class MainActivity : FlutterActivity() {
                                 result.error("financial_snapshot_widget_error", error.message, null)
                             }
                     }
+                    return@setMethodCallHandler
+                }
+                if (call.method == "setNativeKeyguardCard") {
+                    val values = call.arguments as? Map<*, *>
+                    if (values == null) {
+                        result.error("validation", "Hiányzó natív zárképernyő-beállítás.", null)
+                        return@setMethodCallHandler
+                    }
+                    scope.launch {
+                        runCatching {
+                            FluviKeyguardCardSettings.update(applicationContext, values)
+                            lockScreenCardStatus()
+                        }.onSuccess(result::success)
+                            .onFailure { error -> result.error("native_keyguard_card_error", error.message, null) }
+                    }
+                    return@setMethodCallHandler
+                }
+                if (call.method == "openNativeKeyguardSettings") {
+                    runCatching {
+                        startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }.onSuccess { result.success(true) }
+                        .onFailure { result.error("accessibility_settings", it.message, null) }
                     return@setMethodCallHandler
                 }
                 if (call.method == "openRuntimeNotificationChannelSettings") {
@@ -1122,21 +1148,36 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        pendingFinancialSnapshotLaunch = financialSnapshotWidgetLaunch(intent)
+        pendingFinancialSnapshotLaunch?.let { launch ->
+            runtimeMonitoringChannel?.invokeMethod("financialSnapshotWidgetOpen", launch)
+        }
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
     }
 
     private suspend fun lockScreenCardStatus(): Map<String, Any?> =
         FluviLockScreenCardCoordinator.preview(applicationContext).toMutableMap().apply {
             put("widget", FluviFinancialSnapshotWidgetCoordinator.preview(applicationContext))
+            put("nativeCard", FluviKeyguardCardSettings.statusMap(applicationContext))
         }
 
-    private fun financialSnapshotWidgetLaunch(): Map<String, Any?>? {
-        if (intent?.action != "com.fluvi.app.widget.financial.OPEN") return null
+    private fun consumeFinancialSnapshotWidgetLaunch(): Map<String, Any?>? =
+        pendingFinancialSnapshotLaunch.also { pendingFinancialSnapshotLaunch = null }
+
+    private fun financialSnapshotWidgetLaunch(source: android.content.Intent?): Map<String, Any?>? {
+        source ?: return null
+        val fromWidget = source.action == "com.fluvi.app.widget.financial.OPEN"
+        val fromKeyguard = source.action == FluviKeyguardCardService.ACTION_OPEN_FOCUS
+        if (!fromWidget && !fromKeyguard) return null
+        // The exported launcher Activity must not treat arbitrary extras as
+        // financial authority. Both the AppWidget and the native overlay open
+        // only the focus stored by Fluvi itself.
+        val focus = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext)
         return mapOf(
-            "mode" to intent.getStringExtra("com.fluvi.app.widget.financial.MODE"),
-            "timeAxis" to intent.getStringExtra("com.fluvi.app.widget.financial.AXIS"),
-            "direction" to FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext).direction.name,
-            "categoryId" to intent.getStringExtra("com.fluvi.app.widget.financial.CATEGORY"),
+            "mode" to focus.mode.name,
+            "timeAxis" to focus.timeAxis.name,
+            "direction" to focus.direction.name,
+            "categoryId" to focus.categoryId,
         )
     }
 

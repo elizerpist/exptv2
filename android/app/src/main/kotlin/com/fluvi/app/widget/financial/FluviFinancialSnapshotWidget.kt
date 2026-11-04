@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -16,7 +15,9 @@ import com.fluvi.app.R
 import com.fluvi.app.runtime.FluviLockScreenCardConfiguration
 import com.fluvi.app.runtime.FluviLockScreenCardContent
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
-import com.fluvi.app.runtime.orbBitmap
+import com.fluvi.app.runtime.FluviFinancialCardPresentation
+import com.fluvi.app.runtime.FluviFinancialCardPresenter
+import com.fluvi.app.lockscreen.FluviKeyguardCardServiceRegistry
 import com.fluvi.core.FluviCoreFactory
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
@@ -190,6 +191,9 @@ internal object FluviFinancialSnapshotWidgetCoordinator {
         FluviFinancialSnapshotWidgetProvider.renderCached(application)
         refreshAsync(application, "widgetConfiguration", next.generation)
         reconcileCoreObserver(application)
+        // The native keyguard card shares this focus even when no AppWidget
+        // host exists; its own privacy setting remains independent.
+        FluviKeyguardCardServiceRegistry.notifyFocusChanged()
         return next
     }
 
@@ -361,68 +365,47 @@ class FluviFinancialSnapshotWidgetProvider : AppWidgetProvider() {
             showEvent: Boolean,
         ): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.fluvi_financial_snapshot_widget)
-            val discreet = configuration.privacy == FluviLockScreenCardConfiguration.Privacy.discreet
             val narrow = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
                 .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 220) < 180
             val actual = if (configuration.isValid) content else null
-            if (discreet) {
-                views.setTextViewText(R.id.fluvi_financial_snapshot_focus, "Fluvi · Pénzügyi pillanatkép")
-                views.setTextViewText(R.id.fluvi_financial_snapshot_primary, "Pénzügyi pillanatkép")
-                views.setTextViewText(R.id.fluvi_financial_snapshot_secondary, "A részletek feloldás után láthatók")
-                views.setViewVisibility(R.id.fluvi_financial_snapshot_event, View.GONE)
-                views.setViewVisibility(R.id.fluvi_financial_snapshot_toggle, View.GONE)
-                views.setImageViewBitmap(
-                    R.id.fluvi_financial_snapshot_orb,
-                    FluviLockScreenCardContent("Fluvi", "", "", null, null, Color.rgb(70, 105, 157), true).orbBitmap(),
-                )
-                views.setContentDescription(R.id.fluvi_financial_snapshot_root, "Fluvi · Pénzügyi pillanatkép")
-            } else if (actual == null) {
-                views.setTextViewText(R.id.fluvi_financial_snapshot_focus, "Fluvi · Pénzügyi pillanatkép")
-                views.setTextViewText(R.id.fluvi_financial_snapshot_primary, "Adatok frissítése")
-                views.setTextViewText(R.id.fluvi_financial_snapshot_secondary, "A widget hamarosan megjeleníti a kiválasztott fókuszt")
-                views.setViewVisibility(R.id.fluvi_financial_snapshot_event, View.GONE)
-                views.setViewVisibility(R.id.fluvi_financial_snapshot_toggle, View.GONE)
-                views.setContentDescription(R.id.fluvi_financial_snapshot_root, "Fluvi pénzügyi pillanatkép")
-            } else {
-                views.setTextViewText(R.id.fluvi_financial_snapshot_focus, actual.focus)
-                views.setTextViewText(
-                    R.id.fluvi_financial_snapshot_primary,
-                    if (showEvent && actual.event != null) actual.event else actual.primary,
-                )
-                views.setTextViewText(
-                    R.id.fluvi_financial_snapshot_secondary,
-                    if (showEvent && actual.event != null) actual.eventLabel ?: "Utolsó tétel" else actual.secondary,
-                )
-                views.setViewVisibility(
-                    R.id.fluvi_financial_snapshot_secondary,
-                    if (narrow) View.GONE else View.VISIBLE,
-                )
-                val eventText = actual.event?.let { event ->
-                    "${actual.eventLabel ?: "Utolsó tétel"}: $event"
-                }
-                views.setTextViewText(R.id.fluvi_financial_snapshot_event, eventText ?: "")
-                views.setViewVisibility(
-                    R.id.fluvi_financial_snapshot_event,
-                    if (!narrow && !showEvent && eventText != null) View.VISIBLE else View.GONE,
-                )
-                views.setImageViewBitmap(R.id.fluvi_financial_snapshot_orb, actual.orbBitmap())
-                if (actual.event != null) {
-                    views.setTextViewText(
-                        R.id.fluvi_financial_snapshot_toggle,
-                        if (showEvent) "Fő érték" else "Utolsó tétel",
-                    )
-                    views.setViewVisibility(R.id.fluvi_financial_snapshot_toggle, View.VISIBLE)
-                    views.setOnClickPendingIntent(
-                        R.id.fluvi_financial_snapshot_toggle,
-                        toggleIntent(context, id),
-                    )
-                } else {
-                    views.setViewVisibility(R.id.fluvi_financial_snapshot_toggle, View.GONE)
-                }
-                views.setContentDescription(R.id.fluvi_financial_snapshot_root, actual.focus)
+            val presentation = when {
+                configuration.privacy == FluviLockScreenCardConfiguration.Privacy.discreet -> FluviFinancialCardPresenter.discreet()
+                actual == null -> FluviFinancialCardPresenter.loading()
+                else -> FluviFinancialCardPresenter.full(actual, showEvent)
+            }
+            applyPresentation(views, presentation, narrow)
+            if (presentation.showToggle) {
+                views.setOnClickPendingIntent(R.id.fluvi_financial_snapshot_toggle, toggleIntent(context, id))
             }
             views.setOnClickPendingIntent(R.id.fluvi_financial_snapshot_root, openIntent(context, id, configuration))
             return views
+        }
+
+        private fun applyPresentation(
+            views: RemoteViews,
+            presentation: FluviFinancialCardPresentation,
+            narrow: Boolean,
+        ) {
+            views.setTextViewText(R.id.fluvi_financial_snapshot_focus, presentation.focus)
+            views.setTextViewText(R.id.fluvi_financial_snapshot_primary, presentation.primary)
+            views.setTextViewText(R.id.fluvi_financial_snapshot_secondary, presentation.secondary)
+            views.setViewVisibility(
+                R.id.fluvi_financial_snapshot_secondary,
+                if (narrow) View.GONE else View.VISIBLE,
+            )
+            val event = presentation.event?.let { "${presentation.eventLabel ?: "Utolsó tétel"}: $it" }
+            views.setTextViewText(R.id.fluvi_financial_snapshot_event, event ?: "")
+            views.setViewVisibility(
+                R.id.fluvi_financial_snapshot_event,
+                if (!narrow && event != null) View.VISIBLE else View.GONE,
+            )
+            views.setTextViewText(R.id.fluvi_financial_snapshot_toggle, presentation.toggleLabel)
+            views.setViewVisibility(
+                R.id.fluvi_financial_snapshot_toggle,
+                if (presentation.showToggle) View.VISIBLE else View.GONE,
+            )
+            views.setImageViewBitmap(R.id.fluvi_financial_snapshot_orb, presentation.orb)
+            views.setContentDescription(R.id.fluvi_financial_snapshot_root, presentation.contentDescription)
         }
 
         private fun openIntent(

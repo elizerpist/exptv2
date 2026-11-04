@@ -432,13 +432,24 @@ class _NotificationIconStyleTile extends StatelessWidget {
 }
 
 String _lockScreenSubtitle(LockScreenCardStatus? status) {
+  final native = status?.nativeCard;
+  if (native?.configuration.requested == true) {
+    if (native!.serviceConnected) {
+      return native.configuration.showFinancialDetails
+          ? 'Fluvi-kártya · Teljes · szolgáltatás csatlakoztatva'
+          : 'Fluvi-kártya · Diszkrét · szolgáltatás csatlakoztatva';
+    }
+    return native.systemServiceEnabled
+        ? 'Fluvi-kártya · kapcsolódás folyamatban'
+        : 'Fluvi-kártya · Android-engedély szükséges';
+  }
   final widget = status?.widget;
   if (widget != null && widget.hostWidgetCount > 0) {
     return 'Pénzügyi widget konfigurálva · ${widget.hostWidgetCount} példány';
   }
   final configuration = status?.configuration;
   if (configuration == null || !configuration.enabled) {
-    return 'Widget és pénzügyi értesítés beállításai';
+    return 'Fluvi-kártya, widget és pénzügyi értesítés beállításai';
   }
   final mode = switch (configuration.mode) {
     LockScreenCardMode.mind => 'Mind',
@@ -461,7 +472,7 @@ String _lockScreenSubtitle(LockScreenCardStatus? status) {
   final privacy = configuration.privacy == LockScreenCardPrivacy.discreet
       ? 'Diszkrét'
       : 'Teljes';
-  return [mode, axis, if (category != null) category, privacy].join(' · ');
+  return [mode, axis, ?category, privacy].join(' · ');
 }
 
 class _PermissionTile extends StatelessWidget {

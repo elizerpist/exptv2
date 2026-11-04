@@ -2,7 +2,7 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/fluvi_financial_snapshot_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="wrap_content"
     android:minWidth="180dp"
     android:minHeight="88dp"
     android:background="@drawable/fluvi_financial_snapshot_background"

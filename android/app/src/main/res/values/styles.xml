@@ -2,6 +2,8 @@
 <resources>
     <string name="fluvi_orb_widget_description">Fluvi · Élő orb</string>
     <string name="fluvi_financial_snapshot_widget_description">Fluvi pénzügyi pillanatkép widget</string>
+    <string name="fluvi_keyguard_card_service_label">Fluvi · Zárképernyőkártya</string>
+    <string name="fluvi_keyguard_card_service_description">A Fluvi saját pénzügyi kártyáját csak a felébresztett fő zárképernyőn jeleníti meg. A szolgáltatás a rendszerablakok szerkezetéből különíti el a zárképernyőt, a PIN-bevitelt és a gyorsbeállításokat. Más alkalmazások szövegét nem olvassa vagy menti.</string>
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>

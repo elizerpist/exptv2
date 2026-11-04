@@ -24,6 +24,7 @@ class FluviApp extends StatelessWidget {
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
     this.initialDirection = LedgerDirection.income,
+    this.initialCategoryIds = const <String>{},
     this.shellPresentation,
     this.initialDashboardPresentationPreferences,
   });
@@ -37,6 +38,7 @@ class FluviApp extends StatelessWidget {
   final TimePlane initialPlane;
   final bool initialRailOpen;
   final LedgerDirection initialDirection;
+  final Set<String> initialCategoryIds;
 
   /// Optional explicit shell presentation owner for an embedding host. The
   /// normal application shell retains its session-local owner when omitted.
@@ -59,6 +61,7 @@ class FluviApp extends StatelessWidget {
         initialPlane: initialPlane,
         initialRailOpen: initialRailOpen,
         initialDirection: initialDirection,
+        initialCategoryIds: initialCategoryIds,
         shellPresentation: shellPresentation,
         initialDashboardPresentationPreferences:
             initialDashboardPresentationPreferences,

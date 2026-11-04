@@ -4,6 +4,10 @@ abstract interface class LockScreenCardRepository {
   Future<LockScreenCardStatus> saveWidget(
     FinancialSnapshotWidgetConfiguration configuration,
   );
+  Future<LockScreenCardStatus> saveNativeKeyguardCard(
+    NativeKeyguardCardConfiguration configuration,
+  );
+  Future<void> openNativeKeyguardSettings();
 
   /// Opens exactly the channel that owns the Fluvi card. This is deliberately
   /// separate from generic app notification settings because lock-screen
@@ -108,6 +112,7 @@ final class LockScreenCardStatus {
     required this.statusChannelImportance,
     required this.statusChannelLockscreenVisibility,
     required this.widget,
+    required this.nativeCard,
   });
 
   factory LockScreenCardStatus.fromMap(Map<Object?, Object?> map) {
@@ -134,6 +139,10 @@ final class LockScreenCardStatus {
           map['statusChannelLockscreenVisibility'] as String? ??
           'Rendszer szerinti',
       widget: FinancialSnapshotWidgetStatus.fromMap(rawWidget),
+      nativeCard: NativeKeyguardCardStatus.fromMap(
+        map['nativeCard'] as Map<Object?, Object?>? ??
+            const <Object?, Object?>{},
+      ),
     );
   }
 
@@ -145,6 +154,72 @@ final class LockScreenCardStatus {
   final String statusChannelImportance;
   final String statusChannelLockscreenVisibility;
   final FinancialSnapshotWidgetStatus widget;
+  final NativeKeyguardCardStatus nativeCard;
+}
+
+/// Separate consent for the accessibility overlay. It deliberately does not
+/// inherit either the optional notification's Full setting or the widget
+/// host's Full setting.
+final class NativeKeyguardCardConfiguration {
+  const NativeKeyguardCardConfiguration({
+    required this.requested,
+    required this.showFinancialDetails,
+    required this.verticalOffsetDp,
+  });
+
+  final bool requested;
+  final bool showFinancialDetails;
+  final int verticalOffsetDp;
+
+  NativeKeyguardCardConfiguration copyWith({
+    bool? requested,
+    bool? showFinancialDetails,
+    int? verticalOffsetDp,
+  }) => NativeKeyguardCardConfiguration(
+    requested: requested ?? this.requested,
+    showFinancialDetails: showFinancialDetails ?? this.showFinancialDetails,
+    verticalOffsetDp: verticalOffsetDp ?? this.verticalOffsetDp,
+  );
+
+  Map<String, Object?> toMap() => <String, Object?>{
+    'requested': requested,
+    'showFinancialDetails': showFinancialDetails,
+    'verticalOffsetDp': verticalOffsetDp,
+  };
+}
+
+final class NativeKeyguardCardStatus {
+  const NativeKeyguardCardStatus({
+    required this.configuration,
+    required this.systemServiceEnabled,
+    required this.serviceConnected,
+    required this.lastDecisionReason,
+    required this.lastAttachResult,
+    required this.diagnosticSummary,
+  });
+
+  factory NativeKeyguardCardStatus.fromMap(Map<Object?, Object?> map) =>
+      NativeKeyguardCardStatus(
+        configuration: NativeKeyguardCardConfiguration(
+          requested: map['requested'] as bool? ?? false,
+          showFinancialDetails: map['showFinancialDetails'] as bool? ?? false,
+          verticalOffsetDp: map['verticalOffsetDp'] as int? ?? 0,
+        ),
+        systemServiceEnabled: map['systemServiceEnabled'] as bool? ?? false,
+        serviceConnected: map['serviceConnected'] as bool? ?? false,
+        lastDecisionReason:
+            map['lastDecisionReason'] as String? ?? 'Nincs zárképernyő-próba',
+        lastAttachResult:
+            map['lastAttachResult'] as String? ?? 'Nincs csatolási kísérlet',
+        diagnosticSummary: map['diagnosticSummary'] as String? ?? '',
+      );
+
+  final NativeKeyguardCardConfiguration configuration;
+  final bool systemServiceEnabled;
+  final bool serviceConnected;
+  final String lastDecisionReason;
+  final String lastAttachResult;
+  final String diagnosticSummary;
 }
 
 /// Independent from the optional notification configuration.  A RemoteViews

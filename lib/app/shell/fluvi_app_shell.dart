@@ -135,6 +135,7 @@ class FluviAppShell extends StatefulWidget {
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
     this.initialDirection = LedgerDirection.income,
+    this.initialCategoryIds = const <String>{},
     this.shellPresentation,
     this.initialDashboardPresentationPreferences,
   });
@@ -153,6 +154,7 @@ class FluviAppShell extends StatefulWidget {
   final TimePlane initialPlane;
   final bool initialRailOpen;
   final LedgerDirection initialDirection;
+  final Set<String> initialCategoryIds;
   final DashboardShellPresentationController? shellPresentation;
   final DashboardPresentationPreferences?
   initialDashboardPresentationPreferences;
@@ -322,6 +324,7 @@ class _FluviAppShellState extends State<FluviAppShell>
       initialPlane: widget.initialPlane,
       initialRailOpen: widget.initialRailOpen,
       initialDirection: widget.initialDirection,
+      initialCategoryIds: widget.initialCategoryIds,
       seedReady: !_seedDemo,
     );
     _modeController = DashboardCoreModeController(
