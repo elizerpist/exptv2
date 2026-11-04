@@ -1,6 +1,5 @@
 package com.fluvi.app.runtime
 
-import android.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,7 +12,7 @@ class FluviLockScreenNotificationPresentationTest {
         secondary = "Hónap nettó",
         event = "−9 800 Ft · Lidl · 14:32",
         eventLabel = "Utolsó kapcsolódó tétel",
-        accentColor = Color.rgb(180, 83, 83),
+        accentColor = 0,
         available = true,
     )
 
