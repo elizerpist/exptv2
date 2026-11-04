@@ -68,6 +68,8 @@ import com.fluvi.app.runtime.FluviRuntimeCoordinator
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
 import com.fluvi.app.lockscreen.FluviKeyguardCardSettings
 import com.fluvi.app.lockscreen.FluviKeyguardCardService
+import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
+import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
 import com.fluvi.app.widget.orb.OrbMaterialFrameStore
 import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
@@ -114,6 +116,7 @@ class MainActivity : FlutterActivity() {
     private var demoChannel: MethodChannel? = null
     private var dashboardPresentationChannel: MethodChannel? = null
     private var orbMaterialChannel: MethodChannel? = null
+    private var keyguardMaterialChannel: MethodChannel? = null
     private var coreRevisionEventChannel: EventChannel? = null
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
@@ -1092,6 +1095,45 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        keyguardMaterialChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            KEYGUARD_MATERIAL_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "publishProfile" -> {
+                        val values = call.arguments as? Map<*, *>
+                        if (values == null) {
+                            result.error("validation", "Hiányzó keyguard anyagprofil.", null)
+                        } else {
+                            result.success(
+                                mapOf(
+                                    "accepted" to FluviKeyguardMaterialStore.publish(
+                                        applicationContext,
+                                        values,
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                    "sceneTarget" -> {
+                        val focus = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext)
+                        // Budget category material must use the keyguard
+                        // card's saved category/period, not whichever Budget
+                        // selection happens to be visible on Dashboard.
+                        queryScope.launch {
+                            val target = FluviLockScreenCardCoordinator
+                                .materialSceneTarget(applicationContext, focus.asFinancialFocus())
+                            withContext(Dispatchers.Main.immediate) {
+                                result.success(target.toMap())
+                            }
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+        FluviKeyguardMaterialBridgeRegistry.connect(requireNotNull(keyguardMaterialChannel))
         coreRevisionEventChannel = EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             DASHBOARD_CORE_REVISION_STREAM_CHANNEL,
@@ -1220,6 +1262,9 @@ class MainActivity : FlutterActivity() {
         dashboardPresentationChannel = null
         orbMaterialChannel?.setMethodCallHandler(null)
         orbMaterialChannel = null
+        keyguardMaterialChannel?.setMethodCallHandler(null)
+        FluviKeyguardMaterialBridgeRegistry.disconnect(keyguardMaterialChannel)
+        keyguardMaterialChannel = null
         coreRevisionObservation?.cancel()
         coreRevisionObservation = null
         coreRevisionEventChannel?.setStreamHandler(null)
@@ -3246,6 +3291,7 @@ class MainActivity : FlutterActivity() {
         const val DEMO_CHANNEL = "com.fluvi/demo_data"
         const val DASHBOARD_PRESENTATION_CHANNEL = "fluvi/dashboard_presentation"
         const val ORB_MATERIAL_CHANNEL = "fluvi/orb_material_frames"
+        const val KEYGUARD_MATERIAL_CHANNEL = "fluvi/keyguard_material"
         const val DASHBOARD_PRESENTATION_PREFERENCES = "dashboard_presentation"
         const val DASHBOARD_CORE_REVISION_STREAM_CHANNEL =
             "com.fluvi/dashboard_core_revision_stream"

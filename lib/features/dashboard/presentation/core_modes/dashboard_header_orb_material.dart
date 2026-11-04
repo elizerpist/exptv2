@@ -138,6 +138,61 @@ final class DashboardHeaderMaterialSnapshot {
     );
   }
 
+  /// Structured, finite rendering input for the native keyguard card. This
+  /// is intentionally a semantic snapshot, never a bitmap/frame export: the
+  /// Android view owns its own monotonic clock after receiving it.
+  Map<String, Object?> keyguardMaterialProfile({
+    required String publisherSession,
+    required int publisherRevision,
+    required Size referenceGeometry,
+    required String sceneIdentity,
+  }) {
+    final input = inputAt(Duration.zero, DashboardHeaderDeepDriftSkeleton());
+    Map<String, Object?> portal(
+      DashboardHeaderFragmentPortalInput value,
+      double phaseSpeed,
+    ) => <String, Object?>{
+      'enabled': value.enabled,
+      'effectIndex': value.effectIndex,
+      'phase': value.phase,
+      'phaseSpeed': phaseSpeed,
+      'paletteCenterPercent': value.paletteCenterPercent,
+      'paletteWindowPercent': value.paletteWindowPercent,
+      'rotationEnabled': value.rotationEnabled,
+      'rotationSpeed': value.rotationSpeed,
+      'settings': value.settings,
+    };
+    return <String, Object?>{
+      'schemaVersion': 1,
+      'shaderAbiVersion': DashboardHeaderFragmentUniformLayout.version,
+      // Updated together with the build-time Android adapter. The native
+      // store treats an unsupported schema/ABI as unavailable, not as a
+      // reason to animate guessed data.
+      'sourceShaderHash':
+          '6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b74d565a4c76d4e7f',
+      'publisherSession': publisherSession,
+      'publisherRevision': publisherRevision,
+      'sceneIdentity': sceneIdentity,
+      'effectId': tuning.effect.name,
+      'effectShaderId': input.effectShaderId,
+      'phase': input.phase,
+      'elapsedSeconds':
+          input.elapsed.inMicroseconds / Duration.microsecondsPerSecond,
+      'phaseSpeed': _effectSpeed,
+      'colors': input.canonicalColors
+          .map((color) => color.toARGB32())
+          .toList(growable: false),
+      'stops': input.canonicalStops,
+      'opacity': input.opacity,
+      'paletteSplitPercent': input.paletteSplitPercent,
+      'commonSettings': input.commonSettings,
+      'background': portal(input.background, _background.phaseSpeed),
+      'interior': portal(input.interior, _interior.phaseSpeed),
+      'referenceWidth': referenceGeometry.width,
+      'referenceHeight': referenceGeometry.height,
+    };
+  }
+
   /// A cache key for every input that can affect a launcher texture.  The
   /// live phase/elapsed clock is intentionally absent: a cached finite
   /// package keeps its original clock origin and native selects its current

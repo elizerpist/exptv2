@@ -19,6 +19,8 @@ import com.fluvi.app.MainActivity
 import com.fluvi.app.runtime.FluviFinancialCardPresenter
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
+import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
+import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +100,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             onToggle = ::toggleView,
         )
         lastSettings = FluviKeyguardCardSettings.read(applicationContext)
+        overlay.updateMaterial(FluviKeyguardMaterialStore.read(applicationContext), requireNotNull(lastSettings))
         registerRuntimeSignals()
         wakeEpoch += 1L
         KeyguardCardDiagnostics.beginLockAttempt(this, session.get(), wakeEpoch)
@@ -155,11 +158,13 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // Privacy tightening must redact the existing root before an
                 // asynchronous query can return. It is not a window detach.
                 redactImmediately("settings")
+                overlay.updateMaterial(FluviKeyguardMaterialStore.read(applicationContext), settings)
                 scheduleEvaluation("settings")
             } else {
                 // A position-only change is a WindowManager layout update,
                 // not a financial invalidation or view-state reset.
                 if (previous?.showFinancialDetails != settings.showFinancialDetails) showEvent = false
+                overlay.updateMaterial(FluviKeyguardMaterialStore.read(applicationContext), settings)
                 scheduleEvaluation("settings")
             }
         }
@@ -175,6 +180,16 @@ class FluviKeyguardCardService : AccessibilityService() {
                 applyPresentation(FluviFinancialCardPresenter.loading(), "focusChanged")
             }
             scheduleEvaluation("focusChanged")
+        }
+    }
+
+    /** Profile publication is a retained-view mutation only. It must not
+     * cause an inspection, financial resolve, or WindowManager operation. */
+    internal fun onMaterialProfileChangedFromApplication(profile: KeyguardMaterialProfile) {
+        mainHandler.post {
+            if (!::overlay.isInitialized) return@post
+            overlay.updateMaterial(profile, FluviKeyguardCardSettings.read(applicationContext))
+            KeyguardCardDiagnostics.record(this, "KG|MATERIAL_SCENE", "profile:${profile.publisherRevision}", overlay.isAttached)
         }
     }
 
@@ -530,6 +545,9 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     private fun applyPresentation(presentation: com.fluvi.app.runtime.FluviFinancialCardPresentation, reason: String) {
         val settings = FluviKeyguardCardSettings.read(applicationContext)
+        // This only changes retained drawing input; no animation frame is
+        // allowed to enter showOrUpdate or the financial presentation lane.
+        overlay.updateMaterial(FluviKeyguardMaterialStore.read(applicationContext), settings)
         when (val result = overlay.showOrUpdate(presentation, settings.verticalOffsetDp)) {
             KeyguardCardWindow.Result.ATTACHED -> {
                 KeyguardCardDiagnostics.attach(this, "attached")
@@ -581,6 +599,22 @@ class FluviKeyguardCardService : AccessibilityService() {
             val removed = overlay.hide()
             if (wasAttached && removed) KeyguardCardDiagnostics.record(this, "KG|DETACH", reason, false)
         }
+    }
+
+    internal fun materialDiagnostics(): Map<String, Any?> {
+        val values = if (::overlay.isInitialized) overlay.materialDiagnostics() else null
+        return mapOf(
+            "rendererBackend" to values?.rendererBackend,
+            "hardwareAccelerated" to (values?.hardwareAccelerated ?: false),
+            "shaderCreationCount" to (values?.shaderCreationCount ?: 0),
+            "animationStartCount" to (values?.animationStartCount ?: 0),
+            "animationStopCount" to (values?.animationStopCount ?: 0),
+            "drawCount" to (values?.drawCount ?: 0),
+            "frameIntervalP50" to (values?.frameIntervalP50 ?: 0),
+            "frameIntervalP95" to (values?.frameIntervalP95 ?: 0),
+            "largeFrameGapCount" to (values?.largeFrameGapCount ?: 0),
+            "lastRendererFailure" to values?.rendererFailure,
+        )
     }
 
     private fun redactImmediately(reason: String) {

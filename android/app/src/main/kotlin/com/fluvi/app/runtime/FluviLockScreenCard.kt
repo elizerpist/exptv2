@@ -142,6 +142,31 @@ internal data class FluviLockScreenCardContent(
     )
 }
 
+/**
+ * Minimal, non-textual visual input for the Header material bridge.  It is
+ * deliberately separate from [FluviLockScreenCardContent]: no amount,
+ * category label, partner or event text crosses this boundary.
+ */
+internal data class FluviKeyguardMaterialSceneTarget(
+    val mode: FluviLockScreenCardConfiguration.Mode,
+    val timeAxis: FluviLockScreenCardConfiguration.TimeAxis,
+    val direction: FluviLockScreenCardConfiguration.Direction,
+    val categoryId: String?,
+    val categoryColorId: String?,
+    val remainingPercent: Double?,
+    val focusGeneration: Long,
+) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "mode" to mode.name,
+        "timeAxis" to timeAxis.name,
+        "direction" to direction.name,
+        "categoryId" to categoryId,
+        "categoryColorId" to categoryColorId,
+        "remainingPercent" to remainingPercent,
+        "focusGeneration" to focusGeneration,
+    )
+}
+
 internal class FluviLockScreenCardContentStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(
         "fluvi_lock_screen_card_content",
@@ -242,6 +267,72 @@ internal object FluviLockScreenCardCoordinator {
             "statusChannelImportance" to FluviRuntimeNotificationController.statusChannelImportanceLabel(context),
             "statusChannelLockscreenVisibility" to FluviRuntimeNotificationController.statusChannelLockscreenVisibilityLabel(context),
         )
+    }
+
+    /**
+     * Resolves only the visual inputs needed to project the *saved* keyguard
+     * focus into the Dashboard Budget palette.  This is not a second Budget
+     * calculation: it reuses [scopeFor] and [limitFor], the same authoritative
+     * methods as [resolve].  No financial labels or amounts are returned.
+     */
+    internal suspend fun materialSceneTarget(
+        context: Context,
+        configuration: FluviLockScreenCardConfiguration,
+    ): FluviKeyguardMaterialSceneTarget = withContext(Dispatchers.IO) {
+        if (configuration.mode != FluviLockScreenCardConfiguration.Mode.budget ||
+            configuration.categoryId.isNullOrBlank()
+        ) {
+            return@withContext FluviKeyguardMaterialSceneTarget(
+                mode = configuration.mode,
+                timeAxis = configuration.timeAxis,
+                direction = configuration.direction,
+                categoryId = configuration.categoryId,
+                categoryColorId = null,
+                remainingPercent = null,
+                focusGeneration = configuration.generation,
+            )
+        }
+        val core = FluviCoreFactory.create(context.applicationContext)
+        try {
+            val now = LocalDate.now()
+            val category = core.categories.getById(requireNotNull(configuration.categoryId))
+            val actual = category?.let {
+                core.query.total(
+                    scopeFor(
+                        configuration.direction.ledgerDirection,
+                        configuration.timeAxis,
+                        now,
+                        it.id,
+                    ),
+                ).amountScaled100
+            }
+            val limit = category?.let {
+                limitFor(
+                    core.financialLimits.list(),
+                    configuration.direction.ledgerDirection,
+                    it.id,
+                    configuration.timeAxis,
+                    now,
+                )
+            }
+            val remaining = if (actual != null && limit != null && limit > 0L) {
+                ((1.0 - actual.toDouble() / limit.toDouble()) * 100.0)
+                    .coerceIn(0.0, 100.0)
+            } else {
+                null
+            }
+            FluviKeyguardMaterialSceneTarget(
+                mode = configuration.mode,
+                timeAxis = configuration.timeAxis,
+                direction = configuration.direction,
+                categoryId = configuration.categoryId,
+                categoryColorId = category?.colorId,
+                remainingPercent = remaining,
+                focusGeneration = configuration.generation,
+            )
+        } finally {
+            core.close()
+        }
     }
 
     internal suspend fun categories(

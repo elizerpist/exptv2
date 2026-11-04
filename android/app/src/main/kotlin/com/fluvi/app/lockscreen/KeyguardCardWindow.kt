@@ -6,9 +6,12 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
-import android.widget.ImageView
 import android.widget.TextView
 import com.fluvi.app.R
+import com.fluvi.app.lockscreen.material.KeyguardCardMaterialController
+import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
+import com.fluvi.app.lockscreen.material.KeyguardMaterialDiagnostics
+import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
 import kotlin.math.min
 
@@ -39,6 +42,9 @@ internal class KeyguardCardWindow(
     private var appliedPresentation: FluviFinancialCardPresentation? = null
     private var appliedGeometry: Geometry? = null
     private var accessibilityWindowId: Int? = null
+    private var materialController: KeyguardCardMaterialController? = null
+    private var materialProfile: KeyguardMaterialProfile? = null
+    private var materialSettings = KeyguardCardSettings()
 
     val isAttached: Boolean get() = lifecycle.isAttached()
 
@@ -61,12 +67,17 @@ internal class KeyguardCardWindow(
         checkMainThread()
         val geometry = geometry(verticalOffsetDp)
         val current = root ?: LayoutInflater.from(serviceContext)
-            .inflate(R.layout.fluvi_financial_snapshot_widget, null, false)
+            .inflate(R.layout.fluvi_keyguard_card, null, false)
             .also { created ->
                 created.setOnClickListener { onOpen() }
                 created.findViewById<View>(R.id.fluvi_financial_snapshot_toggle).setOnClickListener {
                     onToggle()
                 }
+                materialController = KeyguardCardMaterialController(
+                    orb = created.findViewById(R.id.fluvi_financial_snapshot_orb),
+                    background = created.findViewById(R.id.fluvi_keyguard_material_background),
+                    backgroundVeil = created.findViewById(R.id.fluvi_keyguard_material_veil),
+                )
                 root = created
             }
 
@@ -78,6 +89,8 @@ internal class KeyguardCardWindow(
                         lifecycle.onAttachSucceeded()
                         appliedPresentation = presentation
                         appliedGeometry = geometry
+                        updateMaterialForPresentation(presentation)
+                        materialController?.onAttached()
                         Result.ATTACHED
                     },
                     onFailure = {
@@ -115,6 +128,7 @@ internal class KeyguardCardWindow(
         }
         val wasFull = appliedPresentation?.full == true
         appliedPresentation = presentation
+        updateMaterialForPresentation(presentation)
         return when {
             contentChanged && wasFull && !presentation.full -> Result.REDACTED
             contentChanged -> Result.CONTENT_UPDATED
@@ -126,6 +140,7 @@ internal class KeyguardCardWindow(
         checkMainThread()
         val current = root ?: return false
         if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
+        materialController?.stop("hide")
         val removed = runCatching { manager.removeViewImmediate(current) }
         val stillAttached = current.isAttachedToWindow
         if (removed.isSuccess || !stillAttached) {
@@ -140,8 +155,24 @@ internal class KeyguardCardWindow(
     }
 
     fun dispose() {
+        materialController?.stop("dispose")
         hide()
         root = null
+        materialController = null
+    }
+
+    /** A material profile change is content-only. It must never issue a
+     * WindowManager operation or reset the financial presentation. */
+    fun updateMaterial(profile: KeyguardMaterialProfile?, settings: KeyguardCardSettings) {
+        checkMainThread()
+        materialProfile = profile
+        materialSettings = settings
+        appliedPresentation?.let(::updateMaterialForPresentation)
+    }
+
+    fun materialDiagnostics(): KeyguardMaterialDiagnostics? {
+        checkMainThread()
+        return materialController?.diagnostics()
     }
 
     private fun apply(root: View, presentation: FluviFinancialCardPresentation, force: Boolean) {
@@ -154,7 +185,8 @@ internal class KeyguardCardWindow(
         if (changed { it.secondary }) root.findViewById<TextView>(R.id.fluvi_financial_snapshot_secondary).text = presentation.secondary
         if (changed { it.contentDescription }) root.contentDescription = presentation.contentDescription
         if (force || previous?.visualKey != presentation.visualKey) {
-            root.findViewById<ImageView>(R.id.fluvi_financial_snapshot_orb).setImageBitmap(presentation.orb)
+            root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                .setStaticBitmap(presentation.orb)
         }
         val eventText = presentation.event?.let { "${presentation.eventLabel ?: "Utolsó tétel"}: $it" } ?: ""
         if (changed { it.event } || changed { it.eventLabel }) {
@@ -185,7 +217,9 @@ internal class KeyguardCardWindow(
         geometry.width,
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
         PixelFormat.TRANSLUCENT,
     ).apply {
         gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
@@ -194,6 +228,15 @@ internal class KeyguardCardWindow(
     }
 
     private fun dp(value: Int): Int = (value * serviceContext.resources.displayMetrics.density).toInt()
+
+    private fun updateMaterialForPresentation(presentation: FluviFinancialCardPresentation) {
+        materialController?.update(
+            profile = materialProfile,
+            animationMode = materialSettings.animationMode,
+            isFull = presentation.full,
+            staticOrb = presentation.orb,
+        )
+    }
 
     private fun checkMainThread() {
         check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {

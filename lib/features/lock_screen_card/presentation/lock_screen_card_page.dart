@@ -198,6 +198,16 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
           'serviceConnected=${native.serviceConnected}',
           'lastDecision=${native.lastDecisionReason}',
           'lastAttach=${native.lastAttachResult}',
+          'renderer=${native.materialDiagnostics.rendererBackend}',
+          'hardwareAccelerated=${native.materialDiagnostics.hardwareAccelerated}',
+          'shaderCreations=${native.materialDiagnostics.shaderCreationCount}',
+          'animationStarts=${native.materialDiagnostics.animationStartCount}',
+          'animationStops=${native.materialDiagnostics.animationStopCount}',
+          'drawCount=${native.materialDiagnostics.drawCount}',
+          'frameIntervalP50=${native.materialDiagnostics.frameIntervalP50}',
+          'frameIntervalP95=${native.materialDiagnostics.frameIntervalP95}',
+          'largeFrameGaps=${native.materialDiagnostics.largeFrameGapCount}',
+          'rendererFailure=${native.materialDiagnostics.lastRendererFailure}',
           native.diagnosticSummary,
         ].join('\n'),
       ),
@@ -282,6 +292,36 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
                     ),
                   ),
                   ListTile(
+                    title: const Text('Animáció'),
+                    subtitle: const Text(
+                      'A header animációját és beállításait követi. Diszkrét módban a pénzügyi állapot színei rejtve maradnak.',
+                    ),
+                    trailing: DropdownButton<NativeKeyguardCardAnimationMode>(
+                      key: const ValueKey('native-keyguard-animation-mode'),
+                      value: native.configuration.animationMode,
+                      onChanged: _savingNative
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                _saveNative(
+                                  native.configuration.copyWith(
+                                    animationMode: value,
+                                  ),
+                                );
+                              }
+                            },
+                      items: NativeKeyguardCardAnimationMode.values
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(_animationModeLabel(value)),
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
                     title: const Text('Függőleges pozíció'),
                     subtitle: Slider(
                       value: native.configuration.verticalOffsetDp.toDouble(),
@@ -307,7 +347,10 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
                 leading: const Icon(Icons.bug_report_outlined),
                 title: const Text('Zárképernyő-diagnosztika'),
                 subtitle: Text(
-                  'Utolsó döntés: ${native.lastDecisionReason}\nCsatolás: ${native.lastAttachResult}',
+                  'Utolsó döntés: ${native.lastDecisionReason}\n'
+                  'Csatolás: ${native.lastAttachResult}\n'
+                  'Rajzoló: ${native.materialDiagnostics.rendererBackend} · '
+                  'p50/p95: ${native.materialDiagnostics.frameIntervalP50}/${native.materialDiagnostics.frameIntervalP95} ms',
                 ),
                 trailing: TextButton(
                   onPressed: () => _copyNativeDiagnostic(native),
@@ -559,6 +602,14 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
       ),
     );
   }
+
+  static String _animationModeLabel(NativeKeyguardCardAnimationMode value) =>
+      switch (value) {
+        NativeKeyguardCardAnimationMode.off => 'Kikapcsolva',
+        NativeKeyguardCardAnimationMode.orbOnly => 'Csak az orb',
+        NativeKeyguardCardAnimationMode.orbAndBackground =>
+          'Orb és kártyaháttér',
+      };
 }
 
 class _FinancialSnapshotWidgetSettings extends StatelessWidget {

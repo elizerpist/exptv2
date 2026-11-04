@@ -25,6 +25,8 @@ enum LockScreenCardEventLine { related, processed, hidden }
 
 enum LockScreenCardPrivacy { discreet, full }
 
+enum NativeKeyguardCardAnimationMode { off, orbOnly, orbAndBackground }
+
 final class LockScreenCardConfiguration {
   const LockScreenCardConfiguration({
     required this.enabled,
@@ -165,26 +167,31 @@ final class NativeKeyguardCardConfiguration {
     required this.requested,
     required this.showFinancialDetails,
     required this.verticalOffsetDp,
+    required this.animationMode,
   });
 
   final bool requested;
   final bool showFinancialDetails;
   final int verticalOffsetDp;
+  final NativeKeyguardCardAnimationMode animationMode;
 
   NativeKeyguardCardConfiguration copyWith({
     bool? requested,
     bool? showFinancialDetails,
     int? verticalOffsetDp,
+    NativeKeyguardCardAnimationMode? animationMode,
   }) => NativeKeyguardCardConfiguration(
     requested: requested ?? this.requested,
     showFinancialDetails: showFinancialDetails ?? this.showFinancialDetails,
     verticalOffsetDp: verticalOffsetDp ?? this.verticalOffsetDp,
+    animationMode: animationMode ?? this.animationMode,
   );
 
   Map<String, Object?> toMap() => <String, Object?>{
     'requested': requested,
     'showFinancialDetails': showFinancialDetails,
     'verticalOffsetDp': verticalOffsetDp,
+    'animationMode': animationMode.name,
   };
 }
 
@@ -196,6 +203,7 @@ final class NativeKeyguardCardStatus {
     required this.lastDecisionReason,
     required this.lastAttachResult,
     required this.diagnosticSummary,
+    required this.materialDiagnostics,
   });
 
   factory NativeKeyguardCardStatus.fromMap(Map<Object?, Object?> map) =>
@@ -204,6 +212,10 @@ final class NativeKeyguardCardStatus {
           requested: map['requested'] as bool? ?? false,
           showFinancialDetails: map['showFinancialDetails'] as bool? ?? false,
           verticalOffsetDp: map['verticalOffsetDp'] as int? ?? 0,
+          animationMode: NativeKeyguardCardAnimationMode.values.firstWhere(
+            (value) => value.name == (map['animationMode'] as String?),
+            orElse: () => NativeKeyguardCardAnimationMode.orbOnly,
+          ),
         ),
         systemServiceEnabled: map['systemServiceEnabled'] as bool? ?? false,
         serviceConnected: map['serviceConnected'] as bool? ?? false,
@@ -212,6 +224,10 @@ final class NativeKeyguardCardStatus {
         lastAttachResult:
             map['lastAttachResult'] as String? ?? 'Nincs csatolási kísérlet',
         diagnosticSummary: map['diagnosticSummary'] as String? ?? '',
+        materialDiagnostics: NativeKeyguardCardMaterialDiagnostics.fromMap(
+          map['materialDiagnostics'] as Map<Object?, Object?>? ??
+              const <Object?, Object?>{},
+        ),
       );
 
   final NativeKeyguardCardConfiguration configuration;
@@ -220,6 +236,48 @@ final class NativeKeyguardCardStatus {
   final String lastDecisionReason;
   final String lastAttachResult;
   final String diagnosticSummary;
+  final NativeKeyguardCardMaterialDiagnostics materialDiagnostics;
+}
+
+final class NativeKeyguardCardMaterialDiagnostics {
+  const NativeKeyguardCardMaterialDiagnostics({
+    required this.rendererBackend,
+    required this.hardwareAccelerated,
+    required this.shaderCreationCount,
+    required this.animationStartCount,
+    required this.animationStopCount,
+    required this.drawCount,
+    required this.frameIntervalP50,
+    required this.frameIntervalP95,
+    required this.largeFrameGapCount,
+    this.lastRendererFailure,
+  });
+
+  factory NativeKeyguardCardMaterialDiagnostics.fromMap(
+    Map<Object?, Object?> map,
+  ) => NativeKeyguardCardMaterialDiagnostics(
+    rendererBackend: map['rendererBackend'] as String? ?? 'not-connected',
+    hardwareAccelerated: map['hardwareAccelerated'] as bool? ?? false,
+    shaderCreationCount: map['shaderCreationCount'] as int? ?? 0,
+    animationStartCount: map['animationStartCount'] as int? ?? 0,
+    animationStopCount: map['animationStopCount'] as int? ?? 0,
+    drawCount: map['drawCount'] as int? ?? 0,
+    frameIntervalP50: map['frameIntervalP50'] as int? ?? 0,
+    frameIntervalP95: map['frameIntervalP95'] as int? ?? 0,
+    largeFrameGapCount: map['largeFrameGapCount'] as int? ?? 0,
+    lastRendererFailure: map['lastRendererFailure'] as String?,
+  );
+
+  final String rendererBackend;
+  final bool hardwareAccelerated;
+  final int shaderCreationCount;
+  final int animationStartCount;
+  final int animationStopCount;
+  final int drawCount;
+  final int frameIntervalP50;
+  final int frameIntervalP95;
+  final int largeFrameGapCount;
+  final String? lastRendererFailure;
 }
 
 /// Independent from the optional notification configuration.  A RemoteViews

@@ -48,6 +48,7 @@ import 'core_modes/balance_presentation_settings.dart';
 import 'core_modes/balance_header_glass_configuration.dart';
 import 'core_modes/dashboard_header_balance_color_scale.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
+import '../../../app/platform/dashboard_keyguard_material_bridge.dart';
 import '../../../app/platform/dashboard_orb_material_export_bridge.dart';
 import 'core_modes/dashboard_header_tap_wave.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
@@ -194,6 +195,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardMindHeaderColorPolicy _mindHeaderColorPolicy;
   late final DashboardHeaderOrbMaterialExportCoordinator
   _headerOrbMaterialExporter;
+  late final DashboardKeyguardMaterialBridge _keyguardMaterialBridge;
   late final DashboardSummaryAutoResetController _summaryAutoResetController;
   late final DashboardSummaryAutoResetMotionRegistry _summaryAutoResetMotions;
   late final DashboardUpperVerticalGestureCoordinator _upperVerticalGestures;
@@ -335,6 +337,12 @@ class _CoreDashboardState extends State<CoreDashboard>
       score: controller.mindBehavioralScore,
     );
     _headerOrbMaterialExporter = DashboardHeaderOrbMaterialExportCoordinator(
+      controller: _headerVisualController,
+      balanceFrame: _balanceHeaderColorPolicy,
+      budgetFrame: _budgetHeaderColorPolicy,
+      mindFrame: _mindHeaderColorPolicy,
+    );
+    _keyguardMaterialBridge = DashboardKeyguardMaterialBridge(
       controller: _headerVisualController,
       balanceFrame: _balanceHeaderColorPolicy,
       budgetFrame: _budgetHeaderColorPolicy,
@@ -1084,6 +1092,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetHeaderColorPolicy.dispose();
     _mindHeaderColorPolicy.dispose();
     _headerOrbMaterialExporter.dispose();
+    _keyguardMaterialBridge.dispose();
     _headerVisualController.tuning.removeListener(_onGlobalAppearanceChanged);
     if (_ownsHeaderVisualController) {
       _headerVisualController.dispose();
@@ -1201,6 +1210,9 @@ class _CoreDashboardState extends State<CoreDashboard>
         _headerOrbMaterialExporter.updateHeaderGeometry(
           size: Size(geometry.headerBounds.width, geometry.headerBounds.height),
           devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+        );
+        _keyguardMaterialBridge.updateHeaderGeometry(
+          Size(geometry.headerBounds.width, geometry.headerBounds.height),
         );
         final collapseTravel = controller.metrics.collapseTravel;
         final normalizedCollapseProgress = collapseTravel == 0

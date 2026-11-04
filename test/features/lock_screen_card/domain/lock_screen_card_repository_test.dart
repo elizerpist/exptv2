@@ -67,6 +67,10 @@ void main() {
 
       expect(status.nativeCard.configuration.requested, isFalse);
       expect(status.nativeCard.configuration.showFinancialDetails, isFalse);
+      expect(
+        status.nativeCard.configuration.animationMode,
+        NativeKeyguardCardAnimationMode.orbOnly,
+      );
       expect(status.nativeCard.systemServiceEnabled, isFalse);
       expect(status.nativeCard.serviceConnected, isFalse);
     },
@@ -89,5 +93,20 @@ void main() {
     expect(status.nativeCard.systemServiceEnabled, isTrue);
     expect(status.nativeCard.serviceConnected, isFalse);
     expect(status.nativeCard.configuration.showFinancialDetails, isFalse);
+  });
+
+  test('keeps the three native material modes round-trippable', () {
+    for (final mode in NativeKeyguardCardAnimationMode.values) {
+      final value = NativeKeyguardCardConfiguration(
+        requested: true,
+        showFinancialDetails: false,
+        verticalOffsetDp: 0,
+        animationMode: mode,
+      );
+      final parsed = NativeKeyguardCardStatus.fromMap(
+        value.toMap(),
+      ).configuration;
+      expect(parsed.animationMode, mode);
+    }
   });
 }

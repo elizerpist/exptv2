@@ -195,6 +195,8 @@ internal object FluviFinancialSnapshotWidgetCoordinator {
         // The native keyguard card shares this focus even when no AppWidget
         // host exists; its own privacy setting remains independent.
         FluviKeyguardCardServiceRegistry.notifyFocusChanged()
+        com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
+            .requestSceneRefresh()
         return next
     }
 

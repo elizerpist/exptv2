@@ -10,14 +10,30 @@ internal data class KeyguardCardSettings(
     val requested: Boolean = false,
     val showFinancialDetails: Boolean = false,
     val verticalOffsetDp: Int = 0,
+    val animationMode: KeyguardCardAnimationMode = KeyguardCardAnimationMode.ORB_ONLY,
     val generation: Long = 0L,
 )
+
+/** Unknown persisted values use the documented migration default rather than
+ * guessing a future background-rendering mode after a downgrade/upgrade. */
+internal enum class KeyguardCardAnimationMode(val wireValue: String) {
+    OFF("off"),
+    ORB_ONLY("orbOnly"),
+    ORB_AND_BACKGROUND("orbAndBackground");
+
+    companion object {
+        fun fromWire(value: Any?): KeyguardCardAnimationMode = entries.firstOrNull {
+            it.wireValue == value as? String
+        } ?: ORB_ONLY
+    }
+}
 
 internal object FluviKeyguardCardSettings {
     private const val PREFS = "fluvi_native_keyguard_card"
     private const val REQUESTED = "requested"
     private const val DETAILS = "details"
     private const val OFFSET = "verticalOffsetDp"
+    private const val ANIMATION_MODE = "animationMode"
     private const val GENERATION = "generation"
 
     fun read(context: Context): KeyguardCardSettings {
@@ -26,6 +42,7 @@ internal object FluviKeyguardCardSettings {
             requested = prefs.getBoolean(REQUESTED, false),
             showFinancialDetails = prefs.getBoolean(DETAILS, false),
             verticalOffsetDp = prefs.getInt(OFFSET, 0).coerceIn(-96, 96),
+            animationMode = KeyguardCardAnimationMode.fromWire(prefs.getString(ANIMATION_MODE, null)),
             generation = prefs.getLong(GENERATION, 0L),
         )
     }
@@ -38,13 +55,22 @@ internal object FluviKeyguardCardSettings {
         val locked = context.getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
         val details = if (requestedDetails && locked) old.showFinancialDetails else requestedDetails
         val offset = (values["verticalOffsetDp"] as? Number)?.toInt()?.coerceIn(-96, 96) ?: old.verticalOffsetDp
-        val next = KeyguardCardSettings(requested, details, offset, old.generation + 1L)
+        val animationMode = if (values.containsKey("animationMode")) {
+            KeyguardCardAnimationMode.fromWire(values["animationMode"])
+        } else old.animationMode
+        val next = KeyguardCardSettings(requested, details, offset, animationMode, old.generation + 1L)
         prefs(context).edit()
             .putBoolean(REQUESTED, next.requested)
             .putBoolean(DETAILS, next.showFinancialDetails)
             .putInt(OFFSET, next.verticalOffsetDp)
+            .putString(ANIMATION_MODE, next.animationMode.wireValue)
             .putLong(GENERATION, next.generation)
             .apply()
+        if (!next.showFinancialDetails) {
+            com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore.redact(context)
+        } else if (!old.showFinancialDetails) {
+            com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
+        }
         FluviKeyguardCardServiceRegistry.notifySettingsChanged(next)
         return next
     }
@@ -55,12 +81,14 @@ internal object FluviKeyguardCardSettings {
             "requested" to value.requested,
             "showFinancialDetails" to value.showFinancialDetails,
             "verticalOffsetDp" to value.verticalOffsetDp,
+            "animationMode" to value.animationMode.wireValue,
             "generation" to value.generation,
             "systemServiceEnabled" to systemServiceEnabled(context),
             "serviceConnected" to FluviKeyguardCardServiceRegistry.connected,
             "lastDecisionReason" to KeyguardCardDiagnostics.lastReason(context),
             "lastAttachResult" to KeyguardCardDiagnostics.lastAttachResult(context),
             "diagnosticSummary" to KeyguardCardDiagnostics.summary(context),
+            "materialDiagnostics" to FluviKeyguardCardServiceRegistry.materialDiagnostics(),
         )
     }
 
@@ -165,4 +193,22 @@ internal object FluviKeyguardCardServiceRegistry {
     fun notifyFocusChanged() {
         service?.onFinancialFocusChangedFromApplication()
     }
+
+    fun notifyMaterialChanged(profile: com.fluvi.app.lockscreen.material.KeyguardMaterialProfile) {
+        service?.onMaterialProfileChangedFromApplication(profile)
+    }
+
+    fun materialDiagnostics(): Map<String, Any?> = service?.materialDiagnostics()
+        ?: mapOf(
+            "rendererBackend" to "not-connected",
+            "hardwareAccelerated" to false,
+            "shaderCreationCount" to 0,
+            "animationStartCount" to 0,
+            "animationStopCount" to 0,
+            "drawCount" to 0,
+            "frameIntervalP50" to 0,
+            "frameIntervalP95" to 0,
+            "largeFrameGapCount" to 0,
+            "lastRendererFailure" to null,
+        )
 }

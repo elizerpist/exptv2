@@ -1,0 +1,119 @@
+package com.fluvi.app.lockscreen.material
+
+import android.graphics.Bitmap
+import android.os.Build
+import android.provider.Settings
+import android.view.View
+import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
+
+/** Owns scene application and one Choreographer clock for both retained
+ * decorative views. It deliberately has no WindowManager or financial API. */
+internal class KeyguardCardMaterialController(
+    private val orb: KeyguardHeaderMaterialView,
+    private val background: KeyguardHeaderMaterialView,
+    private val backgroundVeil: View,
+) {
+    private val clock = KeyguardMaterialClock { nanos ->
+        orb.frame(nanos)
+        background.frame(nanos)
+    }
+    private var attached = false
+    private var profile: KeyguardMaterialProfile? = null
+    private var mode = KeyguardCardAnimationMode.ORB_ONLY
+
+    init {
+        orb.shape = KeyguardHeaderMaterialView.Shape.ORB
+        background.shape = KeyguardHeaderMaterialView.Shape.CARD_BACKGROUND
+    }
+
+    fun update(
+        profile: KeyguardMaterialProfile?,
+        animationMode: KeyguardCardAnimationMode,
+        isFull: Boolean,
+        staticOrb: Bitmap?,
+    ) {
+        this.profile = profile
+        this.mode = animationMode
+        val scene = profile?.let { KeyguardMaterialScene(if (isFull) it else it.neutralized(), full = isFull) }
+        val canAnimate = scene != null && animationMode != KeyguardCardAnimationMode.OFF && animationsEnabled()
+        orb.setStaticBitmap(staticOrb)
+        orb.setScene(scene, enabled = canAnimate)
+        background.setScene(scene, enabled = canAnimate && animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND)
+        val backgroundVisible = animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND && scene != null
+        background.visibility = if (backgroundVisible) View.VISIBLE else View.GONE
+        // OFF and orb-only retain the precise, already validated static-card
+        // appearance. The readability veil only belongs above an animated
+        // material background.
+        backgroundVeil.visibility = if (backgroundVisible) View.VISIBLE else View.GONE
+        reconcileClock(canAnimate)
+    }
+
+    fun onAttached() {
+        attached = true
+        reconcileClock()
+    }
+
+    fun onDetached(reason: String) {
+        attached = false
+        orb.pause()
+        background.pause()
+        clock.stop()
+    }
+
+    fun stop(reason: String) = onDetached(reason)
+
+    fun diagnostics(): KeyguardMaterialDiagnostics = KeyguardMaterialDiagnostics(
+        rendererBackend = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "RuntimeShader/AGSL" else "static-fallback",
+        hardwareAccelerated = orb.hardwareAcceleratedForDiagnostics(),
+        shaderCreationCount = orb.shaderCreationCount() + background.shaderCreationCount(),
+        animationStartCount = clock.startCount,
+        animationStopCount = clock.stopCount,
+        drawCount = clock.drawCount,
+        frameIntervalP50 = clock.framePercentile(.5),
+        frameIntervalP95 = clock.framePercentile(.95),
+        largeFrameGapCount = clock.largeGapCount,
+        rendererFailure = orb.rendererFailure() ?: background.rendererFailure(),
+    )
+
+    private fun reconcileClock(forceCanAnimate: Boolean? = null) {
+        val canAnimate = forceCanAnimate ?: (profile != null && mode != KeyguardCardAnimationMode.OFF && animationsEnabled())
+        // A genuinely static Header scene is rendered once; the selected
+        // visual mode alone must not leave a 60 Hz callback running.
+        if (!attached || !canAnimate || profile?.animated != true) {
+            orb.pause()
+            background.pause()
+            clock.stop()
+            return
+        }
+        val rendererReady = orb.canAnimateMaterial() &&
+            (mode != KeyguardCardAnimationMode.ORB_AND_BACKGROUND || background.canAnimateMaterial())
+        if (rendererReady) {
+            orb.resume()
+            background.resume()
+            clock.start()
+        } else {
+            orb.pause()
+            background.pause()
+            clock.stop()
+        }
+    }
+
+    private fun animationsEnabled(): Boolean = Settings.Global.getFloat(
+        orb.context.contentResolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f,
+    ) > 0f
+}
+
+internal data class KeyguardMaterialDiagnostics(
+    val rendererBackend: String,
+    val hardwareAccelerated: Boolean,
+    val shaderCreationCount: Int,
+    val animationStartCount: Int,
+    val animationStopCount: Int,
+    val drawCount: Int,
+    val frameIntervalP50: Long,
+    val frameIntervalP95: Long,
+    val largeFrameGapCount: Int,
+    val rendererFailure: String?,
+)

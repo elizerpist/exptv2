@@ -400,6 +400,49 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'KEYGUARD-MATERIAL-01 transports every Header effect through the v6 profile ABI',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester)
+        ..setPortalEnabled(DashboardHeaderPortalChannel.backgroundMorph, true)
+        ..setPortalEnabled(DashboardHeaderPortalChannel.innerMotion, true);
+      const frame = DashboardHeaderVisualFrame(
+        colors: <Color>[
+          Color(0xff1c4f9d),
+          Color(0xff8bc8ee),
+          Color(0xff25366f),
+        ],
+        stops: <double>[0, .42, 1],
+        opacity: .8,
+        colorA: Color(0xff1c4f9d),
+        colorB: Color(0xff25366f),
+      );
+      try {
+        for (final effect in DashboardHeaderEffectId.values) {
+          controller.selectEffect(effect);
+          final profile =
+              DashboardHeaderMaterialSnapshot.capture(
+                controller: controller,
+                frame: frame,
+              ).keyguardMaterialProfile(
+                publisherSession: 'test-session',
+                publisherRevision: effect.index + 1,
+                referenceGeometry: const Size(412, 188),
+                sceneIdentity: 'budget|month|expense|category|${effect.index}',
+              );
+          expect(profile['shaderAbiVersion'], 6);
+          expect(profile['effectId'], effect.name);
+          expect(profile['commonSettings'], hasLength(40));
+          expect(profile['background'], isA<Map<String, Object?>>());
+          expect(profile['interior'], isA<Map<String, Object?>>());
+          expect(profile['sceneIdentity'], contains(effect.index.toString()));
+        }
+      } finally {
+        controller.dispose();
+      }
+    },
+  );
 }
 
 Future<Uint8List> _rgba(ui.Image image) async {
