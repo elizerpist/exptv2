@@ -500,6 +500,23 @@ internal object FluviRuntimeNotificationController {
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                 .getNotificationChannel(CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
 
+    /** Android reports the channel importance, not the launcher/keyguard's
+     * final rendering decision. Keep that distinction visible to Flutter. */
+    fun statusChannelImportanceLabel(context: Context): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "A rendszer kezeli"
+        val importance = (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .getNotificationChannel(CHANNEL_ID)?.importance
+            ?: return "Ismeretlen"
+        return when (importance) {
+            NotificationManager.IMPORTANCE_NONE -> "Kikapcsolva"
+            NotificationManager.IMPORTANCE_MIN -> "Minimális"
+            NotificationManager.IMPORTANCE_LOW -> "Csendes"
+            NotificationManager.IMPORTANCE_DEFAULT -> "Alapértelmezett"
+            NotificationManager.IMPORTANCE_HIGH -> "Magas"
+            else -> "Rendszer szerinti"
+        }
+    }
+
     private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

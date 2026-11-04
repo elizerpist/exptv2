@@ -169,7 +169,7 @@ internal object OrbRendererCapabilities {
         State(
             liveHeaderSupported = true,
             reason = "Header-anyag képkockacsomag · ViewFlipper helyi lejátszással.",
-            backend = "remoteviews-flutter-material-v4-opaque-frames",
+            backend = "remoteviews-flutter-material-v5-phase-aligned-opaque-frames",
             isShaderIdentical = false,
         )
     } else {
@@ -259,6 +259,7 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
     override fun onDeleted(context: Context, ids: IntArray) {
         FluviOrbConfigurationStore(context).delete(ids)
         OrbMaterialFrameStore.delete(context, ids)
+        ids.forEach { lastPublished.remove(it) }
         FluviOrbRevisionObserver.reconcile(context)
         super.onDeleted(context, ids)
     }
@@ -291,6 +292,7 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
     companion object {
         private val renderScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private val renderGenerations = ConcurrentHashMap<Int, AtomicLong>()
+        private val lastPublished = ConcurrentHashMap<Int, String>()
 
         fun renderAsync(
             context: Context,
@@ -314,6 +316,24 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        /**
+         * Used only by a completed Flutter material handoff.  Returning after
+         * `updateAppWidget` prevents a complete package queued immediately
+         * afterwards from invalidating the starter package before the launcher
+         * ever receives its first correct shader frame.
+         */
+        fun renderCommittedMaterial(
+            context: Context,
+            manager: AppWidgetManager,
+            widgetId: Int,
+        ) {
+            val requested = renderGenerations.getOrPut(widgetId) { AtomicLong(0) }
+                .incrementAndGet()
+            render(context.applicationContext, manager, intArrayOf(widgetId), "flutterMaterialExport") {
+                renderGenerations[widgetId]?.get() == requested
+            }
+        }
+
         private fun render(
             context: Context,
             manager: AppWidgetManager,
@@ -325,6 +345,7 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
             val capability = OrbRendererCapabilities.current()
             ids.forEach { id ->
                 runCatching {
+                    val remoteViewsStartedAt = System.nanoTime()
                     if (!isCurrentGeneration(id)) return@runCatching
                     // Android launches the configure Activity before a newly
                     // added widget is committed.  Keep its XML shell empty
@@ -337,6 +358,33 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
                             profile,
                             framePlanFor(context, manager, id),
                         )
+                    val displaySize = OrbWidgetDisplayDimensions.shortSidePx(
+                        context,
+                        manager.getAppWidgetOptions(id),
+                    )
+                    val publicationKey = listOf(
+                        sequence.profileKey,
+                        sequence.plan.frameCount,
+                        sequence.plan.intervalMs,
+                        sequence.plan.phaseOriginUtcMs,
+                        displaySize,
+                    ).joinToString("|")
+                    // Core revisions and other non-visual refreshes used to
+                    // rebuild the flipper and visibly reset it to frame zero.
+                    // A system/options restore is intentionally not skipped:
+                    // it may be the host's request to recreate RemoteViews.
+                    if (
+                        reason !in setOf("systemUpdate", "restored", "optionsChanged") &&
+                        lastPublished[id] == publicationKey
+                    ) {
+                        OrbFrameRenderDiagnostics.continued(
+                            context = context,
+                            widgetId = id,
+                            reason = reason,
+                            sequence = sequence,
+                        )
+                        return@runCatching
+                    }
                     val view = android.widget.RemoteViews(context.packageName, R.layout.fluvi_orb_widget)
                     // One active ViewFlipper switches opaque, completed shader
                     // frames. There is no outgoing/incoming alpha layer which
@@ -349,23 +397,20 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
                         sequence.plan.intervalMs,
                     )
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val displaySize = OrbWidgetDisplayDimensions.shortSidePx(
-                            context,
-                            manager.getAppWidgetOptions(id),
-                        ).toFloat()
+                        val displaySizeFloat = displaySize.toFloat()
                         view.setViewLayoutWidth(
                             R.id.fluvi_orb_circle_container,
-                            displaySize,
+                            displaySizeFloat,
                             android.util.TypedValue.COMPLEX_UNIT_PX,
                         )
                         view.setViewLayoutHeight(
                             R.id.fluvi_orb_circle_container,
-                            displaySize,
+                            displaySizeFloat,
                             android.util.TypedValue.COMPLEX_UNIT_PX,
                         )
                         view.setViewOutlinePreferredRadius(
                             R.id.fluvi_orb_circle_container,
-                            displaySize / 2f,
+                            displaySizeFloat / 2f,
                             android.util.TypedValue.COMPLEX_UNIT_PX,
                         )
                     }
@@ -377,6 +422,14 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
                         child.setImageViewBitmap(R.id.fluvi_orb_frame_image, frame)
                         view.addView(flipperId, child)
                     }
+                    // A full package follows a short starter package with the
+                    // same origin. Select after its children have been added;
+                    // this avoids a visible restart at child zero.
+                    view.setInt(
+                        flipperId,
+                        "setDisplayedChild",
+                        sequence.plan.initialFrameIndex(),
+                    )
                     view.setContentDescription(
                         R.id.fluvi_orb_root,
                         "Fluvi élő orb · ${configuration.mode.name} · ${capability.backend}",
@@ -395,7 +448,16 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
                     )
                     if (!isCurrentGeneration(id)) return@runCatching
                     manager.updateAppWidget(id, view)
-                    OrbFrameRenderDiagnostics.published(context, id, profile, sequence)
+                    lastPublished[id] = publicationKey
+                    OrbFrameRenderDiagnostics.published(
+                        context,
+                        id,
+                        profile,
+                        sequence,
+                        reason = reason,
+                        displaySizePx = displaySize,
+                        remoteViewsBuildAndPublishMs = (System.nanoTime() - remoteViewsStartedAt) / 1_000_000,
+                    )
                 }.onFailure { failure ->
                     // Do not replace a previous good orb with a text/error
                     // placeholder while a transient frame build fails.

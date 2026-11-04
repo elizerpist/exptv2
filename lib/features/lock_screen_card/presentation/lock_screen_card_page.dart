@@ -238,7 +238,7 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
                         ? Icons.check_circle_outline
                         : Icons.error_outline,
                   ),
-                  title: const Text('Fluvi értesítései'),
+                  title: const Text('A Fluvi küldhet értesítést'),
                   subtitle: Text(
                     status.postNotificationsGranted
                         ? 'Engedélyezve'
@@ -253,18 +253,20 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
                 ListTile(
                   leading: Icon(
                     status.statusChannelEnabled
-                        ? Icons.check_circle_outline
+                        ? Icons.settings_outlined
                         : Icons.error_outline,
                   ),
-                  title: const Text('Háttérfigyelés csatorna'),
+                  title: const Text('Pénzügyi kártya csatornája'),
                   subtitle: Text(
-                    status.statusChannelEnabled
-                        ? 'Engedélyezve'
-                        : 'A csatorna ki van kapcsolva',
+                    'Csatornafontosság: ${status.statusChannelImportance}. '
+                    '${status.statusChannelEnabled ? '' : 'A csatorna ki van kapcsolva. '}'
+                    'A zárolt képernyőn való megjelenést a telefon beállításai szabályozzák.',
                   ),
                   trailing: TextButton(
-                    onPressed: widget.openAndroidNotificationSettings,
-                    child: const Text('Megnyitás'),
+                    onPressed: widget
+                        .repository
+                        .openRuntimeNotificationChannelSettings,
+                    child: const Text('Csatorna'),
                   ),
                 ),
               ],

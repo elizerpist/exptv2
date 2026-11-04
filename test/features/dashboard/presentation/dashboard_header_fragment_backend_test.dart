@@ -226,7 +226,7 @@ void main() {
           },
         );
 
-        expect(DashboardHeaderFragmentUniformLayout.version, 5);
+        expect(DashboardHeaderFragmentUniformLayout.version, 6);
         expect(DashboardHeaderFragmentUniformLayout.gradientColorStart, 9);
         expect(DashboardHeaderFragmentUniformLayout.gradientStopStart, 49);
         expect(DashboardHeaderFragmentUniformLayout.commonSettingsStart, 61);
@@ -400,7 +400,7 @@ void main() {
     );
 
     testWidgets(
-      'the pinned runtime-stage compiler retains every v5 uniform-bank slot',
+      'the pinned runtime-stage compiler retains every v6 uniform-bank slot',
       (tester) async {
         final program = await FragmentProgram.fromAsset(
           DashboardHeaderFragmentBackend.asset,

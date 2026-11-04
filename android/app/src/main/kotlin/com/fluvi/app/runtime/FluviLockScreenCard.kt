@@ -239,6 +239,7 @@ internal object FluviLockScreenCardCoordinator {
             "categories" to categories,
             "postNotificationsGranted" to FluviRuntimeCoordinator.status(context).postNotificationsGranted,
             "statusChannelEnabled" to FluviRuntimeNotificationController.statusChannelEnabled(context),
+            "statusChannelImportance" to FluviRuntimeNotificationController.statusChannelImportanceLabel(context),
         )
     }
 

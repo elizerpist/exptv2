@@ -10,7 +10,7 @@ class OrbRendererCapabilitiesTest {
         val state = OrbRendererCapabilities.forAndroidApi(35)
 
         assertTrue(state.liveHeaderSupported)
-        assertEquals("remoteviews-flutter-material-v4-opaque-frames", state.backend)
+        assertEquals("remoteviews-flutter-material-v5-phase-aligned-opaque-frames", state.backend)
         assertTrue(state.reason.contains("ViewFlipper"))
         assertTrue(!state.isShaderIdentical)
     }
@@ -62,9 +62,22 @@ class OrbRendererCapabilitiesTest {
     }
 
     @Test
-    fun `v4 has one opaque frame flipper and a 175 frame raw budget`() {
+    fun `v5 has one opaque phase-aligned frame flipper and a 175 frame raw budget`() {
         assertEquals(175, OrbMaterialPlaybackContract.maximumFrameCount)
         assertEquals(0, OrbFramePlan(32, 150, 32).transitionDurationMs)
         assertEquals(150 * 32 * 32 * 4L, OrbFramePlan(32, 150, 32).estimatedRawBytes)
+    }
+
+    @Test
+    fun `phase origin selects the elapsed source frame rather than frame zero`() {
+        val plan = OrbFramePlan(
+            sizePx = 32,
+            frameCount = 150,
+            intervalMs = 32,
+            phaseOriginUtcMs = 10_000,
+        )
+
+        assertEquals(3, plan.initialFrameIndex(nowUtcMs = 10_096))
+        assertEquals(0, plan.initialFrameIndex(nowUtcMs = 14_800))
     }
 }

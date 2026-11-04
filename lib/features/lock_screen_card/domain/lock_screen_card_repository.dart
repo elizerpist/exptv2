@@ -1,6 +1,11 @@
 abstract interface class LockScreenCardRepository {
   Future<LockScreenCardStatus> load();
   Future<LockScreenCardStatus> save(LockScreenCardConfiguration configuration);
+
+  /// Opens exactly the channel that owns the Fluvi card. This is deliberately
+  /// separate from generic app notification settings because lock-screen
+  /// visibility and silent-channel policy belong to Android/the launcher.
+  Future<void> openRuntimeNotificationChannelSettings();
 }
 
 enum LockScreenCardMode { mind, balance, budget }
@@ -97,6 +102,7 @@ final class LockScreenCardStatus {
     required this.categories,
     required this.postNotificationsGranted,
     required this.statusChannelEnabled,
+    required this.statusChannelImportance,
   });
 
   factory LockScreenCardStatus.fromMap(Map<Object?, Object?> map) {
@@ -115,6 +121,8 @@ final class LockScreenCardStatus {
       postNotificationsGranted:
           map['postNotificationsGranted'] as bool? ?? false,
       statusChannelEnabled: map['statusChannelEnabled'] as bool? ?? true,
+      statusChannelImportance:
+          map['statusChannelImportance'] as String? ?? 'Ismeretlen',
     );
   }
 
@@ -123,6 +131,7 @@ final class LockScreenCardStatus {
   final List<LockScreenCardCategory> categories;
   final bool postNotificationsGranted;
   final bool statusChannelEnabled;
+  final String statusChannelImportance;
 }
 
 final class LockScreenCardContent {

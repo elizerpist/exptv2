@@ -2394,6 +2394,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
         const <DashboardHeaderTunerSection>{},
       ),
       portalSettingsGeneration = ValueNotifier<int>(0),
+      orbExportCommitGeneration = ValueNotifier<int>(0),
       tapWaveTuning = ValueNotifier<DashboardHeaderTapWaveTuning>(
         DashboardHeaderTapWaveTuning.defaults(),
       ),
@@ -2427,6 +2428,11 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   /// Semantic Portal config changes rebuild only the relevant tuner sections.
   /// Animation phase ticks never publish through this notifier.
   final ValueNotifier<int> portalSettingsGeneration;
+
+  /// A slider's drag samples remain debounced for the launcher export; its
+  /// release increments this notifier so the final selected material is not
+  /// left behind a trailing debounce window.
+  final ValueNotifier<int> orbExportCommitGeneration;
 
   /// Source/app-added tap-wave settings rebuild only the respective tuner
   /// section. The one-shot state itself advances solely on the shared clock.
@@ -3113,6 +3119,11 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void commitOrbExport() {
+    if (_disposed) return;
+    orbExportCommitGeneration.value += 1;
+  }
+
   /// Updates one independently-owned Portal source channel. The shared
   /// material-field implementation is selected by both channels, but their
   /// selections, settings and active-mode reset state never alias.
@@ -3509,6 +3520,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     tunerOpen.dispose();
     expandedTunerSections.dispose();
     portalSettingsGeneration.dispose();
+    orbExportCommitGeneration.dispose();
     tapWaveTuning.dispose();
     tapWaveReferencePreview.dispose();
     headerVisualTerminal.dispose();

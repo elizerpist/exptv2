@@ -140,6 +140,146 @@ void main() {
   );
 
   testWidgets(
+    'ORB-MATERIAL-01c direct orb rendering keeps the full header coordinate field',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester)
+        ..selectEffect(DashboardHeaderEffectId.staticEffect)
+        ..setPortalEnabled(DashboardHeaderPortalChannel.backgroundMorph, false)
+        ..setPortalEnabled(DashboardHeaderPortalChannel.innerMotion, false);
+      const frame = DashboardHeaderVisualFrame(
+        colors: <Color>[
+          Color(0xffffb37b),
+          Color(0xffff79a8),
+          Color(0xff8f5ee8),
+        ],
+        stops: <double>[0, .5, 1],
+        opacity: 1,
+        colorA: Color(0xffffb37b),
+        colorB: Color(0xff8f5ee8),
+      );
+      final snapshot = DashboardHeaderMaterialSnapshot.capture(
+        controller: controller,
+        frame: frame,
+      );
+      final renderer = DashboardHeaderMaterialFrameRenderer();
+      final direct = (await tester.runAsync(
+        () => renderer.renderOrbTexture(
+          snapshot: snapshot,
+          headerSize: const Size(412, 188),
+          orbSizePx: 80,
+          offset: Duration.zero,
+        ),
+      ))!;
+      final header = (await tester.runAsync(
+        () => renderer.render(
+          snapshot: snapshot,
+          headerSize: const Size(412, 188),
+          offset: Duration.zero,
+        ),
+      ))!;
+      final mapped = (await tester.runAsync(
+        () => DashboardHeaderOrbFrameMapper.map(header: header, orbSizePx: 80),
+      ))!;
+      try {
+        final directPixels = (await tester.runAsync(() => _rgba(direct)))!;
+        final mappedPixels = (await tester.runAsync(() => _rgba(mapped)))!;
+        for (final coordinate in <(int, int)>[
+          (1, 1),
+          (12, 24),
+          (40, 40),
+          (68, 56),
+          (78, 78),
+        ]) {
+          _expectFilteredSample(
+            actual: _pixel(directPixels, 80, coordinate.$1, coordinate.$2),
+            expected: _pixel(mappedPixels, 80, coordinate.$1, coordinate.$2),
+            reason: 'direct shader texture must retain complete header mapping',
+          );
+        }
+      } finally {
+        direct.dispose();
+        header.dispose();
+        mapped.dispose();
+        renderer.dispose();
+        controller.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'ORB-MATERIAL-01d direct shader texture keeps animated header aspect and phase',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester)
+        ..selectEffect(DashboardHeaderEffectId.dualTide)
+        ..setEffectControl('speed', .24)
+        ..setPortalEnabled(DashboardHeaderPortalChannel.backgroundMorph, false)
+        ..setPortalEnabled(DashboardHeaderPortalChannel.innerMotion, false);
+      const frame = DashboardHeaderVisualFrame(
+        colors: <Color>[
+          Color(0xffffb37b),
+          Color(0xffff79a8),
+          Color(0xff8f5ee8),
+        ],
+        stops: <double>[0, .5, 1],
+        opacity: 1,
+        colorA: Color(0xffffb37b),
+        colorB: Color(0xff8f5ee8),
+      );
+      final backend = DashboardHeaderFragmentBackend();
+      final renderer = DashboardHeaderMaterialFrameRenderer(backend: backend);
+      final snapshot = DashboardHeaderMaterialSnapshot.capture(
+        controller: controller,
+        frame: frame,
+      );
+      const offset = Duration(milliseconds: 1250);
+      final direct = (await tester.runAsync(
+        () => renderer.renderOrbTexture(
+          snapshot: snapshot,
+          headerSize: const Size(412, 188),
+          orbSizePx: 80,
+          offset: offset,
+        ),
+      ))!;
+      final header = (await tester.runAsync(
+        () => renderer.render(
+          snapshot: snapshot,
+          headerSize: const Size(412, 188),
+          offset: offset,
+        ),
+      ))!;
+      final mapped = (await tester.runAsync(
+        () => DashboardHeaderOrbFrameMapper.map(header: header, orbSizePx: 80),
+      ))!;
+      try {
+        expect(backend.isReady, isTrue);
+        final directPixels = (await tester.runAsync(() => _rgba(direct)))!;
+        final mappedPixels = (await tester.runAsync(() => _rgba(mapped)))!;
+        for (final coordinate in <(int, int)>[
+          (8, 8),
+          (24, 36),
+          (40, 40),
+          (64, 52),
+          (72, 70),
+        ]) {
+          _expectFilteredSample(
+            actual: _pixel(directPixels, 80, coordinate.$1, coordinate.$2),
+            expected: _pixel(mappedPixels, 80, coordinate.$1, coordinate.$2),
+            reason:
+                'direct shader texture must preserve source aspect and phase',
+          );
+        }
+      } finally {
+        direct.dispose();
+        header.dispose();
+        mapped.dispose();
+        renderer.dispose();
+        backend.dispose();
+        controller.dispose();
+      }
+    },
+  );
+
+  testWidgets(
     'ORB-MATERIAL-02 keeps two production effects distinct at one explicit phase',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester)

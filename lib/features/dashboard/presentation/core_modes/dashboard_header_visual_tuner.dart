@@ -327,6 +327,7 @@ final class _TunerSlider extends StatelessWidget {
     required this.divisions,
     required this.value,
     required this.onChanged,
+    this.onChangeEnd,
   });
 
   final String label;
@@ -336,6 +337,7 @@ final class _TunerSlider extends StatelessWidget {
   final int divisions;
   final double value;
   final ValueChanged<double>? onChanged;
+  final ValueChanged<double>? onChangeEnd;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -356,6 +358,7 @@ final class _TunerSlider extends StatelessWidget {
           divisions: divisions,
           value: value.clamp(min, max).toDouble(),
           onChanged: onChanged,
+          onChangeEnd: onChangeEnd,
         ),
       ],
     ),
@@ -4032,6 +4035,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                                       control.defaultValue,
                                   onChanged: (value) => controller
                                       .setEffectControl(control.id, value),
+                                  onChangeEnd: (_) =>
+                                      controller.commitOrbExport(),
                                 ),
                             ],
                           ),

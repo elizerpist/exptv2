@@ -138,6 +138,34 @@ final class DashboardHeaderMaterialSnapshot {
     );
   }
 
+  /// A cache key for every input that can affect a launcher texture.  The
+  /// live phase/elapsed clock is intentionally absent: a cached finite
+  /// package keeps its original clock origin and native selects its current
+  /// phase when it is republished.
+  String get orbVisualCacheKey => <Object?>[
+    'header-material-v5-shader${DashboardHeaderFragmentUniformLayout.version}',
+    tuning.effect.name,
+    tuning.paletteOrientation.enabled,
+    tuning.paletteOrientation.baseAngleDegrees,
+    tuning.paletteOrientation.sweepDegrees,
+    tuning.paletteOrientation.speed,
+    tuning.paletteOrientation.phaseDegrees,
+    _numberListKey(frame.colors.map((color) => color.toARGB32())),
+    _numberListKey(frame.stops),
+    frame.opacity,
+    frame.paletteSplitPercent,
+    _settingsKey(tuning.settingsFor(tuning.effect)),
+    _background.orbVisualCacheKey,
+    _interior.orbVisualCacheKey,
+  ].join('|');
+
+  static String _numberListKey(Iterable<num> values) => values.join(',');
+
+  static String _settingsKey(Map<String, double> settings) {
+    final keys = settings.keys.toList(growable: false)..sort();
+    return keys.map((key) => '$key=${settings[key]}').join(',');
+  }
+
   static List<double> _pack(
     List<DashboardHeaderEffectControl> controls,
     Map<String, double> settings, {
@@ -198,6 +226,16 @@ final class _DashboardHeaderMaterialPortalSnapshot {
   final bool rotationEnabled;
   final double rotationSpeed;
   final Map<String, double> settings;
+
+  String get orbVisualCacheKey => <Object?>[
+    enabled,
+    effect.name,
+    paletteCenterPercent,
+    paletteWindowPercent,
+    rotationEnabled,
+    rotationSpeed,
+    DashboardHeaderMaterialSnapshot._settingsKey(settings),
+  ].join(',');
 
   bool get requiresFrames =>
       enabled &&
@@ -272,46 +310,15 @@ final class DashboardHeaderMaterialFrameRenderer {
     final width = math.max(1, (headerSize.width * devicePixelRatio).round());
     final height = math.max(1, (headerSize.height * devicePixelRatio).round());
     final logicalSize = Size(width.toDouble(), height.toDouble());
+    if (!_usesStatic(snapshot)) await _backend.waitForReadiness();
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    // Dashboard's visual material has an opaque white base; opacity is then
-    // applied once by the shared static/shader route.
-    canvas.drawRect(Offset.zero & logicalSize, Paint()..color = Colors.white);
-    final usesStatic =
-        snapshot.tuning.effect == DashboardHeaderEffectId.staticEffect &&
-        !snapshot._background.enabled &&
-        !snapshot._interior.enabled;
-    if (usesStatic) {
-      DashboardHeaderStaticColorRenderer.paint(
-        canvas: canvas,
-        rect: Offset.zero & logicalSize,
-        colors: snapshot.frame.colors,
-        stops: snapshot.frame.stops,
-        opacity: snapshot.frame.opacity,
-      );
-    } else {
-      await _backend.waitForReadiness();
-      final plan = DashboardHeaderFragmentRenderPlan.resolve(
-        logicalSize: logicalSize,
-        devicePixelRatio: 1,
-        renderScale: 1,
-      );
-      final painted = _backend.paint(
-        canvas,
-        logicalSize,
-        plan: plan,
-        input: snapshot.inputAt(offset, _deepDrift),
-      );
-      if (!painted) {
-        DashboardHeaderStaticColorRenderer.paint(
-          canvas: canvas,
-          rect: Offset.zero & logicalSize,
-          colors: snapshot.frame.colors,
-          stops: snapshot.frame.stops,
-          opacity: snapshot.frame.opacity,
-        );
-      }
-    }
+    _paintMaterial(
+      canvas: canvas,
+      snapshot: snapshot,
+      logicalSize: logicalSize,
+      offset: offset,
+    );
     final picture = recorder.endRecording();
     try {
       return await picture.toImage(width, height);
@@ -319,6 +326,103 @@ final class DashboardHeaderMaterialFrameRenderer {
       picture.dispose();
     }
   }
+
+  /// Renders the production shader directly into the square orb texture.
+  ///
+  /// `uSize` remains the header's original physical rectangle while
+  /// `uRasterSize` is the bounded square output. This avoids first allocating
+  /// a complete physical header bitmap for every animation sample.
+  Future<ui.Image> renderOrbTexture({
+    required DashboardHeaderMaterialSnapshot snapshot,
+    required Size headerSize,
+    required int orbSizePx,
+    required Duration offset,
+    double devicePixelRatio = 1,
+  }) async {
+    final width = math.max(1, (headerSize.width * devicePixelRatio).round());
+    final height = math.max(1, (headerSize.height * devicePixelRatio).round());
+    final sourceSize = Size(width.toDouble(), height.toDouble());
+    final targetSize = orbSizePx.clamp(1, 512).toInt();
+    if (!_usesStatic(snapshot)) await _backend.waitForReadiness();
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    if (_usesStatic(snapshot) || !_backend.isReady) {
+      canvas.save();
+      canvas.scale(
+        targetSize / sourceSize.width,
+        targetSize / sourceSize.height,
+      );
+      _paintMaterial(
+        canvas: canvas,
+        snapshot: snapshot,
+        logicalSize: sourceSize,
+        offset: offset,
+      );
+      canvas.restore();
+    } else {
+      _paintMaterial(
+        canvas: canvas,
+        snapshot: snapshot,
+        logicalSize: sourceSize,
+        rasterSize: Size.square(targetSize.toDouble()),
+        offset: offset,
+      );
+    }
+    final picture = recorder.endRecording();
+    try {
+      return await picture.toImage(targetSize, targetSize);
+    } finally {
+      picture.dispose();
+    }
+  }
+
+  void _paintMaterial({
+    required Canvas canvas,
+    required DashboardHeaderMaterialSnapshot snapshot,
+    required Size logicalSize,
+    required Duration offset,
+    Size? rasterSize,
+  }) {
+    // Dashboard's visual material has an opaque white base; opacity is then
+    // applied once by the shared static/shader route.
+    canvas.drawRect(Offset.zero & logicalSize, Paint()..color = Colors.white);
+    if (_usesStatic(snapshot)) {
+      DashboardHeaderStaticColorRenderer.paint(
+        canvas: canvas,
+        rect: Offset.zero & logicalSize,
+        colors: snapshot.frame.colors,
+        stops: snapshot.frame.stops,
+        opacity: snapshot.frame.opacity,
+      );
+      return;
+    }
+    final plan = DashboardHeaderFragmentRenderPlan.resolve(
+      logicalSize: logicalSize,
+      devicePixelRatio: 1,
+      renderScale: 1,
+    );
+    final painted = _backend.paint(
+      canvas,
+      logicalSize,
+      plan: plan,
+      input: snapshot.inputAt(offset, _deepDrift),
+      rasterSize: rasterSize,
+    );
+    if (!painted) {
+      DashboardHeaderStaticColorRenderer.paint(
+        canvas: canvas,
+        rect: Offset.zero & logicalSize,
+        colors: snapshot.frame.colors,
+        stops: snapshot.frame.stops,
+        opacity: snapshot.frame.opacity,
+      );
+    }
+  }
+
+  static bool _usesStatic(DashboardHeaderMaterialSnapshot snapshot) =>
+      snapshot.tuning.effect == DashboardHeaderEffectId.staticEffect &&
+      !snapshot._background.enabled &&
+      !snapshot._interior.enabled;
 
   void dispose() {
     if (_ownsBackend) _backend.dispose();

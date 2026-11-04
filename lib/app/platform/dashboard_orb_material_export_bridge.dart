@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -22,6 +23,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
        _channel = channel ?? const MethodChannel(_channelName) {
     _controller.tuning.addListener(schedule);
     _controller.portalSettingsGeneration.addListener(schedule);
+    _controller.orbExportCommitGeneration.addListener(_scheduleFinal);
     balanceFrame.addListener(schedule);
     budgetFrame.addListener(schedule);
     mindFrame.addListener(schedule);
@@ -42,6 +44,16 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
   var _requestedWhileExporting = false;
   var _requestedGeneration = 0;
   var _disposed = false;
+  final Map<int, DateTime> _requestedAt = <int, DateTime>{};
+  final LinkedHashMap<String, _CachedOrbMaterialPackage> _frameCache =
+      LinkedHashMap<String, _CachedOrbMaterialPackage>();
+
+  // A short debounce coalesces slider drag samples, but no longer hides the
+  // completed choice behind the old 180 ms delay. Generation checks below
+  // give the newest value priority if A → B → C arrives during an export.
+  static const _settingsDebounce = Duration(milliseconds: 48);
+  static const _starterFrameCount = 8;
+  static const _maximumCachedEncodedBytes = 2 * 1024 * 1024;
 
   /// Uses Dashboard's actual Header bounds. The orb mapper later maps the
   /// entire normalized rectangle to a circle, retaining both palette ends.
@@ -62,24 +74,47 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
   void schedule() {
     if (_disposed) return;
     _requestedGeneration += 1;
+    _requestedAt[_requestedGeneration] = DateTime.now();
+    _requestedAt.removeWhere(
+      (generation, _) => generation < _requestedGeneration - 2,
+    );
     if (_exporting) {
       _requestedWhileExporting = true;
       return;
     }
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 180), () {
+    _debounce = Timer(_settingsDebounce, () {
       unawaited(_export(_requestedGeneration));
     });
+  }
+
+  void _scheduleFinal() {
+    if (_disposed) return;
+    _requestedGeneration += 1;
+    _requestedAt[_requestedGeneration] = DateTime.now();
+    _requestedAt.removeWhere(
+      (generation, _) => generation < _requestedGeneration - 2,
+    );
+    _debounce?.cancel();
+    if (_exporting) {
+      _requestedWhileExporting = true;
+      return;
+    }
+    unawaited(_export(_requestedGeneration));
   }
 
   Future<void> _export(int generation) async {
     final size = _headerSize;
     if (_disposed || size == null || _exporting) return;
     _exporting = true;
+    final requestedAt = _requestedAt[generation] ?? DateTime.now();
+    final debounceMs = DateTime.now().difference(requestedAt).inMilliseconds;
+    final sceneQuery = Stopwatch()..start();
     try {
       final scenes = await _channel.invokeListMethod<Object?>(
         'configuredScenes',
       );
+      sceneQuery.stop();
       if (scenes == null ||
           scenes.isEmpty ||
           _disposed ||
@@ -131,6 +166,9 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
           isCurrent: () => _isCurrent(generation),
           frame: frame,
           headerSize: size,
+          requestedAt: requestedAt,
+          debounceMs: debounceMs,
+          sceneQueryMs: sceneQuery.elapsedMilliseconds,
         );
       }
     } on MissingPluginException {
@@ -141,7 +179,9 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       _exporting = false;
       if (_requestedWhileExporting && !_disposed) {
         _requestedWhileExporting = false;
-        schedule();
+        // The latest drag release has already supplied its generation while
+        // the stale job was rendering. Do not add a second debounce here.
+        unawaited(_export(_requestedGeneration));
       }
     }
   }
@@ -160,12 +200,15 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     required bool Function() isCurrent,
     required DashboardHeaderVisualFrame frame,
     required Size headerSize,
+    required DateTime requestedAt,
+    required int debounceMs,
+    required int sceneQueryMs,
   }) async {
     final snapshot = DashboardHeaderMaterialSnapshot.capture(
       controller: _controller,
       frame: frame,
     );
-    final playback = DashboardOrbMaterialPlaybackProfile.resolve(
+    final initialPlayback = DashboardOrbMaterialPlaybackProfile.resolve(
       isAnimated: snapshot.isAnimated,
       requiresDenseShaderSampling: snapshot.requiresDenseOrbSampling,
       characteristicCycleMs: snapshot.characteristicCycleMs,
@@ -174,89 +217,312 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       maximumDecodedBytes: maximumDecodedBytes,
       applyCircularAlphaMask: requiresAlphaMask,
     );
+    final cacheKey = <Object?>[
+      snapshot.orbVisualCacheKey,
+      targetSizePx,
+      maximumFrameCount,
+      maximumDecodedBytes,
+      requiresAlphaMask,
+      dashboardOrbMaterialCacheVersion,
+    ].join('|');
+    final cached = _frameCache.remove(cacheKey);
+    if (cached != null) {
+      _frameCache[cacheKey] = cached;
+      final timing = _OrbExportTiming(
+        debounceMs: debounceMs,
+        sceneQueryMs: sceneQueryMs,
+        cacheHit: true,
+        requestedAt: requestedAt,
+      );
+      await _publishFrames(
+        widgetId: widgetId,
+        configurationRevision: configurationRevision,
+        mode: mode,
+        snapshot: snapshot,
+        playback: cached.playback,
+        frames: cached.frames,
+        phaseOriginUtcMs: cached.phaseOriginUtcMs,
+        timing: timing,
+        packageStage: 'warm-cache',
+        seamMeanRgbDelta: cached.seamMeanRgbDelta,
+        seamCandidates: cached.seamCandidates,
+      );
+      return;
+    }
+
+    final timing = _OrbExportTiming(
+      debounceMs: debounceMs,
+      sceneQueryMs: sceneQueryMs,
+      cacheHit: false,
+      requestedAt: requestedAt,
+    );
+    final phaseOriginUtcMs = DateTime.now().millisecondsSinceEpoch;
     final renderer = DashboardHeaderMaterialFrameRenderer();
     try {
       final frames = <Uint8List>[];
       Uint8List? firstOrbRgba;
+      DashboardOrbMaterialPlaybackProfile playback = initialPlayback;
       for (var index = 0; index < playback.frameCount; index += 1) {
         if (!isCurrent()) return;
-        final header = await renderer.render(
+        final renderWatch = Stopwatch()..start();
+        final orb = await _renderTexture(
+          renderer: renderer,
           snapshot: snapshot,
           headerSize: headerSize,
-          devicePixelRatio: _devicePixelRatio,
-          offset: Duration(milliseconds: playback.intervalMs * index),
+          orbSizePx: initialPlayback.frameSizePx,
+          applyCircularAlphaMask: initialPlayback.applyCircularAlphaMask,
+          offset: Duration(milliseconds: initialPlayback.intervalMs * index),
         );
+        renderWatch.stop();
+        timing.shaderRenderMs += renderWatch.elapsedMilliseconds;
         try {
-          final orb = await DashboardHeaderOrbFrameMapper.map(
-            header: header,
-            orbSizePx: playback.frameSizePx,
-            applyCircularAlphaMask: playback.applyCircularAlphaMask,
-          );
-          try {
-            if (index == 0) {
-              final rgba = await orb.toByteData(
-                format: ImageByteFormat.rawRgba,
-              );
-              if (rgba == null) throw StateError('Orb RGBA encoding failed.');
-              firstOrbRgba = Uint8List.fromList(rgba.buffer.asUint8List());
-            }
-            final bytes = await orb.toByteData(format: ImageByteFormat.png);
-            if (bytes == null) throw StateError('Orb PNG encoding failed.');
-            frames.add(bytes.buffer.asUint8List());
-          } finally {
-            orb.dispose();
+          if (index == 0) {
+            final rgba = await orb.toByteData(format: ImageByteFormat.rawRgba);
+            if (rgba == null) throw StateError('Orb RGBA encoding failed.');
+            firstOrbRgba = Uint8List.fromList(rgba.buffer.asUint8List());
           }
+          final pngWatch = Stopwatch()..start();
+          final bytes = await orb.toByteData(format: ImageByteFormat.png);
+          pngWatch.stop();
+          timing.pngEncodeMs += pngWatch.elapsedMilliseconds;
+          if (bytes == null) throw StateError('Orb PNG encoding failed.');
+          frames.add(Uint8List.fromList(bytes.buffer.asUint8List()));
         } finally {
-          header.dispose();
+          orb.dispose();
+        }
+
+        // The starter is made exclusively from the selected production
+        // shader's first real time samples. It gives the launcher an early
+        // visual reaction without waiting for the remaining PNG sequence.
+        if (snapshot.isAnimated && index + 1 == _starterFrameCount) {
+          if (!isCurrent()) return;
+          await _publishFrames(
+            widgetId: widgetId,
+            configurationRevision: configurationRevision,
+            mode: mode,
+            snapshot: snapshot,
+            playback: initialPlayback.withLoopDurationMs(
+              _starterFrameCount * initialPlayback.intervalMs,
+            ),
+            frames: List<Uint8List>.unmodifiable(frames),
+            phaseOriginUtcMs: phaseOriginUtcMs,
+            timing: timing,
+            packageStage: 'starter',
+            seamMeanRgbDelta: -1,
+            seamCandidates: 0,
+          );
+        }
+
+        // Once the starter is out, choose the finite return point against
+        // actual shader pixels. This makes the old 2π/speed assumption an
+        // input candidate rather than an unverified loop guarantee.
+        if (snapshot.isAnimated && index + 1 == _starterFrameCount) {
+          final selected = await _selectLoopDuration(
+            renderer: renderer,
+            snapshot: snapshot,
+            headerSize: headerSize,
+            playback: initialPlayback,
+            firstOrbRgba: firstOrbRgba!,
+          );
+          playback = initialPlayback.withLoopDurationMs(selected.durationMs);
+          timing.loopSelectionMs = selected.elapsedMs;
+          timing.loopSeamMeanRgbDelta = selected.meanRgbDelta;
+          timing.loopCandidates = selected.candidateCount;
+          // The selected package can be longer than the nominal cycle. The
+          // first samples were already rendered at the same dt and remain
+          // valid; this loop merely chooses where playback returns to zero.
+          if (index + 1 >= playback.frameCount) break;
         }
       }
+      // A static package never reaches the starter branch. Animated packages
+      // whose frame count is unexpectedly below it retain the initial loop.
+      if (!snapshot.isAnimated || firstOrbRgba == null) {
+        timing.loopSeamMeanRgbDelta = 0;
+      } else if (timing.loopCandidates == 0) {
+        final seam = await _loopSeamMeanRgbDelta(
+          renderer: renderer,
+          snapshot: snapshot,
+          headerSize: headerSize,
+          targetSizePx: playback.frameSizePx,
+          applyCircularAlphaMask: playback.applyCircularAlphaMask,
+          firstOrbRgba: firstOrbRgba,
+          loopDuration: Duration(milliseconds: playback.loopDurationMs),
+        );
+        timing.loopSeamMeanRgbDelta = seam;
+      }
+      if (!isCurrent()) return;
       final channelPngBytes = frames.fold<int>(
         0,
         (sum, frame) => sum + frame.length,
       );
-      final seamMeanRgbDelta = snapshot.isAnimated
-          ? await _loopSeamMeanRgbDelta(
-              renderer: renderer,
-              snapshot: snapshot,
-              headerSize: headerSize,
-              targetSizePx: playback.frameSizePx,
-              applyCircularAlphaMask: playback.applyCircularAlphaMask,
-              firstOrbRgba: firstOrbRgba!,
-              loopDuration: Duration(milliseconds: playback.loopDurationMs),
-            )
-          : 0.0;
-      if (!isCurrent()) return;
-      final seamDescription = snapshot.isAnimated
-          ? seamMeanRgbDelta >= 2
-                ? 'repeat=visible-sampling-seam'
-                : 'repeat=continuous-within-sample-threshold'
-          : 'repeat=static';
-      await _channel.invokeMethod<void>('publishFrames', <String, Object>{
-        'widgetId': widgetId,
-        'configurationRevision': configurationRevision,
-        'cacheVersion': playback.cacheVersion,
-        'intervalMs': playback.intervalMs,
-        'sourceDescription':
-            'DashboardHeaderMaterialFrameRenderer/v${playback.cacheVersion}; mode=$mode; '
-            'effect=${snapshot.tuning.effect.name}; '
-            'targetCycleMs=${playback.targetCycleMs}; '
-            'loopMs=${playback.loopDurationMs}; '
-            'realShaderSamples=${playback.frameCount}; '
-            'sampling=${playback.frameCount}x${playback.intervalMs}ms; '
-            'sourceHz=${playback.realShaderSamplesPerSecond.toStringAsFixed(2)}; '
-            'launcherFlipMs=${playback.intervalMs}; '
-            'denseShaderSampling=${playback.usesDenseShaderSampling}; '
-            'texture=${playback.frameSizePx}px; display=current-widget-short-side; '
-            'decoded1=${playback.oneWidgetDecodedBytes}; '
-            'decoded3=${playback.threeWidgetDecodedBytes}; '
-            'channelPng=$channelPngBytes; '
-            'alphaMaskFallback=${playback.applyCircularAlphaMask}; '
-            'loopSeamMeanRgb=${seamMeanRgbDelta.toStringAsFixed(2)}; '
-            '$seamDescription',
-        'frames': frames,
-      });
+      _remember(
+        cacheKey,
+        _CachedOrbMaterialPackage(
+          playback: playback,
+          frames: List<Uint8List>.unmodifiable(frames),
+          phaseOriginUtcMs: phaseOriginUtcMs,
+          seamMeanRgbDelta: timing.loopSeamMeanRgbDelta,
+          seamCandidates: timing.loopCandidates,
+          encodedBytes: channelPngBytes,
+        ),
+      );
+      await _publishFrames(
+        widgetId: widgetId,
+        configurationRevision: configurationRevision,
+        mode: mode,
+        snapshot: snapshot,
+        playback: playback,
+        frames: frames,
+        phaseOriginUtcMs: phaseOriginUtcMs,
+        timing: timing,
+        packageStage: 'complete',
+        seamMeanRgbDelta: timing.loopSeamMeanRgbDelta,
+        seamCandidates: timing.loopCandidates,
+      );
     } finally {
       renderer.dispose();
+    }
+  }
+
+  Future<Image> _renderTexture({
+    required DashboardHeaderMaterialFrameRenderer renderer,
+    required DashboardHeaderMaterialSnapshot snapshot,
+    required Size headerSize,
+    required int orbSizePx,
+    required bool applyCircularAlphaMask,
+    required Duration offset,
+  }) async {
+    final direct = await renderer.renderOrbTexture(
+      snapshot: snapshot,
+      headerSize: headerSize,
+      devicePixelRatio: _devicePixelRatio,
+      orbSizePx: orbSizePx,
+      offset: offset,
+    );
+    if (!applyCircularAlphaMask) return direct;
+    try {
+      return await DashboardHeaderOrbFrameMapper.map(
+        header: direct,
+        orbSizePx: orbSizePx,
+        applyCircularAlphaMask: true,
+      );
+    } finally {
+      direct.dispose();
+    }
+  }
+
+  Future<_LoopSelection> _selectLoopDuration({
+    required DashboardHeaderMaterialFrameRenderer renderer,
+    required DashboardHeaderMaterialSnapshot snapshot,
+    required Size headerSize,
+    required DashboardOrbMaterialPlaybackProfile playback,
+    required Uint8List firstOrbRgba,
+  }) async {
+    final watch = Stopwatch()..start();
+    var bestDurationMs = playback.loopDurationMs;
+    var bestDelta = double.infinity;
+    var candidates = 0;
+    // A finite package cannot reproduce an arbitrarily long non-periodic
+    // field. Search the representable neighbourhood in actual shader output,
+    // rather than treating 2π/speed as proof that the return is seamless.
+    final nominalCount = playback.frameCount;
+    final minimumCount = (nominalCount - 16)
+        .clamp(2, playback.maximumFrameCount)
+        .toInt();
+    final maximumCount = (nominalCount + 16)
+        .clamp(2, playback.maximumFrameCount)
+        .toInt();
+    for (var count = minimumCount; count <= maximumCount; count += 1) {
+      final candidateDurationMs = count * playback.intervalMs;
+      final candidate = await _renderTexture(
+        renderer: renderer,
+        snapshot: snapshot,
+        headerSize: headerSize,
+        orbSizePx: playback.frameSizePx,
+        applyCircularAlphaMask: playback.applyCircularAlphaMask,
+        offset: Duration(milliseconds: candidateDurationMs),
+      );
+      try {
+        final data = await candidate.toByteData(
+          format: ImageByteFormat.rawRgba,
+        );
+        if (data == null) continue;
+        final delta = _meanRgbDelta(firstOrbRgba, data.buffer.asUint8List());
+        candidates += 1;
+        if (delta < bestDelta) {
+          bestDelta = delta;
+          bestDurationMs = candidateDurationMs;
+        }
+      } finally {
+        candidate.dispose();
+      }
+    }
+    watch.stop();
+    return _LoopSelection(
+      durationMs: bestDurationMs,
+      meanRgbDelta: bestDelta.isFinite ? bestDelta : 0,
+      candidateCount: candidates,
+      elapsedMs: watch.elapsedMilliseconds,
+    );
+  }
+
+  Future<void> _publishFrames({
+    required int widgetId,
+    required int configurationRevision,
+    required String mode,
+    required DashboardHeaderMaterialSnapshot snapshot,
+    required DashboardOrbMaterialPlaybackProfile playback,
+    required List<Uint8List> frames,
+    required int phaseOriginUtcMs,
+    required _OrbExportTiming timing,
+    required String packageStage,
+    required double seamMeanRgbDelta,
+    required int seamCandidates,
+  }) async {
+    final beforePublication = Stopwatch()..start();
+    final encodedBytes = frames.fold<int>(
+      0,
+      (sum, frame) => sum + frame.length,
+    );
+    final seam = seamMeanRgbDelta < 0
+        ? 'pending'
+        : seamMeanRgbDelta.toStringAsFixed(2);
+    final description =
+        'HeaderMaterial/v${playback.cacheVersion};stage=$packageStage;mode=$mode;'
+        'effect=${snapshot.tuning.effect.name};loopMs=${playback.loopDurationMs};'
+        'frames=${frames.length};shaderHz=${playback.realShaderSamplesPerSecond.toStringAsFixed(2)};'
+        'texture=${playback.frameSizePx};decoded=${playback.decodedBitmapBytes};png=$encodedBytes;'
+        'seamRgb=$seam;seamCandidates=$seamCandidates;cache=${timing.cacheHit};'
+        'dartMs[d=${timing.debounceMs},scene=${timing.sceneQueryMs},'
+        'shader=${timing.shaderRenderMs},resize=0,png=${timing.pngEncodeMs},'
+        'loop=${timing.loopSelectionMs},first=${timing.firstPublicationMs ?? -1}]';
+    await _channel.invokeMethod<Object?>('publishFrames', <String, Object>{
+      'widgetId': widgetId,
+      'configurationRevision': configurationRevision,
+      'cacheVersion': playback.cacheVersion,
+      'intervalMs': playback.intervalMs,
+      'phaseOriginUtcMs': phaseOriginUtcMs,
+      'requestedAtUtcMs': timing.requestedAt.millisecondsSinceEpoch,
+      'sourceDescription': description,
+      'frames': frames,
+    });
+    beforePublication.stop();
+    timing.nativeWriteAndQueueMs += beforePublication.elapsedMilliseconds;
+    timing.firstPublicationMs ??= DateTime.now()
+        .difference(timing.requestedAt)
+        .inMilliseconds;
+  }
+
+  void _remember(String key, _CachedOrbMaterialPackage package) {
+    _frameCache.remove(key);
+    _frameCache[key] = package;
+    var bytes = _frameCache.values.fold<int>(
+      0,
+      (sum, item) => sum + item.encodedBytes,
+    );
+    while (bytes > _maximumCachedEncodedBytes && _frameCache.length > 1) {
+      final oldest = _frameCache.keys.first;
+      bytes -= _frameCache.remove(oldest)!.encodedBytes;
     }
   }
 
@@ -269,27 +535,20 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     required Uint8List firstOrbRgba,
     required Duration loopDuration,
   }) async {
-    final header = await renderer.render(
+    final orb = await _renderTexture(
+      renderer: renderer,
       snapshot: snapshot,
       headerSize: headerSize,
-      devicePixelRatio: _devicePixelRatio,
+      orbSizePx: targetSizePx,
+      applyCircularAlphaMask: applyCircularAlphaMask,
       offset: loopDuration,
     );
     try {
-      final orb = await DashboardHeaderOrbFrameMapper.map(
-        header: header,
-        orbSizePx: targetSizePx,
-        applyCircularAlphaMask: applyCircularAlphaMask,
-      );
-      try {
-        final data = await orb.toByteData(format: ImageByteFormat.rawRgba);
-        if (data == null) throw StateError('Orb seam RGBA encoding failed.');
-        return _meanRgbDelta(firstOrbRgba, data.buffer.asUint8List());
-      } finally {
-        orb.dispose();
-      }
+      final data = await orb.toByteData(format: ImageByteFormat.rawRgba);
+      if (data == null) throw StateError('Orb seam RGBA encoding failed.');
+      return _meanRgbDelta(firstOrbRgba, data.buffer.asUint8List());
     } finally {
-      header.dispose();
+      orb.dispose();
     }
   }
 
@@ -317,8 +576,65 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     _debounce?.cancel();
     _controller.tuning.removeListener(schedule);
     _controller.portalSettingsGeneration.removeListener(schedule);
+    _controller.orbExportCommitGeneration.removeListener(_scheduleFinal);
     balanceFrame.removeListener(schedule);
     budgetFrame.removeListener(schedule);
     mindFrame.removeListener(schedule);
   }
+}
+
+final class _CachedOrbMaterialPackage {
+  const _CachedOrbMaterialPackage({
+    required this.playback,
+    required this.frames,
+    required this.phaseOriginUtcMs,
+    required this.seamMeanRgbDelta,
+    required this.seamCandidates,
+    required this.encodedBytes,
+  });
+
+  final DashboardOrbMaterialPlaybackProfile playback;
+  final List<Uint8List> frames;
+  final int phaseOriginUtcMs;
+  final double seamMeanRgbDelta;
+  final int seamCandidates;
+  final int encodedBytes;
+}
+
+final class _LoopSelection {
+  const _LoopSelection({
+    required this.durationMs,
+    required this.meanRgbDelta,
+    required this.candidateCount,
+    required this.elapsedMs,
+  });
+
+  final int durationMs;
+  final double meanRgbDelta;
+  final int candidateCount;
+  final int elapsedMs;
+}
+
+/// Timings are persisted through the native frame diagnostics with the
+/// package. They describe publication work only; they never claim that a
+/// launcher has actually displayed a frame.
+final class _OrbExportTiming {
+  _OrbExportTiming({
+    required this.debounceMs,
+    required this.sceneQueryMs,
+    required this.cacheHit,
+    required this.requestedAt,
+  });
+
+  final int debounceMs;
+  final int sceneQueryMs;
+  final bool cacheHit;
+  final DateTime requestedAt;
+  int shaderRenderMs = 0;
+  int pngEncodeMs = 0;
+  int loopSelectionMs = 0;
+  int loopCandidates = 0;
+  double loopSeamMeanRgbDelta = 0;
+  int nativeWriteAndQueueMs = 0;
+  int? firstPublicationMs;
 }

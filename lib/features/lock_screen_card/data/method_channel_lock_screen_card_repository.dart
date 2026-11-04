@@ -17,6 +17,10 @@ final class MethodChannelLockScreenCardRepository
     LockScreenCardConfiguration configuration,
   ) => _read('setLockScreenCard', configuration.toMap());
 
+  @override
+  Future<void> openRuntimeNotificationChannelSettings() =>
+      _channel.invokeMethod<void>('openRuntimeNotificationChannelSettings');
+
   Future<LockScreenCardStatus> _read(
     String method, [
     Map<String, Object?>? arguments,

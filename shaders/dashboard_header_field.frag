@@ -140,6 +140,11 @@ uniform vec4 uTrail24;
 // Retained ABI reserve. Dart publishes at most 25 samples / 24 segments.
 uniform vec4 uTrail25;
 
+// `uSize` remains the Header's authored logical field. An offscreen orb can
+// rasterize that field into a much smaller texture, so fragment coordinates
+// need their own target extent instead of inheriting the logical width.
+uniform vec2 uRasterSize;
+
 out vec4 fragColor;
 
 const float PI = 3.1415926535897932384626433832795;
@@ -1708,7 +1713,7 @@ vec3 liveTouchPoint(vec2 uv, out float alpha) {
 }
 
 void main() {
-  vec2 uv = FlutterFragCoord().xy / max(uSize, vec2(1.0));
+  vec2 uv = FlutterFragCoord().xy / max(uRasterSize, vec2(1.0));
   float waterHighlight;
   float waterShadow;
   // Water deformation happens before every Header material sample, so Portal

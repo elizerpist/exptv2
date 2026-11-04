@@ -4,13 +4,14 @@
 /// offset. The launcher only flips those complete frames: it never blends two
 /// material states, because that creates both a brightness pulse and ghosting
 /// on directional effects such as Deep Drift and Portal.
-const int dashboardOrbMaterialCacheVersion = 4;
+const int dashboardOrbMaterialCacheVersion = 5;
 
 final class DashboardOrbMaterialPlaybackProfile {
   const DashboardOrbMaterialPlaybackProfile._({
     required this.cacheVersion,
     required this.frameCount,
     required this.frameSizePx,
+    required this.maximumFrameCount,
     required this.intervalMs,
     required this.targetCycleMs,
     required this.loopDurationMs,
@@ -18,8 +19,8 @@ final class DashboardOrbMaterialPlaybackProfile {
     required this.applyCircularAlphaMask,
   });
 
-  /// v4 invalidates v3's cross-faded payload. Native keeps an old package
-  /// visible only until a fully validated v4 package is committed.
+  /// v5 invalidates the pre-phase-aligned payload. Native keeps an old package
+  /// visible only until a fully validated v5 package is committed.
   final int cacheVersion;
   final int frameCount;
 
@@ -27,6 +28,7 @@ final class DashboardOrbMaterialPlaybackProfile {
   /// from the AppWidget's physical diameter, which native derives from the
   /// current launcher cell at render time.
   final int frameSizePx;
+  final int maximumFrameCount;
   final int intervalMs;
   final int targetCycleMs;
   final int loopDurationMs;
@@ -41,6 +43,27 @@ final class DashboardOrbMaterialPlaybackProfile {
   int get oneWidgetDecodedBytes => decodedBitmapBytes;
   int get threeWidgetDecodedBytes => decodedBitmapBytes * 3;
   double get realShaderSamplesPerSecond => 1000 / intervalMs;
+
+  /// Keeps the authored dt intact while selecting a seam-tested finite loop.
+  /// Only a whole number of existing source samples can be selected, so the
+  /// shader motion never gets sped up or slowed down to make a package fit.
+  DashboardOrbMaterialPlaybackProfile withLoopDurationMs(int durationMs) {
+    if (frameCount == 1) return this;
+    final count = (durationMs ~/ intervalMs)
+        .clamp(2, maximumFrameCount)
+        .toInt();
+    return DashboardOrbMaterialPlaybackProfile._(
+      cacheVersion: cacheVersion,
+      frameCount: count,
+      frameSizePx: frameSizePx,
+      maximumFrameCount: maximumFrameCount,
+      intervalMs: intervalMs,
+      targetCycleMs: targetCycleMs,
+      loopDurationMs: count * intervalMs,
+      usesDenseShaderSampling: usesDenseShaderSampling,
+      applyCircularAlphaMask: applyCircularAlphaMask,
+    );
+  }
 
   /// Resolves source sampling and texture size under the exact raw bitmap
   /// budget Android validates on receipt. Animated profiles target thirty
@@ -61,6 +84,7 @@ final class DashboardOrbMaterialPlaybackProfile {
         cacheVersion: dashboardOrbMaterialCacheVersion,
         frameCount: 1,
         frameSizePx: preferredTexture,
+        maximumFrameCount: 1,
         intervalMs: 1000,
         targetCycleMs: 1000,
         loopDurationMs: 1000,
@@ -132,6 +156,7 @@ final class DashboardOrbMaterialPlaybackProfile {
       cacheVersion: dashboardOrbMaterialCacheVersion,
       frameCount: frameCount,
       frameSizePx: frameSize,
+      maximumFrameCount: frameLimit,
       intervalMs: intervalMs,
       targetCycleMs: targetCycle,
       loopDurationMs: frameCount * intervalMs,

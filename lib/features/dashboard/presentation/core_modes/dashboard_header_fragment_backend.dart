@@ -254,11 +254,12 @@ final class DashboardHeaderFragmentPortalInput {
 /// owns the entire palette field; keeping this layout explicit prevents a
 /// later bank insertion from silently redirecting Portal values.
 abstract final class DashboardHeaderFragmentUniformLayout {
-  // v5 adds a logically-pixel-sized live touch point. v4 changed every trail
+  // v6 adds a separate raster extent. v5 adds a logically-pixel-sized live
+  // touch point. v4 changed every trail
   // vec4 from an isolated
   // dot's `(x, y, opacity, scale)` to a connected-path vertex's
   // `(x, y, ageSeconds, signedVelocity)`.
-  static const int version = 5;
+  static const int version = 6;
   static const int canonicalGradientStopCapacity = 10;
   // The v3 uniform bank reserves ten colour positions for index stability,
   // but the accepted Budget Header projects the authored Cool scale into its
@@ -305,7 +306,8 @@ abstract final class DashboardHeaderFragmentUniformLayout {
   static const int tapVisualStart = 255;
   static const int liveTouchStart = 262;
   static const int trailStart = 269;
-  static const int floatCount = 373;
+  static const int rasterSizeStart = 373;
+  static const int floatCount = 375;
 
   /// Emits exactly the scalar order declared in
   /// `dashboard_header_field.frag`. The production writer supplies
@@ -313,6 +315,7 @@ abstract final class DashboardHeaderFragmentUniformLayout {
   /// detached test serialization.
   static void write({
     required Size size,
+    Size? rasterSize,
     required DashboardHeaderFragmentPaintInput input,
     required void Function(int index, double value) setFloat,
   }) {
@@ -426,6 +429,10 @@ abstract final class DashboardHeaderFragmentUniformLayout {
       f(trail.age);
       f(trail.signedVelocity);
     }
+    assert(index == rasterSizeStart);
+    final raster = rasterSize ?? size;
+    f(raster.width);
+    f(raster.height);
     assert(index == floatCount);
   }
 
@@ -535,6 +542,7 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
     Size size, {
     required DashboardHeaderFragmentRenderPlan plan,
     required DashboardHeaderFragmentPaintInput input,
+    Size? rasterSize,
   }) {
     final shader = _shader;
     if (shader == null ||
@@ -542,7 +550,7 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
         size.isEmpty) {
       return false;
     }
-    _writeUniforms(shader, size, input);
+    _writeUniforms(shader, size, input, rasterSize: rasterSize);
     canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
     return true;
   }
@@ -550,13 +558,15 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
   void _writeUniforms(
     ui.FragmentShader shader,
     Size size,
-    DashboardHeaderFragmentPaintInput input,
-  ) {
+    DashboardHeaderFragmentPaintInput input, {
+    Size? rasterSize,
+  }) {
     _phaseUniformWriteCount += 1;
     _firstPhaseUniformWrite ??= input.phase;
     _latestPhaseUniformWrite = input.phase;
     DashboardHeaderFragmentUniformLayout.write(
       size: size,
+      rasterSize: rasterSize,
       input: input,
       setFloat: shader.setFloat,
     );

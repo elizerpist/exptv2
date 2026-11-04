@@ -364,6 +364,23 @@ class MainActivity : FlutterActivity() {
                     }
                     return@setMethodCallHandler
                 }
+                if (call.method == "openRuntimeNotificationChannelSettings") {
+                    val intent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        android.content.Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+                            .putExtra(
+                                android.provider.Settings.EXTRA_CHANNEL_ID,
+                                com.fluvi.app.runtime.FluviRuntimeNotificationController.CHANNEL_ID,
+                            )
+                    } else {
+                        android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+                    }.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { startActivity(intent) }
+                        .onSuccess { result.success(true) }
+                        .onFailure { result.error("notification_settings", it.message, null) }
+                    return@setMethodCallHandler
+                }
                 try {
                     val status = when (call.method) {
                         "getRuntimeStatus" -> FluviRuntimeCoordinator.status(applicationContext)
@@ -952,7 +969,11 @@ class MainActivity : FlutterActivity() {
                                         ?: throw IllegalArgumentException("Missing orb material cache version.")
                                     val intervalMs = (values["intervalMs"] as? Number)?.toInt()
                                         ?: throw IllegalArgumentException("Missing frame interval.")
-                                    // v4 is intentionally opaque-frame only.
+                                    val phaseOriginUtcMs = (values["phaseOriginUtcMs"] as? Number)?.toLong()
+                                        ?: throw IllegalArgumentException("Missing orb phase origin.")
+                                    val requestedAtUtcMs = (values["requestedAtUtcMs"] as? Number)?.toLong()
+                                        ?: throw IllegalArgumentException("Missing orb export request time.")
+                                    // v5 is intentionally opaque-frame only.
                                     // Display geometry belongs to the current
                                     // AppWidget options, never this package.
                                     val transitionDurationMs = 0
@@ -968,24 +989,34 @@ class MainActivity : FlutterActivity() {
                                     require(current.configurationRevision == revision) {
                                         "Stale orb material publication."
                                     }
-                                    OrbMaterialFrameStore.write(
+                                    val writeTiming = OrbMaterialFrameStore.write(
                                         context = applicationContext,
                                         widgetId = widgetId,
                                         configurationRevision = revision,
                                         cacheVersion = cacheVersion,
                                         intervalMs = intervalMs,
+                                        phaseOriginUtcMs = phaseOriginUtcMs,
                                         transitionDurationMs = transitionDurationMs,
                                         displaySizePx = displaySizePx,
                                         frames = frames,
                                         sourceDescription = description.take(512),
                                     )
-                                    FluviOrbWidgetProvider.renderAsync(
+                                    com.fluvi.app.widget.orb.OrbFrameRenderDiagnostics.materialStored(
+                                        applicationContext,
+                                        widgetId,
+                                        writeTiming,
+                                        requestedAtUtcMs,
+                                    )
+                                    FluviOrbWidgetProvider.renderCommittedMaterial(
                                         applicationContext,
                                         android.appwidget.AppWidgetManager.getInstance(applicationContext),
-                                        intArrayOf(widgetId),
-                                        reason = "flutterMaterialExport",
+                                        widgetId,
                                     )
-                                    null
+                                    mapOf(
+                                        "nativeSaveMs" to writeTiming.nativeSaveMs,
+                                        "nativeDecodeMs" to writeTiming.nativeDecodeMs,
+                                        "remoteViewsPublication" to "queued",
+                                    )
                                 }
                                 else -> throw IllegalArgumentException("Unknown orb material method: ${call.method}")
                             }

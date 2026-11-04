@@ -212,11 +212,11 @@ internal object OrbBalancePaletteCompatibility {
         colors.map { Color.parseColor("#$it") }.toIntArray()
 }
 
-/** v4 removes crossfades and decouples physical diameter from texture size.
- * Keep earlier packages readable so an already-installed widget remains
- * visible until Flutter has successfully committed a complete v4 package. */
+/** v5 keeps opaque frames, phase-aligned replacement and a texture/diameter
+ * split. Keep earlier packages readable so an already-installed widget stays
+ * visible until a complete v5 package has committed. */
 internal object OrbMaterialPlaybackContract {
-    const val cacheVersion = 4
+    const val cacheVersion = 5
     const val legacyCacheVersion = 2
     const val minimumFrameCount = 1
     // 175 × 32² × 4 = 716,800 bytes, exactly the 700 KiB decoded cap.
@@ -237,8 +237,16 @@ internal data class OrbFramePlan(
     val transitionDurationMs: Int = 0,
     val displaySizePx: Int = sizePx,
     val cacheVersion: Int = OrbMaterialPlaybackContract.cacheVersion,
+    /** Wall-clock origin shared by starter and complete packages. */
+    val phaseOriginUtcMs: Long = 0,
 ) {
     val estimatedRawBytes: Long get() = sizePx.toLong() * sizePx * frameCount * 4L
+
+    fun initialFrameIndex(nowUtcMs: Long = System.currentTimeMillis()): Int {
+        if (frameCount <= 1 || intervalMs <= 0 || phaseOriginUtcMs <= 0) return 0
+        val elapsed = (nowUtcMs - phaseOriginUtcMs).coerceAtLeast(0)
+        return ((elapsed / intervalMs) % frameCount).toInt()
+    }
 }
 
 internal data class OrbFrameSequence(
@@ -249,6 +257,11 @@ internal data class OrbFrameSequence(
     val encodedBytes: Long = plan.estimatedRawBytes,
     /** Records whether these pixels came from Flutter's Header or fallback. */
     val sourceDescription: String = "native-static-fallback",
+)
+
+internal data class OrbMaterialStoreWriteTiming(
+    val nativeSaveMs: Long,
+    val nativeDecodeMs: Long,
 )
 
 /**
@@ -309,11 +322,14 @@ internal object OrbMaterialFrameStore {
         configurationRevision: Long,
         cacheVersion: Int,
         intervalMs: Int,
+        phaseOriginUtcMs: Long,
         transitionDurationMs: Int,
         displaySizePx: Int,
         frames: List<ByteArray>,
         sourceDescription: String,
-    ) {
+    ): OrbMaterialStoreWriteTiming {
+        val writeStartedAt = System.nanoTime()
+        var decodeMs = 0L
         require(cacheVersion == OrbMaterialPlaybackContract.cacheVersion) {
             "Unexpected orb material cache version $cacheVersion."
         }
@@ -327,7 +343,10 @@ internal object OrbMaterialFrameStore {
             "Orb material interval is outside its launcher-safe range."
         }
         require(transitionDurationMs == 0) {
-            "Orb v4 plays opaque complete frames and does not support crossfades."
+            "Orb v5 plays opaque complete frames and does not support crossfades."
+        }
+        require(phaseOriginUtcMs > 0) {
+            "Orb material package needs a phase origin."
         }
         val application = context.applicationContext
         val directory = File(application.filesDir, directoryName).apply { mkdirs() }
@@ -343,10 +362,12 @@ internal object OrbMaterialFrameStore {
         }
         val published = mutableListOf<File>()
         try {
+            val decodeStartedAt = System.nanoTime()
             val decoded = staged.map { file ->
                 BitmapFactory.decodeFile(file.absolutePath)
                     ?: throw IllegalArgumentException("Invalid orb material PNG.")
             }
+            decodeMs = (System.nanoTime() - decodeStartedAt) / 1_000_000
             try {
                 require(decoded.all { bitmap ->
                     bitmap.width == bitmap.height &&
@@ -383,6 +404,7 @@ internal object OrbMaterialFrameStore {
             .putInt("$widgetId.format", cacheVersion)
             .putInt("$widgetId.count", frames.size)
             .putInt("$widgetId.interval", intervalMs)
+            .putLong("$widgetId.phaseOrigin", phaseOriginUtcMs)
             .putInt("$widgetId.transition", 0)
             // A package never owns physical display geometry. Keep this key
             // only for v2/v3 preference compatibility; rendering derives the
@@ -397,6 +419,10 @@ internal object OrbMaterialFrameStore {
             throw IllegalStateException("Unable to commit orb material package.")
         }
         previousPackage?.let { deletePackage(directory, it) }
+        return OrbMaterialStoreWriteTiming(
+            nativeSaveMs = (System.nanoTime() - writeStartedAt) / 1_000_000,
+            nativeDecodeMs = decodeMs,
+        )
     }
 
     fun sequenceFor(
@@ -448,6 +474,10 @@ internal object OrbMaterialFrameStore {
                 transitionDurationMs = 0,
                 displaySizePx = size,
                 cacheVersion = cacheVersion,
+                phaseOriginUtcMs = preferences.getLong(
+                    "${configuration.appWidgetId}.phaseOrigin",
+                    preferences.getLong("${configuration.appWidgetId}.renderedAt", 0),
+                ),
             ),
             frames = bitmaps,
             encodedBytes = preferences.getLong(
@@ -474,7 +504,7 @@ internal object OrbMaterialFrameStore {
                 }
                 listOf(
                     "package", "revision", "format", "count", "interval", "transition",
-                    "displaySize", "encodedBytes", "source", "renderedAt",
+                    "displaySize", "encodedBytes", "source", "renderedAt", "phaseOrigin",
                 )
                     .forEach { suffix -> editor.remove("$widgetId.$suffix") }
             }
@@ -524,24 +554,58 @@ internal object OrbFrameRenderDiagnostics {
         widgetId: Int,
         profile: OrbCompatibilityVisualProfile,
         sequence: OrbFrameSequence,
+        reason: String,
+        displaySizePx: Int,
+        remoteViewsBuildAndPublishMs: Long,
     ) {
-        context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+        val preferences = context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val requestedAt = preferences.getLong("$widgetId.exportRequestedAtUtcMs", 0)
+        val editor = preferences
             .edit()
-            .putLong("$widgetId.snapshotResolvedAt", System.currentTimeMillis())
-            .putLong("$widgetId.framesRenderedAt", System.currentTimeMillis())
-            .putLong("$widgetId.remoteViewsPublishedAt", System.currentTimeMillis())
+            .putLong("$widgetId.snapshotResolvedAt", now)
+            .putLong("$widgetId.framesRenderedAt", now)
+            .putLong("$widgetId.remoteViewsPublishedAt", now)
             .putString("$widgetId.profile", profile.cacheKey.hashCode().toString())
             .putString("$widgetId.backend", sequence.sourceDescription)
             .putInt("$widgetId.frameCount", sequence.plan.frameCount)
             .putInt("$widgetId.frameSizePx", sequence.plan.sizePx)
-            .putInt("$widgetId.displaySizePx", sequence.plan.displaySizePx)
+            .putInt("$widgetId.displaySizePx", displaySizePx)
             .putInt("$widgetId.cacheVersion", sequence.plan.cacheVersion)
             .putInt("$widgetId.intervalMs", sequence.plan.intervalMs)
             .putInt("$widgetId.transitionDurationMs", sequence.plan.transitionDurationMs)
             .putLong("$widgetId.channelEncodedBytes", sequence.encodedBytes)
             .putLong("$widgetId.estimatedRawBytes", sequence.plan.estimatedRawBytes)
             .putLong("$widgetId.threeWidgetEstimatedRawBytes", sequence.plan.estimatedRawBytes * 3L)
+            .putLong("$widgetId.phaseOriginUtcMs", sequence.plan.phaseOriginUtcMs)
+            .putInt("$widgetId.initialFrameIndex", sequence.plan.initialFrameIndex())
+            .putString("$widgetId.publicationReason", reason)
+            .putLong("$widgetId.remoteViewsBuildAndPublishMs", remoteViewsBuildAndPublishMs)
+            .putBoolean("$widgetId.playbackContinued", false)
             .remove("$widgetId.lastFailure")
+        if (reason == "flutterMaterialExport" && requestedAt > 0) {
+            when {
+                sequence.sourceDescription.contains("stage=starter") ->
+                    editor.putLong("$widgetId.firstCorrectRemoteViewsMs", now - requestedAt)
+                sequence.sourceDescription.contains("stage=complete") ->
+                    editor.putLong("$widgetId.completeRemoteViewsMs", now - requestedAt)
+            }
+        }
+        editor.apply()
+    }
+
+    fun continued(
+        context: Context,
+        widgetId: Int,
+        reason: String,
+        sequence: OrbFrameSequence,
+    ) {
+        context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+            .edit()
+            .putLong("$widgetId.playbackContinuedAt", System.currentTimeMillis())
+            .putString("$widgetId.publicationReason", reason)
+            .putString("$widgetId.backend", sequence.sourceDescription)
+            .putBoolean("$widgetId.playbackContinued", true)
             .apply()
     }
 
@@ -550,6 +614,21 @@ internal object OrbFrameRenderDiagnostics {
             .edit()
             .putLong("$widgetId.lastFailureAt", System.currentTimeMillis())
             .putString("$widgetId.lastFailure", failure.javaClass.simpleName)
+            .apply()
+    }
+
+    fun materialStored(
+        context: Context,
+        widgetId: Int,
+        timing: OrbMaterialStoreWriteTiming,
+        requestedAtUtcMs: Long,
+    ) {
+        context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+            .edit()
+            .putLong("$widgetId.nativeSaveMs", timing.nativeSaveMs)
+            .putLong("$widgetId.nativeDecodeMs", timing.nativeDecodeMs)
+            .putLong("$widgetId.nativeStoredAt", System.currentTimeMillis())
+            .putLong("$widgetId.exportRequestedAtUtcMs", requestedAtUtcMs)
             .apply()
     }
 }
