@@ -2429,9 +2429,9 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   /// Animation phase ticks never publish through this notifier.
   final ValueNotifier<int> portalSettingsGeneration;
 
-  /// A slider's drag samples remain debounced for the launcher export; its
+  /// A slider's drag samples remain coalesced for the launcher export; its
   /// release increments this notifier so the final selected material is not
-  /// left behind a trailing debounce window.
+  /// left behind a trailing coalescing window.
   final ValueNotifier<int> orbExportCommitGeneration;
 
   /// Source/app-added tap-wave settings rebuild only the respective tuner
