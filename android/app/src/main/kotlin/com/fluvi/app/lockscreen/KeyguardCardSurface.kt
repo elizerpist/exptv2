@@ -36,6 +36,7 @@ internal data class KeyguardWindowSnapshot(
     val displayId: Int,
     val ownOverlay: Boolean = false,
     val visibleViewIds: Set<String> = emptySet(),
+    val windowId: Int = -1,
 )
 
 internal object KeyguardSurfaceClassifier {

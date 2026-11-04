@@ -236,6 +236,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val signals: KeyguardCardSignals,
         val decision: KeyguardCardVisibility,
         val surfaceReason: KeyguardSurfaceReason,
+        val ownOverlayWindowId: Int? = null,
     )
 
     private data class SystemWindowsRead(
@@ -267,7 +268,12 @@ class FluviKeyguardCardService : AccessibilityService() {
             walkTruncated = read.walkTruncated,
         )
         val signals = quickSignals(settings, classification.surface)
-        return Inspection(signals, KeyguardCardVisibilityPolicy.decide(signals), classification.reason)
+        return Inspection(
+            signals,
+            KeyguardCardVisibilityPolicy.decide(signals),
+            classification.reason,
+            read.snapshots.firstOrNull { it.ownOverlay }?.windowId?.takeIf { it >= 0 },
+        )
     }
 
     private fun quickSignals(settings: KeyguardCardSettings, surface: KeyguardSurface): KeyguardCardSignals {
@@ -302,6 +308,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
             root?.recycle()
             KeyguardWindowSnapshot(
+                windowId = window.id,
                 packageName = rootPackage,
                 type = window.type,
                 layer = window.layer,
@@ -349,6 +356,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         expectedEpoch: Long,
         trigger: String,
     ) {
+        inspection.ownOverlayWindowId?.let(overlay::recordAccessibilityWindowId)
         // A stale Binder walk has no authority over a newer session/epoch.
         // In particular, it must not remove an overlay attached by a later
         // wake inspection.

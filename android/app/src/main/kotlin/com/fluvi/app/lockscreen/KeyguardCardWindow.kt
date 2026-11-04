@@ -2,7 +2,6 @@ package com.fluvi.app.lockscreen
 
 import android.content.Context
 import android.graphics.PixelFormat
-import android.os.SystemClock
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -40,7 +39,6 @@ internal class KeyguardCardWindow(
     private var appliedPresentation: FluviFinancialCardPresentation? = null
     private var appliedGeometry: Geometry? = null
     private var accessibilityWindowId: Int? = null
-    private var attachedAtElapsedMs = Long.MIN_VALUE
 
     val isAttached: Boolean get() = lifecycle.isAttached()
 
@@ -49,14 +47,14 @@ internal class KeyguardCardWindow(
      * service will inspect it rather than treating it as safe. */
     fun isOwnAccessibilityWindow(windowId: Int): Boolean {
         checkMainThread()
-        refreshAccessibilityWindowId()
         return lifecycle.isAttached() && accessibilityWindowId == windowId
     }
 
-    fun attachedAgeMs(): Long = if (lifecycle.isAttached()) {
-        (SystemClock.elapsedRealtime() - attachedAtElapsedMs).coerceAtLeast(0L)
-    } else {
-        Long.MAX_VALUE
+    /** The service learns this from public AccessibilityWindowInfo.id while
+     * inspecting its own overlay; View has no public window-id accessor. */
+    fun recordAccessibilityWindowId(windowId: Int) {
+        checkMainThread()
+        if (lifecycle.isAttached() && windowId >= 0) accessibilityWindowId = windowId
     }
 
     fun showOrUpdate(presentation: FluviFinancialCardPresentation, verticalOffsetDp: Int): Result {
@@ -80,8 +78,6 @@ internal class KeyguardCardWindow(
                         lifecycle.onAttachSucceeded()
                         appliedPresentation = presentation
                         appliedGeometry = geometry
-                        attachedAtElapsedMs = SystemClock.elapsedRealtime()
-                        refreshAccessibilityWindowId()
                         Result.ATTACHED
                     },
                     onFailure = {
@@ -137,7 +133,6 @@ internal class KeyguardCardWindow(
             appliedPresentation = null
             appliedGeometry = null
             accessibilityWindowId = null
-            attachedAtElapsedMs = Long.MIN_VALUE
         } else {
             lifecycle.onUpdateFailed(stillAttached = true)
         }
@@ -175,11 +170,6 @@ internal class KeyguardCardWindow(
                 contentDescription = if (presentation.showToggle) presentation.toggleLabel else null
             }
         }
-    }
-
-    private fun refreshAccessibilityWindowId() {
-        val candidate = root?.accessibilityWindowId ?: return
-        if (candidate >= 0) accessibilityWindowId = candidate
     }
 
     private fun geometry(verticalOffsetDp: Int): Geometry {
