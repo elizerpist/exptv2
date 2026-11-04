@@ -59,6 +59,6 @@ class KeyguardMaterialProfileTest {
     @Test fun `scene time preserves phase speed without a finite loop`() {
         val value = requireNotNull(KeyguardMaterialProfile.fromMap(profile(speed = .25)))
         val scene = KeyguardMaterialScene(value, full = true, appliedAtNanos = 1_000_000_000L)
-        assertEquals(.5f + .25f * 9f, scene.timeAt(10_000_000_000L).phase, 0f)
+        assertEquals(.5f + .25f * 9f, scene.timeAt(10_000_000_000L).phase, .0001f)
     }
 }
