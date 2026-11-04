@@ -228,11 +228,11 @@ class _LockScreenCardPageState extends State<LockScreenCardPage> {
           const Card(
             child: ListTile(
               leading: Icon(Icons.info_outline),
-              title: Text('Nem önálló Nothing-zárképernyőwidget'),
+              title: Text('Zárképernyős értesítés, nem önálló widget'),
               subtitle: Text(
-                'A Nothing OS zárképernyős widgetfelülete nem kínál fel '
-                'külső Android AppWidgetProvidert. A Fluvi pillanatképe '
-                'ezért rendszerértesítésként jelenhet meg a zárolt képernyőn.',
+                'A Fluvi pillanatképe jelenleg rendszerértesítésként jelenhet '
+                'meg a zárolt képernyőn. A külső Android-zárképernyőwidgetek '
+                'tényleges támogatását a telefon widgetválasztója dönti el.',
               ),
             ),
           ),
