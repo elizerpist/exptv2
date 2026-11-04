@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'dashboard_orb_material_playback_profile.dart';
 
 /// Foreground bridge from Dashboard's authoritative material renderer to the
 /// persisted native AppWidget frame bundle. It listens to semantic material
@@ -83,10 +84,17 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
         final revision = raw['configurationRevision'] as int?;
         final mode = raw['mode'] as String?;
         final orbSize = raw['frameSizePx'] as int?;
+        final cacheVersion = raw['cacheVersion'] as int?;
+        final maximumFrameCount = raw['maximumFrameCount'] as int?;
+        final maximumDecodedBytes = raw['maximumDecodedBytes'] as int?;
+        final requiresAlphaMask = raw['requiresAlphaMask'] as bool? ?? false;
         if (widgetId == null ||
             revision == null ||
             mode == null ||
-            orbSize == null) {
+            orbSize == null ||
+            cacheVersion != dashboardOrbMaterialCacheVersion ||
+            maximumFrameCount == null ||
+            maximumDecodedBytes == null) {
           continue;
         }
         // This handover deliberately enables only Balance. Budget's category
@@ -105,6 +113,9 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
           configurationRevision: revision,
           mode: mode,
           targetSizePx: orbSize,
+          maximumFrameCount: maximumFrameCount,
+          maximumDecodedBytes: maximumDecodedBytes,
+          requiresAlphaMask: requiresAlphaMask,
           frame: frame,
           headerSize: size,
         );
@@ -127,6 +138,9 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     required int configurationRevision,
     required String mode,
     required int targetSizePx,
+    required int maximumFrameCount,
+    required int maximumDecodedBytes,
+    required bool requiresAlphaMask,
     required DashboardHeaderVisualFrame frame,
     required Size headerSize,
   }) async {
@@ -134,25 +148,31 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       controller: _controller,
       frame: frame,
     );
-    final frameCount = snapshot.isAnimated ? 24 : 1;
-    final intervalMs = snapshot.isAnimated
-        ? (snapshot.characteristicCycleMs / frameCount).round().clamp(40, 60000)
-        : 1000;
+    final playback = DashboardOrbMaterialPlaybackProfile.resolve(
+      isAnimated: snapshot.isAnimated,
+      requiresDenseShaderSampling: snapshot.requiresDenseOrbSampling,
+      characteristicCycleMs: snapshot.characteristicCycleMs,
+      preferredDisplaySizePx: targetSizePx,
+      maximumFrameCount: maximumFrameCount,
+      maximumDecodedBytes: maximumDecodedBytes,
+      applyCircularAlphaMask: requiresAlphaMask,
+    );
     final renderer = DashboardHeaderMaterialFrameRenderer();
     try {
       final frames = <Uint8List>[];
       Uint8List? firstOrbRgba;
-      for (var index = 0; index < frameCount; index += 1) {
+      for (var index = 0; index < playback.frameCount; index += 1) {
         final header = await renderer.render(
           snapshot: snapshot,
           headerSize: headerSize,
           devicePixelRatio: _devicePixelRatio,
-          offset: Duration(milliseconds: intervalMs * index),
+          offset: Duration(milliseconds: playback.intervalMs * index),
         );
         try {
           final orb = await DashboardHeaderOrbFrameMapper.map(
             header: header,
-            orbSizePx: targetSizePx,
+            orbSizePx: playback.frameSizePx,
+            applyCircularAlphaMask: playback.applyCircularAlphaMask,
           );
           try {
             if (index == 0) {
@@ -172,15 +192,19 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
           header.dispose();
         }
       }
-      final loopDurationMs = intervalMs * frameCount;
+      final channelPngBytes = frames.fold<int>(
+        0,
+        (sum, frame) => sum + frame.length,
+      );
       final seamMeanRgbDelta = snapshot.isAnimated
           ? await _loopSeamMeanRgbDelta(
               renderer: renderer,
               snapshot: snapshot,
               headerSize: headerSize,
-              targetSizePx: targetSizePx,
+              targetSizePx: playback.frameSizePx,
+              applyCircularAlphaMask: playback.applyCircularAlphaMask,
               firstOrbRgba: firstOrbRgba!,
-              loopDuration: Duration(milliseconds: loopDurationMs),
+              loopDuration: Duration(milliseconds: playback.loopDurationMs),
             )
           : 0.0;
       final seamDescription = snapshot.isAnimated
@@ -191,13 +215,25 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       await _channel.invokeMethod<void>('publishFrames', <String, Object>{
         'widgetId': widgetId,
         'configurationRevision': configurationRevision,
-        'intervalMs': intervalMs,
+        'cacheVersion': playback.cacheVersion,
+        'intervalMs': playback.intervalMs,
+        'transitionDurationMs': playback.transitionDurationMs,
+        'displaySizePx': playback.displaySizePx,
         'sourceDescription':
-            'DashboardHeaderMaterialFrameRenderer; mode=$mode; '
+            'DashboardHeaderMaterialFrameRenderer/v${playback.cacheVersion}; mode=$mode; '
             'effect=${snapshot.tuning.effect.name}; '
-            'targetCycleMs=${snapshot.characteristicCycleMs}; '
-            'loopMs=$loopDurationMs; '
-            'sampling=${frameCount}x${intervalMs}ms; '
+            'targetCycleMs=${playback.targetCycleMs}; '
+            'loopMs=${playback.loopDurationMs}; '
+            'realShaderSamples=${playback.frameCount}; '
+            'sampling=${playback.frameCount}x${playback.intervalMs}ms; '
+            'sourceHz=${playback.realShaderSamplesPerSecond.toStringAsFixed(2)}; '
+            'crossfadeMs=${playback.transitionDurationMs}; '
+            'denseShaderSampling=${playback.usesDenseShaderSampling}; '
+            'texture=${playback.frameSizePx}px; display=${playback.displaySizePx}px; '
+            'decoded1=${playback.oneWidgetDecodedBytes}; '
+            'decoded3=${playback.threeWidgetDecodedBytes}; '
+            'channelPng=$channelPngBytes; '
+            'alphaMaskFallback=${playback.applyCircularAlphaMask}; '
             'loopSeamMeanRgb=${seamMeanRgbDelta.toStringAsFixed(2)}; '
             '$seamDescription',
         'frames': frames,
@@ -212,6 +248,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     required DashboardHeaderMaterialSnapshot snapshot,
     required Size headerSize,
     required int targetSizePx,
+    required bool applyCircularAlphaMask,
     required Uint8List firstOrbRgba,
     required Duration loopDuration,
   }) async {
@@ -225,6 +262,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       final orb = await DashboardHeaderOrbFrameMapper.map(
         header: header,
         orbSizePx: targetSizePx,
+        applyCircularAlphaMask: applyCircularAlphaMask,
       );
       try {
         final data = await orb.toByteData(format: ImageByteFormat.rawRgba);
@@ -245,7 +283,8 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     var total = 0;
     var samples = 0;
     for (var index = 0; index < first.length; index += 4) {
-      // The transparent square corners are not part of the visible orb.
+      // v3 normally clips in the launcher. The legacy alpha-mask fallback
+      // keeps its transparent corners, which are intentionally excluded.
       if (first[index + 3] == 0 || repeated[index + 3] == 0) continue;
       total += (first[index] - repeated[index]).abs();
       total += (first[index + 1] - repeated[index + 1]).abs();

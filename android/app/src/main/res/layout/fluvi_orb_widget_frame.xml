@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A single ViewFlipper child. Its bitmap contains transparent pixels outside
-     the orb, so the launcher wallpaper remains visible around the circle. -->
+<!-- A single ViewFlipper child. The v3 normal path is a full square material
+     texture; its parent clips the complete outgoing/incoming layer pair. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -11,5 +11,5 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:contentDescription="@null"
-        android:scaleType="fitCenter" />
+        android:scaleType="fitXY" />
 </FrameLayout>

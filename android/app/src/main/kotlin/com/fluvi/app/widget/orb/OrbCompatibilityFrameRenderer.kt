@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.os.Build
 import java.io.File
 import java.util.LinkedHashMap
 import kotlin.math.floor
@@ -211,10 +212,36 @@ internal object OrbBalancePaletteCompatibility {
         colors.map { Color.parseColor("#$it") }.toIntArray()
 }
 
+/** v3 is the first package whose edge is clipped by the host, not rasterised
+ * into each frame. Keep v2 readable so an already-installed widget remains
+ * visible until Flutter has successfully committed a complete v3 package. */
+internal object OrbMaterialPlaybackContract {
+    const val cacheVersion = 3
+    const val legacyCacheVersion = 2
+    const val minimumFrameCount = 1
+    const val maximumFrameCount = 160
+    const val minimumFrameSizePx = 32
+    const val maximumFrameSizePx = 128
+    const val minimumFlipIntervalMs = 16
+    const val maximumFlipIntervalMs = 60_000
+    const val maximumEncodedBytes = 2 * 1024 * 1024
+    const val maximumDecodedBytes = 700L * 1024L
+
+    /** Every value has a matching fixed XML alpha animation. */
+    val transitionDurationsMs = setOf(
+        40, 60, 80, 100, 120, 140, 160, 180, 190, 200, 220, 240,
+        280, 320, 400, 500, 600, 800, 1000, 2000, 4000, 8000,
+        16000, 32000, 60000,
+    )
+}
+
 internal data class OrbFramePlan(
     val sizePx: Int,
     val frameCount: Int,
     val intervalMs: Int,
+    val transitionDurationMs: Int = 0,
+    val displaySizePx: Int = sizePx,
+    val cacheVersion: Int = OrbMaterialPlaybackContract.cacheVersion,
 ) {
     val estimatedRawBytes: Long get() = sizePx.toLong() * sizePx * frameCount * 4L
 }
@@ -223,6 +250,8 @@ internal data class OrbFrameSequence(
     val profileKey: String,
     val plan: OrbFramePlan,
     val frames: List<Bitmap>,
+    /** PNG bytes crossing Flutter's method channel before they are decoded. */
+    val encodedBytes: Long = plan.estimatedRawBytes,
     /** Records whether these pixels came from Flutter's Header or fallback. */
     val sourceDescription: String = "native-static-fallback",
 )
@@ -236,9 +265,6 @@ internal data class OrbFrameSequence(
 internal object OrbMaterialFrameStore {
     private const val preferencesName = "fluvi_orb_material_frames"
     private const val directoryName = "fluvi-orb-material-frames"
-    private const val maximumFrameCount = 24
-    private const val maximumEncodedBytes = 2 * 1024 * 1024
-    private const val maximumFlipIntervalMs = 60_000
 
     data class Target(
         val widgetId: Int,
@@ -248,6 +274,10 @@ internal object OrbMaterialFrameStore {
         val direction: String,
         val categoryId: String?,
         val preferredSizePx: Int,
+        val cacheVersion: Int,
+        val maximumFrameCount: Int,
+        val maximumDecodedBytes: Long,
+        val requiresAlphaMask: Boolean,
     )
 
     fun targets(context: Context): List<Target> {
@@ -266,6 +296,13 @@ internal object OrbMaterialFrameStore {
                         context = context,
                         options = manager.getAppWidgetOptions(widgetId),
                     ).sizePx,
+                    cacheVersion = OrbMaterialPlaybackContract.cacheVersion,
+                    maximumFrameCount = OrbMaterialPlaybackContract.maximumFrameCount,
+                    maximumDecodedBytes = OrbMaterialPlaybackContract.maximumDecodedBytes,
+                    // API 31 supplies RemoteViews layout/outline actions. It
+                    // is the normal Nothing/API 35 path; older hosts retain
+                    // a filtered alpha mask in their source texture.
+                    requiresAlphaMask = Build.VERSION.SDK_INT < Build.VERSION_CODES.S,
                 )
             }
         }.filterNotNull()
@@ -275,16 +312,30 @@ internal object OrbMaterialFrameStore {
         context: Context,
         widgetId: Int,
         configurationRevision: Long,
+        cacheVersion: Int,
         intervalMs: Int,
+        transitionDurationMs: Int,
+        displaySizePx: Int,
         frames: List<ByteArray>,
         sourceDescription: String,
     ) {
-        require(frames.isNotEmpty() && frames.size <= maximumFrameCount) {
-            "An orb material package needs 1..$maximumFrameCount frames."
+        require(cacheVersion == OrbMaterialPlaybackContract.cacheVersion) {
+            "Unexpected orb material cache version $cacheVersion."
         }
-        require(frames.sumOf { it.size } <= maximumEncodedBytes) {
+        require(frames.size in OrbMaterialPlaybackContract.minimumFrameCount..OrbMaterialPlaybackContract.maximumFrameCount) {
+            "An orb material package needs ${OrbMaterialPlaybackContract.minimumFrameCount}..${OrbMaterialPlaybackContract.maximumFrameCount} frames."
+        }
+        require(frames.sumOf { it.size } <= OrbMaterialPlaybackContract.maximumEncodedBytes) {
             "Orb material package exceeds its bounded transport budget."
         }
+        require(intervalMs in OrbMaterialPlaybackContract.minimumFlipIntervalMs..OrbMaterialPlaybackContract.maximumFlipIntervalMs) {
+            "Orb material interval is outside its launcher-safe range."
+        }
+        require(
+            transitionDurationMs == 0 ||
+                (transitionDurationMs in OrbMaterialPlaybackContract.transitionDurationsMs &&
+                    transitionDurationMs <= intervalMs),
+        ) { "Orb material transition does not fit its frame interval." }
         val application = context.applicationContext
         val directory = File(application.filesDir, directoryName).apply { mkdirs() }
         val preferences = application.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
@@ -304,11 +355,20 @@ internal object OrbMaterialFrameStore {
                     ?: throw IllegalArgumentException("Invalid orb material PNG.")
             }
             try {
-                require(decoded.all { bitmap -> bitmap.width == bitmap.height && bitmap.width in 32..128 }) {
-                    "Orb frames must be square 32..128px images."
+                require(decoded.all { bitmap ->
+                    bitmap.width == bitmap.height &&
+                        bitmap.width in OrbMaterialPlaybackContract.minimumFrameSizePx..OrbMaterialPlaybackContract.maximumFrameSizePx
+                }) {
+                    "Orb frames must be square ${OrbMaterialPlaybackContract.minimumFrameSizePx}..${OrbMaterialPlaybackContract.maximumFrameSizePx}px images."
                 }
                 require(decoded.map { it.width }.distinct().size == 1) {
                     "Orb material frames must share one square size."
+                }
+                val decodedBytes = decoded.sumOf { bitmap ->
+                    bitmap.width.toLong() * bitmap.height * 4L
+                }
+                require(decodedBytes <= OrbMaterialPlaybackContract.maximumDecodedBytes) {
+                    "Orb material package exceeds its decoded bitmap budget."
                 }
             } finally {
                 decoded.forEach { it.recycle() }
@@ -327,8 +387,15 @@ internal object OrbMaterialFrameStore {
         val committed = preferences.edit()
             .putString("$widgetId.package", packageId)
             .putLong("$widgetId.revision", configurationRevision)
+            .putInt("$widgetId.format", cacheVersion)
             .putInt("$widgetId.count", frames.size)
-            .putInt("$widgetId.interval", intervalMs.coerceIn(40, maximumFlipIntervalMs))
+            .putInt("$widgetId.interval", intervalMs)
+            .putInt("$widgetId.transition", transitionDurationMs)
+            .putInt("$widgetId.displaySize", displaySizePx.coerceIn(
+                OrbMaterialPlaybackContract.minimumFrameSizePx,
+                OrbMaterialPlaybackContract.maximumFrameSizePx,
+            ))
+            .putLong("$widgetId.encodedBytes", frames.sumOf { it.size.toLong() })
             .putString("$widgetId.source", sourceDescription)
             .putLong("$widgetId.renderedAt", System.currentTimeMillis())
             .commit()
@@ -350,8 +417,15 @@ internal object OrbMaterialFrameStore {
         }
         val packageId = preferences.getString("${configuration.appWidgetId}.package", null)
             ?: return null
+        val cacheVersion = preferences.getInt(
+            "${configuration.appWidgetId}.format",
+            OrbMaterialPlaybackContract.legacyCacheVersion,
+        )
+        if (cacheVersion !in OrbMaterialPlaybackContract.legacyCacheVersion..OrbMaterialPlaybackContract.cacheVersion) {
+            return null
+        }
         val count = preferences.getInt("${configuration.appWidgetId}.count", 0)
-        if (count !in 1..maximumFrameCount) return null
+        if (count !in OrbMaterialPlaybackContract.minimumFrameCount..OrbMaterialPlaybackContract.maximumFrameCount) return null
         val directory = File(application.filesDir, directoryName)
         val frames = (0 until count).map { index ->
             BitmapFactory.decodeFile(File(directory, "$packageId-$index.png").absolutePath)
@@ -359,13 +433,50 @@ internal object OrbMaterialFrameStore {
         if (frames.any { it == null }) return null
         val bitmaps = frames.filterNotNull()
         val size = bitmaps.first().width
-        if (bitmaps.any { it.width != size || it.height != size }) return null
+        if (
+            bitmaps.any {
+                it.width != size || it.height != size ||
+                    it.width !in OrbMaterialPlaybackContract.minimumFrameSizePx..OrbMaterialPlaybackContract.maximumFrameSizePx
+            }
+        ) return null
+        val decodedBytes = bitmaps.sumOf { bitmap -> bitmap.width.toLong() * bitmap.height * 4L }
+        if (decodedBytes > OrbMaterialPlaybackContract.maximumDecodedBytes) return null
         val interval = preferences.getInt("${configuration.appWidgetId}.interval", 80)
-            .coerceIn(40, maximumFlipIntervalMs)
+            .coerceIn(
+                OrbMaterialPlaybackContract.minimumFlipIntervalMs,
+                OrbMaterialPlaybackContract.maximumFlipIntervalMs,
+            )
+        val transition = if (cacheVersion == OrbMaterialPlaybackContract.cacheVersion) {
+            preferences.getInt("${configuration.appWidgetId}.transition", 0)
+        } else {
+            0
+        }
+        if (
+            transition != 0 &&
+                (transition !in OrbMaterialPlaybackContract.transitionDurationsMs || transition > interval)
+        ) return null
+        val displaySize = preferences.getInt("${configuration.appWidgetId}.displaySize", size)
+            .coerceIn(
+                OrbMaterialPlaybackContract.minimumFrameSizePx,
+                OrbMaterialPlaybackContract.maximumFrameSizePx,
+            )
         return OrbFrameSequence(
             profileKey = "stored|${configuration.appWidgetId}|${configuration.configurationRevision}|$packageId",
-            plan = OrbFramePlan(size, count, interval),
+            plan = OrbFramePlan(
+                sizePx = size,
+                frameCount = count,
+                intervalMs = interval,
+                transitionDurationMs = transition,
+                displaySizePx = displaySize,
+                cacheVersion = cacheVersion,
+            ),
             frames = bitmaps,
+            encodedBytes = preferences.getLong(
+                "${configuration.appWidgetId}.encodedBytes",
+                (0 until count).sumOf { index ->
+                    File(directory, "$packageId-$index.png").length()
+                },
+            ),
             sourceDescription = preferences.getString(
                 "${configuration.appWidgetId}.source",
                 "flutter-header-material",
@@ -382,7 +493,10 @@ internal object OrbMaterialFrameStore {
                 preferences.getString("$widgetId.package", null)?.let {
                     deletePackage(directory, it)
                 }
-                listOf("package", "revision", "count", "interval", "source", "renderedAt")
+                listOf(
+                    "package", "revision", "format", "count", "interval", "transition",
+                    "displaySize", "encodedBytes", "source", "renderedAt",
+                )
                     .forEach { suffix -> editor.remove("$widgetId.$suffix") }
             }
         }.apply()
@@ -433,7 +547,13 @@ internal object OrbFrameRenderDiagnostics {
             .putString("$widgetId.backend", sequence.sourceDescription)
             .putInt("$widgetId.frameCount", sequence.plan.frameCount)
             .putInt("$widgetId.frameSizePx", sequence.plan.sizePx)
+            .putInt("$widgetId.displaySizePx", sequence.plan.displaySizePx)
+            .putInt("$widgetId.cacheVersion", sequence.plan.cacheVersion)
+            .putInt("$widgetId.intervalMs", sequence.plan.intervalMs)
+            .putInt("$widgetId.transitionDurationMs", sequence.plan.transitionDurationMs)
+            .putLong("$widgetId.channelEncodedBytes", sequence.encodedBytes)
             .putLong("$widgetId.estimatedRawBytes", sequence.plan.estimatedRawBytes)
+            .putLong("$widgetId.threeWidgetEstimatedRawBytes", sequence.plan.estimatedRawBytes * 3L)
             .remove("$widgetId.lastFailure")
             .apply()
     }
@@ -448,12 +568,12 @@ internal object OrbFrameRenderDiagnostics {
 }
 
 internal object OrbCompatibilityFrameRenderer {
-    private const val safeRemoteViewsBytes = 700 * 1024L
+    private const val safeRemoteViewsBytes = OrbMaterialPlaybackContract.maximumDecodedBytes
     private const val requestedSizePx = 96
-    private const val requestedFrameCount = 32
-    private const val frameIntervalMs = 80
+    private const val requestedFrameCount = 1
+    private const val frameIntervalMs = 1000
     private const val fallbackSizePx = 80
-    private const val fallbackFrameCount = 24
+    private const val fallbackFrameCount = 1
     private const val maxCachedSequences = 3
 
     val requestedPlan = OrbFramePlan(requestedSizePx, requestedFrameCount, frameIntervalMs)
@@ -492,10 +612,9 @@ internal object OrbCompatibilityFrameRenderer {
         val maximumFrames = (safeRemoteViewsBytes / (size.toLong() * size * 4L))
             .toInt()
             .coerceAtLeast(12)
-        // 24 × 80 × 80 is the deliberately conservative default described by
-        // the widget contract.  Larger cells retain sharpness by trading
-        // frame count for pixels; smaller cells do not consume the spare
-        // transport budget merely because it is available.
+        // This renderer is only the non-animated palette fallback until the
+        // Dashboard Header export arrives. A static fallback intentionally
+        // owns one frame; normal animation is always the Flutter package.
         val frameCount = minOf(fallbackFrameCount, maximumFrames)
         return OrbFramePlan(size, frameCount, frameIntervalMs)
     }

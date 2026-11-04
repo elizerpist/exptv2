@@ -14,7 +14,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'ORB-MATERIAL-01 maps every circle sample to the full static header field',
+    'ORB-MATERIAL-01 filters the full static header field into a square launcher texture',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester)
         ..selectEffect(DashboardHeaderEffectId.staticEffect)
@@ -55,14 +55,17 @@ void main() {
         for (final x in <int>[1, 12, 24, 40, 56, 68, 78]) {
           final expectedX = (((x + .5) / 80) * (header.width - 1)).round();
           final expectedY = (((40 + .5) / 80) * (header.height - 1)).round();
-          expect(
-            _pixel(orbPixels, 80, x, 40),
-            _pixel(headerPixels, header.width, expectedX, expectedY),
-            reason: 'orb x=$x must be the same source-material sample',
+          _expectFilteredSample(
+            actual: _pixel(orbPixels, 80, x, 40),
+            expected: _pixel(headerPixels, header.width, expectedX, expectedY),
+            reason: 'orb x=$x must retain the source material without a crop',
           );
         }
-        expect(_pixel(orbPixels, 80, 0, 0).$4, 0);
-        expect(_pixel(orbPixels, 80, 79, 0).$4, 0);
+        // Android 12+ owns the geometric clip outside this texture. Keeping
+        // these pixels opaque proves that no binary circular raster cutout
+        // can flicker during a ViewFlipper crossfade.
+        expect(_pixel(orbPixels, 80, 0, 0).$4, 255);
+        expect(_pixel(orbPixels, 80, 79, 0).$4, 255);
         await tester.runAsync(
           () => _writeEvidencePair(
             name: 'balance_static_header_orb_phase_0000ms',
@@ -75,10 +78,58 @@ void main() {
               'headerSizePx': <int>[412, 188],
               'orbSizePx': 80,
               'renderer': 'DashboardHeaderStaticColorRenderer',
-              'mapping': 'full-header-normalized-rectangle-to-circle',
+              'mapping': 'full-header-normalized-rectangle-to-filtered-square',
             },
           ),
         );
+      } finally {
+        header.dispose();
+        orb.dispose();
+        renderer.dispose();
+        controller.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'ORB-MATERIAL-01b uses partially covered edge pixels only for the legacy alpha fallback',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester)
+        ..selectEffect(DashboardHeaderEffectId.staticEffect);
+      const frame = DashboardHeaderVisualFrame(
+        colors: <Color>[Color(0xffffb37b), Color(0xff8f5ee8)],
+        stops: <double>[0, 1],
+        opacity: 1,
+        colorA: Color(0xffffb37b),
+        colorB: Color(0xff8f5ee8),
+      );
+      final renderer = DashboardHeaderMaterialFrameRenderer();
+      final snapshot = DashboardHeaderMaterialSnapshot.capture(
+        controller: controller,
+        frame: frame,
+      );
+      final header = (await tester.runAsync(
+        () => renderer.render(
+          snapshot: snapshot,
+          headerSize: const Size(412, 188),
+          offset: Duration.zero,
+        ),
+      ))!;
+      final orb = (await tester.runAsync(
+        () => DashboardHeaderOrbFrameMapper.map(
+          header: header,
+          orbSizePx: 80,
+          applyCircularAlphaMask: true,
+        ),
+      ))!;
+      try {
+        final pixels = (await tester.runAsync(() => _rgba(orb)))!;
+        final alpha = <int>[
+          for (var index = 3; index < pixels.length; index += 4) pixels[index],
+        ];
+        expect(_pixel(pixels, 80, 0, 0).$4, 0);
+        expect(_pixel(pixels, 80, 40, 40).$4, 255);
+        expect(alpha.any((value) => value > 0 && value < 255), isTrue);
       } finally {
         header.dispose();
         orb.dispose();
@@ -167,7 +218,8 @@ void main() {
                     'orbSizePx': 80,
                     'renderer':
                         'DashboardHeaderFragmentBackend/dashboard_header_field.frag',
-                    'mapping': 'full-header-normalized-rectangle-to-circle',
+                    'mapping':
+                        'full-header-normalized-rectangle-to-filtered-square',
                     'launcherPlayback':
                         'sampled ViewFlipper package; not a live shader',
                   },
@@ -237,11 +289,29 @@ void _expectMappedCentreLine({
   final expectedY = (((y + .5) / orbSize) * (headerHeight - 1)).round();
   for (final x in <int>[1, 12, 24, 40, 56, 68, 78]) {
     final expectedX = (((x + .5) / orbSize) * (headerWidth - 1)).round();
-    expect(
-      _pixel(orbPixels, orbSize, x, y),
-      _pixel(headerPixels, headerWidth, expectedX, expectedY),
+    _expectFilteredSample(
+      actual: _pixel(orbPixels, orbSize, x, y),
+      expected: _pixel(headerPixels, headerWidth, expectedX, expectedY),
       reason: 'the centre line may contain the source field only once',
     );
+  }
+}
+
+void _expectFilteredSample({
+  required (int, int, int, int) actual,
+  required (int, int, int, int) expected,
+  required String reason,
+}) {
+  // drawImageRect uses filtered sampling instead of the former round() lookup.
+  // A one-source-pixel tolerance keeps the assertion about coordinate ownership
+  // while explicitly permitting proper reconstruction filtering.
+  for (final pair in <(int, int)>[
+    (actual.$1, expected.$1),
+    (actual.$2, expected.$2),
+    (actual.$3, expected.$3),
+    (actual.$4, expected.$4),
+  ]) {
+    expect((pair.$1 - pair.$2).abs(), lessThanOrEqualTo(8), reason: reason);
   }
 }
 

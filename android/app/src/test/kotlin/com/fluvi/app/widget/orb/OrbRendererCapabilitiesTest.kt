@@ -10,17 +10,16 @@ class OrbRendererCapabilitiesTest {
         val state = OrbRendererCapabilities.forAndroidApi(35)
 
         assertTrue(state.liveHeaderSupported)
-        assertEquals("remoteviews-flutter-material-v2", state.backend)
+        assertEquals("remoteviews-flutter-material-v3", state.backend)
         assertTrue(state.reason.contains("ViewFlipper"))
         assertTrue(!state.isShaderIdentical)
     }
 
     @Test
-    fun `the finite transport plan falls back below the conservative RemoteViews budget`() {
-        assertTrue(OrbCompatibilityFrameRenderer.requestedPlan.estimatedRawBytes > 700L * 1024L)
+    fun `the static fallback is a single frame within the conservative RemoteViews budget`() {
         assertTrue(OrbCompatibilityFrameRenderer.activePlan.estimatedRawBytes <= 700L * 1024L)
-        assertEquals(24, OrbCompatibilityFrameRenderer.activePlan.frameCount)
-        assertEquals(80, OrbCompatibilityFrameRenderer.activePlan.intervalMs)
+        assertEquals(1, OrbCompatibilityFrameRenderer.activePlan.frameCount)
+        assertEquals(1000, OrbCompatibilityFrameRenderer.activePlan.intervalMs)
     }
 
     @Test
@@ -28,7 +27,7 @@ class OrbRendererCapabilitiesTest {
         val plan = OrbCompatibilityFrameRenderer.planFor(180)
 
         assertEquals(96, plan.sizePx)
-        assertTrue(plan.frameCount in 12..31)
+        assertEquals(1, plan.frameCount)
         assertTrue(plan.estimatedRawBytes <= 700L * 1024L)
     }
 
@@ -60,5 +59,17 @@ class OrbRendererCapabilitiesTest {
 
         assertEquals("flutter-header-material-v2", profile.effectId)
         assertTrue(profile.cacheKey.contains("flutter-header-material-v2"))
+    }
+
+    @Test
+    fun `v3 has XML transition resources for every accepted duration`() {
+        assertEquals(
+            OrbMaterialPlaybackContract.transitionDurationsMs.size + 1,
+            OrbWidgetFrameFlippers.allIds.size,
+        )
+        assertTrue(OrbWidgetFrameFlippers.allIds.contains(OrbWidgetFrameFlippers.idFor(0)))
+        OrbMaterialPlaybackContract.transitionDurationsMs.forEach { duration ->
+            assertTrue(OrbWidgetFrameFlippers.allIds.contains(OrbWidgetFrameFlippers.idFor(duration)))
+        }
     }
 }

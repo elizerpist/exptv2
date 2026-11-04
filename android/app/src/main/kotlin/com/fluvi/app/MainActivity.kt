@@ -905,6 +905,10 @@ class MainActivity : FlutterActivity() {
                                         "direction" to target.direction,
                                         "categoryId" to target.categoryId,
                                         "frameSizePx" to target.preferredSizePx,
+                                        "cacheVersion" to target.cacheVersion,
+                                        "maximumFrameCount" to target.maximumFrameCount,
+                                        "maximumDecodedBytes" to target.maximumDecodedBytes,
+                                        "requiresAlphaMask" to target.requiresAlphaMask,
                                     )
                                 }
                                 "publishFrames" -> {
@@ -914,8 +918,14 @@ class MainActivity : FlutterActivity() {
                                         ?: throw IllegalArgumentException("Missing widget id.")
                                     val revision = (values["configurationRevision"] as? Number)?.toLong()
                                         ?: throw IllegalArgumentException("Missing widget configuration revision.")
+                                    val cacheVersion = (values["cacheVersion"] as? Number)?.toInt()
+                                        ?: throw IllegalArgumentException("Missing orb material cache version.")
                                     val intervalMs = (values["intervalMs"] as? Number)?.toInt()
                                         ?: throw IllegalArgumentException("Missing frame interval.")
+                                    val transitionDurationMs = (values["transitionDurationMs"] as? Number)?.toInt()
+                                        ?: throw IllegalArgumentException("Missing frame transition duration.")
+                                    val displaySizePx = (values["displaySizePx"] as? Number)?.toInt()
+                                        ?: throw IllegalArgumentException("Missing orb display size.")
                                     val description = values["sourceDescription"] as? String
                                         ?: "flutter-header-material"
                                     val frames = (values["frames"] as? List<*>)
@@ -931,9 +941,12 @@ class MainActivity : FlutterActivity() {
                                         context = applicationContext,
                                         widgetId = widgetId,
                                         configurationRevision = revision,
+                                        cacheVersion = cacheVersion,
                                         intervalMs = intervalMs,
+                                        transitionDurationMs = transitionDurationMs,
+                                        displaySizePx = displaySizePx,
                                         frames = frames,
-                                        sourceDescription = description.take(160),
+                                        sourceDescription = description.take(512),
                                     )
                                     FluviOrbWidgetProvider.renderAsync(
                                         applicationContext,

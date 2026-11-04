@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -67,6 +65,14 @@ final class DashboardHeaderMaterialSnapshot {
   bool get isAnimated =>
       (tuning.effect != DashboardHeaderEffectId.staticEffect &&
           _effectSpeed > 0) ||
+      _background.hasMotion ||
+      _interior.hasMotion;
+
+  /// Crossfading is enough for the calm material fields. Deep Drift and the
+  /// Portal layers contain travelling structure, so their finite launcher
+  /// package requests denser *real shader* samples before it is blended.
+  bool get requiresDenseOrbSampling =>
+      tuning.effect == DashboardHeaderEffectId.deepDrift ||
       _background.hasMotion ||
       _interior.hasMotion;
 
@@ -319,49 +325,54 @@ final class DashboardHeaderMaterialFrameRenderer {
   }
 }
 
-/// Maps all of the normalized Header rectangle to an alpha-masked orb.  It
-/// intentionally has no radial shade, highlight, crop, or material math.
+/// Maps the complete normalized Header rectangle into a square texture.
+///
+/// The normal Android 12+ path clips the *whole* animated ViewFlipper with a
+/// geometric outline. This keeps an edge fixed during a crossfade and avoids
+/// sampling a binary circle into every exported image. Older hosts can request
+/// [applyCircularAlphaMask], which performs the same clipping with an
+/// anti-aliased alpha mask as a compatibility fallback.
 abstract final class DashboardHeaderOrbFrameMapper {
   static Future<ui.Image> map({
     required ui.Image header,
     required int orbSizePx,
+    bool applyCircularAlphaMask = false,
   }) async {
-    final source = await header.toByteData(format: ui.ImageByteFormat.rawRgba);
-    if (source == null) throw StateError('Header pixels are unavailable.');
     final targetSize = orbSizePx.clamp(1, 512);
-    final target = Uint8List(targetSize * targetSize * 4);
-    final bytes = source.buffer.asUint8List();
-    for (var y = 0; y < targetSize; y += 1) {
-      final normalizedY = (y + .5) / targetSize;
-      for (var x = 0; x < targetSize; x += 1) {
-        final normalizedX = (x + .5) / targetSize;
-        final dx = normalizedX - .5;
-        final dy = normalizedY - .5;
-        final out = (y * targetSize + x) * 4;
-        if (dx * dx + dy * dy > .25) continue;
-        final sx = (normalizedX * (header.width - 1)).round().clamp(
-          0,
-          header.width - 1,
-        );
-        final sy = (normalizedY * (header.height - 1)).round().clamp(
-          0,
-          header.height - 1,
-        );
-        final input = (sy * header.width + sx) * 4;
-        target[out] = bytes[input];
-        target[out + 1] = bytes[input + 1];
-        target[out + 2] = bytes[input + 2];
-        target[out + 3] = bytes[input + 3];
-      }
-    }
-    final completer = Completer<ui.Image>();
-    ui.decodeImageFromPixels(
-      target,
-      targetSize,
-      targetSize,
-      ui.PixelFormat.rgba8888,
-      completer.complete,
+    final destination = ui.Rect.fromLTWH(
+      0,
+      0,
+      targetSize.toDouble(),
+      targetSize.toDouble(),
     );
-    return completer.future;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final paint = ui.Paint()
+      ..isAntiAlias = true
+      ..filterQuality = ui.FilterQuality.high;
+    if (applyCircularAlphaMask) {
+      canvas.saveLayer(destination, ui.Paint());
+      canvas.drawCircle(
+        destination.center,
+        targetSize / 2,
+        ui.Paint()
+          ..color = const ui.Color(0xffffffff)
+          ..isAntiAlias = true
+          ..blendMode = ui.BlendMode.src,
+      );
+    }
+    canvas.drawImageRect(
+      header,
+      ui.Rect.fromLTWH(0, 0, header.width.toDouble(), header.height.toDouble()),
+      destination,
+      applyCircularAlphaMask ? (paint..blendMode = ui.BlendMode.srcIn) : paint,
+    );
+    if (applyCircularAlphaMask) canvas.restore();
+    final picture = recorder.endRecording();
+    try {
+      return await picture.toImage(targetSize, targetSize);
+    } finally {
+      picture.dispose();
+    }
   }
 }

@@ -7,16 +7,309 @@
     android:foregroundGravity="center">
 
     <!--
-      ViewFlipper is one of the platform RemoteViews collection-safe view
-      types.  The provider installs a finite image sequence in one update; the
-      launcher owns the subsequent local loop.  No provider timer or per-frame
-      IPC is involved.
+      This is the one geometric clip for every ViewFlipper layer. On Android
+      12+ the provider makes this container physically square and sets a
+      half-side outline radius through RemoteViews, giving the launcher one
+      quiet circular edge for both the outgoing and incoming bitmaps.
     -->
-    <ViewFlipper
-        android:id="@+id/fluvi_orb_frame_flipper"
+    <FrameLayout
+        android:id="@+id/fluvi_orb_circle_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:autoStart="true"
-        android:flipInterval="80"
-        android:contentDescription="@null" />
+        android:layout_gravity="center"
+        android:background="@drawable/fluvi_orb_circle_clip"
+        android:clipChildren="true"
+        android:clipToOutline="true">
+
+        <!--
+          RemoteViews cannot change an Animation duration after inflation.
+          The provider reveals one of these stock ViewFlippers, adds all
+          frames in one update, and the launcher owns the loop thereafter.
+          In ViewAnimator the incoming child is shown after the outgoing
+          child; its alpha animation therefore composes on top instead of
+          exposing the transparent root between frames.
+        -->
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="1000"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_40"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="40"
+            android:inAnimation="@anim/fluvi_orb_fade_in_40"
+            android:outAnimation="@anim/fluvi_orb_fade_out_40"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_60"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="60"
+            android:inAnimation="@anim/fluvi_orb_fade_in_60"
+            android:outAnimation="@anim/fluvi_orb_fade_out_60"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_80"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="80"
+            android:inAnimation="@anim/fluvi_orb_fade_in_80"
+            android:outAnimation="@anim/fluvi_orb_fade_out_80"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_100"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="100"
+            android:inAnimation="@anim/fluvi_orb_fade_in_100"
+            android:outAnimation="@anim/fluvi_orb_fade_out_100"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_120"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="120"
+            android:inAnimation="@anim/fluvi_orb_fade_in_120"
+            android:outAnimation="@anim/fluvi_orb_fade_out_120"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_140"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="140"
+            android:inAnimation="@anim/fluvi_orb_fade_in_140"
+            android:outAnimation="@anim/fluvi_orb_fade_out_140"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_160"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="160"
+            android:inAnimation="@anim/fluvi_orb_fade_in_160"
+            android:outAnimation="@anim/fluvi_orb_fade_out_160"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_180"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="180"
+            android:inAnimation="@anim/fluvi_orb_fade_in_180"
+            android:outAnimation="@anim/fluvi_orb_fade_out_180"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_190"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="190"
+            android:inAnimation="@anim/fluvi_orb_fade_in_190"
+            android:outAnimation="@anim/fluvi_orb_fade_out_190"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_200"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="200"
+            android:inAnimation="@anim/fluvi_orb_fade_in_200"
+            android:outAnimation="@anim/fluvi_orb_fade_out_200"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_220"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="220"
+            android:inAnimation="@anim/fluvi_orb_fade_in_220"
+            android:outAnimation="@anim/fluvi_orb_fade_out_220"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_240"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="240"
+            android:inAnimation="@anim/fluvi_orb_fade_in_240"
+            android:outAnimation="@anim/fluvi_orb_fade_out_240"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_280"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="280"
+            android:inAnimation="@anim/fluvi_orb_fade_in_280"
+            android:outAnimation="@anim/fluvi_orb_fade_out_280"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_320"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="320"
+            android:inAnimation="@anim/fluvi_orb_fade_in_320"
+            android:outAnimation="@anim/fluvi_orb_fade_out_320"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_400"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="400"
+            android:inAnimation="@anim/fluvi_orb_fade_in_400"
+            android:outAnimation="@anim/fluvi_orb_fade_out_400"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_500"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="500"
+            android:inAnimation="@anim/fluvi_orb_fade_in_500"
+            android:outAnimation="@anim/fluvi_orb_fade_out_500"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_600"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="600"
+            android:inAnimation="@anim/fluvi_orb_fade_in_600"
+            android:outAnimation="@anim/fluvi_orb_fade_out_600"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_800"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="800"
+            android:inAnimation="@anim/fluvi_orb_fade_in_800"
+            android:outAnimation="@anim/fluvi_orb_fade_out_800"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_1000"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="1000"
+            android:inAnimation="@anim/fluvi_orb_fade_in_1000"
+            android:outAnimation="@anim/fluvi_orb_fade_out_1000"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_2000"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="2000"
+            android:inAnimation="@anim/fluvi_orb_fade_in_2000"
+            android:outAnimation="@anim/fluvi_orb_fade_out_2000"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_4000"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="4000"
+            android:inAnimation="@anim/fluvi_orb_fade_in_4000"
+            android:outAnimation="@anim/fluvi_orb_fade_out_4000"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_8000"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="8000"
+            android:inAnimation="@anim/fluvi_orb_fade_in_8000"
+            android:outAnimation="@anim/fluvi_orb_fade_out_8000"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_16000"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="16000"
+            android:inAnimation="@anim/fluvi_orb_fade_in_16000"
+            android:outAnimation="@anim/fluvi_orb_fade_out_16000"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_32000"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="32000"
+            android:inAnimation="@anim/fluvi_orb_fade_in_32000"
+            android:outAnimation="@anim/fluvi_orb_fade_out_32000"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ViewFlipper
+            android:id="@+id/fluvi_orb_frame_flipper_60000"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="60000"
+            android:inAnimation="@anim/fluvi_orb_fade_in_60000"
+            android:outAnimation="@anim/fluvi_orb_fade_out_60000"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+    </FrameLayout>
 </FrameLayout>
