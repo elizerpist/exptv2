@@ -97,8 +97,12 @@ internal data class KeyguardMaterialProfile(
             val colors = values.intArray("colors", 2, 10)
             val stops = values.floatArray("stops", 2, 10)
             val common = values.floatArray("commonSettings", 40, 40)
-            val background = KeyguardMaterialPortal.fromMap(values["background"] as? Map<*, *> ?: emptyMap())
-            val interior = KeyguardMaterialPortal.fromMap(values["interior"] as? Map<*, *> ?: emptyMap())
+            val background = KeyguardMaterialPortal.fromMap(
+                values["background"] as? Map<*, *> ?: emptyMap<Any?, Any?>(),
+            )
+            val interior = KeyguardMaterialPortal.fromMap(
+                values["interior"] as? Map<*, *> ?: emptyMap<Any?, Any?>(),
+            )
             KeyguardMaterialProfile(
                 schemaVersion = schema,
                 shaderAbiVersion = abi,
