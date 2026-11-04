@@ -46,9 +46,16 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var reevaluationQueued = false
     private var contentJob: Job? = null
     private var coreObservation: Job? = null
+    private var observedFocusGeneration: Long? = null
+    private var activeFocusGeneration: Long? = null
+    private var renderedFullContent: com.fluvi.app.runtime.FluviLockScreenCardContent? = null
+    private var resolvingFocusGeneration: Long? = null
+    private var resolveQueued = false
     private var receiverRegistered = false
     private var displayRegistered = false
     private var retryCount = 0
+    private var wakeEpoch = 0L
+    private var lastSettings: KeyguardCardSettings? = null
     private var showEvent = false
     private var appliedDecision = KeyguardCardVisibility.HIDDEN_DISCONNECTED
     private lateinit var overlay: KeyguardCardWindow
@@ -64,6 +71,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 Intent.ACTION_SCREEN_OFF, Intent.ACTION_USER_PRESENT -> hideImmediately(intent.action ?: "screen")
                 Intent.ACTION_SCREEN_ON -> {
                     retryCount = 0
+                    wakeEpoch += 1L
+                    KeyguardCardDiagnostics.beginLockAttempt(this@FluviKeyguardCardService, session.get(), wakeEpoch)
                     scheduleEvaluation("wake")
                 }
             }
@@ -88,20 +97,34 @@ class FluviKeyguardCardService : AccessibilityService() {
             onOpen = ::openFocusedFluvi,
             onToggle = ::toggleView,
         )
+        lastSettings = FluviKeyguardCardSettings.read(applicationContext)
         registerRuntimeSignals()
+        wakeEpoch += 1L
+        KeyguardCardDiagnostics.beginLockAttempt(this, session.get(), wakeEpoch)
         KeyguardCardDiagnostics.record(this, "KG|SERVICE_CONNECTED", "connected", false)
         scheduleEvaluation("connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        // Only copy non-sensitive metadata while Android owns the event. The
-        // actual tree walk is serialised and never uses event text.
-        if (event.packageName?.toString() == packageName) return
-        when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> hideImmediately("surfaceChanging")
+        // Copy only non-sensitive metadata while Android owns the event. In
+        // particular, do not hand AccessibilityEvent itself to the worker.
+        val meta = KeyguardAccessibilityEventMeta(
+            eventType = event.eventType,
+            windowId = event.windowId,
+            displayId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) event.displayId else Display.DEFAULT_DISPLAY,
+            windowChanges = if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) event.windowChanges else 0,
+            packageName = event.packageName?.toString(),
+        )
+        if (!KeyguardCardEventGate.isSurfaceEvent(meta.eventType)) return
+        val own = ::overlay.isInitialized && overlay.isOwnAccessibilityWindow(meta.windowId)
+        when (KeyguardCardEventGate.decide(meta, own)) {
+            KeyguardEventAction.IGNORE_OWN -> {
+                KeyguardCardDiagnostics.record(this, "KG|OWN_WINDOW", "ownSignal", overlay.isAttached)
+                // The package-less post-add race reaches INSPECT, not an
+                // eager detach. A positively matched own event needs no work.
+            }
+            KeyguardEventAction.INSPECT -> scheduleEvaluation("window")
         }
-        scheduleEvaluation("window")
     }
 
     override fun onInterrupt() {
@@ -123,18 +146,20 @@ class FluviKeyguardCardService : AccessibilityService() {
      * durable source of truth. */
     internal fun onSettingsChangedFromApplication(settings: KeyguardCardSettings) {
         mainHandler.post {
+            val previous = lastSettings
+            lastSettings = settings
             if (!settings.requested) {
                 hideImmediately("settings")
                 disableSelf()
             } else if (!settings.showFinancialDetails) {
-                // Privacy tightening first removes all full View fields, then
-                // repaints the safe discrete card from no financial data.
-                hideImmediately("settings")
+                // Privacy tightening must redact the existing root before an
+                // asynchronous query can return. It is not a window detach.
+                redactImmediately("settings")
                 scheduleEvaluation("settings")
             } else {
-                // Do not leave the old event sub-view around after a focus or
-                // privacy change.
-                showEvent = false
+                // A position-only change is a WindowManager layout update,
+                // not a financial invalidation or view-state reset.
+                if (previous?.showFinancialDetails != settings.showFinancialDetails) showEvent = false
                 scheduleEvaluation("settings")
             }
         }
@@ -143,7 +168,12 @@ class FluviKeyguardCardService : AccessibilityService() {
     internal fun onFinancialFocusChangedFromApplication() {
         mainHandler.post {
             showEvent = false
-            hideImmediately("focusChanged")
+            invalidateFullContent()
+            // A focus change may make a visible amount misleading. Redact in
+            // place when possible; do not bounce the overlay root.
+            if (overlay.isAttached && appliedDecision == KeyguardCardVisibility.SHOW_FULL) {
+                applyPresentation(FluviFinancialCardPresenter.loading(), "focusChanged")
+            }
             scheduleEvaluation("focusChanged")
         }
     }
@@ -181,9 +211,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         scope.launch {
             var nextTrigger = trigger
             while (true) {
-                // Each coalesced pass owns a fresh epoch. A previous wake's
-                // late Binder result can therefore never suppress the next
-                // wake's valid evidence.
+                // Capture the currently valid session/epoch for this pass.
+                // A later wake, hide, or disconnect invalidates it before it
+                // can mutate the main-thread window state.
                 val expectedSession = session.get()
                 val expectedEpoch = visibilityEpoch.get()
                 val result = inspectSurface(expectedSession, expectedEpoch)
@@ -205,6 +235,18 @@ class FluviKeyguardCardService : AccessibilityService() {
     private data class Inspection(
         val signals: KeyguardCardSignals,
         val decision: KeyguardCardVisibility,
+        val surfaceReason: KeyguardSurfaceReason,
+    )
+
+    private data class SystemWindowsRead(
+        val snapshots: List<KeyguardWindowSnapshot>,
+        val rootUnavailable: Boolean,
+        val walkTruncated: Boolean,
+    )
+
+    private data class VisibleIds(
+        val ids: Set<String>,
+        val truncated: Boolean,
     )
 
     private fun inspectSurface(expectedSession: Long, expectedEpoch: Long): Inspection {
@@ -213,15 +255,19 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (!baseline.requested || !baseline.serviceConnected || !baseline.userUnlocked ||
             !baseline.primaryDisplay || !baseline.interactive || !baseline.displayOn || !baseline.keyguardLocked
         ) {
-            return Inspection(baseline, KeyguardCardVisibilityPolicy.decide(baseline))
+            return Inspection(baseline, KeyguardCardVisibilityPolicy.decide(baseline), KeyguardSurfaceReason.NO_WINDOWS)
         }
         if (session.get() != expectedSession || visibilityEpoch.get() != expectedEpoch) {
-            return Inspection(baseline, KeyguardCardVisibility.HIDDEN_UNKNOWN)
+            return Inspection(baseline, KeyguardCardVisibility.HIDDEN_UNKNOWN, KeyguardSurfaceReason.NO_WINDOWS)
         }
-        val snapshots = readSystemWindows()
-        val surface = KeyguardSurfaceClassifier.classify(snapshots)
-        val signals = quickSignals(settings, surface)
-        return Inspection(signals, KeyguardCardVisibilityPolicy.decide(signals))
+        val read = readSystemWindows()
+        val classification = KeyguardSurfaceClassifier.classifyDetailed(
+            read.snapshots,
+            unavailableRoot = read.rootUnavailable,
+            walkTruncated = read.walkTruncated,
+        )
+        val signals = quickSignals(settings, classification.surface)
+        return Inspection(signals, KeyguardCardVisibilityPolicy.decide(signals), classification.reason)
     }
 
     private fun quickSignals(settings: KeyguardCardSettings, surface: KeyguardSurface): KeyguardCardSignals {
@@ -239,14 +285,18 @@ class FluviKeyguardCardService : AccessibilityService() {
         )
     }
 
-    private fun readSystemWindows(): List<KeyguardWindowSnapshot> = runCatching {
-        windows.mapNotNull { window ->
+    private fun readSystemWindows(): SystemWindowsRead = runCatching {
+        val currentWindows = windows
+        var unavailableRoot = false
+        var walkTruncated = false
+        val snapshots = currentWindows.map { window ->
             val root = runCatching { window.root }.getOrNull()
+            if (root == null) unavailableRoot = true
             val rootPackage = root?.packageName?.toString()
             val own = rootPackage == this.packageName && window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
             val displayId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) window.displayId else Display.DEFAULT_DISPLAY
             val ids = if (rootPackage in setOf("com.android.systemui", "com.android.keyguard", "android")) {
-                root?.let(::visibleResourceIds).orEmpty()
+                root?.let(::visibleResourceIds)?.also { walkTruncated = walkTruncated || it.truncated }?.ids.orEmpty()
             } else {
                 emptySet()
             }
@@ -260,15 +310,21 @@ class FluviKeyguardCardService : AccessibilityService() {
                 visibleViewIds = ids,
             )
         }
-    }.getOrDefault(emptyList())
+        SystemWindowsRead(snapshots, unavailableRoot, walkTruncated)
+    }.getOrDefault(SystemWindowsRead(emptyList(), rootUnavailable = false, walkTruncated = false))
 
     /** Bounded, ID-only traversal. Never read node.text, event.text,
      * contentDescription, input values, screenshots, or foreign app trees. */
-    private fun visibleResourceIds(root: AccessibilityNodeInfo): Set<String> {
+    private fun visibleResourceIds(root: AccessibilityNodeInfo): VisibleIds {
         val ids = linkedSetOf<String>()
         var visited = 0
+        var truncated = false
         fun visit(node: AccessibilityNodeInfo?) {
-            if (node == null || visited >= 96) return
+            if (node == null) return
+            if (visited >= 96) {
+                truncated = true
+                return
+            }
             visited += 1
             try {
                 if (!node.isVisibleToUser) return
@@ -284,7 +340,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
         }
         visit(root)
-        return ids
+        return VisibleIds(ids, truncated)
     }
 
     private fun applyInspection(
@@ -293,14 +349,29 @@ class FluviKeyguardCardService : AccessibilityService() {
         expectedEpoch: Long,
         trigger: String,
     ) {
-        if (session.get() != expectedSession || visibilityEpoch.get() != expectedEpoch ||
-            !isDisplayOnAndInteractive() || !keyguardManager.isKeyguardLocked
-        ) {
-            hideImmediately("staleGate")
-            return
+        // A stale Binder walk has no authority over a newer session/epoch.
+        // In particular, it must not remove an overlay attached by a later
+        // wake inspection.
+        when (KeyguardCardInspectionGate.decide(
+            expectedSession = expectedSession,
+            currentSession = session.get(),
+            expectedEpoch = expectedEpoch,
+            currentEpoch = visibilityEpoch.get(),
+            displayEligibleNow = isDisplayOnAndInteractive(),
+            keyguardLockedNow = keyguardManager.isKeyguardLocked,
+        )) {
+            KeyguardInspectionAction.DROP_STALE -> {
+                KeyguardCardDiagnostics.record(this, "KG|DROP_STALE", "surfaceEpoch", overlay.isAttached)
+                return
+            }
+            KeyguardInspectionAction.HIDE_CURRENT_GATE -> {
+                hideImmediately("currentGate")
+                return
+            }
+            KeyguardInspectionAction.APPLY -> Unit
         }
         val decision = inspection.decision
-        KeyguardCardDiagnostics.record(this, "KG|SURFACE_DECISION", decision.name, overlay.isAttached)
+        KeyguardCardDiagnostics.record(this, "KG|SURFACE_DECISION", "${decision.name}:${inspection.surfaceReason.name}", overlay.isAttached)
         appliedDecision = decision
         when (decision) {
             KeyguardCardVisibility.SHOW_DISCREET -> {
@@ -312,9 +383,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             KeyguardCardVisibility.SHOW_FULL -> {
                 retryCount = 0
                 val focus = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext)
-                applyPresentation(FluviFinancialCardPresenter.loading(), "loading:$trigger")
-                beginFinancialObservation(expectedSession, expectedEpoch, focus.generation)
-                resolveFullContent(expectedSession, expectedEpoch, focus.generation)
+                showFullContent(expectedSession, expectedEpoch, focus.generation, trigger)
             }
             else -> {
                 hideImmediately(decision.name)
@@ -328,13 +397,53 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
     }
 
+    private fun showFullContent(
+        expectedSession: Long,
+        expectedEpoch: Long,
+        focusGeneration: Long,
+        trigger: String,
+    ) {
+        val focusChanged = activeFocusGeneration != focusGeneration
+        if (focusChanged) {
+            showEvent = false
+            invalidateFullContent()
+            activeFocusGeneration = focusGeneration
+        }
+        val cached = renderedFullContent
+        val plan = KeyguardCardContentRefreshPolicy.firstOrSurfacePlan(
+            focusChanged = focusChanged,
+            hasCurrentContent = cached != null && !focusChanged,
+            resolveInFlightForFocus = resolvingFocusGeneration == focusGeneration,
+        )
+        if (cached != null && !focusChanged) {
+            applyPresentation(FluviFinancialCardPresenter.full(cached, showEvent), "cached:$trigger")
+        } else if (plan.publishLoading) {
+            // First full render only. Repeated same-surface inspection keeps
+            // the current amount or existing loading presentation untouched.
+            applyPresentation(FluviFinancialCardPresenter.loading(), "loading:$trigger")
+        }
+        beginFinancialObservation(expectedSession, expectedEpoch, focusGeneration)
+        if (plan.startResolve) {
+            resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "first")
+        }
+    }
+
     private fun beginFinancialObservation(expectedSession: Long, expectedEpoch: Long, focusGeneration: Long) {
-        if (coreObservation?.isActive == true) return
+        if (coreObservation?.isActive == true && observedFocusGeneration == focusGeneration) return
+        stopFinancialObservation(keepRenderedContent = true)
+        observedFocusGeneration = focusGeneration
         coreObservation = scope.launch {
             val core = com.fluvi.core.FluviCoreFactory.create(applicationContext)
             try {
+                var firstEmission = true
                 core.query.observeCoreRevision().collectLatest {
-                    resolveFullContent(expectedSession, expectedEpoch, focusGeneration)
+                    if (firstEmission) {
+                        firstEmission = false
+                        return@collectLatest
+                    }
+                    withContext(Dispatchers.Main.immediate) {
+                        resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "coreRevision")
+                    }
                 }
             } finally {
                 core.close()
@@ -342,58 +451,98 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
     }
 
-    private fun resolveFullContent(expectedSession: Long, expectedEpoch: Long, focusGeneration: Long) {
-        contentJob?.cancel()
+    private fun resolveFullContent(
+        expectedSession: Long,
+        expectedEpoch: Long,
+        focusGeneration: Long,
+        reason: String,
+    ) {
+        check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        if (contentJob?.isActive == true) {
+            if (resolvingFocusGeneration == focusGeneration) {
+                // A core observer's initial emission commonly follows the
+                // explicit first resolve. Coalesce it instead of cancelling
+                // the in-flight query and flashing loading again.
+                resolveQueued = true
+                return
+            }
+            contentJob?.cancel()
+        }
+        resolvingFocusGeneration = focusGeneration
+        resolveQueued = false
+        KeyguardCardDiagnostics.record(this, "KG|RESOLVE_STARTED", reason, overlay.isAttached)
         contentJob = scope.launch {
             val focus = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext)
-            if (focus.generation != focusGeneration) return@launch
-            val content = runCatching {
-                FluviLockScreenCardCoordinator.resolve(applicationContext, focus.asFinancialFocus())
-            }.getOrNull() ?: return@launch
+            val content = if (focus.generation == focusGeneration) {
+                runCatching {
+                    FluviLockScreenCardCoordinator.resolve(applicationContext, focus.asFinancialFocus())
+                }.getOrNull()
+            } else {
+                null
+            }
             withContext(Dispatchers.Main.immediate) {
-                val settings = FluviKeyguardCardSettings.read(applicationContext)
-                val stillCurrent = KeyguardCardContentPublicationPolicy.canApply(
-                    KeyguardCardContentPublication(
-                        requestSession = expectedSession,
-                        currentSession = session.get(),
-                        requestEpoch = expectedEpoch,
-                        currentEpoch = visibilityEpoch.get(),
-                        requestFocusGeneration = focusGeneration,
-                        currentFocusGeneration = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext).generation,
-                        currentlyFull = appliedDecision == KeyguardCardVisibility.SHOW_FULL,
-                        detailsStillAllowed = settings.showFinancialDetails,
-                        displayStillEligible = isDisplayOnAndInteractive() && keyguardManager.isKeyguardLocked,
-                    ),
-                )
-                if (!stillCurrent) {
-                    KeyguardCardDiagnostics.record(this@FluviKeyguardCardService, "KG|CONTENT_STALE", "contentEpoch", overlay.isAttached)
-                    return@withContext
+                try {
+                    val settings = FluviKeyguardCardSettings.read(applicationContext)
+                    val stillCurrent = KeyguardCardContentPublicationPolicy.canApply(
+                        KeyguardCardContentPublication(
+                            requestSession = expectedSession,
+                            currentSession = session.get(),
+                            requestEpoch = expectedEpoch,
+                            currentEpoch = visibilityEpoch.get(),
+                            requestFocusGeneration = focusGeneration,
+                            currentFocusGeneration = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext).generation,
+                            currentlyFull = appliedDecision == KeyguardCardVisibility.SHOW_FULL,
+                            detailsStillAllowed = settings.showFinancialDetails,
+                            displayStillEligible = isDisplayOnAndInteractive() && keyguardManager.isKeyguardLocked,
+                        ),
+                    )
+                    if (!stillCurrent || content == null) {
+                        KeyguardCardDiagnostics.record(
+                            this@FluviKeyguardCardService,
+                            "KG|CONTENT_STALE",
+                            if (content == null) "resolveUnavailable" else "contentEpoch",
+                            overlay.isAttached,
+                        )
+                    } else {
+                        renderedFullContent = content
+                        activeFocusGeneration = focusGeneration
+                        applyPresentation(FluviFinancialCardPresenter.full(content, showEvent), "content")
+                        KeyguardCardDiagnostics.record(this@FluviKeyguardCardService, "KG|CONTENT_APPLIED", "full", overlay.isAttached)
+                    }
+                } finally {
+                    val rerun = resolveQueued && activeFocusGeneration == focusGeneration
+                    resolveQueued = false
+                    resolvingFocusGeneration = null
+                    contentJob = null
+                    if (rerun) resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "coalescedRevision")
                 }
-                applyPresentation(FluviFinancialCardPresenter.full(content, showEvent), "content")
-                KeyguardCardDiagnostics.record(this@FluviKeyguardCardService, "KG|CONTENT_APPLIED", "full", overlay.isAttached)
             }
         }
     }
 
     private fun applyPresentation(presentation: com.fluvi.app.runtime.FluviFinancialCardPresentation, reason: String) {
         val settings = FluviKeyguardCardSettings.read(applicationContext)
-        val success = overlay.showOrUpdate(presentation, settings.verticalOffsetDp)
-        if (success) {
-            KeyguardCardDiagnostics.attach(this, "attached")
-            KeyguardCardDiagnostics.record(this, "KG|ATTACH", reason, true)
-        } else {
-            KeyguardCardDiagnostics.attach(this, "failed")
-            KeyguardCardDiagnostics.record(this, "KG|ATTACH_FAILED", "window", false)
+        when (val result = overlay.showOrUpdate(presentation, settings.verticalOffsetDp)) {
+            KeyguardCardWindow.Result.ATTACHED -> {
+                KeyguardCardDiagnostics.attach(this, "attached")
+                KeyguardCardDiagnostics.record(this, "KG|ATTACH", reason, true)
+            }
+            KeyguardCardWindow.Result.CONTENT_UPDATED,
+            KeyguardCardWindow.Result.REDACTED -> KeyguardCardDiagnostics.record(this, "KG|CONTENT_UPDATE", "$reason:${result.name}", true)
+            KeyguardCardWindow.Result.LAYOUT_UPDATED -> KeyguardCardDiagnostics.record(this, "KG|LAYOUT_UPDATE", reason, true)
+            KeyguardCardWindow.Result.NO_OP -> Unit
+            KeyguardCardWindow.Result.FAILED -> {
+                KeyguardCardDiagnostics.attach(this, "failed")
+                KeyguardCardDiagnostics.record(this, "KG|ATTACH_FAILED", "window", false)
+            }
         }
     }
 
     private fun toggleView() {
         if (appliedDecision != KeyguardCardVisibility.SHOW_FULL) return
+        val content = renderedFullContent ?: return
         showEvent = !showEvent
-        val expected = session.get()
-        val epoch = visibilityEpoch.get()
-        val focusGeneration = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext).generation
-        resolveFullContent(expected, epoch, focusGeneration)
+        applyPresentation(FluviFinancialCardPresenter.full(content, showEvent), "toggle")
     }
 
     private fun openFocusedFluvi() {
@@ -421,16 +570,42 @@ class FluviKeyguardCardService : AccessibilityService() {
         stopFinancialObservation()
         if (::overlay.isInitialized) {
             val wasAttached = overlay.isAttached
-            overlay.hide()
-            if (wasAttached) KeyguardCardDiagnostics.record(this, "KG|DETACH", reason, false)
+            val removed = overlay.hide()
+            if (wasAttached && removed) KeyguardCardDiagnostics.record(this, "KG|DETACH", reason, false)
         }
     }
 
-    private fun stopFinancialObservation() {
+    private fun redactImmediately(reason: String) {
+        visibilityEpoch.incrementAndGet()
+        showEvent = false
+        stopFinancialObservation()
+        appliedDecision = KeyguardCardVisibility.SHOW_DISCREET
+        if (::overlay.isInitialized && overlay.isAttached && isDisplayOnAndInteractive() && keyguardManager.isKeyguardLocked) {
+            applyPresentation(FluviFinancialCardPresenter.discreet(), "redact:$reason")
+        }
+    }
+
+    private fun invalidateFullContent() {
+        renderedFullContent = null
+        activeFocusGeneration = null
+        resolveQueued = false
+        resolvingFocusGeneration = null
+        contentJob?.cancel()
+        contentJob = null
+    }
+
+    private fun stopFinancialObservation(keepRenderedContent: Boolean = false) {
         contentJob?.cancel()
         contentJob = null
         coreObservation?.cancel()
         coreObservation = null
+        observedFocusGeneration = null
+        resolvingFocusGeneration = null
+        resolveQueued = false
+        if (!keepRenderedContent) {
+            renderedFullContent = null
+            activeFocusGeneration = null
+        }
     }
 
     private fun isDisplayOnAndInteractive(): Boolean {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../lock_screen_card/domain/lock_screen_card_repository.dart';
 
@@ -182,6 +183,32 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
     }
   }
 
+  Future<void> _copyNativeDiagnostic(NativeKeyguardCardStatus native) async {
+    const buildCommit = String.fromEnvironment(
+      'FLUVI_BUILD_COMMIT',
+      defaultValue: 'ismeretlen',
+    );
+    await Clipboard.setData(
+      ClipboardData(
+        text: [
+          'FLUVI_KEYGUARD_DIAGNOSTIC',
+          'build=$buildCommit',
+          'requested=${native.configuration.requested}',
+          'systemEnabled=${native.systemServiceEnabled}',
+          'serviceConnected=${native.serviceConnected}',
+          'lastDecision=${native.lastDecisionReason}',
+          'lastAttach=${native.lastAttachResult}',
+          native.diagnosticSummary,
+        ].join('\n'),
+      ),
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Utolsó zárolási próba a vágólapon.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = _status;
@@ -281,6 +308,10 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
                 title: const Text('Zárképernyő-diagnosztika'),
                 subtitle: Text(
                   'Utolsó döntés: ${native.lastDecisionReason}\nCsatolás: ${native.lastAttachResult}',
+                ),
+                trailing: TextButton(
+                  onPressed: () => _copyNativeDiagnostic(native),
+                  child: const Text('Utolsó próba másolása'),
                 ),
               ),
             ),

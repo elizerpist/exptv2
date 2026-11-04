@@ -11,6 +11,24 @@ internal enum class KeyguardSurface {
     UNKNOWN,
 }
 
+/** Why a surface decision was made. These are technical only: no node text,
+ * app name, or accessibility payload is retained in diagnostics. */
+internal enum class KeyguardSurfaceReason {
+    NO_WINDOWS,
+    ROOT_UNAVAILABLE,
+    WALK_TRUNCATED,
+    NO_MAIN_MARKER,
+    CREDENTIAL_MARKER,
+    SHADE_MARKER,
+    FOREIGN_ABOVE,
+    MAIN_CONFIRMED,
+}
+
+internal data class KeyguardSurfaceClassification(
+    val surface: KeyguardSurface,
+    val reason: KeyguardSurfaceReason,
+)
+
 internal data class KeyguardWindowSnapshot(
     val packageName: String?,
     val type: Int,
@@ -53,29 +71,43 @@ internal object KeyguardSurfaceClassifier {
         "com.android.systemui:id/camera_preview",
     )
 
-    fun classify(windows: List<KeyguardWindowSnapshot>, primaryDisplayId: Int = 0): KeyguardSurface {
+    fun classify(windows: List<KeyguardWindowSnapshot>, primaryDisplayId: Int = 0): KeyguardSurface =
+        classifyDetailed(windows, primaryDisplayId).surface
+
+    fun classifyDetailed(
+        windows: List<KeyguardWindowSnapshot>,
+        primaryDisplayId: Int = 0,
+        unavailableRoot: Boolean = false,
+        walkTruncated: Boolean = false,
+    ): KeyguardSurfaceClassification {
         val visible = windows.filter { it.displayId == primaryDisplayId && !it.ownOverlay }
-        if (visible.isEmpty()) return KeyguardSurface.UNKNOWN
+        if (visible.isEmpty()) return KeyguardSurfaceClassification(
+            KeyguardSurface.UNKNOWN,
+            if (unavailableRoot) KeyguardSurfaceReason.ROOT_UNAVAILABLE else KeyguardSurfaceReason.NO_WINDOWS,
+        )
         val system = visible.filter { it.packageName in systemPackages }
         val ids = system.flatMapTo(linkedSetOf()) { it.visibleViewIds }
         // Priority is deliberately security-first. A positive clock/carrier
         // marker can never override a visible bouncer or shade marker.
         if (ids.any { it in credentialIds || it.contains("bouncer", ignoreCase = true) }) {
-            return KeyguardSurface.CREDENTIAL
+            return KeyguardSurfaceClassification(KeyguardSurface.CREDENTIAL, KeyguardSurfaceReason.CREDENTIAL_MARKER)
         }
         if (ids.any { it in occludedIds || it.contains("global_actions", ignoreCase = true) }) {
-            return KeyguardSurface.OCCLUDED
+            return KeyguardSurfaceClassification(KeyguardSurface.OCCLUDED, KeyguardSurfaceReason.FOREIGN_ABOVE)
         }
-        if (ids.any { it in shadeIds }) return KeyguardSurface.SHADE
+        if (ids.any { it in shadeIds }) return KeyguardSurfaceClassification(KeyguardSurface.SHADE, KeyguardSurfaceReason.SHADE_MARKER)
         val foreignAboveSystem = visible.any { window ->
             window.packageName != null &&
                 window.packageName !in systemPackages &&
                 window.packageName != "com.fluvi.app" &&
                 window.layer >= (system.maxOfOrNull { it.layer } ?: Int.MAX_VALUE)
         }
-        if (foreignAboveSystem) return KeyguardSurface.OCCLUDED
-        if (ids.any { it in mainIds }) return KeyguardSurface.MAIN_KEYGUARD
-        return KeyguardSurface.UNKNOWN
+        if (foreignAboveSystem) return KeyguardSurfaceClassification(KeyguardSurface.OCCLUDED, KeyguardSurfaceReason.FOREIGN_ABOVE)
+        if (ids.any { it in mainIds }) return KeyguardSurfaceClassification(KeyguardSurface.MAIN_KEYGUARD, KeyguardSurfaceReason.MAIN_CONFIRMED)
+        return KeyguardSurfaceClassification(
+            KeyguardSurface.UNKNOWN,
+            if (walkTruncated) KeyguardSurfaceReason.WALK_TRUNCATED else KeyguardSurfaceReason.NO_MAIN_MARKER,
+        )
     }
 }
 

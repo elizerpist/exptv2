@@ -20,6 +20,9 @@ internal data class FluviFinancialCardPresentation(
     val showToggle: Boolean,
     val toggleLabel: String,
     val full: Boolean,
+    /** Stable rendered-input identity. Bitmap allocation identity is not a
+     * visual change and must never trigger an accessibility-window update. */
+    val visualKey: String,
 )
 
 internal object FluviFinancialCardPresenter {
@@ -44,6 +47,7 @@ internal object FluviFinancialCardPresenter {
         showToggle = false,
         toggleLabel = "",
         full = false,
+        visualKey = "discreet:v1",
     )
 
     fun loading(): FluviFinancialCardPresentation = FluviFinancialCardPresentation(
@@ -57,6 +61,7 @@ internal object FluviFinancialCardPresenter {
         showToggle = false,
         toggleLabel = "",
         full = true,
+        visualKey = "loading:v1",
     )
 
     fun full(content: FluviLockScreenCardContent, showEvent: Boolean): FluviFinancialCardPresentation {
@@ -72,6 +77,16 @@ internal object FluviFinancialCardPresenter {
             showToggle = content.event != null,
             toggleLabel = if (eventIsPrimary) "Fő érték" else "Utolsó tétel",
             full = true,
+            visualKey = listOf(
+                "full:v1",
+                content.focus,
+                content.primary,
+                content.secondary,
+                content.event.orEmpty(),
+                content.eventLabel.orEmpty(),
+                content.accentColor.toString(),
+                eventIsPrimary.toString(),
+            ).joinToString("\u001f"),
         )
     }
 }

@@ -87,11 +87,27 @@ internal object KeyguardCardDiagnostics {
     private const val LAST_REASON = "lastReason"
     private const val LAST_ATTACH = "lastAttach"
     private const val LAST_EVENT = "lastEvent"
+    private const val LAST_EVENT_COUNT = "lastEventCount"
+    private const val ATTEMPT = "attempt"
+
+    fun beginLockAttempt(context: Context, session: Long, wakeEpoch: Long) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val line = "${android.os.SystemClock.elapsedRealtime()}|KG|WAKE|session=$session|wake=$wakeEpoch"
+        prefs.edit()
+            .putString(EVENTS, line)
+            .putString(ATTEMPT, "session=$session|wake=$wakeEpoch")
+            .remove(LAST_EVENT)
+            .putInt(LAST_EVENT_COUNT, 0)
+            .apply()
+    }
 
     fun record(context: Context, event: String, reason: String, attached: Boolean? = null) {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val state = "$event|$reason|${attached ?: "-"}"
-        if (prefs.getString(LAST_EVENT, null) == state) return
+        if (prefs.getString(LAST_EVENT, null) == state) {
+            prefs.edit().putInt(LAST_EVENT_COUNT, prefs.getInt(LAST_EVENT_COUNT, 1) + 1).apply()
+            return
+        }
         val line = "${android.os.SystemClock.elapsedRealtime()}|$state"
         // Sequence has no takeLast extension on the Kotlin version used by
         // this project. The diagnostic buffer is deliberately tiny, so make
@@ -99,11 +115,12 @@ internal object KeyguardCardDiagnostics {
         val old = prefs.getString(EVENTS, "").orEmpty().lineSequence()
             .filter(String::isNotBlank)
             .toList()
-            .takeLast(15)
+            .takeLast(47)
         prefs.edit()
             .putString(EVENTS, (old + line).joinToString("\n"))
             .putString(LAST_REASON, reason)
             .putString(LAST_EVENT, state)
+            .putInt(LAST_EVENT_COUNT, 1)
             .apply()
     }
 
@@ -118,8 +135,12 @@ internal object KeyguardCardDiagnostics {
     fun lastAttachResult(context: Context): String = context.applicationContext
         .getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LAST_ATTACH, "Nincs csatolási kísérlet") ?: "Nincs csatolási kísérlet"
 
-    fun summary(context: Context): String = context.applicationContext
-        .getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(EVENTS, "") ?: ""
+    fun summary(context: Context): String {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val events = prefs.getString(EVENTS, "").orEmpty()
+        val repeated = prefs.getInt(LAST_EVENT_COUNT, 1)
+        return if (repeated > 1) "$events\nrepeat=$repeated" else events
+    }
 }
 
 internal object FluviKeyguardCardServiceRegistry {

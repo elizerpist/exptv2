@@ -1,5 +1,7 @@
 package com.fluvi.app.lockscreen
 
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -80,6 +82,52 @@ class KeyguardCardVisibilityPolicyTest {
         assertEquals(false, KeyguardCardContentPublicationPolicy.canApply(gate(epoch = 5)))
         assertEquals(false, KeyguardCardContentPublicationPolicy.canApply(gate(focus = 10)))
         assertEquals(false, KeyguardCardContentPublicationPolicy.canApply(gate(display = false)))
+    }
+
+    @Test fun `matched own window feedback is ignored but package-less attach race is inspected`() {
+        val own = KeyguardAccessibilityEventMeta(
+            eventType = AccessibilityEvent.TYPE_WINDOWS_CHANGED,
+            windowId = 41,
+            displayId = 0,
+            windowChanges = AccessibilityWindowInfo.WINDOWS_CHANGE_ADDED,
+            packageName = null,
+        )
+        assertEquals(KeyguardEventAction.IGNORE_OWN, KeyguardCardEventGate.decide(own, ownWindow = true))
+        // Before View.accessibilityWindowId is available the event is not
+        // assumed safe. It is inspected, but no eager detach is allowed.
+        assertEquals(KeyguardEventAction.INSPECT, KeyguardCardEventGate.decide(own, ownWindow = false))
+    }
+
+    @Test fun `stale inspection has no detach authority over a newer attach`() {
+        assertEquals(
+            KeyguardInspectionAction.DROP_STALE,
+            KeyguardCardInspectionGate.decide(
+                expectedSession = 3,
+                currentSession = 3,
+                expectedEpoch = 5,
+                currentEpoch = 6,
+                displayEligibleNow = true,
+                keyguardLockedNow = true,
+            ),
+        )
+        assertEquals(
+            KeyguardInspectionAction.HIDE_CURRENT_GATE,
+            KeyguardCardInspectionGate.decide(3, 3, 6, 6, false, true),
+        )
+    }
+
+    @Test fun `missing roots and truncated walks stay distinguishable unknown states`() {
+        assertEquals(
+            KeyguardSurfaceReason.ROOT_UNAVAILABLE,
+            KeyguardSurfaceClassifier.classifyDetailed(emptyList(), unavailableRoot = true).reason,
+        )
+        assertEquals(
+            KeyguardSurfaceReason.WALK_TRUNCATED,
+            KeyguardSurfaceClassifier.classifyDetailed(
+                listOf(system()),
+                walkTruncated = true,
+            ).reason,
+        )
     }
 
     private fun system(vararg ids: String) = KeyguardWindowSnapshot(
