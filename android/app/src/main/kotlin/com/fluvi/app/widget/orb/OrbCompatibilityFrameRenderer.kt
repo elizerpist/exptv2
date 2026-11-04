@@ -1,13 +1,13 @@
 package com.fluvi.app.widget.orb
 
 import android.content.Context
+import android.appwidget.AppWidgetManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import java.io.File
 import java.util.LinkedHashMap
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.floor
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -16,11 +16,10 @@ import kotlin.math.sqrt
  * ViewFlipper repeats it inside the launcher.  It is not a timer, service or
  * bitmap-IPC animation loop.
  *
- * The Flutter FragmentProgram cannot execute in a RemoteViews host. This
- * renderer therefore uses [OrbCompatibilityVisualProfile] and is named as a
- * compatibility renderer rather than claiming shader-identical output. The
- * profile retains all three sampled stops and the user-selected palette window
- * so a later host-native renderer can consume the same snapshot contract.
+ * RemoteViews cannot execute Flutter's FragmentProgram. Its normal source is
+ * therefore a pre-rendered [OrbMaterialFrameStore] package produced by the
+ * Dashboard material renderer. This class remains only as an interaction-free
+ * static fallback until the first source package is available.
  */
 internal data class OrbCompatibilityVisualProfile(
     val configurationRevision: Long,
@@ -36,8 +35,8 @@ internal data class OrbCompatibilityVisualProfile(
     val colors: IntArray,
     val stops: FloatArray,
     val visualProfileRevision: Int,
-    val rendererContractVersion: Int = 1,
-    val effectId: String = "compatibility-wave-v1",
+    val rendererContractVersion: Int = 2,
+    val effectId: String = "flutter-header-material-v2",
 ) {
     init {
         require(colors.size >= 2) { "An orb profile needs at least two colour stops." }
@@ -224,7 +223,195 @@ internal data class OrbFrameSequence(
     val profileKey: String,
     val plan: OrbFramePlan,
     val frames: List<Bitmap>,
+    /** Records whether these pixels came from Flutter's Header or fallback. */
+    val sourceDescription: String = "native-static-fallback",
 )
+
+/**
+ * Persists the last known-good Flutter material package per widget.  Android
+ * may refresh an AppWidget after Flutter has been closed; it must then replay
+ * this exact finite package rather than synthesising a new wave field from a
+ * partial palette preference.
+ */
+internal object OrbMaterialFrameStore {
+    private const val preferencesName = "fluvi_orb_material_frames"
+    private const val directoryName = "fluvi-orb-material-frames"
+    private const val maximumFrameCount = 24
+    private const val maximumEncodedBytes = 2 * 1024 * 1024
+    private const val maximumFlipIntervalMs = 60_000
+
+    data class Target(
+        val widgetId: Int,
+        val configurationRevision: Long,
+        val mode: String,
+        val axis: String,
+        val direction: String,
+        val categoryId: String?,
+        val preferredSizePx: Int,
+    )
+
+    fun targets(context: Context): List<Target> {
+        val store = FluviOrbConfigurationStore(context)
+        val manager = AppWidgetManager.getInstance(context.applicationContext)
+        return store.configuredIds().map { widgetId ->
+            store.get(widgetId)?.let { configuration ->
+                Target(
+                    widgetId = widgetId,
+                    configurationRevision = configuration.configurationRevision,
+                    mode = configuration.mode.name,
+                    axis = configuration.timeAxis.name,
+                    direction = configuration.direction.name,
+                    categoryId = configuration.categoryId,
+                    preferredSizePx = framePlanFor(
+                        context = context,
+                        options = manager.getAppWidgetOptions(widgetId),
+                    ).sizePx,
+                )
+            }
+        }.filterNotNull()
+    }
+
+    fun write(
+        context: Context,
+        widgetId: Int,
+        configurationRevision: Long,
+        intervalMs: Int,
+        frames: List<ByteArray>,
+        sourceDescription: String,
+    ) {
+        require(frames.isNotEmpty() && frames.size <= maximumFrameCount) {
+            "An orb material package needs 1..$maximumFrameCount frames."
+        }
+        require(frames.sumOf { it.size } <= maximumEncodedBytes) {
+            "Orb material package exceeds its bounded transport budget."
+        }
+        val application = context.applicationContext
+        val directory = File(application.filesDir, directoryName).apply { mkdirs() }
+        val preferences = application.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+        // Never overwrite the active package in place. Flutter can be closed
+        // while a new export is incomplete, and the launcher must keep the
+        // last good package playable in that case.
+        val packageId = "$widgetId-${System.nanoTime()}"
+        val staged = frames.mapIndexed { index, bytes ->
+            val temporary = File(directory, "$packageId-$index.pending")
+            temporary.outputStream().use { it.write(bytes) }
+            temporary
+        }
+        val published = mutableListOf<File>()
+        try {
+            val decoded = staged.map { file ->
+                BitmapFactory.decodeFile(file.absolutePath)
+                    ?: throw IllegalArgumentException("Invalid orb material PNG.")
+            }
+            try {
+                require(decoded.all { bitmap -> bitmap.width == bitmap.height && bitmap.width in 32..128 }) {
+                    "Orb frames must be square 32..128px images."
+                }
+                require(decoded.map { it.width }.distinct().size == 1) {
+                    "Orb material frames must share one square size."
+                }
+            } finally {
+                decoded.forEach { it.recycle() }
+            }
+            staged.forEachIndexed { index, temporary ->
+                val target = File(directory, "$packageId-$index.png")
+                check(temporary.renameTo(target)) { "Unable to publish orb frame $index." }
+                published += target
+            }
+        } catch (failure: Throwable) {
+            staged.forEach(File::delete)
+            published.forEach(File::delete)
+            throw failure
+        }
+        val previousPackage = preferences.getString("$widgetId.package", null)
+        val committed = preferences.edit()
+            .putString("$widgetId.package", packageId)
+            .putLong("$widgetId.revision", configurationRevision)
+            .putInt("$widgetId.count", frames.size)
+            .putInt("$widgetId.interval", intervalMs.coerceIn(40, maximumFlipIntervalMs))
+            .putString("$widgetId.source", sourceDescription)
+            .putLong("$widgetId.renderedAt", System.currentTimeMillis())
+            .commit()
+        if (!committed) {
+            published.forEach(File::delete)
+            throw IllegalStateException("Unable to commit orb material package.")
+        }
+        previousPackage?.let { deletePackage(directory, it) }
+    }
+
+    fun sequenceFor(
+        context: Context,
+        configuration: FluviOrbConfiguration,
+    ): OrbFrameSequence? {
+        val application = context.applicationContext
+        val preferences = application.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+        if (preferences.getLong("${configuration.appWidgetId}.revision", -1) != configuration.configurationRevision) {
+            return null
+        }
+        val packageId = preferences.getString("${configuration.appWidgetId}.package", null)
+            ?: return null
+        val count = preferences.getInt("${configuration.appWidgetId}.count", 0)
+        if (count !in 1..maximumFrameCount) return null
+        val directory = File(application.filesDir, directoryName)
+        val frames = (0 until count).map { index ->
+            BitmapFactory.decodeFile(File(directory, "$packageId-$index.png").absolutePath)
+        }
+        if (frames.any { it == null }) return null
+        val bitmaps = frames.filterNotNull()
+        val size = bitmaps.first().width
+        if (bitmaps.any { it.width != size || it.height != size }) return null
+        val interval = preferences.getInt("${configuration.appWidgetId}.interval", 80)
+            .coerceIn(40, maximumFlipIntervalMs)
+        return OrbFrameSequence(
+            profileKey = "stored|${configuration.appWidgetId}|${configuration.configurationRevision}|$packageId",
+            plan = OrbFramePlan(size, count, interval),
+            frames = bitmaps,
+            sourceDescription = preferences.getString(
+                "${configuration.appWidgetId}.source",
+                "flutter-header-material",
+            ) ?: "flutter-header-material",
+        )
+    }
+
+    fun delete(context: Context, ids: IntArray) {
+        val application = context.applicationContext
+        val directory = File(application.filesDir, directoryName)
+        val preferences = application.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+        preferences.edit().also { editor ->
+            ids.forEach { widgetId ->
+                preferences.getString("$widgetId.package", null)?.let {
+                    deletePackage(directory, it)
+                }
+                listOf("package", "revision", "count", "interval", "source", "renderedAt")
+                    .forEach { suffix -> editor.remove("$widgetId.$suffix") }
+            }
+        }.apply()
+    }
+
+    private fun deletePackage(directory: File, packageId: String) {
+        directory.listFiles { file ->
+            file.name.startsWith("$packageId-") &&
+                (file.name.endsWith(".png") || file.name.endsWith(".pending"))
+        }?.forEach(File::delete)
+    }
+
+    private fun framePlanFor(
+        context: Context,
+        options: android.os.Bundle,
+    ): OrbFramePlan {
+        val widthDp = options.getInt(
+            AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH,
+            options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 56),
+        )
+        val heightDp = options.getInt(
+            AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT,
+            options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 56),
+        )
+        val shortSidePx = (minOf(widthDp, heightDp).coerceAtLeast(1) *
+            context.resources.displayMetrics.density).toInt()
+        return OrbCompatibilityFrameRenderer.planFor(shortSidePx)
+    }
+}
 
 /** Small, non-financial delivery diagnostics. A successful updateAppWidget is
  * deliberately recorded as "published", never as launcher-visible proof. */
@@ -243,7 +430,7 @@ internal object OrbFrameRenderDiagnostics {
             .putLong("$widgetId.framesRenderedAt", System.currentTimeMillis())
             .putLong("$widgetId.remoteViewsPublishedAt", System.currentTimeMillis())
             .putString("$widgetId.profile", profile.cacheKey.hashCode().toString())
-            .putString("$widgetId.backend", profile.effectId)
+            .putString("$widgetId.backend", sequence.sourceDescription)
             .putInt("$widgetId.frameCount", sequence.plan.frameCount)
             .putInt("$widgetId.frameSizePx", sequence.plan.sizePx)
             .putLong("$widgetId.estimatedRawBytes", sequence.plan.estimatedRawBytes)
@@ -326,42 +513,23 @@ internal object OrbCompatibilityFrameRenderer {
                 val nx = (x - centre) / radius
                 val ny = (y - centre) / radius
                 val target = y * sizePx + x
-                pixels[target] = OrbFramePixelSampler.pixelAt(profile, time, nx, ny)
+                pixels[target] = staticPixelAt(profile, nx, ny)
             }
         }
         return Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888).apply {
             setPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
         }
     }
-
-}
-
-/** Pure pixel contract shared by bitmap generation and JVM unit tests. */
-internal object OrbFramePixelSampler {
-    fun pixelAt(
-        profile: OrbCompatibilityVisualProfile,
-        time: Float,
-        nx: Float,
-        ny: Float,
-    ): Int {
+    private fun staticPixelAt(profile: OrbCompatibilityVisualProfile, nx: Float, ny: Float): Int {
         val distance = sqrt(nx * nx + ny * ny)
         if (distance > 1f) return 0
-        val twoPi = (2.0 * PI).toFloat()
-        val seedPhase = ((stableSeed(profile) ushr 1) % 10_000) / 10_000f
-        val angle = time * twoPi + seedPhase * twoPi
-        val travelling = sin((nx * 2.8f - ny * 2.15f) * PI.toFloat() + angle)
-        val curl = cos((nx + ny * 1.3f) * 4.4f - angle * 1.7f)
-        val radial = sin(distance * 7.2f - angle * 1.25f)
-        val material = (.5f + .24f * travelling + .16f * curl + .10f * radial)
-            .coerceIn(0f, 1f)
-        val base = colorAt(profile.colors, profile.stops, material)
-        val highlight = (1f - distance).coerceIn(0f, 1f) *
-            (.12f + .10f * sin(angle + nx * 2.1f))
-        val shaded = shade(base, 1f + highlight - distance * .18f)
-        // A fractional edge keeps the circle crisp without a non-transparent
-        // square/background around it.
+        // Fallback only: preserve the full palette across the circle with no
+        // travelling/curl/radial bands, highlight or edge darkening. The
+        // normal path above is the Flutter-rendered Header material package.
+        val coordinate = ((nx + 1f) * .5f).coerceIn(0f, 1f)
+        val color = colorAt(profile.colors, profile.stops, coordinate)
         val alpha = ((1f - ((distance - .955f) / .045f).coerceIn(0f, 1f)) * 255f).toInt()
-        return argb(alpha, red(shaded), green(shaded), blue(shaded))
+        return argb(alpha, red(color), green(color), blue(color))
     }
 
     private fun colorAt(colors: IntArray, stops: FloatArray, value: Float): Int {
@@ -378,13 +546,6 @@ internal object OrbFramePixelSampler {
         )
     }
 
-    private fun shade(color: Int, factor: Float): Int = rgb(
-        (red(color) * factor).toInt().coerceIn(0, 255),
-        (green(color) * factor).toInt().coerceIn(0, 255),
-        (blue(color) * factor).toInt().coerceIn(0, 255),
-    )
-
-    private fun stableSeed(profile: OrbCompatibilityVisualProfile): Int = profile.cacheKey.hashCode()
     private fun red(color: Int): Int = (color shr 16) and 0xff
     private fun green(color: Int): Int = (color shr 8) and 0xff
     private fun blue(color: Int): Int = color and 0xff

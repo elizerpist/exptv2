@@ -151,10 +151,9 @@ internal class FluviOrbConfigurationStore(context: Context) {
 }
 
 /**
- * The AppWidget backend works on every supported Fluvi API level: a bounded
- * bitmap sequence is delivered once and ViewFlipper repeats it inside the
- * launcher. This is intentionally separate from the still-unavailable
- * Flutter FragmentProgram parity contract.
+ * The AppWidget backend delivers a bounded Flutter-material bitmap sequence
+ * once and ViewFlipper repeats it inside the launcher. A static palette
+ * fallback is used only until Dashboard has exported the first source bundle.
  */
 internal object OrbRendererCapabilities {
     data class State(
@@ -169,8 +168,8 @@ internal object OrbRendererCapabilities {
     internal fun forAndroidApi(androidApi: Int): State = if (androidApi >= 24) {
         State(
             liveHeaderSupported = true,
-            reason = "Kompatibilitási hullámanyag · ViewFlipper helyi lejátszással.",
-            backend = "remoteviews-viewflipper-v1",
+            reason = "Header-anyag képkockacsomag · ViewFlipper helyi lejátszással.",
+            backend = "remoteviews-flutter-material-v2",
             isShaderIdentical = false,
         )
     } else {
@@ -259,6 +258,7 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
 
     override fun onDeleted(context: Context, ids: IntArray) {
         FluviOrbConfigurationStore(context).delete(ids)
+        OrbMaterialFrameStore.delete(context, ids)
         FluviOrbRevisionObserver.reconcile(context)
         super.onDeleted(context, ids)
     }
@@ -332,12 +332,18 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
                     // briefly publishing an arbitrary default target.
                     val configuration = store.get(id) ?: return@runCatching
                     val profile = OrbCompatibilityVisualProfileResolver.resolve(context, configuration)
-                    val sequence = OrbCompatibilityFrameRenderer.sequenceFor(
-                        profile,
-                        framePlanFor(context, manager, id),
-                    )
+                    val sequence = OrbMaterialFrameStore.sequenceFor(context, configuration)
+                        ?: OrbCompatibilityFrameRenderer.sequenceFor(
+                            profile,
+                            framePlanFor(context, manager, id),
+                        )
                     val view = android.widget.RemoteViews(context.packageName, R.layout.fluvi_orb_widget)
                     view.removeAllViews(R.id.fluvi_orb_frame_flipper)
+                    view.setInt(
+                        R.id.fluvi_orb_frame_flipper,
+                        "setFlipInterval",
+                        sequence.plan.intervalMs,
+                    )
                     sequence.frames.forEach { frame ->
                         val child = android.widget.RemoteViews(
                             context.packageName,

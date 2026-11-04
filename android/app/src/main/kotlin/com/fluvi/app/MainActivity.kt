@@ -65,6 +65,8 @@ import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.app.query.QueryMenuMethodBridge
 import com.fluvi.app.runtime.FluviRuntimeCoordinator
+import com.fluvi.app.widget.orb.OrbMaterialFrameStore
+import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.BinaryMessenger
@@ -107,6 +109,7 @@ class MainActivity : FlutterActivity() {
     private var queryMenuChannel: MethodChannel? = null
     private var demoChannel: MethodChannel? = null
     private var dashboardPresentationChannel: MethodChannel? = null
+    private var orbMaterialChannel: MethodChannel? = null
     private var coreRevisionEventChannel: EventChannel? = null
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
@@ -884,6 +887,71 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        orbMaterialChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ORB_MATERIAL_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                scope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            when (call.method) {
+                                "configuredScenes" -> OrbMaterialFrameStore.targets(applicationContext).map { target ->
+                                    mapOf(
+                                        "widgetId" to target.widgetId,
+                                        "configurationRevision" to target.configurationRevision,
+                                        "mode" to target.mode,
+                                        "timeAxis" to target.axis,
+                                        "direction" to target.direction,
+                                        "categoryId" to target.categoryId,
+                                        "frameSizePx" to target.preferredSizePx,
+                                    )
+                                }
+                                "publishFrames" -> {
+                                    val values = call.arguments as? Map<*, *>
+                                        ?: throw IllegalArgumentException("Orb material publication must be a map.")
+                                    val widgetId = (values["widgetId"] as? Number)?.toInt()
+                                        ?: throw IllegalArgumentException("Missing widget id.")
+                                    val revision = (values["configurationRevision"] as? Number)?.toLong()
+                                        ?: throw IllegalArgumentException("Missing widget configuration revision.")
+                                    val intervalMs = (values["intervalMs"] as? Number)?.toInt()
+                                        ?: throw IllegalArgumentException("Missing frame interval.")
+                                    val description = values["sourceDescription"] as? String
+                                        ?: "flutter-header-material"
+                                    val frames = (values["frames"] as? List<*>)
+                                        ?.map { it as? ByteArray ?: throw IllegalArgumentException("Invalid orb frame payload.") }
+                                        ?: throw IllegalArgumentException("Missing orb frames.")
+                                    val current = com.fluvi.app.widget.orb.FluviOrbConfigurationStore(applicationContext)
+                                        .get(widgetId)
+                                        ?: throw IllegalArgumentException("Orb configuration no longer exists.")
+                                    require(current.configurationRevision == revision) {
+                                        "Stale orb material publication."
+                                    }
+                                    OrbMaterialFrameStore.write(
+                                        context = applicationContext,
+                                        widgetId = widgetId,
+                                        configurationRevision = revision,
+                                        intervalMs = intervalMs,
+                                        frames = frames,
+                                        sourceDescription = description.take(160),
+                                    )
+                                    FluviOrbWidgetProvider.renderAsync(
+                                        applicationContext,
+                                        android.appwidget.AppWidgetManager.getInstance(applicationContext),
+                                        intArrayOf(widgetId),
+                                        reason = "flutterMaterialExport",
+                                    )
+                                    null
+                                }
+                                else -> throw IllegalArgumentException("Unknown orb material method: ${call.method}")
+                            }
+                        }
+                    }.onSuccess(result::success).onFailure { error ->
+                        result.error("orb_material", error.message, null)
+                    }
+                }
+            }
+        }
         coreRevisionEventChannel = EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             DASHBOARD_CORE_REVISION_STREAM_CHANNEL,
@@ -980,6 +1048,8 @@ class MainActivity : FlutterActivity() {
         demoChannel = null
         dashboardPresentationChannel?.setMethodCallHandler(null)
         dashboardPresentationChannel = null
+        orbMaterialChannel?.setMethodCallHandler(null)
+        orbMaterialChannel = null
         coreRevisionObservation?.cancel()
         coreRevisionObservation = null
         coreRevisionEventChannel?.setStreamHandler(null)
@@ -3005,6 +3075,7 @@ class MainActivity : FlutterActivity() {
         const val QUERY_MENU_CHANNEL = "com.fluvi/query_menu"
         const val DEMO_CHANNEL = "com.fluvi/demo_data"
         const val DASHBOARD_PRESENTATION_CHANNEL = "fluvi/dashboard_presentation"
+        const val ORB_MATERIAL_CHANNEL = "fluvi/orb_material_frames"
         const val DASHBOARD_PRESENTATION_PREFERENCES = "dashboard_presentation"
         const val DASHBOARD_CORE_REVISION_STREAM_CHANNEL =
             "com.fluvi/dashboard_core_revision_stream"

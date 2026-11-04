@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -466,6 +467,7 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
   ui.FragmentProgram? _program;
   ui.FragmentShader? _shader;
   Object? _failure;
+  Completer<void>? _readiness;
   bool _disposed = false;
   int _programCreations = 0;
   int _shaderCreations = 0;
@@ -503,12 +505,26 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
       _shader = program.fragmentShader();
       _programCreations += 1;
       _shaderCreations += 1;
+      _readiness?.complete();
+      _readiness = null;
       notifyListeners();
     } catch (error) {
       if (_disposed) return;
       _failure = error;
+      _readiness?.complete();
+      _readiness = null;
       notifyListeners();
     }
+  }
+
+  /// Waits only for this retained backend's initial shader result.  Offscreen
+  /// exporters use this instead of borrowing a visible Header's ticker or
+  /// mutating its current frame phase.
+  Future<void> waitForReadiness() {
+    if (_shader != null || _failure != null || _disposed) {
+      return Future<void>.value();
+    }
+    return (_readiness ??= Completer<void>()).future;
   }
 
   void markConfigurationChanged() => _configurationGeneration += 1;
@@ -549,6 +565,8 @@ final class DashboardHeaderFragmentBackend extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _readiness?.complete();
+    _readiness = null;
     super.dispose();
   }
 }

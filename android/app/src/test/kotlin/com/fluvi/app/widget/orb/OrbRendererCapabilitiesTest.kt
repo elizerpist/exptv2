@@ -1,7 +1,6 @@
 package com.fluvi.app.widget.orb
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,7 +10,7 @@ class OrbRendererCapabilitiesTest {
         val state = OrbRendererCapabilities.forAndroidApi(35)
 
         assertTrue(state.liveHeaderSupported)
-        assertEquals("remoteviews-viewflipper-v1", state.backend)
+        assertEquals("remoteviews-flutter-material-v2", state.backend)
         assertTrue(state.reason.contains("ViewFlipper"))
         assertTrue(!state.isShaderIdentical)
     }
@@ -42,7 +41,7 @@ class OrbRendererCapabilitiesTest {
     }
 
     @Test
-    fun `material pixel contract keeps corners transparent and changes over time`() {
+    fun `material profile identifies the Flutter-header frame source`() {
         val profile = OrbCompatibilityVisualProfile(
             configurationRevision = 7,
             mode = FluviOrbConfiguration.Mode.balance,
@@ -59,10 +58,7 @@ class OrbRendererCapabilitiesTest {
             visualProfileRevision = 3,
         )
 
-        assertEquals(0, OrbFramePixelSampler.pixelAt(profile, 0f, 1.1f, 0f))
-        assertNotEquals(
-            OrbFramePixelSampler.pixelAt(profile, 0f, .26f, -.17f),
-            OrbFramePixelSampler.pixelAt(profile, .25f, .26f, -.17f),
-        )
+        assertEquals("flutter-header-material-v2", profile.effectId)
+        assertTrue(profile.cacheKey.contains("flutter-header-material-v2"))
     }
 }

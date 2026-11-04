@@ -48,6 +48,7 @@ import 'core_modes/balance_presentation_settings.dart';
 import 'core_modes/balance_header_glass_configuration.dart';
 import 'core_modes/dashboard_header_balance_color_scale.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
+import '../../../app/platform/dashboard_orb_material_export_bridge.dart';
 import 'core_modes/dashboard_header_tap_wave.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
 import 'core_modes/budget_category_distribution_visual_bank.dart';
@@ -191,6 +192,8 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardBalanceHeaderColorPolicy _balanceHeaderColorPolicy;
   late final DashboardBudgetHeaderColorPolicy _budgetHeaderColorPolicy;
   late final DashboardMindHeaderColorPolicy _mindHeaderColorPolicy;
+  late final DashboardHeaderOrbMaterialExportCoordinator
+  _headerOrbMaterialExporter;
   late final DashboardSummaryAutoResetController _summaryAutoResetController;
   late final DashboardSummaryAutoResetMotionRegistry _summaryAutoResetMotions;
   late final DashboardUpperVerticalGestureCoordinator _upperVerticalGestures;
@@ -330,6 +333,12 @@ class _CoreDashboardState extends State<CoreDashboard>
     _mindHeaderColorPolicy = DashboardMindHeaderColorPolicy(
       tuning: _headerVisualController.tuning,
       score: controller.mindBehavioralScore,
+    );
+    _headerOrbMaterialExporter = DashboardHeaderOrbMaterialExportCoordinator(
+      controller: _headerVisualController,
+      balanceFrame: _balanceHeaderColorPolicy,
+      budgetFrame: _budgetHeaderColorPolicy,
+      mindFrame: _mindHeaderColorPolicy,
     );
     FluviDiagnosticLogger.log(
       const FluviDiagnosticEvent(
@@ -1074,6 +1083,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _balanceHeaderColorPolicy.dispose();
     _budgetHeaderColorPolicy.dispose();
     _mindHeaderColorPolicy.dispose();
+    _headerOrbMaterialExporter.dispose();
     _headerVisualController.tuning.removeListener(_onGlobalAppearanceChanged);
     if (_ownsHeaderVisualController) {
       _headerVisualController.dispose();
@@ -1188,6 +1198,10 @@ class _CoreDashboardState extends State<CoreDashboard>
           : 0.0,
       builder: (context, frame) {
         final geometry = frame.geometry;
+        _headerOrbMaterialExporter.updateHeaderGeometry(
+          size: Size(geometry.headerBounds.width, geometry.headerBounds.height),
+          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+        );
         final collapseTravel = controller.metrics.collapseTravel;
         final normalizedCollapseProgress = collapseTravel == 0
             ? 0.0
