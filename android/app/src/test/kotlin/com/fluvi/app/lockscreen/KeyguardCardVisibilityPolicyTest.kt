@@ -1,7 +1,6 @@
 package com.fluvi.app.lockscreen
 
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityWindowInfo
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -89,7 +88,7 @@ class KeyguardCardVisibilityPolicyTest {
             eventType = AccessibilityEvent.TYPE_WINDOWS_CHANGED,
             windowId = 41,
             displayId = 0,
-            windowChanges = AccessibilityWindowInfo.WINDOWS_CHANGE_ADDED,
+            windowChanges = AccessibilityEvent.WINDOWS_CHANGE_ADDED,
             packageName = null,
         )
         assertEquals(KeyguardEventAction.IGNORE_OWN, KeyguardCardEventGate.decide(own, ownWindow = true))
