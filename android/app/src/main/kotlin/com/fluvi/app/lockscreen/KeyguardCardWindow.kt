@@ -1,10 +1,9 @@
 package com.fluvi.app.lockscreen
 
 import android.content.Context
-import android.graphics.PixelFormat
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.TextView
 import com.fluvi.app.R
@@ -13,7 +12,6 @@ import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
 import com.fluvi.app.lockscreen.material.KeyguardMaterialDiagnostics
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
-import kotlin.math.min
 
 /** Main-thread-only owner of exactly one accessibility overlay root.
  *
@@ -34,13 +32,11 @@ internal class KeyguardCardWindow(
         FAILED,
     }
 
-    private data class Geometry(val width: Int, val y: Int)
-
     private val manager: WindowManager = serviceContext.getSystemService(WindowManager::class.java)
     private var root: View? = null
     private val lifecycle = KeyguardCardWindowLifecycle()
     private var appliedPresentation: FluviFinancialCardPresentation? = null
-    private var appliedGeometry: Geometry? = null
+    private var appliedGeometry: KeyguardCardGeometry? = null
     private var accessibilityWindowId: Int? = null
     private var materialController: KeyguardCardMaterialController? = null
     private var materialProfile: KeyguardMaterialProfile? = null
@@ -202,32 +198,36 @@ internal class KeyguardCardWindow(
                 contentDescription = if (presentation.showToggle) presentation.toggleLabel else null
             }
         }
+        // This runs only after a semantic content update. It never changes
+        // WindowManager geometry or the retained material renderer.
+        root.post {
+            if (!root.isAttachedToWindow || !KeyguardCardContentOverflow.fit(root)) return@post
+            root.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    if (root.viewTreeObserver.isAlive) {
+                        root.viewTreeObserver.removeOnPreDrawListener(this)
+                    }
+                    KeyguardCardContentOverflow.fit(root)
+                    return true
+                }
+            })
+        }
     }
 
-    private fun geometry(verticalOffsetDp: Int): Geometry {
+    private fun geometry(verticalOffsetDp: Int): KeyguardCardGeometry {
         val metrics = serviceContext.resources.displayMetrics
-        val margin = dp(16)
-        return Geometry(
-            width = min(dp(360), metrics.widthPixels - margin * 2).coerceAtLeast(dp(180)),
-            y = dp(148 + verticalOffsetDp.coerceIn(-96, 96)),
+        return resolveKeyguardCardGeometry(
+            displayWidthPx = metrics.widthPixels,
+            density = metrics.density,
+            heightPx = serviceContext.resources.getDimensionPixelSize(
+                R.dimen.fluvi_keyguard_card_height,
+            ),
+            verticalOffsetDp = verticalOffsetDp,
         )
     }
 
-    private fun parameters(geometry: Geometry): WindowManager.LayoutParams = WindowManager.LayoutParams(
-        geometry.width,
-        WindowManager.LayoutParams.WRAP_CONTENT,
-        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-        PixelFormat.TRANSLUCENT,
-    ).apply {
-        gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
-        y = geometry.y
-        title = "FluviKeyguardCard"
-    }
-
-    private fun dp(value: Int): Int = (value * serviceContext.resources.displayMetrics.density).toInt()
+    private fun parameters(geometry: KeyguardCardGeometry): WindowManager.LayoutParams =
+        keyguardCardWindowParameters(geometry)
 
     private fun updateMaterialForPresentation(presentation: FluviFinancialCardPresentation) {
         materialController?.update(

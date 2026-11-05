@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- One physical contract for both the overlay WindowManager window and
+         its production root.  Decorative match_parent layers may only fill
+         this extent; they can never participate in measuring it. -->
+    <dimen name="fluvi_keyguard_card_height">120dp</dimen>
+</resources>

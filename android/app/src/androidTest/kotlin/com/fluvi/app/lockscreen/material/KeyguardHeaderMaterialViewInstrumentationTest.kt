@@ -2,16 +2,24 @@ package com.fluvi.app.lockscreen.material
 
 import android.app.Instrumentation
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.view.PixelCopy
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
+import com.fluvi.app.lockscreen.KeyguardCardContentOverflow
+import com.fluvi.app.lockscreen.keyguardCardWindowParameters
+import com.fluvi.app.lockscreen.resolveKeyguardCardGeometry
+import com.fluvi.app.R
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
@@ -28,6 +36,91 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
+    @Test fun productionKeyguardCardHasOneFixedMeasuredWindowExtent() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        try {
+            instrumentation.runOnMainSync {
+                val resources = activity.resources
+                val height = resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_card_height)
+                val geometry = resolveKeyguardCardGeometry(
+                    displayWidthPx = (392 * resources.displayMetrics.density).toInt(),
+                    density = resources.displayMetrics.density,
+                    heightPx = height,
+                    verticalOffsetDp = 0,
+                )
+                assertEquals(height, keyguardCardWindowParameters(geometry).height)
+                val narrow = resolveKeyguardCardGeometry(
+                    displayWidthPx = (200 * resources.displayMetrics.density).toInt(),
+                    density = resources.displayMetrics.density,
+                    heightPx = height,
+                    verticalOffsetDp = 0,
+                )
+                assertEquals(
+                    (200 * resources.displayMetrics.density).toInt() -
+                        (16 * resources.displayMetrics.density).toInt() * 2,
+                    narrow.width,
+                )
+
+                // These cover every presentation and material state that can
+                // change visibility.  They are measured inside the same fixed
+                // parent extent used by the real WindowManager window.
+                listOf(
+                    CardState("loading", false, false, "Betöltés", "…", ""),
+                    CardState("discreet", false, false, "Fluvi", "Rejtett", ""),
+                    CardState("full", true, true, "Balance · Hónap", "+15 200 Ft", "Hónap nettó"),
+                    CardState("last-item", true, true, "Balance · Hónap", "+15 200 Ft", "Hónap nettó"),
+                    CardState("no-data", false, false, "Balance", "Nincs adat", "Frissítés után megjelenik"),
+                    CardState("content-error", false, false, "Balance", "Nem elérhető", "Próbáld újra az appban"),
+                    CardState("orb-only", false, false, "Balance", "+15 200 Ft", "Hónap nettó"),
+                    CardState("orb-and-background", false, false, "Balance", "+15 200 Ft", "Hónap nettó"),
+                    CardState("animation-off", false, false, "Balance", "+15 200 Ft", "Hónap nettó"),
+                ).forEach { state ->
+                    val card = inflatedCard(activity)
+                    populate(card, state)
+                    measureFromXmlDefinition(card, geometry.width, height)
+                    assertCardExtent(card, height, state.name)
+                    measureInWindowParent(card, geometry.width, height)
+                    assertCardExtent(card, height, state.name)
+                    assertNoReservedAreaOverlap(card, state.name)
+                }
+
+                // Font scaling remains enabled. The two optional lines yield
+                // in priority order rather than changing the card extent or
+                // wrapping the primary value.
+                val largeTextContext = activity.createConfigurationContext(
+                    Configuration(resources.configuration).apply { fontScale = 2f },
+                )
+                val longCard = inflatedCard(largeTextContext)
+                populate(
+                    longCard,
+                    CardState(
+                        "large-text",
+                        true,
+                        true,
+                        "Balance · Hónap · nagyon hosszú fókuszcímke",
+                        "+15 200 000 Ft nagyon hosszú elsődleges érték",
+                        "Hosszú másodlagos magyarázó sor",
+                    ),
+                )
+                measureFromXmlDefinition(longCard, geometry.width, height)
+                assertCardExtent(longCard, height, "large-text")
+                measureInWindowParent(longCard, geometry.width, height)
+                KeyguardCardContentOverflow.fit(longCard)
+                measureInWindowParent(longCard, geometry.width, height)
+                KeyguardCardContentOverflow.fit(longCard)
+                measureInWindowParent(longCard, geometry.width, height)
+                assertCardExtent(longCard, height, "large-text")
+                assertNoReservedAreaOverlap(longCard, "large-text")
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
     @Test fun productionAssetCompilesAndDrawsOnHardwareCanvas() {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -162,4 +255,93 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         "rotationSpeed" to 0.0,
         "settings" to List(12) { 0.0 },
     )
+
+    private data class CardState(
+        val name: String,
+        val eventVisible: Boolean,
+        val toggleVisible: Boolean,
+        val focus: String,
+        val primary: String,
+        val secondary: String,
+    )
+
+    private fun inflatedCard(context: android.content.Context): View =
+        LayoutInflater.from(context).inflate(R.layout.fluvi_keyguard_card, null, false)
+
+    private fun populate(card: View, state: CardState) {
+        card.findViewById<android.widget.TextView>(R.id.fluvi_financial_snapshot_focus).text = state.focus
+        card.findViewById<android.widget.TextView>(R.id.fluvi_financial_snapshot_primary).text = state.primary
+        card.findViewById<android.widget.TextView>(R.id.fluvi_financial_snapshot_secondary).text = state.secondary
+        card.findViewById<android.widget.TextView>(R.id.fluvi_financial_snapshot_event).apply {
+            text = "Utolsó tétel: rendkívül hosszú tranzakciós kategória és megjegyzés"
+            visibility = if (state.eventVisible) View.VISIBLE else View.GONE
+        }
+        card.findViewById<android.widget.TextView>(R.id.fluvi_financial_snapshot_toggle).apply {
+            text = "Utolsó tétel"
+            visibility = if (state.toggleVisible) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun measureInWindowParent(card: View, width: Int, height: Int) {
+        (card.parent as? ViewGroup)?.removeView(card)
+        val parent = FrameLayout(card.context).apply {
+            addView(
+                card,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                ),
+            )
+        }
+        parent.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
+        )
+        parent.layout(0, 0, width, height)
+    }
+
+    private fun measureFromXmlDefinition(card: View, width: Int, height: Int) {
+        card.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height * 3, View.MeasureSpec.AT_MOST),
+        )
+        card.layout(0, 0, width, card.measuredHeight)
+    }
+
+    private fun assertCardExtent(card: View, expectedHeight: Int, label: String) {
+        assertEquals("$label root height", expectedHeight, card.measuredHeight)
+        assertEquals(
+            "$label material background height",
+            expectedHeight,
+            card.findViewById<View>(R.id.fluvi_keyguard_material_background).measuredHeight,
+        )
+        assertEquals(
+            "$label veil height",
+            expectedHeight,
+            card.findViewById<View>(R.id.fluvi_keyguard_material_veil).measuredHeight,
+        )
+    }
+
+    private fun assertNoReservedAreaOverlap(card: View, label: String) {
+        val orb = card.findViewById<View>(R.id.fluvi_financial_snapshot_orb)
+        val toggle = card.findViewById<View>(R.id.fluvi_financial_snapshot_toggle)
+        listOf(
+            R.id.fluvi_financial_snapshot_focus,
+            R.id.fluvi_financial_snapshot_primary,
+            R.id.fluvi_financial_snapshot_secondary,
+        ).map { card.findViewById<View>(it) }
+            .filter { it.visibility == View.VISIBLE }
+            .forEach { text ->
+                assertTrue("$label text reached orb", text.right <= orb.left)
+            }
+        val event = card.findViewById<View>(R.id.fluvi_financial_snapshot_event)
+        if (event.visibility == View.VISIBLE && toggle.visibility == View.VISIBLE) {
+            assertTrue("$label event reached toggle", event.right <= toggle.left)
+        }
+        if (event.visibility == View.VISIBLE) {
+            val secondary = card.findViewById<View>(R.id.fluvi_financial_snapshot_secondary)
+            assertTrue("$label event overlaps secondary", event.top >= secondary.bottom)
+        }
+        assertTrue("$label orb and toggle overlap", orb.bottom <= toggle.top || toggle.bottom <= orb.top)
+    }
 }
