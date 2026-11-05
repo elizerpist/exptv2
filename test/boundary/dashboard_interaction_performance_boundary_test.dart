@@ -345,20 +345,20 @@ void main() {
     );
     expect(
       RegExp(r'- name: Enable KVM').allMatches(profileWorkflow).length,
-      2,
-      reason: 'Both profile jobs must enable the same VM acceleration path.',
+      3,
+      reason: 'Profile jobs and the material smoke must enable VM acceleration.',
     );
     expect(
       RegExp(r'test -r /dev/kvm').allMatches(profileWorkflow).length,
-      2,
-      reason: 'Both profile jobs must fail closed when KVM is unavailable.',
+      3,
+      reason: 'Profile jobs and the material smoke must fail closed without KVM.',
     );
     expect(
       RegExp(r'sudo chmod 0666 /dev/kvm').allMatches(profileWorkflow).length,
-      2,
+      3,
       reason:
-          'Both ephemeral runners must grant KVM access without relying on '
-          'a udev daemon.',
+          'All emulator runners must grant KVM access without relying on a '
+          'udev daemon.',
     );
     expect(
       profileWorkflow,
@@ -373,8 +373,8 @@ void main() {
     );
     expect(
       RegExp(r'- name: Enable KVM').allMatches(profileWorkflow).length,
-      2,
-      reason: 'Current and milestone jobs must share one explicit KVM setup.',
+      3,
+      reason: 'All emulator jobs must share one explicit KVM setup.',
     );
     expect(
       RegExp(r'target: default').allMatches(profileWorkflow).length,

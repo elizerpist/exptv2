@@ -163,6 +163,13 @@ jobs:
 
       - uses: ./.github/actions/setup-fluvi-flutter
 
+      - name: Enable KVM for material runtime
+        run: |
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+
       - name: Run production keyguard AGSL smoke on API 35
         uses: reactivecircus/android-emulator-runner@v2
         with:
