@@ -140,6 +140,49 @@ jobs:
             ! -name '*_golden_test.dart' -print0 \
             | xargs -0 flutter test
 
+  # RuntimeShader construction is a device/GPU API, not a JVM contract. This
+  # deliberately compiles the generated production AGSL asset and mounts the
+  # production retained View on an API-35 hardware Canvas before an APK is
+  # handed to a physical-device tester.
+  test-keyguard-material-runtime:
+    needs: test-core
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - uses: ./.github/actions/setup-fluvi-flutter
+
+      - name: Run production keyguard AGSL smoke on API 35
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          emulator-build: 15081367
+          target: default
+          arch: x86_64
+          profile: pixel_7
+          cores: 4
+          ram-size: 2048M
+          disable-animations: false
+          emulator-options: >-
+            -no-window -gpu swangle -feature -Vulkan -accel on
+            -no-snapshot -noaudio -no-boot-anim -camera-back none
+          pre-emulator-launch-script: >-
+            cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+          script: >-
+            cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon
+            --tests 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest'
+
   test-native-nightly:
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)
     needs: test-core
@@ -163,7 +206,7 @@ jobs:
         run: ./gradlew testDebugUnitTest --no-daemon
 
   build-human-diagnostic-apk:
-    needs: [test-core, test-flutter]
+    needs: [test-core, test-flutter, test-keyguard-material-runtime]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

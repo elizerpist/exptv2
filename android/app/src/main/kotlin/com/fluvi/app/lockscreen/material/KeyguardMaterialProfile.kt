@@ -6,7 +6,7 @@ import android.os.Looper
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.math.max
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Versioned, durable copy of the Header's visual input.  It contains no
@@ -42,7 +42,7 @@ internal data class KeyguardMaterialProfile(
     /** The visual identity excludes the handoff clock so an identical scene
      * from a restarted Flutter publisher never restarts the native clock. */
     val visualKey: String = listOf(
-        shaderAbiVersion, sourceShaderHash, sceneIdentity, effectId, effectShaderId,
+        shaderAbiVersion, sourceShaderHash, sceneIdentity, effectId, effectShaderId, phaseSpeed,
         colors.contentHashCode(), stops.contentHashCode(), opacity,
         paletteSplitPercent, commonSettings.contentHashCode(), background.visualKey,
         interior.visualKey, referenceWidth, referenceHeight,
@@ -84,53 +84,102 @@ internal data class KeyguardMaterialProfile(
         // emits the same value into the packaged asset; changing the source
         // requires deliberately updating this transport contract too.
         const val SOURCE_SHADER_HASH = "6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b74d565a4c76d4e7f"
-        private const val MAX_VALUES = 40
+        /** Stable IDs copied from DashboardHeaderEffectCatalog.shaderId, not
+         * derived at runtime from enum order. */
+        private val effectShaderIds = mapOf(
+            "staticEffect" to 0, "dualTide" to 1, "magneticMembrane" to 2,
+            "breathingLens" to 3, "cellularField" to 4, "balanceMembrane" to 5,
+            "balanceCounterflow" to 6, "balanceCharges" to 7, "deepDrift" to 8,
+            "freeFlow" to 9, "chaoticAdvection" to 10, "elasticSpace" to 11,
+            "braidedCurrent" to 12, "volumetricCurrent" to 13, "metricBloom" to 14,
+            "gravitationalFabric" to 15, "breathingMetric" to 16, "tidalCurvature" to 17,
+        )
 
-        fun fromMap(values: Map<*, *>): KeyguardMaterialProfile? = runCatching {
-            val schema = values.int("schemaVersion")
-            val abi = values.int("shaderAbiVersion")
-            val sourceHash = values["sourceShaderHash"] as? String ?: return null
-            val session = values["publisherSession"] as? String ?: return null
-            val revision = values.long("publisherRevision")
-            val sceneIdentity = values["sceneIdentity"] as? String ?: return null
-            val effect = values["effectId"] as? String ?: return null
-            val colors = values.intArray("colors", 2, 10)
-            val stops = values.floatArray("stops", 2, 10)
-            val common = values.floatArray("commonSettings", 40, 40)
-            val background = KeyguardMaterialPortal.fromMap(
-                values["background"] as? Map<*, *> ?: emptyMap<Any?, Any?>(),
-            )
-            val interior = KeyguardMaterialPortal.fromMap(
-                values["interior"] as? Map<*, *> ?: emptyMap<Any?, Any?>(),
-            )
-            KeyguardMaterialProfile(
+        sealed interface DecodeResult {
+            data class Accepted(val profile: KeyguardMaterialProfile) : DecodeResult
+            data class Rejected(val reason: String) : DecodeResult
+            data class Unavailable(val reason: String) : DecodeResult
+        }
+
+        fun decode(values: Map<*, *>): DecodeResult {
+            return try {
+            fun finite(name: String): Float = ((values[name] as? Number)?.toFloat()
+                ?: throw IllegalArgumentException("missing:$name")).also {
+                require(it.isFinite()) { "nonFinite:$name" }
+            }
+            fun text(name: String, maxLength: Int): String = (values[name] as? String)
+                ?.takeIf { it.isNotBlank() && it.length <= maxLength }
+                ?: throw IllegalArgumentException("invalid:$name")
+            fun floats(name: String, size: Int): FloatArray {
+                val raw = values[name] as? List<*> ?: throw IllegalArgumentException("missing:$name")
+                require(raw.size == size) { "size:$name" }
+                return FloatArray(size) { index ->
+                    (raw[index] as? Number)?.toFloat()?.also { require(it.isFinite()) { "nonFinite:$name" } }
+                        ?: throw IllegalArgumentException("invalid:$name")
+                }
+            }
+            fun colors(): IntArray {
+                val raw = values["colors"] as? List<*> ?: throw IllegalArgumentException("missing:colors")
+                require(raw.size in 2..10) { "size:colors" }
+                return IntArray(raw.size) { index ->
+                    (raw[index] as? Number)?.toInt() ?: throw IllegalArgumentException("invalid:colors")
+                }
+            }
+            val schema = (values["schemaVersion"] as? Number)?.toInt() ?: throw IllegalArgumentException("missing:schema")
+            val abi = (values["shaderAbiVersion"] as? Number)?.toInt() ?: throw IllegalArgumentException("missing:abi")
+            require(schema == SCHEMA_VERSION) { "schema" }
+            require(abi == SHADER_ABI_VERSION) { "abi" }
+            val sourceHash = text("sourceShaderHash", 64)
+            require(sourceHash == SOURCE_SHADER_HASH) { "sourceHash" }
+            val effect = text("effectId", 64)
+            val effectShaderId = (values["effectShaderId"] as? Number)?.toInt()
+                ?: throw IllegalArgumentException("missing:effectShaderId")
+            require(effectShaderIds[effect] == effectShaderId) { "effectMapping" }
+            val stops = floats("stops", (values["stops"] as? List<*>)?.size ?: 0)
+            val colors = colors()
+            require(stops.size == colors.size) { "stops" }
+            require(stops.indices.all { index ->
+                stops[index] in 0f..1f && (index == 0 || stops[index] >= stops[index - 1])
+            }) { "stopRange" }
+            val background = KeyguardMaterialPortal.decode(values["background"] as? Map<*, *>)
+            val interior = KeyguardMaterialPortal.decode(values["interior"] as? Map<*, *>)
+            if (background is KeyguardMaterialPortal.DecodeResult.Rejected) return DecodeResult.Rejected("background:${background.reason}")
+            if (interior is KeyguardMaterialPortal.DecodeResult.Rejected) return DecodeResult.Rejected("interior:${interior.reason}")
+            val bg = (background as KeyguardMaterialPortal.DecodeResult.Accepted).portal
+            val inside = (interior as KeyguardMaterialPortal.DecodeResult.Accepted).portal
+            val profile = KeyguardMaterialProfile(
                 schemaVersion = schema,
                 shaderAbiVersion = abi,
                 sourceShaderHash = sourceHash,
-                publisherSession = session.take(96),
-                publisherRevision = max(0L, revision),
-                sceneIdentity = sceneIdentity.take(256),
-                effectId = effect.take(64),
-                effectShaderId = values.int("effectShaderId"),
-                phase = values.float("phase"),
-                elapsedSeconds = values.float("elapsedSeconds").coerceAtLeast(0f),
-                phaseSpeed = values.float("phaseSpeed").coerceAtLeast(0f),
+                publisherSession = text("publisherSession", 96),
+                publisherRevision = (values["publisherRevision"] as? Number)?.toLong()?.also { require(it >= 0L) { "revision" } }
+                    ?: throw IllegalArgumentException("missing:revision"),
+                sceneIdentity = text("sceneIdentity", 256),
+                effectId = effect,
+                effectShaderId = effectShaderId,
+                phase = finite("phase"),
+                elapsedSeconds = finite("elapsedSeconds").also { require(it >= 0f) { "elapsed" } },
+                phaseSpeed = finite("phaseSpeed").also { require(it >= 0f) { "speed" } },
                 colors = colors,
                 stops = stops,
-                opacity = values.float("opacity").coerceIn(0f, 1f),
-                paletteSplitPercent = values.float("paletteSplitPercent").coerceIn(0f, 100f),
-                commonSettings = common,
-                background = background,
-                interior = interior,
-                referenceWidth = values.float("referenceWidth").coerceAtLeast(1f),
-                referenceHeight = values.float("referenceHeight").coerceAtLeast(1f),
-            ).takeIf {
-                it.schemaVersion == SCHEMA_VERSION &&
-                    it.shaderAbiVersion == SHADER_ABI_VERSION &&
-                    it.sourceShaderHash == SOURCE_SHADER_HASH &&
-                    it.colors.size == it.stops.size
+                opacity = finite("opacity").also { require(it in 0f..1f) { "opacity" } },
+                paletteSplitPercent = finite("paletteSplitPercent").also { require(it in 0f..100f) { "split" } },
+                commonSettings = floats("commonSettings", 40),
+                background = bg,
+                interior = inside,
+                referenceWidth = finite("referenceWidth").also { require(it > 0f && it <= 10000f) { "width" } },
+                referenceHeight = finite("referenceHeight").also { require(it > 0f && it <= 10000f) { "height" } },
+            )
+            DecodeResult.Accepted(profile)
+            } catch (error: IllegalArgumentException) {
+                DecodeResult.Rejected(error.message?.take(96) ?: "invalid")
+            } catch (error: Throwable) {
+                DecodeResult.Unavailable(error.javaClass.simpleName)
             }
-        }.getOrNull()
+        }
+
+        fun fromMap(values: Map<*, *>): KeyguardMaterialProfile? =
+            (decode(values) as? DecodeResult.Accepted)?.profile
 
         fun fromJson(raw: String): KeyguardMaterialProfile? = runCatching {
             val value = JSONObject(raw)
@@ -146,19 +195,6 @@ internal data class KeyguardMaterialProfile(
             }
         }
 
-        private fun Map<*, *>.int(key: String): Int = (this[key] as? Number)?.toInt() ?: 0
-        private fun Map<*, *>.long(key: String): Long = (this[key] as? Number)?.toLong() ?: 0L
-        private fun Map<*, *>.float(key: String): Float = ((this[key] as? Number)?.toFloat() ?: 0f).takeIf { it.isFinite() } ?: 0f
-        private fun Map<*, *>.intArray(key: String, min: Int, max: Int): IntArray {
-            val raw = this[key] as? List<*> ?: return IntArray(0)
-            if (raw.size !in min..max) return IntArray(0)
-            return IntArray(raw.size) { index -> (raw[index] as? Number)?.toInt() ?: 0 }
-        }
-        private fun Map<*, *>.floatArray(key: String, min: Int, max: Int): FloatArray {
-            val raw = this[key] as? List<*> ?: return FloatArray(0)
-            if (raw.size !in min..max || raw.size > MAX_VALUES) return FloatArray(0)
-            return FloatArray(raw.size) { index -> ((raw[index] as? Number)?.toFloat() ?: 0f).takeIf { it.isFinite() } ?: 0f }
-        }
     }
 }
 
@@ -189,21 +225,60 @@ internal data class KeyguardMaterialPortal(
     }
 
     companion object {
-        fun fromMap(values: Map<*, *>): KeyguardMaterialPortal = KeyguardMaterialPortal(
-            enabled = values["enabled"] as? Boolean ?: false,
-            effectIndex = ((values["effectIndex"] as? Number)?.toInt() ?: 0).coerceIn(0, 4),
-            phase = number(values, "phase"),
-            phaseSpeed = number(values, "phaseSpeed").coerceAtLeast(0f),
-            paletteCenterPercent = number(values, "paletteCenterPercent").coerceIn(0f, 100f),
-            paletteWindowPercent = number(values, "paletteWindowPercent").coerceIn(10f, 100f),
-            rotationEnabled = values["rotationEnabled"] as? Boolean ?: false,
-            rotationSpeed = number(values, "rotationSpeed").coerceIn(0f, 100f),
-            settings = (values["settings"] as? List<*>)?.take(12)?.let { raw ->
-                FloatArray(12) { index -> ((raw.getOrNull(index) as? Number)?.toFloat() ?: 0f).takeIf { it.isFinite() } ?: 0f }
-            } ?: FloatArray(12),
-        )
-        private fun number(values: Map<*, *>, key: String): Float = ((values[key] as? Number)?.toFloat() ?: 0f).takeIf { it.isFinite() } ?: 0f
+        sealed interface DecodeResult {
+            data class Accepted(val portal: KeyguardMaterialPortal) : DecodeResult
+            data class Rejected(val reason: String) : DecodeResult
+        }
+
+        fun decode(values: Map<*, *>?): DecodeResult = try {
+            requireNotNull(values) { "missing" }
+            fun finite(key: String): Float = ((values[key] as? Number)?.toFloat()
+                ?: throw IllegalArgumentException("missing:$key")).also { require(it.isFinite()) { "nonFinite:$key" } }
+            val rawSettings = values["settings"] as? List<*> ?: throw IllegalArgumentException("missing:settings")
+            require(rawSettings.size == 12) { "size:settings" }
+            val settings = FloatArray(12) { index ->
+                (rawSettings[index] as? Number)?.toFloat()?.also { require(it.isFinite()) { "nonFinite:settings" } }
+                    ?: throw IllegalArgumentException("invalid:settings")
+            }
+            val effect = (values["effectIndex"] as? Number)?.toInt()
+                ?: throw IllegalArgumentException("missing:effect")
+            require(effect in 0..4) { "effect" }
+            DecodeResult.Accepted(
+                KeyguardMaterialPortal(
+                    enabled = values["enabled"] as? Boolean ?: throw IllegalArgumentException("missing:enabled"),
+                    effectIndex = effect,
+                    phase = finite("phase"),
+                    phaseSpeed = finite("phaseSpeed").also { require(it >= 0f) { "phaseSpeed" } },
+                    paletteCenterPercent = finite("paletteCenterPercent").also { require(it in 0f..100f) { "center" } },
+                    paletteWindowPercent = finite("paletteWindowPercent").also { require(it in 10f..100f) { "window" } },
+                    rotationEnabled = values["rotationEnabled"] as? Boolean ?: throw IllegalArgumentException("missing:rotationEnabled"),
+                    rotationSpeed = finite("rotationSpeed").also { require(it in 0f..100f) { "rotationSpeed" } },
+                    settings = settings,
+                ),
+            )
+        } catch (error: IllegalArgumentException) {
+            DecodeResult.Rejected(error.message?.take(96) ?: "invalid")
+        }
+
+        fun fromMap(values: Map<*, *>): KeyguardMaterialPortal =
+            (decode(values) as? DecodeResult.Accepted)?.portal
+                ?: KeyguardMaterialPortal(false, 0, 0f, 0f, 50f, 68f, false, 0f, FloatArray(12))
     }
+}
+
+/** Ordering is intentionally independent of Flutter's per-engine revision:
+ * every new MethodChannel session starts its Dart counter again at one. */
+internal object KeyguardMaterialPublicationOrder {
+    fun accepts(
+        storedEpoch: Long,
+        storedSession: String?,
+        storedRevision: Long,
+        incomingEpoch: Long,
+        incomingSession: String,
+        incomingRevision: Long,
+    ): Boolean = incomingEpoch > storedEpoch ||
+        (incomingEpoch == storedEpoch &&
+            (storedSession != incomingSession || incomingRevision > storedRevision))
 }
 
 /** Native durability and publication ordering for the rendering profile. */
@@ -212,23 +287,50 @@ internal object FluviKeyguardMaterialStore {
     private const val PROFILE = "profile"
     private const val SESSION = "publisherSession"
     private const val REVISION = "publisherRevision"
+    private const val PUBLISHER_EPOCH = "publisherEpoch"
+    private const val PROFILE_STATUS = "profileStatus"
 
     fun read(context: Context): KeyguardMaterialProfile? = prefs(context).getString(PROFILE, null)
         ?.let(KeyguardMaterialProfile::fromJson)
 
-    fun publish(context: Context, values: Map<*, *>): Boolean {
-        val unredacted = KeyguardMaterialProfile.fromMap(values) ?: return false
+    fun status(context: Context): String = prefs(context).getString(PROFILE_STATUS, "unavailable") ?: "unavailable"
+
+    fun publish(context: Context, values: Map<*, *>, publisherEpoch: Long): Boolean {
+        val decoded = KeyguardMaterialProfile.decode(values)
+        val unredacted = (decoded as? KeyguardMaterialProfile.DecodeResult.Accepted)?.profile
+        if (unredacted == null) {
+            prefs(context).edit().putString(PROFILE_STATUS, when (decoded) {
+                is KeyguardMaterialProfile.DecodeResult.Rejected -> "rejected:${decoded.reason}"
+                is KeyguardMaterialProfile.DecodeResult.Unavailable -> "unavailable:${decoded.reason}"
+                else -> "unavailable"
+            }).apply()
+            return false
+        }
         val candidate = if (com.fluvi.app.lockscreen.FluviKeyguardCardSettings
                 .read(context).showFinancialDetails
         ) unredacted else unredacted.neutralized()
         val prefs = prefs(context)
         val oldSession = prefs.getString(SESSION, null)
         val oldRevision = prefs.getLong(REVISION, -1L)
-        if (oldSession == candidate.publisherSession && candidate.publisherRevision <= oldRevision) return false
+        val oldEpoch = prefs.getLong(PUBLISHER_EPOCH, -1L)
+        // A Flutter bridge starts its local revision at one after Activity
+        // recreation. The native connection epoch orders those sessions, so
+        // a late call from a detached engine cannot overwrite a newer scene.
+        if (!KeyguardMaterialPublicationOrder.accepts(
+                storedEpoch = oldEpoch,
+                storedSession = oldSession,
+                storedRevision = oldRevision,
+                incomingEpoch = publisherEpoch,
+                incomingSession = candidate.publisherSession,
+                incomingRevision = candidate.publisherRevision,
+            )
+        ) return false
         prefs.edit()
             .putString(PROFILE, candidate.toJson().toString())
             .putString(SESSION, candidate.publisherSession)
             .putLong(REVISION, candidate.publisherRevision)
+            .putLong(PUBLISHER_EPOCH, publisherEpoch)
+            .putString(PROFILE_STATUS, "accepted")
             .apply()
         com.fluvi.app.lockscreen.FluviKeyguardCardServiceRegistry.notifyMaterialChanged(candidate)
         return true
@@ -256,9 +358,11 @@ internal object FluviKeyguardMaterialStore {
 internal object FluviKeyguardMaterialBridgeRegistry {
     private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var channel: MethodChannel? = null
+    private val publisherEpoch = AtomicLong(0L)
 
-    fun connect(value: MethodChannel) {
+    fun connect(value: MethodChannel): Long {
         channel = value
+        return publisherEpoch.incrementAndGet()
     }
 
     fun disconnect(value: MethodChannel?) {

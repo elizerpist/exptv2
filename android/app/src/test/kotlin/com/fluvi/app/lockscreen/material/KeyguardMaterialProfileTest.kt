@@ -48,6 +48,23 @@ class KeyguardMaterialProfileTest {
         assertEquals(null, KeyguardMaterialProfile.fromMap(profile().plus("shaderAbiVersion" to 5)))
     }
 
+    @Test fun `rejects empty or malformed palette rather than manufacturing zero uniforms`() {
+        assertEquals(null, KeyguardMaterialProfile.fromMap(profile().plus("colors" to emptyList<Int>())))
+        assertEquals(null, KeyguardMaterialProfile.fromMap(profile().plus("stops" to listOf(0.0, 1.2, 1.0))))
+        assertEquals(null, KeyguardMaterialProfile.fromMap(profile().plus("commonSettings" to List(39) { 0.0 })))
+    }
+
+    @Test fun `rejects effect names that do not match their stable shader id`() {
+        assertEquals(
+            null,
+            KeyguardMaterialProfile.fromMap(profile().plus("effectShaderId" to 7)),
+        )
+        assertEquals(
+            null,
+            KeyguardMaterialProfile.fromMap(profile().plus("effectId" to "unknownEffect")),
+        )
+    }
+
     @Test fun `neutral profile removes financial palette while retaining animation grammar`() {
         val value = requireNotNull(KeyguardMaterialProfile.fromMap(profile()))
         val neutral = value.neutralized()
@@ -60,5 +77,37 @@ class KeyguardMaterialProfileTest {
         val value = requireNotNull(KeyguardMaterialProfile.fromMap(profile(speed = .25)))
         val scene = KeyguardMaterialScene(value, full = true, appliedAtNanos = 1_000_000_000L)
         assertEquals(.5f + .25f * 9f, scene.timeAt(10_000_000_000L).phase, .0001f)
+    }
+
+    @Test fun `scene time derives deltas from one nanosecond timebase`() {
+        val value = requireNotNull(KeyguardMaterialProfile.fromMap(profile(speed = .25)))
+        val scene = KeyguardMaterialScene(value, full = true, appliedAtNanos = 9_000_000_000_000L)
+        val before = scene.timeAt(9_000_000_000_000L)
+        val after = scene.timeAt(9_001_000_000_000L)
+        assertEquals(0.25f, after.phase - before.phase, .0001f)
+        assertEquals(1f, after.elapsedSeconds - before.elapsedSeconds, .0001f)
+    }
+
+    @Test fun `new bridge session accepts revision one but old session cannot overwrite it`() {
+        assertTrue(
+            KeyguardMaterialPublicationOrder.accepts(
+                storedEpoch = 4L,
+                storedSession = "publisher-a",
+                storedRevision = 21L,
+                incomingEpoch = 5L,
+                incomingSession = "publisher-b",
+                incomingRevision = 1L,
+            ),
+        )
+        assertFalse(
+            KeyguardMaterialPublicationOrder.accepts(
+                storedEpoch = 5L,
+                storedSession = "publisher-b",
+                storedRevision = 1L,
+                incomingEpoch = 4L,
+                incomingSession = "publisher-a",
+                incomingRevision = 22L,
+            ),
+        )
     }
 }

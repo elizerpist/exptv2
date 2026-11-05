@@ -15,8 +15,16 @@ plugins {
 val keyguardHeaderSource = rootProject.projectDir.parentFile.resolve("shaders/dashboard_header_field.frag")
 val keyguardHeaderGeneratedAssets = layout.buildDirectory.dir("generated/keyguardHeaderMaterial/assets")
 val keyguardHeaderSourceHash = "6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b74d565a4c76d4e7f"
+// Bump only when the fixed, audited adapter changes.  This is intentionally
+// separate from the canonical Flutter source hash: Android diagnostics must
+// distinguish a source change from an AGSL adaptation change.
+val keyguardHeaderAdapterVersion = "2"
 val generateKeyguardHeaderMaterial by tasks.registering {
     inputs.file(keyguardHeaderSource)
+    // Gradle must rerun when the fixed adapter changes even when the canonical
+    // Flutter source has not. Otherwise an APK can retain an old AGSL asset
+    // with the same source input and silently reintroduce a compiler failure.
+    inputs.property("adapterVersion", keyguardHeaderAdapterVersion)
     outputs.dir(keyguardHeaderGeneratedAssets)
     doLast {
         val source = keyguardHeaderSource.readText()
@@ -34,9 +42,14 @@ val generateKeyguardHeaderMaterial by tasks.registering {
         val agsl = source
             .replace("#include <flutter/runtime_effect.glsl>\n", "")
             .replace("out vec4 fragColor;\n", "")
+            // AGSL exposes saturate as an intrinsic.  The canonical Flutter
+            // program owns a helper with that name, so rename its declaration
+            // and every complete identifier call without touching names such
+            // as saturateColor.  The Flutter source remains untouched.
+            .replace(Regex("\\bsaturate\\b"), "fluviSaturate")
             .replace("void main() {", "half4 main(float2 _fluviFragCoord) {")
             .replace("FlutterFragCoord()", "_fluviFragCoord")
-            .replace("fragColor = vec4(composed, saturate(uOpacity));", "float _fluviAlpha = saturate(uOpacity);\n  return half4(composed * _fluviAlpha, _fluviAlpha);")
+            .replace("fragColor = vec4(composed, fluviSaturate(uOpacity));", "float _fluviAlpha = fluviSaturate(uOpacity);\n  return half4(composed * _fluviAlpha, _fluviAlpha);")
             .replace(Regex("\\bvec2\\b"), "float2")
             .replace(Regex("\\bvec3\\b"), "float3")
             .replace(Regex("\\bvec4\\b"), "float4")
@@ -44,13 +57,26 @@ val generateKeyguardHeaderMaterial by tasks.registering {
         check(agsl.contains("half4 main(float2 _fluviFragCoord)"))
         check(!agsl.contains("FlutterFragCoord"))
         check(!agsl.contains("runtime_effect.glsl"))
+        check(!Regex("out\\s+vec4\\s+fragColor").containsMatchIn(agsl)) {
+            "AGSL adapter retained the Flutter fragment output declaration"
+        }
+        check(!Regex("float\\s+saturate\\s*\\(").containsMatchIn(agsl)) {
+            "AGSL adapter retained a custom saturate declaration"
+        }
+        check(agsl.contains("float fluviSaturate(float value)")) {
+            "AGSL adapter did not rename the canonical saturate helper"
+        }
+        check(agsl.contains("return half4(")) { "AGSL adapter did not produce a return entry point" }
+        val generatedHash = MessageDigest.getInstance("SHA-256")
+            .digest(agsl.toByteArray())
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
         val destination = keyguardHeaderGeneratedAssets.get().asFile
         destination.mkdirs()
         destination.resolve("fluvi_keyguard_header_material.agsl").writeText(
             "// generated-from=shaders/dashboard_header_field.frag\n// source-sha256=$hash\n$agsl",
         )
         destination.resolve("fluvi_keyguard_header_material.meta").writeText(
-            "source-sha256=$hash\nshader-abi-version=6\n",
+            "source-sha256=$hash\ngenerated-agsl-sha256=$generatedHash\nadapter-version=$keyguardHeaderAdapterVersion\nshader-abi-version=6\n",
         )
     }
 }
@@ -77,6 +103,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 }
 
@@ -92,4 +119,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:core:1.6.1")
 }

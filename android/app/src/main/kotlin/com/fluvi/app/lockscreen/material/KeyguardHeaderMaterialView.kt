@@ -9,7 +9,6 @@ import android.graphics.Paint
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
-import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.View
@@ -30,7 +29,8 @@ internal class KeyguardMaterialClock(
         private set
     var stopCount = 0
         private set
-    var drawCount = 0
+    /** Number of display callbacks, deliberately not a Canvas-draw metric. */
+    var callbackCount = 0
         private set
     var largeGapCount = 0
         private set
@@ -64,7 +64,7 @@ internal class KeyguardMaterialClock(
             }
         }
         lastFrameNanos = frameTimeNanos
-        drawCount += 1
+        callbackCount += 1
         onFrame(frameTimeNanos)
         schedule()
     }
@@ -82,20 +82,32 @@ internal class KeyguardMaterialClock(
     }
 }
 
+/** `System.nanoTime()` and Choreographer frameTimeNanos share Android's
+ * monotonic timebase.  Keeping the source injectable makes pause/resume and
+ * handoff regressions deterministic without introducing wall-clock time. */
+internal fun interface KeyguardAnimationTimeSource {
+    fun nowNanos(): Long
+}
+
+internal val SystemKeyguardAnimationTimeSource = KeyguardAnimationTimeSource(System::nanoTime)
+
 /** Immutable clock anchor held by a view during a semantic scene. */
 internal data class KeyguardMaterialScene(
     val profile: KeyguardMaterialProfile,
     val full: Boolean,
-    val appliedAtNanos: Long = SystemClock.elapsedRealtimeNanos(),
+    val appliedAtNanos: Long,
 ) {
     val visualKey = "${profile.visualKey}|$full"
     fun timeAt(frameNanos: Long): KeyguardMaterialTime {
-        val delta = max(0L, frameNanos - appliedAtNanos) / 1_000_000_000f
+        // Keep the subtraction and division in Long/Double.  Converting the
+        // absolute monotonic timestamp to Float first freezes animation after
+        // sufficiently long uptime.
+        val delta = (max(0L, frameNanos - appliedAtNanos).toDouble() / 1_000_000_000.0)
         return KeyguardMaterialTime(
-            elapsedSeconds = profile.elapsedSeconds + delta,
-            phase = profile.phase + delta * profile.phaseSpeed,
-            backgroundPhase = profile.background.phase + delta * profile.background.phaseSpeed,
-            interiorPhase = profile.interior.phase + delta * profile.interior.phaseSpeed,
+            elapsedSeconds = (profile.elapsedSeconds.toDouble() + delta).toFloat(),
+            phase = (profile.phase.toDouble() + delta * profile.phaseSpeed).toFloat(),
+            backgroundPhase = (profile.background.phase.toDouble() + delta * profile.background.phaseSpeed).toFloat(),
+            interiorPhase = (profile.interior.phase.toDouble() + delta * profile.interior.phaseSpeed).toFloat(),
         )
     }
 
@@ -110,6 +122,13 @@ internal data class KeyguardMaterialScene(
         appliedAtNanos = nowNanos,
     )
 }
+
+internal data class KeyguardMaterialRendererState(
+    val viewAttached: Boolean,
+    val positiveSize: Boolean,
+    val lastCanvasHardwareAccelerated: Boolean?,
+    val rendererReady: Boolean,
+)
 
 internal data class KeyguardMaterialTime(
     val elapsedSeconds: Float,
@@ -127,6 +146,7 @@ internal data class KeyguardMaterialTime(
 internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
+    private val animationTime: KeyguardAnimationTimeSource = SystemKeyguardAnimationTimeSource,
 ) : View(context, attrs) {
     enum class Shape { ORB, CARD_BACKGROUND }
 
@@ -134,13 +154,26 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private var current: KeyguardMaterialScene? = null
     private var previous: KeyguardMaterialScene? = null
     private var transitionStartedNanos = 0L
-    private var frameNanos = SystemClock.elapsedRealtimeNanos()
+    private var frameNanos = animationTime.nowNanos()
     private var pausedTime: KeyguardMaterialTime? = null
     private var fallbackBitmap: Bitmap? = null
     private var materialEnabled = false
     private var shaderCurrent: KeyguardHeaderShader? = null
     private var shaderPrevious: KeyguardHeaderShader? = null
-    private var shaderFailure: String? = null
+    private var shaderFailure: KeyguardMaterialRendererFailure? = null
+    private var attemptedProgramKey: String? = null
+    private var lastCanvasHardwareAccelerated: Boolean? = null
+    private var lastTime: KeyguardMaterialTime? = null
+    private var onDrawCount = 0
+    private var shaderDrawCount = 0
+    private var fallbackDrawCount = 0
+    private var phaseAdvanceCount = 0
+    private var shaderCompileAttempts = 0
+    private var shaderCompileSuccesses = 0
+    private var shaderCompileFailures = 0
+    private var transitionCompletedCount = 0
+    /** This is called only on main-thread view lifecycle/Canvas state changes. */
+    var onRendererStateChanged: ((KeyguardMaterialRendererState) -> Unit)? = null
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
@@ -152,21 +185,39 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         setWillNotDraw(false)
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        notifyRendererState()
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        // `isAttachedToWindow` flips during the framework call.  Publishing
+        // before it would let the controller retain a frame callback for a
+        // root which has already been removed from the accessibility window.
+        notifyRendererState()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        notifyRendererState()
+    }
+
     fun setStaticBitmap(value: Bitmap?) {
         fallbackBitmap = value
         if (!materialEnabled) invalidate()
     }
 
     fun setScene(scene: KeyguardMaterialScene?, enabled: Boolean) {
-        val next = scene
-        materialEnabled = enabled && next != null
-        if (next == null) {
+        materialEnabled = enabled && scene != null
+        if (scene == null) {
             current = null
             previous = null
             pausedTime = null
             invalidate()
             return
         }
+        var next = scene
         val currentScene = current
         if (currentScene?.visualKey == next.visualKey) {
             // Keep the original monotonic anchor. Financial text updates and
@@ -174,17 +225,39 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             invalidate()
             return
         }
+        // A speed/palette/settings publication for the same effect must not
+        // restart at Flutter's old handoff phase. Preserve the material's
+        // local monotonic position, then use the new profile from that point.
+        // A privacy or effect change intentionally takes the incoming anchor.
+        if (currentScene != null && currentScene.full == next.full &&
+            currentScene.profile.effectId == next.profile.effectId
+        ) {
+            val now = animationTime.nowNanos()
+            val at = pausedTime ?: currentScene.timeAt(now)
+            next = KeyguardMaterialScene(
+                profile = next.profile.copy(
+                    phase = at.phase,
+                    elapsedSeconds = at.elapsedSeconds,
+                    background = next.profile.background.copy(phase = at.backgroundPhase),
+                    interior = next.profile.interior.copy(phase = at.interiorPhase),
+                ),
+                full = next.full,
+                appliedAtNanos = now,
+            )
+        }
         // Privacy redaction never crossfades financial colour into the
         // neutral scene. A semantic effect/palette change keeps the old field
         // as an opaque base and lays the new field over it.
         if (currentScene != null && currentScene.full == next.full) {
             previous = currentScene
-            transitionStartedNanos = SystemClock.elapsedRealtimeNanos()
+            transitionStartedNanos = animationTime.nowNanos()
         } else {
             previous = null
         }
         current = next
-        ensureShaders()
+        // RuntimeShader construction deliberately waits for the first real
+        // hardware Canvas.  `addView()` and even View attachment are not a
+        // rendering-readiness signal for an accessibility overlay.
         invalidate()
     }
 
@@ -195,29 +268,55 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     fun pause() {
         if (pausedTime != null) return
-        val now = SystemClock.elapsedRealtimeNanos()
+        val now = animationTime.nowNanos()
         pausedTime = current?.timeAt(now)
     }
 
     fun resume() {
         val paused = pausedTime ?: return
         val scene = current ?: return
-        current = scene.anchoredAt(paused, SystemClock.elapsedRealtimeNanos())
+        current = scene.anchoredAt(paused, animationTime.nowNanos())
         previous = null
         pausedTime = null
         invalidate()
     }
 
-    fun rendererFailure(): String? = shaderFailure
+    fun rendererFailure(): String? = shaderFailure?.summary
+    fun rendererFailureStage(): String? = shaderFailure?.stage
+    fun rendererFailureMessage(): String? = shaderFailure?.message
     fun shaderCreationCount(): Int = (shaderCurrent?.creationCount ?: 0) + (shaderPrevious?.creationCount ?: 0)
-    fun hardwareAcceleratedForDiagnostics(): Boolean = isHardwareAccelerated
+    fun lastCanvasHardwareAcceleratedForDiagnostics(): Boolean = lastCanvasHardwareAccelerated ?: false
+    fun isRendererReady(): Boolean = isAttachedToWindow && width > 0 && height > 0 &&
+        lastCanvasHardwareAccelerated == true && shaderCurrent != null && shaderFailure == null
     fun canAnimateMaterial(): Boolean {
         ensureShaders()
-        return isHardwareAccelerated && shaderCurrent != null && shaderFailure == null
+        return isRendererReady()
     }
+
+    fun diagnostics(): KeyguardHeaderMaterialViewDiagnostics = KeyguardHeaderMaterialViewDiagnostics(
+        onDrawCount = onDrawCount,
+        shaderDrawCount = shaderDrawCount,
+        fallbackDrawCount = fallbackDrawCount,
+        phaseAdvanceCount = phaseAdvanceCount,
+        shaderCompileAttempts = shaderCompileAttempts,
+        shaderCompileSuccesses = shaderCompileSuccesses,
+        shaderCompileFailures = shaderCompileFailures,
+        transitionCompletedCount = transitionCompletedCount,
+        lastCanvasHardwareAccelerated = lastCanvasHardwareAccelerated,
+        failureStage = shaderFailure?.stage,
+        failureClass = shaderFailure?.exceptionClass,
+        failureMessage = shaderFailure?.message,
+        generatedAgslHash = KeyguardHeaderShader.metadata(context).generatedAgslHash,
+        adapterVersion = KeyguardHeaderShader.metadata(context).adapterVersion,
+    )
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        onDrawCount += 1
+        if (lastCanvasHardwareAccelerated != canvas.isHardwareAccelerated) {
+            lastCanvasHardwareAccelerated = canvas.isHardwareAccelerated
+            notifyRendererState()
+        }
         val scene = current
         if (!materialEnabled || scene == null || width <= 0 || height <= 0) {
             drawFallback(canvas, scene)
@@ -245,23 +344,55 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             drawShader(canvas, shaderPrevious ?: currentShader, old, 1f)
             drawShader(canvas, currentShader, scene, progress)
         } else {
+            if (old != null) transitionCompletedCount += 1
             previous = null
             drawShader(canvas, currentShader, scene, 1f)
         }
     }
 
     private fun ensureShaders() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || shaderFailure != null) return
-        if (shaderCurrent == null) runCatching { KeyguardHeaderShader(context) }
-            .onSuccess { shaderCurrent = it }
-            .onFailure { error -> shaderFailure = error.javaClass.simpleName }
-        if (previous != null && shaderPrevious == null && shaderFailure == null) runCatching { KeyguardHeaderShader(context) }
-            .onSuccess { shaderPrevious = it }
-            .onFailure { error -> shaderFailure = error.javaClass.simpleName }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val metadata = KeyguardHeaderShader.metadata(context)
+        val programKey = "${metadata.generatedAgslHash}|${metadata.adapterVersion}"
+        if (shaderFailure != null && attemptedProgramKey == programKey) return
+        if (shaderCurrent == null) {
+            attemptedProgramKey = programKey
+            shaderCompileAttempts += 1
+            runCatching { KeyguardHeaderShader(context, metadata) }
+                .onSuccess {
+                    shaderCurrent = it
+                    shaderCompileSuccesses += 1
+                    shaderFailure = null
+                    notifyRendererState()
+                }
+                .onFailure { error ->
+                    shaderCompileFailures += 1
+                    shaderFailure = KeyguardMaterialRendererFailure.compile(error, metadata)
+                    notifyRendererState()
+                }
+        }
+        if (previous != null && shaderPrevious == null && shaderFailure == null) {
+            shaderCompileAttempts += 1
+            runCatching { KeyguardHeaderShader(context, metadata) }
+                .onSuccess { shaderPrevious = it; shaderCompileSuccesses += 1 }
+                .onFailure { error ->
+                    shaderCompileFailures += 1
+                    shaderFailure = KeyguardMaterialRendererFailure.compile(error, metadata)
+                    notifyRendererState()
+                }
+        }
     }
 
     private fun drawShader(canvas: Canvas, shader: KeyguardHeaderShader, scene: KeyguardMaterialScene, alpha: Float) {
-        shader.configure(scene.profile, width, height, scene.timeAt(frameNanos))
+        val time = scene.timeAt(frameNanos)
+        try {
+            shader.configure(scene.profile, width, height, time)
+        } catch (error: Throwable) {
+            shaderFailure = KeyguardMaterialRendererFailure.uniform(error)
+            notifyRendererState()
+            drawFallback(canvas, scene)
+            return
+        }
         paint.shader = shader.runtimeShader
         paint.alpha = (alpha * 255).toInt().coerceIn(0, 255)
         when (shape) {
@@ -273,9 +404,16 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         }
         paint.shader = null
         paint.alpha = 255
+        shaderDrawCount += 1
+        val before = lastTime
+        if (before != null && (before.phase != time.phase || before.elapsedSeconds != time.elapsedSeconds)) {
+            phaseAdvanceCount += 1
+        }
+        lastTime = time
     }
 
     private fun drawFallback(canvas: Canvas, scene: KeyguardMaterialScene?) {
+        fallbackDrawCount += 1
         val profile = scene?.profile
         val bitmap = fallbackBitmap
         if (shape == Shape.ORB && bitmap != null && !materialEnabled) {
@@ -345,10 +483,94 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     private fun dp(value: Float): Float = value * resources.displayMetrics.density
+
+    private fun notifyRendererState() {
+        onRendererStateChanged?.invoke(
+            KeyguardMaterialRendererState(
+                viewAttached = isAttachedToWindow,
+                positiveSize = width > 0 && height > 0,
+                lastCanvasHardwareAccelerated = lastCanvasHardwareAccelerated,
+                rendererReady = isRendererReady(),
+            ),
+        )
+    }
+}
+
+internal data class KeyguardHeaderMaterialViewDiagnostics(
+    val onDrawCount: Int,
+    val shaderDrawCount: Int,
+    val fallbackDrawCount: Int,
+    val phaseAdvanceCount: Int,
+    val shaderCompileAttempts: Int,
+    val shaderCompileSuccesses: Int,
+    val shaderCompileFailures: Int,
+    val transitionCompletedCount: Int,
+    val lastCanvasHardwareAccelerated: Boolean?,
+    val failureStage: String?,
+    val failureClass: String?,
+    val failureMessage: String?,
+    val generatedAgslHash: String?,
+    val adapterVersion: String?,
+)
+
+private data class KeyguardMaterialRendererFailure(
+    val stage: String,
+    val exceptionClass: String,
+    val message: String?,
+    val sourceShaderHash: String? = null,
+    val generatedAgslHash: String? = null,
+    val adapterVersion: String? = null,
+) {
+    val summary: String get() = listOfNotNull(stage, exceptionClass, message).joinToString(":")
+
+    companion object {
+        private fun bounded(error: Throwable): String? = error.message
+            ?.replace(Regex("[\\r\\n\\t]+"), " ")
+            ?.take(4096)
+
+        fun compile(error: Throwable, metadata: KeyguardHeaderShader.Metadata) = KeyguardMaterialRendererFailure(
+            stage = "COMPILE",
+            exceptionClass = error.javaClass.simpleName,
+            message = bounded(error),
+            sourceShaderHash = metadata.sourceShaderHash,
+            generatedAgslHash = metadata.generatedAgslHash,
+            adapterVersion = metadata.adapterVersion,
+        )
+
+        fun uniform(error: Throwable) = KeyguardMaterialRendererFailure(
+            stage = "UNIFORM_BIND",
+            exceptionClass = error.javaClass.simpleName,
+            message = bounded(error),
+        )
+    }
 }
 
 /** Writes the v6 Header uniform ABI into one retained RuntimeShader. */
-internal class KeyguardHeaderShader(context: Context) {
+internal class KeyguardHeaderShader(context: Context, private val metadata: Metadata = metadata(context)) {
+    data class Metadata(
+        val sourceShaderHash: String?,
+        val generatedAgslHash: String?,
+        val adapterVersion: String?,
+    )
+
+    companion object {
+        fun metadata(context: Context): Metadata = runCatching {
+            val values = context.assets.open("fluvi_keyguard_header_material.meta")
+                .bufferedReader().useLines { lines ->
+                    lines.mapNotNull { line ->
+                        line.indexOf('=').takeIf { it > 0 }?.let { index ->
+                            line.substring(0, index) to line.substring(index + 1)
+                        }
+                    }.toMap()
+                }
+            Metadata(
+                sourceShaderHash = values["source-sha256"],
+                generatedAgslHash = values["generated-agsl-sha256"],
+                adapterVersion = values["adapter-version"],
+            )
+        }.getOrDefault(Metadata(null, null, null))
+    }
+
     val runtimeShader: RuntimeShader
     var creationCount = 1
         private set
@@ -392,9 +614,12 @@ internal class KeyguardHeaderShader(context: Context) {
             val color = profile.colors.getOrElse(index) { fallback }
             uniform4("uGradient$index", Color.red(color) / 255f, Color.green(color) / 255f, Color.blue(color) / 255f, Color.alpha(color) / 255f)
         }
+        // This mirrors DashboardHeaderFragmentUniformLayout exactly: slots
+        // 0..9 are stop positions, slot 10 is the live-probe count, and slot
+        // 11 remains padding.  Swapping the final two (as the first Android
+        // port did) leaves the canonical shader with zero usable probes.
         val stops = FloatArray(12) { index -> if (index < 10) profile.stops.getOrElse(index) { 1f } else 1f }
-        stops[10] = 0f
-        stops[11] = min(3, max(2, min(profile.colors.size, profile.stops.size))).toFloat()
+        stops[10] = min(3, max(2, min(profile.colors.size, profile.stops.size))).toFloat()
         uniform4("uGradientStops0", stops, 0)
         uniform4("uGradientStops1", stops, 4)
         uniform4("uGradientStops2", stops, 8)

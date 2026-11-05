@@ -117,6 +117,7 @@ class MainActivity : FlutterActivity() {
     private var dashboardPresentationChannel: MethodChannel? = null
     private var orbMaterialChannel: MethodChannel? = null
     private var keyguardMaterialChannel: MethodChannel? = null
+    private var keyguardMaterialPublisherEpoch: Long = -1L
     private var coreRevisionEventChannel: EventChannel? = null
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
@@ -1111,16 +1112,17 @@ class MainActivity : FlutterActivity() {
                                     "accepted" to FluviKeyguardMaterialStore.publish(
                                         applicationContext,
                                         values,
+                                        keyguardMaterialPublisherEpoch,
                                     ),
                                 ),
                             )
                         }
                     }
                     "sceneTarget" -> {
-                        val focus = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext)
-                        // Budget category material must use the keyguard
-                        // card's saved category/period, not whichever Budget
-                        // selection happens to be visible on Dashboard.
+                        val focus = FluviKeyguardCardSettings.read(applicationContext).focus
+                        // This is the keyguard card's own focus.  It is never
+                        // borrowed from an AppWidget host or the notification
+                        // configuration, even while those surfaces exist.
                         queryScope.launch {
                             val target = FluviLockScreenCardCoordinator
                                 .materialSceneTarget(applicationContext, focus.asFinancialFocus())
@@ -1133,7 +1135,9 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
-        FluviKeyguardMaterialBridgeRegistry.connect(requireNotNull(keyguardMaterialChannel))
+        keyguardMaterialPublisherEpoch = FluviKeyguardMaterialBridgeRegistry.connect(
+            requireNotNull(keyguardMaterialChannel),
+        )
         coreRevisionEventChannel = EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             DASHBOARD_CORE_REVISION_STREAM_CHANNEL,
@@ -1199,8 +1203,27 @@ class MainActivity : FlutterActivity() {
 
     private suspend fun lockScreenCardStatus(): Map<String, Any?> =
         FluviLockScreenCardCoordinator.preview(applicationContext).toMutableMap().apply {
+            val keyguardFocus = FluviKeyguardCardSettings.read(applicationContext).focus
             put("widget", FluviFinancialSnapshotWidgetCoordinator.preview(applicationContext))
             put("nativeCard", FluviKeyguardCardSettings.statusMap(applicationContext))
+            put(
+                "keyguardCategories",
+                FluviLockScreenCardCoordinator.categories(
+                    applicationContext,
+                    keyguardFocus.direction,
+                    keyguardFocus.timeAxis,
+                ),
+            )
+            put(
+                "keyguardContent",
+                if (keyguardFocus.isValid) {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            FluviLockScreenCardCoordinator.resolve(applicationContext, keyguardFocus.asFinancialFocus()).toMap()
+                        }
+                    }.getOrNull()
+                } else null,
+            )
         }
 
     private fun consumeFinancialSnapshotWidgetLaunch(): Map<String, Any?>? =
@@ -1265,6 +1288,7 @@ class MainActivity : FlutterActivity() {
         keyguardMaterialChannel?.setMethodCallHandler(null)
         FluviKeyguardMaterialBridgeRegistry.disconnect(keyguardMaterialChannel)
         keyguardMaterialChannel = null
+        keyguardMaterialPublisherEpoch = -1L
         coreRevisionObservation?.cancel()
         coreRevisionObservation = null
         coreRevisionEventChannel?.setStreamHandler(null)

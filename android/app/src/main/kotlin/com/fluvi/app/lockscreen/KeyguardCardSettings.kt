@@ -3,6 +3,46 @@ package com.fluvi.app.lockscreen
 import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
+import com.fluvi.app.runtime.FluviLockScreenCardConfiguration
+import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
+
+/**
+ * The accessibility overlay owns this focus.  It may share the financial
+ * projector enum with the widget and notification, but it never shares their
+ * storage authority.  In particular, a null Budget category remains an
+ * explicit incomplete choice instead of silently becoming another category.
+ */
+internal data class KeyguardCardFocus(
+    val mode: FluviLockScreenCardConfiguration.Mode = FluviLockScreenCardConfiguration.Mode.balance,
+    val timeAxis: FluviLockScreenCardConfiguration.TimeAxis = FluviLockScreenCardConfiguration.TimeAxis.month,
+    val direction: FluviLockScreenCardConfiguration.Direction = FluviLockScreenCardConfiguration.Direction.expense,
+    val categoryId: String? = null,
+    val eventLine: FluviLockScreenCardConfiguration.EventLine = FluviLockScreenCardConfiguration.EventLine.related,
+    val generation: Long = 0L,
+) {
+    val isValid: Boolean get() = mode != FluviLockScreenCardConfiguration.Mode.budget || !categoryId.isNullOrBlank()
+
+    fun asFinancialFocus() = FluviLockScreenCardConfiguration(
+        enabled = true,
+        mode = mode,
+        timeAxis = timeAxis,
+        direction = direction,
+        categoryId = categoryId,
+        eventLine = eventLine,
+        privacy = FluviLockScreenCardConfiguration.Privacy.full,
+        generation = generation,
+    )
+
+    fun toMap(): Map<String, Any?> = mapOf(
+        "mode" to mode.name,
+        "timeAxis" to timeAxis.name,
+        "direction" to direction.name,
+        "categoryId" to categoryId,
+        "eventLine" to eventLine.name,
+        "generation" to generation,
+        "valid" to isValid,
+    )
+}
 
 /** Persistent user consent only.  Live service/window facts deliberately do
  * not live here, so a stale setting can never claim physical visibility. */
@@ -11,6 +51,7 @@ internal data class KeyguardCardSettings(
     val showFinancialDetails: Boolean = false,
     val verticalOffsetDp: Int = 0,
     val animationMode: KeyguardCardAnimationMode = KeyguardCardAnimationMode.ORB_ONLY,
+    val focus: KeyguardCardFocus = KeyguardCardFocus(),
     val generation: Long = 0L,
 )
 
@@ -34,15 +75,31 @@ internal object FluviKeyguardCardSettings {
     private const val DETAILS = "details"
     private const val OFFSET = "verticalOffsetDp"
     private const val ANIMATION_MODE = "animationMode"
+    private const val FOCUS_MIGRATED = "focusMigrated"
+    private const val FOCUS_MODE = "focus.mode"
+    private const val FOCUS_AXIS = "focus.axis"
+    private const val FOCUS_DIRECTION = "focus.direction"
+    private const val FOCUS_CATEGORY = "focus.categoryId"
+    private const val FOCUS_EVENT_LINE = "focus.eventLine"
+    private const val FOCUS_GENERATION = "focus.generation"
     private const val GENERATION = "generation"
 
     fun read(context: Context): KeyguardCardSettings {
         val prefs = prefs(context)
+        migrateFocusIfNeeded(context, prefs)
         return KeyguardCardSettings(
             requested = prefs.getBoolean(REQUESTED, false),
             showFinancialDetails = prefs.getBoolean(DETAILS, false),
             verticalOffsetDp = prefs.getInt(OFFSET, 0).coerceIn(-96, 96),
             animationMode = KeyguardCardAnimationMode.fromWire(prefs.getString(ANIMATION_MODE, null)),
+            focus = KeyguardCardFocus(
+                mode = enumValue(prefs.getString(FOCUS_MODE, null), FluviLockScreenCardConfiguration.Mode.balance),
+                timeAxis = enumValue(prefs.getString(FOCUS_AXIS, null), FluviLockScreenCardConfiguration.TimeAxis.month),
+                direction = enumValue(prefs.getString(FOCUS_DIRECTION, null), FluviLockScreenCardConfiguration.Direction.expense),
+                categoryId = prefs.getString(FOCUS_CATEGORY, null),
+                eventLine = enumValue(prefs.getString(FOCUS_EVENT_LINE, null), FluviLockScreenCardConfiguration.EventLine.related),
+                generation = prefs.getLong(FOCUS_GENERATION, 0L),
+            ),
             generation = prefs.getLong(GENERATION, 0L),
         )
     }
@@ -58,17 +115,31 @@ internal object FluviKeyguardCardSettings {
         val animationMode = if (values.containsKey("animationMode")) {
             KeyguardCardAnimationMode.fromWire(values["animationMode"])
         } else old.animationMode
-        val next = KeyguardCardSettings(requested, details, offset, animationMode, old.generation + 1L)
+        val focus = focusFromMap(values, old.focus)
+        val focusChanged = focus.copy(generation = 0L) != old.focus.copy(generation = 0L)
+        val committedFocus = focus.copy(generation = if (focusChanged) old.focus.generation + 1L else old.focus.generation)
+        val next = KeyguardCardSettings(requested, details, offset, animationMode, committedFocus, old.generation + 1L)
         prefs(context).edit()
             .putBoolean(REQUESTED, next.requested)
             .putBoolean(DETAILS, next.showFinancialDetails)
             .putInt(OFFSET, next.verticalOffsetDp)
             .putString(ANIMATION_MODE, next.animationMode.wireValue)
+            .putBoolean(FOCUS_MIGRATED, true)
+            .putString(FOCUS_MODE, next.focus.mode.name)
+            .putString(FOCUS_AXIS, next.focus.timeAxis.name)
+            .putString(FOCUS_DIRECTION, next.focus.direction.name)
+            .putString(FOCUS_CATEGORY, next.focus.categoryId)
+            .putString(FOCUS_EVENT_LINE, next.focus.eventLine.name)
+            .putLong(FOCUS_GENERATION, next.focus.generation)
             .putLong(GENERATION, next.generation)
             .apply()
         if (!next.showFinancialDetails) {
             com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore.redact(context)
         } else if (!old.showFinancialDetails) {
+            com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
+        }
+        if (focusChanged) {
+            FluviKeyguardCardServiceRegistry.notifyFocusChanged()
             com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
         }
         FluviKeyguardCardServiceRegistry.notifySettingsChanged(next)
@@ -82,6 +153,7 @@ internal object FluviKeyguardCardSettings {
             "showFinancialDetails" to value.showFinancialDetails,
             "verticalOffsetDp" to value.verticalOffsetDp,
             "animationMode" to value.animationMode.wireValue,
+            "focus" to value.focus.toMap(),
             "generation" to value.generation,
             "systemServiceEnabled" to systemServiceEnabled(context),
             "serviceConnected" to FluviKeyguardCardServiceRegistry.connected,
@@ -105,6 +177,73 @@ internal object FluviKeyguardCardSettings {
     }
 
     internal fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private fun migrateFocusIfNeeded(context: Context, prefs: android.content.SharedPreferences) {
+        if (prefs.getBoolean(FOCUS_MIGRATED, false)) return
+        // The old implementation accidentally treated the AppWidget focus as
+        // the overlay focus.  Copy it once only if it is meaningful.  A
+        // legacy invalid Budget selection stays explicitly incomplete rather
+        // than being silently redirected to a different category or metric.
+        val legacy = FluviFinancialSnapshotWidgetCoordinator.configuration(context.applicationContext)
+        val hadLegacyChoice = context.applicationContext
+            .getSharedPreferences("fluvi_financial_snapshot_widget", Context.MODE_PRIVATE)
+            .contains("mode")
+        val copied = if (legacy.isValid) {
+            KeyguardCardFocus(
+                mode = legacy.mode,
+                timeAxis = legacy.timeAxis,
+                direction = legacy.direction,
+                categoryId = legacy.categoryId,
+                eventLine = legacy.eventLine,
+                generation = 1L,
+            )
+        } else if (hadLegacyChoice) {
+            // Preserve the incomplete Budget intent so the editor can ask for
+            // a category. Never silently turn it into a different metric.
+            KeyguardCardFocus(
+                mode = legacy.mode,
+                timeAxis = legacy.timeAxis,
+                direction = legacy.direction,
+                categoryId = null,
+                eventLine = legacy.eventLine,
+                generation = 1L,
+            )
+        } else {
+            KeyguardCardFocus(generation = 1L)
+        }
+        prefs.edit()
+            .putBoolean(FOCUS_MIGRATED, true)
+            .putString(FOCUS_MODE, copied.mode.name)
+            .putString(FOCUS_AXIS, copied.timeAxis.name)
+            .putString(FOCUS_DIRECTION, copied.direction.name)
+            .putString(FOCUS_CATEGORY, copied.categoryId)
+            .putString(FOCUS_EVENT_LINE, copied.eventLine.name)
+            .putLong(FOCUS_GENERATION, copied.generation)
+            .apply()
+    }
+
+    private fun focusFromMap(values: Map<*, *>, old: KeyguardCardFocus): KeyguardCardFocus {
+        val nested = values["focus"] as? Map<*, *>
+        val source = nested ?: values
+        fun text(key: String, fallback: String): String = source[key] as? String ?: fallback
+        val categoryProvided = source.containsKey("categoryId") || values.containsKey("focusCategoryId")
+        val category = when {
+            source.containsKey("categoryId") -> source["categoryId"] as? String
+            values.containsKey("focusCategoryId") -> values["focusCategoryId"] as? String
+            else -> old.categoryId
+        }
+        return KeyguardCardFocus(
+            mode = enumValue(text("mode", values["focusMode"] as? String ?: old.mode.name), old.mode),
+            timeAxis = enumValue(text("timeAxis", values["focusTimeAxis"] as? String ?: old.timeAxis.name), old.timeAxis),
+            direction = enumValue(text("direction", values["focusDirection"] as? String ?: old.direction.name), old.direction),
+            categoryId = if (categoryProvided) category else old.categoryId,
+            eventLine = enumValue(text("eventLine", values["focusEventLine"] as? String ?: old.eventLine.name), old.eventLine),
+            generation = old.generation,
+        )
+    }
+
+    private inline fun <reified T : Enum<T>> enumValue(value: String?, fallback: T): T =
+        enumValues<T>().firstOrNull { it.name == value } ?: fallback
 }
 
 /** A bounded, technical-only log for diagnostic builds. No node tree, text,
@@ -201,14 +340,32 @@ internal object FluviKeyguardCardServiceRegistry {
     fun materialDiagnostics(): Map<String, Any?> = service?.materialDiagnostics()
         ?: mapOf(
             "rendererBackend" to "not-connected",
+            "requestedRenderer" to "not-connected",
+            "activeRenderer" to "not-connected",
             "hardwareAccelerated" to false,
             "shaderCreationCount" to 0,
             "animationStartCount" to 0,
             "animationStopCount" to 0,
             "drawCount" to 0,
+            "frameCallbackCount" to 0,
             "frameIntervalP50" to 0,
             "frameIntervalP95" to 0,
             "largeFrameGapCount" to 0,
             "lastRendererFailure" to null,
+            "shaderCompileAttempts" to 0,
+            "shaderCompileSuccesses" to 0,
+            "shaderCompileFailures" to 0,
+            "onDrawCount" to 0,
+            "shaderDrawCount" to 0,
+            "fallbackDrawCount" to 0,
+            "phaseAdvanceCount" to 0,
+            "transitionCompletedCount" to 0,
+            "lastFailureStage" to null,
+            "lastFailureClass" to null,
+            "lastFailureMessage" to null,
+            "shaderSourceHash" to null,
+            "generatedAgslHash" to null,
+            "adapterVersion" to null,
+            "effectId" to null,
         )
 }

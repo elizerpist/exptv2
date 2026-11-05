@@ -115,6 +115,8 @@ final class LockScreenCardStatus {
     required this.statusChannelLockscreenVisibility,
     required this.widget,
     required this.nativeCard,
+    required this.keyguardCategories,
+    this.keyguardContent,
   });
 
   factory LockScreenCardStatus.fromMap(Map<Object?, Object?> map) {
@@ -145,6 +147,16 @@ final class LockScreenCardStatus {
         map['nativeCard'] as Map<Object?, Object?>? ??
             const <Object?, Object?>{},
       ),
+      keyguardCategories:
+          ((map['keyguardCategories'] as List<Object?>?) ?? const <Object?>[])
+              .whereType<Map<Object?, Object?>>()
+              .map(LockScreenCardCategory.fromMap)
+              .toList(growable: false),
+      keyguardContent: map['keyguardContent'] is Map<Object?, Object?>
+          ? LockScreenCardContent.fromMap(
+              map['keyguardContent'] as Map<Object?, Object?>,
+            )
+          : null,
     );
   }
 
@@ -157,6 +169,8 @@ final class LockScreenCardStatus {
   final String statusChannelLockscreenVisibility;
   final FinancialSnapshotWidgetStatus widget;
   final NativeKeyguardCardStatus nativeCard;
+  final List<LockScreenCardCategory> keyguardCategories;
+  final LockScreenCardContent? keyguardContent;
 }
 
 /// Separate consent for the accessibility overlay. It deliberately does not
@@ -168,23 +182,27 @@ final class NativeKeyguardCardConfiguration {
     required this.showFinancialDetails,
     required this.verticalOffsetDp,
     required this.animationMode,
+    this.focus = const NativeKeyguardCardFocus(),
   });
 
   final bool requested;
   final bool showFinancialDetails;
   final int verticalOffsetDp;
   final NativeKeyguardCardAnimationMode animationMode;
+  final NativeKeyguardCardFocus focus;
 
   NativeKeyguardCardConfiguration copyWith({
     bool? requested,
     bool? showFinancialDetails,
     int? verticalOffsetDp,
     NativeKeyguardCardAnimationMode? animationMode,
+    NativeKeyguardCardFocus? focus,
   }) => NativeKeyguardCardConfiguration(
     requested: requested ?? this.requested,
     showFinancialDetails: showFinancialDetails ?? this.showFinancialDetails,
     verticalOffsetDp: verticalOffsetDp ?? this.verticalOffsetDp,
     animationMode: animationMode ?? this.animationMode,
+    focus: focus ?? this.focus,
   );
 
   Map<String, Object?> toMap() => <String, Object?>{
@@ -192,6 +210,87 @@ final class NativeKeyguardCardConfiguration {
     'showFinancialDetails': showFinancialDetails,
     'verticalOffsetDp': verticalOffsetDp,
     'animationMode': animationMode.name,
+    'focus': focus.toMap(),
+  };
+}
+
+/// Persistent focus owned by the native keyguard card only.  It shares enum
+/// vocabulary with the other surfaces but deliberately has separate storage
+/// and generation on Android.
+final class NativeKeyguardCardFocus {
+  const NativeKeyguardCardFocus({
+    this.mode = LockScreenCardMode.balance,
+    this.timeAxis = LockScreenCardTimeAxis.month,
+    this.direction = LockScreenCardDirection.expense,
+    this.categoryId,
+    this.eventLine = LockScreenCardEventLine.related,
+    this.generation = 0,
+    this.valid = true,
+  });
+
+  factory NativeKeyguardCardFocus.fromMap(Map<Object?, Object?> map) {
+    final mode = _enumByName(LockScreenCardMode.values, map['mode'] as String?);
+    final categoryId = map['categoryId'] as String?;
+    return NativeKeyguardCardFocus(
+      mode: mode,
+      timeAxis: _enumByName(
+        LockScreenCardTimeAxis.values,
+        map['timeAxis'] as String?,
+      ),
+      direction: _enumByName(
+        LockScreenCardDirection.values,
+        map['direction'] as String?,
+      ),
+      categoryId: categoryId,
+      eventLine: _enumByName(
+        LockScreenCardEventLine.values,
+        map['eventLine'] as String?,
+      ),
+      generation: map['generation'] as int? ?? 0,
+      valid:
+          map['valid'] as bool? ??
+          (mode != LockScreenCardMode.budget ||
+              (categoryId?.isNotEmpty ?? false)),
+    );
+  }
+
+  final LockScreenCardMode mode;
+  final LockScreenCardTimeAxis timeAxis;
+  final LockScreenCardDirection direction;
+  final String? categoryId;
+  final LockScreenCardEventLine eventLine;
+  final int generation;
+  final bool valid;
+
+  NativeKeyguardCardFocus copyWith({
+    LockScreenCardMode? mode,
+    LockScreenCardTimeAxis? timeAxis,
+    LockScreenCardDirection? direction,
+    String? categoryId,
+    bool clearCategory = false,
+    LockScreenCardEventLine? eventLine,
+  }) {
+    final nextMode = mode ?? this.mode;
+    final nextCategory = clearCategory ? null : categoryId ?? this.categoryId;
+    return NativeKeyguardCardFocus(
+      mode: nextMode,
+      timeAxis: timeAxis ?? this.timeAxis,
+      direction: direction ?? this.direction,
+      categoryId: nextCategory,
+      eventLine: eventLine ?? this.eventLine,
+      generation: generation,
+      valid:
+          nextMode != LockScreenCardMode.budget ||
+          (nextCategory?.isNotEmpty ?? false),
+    );
+  }
+
+  Map<String, Object?> toMap() => <String, Object?>{
+    'mode': mode.name,
+    'timeAxis': timeAxis.name,
+    'direction': direction.name,
+    'categoryId': categoryId,
+    'eventLine': eventLine.name,
   };
 }
 
@@ -215,6 +314,10 @@ final class NativeKeyguardCardStatus {
           animationMode: NativeKeyguardCardAnimationMode.values.firstWhere(
             (value) => value.name == (map['animationMode'] as String?),
             orElse: () => NativeKeyguardCardAnimationMode.orbOnly,
+          ),
+          focus: NativeKeyguardCardFocus.fromMap(
+            map['focus'] as Map<Object?, Object?>? ??
+                const <Object?, Object?>{},
           ),
         ),
         systemServiceEnabled: map['systemServiceEnabled'] as bool? ?? false,
@@ -242,42 +345,93 @@ final class NativeKeyguardCardStatus {
 final class NativeKeyguardCardMaterialDiagnostics {
   const NativeKeyguardCardMaterialDiagnostics({
     required this.rendererBackend,
+    required this.requestedRenderer,
+    required this.activeRenderer,
     required this.hardwareAccelerated,
     required this.shaderCreationCount,
     required this.animationStartCount,
     required this.animationStopCount,
     required this.drawCount,
+    required this.frameCallbackCount,
+    required this.onDrawCount,
+    required this.shaderDrawCount,
+    required this.fallbackDrawCount,
+    required this.phaseAdvanceCount,
+    required this.shaderCompileAttempts,
+    required this.shaderCompileSuccesses,
+    required this.shaderCompileFailures,
     required this.frameIntervalP50,
     required this.frameIntervalP95,
     required this.largeFrameGapCount,
     this.lastRendererFailure,
+    this.lastFailureStage,
+    this.lastFailureClass,
+    this.lastFailureMessage,
+    this.shaderSourceHash,
+    this.generatedAgslHash,
+    this.adapterVersion,
+    this.effectId,
   });
 
   factory NativeKeyguardCardMaterialDiagnostics.fromMap(
     Map<Object?, Object?> map,
   ) => NativeKeyguardCardMaterialDiagnostics(
     rendererBackend: map['rendererBackend'] as String? ?? 'not-connected',
+    requestedRenderer: map['requestedRenderer'] as String? ?? 'not-connected',
+    activeRenderer: map['activeRenderer'] as String? ?? 'not-connected',
     hardwareAccelerated: map['hardwareAccelerated'] as bool? ?? false,
     shaderCreationCount: map['shaderCreationCount'] as int? ?? 0,
     animationStartCount: map['animationStartCount'] as int? ?? 0,
     animationStopCount: map['animationStopCount'] as int? ?? 0,
     drawCount: map['drawCount'] as int? ?? 0,
+    frameCallbackCount: map['frameCallbackCount'] as int? ?? 0,
+    onDrawCount: map['onDrawCount'] as int? ?? 0,
+    shaderDrawCount: map['shaderDrawCount'] as int? ?? 0,
+    fallbackDrawCount: map['fallbackDrawCount'] as int? ?? 0,
+    phaseAdvanceCount: map['phaseAdvanceCount'] as int? ?? 0,
+    shaderCompileAttempts: map['shaderCompileAttempts'] as int? ?? 0,
+    shaderCompileSuccesses: map['shaderCompileSuccesses'] as int? ?? 0,
+    shaderCompileFailures: map['shaderCompileFailures'] as int? ?? 0,
     frameIntervalP50: map['frameIntervalP50'] as int? ?? 0,
     frameIntervalP95: map['frameIntervalP95'] as int? ?? 0,
     largeFrameGapCount: map['largeFrameGapCount'] as int? ?? 0,
     lastRendererFailure: map['lastRendererFailure'] as String?,
+    lastFailureStage: map['lastFailureStage'] as String?,
+    lastFailureClass: map['lastFailureClass'] as String?,
+    lastFailureMessage: map['lastFailureMessage'] as String?,
+    shaderSourceHash: map['shaderSourceHash'] as String?,
+    generatedAgslHash: map['generatedAgslHash'] as String?,
+    adapterVersion: map['adapterVersion'] as String?,
+    effectId: map['effectId'] as String?,
   );
 
   final String rendererBackend;
+  final String requestedRenderer;
+  final String activeRenderer;
   final bool hardwareAccelerated;
   final int shaderCreationCount;
   final int animationStartCount;
   final int animationStopCount;
   final int drawCount;
+  final int frameCallbackCount;
+  final int onDrawCount;
+  final int shaderDrawCount;
+  final int fallbackDrawCount;
+  final int phaseAdvanceCount;
+  final int shaderCompileAttempts;
+  final int shaderCompileSuccesses;
+  final int shaderCompileFailures;
   final int frameIntervalP50;
   final int frameIntervalP95;
   final int largeFrameGapCount;
   final String? lastRendererFailure;
+  final String? lastFailureStage;
+  final String? lastFailureClass;
+  final String? lastFailureMessage;
+  final String? shaderSourceHash;
+  final String? generatedAgslHash;
+  final String? adapterVersion;
+  final String? effectId;
 }
 
 /// Independent from the optional notification configuration.  A RemoteViews

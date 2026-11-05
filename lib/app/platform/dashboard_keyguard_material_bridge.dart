@@ -116,6 +116,14 @@ final class DashboardKeyguardMaterialBridge {
 
   DashboardHeaderVisualFrame _frameForTarget(Map<Object?, Object?>? target) {
     final mode = target?['mode'] as String?;
+    // Never turn the material currently visible in another dashboard scope
+    // into this card's claimed financial colour.  The renderer still receives
+    // the saved Header effect, speed and Portal settings; only the unavailable
+    // financial palette is neutralised. In particular Mind has no native,
+    // scope-revisioned score projection yet.
+    if (target?['projectionAvailable'] != true) {
+      return DashboardHeaderVisualFrame.staticTone(const Color(0xff718096));
+    }
     if (mode != 'budget') {
       return switch (mode) {
         'mind' => mindFrame.value,
@@ -131,7 +139,9 @@ final class DashboardKeyguardMaterialBridge {
     final scale = DashboardHeaderCategoryCompressedV1Scale.forColorIdOrNull(
       colorId,
     );
-    if (scale == null) return budgetFrame.value;
+    if (scale == null) {
+      return DashboardHeaderVisualFrame.staticTone(const Color(0xff718096));
+    }
     final remaining = (target?['remainingPercent'] as num?)?.toDouble();
     final window = DashboardHeaderCategoryWindowSampler.sample(
       scale: scale,

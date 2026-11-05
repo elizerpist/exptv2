@@ -109,4 +109,26 @@ void main() {
       expect(parsed.animationMode, mode);
     }
   });
+
+  test('native keyguard focus is independent and keeps a Budget category', () {
+    const value = NativeKeyguardCardConfiguration(
+      requested: true,
+      showFinancialDetails: true,
+      verticalOffsetDp: 12,
+      animationMode: NativeKeyguardCardAnimationMode.orbOnly,
+      focus: NativeKeyguardCardFocus(
+        mode: LockScreenCardMode.budget,
+        timeAxis: LockScreenCardTimeAxis.month,
+        direction: LockScreenCardDirection.expense,
+        categoryId: 'food',
+      ),
+    );
+
+    final parsed = NativeKeyguardCardStatus.fromMap(
+      value.toMap(),
+    ).configuration;
+    expect(parsed.focus.mode, LockScreenCardMode.budget);
+    expect(parsed.focus.categoryId, 'food');
+    expect(parsed.focus.valid, isTrue);
+  });
 }

@@ -24,6 +24,12 @@ internal class KeyguardCardMaterialController(
     init {
         orb.shape = KeyguardHeaderMaterialView.Shape.ORB
         background.shape = KeyguardHeaderMaterialView.Shape.CARD_BACKGROUND
+        // addView() returning is not proof that a hardware Canvas exists.
+        // The retained child views publish attach/size/first-draw readiness;
+        // all notifications stay within this controller and never touch the
+        // WindowManager or the financial resolver.
+        orb.onRendererStateChanged = { reconcileClock() }
+        background.onRendererStateChanged = { reconcileClock() }
     }
 
     fun update(
@@ -34,7 +40,13 @@ internal class KeyguardCardMaterialController(
     ) {
         this.profile = profile
         this.mode = animationMode
-        val scene = profile?.let { KeyguardMaterialScene(if (isFull) it else it.neutralized(), full = isFull) }
+        val scene = profile?.let {
+            KeyguardMaterialScene(
+                profile = if (isFull) it else it.neutralized(),
+                full = isFull,
+                appliedAtNanos = System.nanoTime(),
+            )
+        }
         val canAnimate = scene != null && animationMode != KeyguardCardAnimationMode.OFF && animationsEnabled()
         orb.setStaticBitmap(staticOrb)
         orb.setScene(scene, enabled = canAnimate)
@@ -50,6 +62,11 @@ internal class KeyguardCardMaterialController(
 
     fun onAttached() {
         attached = true
+        // Invalidate once so the first Canvas draw can prove whether this
+        // actual overlay is hardware accelerated.  No animation callback is
+        // required for this traversal.
+        orb.invalidate()
+        background.invalidate()
         reconcileClock()
     }
 
@@ -63,16 +80,24 @@ internal class KeyguardCardMaterialController(
     fun stop(reason: String) = onDetached(reason)
 
     fun diagnostics(): KeyguardMaterialDiagnostics = KeyguardMaterialDiagnostics(
-        rendererBackend = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "RuntimeShader/AGSL" else "static-fallback",
-        hardwareAccelerated = orb.hardwareAcceleratedForDiagnostics(),
+        requestedRenderer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "RuntimeShader/AGSL" else "static-fallback",
+        activeRenderer = when {
+            mode == KeyguardCardAnimationMode.OFF -> "STATIC_BY_SETTING"
+            orb.rendererFailure() != null -> "COMPILE_OR_UNIFORM_FAILED"
+            orb.isRendererReady() -> "RuntimeShader/AGSL"
+            else -> "WAITING_FOR_ATTACH_OR_DRAW"
+        },
+        hardwareAccelerated = orb.lastCanvasHardwareAcceleratedForDiagnostics(),
         shaderCreationCount = orb.shaderCreationCount() + background.shaderCreationCount(),
         animationStartCount = clock.startCount,
         animationStopCount = clock.stopCount,
-        drawCount = clock.drawCount,
+        frameCallbackCount = clock.callbackCount,
         frameIntervalP50 = clock.framePercentile(.5),
         frameIntervalP95 = clock.framePercentile(.95),
         largeFrameGapCount = clock.largeGapCount,
         rendererFailure = orb.rendererFailure() ?: background.rendererFailure(),
+        orb = orb.diagnostics(),
+        background = background.diagnostics(),
     )
 
     private fun reconcileClock(forceCanAnimate: Boolean? = null) {
@@ -85,6 +110,8 @@ internal class KeyguardCardMaterialController(
             clock.stop()
             return
         }
+        // Do not use View.isHardwareAccelerated as an eager attach-time gate:
+        // it is false until the first actual Canvas draw for some overlays.
         val rendererReady = orb.canAnimateMaterial() &&
             (mode != KeyguardCardAnimationMode.ORB_AND_BACKGROUND || background.canAnimateMaterial())
         if (rendererReady) {
@@ -106,14 +133,17 @@ internal class KeyguardCardMaterialController(
 }
 
 internal data class KeyguardMaterialDiagnostics(
-    val rendererBackend: String,
+    val requestedRenderer: String,
+    val activeRenderer: String,
     val hardwareAccelerated: Boolean,
     val shaderCreationCount: Int,
     val animationStartCount: Int,
     val animationStopCount: Int,
-    val drawCount: Int,
+    val frameCallbackCount: Int,
     val frameIntervalP50: Long,
     val frameIntervalP95: Long,
     val largeFrameGapCount: Int,
     val rendererFailure: String?,
+    val orb: KeyguardHeaderMaterialViewDiagnostics,
+    val background: KeyguardHeaderMaterialViewDiagnostics,
 )

@@ -154,6 +154,10 @@ internal data class FluviKeyguardMaterialSceneTarget(
     val categoryId: String?,
     val categoryColorId: String?,
     val remainingPercent: Double?,
+    /** False means the dashboard does not own an equally-scoped visual
+     * projection. The Flutter bridge must use a neutral material rather than
+     * borrow another screen's palette. */
+    val projectionAvailable: Boolean,
     val focusGeneration: Long,
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
@@ -163,6 +167,7 @@ internal data class FluviKeyguardMaterialSceneTarget(
         "categoryId" to categoryId,
         "categoryColorId" to categoryColorId,
         "remainingPercent" to remainingPercent,
+        "projectionAvailable" to projectionAvailable,
         "focusGeneration" to focusGeneration,
     )
 }
@@ -289,6 +294,10 @@ internal object FluviLockScreenCardCoordinator {
                 categoryId = configuration.categoryId,
                 categoryColorId = null,
                 remainingPercent = null,
+                // Mind is intentionally not inferred from a different
+                // dashboard time-axis. Its canonical score projection is
+                // currently Flutter-owned and may be unavailable here.
+                projectionAvailable = configuration.mode != FluviLockScreenCardConfiguration.Mode.mind,
                 focusGeneration = configuration.generation,
             )
         }
@@ -328,6 +337,7 @@ internal object FluviLockScreenCardCoordinator {
                 categoryId = configuration.categoryId,
                 categoryColorId = category?.colorId,
                 remainingPercent = remaining,
+                projectionAvailable = category != null,
                 focusGeneration = configuration.generation,
             )
         } finally {
@@ -338,18 +348,33 @@ internal object FluviLockScreenCardCoordinator {
     internal suspend fun categories(
         context: Context,
         direction: FluviLockScreenCardConfiguration.Direction,
+        timeAxis: FluviLockScreenCardConfiguration.TimeAxis? = null,
     ): List<Map<String, Any?>> {
         val core = FluviCoreFactory.create(context.applicationContext)
         return try {
             val names = core.categories.list().associateBy { it.id }
-            core.financialLimits.list().asSequence()
+            val limits = core.financialLimits.list()
+            val now = LocalDate.now()
+            limits.asSequence()
                 .filter { limit ->
                     limit.key.direction == direction.ledgerDirection &&
                         limit.key.target is FluviFinancialLimitTarget.Category
                 }
                 .mapNotNull { limit ->
                     val id = (limit.key.target as FluviFinancialLimitTarget.Category).categoryId
-                    names[id]?.let { mapOf("id" to id, "name" to it.name) }
+                    names[id]?.takeIf {
+                        // The editor must not make an apparently valid
+                        // Budget focus out of a category that has no limit in
+                        // the selected period. The resolver remains the
+                        // authority for period overrides and zero limits.
+                        timeAxis == null || limitFor(
+                            limits,
+                            direction.ledgerDirection,
+                            id,
+                            timeAxis,
+                            now,
+                        ) != null
+                    }?.let { mapOf("id" to id, "name" to it.name) }
                 }
                 .distinctBy { it.getValue("id") }
                 .sortedBy { it.getValue("name") as String }

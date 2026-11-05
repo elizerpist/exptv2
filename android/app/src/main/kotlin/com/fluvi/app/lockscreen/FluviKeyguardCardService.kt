@@ -17,12 +17,13 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.fluvi.app.MainActivity
 import com.fluvi.app.runtime.FluviFinancialCardPresenter
+import com.fluvi.app.runtime.FluviLockScreenCardContent
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
-import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -50,7 +51,15 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var coreObservation: Job? = null
     private var observedFocusGeneration: Long? = null
     private var activeFocusGeneration: Long? = null
-    private var renderedFullContent: com.fluvi.app.runtime.FluviLockScreenCardContent? = null
+    private var renderedFullContent: FluviLockScreenCardContent? = null
+    /** A deterministic invalid focus must not turn every SystemUI event into
+     * another doomed database resolve. Cleared with a new focus or a
+     * deliberate content invalidation. */
+    private var terminalContentFailure: Pair<Long, String>? = null
+    /** A transient query failure is retried only by a meaningful core
+     * invalidation, focus change, or new visible session—not by a burst of
+     * accessibility content events from the same lockscreen. */
+    private var transientContentFailure: Pair<Long, String>? = null
     private var resolvingFocusGeneration: Long? = null
     private var resolveQueued = false
     private var receiverRegistered = false
@@ -254,6 +263,19 @@ class FluviKeyguardCardService : AccessibilityService() {
         val ownOverlayWindowId: Int? = null,
     )
 
+    /** A missing Budget category is a user-visible configuration state, not a
+     * generic exception.  Keeping this typed also prevents every window event
+     * from restarting an impossible `requireNotNull` query. */
+    private sealed interface FullContentResolveResult {
+        val diagnosticCode: String
+        data class Ready(val content: FluviLockScreenCardContent) : FullContentResolveResult {
+            override val diagnosticCode = "ready"
+        }
+        data class InvalidFocus(override val diagnosticCode: String) : FullContentResolveResult
+        object StaleRequest : FullContentResolveResult { override val diagnosticCode = "staleRequest" }
+        data class Failure(override val diagnosticCode: String) : FullContentResolveResult
+    }
+
     private data class SystemWindowsRead(
         val snapshots: List<KeyguardWindowSnapshot>,
         val rootUnavailable: Boolean,
@@ -405,7 +427,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
             KeyguardCardVisibility.SHOW_FULL -> {
                 retryCount = 0
-                val focus = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext)
+                val focus = FluviKeyguardCardSettings.read(applicationContext).focus
                 showFullContent(expectedSession, expectedEpoch, focus.generation, trigger)
             }
             else -> {
@@ -431,6 +453,14 @@ class FluviKeyguardCardService : AccessibilityService() {
             showEvent = false
             invalidateFullContent()
             activeFocusGeneration = focusGeneration
+        }
+        terminalContentFailure?.takeIf { it.first == focusGeneration }?.let { (_, code) ->
+            applyPresentation(FluviFinancialCardPresenter.unavailable(code), "invalidFocus:$trigger")
+            return
+        }
+        transientContentFailure?.takeIf { it.first == focusGeneration }?.let { (_, code) ->
+            applyPresentation(FluviFinancialCardPresenter.unavailable(code), "contentUnavailable:$trigger")
+            return
         }
         val cached = renderedFullContent
         val plan = KeyguardCardContentRefreshPolicy.firstOrSurfacePlan(
@@ -495,13 +525,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         resolveQueued = false
         KeyguardCardDiagnostics.record(this, "KG|RESOLVE_STARTED", reason, overlay.isAttached)
         contentJob = scope.launch {
-            val focus = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext)
-            val content = if (focus.generation == focusGeneration) {
-                runCatching {
-                    FluviLockScreenCardCoordinator.resolve(applicationContext, focus.asFinancialFocus())
-                }.getOrNull()
-            } else {
-                null
+            val focus = FluviKeyguardCardSettings.read(applicationContext).focus
+            val outcome = when {
+                focus.generation != focusGeneration -> FullContentResolveResult.StaleRequest
+                !focus.isValid -> FullContentResolveResult.InvalidFocus("missingCategory")
+                else -> resolveKeyguardContent(focus)
             }
             withContext(Dispatchers.Main.immediate) {
                 try {
@@ -513,22 +541,38 @@ class FluviKeyguardCardService : AccessibilityService() {
                             requestEpoch = expectedEpoch,
                             currentEpoch = visibilityEpoch.get(),
                             requestFocusGeneration = focusGeneration,
-                            currentFocusGeneration = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext).generation,
+                            currentFocusGeneration = FluviKeyguardCardSettings.read(applicationContext).focus.generation,
                             currentlyFull = appliedDecision == KeyguardCardVisibility.SHOW_FULL,
                             detailsStillAllowed = settings.showFinancialDetails,
                             displayStillEligible = isDisplayOnAndInteractive() && keyguardManager.isKeyguardLocked,
                         ),
                     )
+                    val content = (outcome as? FullContentResolveResult.Ready)?.content
                     if (!stillCurrent || content == null) {
+                        if (stillCurrent && outcome is FullContentResolveResult.InvalidFocus) {
+                            terminalContentFailure = focusGeneration to outcome.diagnosticCode
+                            applyPresentation(
+                                FluviFinancialCardPresenter.unavailable(outcome.diagnosticCode),
+                                "invalidFocus:${outcome.diagnosticCode}",
+                            )
+                        } else if (stillCurrent && outcome is FullContentResolveResult.Failure) {
+                            transientContentFailure = focusGeneration to outcome.diagnosticCode
+                            applyPresentation(
+                                FluviFinancialCardPresenter.unavailable(outcome.diagnosticCode),
+                                "contentUnavailable:${outcome.diagnosticCode}",
+                            )
+                        }
                         KeyguardCardDiagnostics.record(
                             this@FluviKeyguardCardService,
                             "KG|CONTENT_STALE",
-                            if (content == null) "resolveUnavailable" else "contentEpoch",
+                            if (content == null) "resolve:${outcome.diagnosticCode}" else "contentEpoch",
                             overlay.isAttached,
                         )
                     } else {
                         renderedFullContent = content
                         activeFocusGeneration = focusGeneration
+                        terminalContentFailure = null
+                        transientContentFailure = null
                         applyPresentation(FluviFinancialCardPresenter.full(content, showEvent), "content")
                         KeyguardCardDiagnostics.record(this@FluviKeyguardCardService, "KG|CONTENT_APPLIED", "full", overlay.isAttached)
                     }
@@ -541,6 +585,22 @@ class FluviKeyguardCardService : AccessibilityService() {
                 }
             }
         }
+    }
+
+    private suspend fun resolveKeyguardContent(focus: KeyguardCardFocus): FullContentResolveResult = try {
+        FullContentResolveResult.Ready(
+            FluviLockScreenCardCoordinator.resolve(applicationContext, focus.asFinancialFocus()),
+        )
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: IllegalArgumentException) {
+        // The resolver's known invalid-focus paths are intentionally distinct
+        // from an unavailable database. Do not retain the exception message:
+        // it can include implementation details and is not useful on a lock
+        // screen diagnostic surface.
+        FullContentResolveResult.InvalidFocus("invalidFocus")
+    } catch (_: Throwable) {
+        FullContentResolveResult.Failure("queryFailure")
     }
 
     private fun applyPresentation(presentation: com.fluvi.app.runtime.FluviFinancialCardPresentation, reason: String) {
@@ -575,7 +635,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (appliedDecision != KeyguardCardVisibility.SHOW_FULL &&
             appliedDecision != KeyguardCardVisibility.SHOW_DISCREET
         ) return
-        val focus = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext)
+        val focus = FluviKeyguardCardSettings.read(applicationContext).focus
         hideImmediately("open")
         startActivity(
             Intent(this, MainActivity::class.java).apply {
@@ -603,17 +663,45 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     internal fun materialDiagnostics(): Map<String, Any?> {
         val values = if (::overlay.isInitialized) overlay.materialDiagnostics() else null
+        val profile = FluviKeyguardMaterialStore.read(applicationContext)
+        val focus = FluviKeyguardCardSettings.read(applicationContext).focus
         return mapOf(
-            "rendererBackend" to values?.rendererBackend,
+            // `rendererBackend` remains for older Flutter diagnostics; the
+            // requested/active pair tells whether AGSL actually compiled and
+            // drew instead of merely being available on this API level.
+            "rendererBackend" to values?.activeRenderer,
+            "requestedRenderer" to values?.requestedRenderer,
+            "activeRenderer" to values?.activeRenderer,
             "hardwareAccelerated" to (values?.hardwareAccelerated ?: false),
             "shaderCreationCount" to (values?.shaderCreationCount ?: 0),
             "animationStartCount" to (values?.animationStartCount ?: 0),
             "animationStopCount" to (values?.animationStopCount ?: 0),
-            "drawCount" to (values?.drawCount ?: 0),
+            "drawCount" to (values?.frameCallbackCount ?: 0),
+            "frameCallbackCount" to (values?.frameCallbackCount ?: 0),
             "frameIntervalP50" to (values?.frameIntervalP50 ?: 0),
             "frameIntervalP95" to (values?.frameIntervalP95 ?: 0),
             "largeFrameGapCount" to (values?.largeFrameGapCount ?: 0),
             "lastRendererFailure" to values?.rendererFailure,
+            "shaderCompileAttempts" to ((values?.orb?.shaderCompileAttempts ?: 0) + (values?.background?.shaderCompileAttempts ?: 0)),
+            "shaderCompileSuccesses" to ((values?.orb?.shaderCompileSuccesses ?: 0) + (values?.background?.shaderCompileSuccesses ?: 0)),
+            "shaderCompileFailures" to ((values?.orb?.shaderCompileFailures ?: 0) + (values?.background?.shaderCompileFailures ?: 0)),
+            "onDrawCount" to ((values?.orb?.onDrawCount ?: 0) + (values?.background?.onDrawCount ?: 0)),
+            "shaderDrawCount" to ((values?.orb?.shaderDrawCount ?: 0) + (values?.background?.shaderDrawCount ?: 0)),
+            "fallbackDrawCount" to ((values?.orb?.fallbackDrawCount ?: 0) + (values?.background?.fallbackDrawCount ?: 0)),
+            "phaseAdvanceCount" to ((values?.orb?.phaseAdvanceCount ?: 0) + (values?.background?.phaseAdvanceCount ?: 0)),
+            "transitionCompletedCount" to ((values?.orb?.transitionCompletedCount ?: 0) + (values?.background?.transitionCompletedCount ?: 0)),
+            "lastFailureStage" to (values?.orb?.failureStage ?: values?.background?.failureStage),
+            "lastFailureClass" to (values?.orb?.failureClass ?: values?.background?.failureClass),
+            "lastFailureMessage" to (values?.orb?.failureMessage ?: values?.background?.failureMessage),
+            "shaderSourceHash" to (profile?.sourceShaderHash ?: values?.orb?.generatedAgslHash),
+            "generatedAgslHash" to (values?.orb?.generatedAgslHash ?: values?.background?.generatedAgslHash),
+            "adapterVersion" to (values?.orb?.adapterVersion ?: values?.background?.adapterVersion),
+            "profileStatus" to FluviKeyguardMaterialStore.status(applicationContext),
+            "profileRevision" to (profile?.publisherRevision ?: -1L),
+            "focusGeneration" to focus.generation,
+            "effectId" to profile?.effectId,
+            "animationMode" to FluviKeyguardCardSettings.read(applicationContext).animationMode.wireValue,
+            "privacyMode" to if (FluviKeyguardCardSettings.read(applicationContext).showFinancialDetails) "full" else "discreet",
         )
     }
 
@@ -632,6 +720,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         activeFocusGeneration = null
         resolveQueued = false
         resolvingFocusGeneration = null
+        terminalContentFailure = null
+        transientContentFailure = null
         contentJob?.cancel()
         contentJob = null
     }
@@ -647,6 +737,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (!keepRenderedContent) {
             renderedFullContent = null
             activeFocusGeneration = null
+            terminalContentFailure = null
+            transientContentFailure = null
         }
     }
 

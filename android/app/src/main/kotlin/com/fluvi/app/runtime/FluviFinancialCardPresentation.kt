@@ -64,6 +64,31 @@ internal object FluviFinancialCardPresenter {
         visualKey = "loading:v1",
     )
 
+    /**
+     * A persisted invalid keyguard focus is not a transient loading state.
+     * Keep the card useful without repeatedly starting a resolver that cannot
+     * succeed (for example, an old Budget choice without a category).
+     *
+     * This contains no financial value. The code is deliberately mapped to a
+     * short user-facing state here instead of exposing an exception message.
+     */
+    fun unavailable(code: String): FluviFinancialCardPresentation = FluviFinancialCardPresentation(
+        focus = "Fluvi · Pénzügyi pillanatkép",
+        primary = "A kártya fókusza hiányos",
+        secondary = when (code) {
+            "missingCategory" -> "Válassz Budget kategóriát a Fluviban"
+            else -> "Nyisd meg a Fluvit a kártya beállításához"
+        },
+        event = null,
+        eventLabel = null,
+        contentDescription = "Fluvi pénzügyi pillanatkép: a kártya fókusza hiányos",
+        orb = neutral.orbBitmap(),
+        showToggle = false,
+        toggleLabel = "",
+        full = true,
+        visualKey = "unavailable:v1:$code",
+    )
+
     fun full(content: FluviLockScreenCardContent, showEvent: Boolean): FluviFinancialCardPresentation {
         val eventIsPrimary = showEvent && content.event != null
         return FluviFinancialCardPresentation(

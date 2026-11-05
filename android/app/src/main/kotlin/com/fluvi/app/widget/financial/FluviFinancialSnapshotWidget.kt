@@ -18,7 +18,6 @@ import com.fluvi.app.runtime.FluviLockScreenCardContent
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
 import com.fluvi.app.runtime.FluviFinancialCardPresenter
-import com.fluvi.app.lockscreen.FluviKeyguardCardServiceRegistry
 import com.fluvi.core.FluviCoreFactory
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
@@ -192,11 +191,9 @@ internal object FluviFinancialSnapshotWidgetCoordinator {
         FluviFinancialSnapshotWidgetProvider.renderCached(application)
         refreshAsync(application, "widgetConfiguration", next.generation)
         reconcileCoreObserver(application)
-        // The native keyguard card shares this focus even when no AppWidget
-        // host exists; its own privacy setting remains independent.
-        FluviKeyguardCardServiceRegistry.notifyFocusChanged()
-        com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
-            .requestSceneRefresh()
+        // The accessibility-overlay card owns a separate persisted focus.
+        // Updating a home/widget-host configuration must not restart its
+        // content, change its Budget category, or publish a new material.
         return next
     }
 

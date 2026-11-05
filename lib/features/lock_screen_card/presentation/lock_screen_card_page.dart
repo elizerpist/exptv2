@@ -198,16 +198,29 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
           'serviceConnected=${native.serviceConnected}',
           'lastDecision=${native.lastDecisionReason}',
           'lastAttach=${native.lastAttachResult}',
-          'renderer=${native.materialDiagnostics.rendererBackend}',
+          'requestedRenderer=${native.materialDiagnostics.requestedRenderer}',
+          'activeRenderer=${native.materialDiagnostics.activeRenderer}',
           'hardwareAccelerated=${native.materialDiagnostics.hardwareAccelerated}',
           'shaderCreations=${native.materialDiagnostics.shaderCreationCount}',
+          'shaderCompileAttempts=${native.materialDiagnostics.shaderCompileAttempts}',
+          'shaderCompileSuccesses=${native.materialDiagnostics.shaderCompileSuccesses}',
+          'shaderCompileFailures=${native.materialDiagnostics.shaderCompileFailures}',
           'animationStarts=${native.materialDiagnostics.animationStartCount}',
           'animationStops=${native.materialDiagnostics.animationStopCount}',
-          'drawCount=${native.materialDiagnostics.drawCount}',
+          'frameCallbacks=${native.materialDiagnostics.frameCallbackCount}',
+          'onDrawCount=${native.materialDiagnostics.onDrawCount}',
+          'shaderDrawCount=${native.materialDiagnostics.shaderDrawCount}',
+          'fallbackDrawCount=${native.materialDiagnostics.fallbackDrawCount}',
+          'phaseAdvanceCount=${native.materialDiagnostics.phaseAdvanceCount}',
           'frameIntervalP50=${native.materialDiagnostics.frameIntervalP50}',
           'frameIntervalP95=${native.materialDiagnostics.frameIntervalP95}',
           'largeFrameGaps=${native.materialDiagnostics.largeFrameGapCount}',
-          'rendererFailure=${native.materialDiagnostics.lastRendererFailure}',
+          'failureStage=${native.materialDiagnostics.lastFailureStage}',
+          'failureClass=${native.materialDiagnostics.lastFailureClass}',
+          'failureMessage=${native.materialDiagnostics.lastFailureMessage}',
+          'shaderSourceHash=${native.materialDiagnostics.shaderSourceHash}',
+          'generatedAgslHash=${native.materialDiagnostics.generatedAgslHash}',
+          'adapterVersion=${native.materialDiagnostics.adapterVersion}',
           native.diagnosticSummary,
         ].join('\n'),
       ),
@@ -349,7 +362,7 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
                 subtitle: Text(
                   'Utolsó döntés: ${native.lastDecisionReason}\n'
                   'Csatolás: ${native.lastAttachResult}\n'
-                  'Rajzoló: ${native.materialDiagnostics.rendererBackend} · '
+                  'Rajzoló: ${native.materialDiagnostics.activeRenderer} · '
                   'p50/p95: ${native.materialDiagnostics.frameIntervalP50}/${native.materialDiagnostics.frameIntervalP95} ms',
                 ),
                 trailing: TextButton(
@@ -361,7 +374,19 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
           ],
           const SizedBox(height: 28),
           const Text(
-            'A kártya fókusza',
+            'Kártya és orb testreszabása',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          _KeyguardCardFocusSettings(
+            status: status,
+            saving: _savingNative,
+            onSave: (focus) =>
+                _saveNative(native.configuration.copyWith(focus: focus)),
+          ),
+          const SizedBox(height: 28),
+          const Text(
+            'Hagyományos pénzügyi widget',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
@@ -612,6 +637,153 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
       };
 }
 
+class _KeyguardCardFocusSettings extends StatelessWidget {
+  const _KeyguardCardFocusSettings({
+    required this.status,
+    required this.saving,
+    required this.onSave,
+  });
+
+  final LockScreenCardStatus status;
+  final bool saving;
+  final ValueChanged<NativeKeyguardCardFocus> onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final focus = status.nativeCard.configuration.focus;
+    final categories = status.keyguardCategories;
+    return Column(
+      children: [
+        Card(
+          child: ListTile(
+            leading: Icon(
+              focus.valid ? Icons.check_circle_outline : Icons.info_outline,
+            ),
+            title: const Text('A kártya fókusza'),
+            subtitle: Text(
+              focus.valid
+                  ? 'Ez a zárképernyőkártya saját mentett fókusza; a widget és az értesítés nem változik.'
+                  : 'Budget módhoz válassz érvényes, kerettel rendelkező kategóriát.',
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Dropdown<LockScreenCardMode>(
+                  label: 'Mód',
+                  value: focus.mode,
+                  values: LockScreenCardMode.values,
+                  text: _modeLabel,
+                  onChanged: saving
+                      ? (_) {}
+                      : (value) => onSave(
+                          focus.copyWith(
+                            mode: value,
+                            clearCategory: value == LockScreenCardMode.budget,
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 12),
+                _Dropdown<LockScreenCardTimeAxis>(
+                  label: 'Időtengely',
+                  value: focus.timeAxis,
+                  values: LockScreenCardTimeAxis.values,
+                  text: _axisLabel,
+                  onChanged: saving
+                      ? (_) {}
+                      : (value) => onSave(focus.copyWith(timeAxis: value)),
+                ),
+                if (focus.mode == LockScreenCardMode.budget) ...[
+                  const SizedBox(height: 12),
+                  _Dropdown<LockScreenCardDirection>(
+                    label: 'Irány',
+                    value: focus.direction,
+                    values: LockScreenCardDirection.values,
+                    text: (value) => value == LockScreenCardDirection.expense
+                        ? 'Kiadás'
+                        : 'Bevétel',
+                    onChanged: saving
+                        ? (_) {}
+                        : (value) => onSave(
+                            focus.copyWith(
+                              direction: value,
+                              clearCategory: true,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (categories.isEmpty)
+                    const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.account_balance_wallet_outlined),
+                      title: Text('Nincs választható keret'),
+                      subtitle: Text(
+                        'A Budget-kategóriához előbb hozz létre keretet.',
+                      ),
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      key: const ValueKey('native-keyguard-card-category'),
+                      value:
+                          categories.any((item) => item.id == focus.categoryId)
+                          ? focus.categoryId
+                          : null,
+                      decoration: const InputDecoration(labelText: 'Kategória'),
+                      items: categories
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item.id,
+                              child: Text(item.name),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: saving
+                          ? null
+                          : (value) =>
+                                onSave(focus.copyWith(categoryId: value)),
+                    ),
+                ],
+                const SizedBox(height: 12),
+                const Text(
+                  'Megjelenés forrása',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'A header beállításait követi · Aktuális: '
+                  '${_headerEffectLabel(status.nativeCard.materialDiagnostics.effectId)}.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Column(
+            children: LockScreenCardEventLine.values
+                .map(
+                  (value) => RadioListTile<LockScreenCardEventLine>(
+                    value: value,
+                    groupValue: focus.eventLine,
+                    onChanged: saving
+                        ? null
+                        : (next) => onSave(focus.copyWith(eventLine: next)),
+                    title: Text(_eventLineLabel(value)),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _FinancialSnapshotWidgetSettings extends StatelessWidget {
   const _FinancialSnapshotWidgetSettings({
     required this.status,
@@ -818,7 +990,8 @@ class _WidgetPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = status.widget.content;
+    final content = status.keyguardContent;
+    final focus = status.nativeCard.configuration.focus;
     final discreet = !status.nativeCard.configuration.showFinancialDetails;
     return Card(
       color: const Color(0xff17233d),
@@ -845,12 +1018,16 @@ class _WidgetPreviewCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      discreet ? 'Fluvi · Pénzügyi pillanatkép' : content.focus,
+                      discreet
+                          ? 'Fluvi · Pénzügyi pillanatkép'
+                          : content?.focus ?? _focusLabel(focus),
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      discreet ? 'Új tranzakció könyvelve' : content.primary,
+                      discreet
+                          ? 'A részletek feloldás után láthatók'
+                          : content?.primary ?? 'Válassz érvényes fókuszt',
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
@@ -860,17 +1037,18 @@ class _WidgetPreviewCard extends StatelessWidget {
                     Text(
                       discreet
                           ? 'A részletek feloldás után láthatók'
-                          : content.secondary,
+                          : content?.secondary ??
+                                'Budget módhoz válassz kategóriát',
                       style: const TextStyle(color: Color(0xffc7d1e8)),
                     ),
-                    if (!discreet && content.event != null) ...[
+                    if (!discreet && content?.event != null) ...[
                       const SizedBox(height: 12),
                       Text(
-                        content.event!,
+                        content!.event!,
                         style: const TextStyle(color: Color(0xffc7d1e8)),
                       ),
                     ],
-                    if (!content.available)
+                    if (content != null && !content.available)
                       const Padding(
                         padding: EdgeInsets.only(top: 10),
                         child: Text(
@@ -888,6 +1066,31 @@ class _WidgetPreviewCard extends StatelessWidget {
     );
   }
 }
+
+String _focusLabel(NativeKeyguardCardFocus focus) =>
+    '${_modeLabel(focus.mode)} · ${_axisLabel(focus.timeAxis)}';
+
+String _headerEffectLabel(String? effectId) => switch (effectId) {
+  'staticEffect' => 'Statikus',
+  'dualTide' => 'Kettős árapály',
+  'magneticMembrane' => 'Mágneses membrán',
+  'breathingLens' => 'Lélegző lencse',
+  'cellularField' => 'Celluláris mező',
+  'balanceMembrane' => 'Balance membrán',
+  'balanceCounterflow' => 'Balance ellenáram',
+  'balanceCharges' => 'Balance töltések',
+  'deepDrift' => 'Deep Drift',
+  'freeFlow' => 'Szabad áramlás',
+  'chaoticAdvection' => 'Kaotikus advekció',
+  'elasticSpace' => 'Rugalmas tér',
+  'braidedCurrent' => 'Fonott áramlat',
+  'volumetricCurrent' => 'Térbeli áramlat',
+  'metricBloom' => 'Metrikus virágzás',
+  'gravitationalFabric' => 'Gravitációs szövet',
+  'breathingMetric' => 'Lélegző metrika',
+  'tidalCurvature' => 'Árapály-görbület',
+  _ => 'Még nincs betöltve',
+};
 
 class _Dropdown<T> extends StatelessWidget {
   const _Dropdown({
