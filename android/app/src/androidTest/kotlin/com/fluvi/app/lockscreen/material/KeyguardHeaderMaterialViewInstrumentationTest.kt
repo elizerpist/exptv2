@@ -265,8 +265,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val secondary: String,
     )
 
-    private fun inflatedCard(context: android.content.Context): View =
-        LayoutInflater.from(context).inflate(R.layout.fluvi_keyguard_card, null, false)
+    private fun inflatedCard(context: android.content.Context): View {
+        // Supplying the real parent type makes Android parse the root's
+        // layout_height into FrameLayout.LayoutParams. Inflating against null
+        // would discard that production XML contract before measurement.
+        val parent = FrameLayout(context)
+        return LayoutInflater.from(context).inflate(R.layout.fluvi_keyguard_card, parent, false)
+    }
 
     private fun populate(card: View, state: CardState) {
         card.findViewById<android.widget.TextView>(R.id.fluvi_financial_snapshot_focus).text = state.focus
@@ -301,11 +306,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
     }
 
     private fun measureFromXmlDefinition(card: View, width: Int, height: Int) {
-        card.measure(
+        (card.parent as? ViewGroup)?.removeView(card)
+        val parent = FrameLayout(card.context).apply { addView(card) }
+        parent.measure(
             View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(height * 3, View.MeasureSpec.AT_MOST),
         )
-        card.layout(0, 0, width, card.measuredHeight)
+        parent.layout(0, 0, width, parent.measuredHeight)
     }
 
     private fun assertCardExtent(card: View, expectedHeight: Int, label: String) {
