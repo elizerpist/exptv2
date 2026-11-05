@@ -1,8 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <activity
-            android:name="com.fluvi.app.lockscreen.material.KeyguardMaterialTestActivity"
-            android:exported="false" />
         <!-- AndroidX Test Core 1.2 is required by Flutter's locked test
              runner. Its pre-Android-12 activity declarations omit exported;
              these declarations are test-APK-only merge completions. -->

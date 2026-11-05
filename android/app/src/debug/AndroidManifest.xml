@@ -1,4 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Required by the Flutter tool to connect to the development VM service. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <application>
+        <!-- Target-APK-only host for the API-35 instrumentation smoke. The
+             test runner can only start activities installed with the target
+             application; this debug declaration never enters a release APK. -->
+        <activity
+            android:name="com.fluvi.app.lockscreen.material.KeyguardMaterialTestActivity"
+            android:exported="false"
+            android:hardwareAccelerated="true"
+            android:theme="@style/NormalTheme" />
+    </application>
 </manifest>
