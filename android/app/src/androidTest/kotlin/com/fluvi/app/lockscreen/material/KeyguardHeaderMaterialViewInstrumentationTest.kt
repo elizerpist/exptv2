@@ -32,7 +32,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         // The exact generated, packaged production program must construct.
-        KeyguardHeaderShader(context)
+        KeyguardHeaderShader(context, "dualTide")
 
         lateinit var view: KeyguardHeaderMaterialView
         lateinit var controller: KeyguardCardMaterialController

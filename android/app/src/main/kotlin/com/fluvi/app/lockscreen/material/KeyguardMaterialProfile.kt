@@ -86,7 +86,7 @@ internal data class KeyguardMaterialProfile(
         const val SOURCE_SHADER_HASH = "6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b74d565a4c76d4e7f"
         /** Stable IDs copied from DashboardHeaderEffectCatalog.shaderId, not
          * derived at runtime from enum order. */
-        private val effectShaderIds = mapOf(
+        internal val effectShaderIds = mapOf(
             "staticEffect" to 0, "dualTide" to 1, "magneticMembrane" to 2,
             "breathingLens" to 3, "cellularField" to 4, "balanceMembrane" to 5,
             "balanceCounterflow" to 6, "balanceCharges" to 7, "deepDrift" to 8,
@@ -94,6 +94,8 @@ internal data class KeyguardMaterialProfile(
             "braidedCurrent" to 12, "volumetricCurrent" to 13, "metricBloom" to 14,
             "gravitationalFabric" to 15, "breathingMetric" to 16, "tidalCurvature" to 17,
         )
+
+        internal val effectIds: Set<String> get() = effectShaderIds.keys
 
         sealed interface DecodeResult {
             data class Accepted(val profile: KeyguardMaterialProfile) : DecodeResult

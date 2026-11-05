@@ -254,6 +254,17 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         } else {
             previous = null
         }
+        // API 35 rejects the canonical all-effects program as too large. The
+        // build therefore emits one compile-time-specialized program per
+        // canonical effect. Retain the old program only as the transition
+        // base; the new effect gets its own program on the next real draw.
+        // This is strictly a retained View concern, never a WindowManager
+        // operation, so rapid profile changes cannot recreate the overlay.
+        if (currentScene?.profile?.effectId != next.profile.effectId) {
+            shaderPrevious = shaderCurrent
+            shaderCurrent = null
+            attemptedProgramKey = null
+        }
         current = next
         // RuntimeShader construction deliberately waits for the first real
         // hardware Canvas.  `addView()` and even View attachment are not a
@@ -289,7 +300,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     fun isRendererReady(): Boolean = isAttachedToWindow && width > 0 && height > 0 &&
         lastCanvasHardwareAccelerated == true && shaderCurrent != null && shaderFailure == null
     fun canAnimateMaterial(): Boolean {
-        ensureShaders()
+        ensureShaders(current)
         return isRendererReady()
     }
 
@@ -306,8 +317,8 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         failureStage = shaderFailure?.stage,
         failureClass = shaderFailure?.exceptionClass,
         failureMessage = shaderFailure?.message,
-        generatedAgslHash = KeyguardHeaderShader.metadata(context).generatedAgslHash,
-        adapterVersion = KeyguardHeaderShader.metadata(context).adapterVersion,
+        generatedAgslHash = KeyguardHeaderShader.metadata(context, current?.profile?.effectId).generatedAgslHash,
+        adapterVersion = KeyguardHeaderShader.metadata(context, current?.profile?.effectId).adapterVersion,
     )
 
     override fun onDraw(canvas: Canvas) {
@@ -332,7 +343,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             drawStaticHeaderGradient(canvas, scene.profile)
             return
         }
-        ensureShaders()
+        ensureShaders(scene)
         val currentShader = shaderCurrent
         if (currentShader == null || !canvas.isHardwareAccelerated) {
             drawFallback(canvas, scene)
@@ -350,31 +361,22 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         }
     }
 
-    private fun ensureShaders() {
+    private fun ensureShaders(scene: KeyguardMaterialScene?) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val metadata = KeyguardHeaderShader.metadata(context)
-        val programKey = "${metadata.generatedAgslHash}|${metadata.adapterVersion}"
+        val profile = scene?.profile ?: return
+        val metadata = KeyguardHeaderShader.metadata(context, profile.effectId)
+        val programKey = "${profile.effectId}|${metadata.generatedAgslHash}|${metadata.adapterVersion}"
         if (shaderFailure != null && attemptedProgramKey == programKey) return
         if (shaderCurrent == null) {
             attemptedProgramKey = programKey
             shaderCompileAttempts += 1
-            runCatching { KeyguardHeaderShader(context, metadata) }
+            runCatching { KeyguardHeaderShader(context, profile.effectId, metadata) }
                 .onSuccess {
                     shaderCurrent = it
                     shaderCompileSuccesses += 1
                     shaderFailure = null
                     notifyRendererState()
                 }
-                .onFailure { error ->
-                    shaderCompileFailures += 1
-                    shaderFailure = KeyguardMaterialRendererFailure.compile(error, metadata)
-                    notifyRendererState()
-                }
-        }
-        if (previous != null && shaderPrevious == null && shaderFailure == null) {
-            shaderCompileAttempts += 1
-            runCatching { KeyguardHeaderShader(context, metadata) }
-                .onSuccess { shaderPrevious = it; shaderCompileSuccesses += 1 }
                 .onFailure { error ->
                     shaderCompileFailures += 1
                     shaderFailure = KeyguardMaterialRendererFailure.compile(error, metadata)
@@ -546,7 +548,11 @@ private data class KeyguardMaterialRendererFailure(
 }
 
 /** Writes the v6 Header uniform ABI into one retained RuntimeShader. */
-internal class KeyguardHeaderShader(context: Context, private val metadata: Metadata = metadata(context)) {
+internal class KeyguardHeaderShader(
+    context: Context,
+    private val effectId: String,
+    private val metadata: Metadata = metadata(context, effectId),
+) {
     data class Metadata(
         val sourceShaderHash: String?,
         val generatedAgslHash: String?,
@@ -554,8 +560,9 @@ internal class KeyguardHeaderShader(context: Context, private val metadata: Meta
     )
 
     companion object {
-        fun metadata(context: Context): Metadata = runCatching {
-            val values = context.assets.open("fluvi_keyguard_header_material.meta")
+        fun metadata(context: Context, effectId: String?): Metadata = runCatching {
+            val safeEffectId = effectId?.takeIf { it in KeyguardMaterialProfile.effectIds } ?: return@runCatching Metadata(null, null, null)
+            val values = context.assets.open("fluvi_keyguard_header_material_$safeEffectId.meta")
                 .bufferedReader().useLines { lines ->
                     lines.mapNotNull { line ->
                         line.indexOf('=').takeIf { it > 0 }?.let { index ->
@@ -579,7 +586,8 @@ internal class KeyguardHeaderShader(context: Context, private val metadata: Meta
     private val deepDrift = KeyguardDeepDriftSkeleton()
 
     init {
-        val source = context.assets.open("fluvi_keyguard_header_material.agsl").bufferedReader().use { it.readText() }
+        require(effectId in KeyguardMaterialProfile.effectIds) { "unknown-effect:$effectId" }
+        val source = context.assets.open("fluvi_keyguard_header_material_$effectId.agsl").bufferedReader().use { it.readText() }
         runtimeShader = RuntimeShader(source)
     }
 
@@ -604,7 +612,6 @@ internal class KeyguardHeaderShader(context: Context, private val metadata: Meta
     private fun writeStatic(profile: KeyguardMaterialProfile, width: Int, height: Int) {
         uniform2("uSize", profile.referenceWidth, profile.referenceHeight)
         uniform2("uRasterSize", width.toFloat(), height.toFloat())
-        runtimeShader.setFloatUniform("uEffect", profile.effectShaderId.toFloat())
         runtimeShader.setFloatUniform("uOpacity", profile.opacity)
         runtimeShader.setFloatUniform("uPaletteSplit", profile.paletteSplitPercent / 100f)
         runtimeShader.setFloatUniform("uPulse", 0f)

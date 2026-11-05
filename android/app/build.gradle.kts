@@ -18,7 +18,33 @@ val keyguardHeaderSourceHash = "6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b
 // Bump only when the fixed, audited adapter changes.  This is intentionally
 // separate from the canonical Flutter source hash: Android diagnostics must
 // distinguish a source change from an AGSL adaptation change.
-val keyguardHeaderAdapterVersion = "2"
+// RuntimeShader rejects the all-effects Flutter program as too large on API
+// 35. The Header's effect is semantic configuration, not per-pixel input, so
+// produce one mechanically-specialized AGSL program for each canonical
+// shaderId. With uEffect made a compile-time constant SkSL can remove the
+// sixteen unrelated effect branches while retaining the selected effect,
+// Portal layers and canonical palette mathematics.
+val keyguardHeaderAdapterVersion = "3"
+val keyguardHeaderEffects = listOf(
+    "staticEffect" to 0,
+    "dualTide" to 1,
+    "magneticMembrane" to 2,
+    "breathingLens" to 3,
+    "cellularField" to 4,
+    "balanceMembrane" to 5,
+    "balanceCounterflow" to 6,
+    "balanceCharges" to 7,
+    "deepDrift" to 8,
+    "freeFlow" to 9,
+    "chaoticAdvection" to 10,
+    "elasticSpace" to 11,
+    "braidedCurrent" to 12,
+    "volumetricCurrent" to 13,
+    "metricBloom" to 14,
+    "gravitationalFabric" to 15,
+    "breathingMetric" to 16,
+    "tidalCurvature" to 17,
+)
 val generateKeyguardHeaderMaterial by tasks.registering {
     inputs.file(keyguardHeaderSource)
     // Gradle must rerun when the fixed adapter changes even when the canonical
@@ -39,7 +65,7 @@ val generateKeyguardHeaderMaterial by tasks.registering {
         }
         // This is deliberately a fixed adaptation of the known canonical
         // shader structure, not a generic text conversion pipeline.
-        val agsl = source
+        val sharedAgsl = source
             .replace("#include <flutter/runtime_effect.glsl>\n", "")
             .replace("out vec4 fragColor;\n", "")
             // AGSL exposes saturate as an intrinsic.  The canonical Flutter
@@ -54,30 +80,42 @@ val generateKeyguardHeaderMaterial by tasks.registering {
             .replace(Regex("\\bvec3\\b"), "float3")
             .replace(Regex("\\bvec4\\b"), "float4")
             .replace(Regex("\\bmat2\\b"), "float2x2")
-        check(agsl.contains("half4 main(float2 _fluviFragCoord)"))
-        check(!agsl.contains("FlutterFragCoord"))
-        check(!agsl.contains("runtime_effect.glsl"))
-        check(!Regex("out\\s+vec4\\s+fragColor").containsMatchIn(agsl)) {
+        check(sharedAgsl.contains("half4 main(float2 _fluviFragCoord)"))
+        check(!sharedAgsl.contains("FlutterFragCoord"))
+        check(!sharedAgsl.contains("runtime_effect.glsl"))
+        check(!Regex("out\\s+vec4\\s+fragColor").containsMatchIn(sharedAgsl)) {
             "AGSL adapter retained the Flutter fragment output declaration"
         }
-        check(!Regex("float\\s+saturate\\s*\\(").containsMatchIn(agsl)) {
+        check(!Regex("float\\s+saturate\\s*\\(").containsMatchIn(sharedAgsl)) {
             "AGSL adapter retained a custom saturate declaration"
         }
-        check(agsl.contains("float fluviSaturate(float value)")) {
+        check(sharedAgsl.contains("float fluviSaturate(float value)")) {
             "AGSL adapter did not rename the canonical saturate helper"
         }
-        check(agsl.contains("return half4(")) { "AGSL adapter did not produce a return entry point" }
-        val generatedHash = MessageDigest.getInstance("SHA-256")
-            .digest(agsl.toByteArray())
-            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        check(sharedAgsl.contains("return half4(")) { "AGSL adapter did not produce a return entry point" }
+        check(sharedAgsl.contains("uniform float uEffect;")) {
+            "AGSL adapter cannot specialize the canonical effect uniform"
+        }
         val destination = keyguardHeaderGeneratedAssets.get().asFile
         destination.mkdirs()
-        destination.resolve("fluvi_keyguard_header_material.agsl").writeText(
-            "// generated-from=shaders/dashboard_header_field.frag\n// source-sha256=$hash\n$agsl",
-        )
-        destination.resolve("fluvi_keyguard_header_material.meta").writeText(
-            "source-sha256=$hash\ngenerated-agsl-sha256=$generatedHash\nadapter-version=$keyguardHeaderAdapterVersion\nshader-abi-version=6\n",
-        )
+        keyguardHeaderEffects.forEach { (effectId, shaderId) ->
+            val agsl = sharedAgsl.replace(
+                "uniform float uEffect;",
+                "const float uEffect = ${shaderId}.0;",
+            )
+            check(!agsl.contains("uniform float uEffect;")) {
+                "AGSL specialization retained uEffect for $effectId"
+            }
+            val generatedHash = MessageDigest.getInstance("SHA-256")
+                .digest(agsl.toByteArray())
+                .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+            destination.resolve("fluvi_keyguard_header_material_$effectId.agsl").writeText(
+                "// generated-from=shaders/dashboard_header_field.frag\n// source-sha256=$hash\n// effect-id=$effectId\n$agsl",
+            )
+            destination.resolve("fluvi_keyguard_header_material_$effectId.meta").writeText(
+                "source-sha256=$hash\ngenerated-agsl-sha256=$generatedHash\nadapter-version=$keyguardHeaderAdapterVersion\nshader-abi-version=6\neffect-id=$effectId\neffect-shader-id=$shaderId\n",
+            )
+        }
     }
 }
 
