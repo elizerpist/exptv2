@@ -1,5 +1,7 @@
 package com.fluvi.app.lockscreen.material
 
+import android.app.Instrumentation
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.os.Build
@@ -7,7 +9,6 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.FrameLayout
 import android.view.PixelCopy
-import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
@@ -40,52 +41,60 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
 
         lateinit var view: KeyguardHeaderMaterialView
-        lateinit var controller: KeyguardCardMaterialController
-        val scenario = ActivityScenario.launch(KeyguardMaterialTestActivity::class.java)
-        scenario.onActivity { activity ->
-            activity.window.setFormat(PixelFormat.TRANSLUCENT)
-            val root = FrameLayout(activity)
-            val background = KeyguardHeaderMaterialView(activity).apply {
-                layoutParams = FrameLayout.LayoutParams(240, 180)
+        var controller: KeyguardCardMaterialController? = null
+        val activity = instrumentation.startActivitySync(
+            Intent(context, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        try {
+            instrumentation.runOnMainSync {
+                activity.window.setFormat(PixelFormat.TRANSLUCENT)
+                val root = FrameLayout(activity)
+                val background = KeyguardHeaderMaterialView(activity).apply {
+                    layoutParams = FrameLayout.LayoutParams(240, 180)
+                }
+                val veil = android.view.View(activity).apply {
+                    layoutParams = FrameLayout.LayoutParams(240, 180)
+                }
+                view = KeyguardHeaderMaterialView(activity).apply {
+                    layoutParams = FrameLayout.LayoutParams(160, 160)
+                }
+                root.addView(background)
+                root.addView(veil)
+                root.addView(view)
+                controller = KeyguardCardMaterialController(view, background, veil)
+                controller!!.update(
+                    profile = profile(),
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    isFull = true,
+                    staticOrb = null,
+                )
+                activity.setContentView(root)
+                controller!!.onAttached()
             }
-            val veil = android.view.View(activity).apply {
-                layoutParams = FrameLayout.LayoutParams(240, 180)
+            assertTrue("production View never reached a hardware Canvas", waitForRenderer(instrumentation, view))
+            instrumentation.waitForIdleSync()
+            val first = copyWindow(instrumentation, activity)
+            Thread.sleep(220)
+            val second = copyWindow(instrumentation, activity)
+            val diagnostics = view.diagnostics()
+            assertTrue(diagnostics.lastCanvasHardwareAccelerated == true)
+            assertTrue("production shader did not draw", diagnostics.shaderDrawCount > 0)
+            assertTrue("retained controller did not advance phase", diagnostics.phaseAdvanceCount > 0)
+            assertTrue("two clock samples produced identical pixels", first.sameAs(second).not())
+        } finally {
+            instrumentation.runOnMainSync {
+                controller?.onDetached("test")
+                activity.finish()
             }
-            view = KeyguardHeaderMaterialView(activity).apply {
-                layoutParams = FrameLayout.LayoutParams(160, 160)
-            }
-            root.addView(background)
-            root.addView(veil)
-            root.addView(view)
-            controller = KeyguardCardMaterialController(view, background, veil)
-            controller.update(
-                profile = profile(),
-                animationMode = KeyguardCardAnimationMode.ORB_ONLY,
-                isFull = true,
-                staticOrb = null,
-            )
-            activity.setContentView(root)
-            controller.onAttached()
         }
-        assertTrue("production View never reached a hardware Canvas", waitForRenderer(scenario, view))
-        instrumentation.waitForIdleSync()
-        val first = copyWindow(scenario)
-        Thread.sleep(220)
-        val second = copyWindow(scenario)
-        val diagnostics = view.diagnostics()
-        assertTrue(diagnostics.lastCanvasHardwareAccelerated == true)
-        assertTrue("production shader did not draw", diagnostics.shaderDrawCount > 0)
-        assertTrue("retained controller did not advance phase", diagnostics.phaseAdvanceCount > 0)
-        assertTrue("two clock samples produced identical pixels", first.sameAs(second).not())
-        scenario.onActivity { controller.onDetached("test") }
-        scenario.close()
     }
 
-    private fun copyWindow(scenario: ActivityScenario<KeyguardMaterialTestActivity>): Bitmap {
+    private fun copyWindow(instrumentation: Instrumentation, activity: KeyguardMaterialTestActivity): Bitmap {
         val copied = CountDownLatch(1)
         var result = PixelCopy.ERROR_UNKNOWN
         lateinit var bitmap: Bitmap
-        scenario.onActivity { activity ->
+        instrumentation.runOnMainSync {
             val root = activity.window.decorView
             bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
             PixelCopy.request(activity.window, bitmap, { value ->
@@ -99,13 +108,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
     }
 
     private fun waitForRenderer(
-        scenario: ActivityScenario<KeyguardMaterialTestActivity>,
+        instrumentation: Instrumentation,
         view: KeyguardHeaderMaterialView,
     ): Boolean {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
         while (System.nanoTime() < deadline) {
             var ready = false
-            scenario.onActivity { ready = view.diagnostics().lastCanvasHardwareAccelerated == true }
+            instrumentation.runOnMainSync { ready = view.diagnostics().lastCanvasHardwareAccelerated == true }
             if (ready) return true
             Thread.sleep(32)
         }
