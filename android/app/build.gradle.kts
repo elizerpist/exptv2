@@ -96,13 +96,84 @@ val generateKeyguardHeaderMaterial by tasks.registering {
         check(sharedAgsl.contains("uniform float uEffect;")) {
             "AGSL adapter cannot specialize the canonical effect uniform"
         }
+        val canonicalCommonField = """float3 commonField(float2 uv, float rippleLight) {
+  if (uEffect < 8.5) return classicReferenceField(uv, rippleLight);
+  if (uEffect < 13.5) return fullFieldFlowField(uv, rippleLight);
+  return spaceFabricField(uv, rippleLight);
+}"""
+        check(sharedAgsl.contains(canonicalCommonField)) {
+            "AGSL adapter cannot locate the canonical common-field dispatch"
+        }
+        val mainSignature = "half4 main(float2 _fluviFragCoord) {"
+        check(sharedAgsl.contains(mainSignature)) {
+            "AGSL adapter cannot locate the canonical entry point"
+        }
         val destination = keyguardHeaderGeneratedAssets.get().asFile
         destination.mkdirs()
         keyguardHeaderEffects.forEach { (effectId, shaderId) ->
-            val agsl = sharedAgsl.replace(
-                "uniform float uEffect;",
-                "const float uEffect = ${shaderId}.0;",
-            )
+            // The overlay has no Header pointer/ripple/trail interaction. The
+            // native binder pins all those uniforms to zero, so this compact
+            // main is exactly the canonical zero-interaction path. More
+            // importantly, it prevents SkSL from flattening the unused 25
+            // trail and 10 ripple loops into RuntimeShader's strict program
+            // size budget. Keep the actual selected effect, both Portals,
+            // palette sampling and final alpha composition unchanged.
+            val commonField = when (shaderId) {
+                0 -> "return applyMaterialOptics(canonicalGradient(uv), uPulse * .025 + rippleLight * uTapPulseLight, 0.0);"
+                8 -> "return deepDriftField(uv, rippleLight);"
+                in 9..13 -> "return fullFieldFlowField(uv, rippleLight);"
+                in 14..17 -> "return spaceFabricField(uv, rippleLight);"
+                else -> "return classicReferenceField(uv, rippleLight);"
+            }
+            val specializedCommon = "float3 commonField(float2 uv, float rippleLight) {\n  $commonField\n}"
+            val sourceUv = when (shaderId) {
+                in 9..13 -> "fullFieldInverseFlowMap(%s, uPhase)"
+                in 14..17 -> "spaceFabricSourceUv(%s, uPhase)"
+                else -> "%s"
+            }
+            fun mapped(name: String) = sourceUv.format(name)
+            val zeroInteractionMain = """
+half4 main(float2 _fluviFragCoord) {
+  float2 uv = _fluviFragCoord.xy / max(uRasterSize, float2(1.0));
+  float2 displaced = uv;
+  float rippleLight = 0.0;
+  float backgroundMatter = uBackgroundEnabled > .5
+      ? portalSample(displaced, uBackgroundEffect, uBackgroundPhase, 1.0)
+      : 0.0;
+  float backgroundCoordinate = portalMaterialCoordinate(
+      ${mapped("displaced")}, backgroundMatter, uBackgroundCenter, uBackgroundWindow,
+      uBackgroundPhase);
+  float3 background = sampleCanonicalPalette(backgroundCoordinate);
+  float3 base = commonField(displaced, rippleLight);
+  float3 composed = mix(base, background, backgroundMatter);
+  float2 interiorUv = displaced;
+  if (uInteriorEnabled > .5 && uInteriorRotationEnabled > .5) {
+    float aspect = uSize.x / max(1.0, uSize.y);
+    float angle = uInteriorPhase * uInteriorRotationSpeed * PI * 2.0;
+    float2x2 rotate = float2x2(cos(angle), -sin(angle), sin(angle), cos(angle));
+    float2 centered = interiorUv - .5;
+    centered.x *= aspect;
+    centered = rotate * centered;
+    centered.x /= aspect;
+    interiorUv = mix(interiorUv, centered + .5, materialBoundaryEnvelope(interiorUv));
+  }
+  if (uInteriorEnabled > .5) {
+    float matter = portalSample(interiorUv, uInteriorEffect, uInteriorPhase, 0.0);
+    float interiorCoordinate = portalMaterialCoordinate(
+        ${mapped("interiorUv")}, matter, uInteriorCenter, uInteriorWindow, uInteriorPhase);
+    float3 interior = sampleCanonicalPalette(interiorCoordinate);
+    composed = mix(composed, interior, matter * .38);
+  }
+  float _fluviAlpha = fluviSaturate(uOpacity);
+  return half4(composed * _fluviAlpha, _fluviAlpha);
+}
+""".trim()
+            val agsl = sharedAgsl.substringBefore(mainSignature)
+                .replace(canonicalCommonField, specializedCommon)
+                .replace(
+                    "uniform float uEffect;",
+                    "const float uEffect = ${shaderId}.0;",
+                ) + "\n$zeroInteractionMain\n"
             check(!agsl.contains("uniform float uEffect;")) {
                 "AGSL specialization retained uEffect for $effectId"
             }

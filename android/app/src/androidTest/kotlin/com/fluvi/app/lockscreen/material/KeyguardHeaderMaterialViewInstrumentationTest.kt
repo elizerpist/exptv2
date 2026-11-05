@@ -31,8 +31,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
-        // The exact generated, packaged production program must construct.
-        KeyguardHeaderShader(context, "dualTide")
+        // Every generated, packaged production effect program must construct.
+        // This catches a strict-SkSL program-size or syntax regression in a
+        // less-common Header effect before the selected profile reaches a
+        // physical lockscreen.
+        KeyguardMaterialProfile.effectIds.forEach { effectId ->
+            KeyguardHeaderShader(context, effectId)
+        }
 
         lateinit var view: KeyguardHeaderMaterialView
         lateinit var controller: KeyguardCardMaterialController
