@@ -39,6 +39,11 @@ internal data class KeyguardMaterialProfile(
     val animated: Boolean
         get() = effectId != "staticEffect" && phaseSpeed > 0f || background.hasMotion || interior.hasMotion
 
+    /** Portal composition has its own bounded runtime program. Keeping the
+     * no-Portal selected effect program separate avoids compiling Portal's
+     * inactive unrolled loops into every normal lock-screen scene. */
+    val usesPortal: Boolean get() = background.enabled || interior.enabled
+
     /** The visual identity excludes the handoff clock so an identical scene
      * from a restarted Flutter publisher never restarts the native clock. */
     val visualKey: String = listOf(

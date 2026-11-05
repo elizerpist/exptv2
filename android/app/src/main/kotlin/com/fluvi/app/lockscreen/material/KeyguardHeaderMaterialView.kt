@@ -260,7 +260,9 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         // base; the new effect gets its own program on the next real draw.
         // This is strictly a retained View concern, never a WindowManager
         // operation, so rapid profile changes cannot recreate the overlay.
-        if (currentScene?.profile?.effectId != next.profile.effectId) {
+        if (currentScene?.profile?.effectId != next.profile.effectId ||
+            currentScene?.profile?.usesPortal != next.profile.usesPortal
+        ) {
             shaderPrevious = shaderCurrent
             shaderCurrent = null
             attemptedProgramKey = null
@@ -317,8 +319,8 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         failureStage = shaderFailure?.stage,
         failureClass = shaderFailure?.exceptionClass,
         failureMessage = shaderFailure?.message,
-        generatedAgslHash = KeyguardHeaderShader.metadata(context, current?.profile?.effectId).generatedAgslHash,
-        adapterVersion = KeyguardHeaderShader.metadata(context, current?.profile?.effectId).adapterVersion,
+        generatedAgslHash = KeyguardHeaderShader.metadata(context, current?.profile?.effectId, current?.profile?.usesPortal).generatedAgslHash,
+        adapterVersion = KeyguardHeaderShader.metadata(context, current?.profile?.effectId, current?.profile?.usesPortal).adapterVersion,
     )
 
     override fun onDraw(canvas: Canvas) {
@@ -364,13 +366,13 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private fun ensureShaders(scene: KeyguardMaterialScene?) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         val profile = scene?.profile ?: return
-        val metadata = KeyguardHeaderShader.metadata(context, profile.effectId)
-        val programKey = "${profile.effectId}|${metadata.generatedAgslHash}|${metadata.adapterVersion}"
+        val metadata = KeyguardHeaderShader.metadata(context, profile.effectId, profile.usesPortal)
+        val programKey = "${profile.effectId}|${profile.usesPortal}|${metadata.generatedAgslHash}|${metadata.adapterVersion}"
         if (shaderFailure != null && attemptedProgramKey == programKey) return
         if (shaderCurrent == null) {
             attemptedProgramKey = programKey
             shaderCompileAttempts += 1
-            runCatching { KeyguardHeaderShader(context, profile.effectId, metadata) }
+            runCatching { KeyguardHeaderShader(context, profile.effectId, profile.usesPortal, metadata) }
                 .onSuccess {
                     shaderCurrent = it
                     shaderCompileSuccesses += 1
@@ -551,7 +553,8 @@ private data class KeyguardMaterialRendererFailure(
 internal class KeyguardHeaderShader(
     context: Context,
     private val effectId: String,
-    private val metadata: Metadata = metadata(context, effectId),
+    private val usesPortal: Boolean,
+    private val metadata: Metadata = metadata(context, effectId, usesPortal),
 ) {
     data class Metadata(
         val sourceShaderHash: String?,
@@ -560,9 +563,10 @@ internal class KeyguardHeaderShader(
     )
 
     companion object {
-        fun metadata(context: Context, effectId: String?): Metadata = runCatching {
+        fun metadata(context: Context, effectId: String?, usesPortal: Boolean?): Metadata = runCatching {
             val safeEffectId = effectId?.takeIf { it in KeyguardMaterialProfile.effectIds } ?: return@runCatching Metadata(null, null, null)
-            val values = context.assets.open("fluvi_keyguard_header_material_$safeEffectId.meta")
+            val variant = if (usesPortal == true) "portal" else "plain"
+            val values = context.assets.open("fluvi_keyguard_header_material_${safeEffectId}_$variant.meta")
                 .bufferedReader().useLines { lines ->
                     lines.mapNotNull { line ->
                         line.indexOf('=').takeIf { it > 0 }?.let { index ->
@@ -587,7 +591,8 @@ internal class KeyguardHeaderShader(
 
     init {
         require(effectId in KeyguardMaterialProfile.effectIds) { "unknown-effect:$effectId" }
-        val source = context.assets.open("fluvi_keyguard_header_material_$effectId.agsl").bufferedReader().use { it.readText() }
+        val variant = if (usesPortal) "portal" else "plain"
+        val source = context.assets.open("fluvi_keyguard_header_material_${effectId}_$variant.agsl").bufferedReader().use { it.readText() }
         runtimeShader = RuntimeShader(source)
     }
 

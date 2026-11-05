@@ -168,24 +168,35 @@ half4 main(float2 _fluviFragCoord) {
   return half4(composed * _fluviAlpha, _fluviAlpha);
 }
 """.trim()
-            val agsl = sharedAgsl.substringBefore(mainSignature)
+            val noPortalMain = """
+half4 main(float2 _fluviFragCoord) {
+  float2 uv = _fluviFragCoord.xy / max(uRasterSize, float2(1.0));
+  float3 composed = commonField(uv, 0.0);
+  float _fluviAlpha = fluviSaturate(uOpacity);
+  return half4(composed * _fluviAlpha, _fluviAlpha);
+}
+""".trim()
+            val agslPrefix = sharedAgsl.substringBefore(mainSignature)
                 .replace(canonicalCommonField, specializedCommon)
                 .replace(
                     "uniform float uEffect;",
                     "const float uEffect = ${shaderId}.0;",
-                ) + "\n$zeroInteractionMain\n"
-            check(!agsl.contains("uniform float uEffect;")) {
+                )
+            check(!agslPrefix.contains("uniform float uEffect;")) {
                 "AGSL specialization retained uEffect for $effectId"
             }
-            val generatedHash = MessageDigest.getInstance("SHA-256")
-                .digest(agsl.toByteArray())
-                .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-            destination.resolve("fluvi_keyguard_header_material_$effectId.agsl").writeText(
-                "// generated-from=shaders/dashboard_header_field.frag\n// source-sha256=$hash\n// effect-id=$effectId\n$agsl",
-            )
-            destination.resolve("fluvi_keyguard_header_material_$effectId.meta").writeText(
-                "source-sha256=$hash\ngenerated-agsl-sha256=$generatedHash\nadapter-version=$keyguardHeaderAdapterVersion\nshader-abi-version=6\neffect-id=$effectId\neffect-shader-id=$shaderId\n",
-            )
+            listOf("plain" to noPortalMain, "portal" to zeroInteractionMain).forEach { (variant, main) ->
+                val agsl = "$agslPrefix\n$main\n"
+                val generatedHash = MessageDigest.getInstance("SHA-256")
+                    .digest(agsl.toByteArray())
+                    .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+                destination.resolve("fluvi_keyguard_header_material_${effectId}_$variant.agsl").writeText(
+                    "// generated-from=shaders/dashboard_header_field.frag\n// source-sha256=$hash\n// effect-id=$effectId\n// variant=$variant\n$agsl",
+                )
+                destination.resolve("fluvi_keyguard_header_material_${effectId}_$variant.meta").writeText(
+                    "source-sha256=$hash\ngenerated-agsl-sha256=$generatedHash\nadapter-version=$keyguardHeaderAdapterVersion\nshader-abi-version=6\neffect-id=$effectId\neffect-shader-id=$shaderId\nvariant=$variant\n",
+                )
+            }
         }
     }
 }

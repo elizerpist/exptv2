@@ -36,7 +36,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         // less-common Header effect before the selected profile reaches a
         // physical lockscreen.
         KeyguardMaterialProfile.effectIds.forEach { effectId ->
-            KeyguardHeaderShader(context, effectId)
+            KeyguardHeaderShader(context, effectId, false)
         }
 
         lateinit var view: KeyguardHeaderMaterialView
