@@ -43,7 +43,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         lateinit var view: KeyguardHeaderMaterialView
         var controller: KeyguardCardMaterialController? = null
         val activity = instrumentation.startActivitySync(
-            Intent(context, KeyguardMaterialTestActivity::class.java)
+            // This Activity belongs to the instrumentation APK, not the
+            // production APK.  Keep the shader/assets on targetContext above,
+            // but resolve this explicit component from the test context so
+            // Android can find its test-manifest declaration.
+            Intent(instrumentation.context, KeyguardMaterialTestActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         ) as KeyguardMaterialTestActivity
         try {
