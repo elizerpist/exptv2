@@ -171,13 +171,18 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             assertTrue("production View never reached a hardware Canvas", waitForRenderer(instrumentation, view))
             instrumentation.waitForIdleSync()
             val first = copyWindow(instrumentation, activity)
-            Thread.sleep(220)
-            val second = copyWindow(instrumentation, activity)
+            // PixelCopy can return the same already-composited buffer once
+            // even while the retained renderer has advanced. Sample a short
+            // run rather than turning one stale copy into a shader failure.
+            val observedMotion = (1..5).any {
+                Thread.sleep(220)
+                first.sameAs(copyWindow(instrumentation, activity)).not()
+            }
             val diagnostics = view.diagnostics()
             assertTrue(diagnostics.lastCanvasHardwareAccelerated == true)
             assertTrue("production shader did not draw", diagnostics.shaderDrawCount > 0)
             assertTrue("retained controller did not advance phase", diagnostics.phaseAdvanceCount > 0)
-            assertTrue("two clock samples produced identical pixels", first.sameAs(second).not())
+            assertTrue("production shader produced no motion across five samples", observedMotion)
         } finally {
             instrumentation.runOnMainSync {
                 controller?.onDetached("test")
