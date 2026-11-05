@@ -2,11 +2,11 @@ package com.fluvi.app.lockscreen.material
 
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
-import android.graphics.PixelCopy
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.widget.FrameLayout
+import android.view.PixelCopy
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
