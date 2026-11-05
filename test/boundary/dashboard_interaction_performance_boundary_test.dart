@@ -301,10 +301,11 @@ void main() {
       RegExp(
         r'-no-window -gpu swangle -feature -Vulkan -accel on(?:\s|$)',
       ).allMatches(profileWorkflow).length,
-      2,
+      3,
       reason:
-          'Current and milestone profiles must use the same explicit '
-          'supported software renderer and KVM acceleration path.',
+          'Current and milestone profiles, plus the API-35 material shader '
+          'smoke test, must use the explicit supported software renderer '
+          'and KVM acceleration path.',
     );
     expect(
       profileWorkflow,
@@ -332,16 +333,15 @@ void main() {
     );
     expect(
       RegExp(r'arch: x86_64').allMatches(profileWorkflow).length,
-      2,
+      3,
       reason:
-          'Current and milestone profiles must use the KVM-compatible x86_64 '
-          'system image.',
+          'Current and milestone profiles plus the API-35 material smoke '
+          'must use the KVM-compatible x86_64 system image.',
     );
     expect(
       RegExp(r'-no-window').allMatches(profileWorkflow).length,
-      2,
-      reason:
-          'Both CI emulators must use the same explicit headless launch mode.',
+      3,
+      reason: 'All CI emulator jobs must use the explicit headless launch mode.',
     );
     expect(
       RegExp(r'- name: Enable KVM').allMatches(profileWorkflow).length,
@@ -378,16 +378,16 @@ void main() {
     );
     expect(
       RegExp(r'target: default').allMatches(profileWorkflow).length,
-      2,
+      3,
       reason:
-          'Both profiles must use the minimal AOSP image without unrelated '
-          'Google service workload.',
+          'Profiles and the material smoke must use the minimal AOSP image '
+          'without unrelated Google service workload.',
     );
     expect(
       RegExp(r'emulator-build: 15081367').allMatches(profileWorkflow).length,
-      2,
+      3,
       reason:
-          'Current and milestone profiles must pin Android Emulator 36.5.10.',
+          'Profiles and the material smoke must pin Android Emulator 36.5.10.',
     );
     expect(
       profileWorkflow,
@@ -396,15 +396,15 @@ void main() {
     );
     expect(
       RegExp(r'ram-size: 2048M').allMatches(profileWorkflow).length,
-      2,
-      reason: 'Current and milestone profiles must use the same bounded RAM.',
+      3,
+      reason: 'All CI emulator jobs must use the same bounded RAM.',
     );
     expect(
       RegExp(
         'pre-emulator-launch-script: >-',
       ).allMatches(profileWorkflow).length,
-      2,
-      reason: 'Both profile APKs must be built before their emulator starts.',
+      3,
+      reason: 'Each profile and material APK must be built before its emulator starts.',
     );
     expect(
       RegExp(r'flutter build apk --profile').allMatches(profileWorkflow).length,
