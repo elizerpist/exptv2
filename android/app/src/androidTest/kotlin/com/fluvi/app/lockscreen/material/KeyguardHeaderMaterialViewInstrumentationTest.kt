@@ -45,7 +45,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val activity = instrumentation.startActivitySync(
             Intent(context, KeyguardMaterialTestActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
+        ) as KeyguardMaterialTestActivity
         try {
             instrumentation.runOnMainSync {
                 activity.window.setFormat(PixelFormat.TRANSLUCENT)
