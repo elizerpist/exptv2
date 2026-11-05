@@ -143,10 +143,10 @@ internal data class KeyguardMaterialProfile(
             }) { "stopRange" }
             val background = KeyguardMaterialPortal.decode(values["background"] as? Map<*, *>)
             val interior = KeyguardMaterialPortal.decode(values["interior"] as? Map<*, *>)
-            if (background is KeyguardMaterialPortal.DecodeResult.Rejected) return DecodeResult.Rejected("background:${background.reason}")
-            if (interior is KeyguardMaterialPortal.DecodeResult.Rejected) return DecodeResult.Rejected("interior:${interior.reason}")
-            val bg = (background as KeyguardMaterialPortal.DecodeResult.Accepted).portal
-            val inside = (interior as KeyguardMaterialPortal.DecodeResult.Accepted).portal
+            if (background is KeyguardMaterialPortal.Companion.DecodeResult.Rejected) return DecodeResult.Rejected("background:${background.reason}")
+            if (interior is KeyguardMaterialPortal.Companion.DecodeResult.Rejected) return DecodeResult.Rejected("interior:${interior.reason}")
+            val bg = (background as KeyguardMaterialPortal.Companion.DecodeResult.Accepted).portal
+            val inside = (interior as KeyguardMaterialPortal.Companion.DecodeResult.Accepted).portal
             val profile = KeyguardMaterialProfile(
                 schemaVersion = schema,
                 shaderAbiVersion = abi,
@@ -297,11 +297,11 @@ internal object FluviKeyguardMaterialStore {
 
     fun publish(context: Context, values: Map<*, *>, publisherEpoch: Long): Boolean {
         val decoded = KeyguardMaterialProfile.decode(values)
-        val unredacted = (decoded as? KeyguardMaterialProfile.DecodeResult.Accepted)?.profile
+        val unredacted = (decoded as? KeyguardMaterialProfile.Companion.DecodeResult.Accepted)?.profile
         if (unredacted == null) {
             prefs(context).edit().putString(PROFILE_STATUS, when (decoded) {
-                is KeyguardMaterialProfile.DecodeResult.Rejected -> "rejected:${decoded.reason}"
-                is KeyguardMaterialProfile.DecodeResult.Unavailable -> "unavailable:${decoded.reason}"
+                is KeyguardMaterialProfile.Companion.DecodeResult.Rejected -> "rejected:${decoded.reason}"
+                is KeyguardMaterialProfile.Companion.DecodeResult.Unavailable -> "unavailable:${decoded.reason}"
                 else -> "unavailable"
             }).apply()
             return false
