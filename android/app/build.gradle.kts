@@ -119,7 +119,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test:core:1.6.1")
+    // Flutter's Android embedding pins the debug runtime to runner 1.2.0.
+    // Keep the production RuntimeShader smoke on that compatible AndroidX
+    // test family rather than relying on Gradle's inconsistent resolution.
+    androidTestImplementation("androidx.test:runner:1.2.0")
+    androidTestImplementation("androidx.test.ext:junit:1.1.1")
+    androidTestImplementation("androidx.test:core:1.2.0")
 }
