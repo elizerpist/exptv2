@@ -317,10 +317,9 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
         }
 
         /**
-         * Used only by a completed Flutter material handoff.  Returning after
-         * `updateAppWidget` prevents a complete package queued immediately
-         * afterwards from invalidating the starter package before the launcher
-         * ever receives its first correct shader frame.
+         * Used only by a committed Flutter material handoff. Returning after
+         * `updateAppWidget` serialises the safe still preview and any later
+         * verified complete package; it never schedules per-frame updates.
          */
         fun renderCommittedMaterial(
             context: Context,
@@ -422,9 +421,9 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
                         child.setImageViewBitmap(R.id.fluvi_orb_frame_image, frame)
                         view.addView(flipperId, child)
                     }
-                    // A full package follows a short starter package with the
-                    // same origin. Select after its children have been added;
-                    // this avoids a visible restart at child zero.
+                    // Each committed package chooses its intended child only
+                    // after all opaque frames have been added. This is phase
+                    // alignment intent, not proof of launcher frame pacing.
                     view.setInt(
                         flipperId,
                         "setDisplayedChild",

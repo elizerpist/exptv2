@@ -65,6 +65,24 @@ final class DashboardOrbMaterialPlaybackProfile {
     );
   }
 
+  /// A first-install safety frame is intentionally still. It is not an
+  /// attempted short loop and never changes the source sampling of a later
+  /// accepted animated package.
+  DashboardOrbMaterialPlaybackProfile asStaticPreview() {
+    if (frameCount == 1) return this;
+    return DashboardOrbMaterialPlaybackProfile._(
+      cacheVersion: cacheVersion,
+      frameCount: 1,
+      frameSizePx: frameSizePx,
+      maximumFrameCount: 1,
+      intervalMs: 1000,
+      targetCycleMs: 1000,
+      loopDurationMs: 1000,
+      usesDenseShaderSampling: false,
+      applyCircularAlphaMask: applyCircularAlphaMask,
+    );
+  }
+
   /// Resolves source sampling and texture size under the exact raw bitmap
   /// budget Android validates on receipt. Animated profiles target thirty
   /// real shader renders per second whenever a full cycle fits the package;

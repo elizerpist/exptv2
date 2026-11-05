@@ -1025,6 +1025,7 @@ class MainActivity : FlutterActivity() {
                                         "maximumFrameCount" to target.maximumFrameCount,
                                         "maximumDecodedBytes" to target.maximumDecodedBytes,
                                         "requiresAlphaMask" to target.requiresAlphaMask,
+                                        "activePackageIdentity" to target.activePackageIdentity,
                                     )
                                 }
                                 "publishFrames" -> {
@@ -1040,6 +1041,8 @@ class MainActivity : FlutterActivity() {
                                         ?: throw IllegalArgumentException("Missing frame interval.")
                                     val phaseOriginUtcMs = (values["phaseOriginUtcMs"] as? Number)?.toLong()
                                         ?: throw IllegalArgumentException("Missing orb phase origin.")
+                                    val packageIdentity = values["packageIdentity"] as? String
+                                        ?: throw IllegalArgumentException("Missing orb package identity.")
                                     val requestedAtUtcMs = (values["requestedAtUtcMs"] as? Number)?.toLong()
                                         ?: throw IllegalArgumentException("Missing orb export request time.")
                                     // v5 is intentionally opaque-frame only.
@@ -1065,6 +1068,7 @@ class MainActivity : FlutterActivity() {
                                         cacheVersion = cacheVersion,
                                         intervalMs = intervalMs,
                                         phaseOriginUtcMs = phaseOriginUtcMs,
+                                        packageIdentity = packageIdentity,
                                         transitionDurationMs = transitionDurationMs,
                                         displaySizePx = displaySizePx,
                                         frames = frames,
@@ -1086,6 +1090,47 @@ class MainActivity : FlutterActivity() {
                                         "nativeDecodeMs" to writeTiming.nativeDecodeMs,
                                         "remoteViewsPublication" to "queued",
                                     )
+                                }
+                                "recordLoopVerification" -> {
+                                    val values = call.arguments as? Map<*, *>
+                                        ?: throw IllegalArgumentException("Orb loop verification must be a map.")
+                                    val widgetId = (values["widgetId"] as? Number)?.toInt()
+                                        ?: throw IllegalArgumentException("Missing widget id.")
+                                    val revision = (values["configurationRevision"] as? Number)?.toLong()
+                                        ?: throw IllegalArgumentException("Missing widget configuration revision.")
+                                    val identity = values["packageIdentity"] as? String
+                                        ?: throw IllegalArgumentException("Missing orb package identity.")
+                                    val status = values["status"] as? String
+                                        ?: throw IllegalArgumentException("Missing loop verification status.")
+                                    val candidateCount = (values["candidateCount"] as? Number)?.toInt()
+                                        ?: throw IllegalArgumentException("Missing loop candidate count.")
+                                    val validCandidateCount = (values["validCandidateCount"] as? Number)?.toInt()
+                                        ?: throw IllegalArgumentException("Missing valid loop candidate count.")
+                                    val current = com.fluvi.app.widget.orb.FluviOrbConfigurationStore(applicationContext)
+                                        .get(widgetId)
+                                        ?: throw IllegalArgumentException("Orb configuration no longer exists.")
+                                    require(current.configurationRevision == revision) {
+                                        "Stale orb loop verification."
+                                    }
+                                    val active = OrbMaterialFrameStore.isActivePackageIdentity(
+                                        applicationContext,
+                                        widgetId,
+                                        identity,
+                                    )
+                                    if (active) {
+                                        com.fluvi.app.widget.orb.OrbFrameRenderDiagnostics.loopVerified(
+                                            context = applicationContext,
+                                            widgetId = widgetId,
+                                            status = status,
+                                            candidateCount = candidateCount,
+                                            validCandidateCount = validCandidateCount,
+                                            seamMeanRgbDelta = (values["seamMeanRgbDelta"] as? Number)?.toDouble(),
+                                            seamLimit = (values["seamLimit"] as? Number)?.toDouble(),
+                                            motionChangeMeanRgbDelta = (values["motionChangeMeanRgbDelta"] as? Number)?.toDouble(),
+                                            motionChangeLimit = (values["motionChangeLimit"] as? Number)?.toDouble(),
+                                        )
+                                    }
+                                    mapOf("recorded" to active)
                                 }
                                 else -> throw IllegalArgumentException("Unknown orb material method: ${call.method}")
                             }

@@ -237,7 +237,7 @@ internal data class OrbFramePlan(
     val transitionDurationMs: Int = 0,
     val displaySizePx: Int = sizePx,
     val cacheVersion: Int = OrbMaterialPlaybackContract.cacheVersion,
-    /** Wall-clock origin shared by starter and complete packages. */
+    /** Wall-clock origin used to choose an intended initial child. */
     val phaseOriginUtcMs: Long = 0,
 ) {
     val estimatedRawBytes: Long get() = sizePx.toLong() * sizePx * frameCount * 4L
@@ -286,6 +286,8 @@ internal object OrbMaterialFrameStore {
         val maximumFrameCount: Int,
         val maximumDecodedBytes: Long,
         val requiresAlphaMask: Boolean,
+        /** Non-sensitive digest of the focus/privacy-safe material input. */
+        val activePackageIdentity: String?,
     )
 
     fun targets(context: Context): List<Target> {
@@ -311,6 +313,7 @@ internal object OrbMaterialFrameStore {
                     // is the normal Nothing/API 35 path; older hosts retain
                     // a filtered alpha mask in their source texture.
                     requiresAlphaMask = Build.VERSION.SDK_INT < Build.VERSION_CODES.S,
+                    activePackageIdentity = activePackageIdentity(context, widgetId),
                 )
             }
         }.filterNotNull()
@@ -323,6 +326,7 @@ internal object OrbMaterialFrameStore {
         cacheVersion: Int,
         intervalMs: Int,
         phaseOriginUtcMs: Long,
+        packageIdentity: String,
         transitionDurationMs: Int,
         displaySizePx: Int,
         frames: List<ByteArray>,
@@ -347,6 +351,9 @@ internal object OrbMaterialFrameStore {
         }
         require(phaseOriginUtcMs > 0) {
             "Orb material package needs a phase origin."
+        }
+        require(packageIdentity.isNotBlank() && packageIdentity.length <= 128) {
+            "Orb material package needs a bounded identity."
         }
         val application = context.applicationContext
         val directory = File(application.filesDir, directoryName).apply { mkdirs() }
@@ -405,6 +412,7 @@ internal object OrbMaterialFrameStore {
             .putInt("$widgetId.count", frames.size)
             .putInt("$widgetId.interval", intervalMs)
             .putLong("$widgetId.phaseOrigin", phaseOriginUtcMs)
+            .putString("$widgetId.identity", packageIdentity)
             .putInt("$widgetId.transition", 0)
             // A package never owns physical display geometry. Keep this key
             // only for v2/v3 preference compatibility; rendering derives the
@@ -504,7 +512,7 @@ internal object OrbMaterialFrameStore {
                 }
                 listOf(
                     "package", "revision", "format", "count", "interval", "transition",
-                    "displaySize", "encodedBytes", "source", "renderedAt", "phaseOrigin",
+                    "displaySize", "encodedBytes", "source", "renderedAt", "phaseOrigin", "identity",
                 )
                     .forEach { suffix -> editor.remove("$widgetId.$suffix") }
             }
@@ -517,6 +525,17 @@ internal object OrbMaterialFrameStore {
                 (file.name.endsWith(".png") || file.name.endsWith(".pending"))
         }?.forEach(File::delete)
     }
+
+    fun isActivePackageIdentity(
+        context: Context,
+        widgetId: Int,
+        identity: String,
+    ): Boolean = activePackageIdentity(context, widgetId) == identity
+
+    private fun activePackageIdentity(context: Context, widgetId: Int): String? =
+        context.applicationContext
+            .getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+            .getString("$widgetId.identity", null)
 
     private fun framePlanFor(
         context: Context,
@@ -585,8 +604,8 @@ internal object OrbFrameRenderDiagnostics {
             .remove("$widgetId.lastFailure")
         if (reason == "flutterMaterialExport" && requestedAt > 0) {
             when {
-                sequence.sourceDescription.contains("stage=starter") ->
-                    editor.putLong("$widgetId.firstCorrectRemoteViewsMs", now - requestedAt)
+                sequence.sourceDescription.contains("stage=static-preview") ->
+                    editor.putLong("$widgetId.firstStaticRemoteViewsMs", now - requestedAt)
                 sequence.sourceDescription.contains("stage=complete") ->
                     editor.putLong("$widgetId.completeRemoteViewsMs", now - requestedAt)
             }
@@ -629,6 +648,34 @@ internal object OrbFrameRenderDiagnostics {
             .putLong("$widgetId.nativeDecodeMs", timing.nativeDecodeMs)
             .putLong("$widgetId.nativeStoredAt", System.currentTimeMillis())
             .putLong("$widgetId.exportRequestedAtUtcMs", requestedAtUtcMs)
+            .apply()
+    }
+
+    /** Stored separately from the source description so a rejected loop can
+     * remain explicit while its safe static preview stays on screen. */
+    fun loopVerified(
+        context: Context,
+        widgetId: Int,
+        status: String,
+        candidateCount: Int,
+        validCandidateCount: Int,
+        seamMeanRgbDelta: Double?,
+        seamLimit: Double?,
+        motionChangeMeanRgbDelta: Double?,
+        motionChangeLimit: Double?,
+    ) {
+        fun metric(value: Double?): String =
+            value?.let { "%.2f".format(java.util.Locale.US, it) } ?: "n/a"
+        context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+            .edit()
+            .putString("$widgetId.loopVerificationStatus", status)
+            .putInt("$widgetId.loopCandidateCount", candidateCount)
+            .putInt("$widgetId.loopValidCandidateCount", validCandidateCount)
+            .putString("$widgetId.loopSeamRgbDelta", metric(seamMeanRgbDelta))
+            .putString("$widgetId.loopSeamLimit", metric(seamLimit))
+            .putString("$widgetId.loopMotionRgbDelta", metric(motionChangeMeanRgbDelta))
+            .putString("$widgetId.loopMotionLimit", metric(motionChangeLimit))
+            .putLong("$widgetId.loopVerifiedAt", System.currentTimeMillis())
             .apply()
     }
 }

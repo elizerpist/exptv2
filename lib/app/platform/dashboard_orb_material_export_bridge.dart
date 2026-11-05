@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'dashboard_orb_loop_verifier.dart';
 import 'dashboard_orb_material_playback_profile.dart';
 
 /// Foreground bridge from Dashboard's authoritative material renderer to the
@@ -52,7 +53,6 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
   // completed choice behind the old 180 ms delay. Generation checks below
   // give the newest value priority if A → B → C arrives during an export.
   static const _settingsDebounce = Duration(milliseconds: 48);
-  static const _starterFrameCount = 8;
   static const _maximumCachedEncodedBytes = 2 * 1024 * 1024;
 
   /// Uses Dashboard's actual Header bounds. The orb mapper later maps the
@@ -135,6 +135,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
         final maximumFrameCount = raw['maximumFrameCount'] as int?;
         final maximumDecodedBytes = raw['maximumDecodedBytes'] as int?;
         final requiresAlphaMask = raw['requiresAlphaMask'] as bool? ?? false;
+        final activePackageIdentity = raw['activePackageIdentity'] as String?;
         if (widgetId == null ||
             revision == null ||
             mode == null ||
@@ -163,6 +164,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
           maximumFrameCount: maximumFrameCount,
           maximumDecodedBytes: maximumDecodedBytes,
           requiresAlphaMask: requiresAlphaMask,
+          activePackageIdentity: activePackageIdentity,
           isCurrent: () => _isCurrent(generation),
           frame: frame,
           headerSize: size,
@@ -197,6 +199,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     required int maximumFrameCount,
     required int maximumDecodedBytes,
     required bool requiresAlphaMask,
+    required String? activePackageIdentity,
     required bool Function() isCurrent,
     required DashboardHeaderVisualFrame frame,
     required Size headerSize,
@@ -225,6 +228,15 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       requiresAlphaMask,
       dashboardOrbMaterialCacheVersion,
     ].join('|');
+    final packageIdentity = _packageIdentity(
+      mode: mode,
+      configurationRevision: configurationRevision,
+      visualCacheKey: snapshot.orbVisualCacheKey,
+    );
+    // An identical focus/privacy-safe visual identity is already the exact
+    // retained package we want. Replacing it would merely restart a launcher
+    // flipper and cannot improve its cadence.
+    if (activePackageIdentity == packageIdentity) return;
     final cached = _frameCache.remove(cacheKey);
     if (cached != null) {
       _frameCache[cacheKey] = cached;
@@ -234,6 +246,21 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
         cacheHit: true,
         requestedAt: requestedAt,
       );
+      if (snapshot.isAnimated) {
+        await _publishFrames(
+          widgetId: widgetId,
+          configurationRevision: configurationRevision,
+          mode: mode,
+          snapshot: snapshot,
+          playback: cached.playback.asStaticPreview(),
+          frames: <Uint8List>[cached.frames.first],
+          phaseOriginUtcMs: DateTime.now().millisecondsSinceEpoch,
+          timing: timing,
+          packageIdentity: packageIdentity,
+          packageStage: 'static-preview',
+          loopValidation: null,
+        );
+      }
       await _publishFrames(
         widgetId: widgetId,
         configurationRevision: configurationRevision,
@@ -243,9 +270,9 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
         frames: cached.frames,
         phaseOriginUtcMs: cached.phaseOriginUtcMs,
         timing: timing,
-        packageStage: 'warm-cache',
-        seamMeanRgbDelta: cached.seamMeanRgbDelta,
-        seamCandidates: cached.seamCandidates,
+        packageIdentity: packageIdentity,
+        packageStage: 'complete-cache',
+        loopValidation: cached.loopValidation,
       );
       return;
     }
@@ -260,9 +287,15 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     final renderer = DashboardHeaderMaterialFrameRenderer();
     try {
       final frames = <Uint8List>[];
-      Uint8List? firstOrbRgba;
+      final rgbaFrames = <Uint8List>[];
       DashboardOrbMaterialPlaybackProfile playback = initialPlayback;
-      for (var index = 0; index < playback.frameCount; index += 1) {
+      final candidateFrameCounts = snapshot.isAnimated
+          ? _candidateFrameCounts(initialPlayback)
+          : const <int>[];
+      final frameRenderCount = snapshot.isAnimated
+          ? candidateFrameCounts.last
+          : playback.frameCount;
+      for (var index = 0; index < frameRenderCount; index += 1) {
         if (!isCurrent()) return;
         final renderWatch = Stopwatch()..start();
         final orb = await _renderTexture(
@@ -276,11 +309,9 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
         renderWatch.stop();
         timing.shaderRenderMs += renderWatch.elapsedMilliseconds;
         try {
-          if (index == 0) {
-            final rgba = await orb.toByteData(format: ImageByteFormat.rawRgba);
-            if (rgba == null) throw StateError('Orb RGBA encoding failed.');
-            firstOrbRgba = Uint8List.fromList(rgba.buffer.asUint8List());
-          }
+          final rgba = await orb.toByteData(format: ImageByteFormat.rawRgba);
+          if (rgba == null) throw StateError('Orb RGBA encoding failed.');
+          rgbaFrames.add(Uint8List.fromList(rgba.buffer.asUint8List()));
           final pngWatch = Stopwatch()..start();
           final bytes = await orb.toByteData(format: ImageByteFormat.png);
           pngWatch.stop();
@@ -291,67 +322,55 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
           orb.dispose();
         }
 
-        // The starter is made exclusively from the selected production
-        // shader's first real time samples. It gives the launcher an early
-        // visual reaction without waiting for the remaining PNG sequence.
-        if (snapshot.isAnimated && index + 1 == _starterFrameCount) {
+        // First display is an accurate still, never an unchecked animated
+        // starter loop. A previous package is left untouched only when its
+        // focus/privacy-safe material identity exactly matches this request.
+        if (snapshot.isAnimated && index == 0) {
           if (!isCurrent()) return;
           await _publishFrames(
             widgetId: widgetId,
             configurationRevision: configurationRevision,
             mode: mode,
             snapshot: snapshot,
-            playback: initialPlayback.withLoopDurationMs(
-              _starterFrameCount * initialPlayback.intervalMs,
-            ),
-            frames: List<Uint8List>.unmodifiable(frames),
-            phaseOriginUtcMs: phaseOriginUtcMs,
+            playback: initialPlayback.asStaticPreview(),
+            frames: <Uint8List>[frames.first],
+            phaseOriginUtcMs: DateTime.now().millisecondsSinceEpoch,
             timing: timing,
-            packageStage: 'starter',
-            seamMeanRgbDelta: -1,
-            seamCandidates: 0,
+            packageIdentity: packageIdentity,
+            packageStage: 'static-preview',
+            loopValidation: null,
           );
-        }
-
-        // Once the starter is out, choose the finite return point against
-        // actual shader pixels. This makes the old 2π/speed assumption an
-        // input candidate rather than an unverified loop guarantee.
-        if (snapshot.isAnimated && index + 1 == _starterFrameCount) {
-          final selected = await _selectLoopDuration(
-            renderer: renderer,
-            snapshot: snapshot,
-            headerSize: headerSize,
-            playback: initialPlayback,
-            firstOrbRgba: firstOrbRgba!,
-          );
-          playback = initialPlayback.withLoopDurationMs(selected.durationMs);
-          timing.loopSelectionMs = selected.elapsedMs;
-          timing.loopSeamMeanRgbDelta = selected.meanRgbDelta;
-          timing.loopCandidates = selected.candidateCount;
-          // The selected package can be longer than the nominal cycle. The
-          // first samples were already rendered at the same dt and remain
-          // valid; this loop merely chooses where playback returns to zero.
-          if (index + 1 >= playback.frameCount) break;
         }
       }
-      // A static package never reaches the starter branch. Animated packages
-      // whose frame count is unexpectedly below it retain the initial loop.
-      if (!snapshot.isAnimated || firstOrbRgba == null) {
-        timing.loopSeamMeanRgbDelta = 0;
-      } else if (timing.loopCandidates == 0) {
-        final seam = await _loopSeamMeanRgbDelta(
-          renderer: renderer,
-          snapshot: snapshot,
-          headerSize: headerSize,
-          targetSizePx: playback.frameSizePx,
-          applyCircularAlphaMask: playback.applyCircularAlphaMask,
-          firstOrbRgba: firstOrbRgba,
-          loopDuration: Duration(milliseconds: playback.loopDurationMs),
+
+      DashboardOrbLoopValidation? loopValidation;
+      if (snapshot.isAnimated) {
+        final loopWatch = Stopwatch()..start();
+        loopValidation = const DashboardOrbLoopVerifier().validate(
+          frames: rgbaFrames,
+          candidateFrameCounts: candidateFrameCounts,
         );
-        timing.loopSeamMeanRgbDelta = seam;
+        loopWatch.stop();
+        timing.loopSelectionMs = loopWatch.elapsedMilliseconds;
+        await _recordLoopVerification(
+          widgetId: widgetId,
+          configurationRevision: configurationRevision,
+          packageIdentity: packageIdentity,
+          validation: loopValidation,
+        );
+        // Do not turn the least-bad candidate into an animated package. The
+        // static preview remains visible, explicitly without a continuity
+        // claim, when this finite sample budget cannot close the effect.
+        if (!loopValidation.accepted) return;
+        playback = initialPlayback.withLoopDurationMs(
+          loopValidation.frameCount! * initialPlayback.intervalMs,
+        );
       }
       if (!isCurrent()) return;
-      final channelPngBytes = frames.fold<int>(
+      final completeFrames = snapshot.isAnimated
+          ? List<Uint8List>.unmodifiable(frames.take(playback.frameCount))
+          : List<Uint8List>.unmodifiable(frames);
+      final channelPngBytes = completeFrames.fold<int>(
         0,
         (sum, frame) => sum + frame.length,
       );
@@ -359,10 +378,9 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
         cacheKey,
         _CachedOrbMaterialPackage(
           playback: playback,
-          frames: List<Uint8List>.unmodifiable(frames),
+          frames: completeFrames,
           phaseOriginUtcMs: phaseOriginUtcMs,
-          seamMeanRgbDelta: timing.loopSeamMeanRgbDelta,
-          seamCandidates: timing.loopCandidates,
+          loopValidation: loopValidation,
           encodedBytes: channelPngBytes,
         ),
       );
@@ -372,12 +390,12 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
         mode: mode,
         snapshot: snapshot,
         playback: playback,
-        frames: frames,
+        frames: completeFrames,
         phaseOriginUtcMs: phaseOriginUtcMs,
         timing: timing,
+        packageIdentity: packageIdentity,
         packageStage: 'complete',
-        seamMeanRgbDelta: timing.loopSeamMeanRgbDelta,
-        seamCandidates: timing.loopCandidates,
+        loopValidation: loopValidation,
       );
     } finally {
       renderer.dispose();
@@ -411,58 +429,18 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     }
   }
 
-  Future<_LoopSelection> _selectLoopDuration({
-    required DashboardHeaderMaterialFrameRenderer renderer,
-    required DashboardHeaderMaterialSnapshot snapshot,
-    required Size headerSize,
-    required DashboardOrbMaterialPlaybackProfile playback,
-    required Uint8List firstOrbRgba,
-  }) async {
-    final watch = Stopwatch()..start();
-    var bestDurationMs = playback.loopDurationMs;
-    var bestDelta = double.infinity;
-    var candidates = 0;
-    // A finite package cannot reproduce an arbitrarily long non-periodic
-    // field. Search the representable neighbourhood in actual shader output,
-    // rather than treating 2π/speed as proof that the return is seamless.
-    final nominalCount = playback.frameCount;
-    final minimumCount = (nominalCount - 16)
-        .clamp(2, playback.maximumFrameCount)
+  List<int> _candidateFrameCounts(
+    DashboardOrbMaterialPlaybackProfile playback,
+  ) {
+    final minimum = (playback.frameCount - 16)
+        .clamp(3, playback.maximumFrameCount)
         .toInt();
-    final maximumCount = (nominalCount + 16)
-        .clamp(2, playback.maximumFrameCount)
+    final maximum = (playback.frameCount + 16)
+        .clamp(3, playback.maximumFrameCount)
         .toInt();
-    for (var count = minimumCount; count <= maximumCount; count += 1) {
-      final candidateDurationMs = count * playback.intervalMs;
-      final candidate = await _renderTexture(
-        renderer: renderer,
-        snapshot: snapshot,
-        headerSize: headerSize,
-        orbSizePx: playback.frameSizePx,
-        applyCircularAlphaMask: playback.applyCircularAlphaMask,
-        offset: Duration(milliseconds: candidateDurationMs),
-      );
-      try {
-        final data = await candidate.toByteData(
-          format: ImageByteFormat.rawRgba,
-        );
-        if (data == null) continue;
-        final delta = _meanRgbDelta(firstOrbRgba, data.buffer.asUint8List());
-        candidates += 1;
-        if (delta < bestDelta) {
-          bestDelta = delta;
-          bestDurationMs = candidateDurationMs;
-        }
-      } finally {
-        candidate.dispose();
-      }
-    }
-    watch.stop();
-    return _LoopSelection(
-      durationMs: bestDurationMs,
-      meanRgbDelta: bestDelta.isFinite ? bestDelta : 0,
-      candidateCount: candidates,
-      elapsedMs: watch.elapsedMilliseconds,
+    return List<int>.generate(
+      maximum - minimum + 1,
+      (index) => minimum + index,
     );
   }
 
@@ -475,24 +453,31 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     required List<Uint8List> frames,
     required int phaseOriginUtcMs,
     required _OrbExportTiming timing,
+    required String packageIdentity,
     required String packageStage,
-    required double seamMeanRgbDelta,
-    required int seamCandidates,
+    required DashboardOrbLoopValidation? loopValidation,
   }) async {
     final beforePublication = Stopwatch()..start();
     final encodedBytes = frames.fold<int>(
       0,
       (sum, frame) => sum + frame.length,
     );
-    final seam = seamMeanRgbDelta < 0
-        ? 'pending'
-        : seamMeanRgbDelta.toStringAsFixed(2);
+    String metric(double? value) =>
+        value == null ? 'n/a' : value.toStringAsFixed(2);
+    final loop = loopValidation;
+    final loopStatus = loop?.status.name ?? 'static-preview';
     final description =
         'HeaderMaterial/v${playback.cacheVersion};stage=$packageStage;mode=$mode;'
         'effect=${snapshot.tuning.effect.name};loopMs=${playback.loopDurationMs};'
         'frames=${frames.length};shaderHz=${playback.realShaderSamplesPerSecond.toStringAsFixed(2)};'
         'texture=${playback.frameSizePx};decoded=${playback.decodedBitmapBytes};png=$encodedBytes;'
-        'seamRgb=$seam;seamCandidates=$seamCandidates;cache=${timing.cacheHit};'
+        'identity=$packageIdentity;loopStatus=$loopStatus;'
+        'seamRgb=${metric(loop?.seamMeanRgbDelta)};seamLimit=${metric(loop?.seamLimit)};'
+        'motionRgb=${metric(loop?.motionChangeMeanRgbDelta)};motionLimit=${metric(loop?.motionChangeLimit)};'
+        'seamCandidates=${loop?.candidateCount ?? 0};validSeamCandidates=${loop?.validCandidateCount ?? 0};'
+        // RemoteViews has no callback that proves which child the launcher is
+        // displaying. A phase-based initial index is alignment intent only.
+        'pacing=unverified;cache=${timing.cacheHit};'
         'dartMs[d=${timing.debounceMs},scene=${timing.sceneQueryMs},'
         'shader=${timing.shaderRenderMs},resize=0,png=${timing.pngEncodeMs},'
         'loop=${timing.loopSelectionMs},first=${timing.firstPublicationMs ?? -1}]';
@@ -503,6 +488,7 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       'intervalMs': playback.intervalMs,
       'phaseOriginUtcMs': phaseOriginUtcMs,
       'requestedAtUtcMs': timing.requestedAt.millisecondsSinceEpoch,
+      'packageIdentity': packageIdentity,
       'sourceDescription': description,
       'frames': frames,
     });
@@ -511,6 +497,39 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
     timing.firstPublicationMs ??= DateTime.now()
         .difference(timing.requestedAt)
         .inMilliseconds;
+  }
+
+  Future<void> _recordLoopVerification({
+    required int widgetId,
+    required int configurationRevision,
+    required String packageIdentity,
+    required DashboardOrbLoopValidation validation,
+  }) => _channel
+      .invokeMethod<Object?>('recordLoopVerification', <String, Object?>{
+        'widgetId': widgetId,
+        'configurationRevision': configurationRevision,
+        'packageIdentity': packageIdentity,
+        'status': validation.status.name,
+        'candidateCount': validation.candidateCount,
+        'validCandidateCount': validation.validCandidateCount,
+        'seamMeanRgbDelta': validation.seamMeanRgbDelta,
+        'seamLimit': validation.seamLimit,
+        'motionChangeMeanRgbDelta': validation.motionChangeMeanRgbDelta,
+        'motionChangeLimit': validation.motionChangeLimit,
+      });
+
+  String _packageIdentity({
+    required String mode,
+    required int configurationRevision,
+    required String visualCacheKey,
+  }) {
+    var hash = 0x811c9dc5;
+    for (final unit
+        in '$mode|$configurationRevision|$visualCacheKey'.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    return 'v$dashboardOrbMaterialCacheVersion-$mode-$configurationRevision-${hash.toUnsigned(32).toRadixString(16)}';
   }
 
   void _remember(String key, _CachedOrbMaterialPackage package) {
@@ -524,50 +543,6 @@ final class DashboardHeaderOrbMaterialExportCoordinator {
       final oldest = _frameCache.keys.first;
       bytes -= _frameCache.remove(oldest)!.encodedBytes;
     }
-  }
-
-  Future<double> _loopSeamMeanRgbDelta({
-    required DashboardHeaderMaterialFrameRenderer renderer,
-    required DashboardHeaderMaterialSnapshot snapshot,
-    required Size headerSize,
-    required int targetSizePx,
-    required bool applyCircularAlphaMask,
-    required Uint8List firstOrbRgba,
-    required Duration loopDuration,
-  }) async {
-    final orb = await _renderTexture(
-      renderer: renderer,
-      snapshot: snapshot,
-      headerSize: headerSize,
-      orbSizePx: targetSizePx,
-      applyCircularAlphaMask: applyCircularAlphaMask,
-      offset: loopDuration,
-    );
-    try {
-      final data = await orb.toByteData(format: ImageByteFormat.rawRgba);
-      if (data == null) throw StateError('Orb seam RGBA encoding failed.');
-      return _meanRgbDelta(firstOrbRgba, data.buffer.asUint8List());
-    } finally {
-      orb.dispose();
-    }
-  }
-
-  static double _meanRgbDelta(Uint8List first, Uint8List repeated) {
-    if (first.length != repeated.length || first.length % 4 != 0) {
-      throw ArgumentError('Mismatched orb frame pixels for loop seam check.');
-    }
-    var total = 0;
-    var samples = 0;
-    for (var index = 0; index < first.length; index += 4) {
-      // v3 normally clips in the launcher. The legacy alpha-mask fallback
-      // keeps its transparent corners, which are intentionally excluded.
-      if (first[index + 3] == 0 || repeated[index + 3] == 0) continue;
-      total += (first[index] - repeated[index]).abs();
-      total += (first[index + 1] - repeated[index + 1]).abs();
-      total += (first[index + 2] - repeated[index + 2]).abs();
-      samples += 3;
-    }
-    return samples == 0 ? 0 : total / samples;
   }
 
   void dispose() {
@@ -588,31 +563,15 @@ final class _CachedOrbMaterialPackage {
     required this.playback,
     required this.frames,
     required this.phaseOriginUtcMs,
-    required this.seamMeanRgbDelta,
-    required this.seamCandidates,
+    required this.loopValidation,
     required this.encodedBytes,
   });
 
   final DashboardOrbMaterialPlaybackProfile playback;
   final List<Uint8List> frames;
   final int phaseOriginUtcMs;
-  final double seamMeanRgbDelta;
-  final int seamCandidates;
+  final DashboardOrbLoopValidation? loopValidation;
   final int encodedBytes;
-}
-
-final class _LoopSelection {
-  const _LoopSelection({
-    required this.durationMs,
-    required this.meanRgbDelta,
-    required this.candidateCount,
-    required this.elapsedMs,
-  });
-
-  final int durationMs;
-  final double meanRgbDelta;
-  final int candidateCount;
-  final int elapsedMs;
 }
 
 /// Timings are persisted through the native frame diagnostics with the
@@ -633,8 +592,6 @@ final class _OrbExportTiming {
   int shaderRenderMs = 0;
   int pngEncodeMs = 0;
   int loopSelectionMs = 0;
-  int loopCandidates = 0;
-  double loopSeamMeanRgbDelta = 0;
   int nativeWriteAndQueueMs = 0;
   int? firstPublicationMs;
 }

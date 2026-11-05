@@ -66,5 +66,26 @@ void main() {
         expect(profile.applyCircularAlphaMask, isTrue);
       },
     );
+
+    test(
+      'animated first-install preview is one still frame, never a mini loop',
+      () {
+        final animated = DashboardOrbMaterialPlaybackProfile.resolve(
+          isAnimated: true,
+          requiresDenseShaderSampling: false,
+          characteristicCycleMs: 4800,
+          preferredTextureSizePx: 80,
+          maximumFrameCount: 175,
+          maximumDecodedBytes: 700 * 1024,
+          applyCircularAlphaMask: false,
+        );
+
+        final preview = animated.asStaticPreview();
+        expect(preview.frameCount, 1);
+        expect(preview.intervalMs, 1000);
+        expect(preview.loopDurationMs, 1000);
+        expect(preview.frameSizePx, animated.frameSizePx);
+      },
+    );
   });
 }
