@@ -184,6 +184,7 @@ jobs:
           emulator-options: >-
             -no-window -gpu swangle -feature -Vulkan -accel on
             -no-snapshot -noaudio -no-boot-anim -camera-back none
+            -partition-size 4096
           pre-emulator-launch-script: >-
             cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
           script: >-
@@ -334,7 +335,7 @@ jobs:
           emulator-options: >-
             -no-window -gpu swangle -feature -Vulkan -accel on
             -no-snapshot -noaudio
-            -no-boot-anim -camera-back none
+            -no-boot-anim -camera-back none -partition-size 4096
           pre-emulator-launch-script: >-
             flutter build apk --profile
             --target=integration_test/dashboard_interaction_profile_test.dart
@@ -438,7 +439,7 @@ jobs:
           emulator-options: >-
             -no-window -gpu swangle -feature -Vulkan -accel on
             -no-snapshot -noaudio
-            -no-boot-anim -camera-back none
+            -no-boot-anim -camera-back none -partition-size 4096
           pre-emulator-launch-script: >-
             flutter build apk --profile
             --target=integration_test/dashboard_interaction_profile_test.dart
