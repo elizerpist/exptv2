@@ -399,6 +399,28 @@ internal object FluviKeyguardCardSettings {
         enumValues<T>().firstOrNull { it.name == value } ?: fallback
 }
 
+/** Immutable diagnostic ownership captured at a wake boundary.  It is never
+ * used for visibility authority: its only purpose is to keep a later
+ * generation change from relabelling an already-started operation. */
+internal data class KeyguardDiagnosticContext(
+    val captureId: String?,
+    val attemptId: Long?,
+    val serviceSession: Long,
+    val originWakeEpoch: Long,
+)
+
+/** The operation identity is deliberately distinct from a wake epoch. A
+ * terminal hide invalidates the latter before its WindowManager callbacks
+ * return, but all callbacks still belong to this one diagnostic operation. */
+internal data class KeyguardDiagnosticOperation(
+    val context: KeyguardDiagnosticContext?,
+    val showOperationId: Long? = null,
+    val hideOperationId: Long? = null,
+    val attachGeneration: Long? = null,
+    val causingInspectionRequestId: Long? = null,
+    val triggerReceivedUptimeMs: Long? = null,
+)
+
 /** A bounded, technical-only log for diagnostic builds. No node tree, text,
  * financial field, or foreign application identity is ever retained. */
 internal object KeyguardCardDiagnostics {
@@ -425,11 +447,14 @@ internal object KeyguardCardDiagnostics {
     private var capture: TimingCapture? = null
     private var recovered: RecoveredCapture? = null
     private var nextCaptureGeneration = 0L
+    private var nextOperationId = 0L
 
     /** A compact event is intentionally technical-only.  It never accepts a
      * node text, content description, financial value, or foreign package
      * name.  All formatting is deferred until a user asks for a snapshot. */
     private data class TimingEvent(
+        val captureId: String,
+        val processInstanceId: String,
         val seq: Long,
         val uptimeMs: Long,
         val elapsedMs: Long,
@@ -438,22 +463,37 @@ internal object KeyguardCardDiagnostics {
         val wakeEpoch: Long?,
         val requestId: Long?,
         val attachGeneration: Long?,
+        val showOperationId: Long?,
+        val hideOperationId: Long?,
+        val triggerReceivedUptimeMs: Long?,
         val stage: String,
         val reason: String,
-        val fields: Map<String, String>,
+        var fields: Map<String, String>,
         var firstUptimeMs: Long = uptimeMs,
         var lastUptimeMs: Long = uptimeMs,
         var count: Int = 1,
     ) {
-        fun byteSize(): Int = toLine().toByteArray(Charsets.UTF_8).size
+        /** A conservative structured-data estimate. Formatting belongs to
+         * export, not the high-frequency capture path. */
+        fun byteSize(): Int = 176 + stage.length + reason.length +
+            fields.entries.sumOf { it.key.length + it.value.length + 2 }
 
-        fun canCoalesce(other: TimingEvent): Boolean =
-            stage == other.stage && reason == other.reason && attemptId == other.attemptId &&
-                requestId == other.requestId && attachGeneration == other.attachGeneration &&
-                fields == other.fields && stage !in NON_COALESCIBLE_STAGES
+        fun canCoalesce(other: TimingEvent): Boolean {
+            if (stage != "ACCESSIBILITY_EVENT" || other.stage != "ACCESSIBILITY_EVENT") return false
+            if (fields["overlayState"] != "hidden" || other.fields["overlayState"] != "hidden") return false
+            // eventTime/eventAge/sequence are expected to differ for every
+            // callback and must never defeat hidden-state noise aggregation.
+            val stableKeys = setOf("eventType", "windowChanges", "windowId", "displayId", "classification", "overlayState")
+            return reason == other.reason && attemptId == other.attemptId &&
+                stableKeys.all { fields[it] == other.fields[it] }
+        }
+
+        fun isTransition(): Boolean = stage in KeyguardCardDiagnostics.TRANSITION_STAGES
 
         fun toLine(): String = buildString {
             append("seq=").append(seq)
+            append(" capture=").append(captureId)
+            append(" process=").append(processInstanceId)
             append(" up=").append(uptimeMs)
             append(" el=").append(elapsedMs)
             attemptId?.let { append(" attempt=").append(it) }
@@ -461,6 +501,9 @@ internal object KeyguardCardDiagnostics {
             wakeEpoch?.let { append(" wake=").append(it) }
             requestId?.let { append(" req=").append(it) }
             attachGeneration?.let { append(" attach=").append(it) }
+            showOperationId?.let { append(" showOp=").append(it) }
+            hideOperationId?.let { append(" hideOp=").append(it) }
+            triggerReceivedUptimeMs?.let { append(" triggerUp=").append(it) }
             append(" stage=").append(stage)
             append(" reason=").append(reason)
             if (count > 1) append(" count=").append(count)
@@ -469,6 +512,38 @@ internal object KeyguardCardDiagnostics {
             fields.forEach { (key, value) -> append(' ').append(key).append('=').append(value) }
         }
     }
+
+    private data class ShowEpisode(
+        val operationId: Long,
+        val requestId: Long?,
+        val decisionAtUptimeMs: Long,
+        var addBeginAtUptimeMs: Long? = null,
+        var addReturnAtUptimeMs: Long? = null,
+        var firstRootDrawAtUptimeMs: Long? = null,
+        var firstShaderDrawAtUptimeMs: Long? = null,
+    )
+
+    private data class HideEpisode(
+        val operationId: Long,
+        val triggerReceivedAtUptimeMs: Long?,
+        val decisionAtUptimeMs: Long,
+        var localHideAppliedAtUptimeMs: Long? = null,
+        var removeBeginAtUptimeMs: Long? = null,
+        var removeReturnAtUptimeMs: Long? = null,
+        var attachedBefore: Boolean? = null,
+        var detachFailed: Boolean = false,
+    )
+
+    private data class InspectionTimeline(
+        val requestId: Long,
+        var queuedAtUptimeMs: Long? = null,
+        var startedAtUptimeMs: Long? = null,
+        var finishedAtUptimeMs: Long? = null,
+        var mainApplyStartedAtUptimeMs: Long? = null,
+        var appliedAtUptimeMs: Long? = null,
+        var windowsReadMs: Long? = null,
+        var treeScanMs: Long? = null,
+    )
 
     private data class TimingAttempt(
         val id: Long,
@@ -479,21 +554,20 @@ internal object KeyguardCardDiagnostics {
         var wakeSource: String = "NA",
         var firstInspectionRequestId: Long? = null,
         var showingInspectionRequestId: Long? = null,
-        var inspectionCount: Int = 0,
+        var requestsReceived: Int = 0,
+        var requestsReplaced: Int = 0,
+        var inspectionsStarted: Int = 0,
+        var inspectionsApplied: Int = 0,
+        var inspectionsRejected: Int = 0,
         var staleInspectionCount: Int = 0,
         var retryScheduledCount: Int = 0,
         var retryFiredCount: Int = 0,
         var retryCancelledCount: Int = 0,
         var attachCount: Int = 0,
         var detachCount: Int = 0,
-        var firstRootDrawAt: Long? = null,
-        var firstShaderDrawAt: Long? = null,
-        var showDecisionAt: Long? = null,
-        var addViewBeginAt: Long? = null,
-        var addViewReturnAt: Long? = null,
-        var hideSignalAt: Long? = null,
-        var hideDecisionAt: Long? = null,
-        var removeViewReturnAt: Long? = null,
+        val shows: ArrayDeque<ShowEpisode> = ArrayDeque(),
+        val hides: ArrayDeque<HideEpisode> = ArrayDeque(),
+        val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         var finalState: String = "INCOMPLETE",
     )
 
@@ -517,9 +591,12 @@ internal object KeyguardCardDiagnostics {
         var retainedBytes: Int = 0,
         var eventsEvicted: Int = 0,
         var eventsCoalesced: Int = 0,
-        var lastPersistedSeq: Long = 0L,
+        var hiddenNoopCount: Int = 0,
+        var queuedForPersistenceSeq: Long = 0L,
+        var lastSuccessfullyPersistedSeq: Long = 0L,
         var lastCheckpointElapsedMs: Long = startedElapsedMs,
         var unflushedTailMayBeMissing: Boolean = false,
+        var frozenExport: TimingCapture? = null,
         val events: ArrayDeque<TimingEvent> = ArrayDeque(),
         val attempts: ArrayDeque<TimingAttempt> = ArrayDeque(),
     )
@@ -530,18 +607,20 @@ internal object KeyguardCardDiagnostics {
         val lastPersistedSeq: Long,
     )
 
-    private val NON_COALESCIBLE_STAGES = setOf(
-        "SHOW_DECIDED", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "FIRST_ROOT_DRAW",
+    private val TRANSITION_STAGES = setOf(
+        "SCREEN_ON_RECEIVED", "WAKE_CYCLE_STARTED", "INSPECTION_QUEUED", "INSPECTION_COALESCED",
+        "INSPECTION_STARTED", "INSPECTION_FINISHED", "INSPECTION_MAIN_APPLY_STARTED", "INSPECTION_APPLIED",
+        "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
+        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
         "FIRST_SHADER_DRAW", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
-        "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "RETRY_SCHEDULED", "RETRY_FIRED",
-        "RETRY_CANCELLED", "INSPECTION_QUEUED", "INSPECTION_COALESCED",
-        "INSPECTION_STARTED", "INSPECTION_FINISHED", "INSPECTION_APPLIED", "INSPECTION_REJECTED",
+        "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "CAPTURE_FROZEN",
     )
 
     /** Starts a capture owned by Android, not by a Flutter widget or stream.
      * The only Flutter supplied values are immutable build labels for the
      * human-readable header. */
-    fun startCapture(context: Context, build: String?, buildMode: String?): Map<String, Any?> = synchronized(captureLock) {
+    fun startCapture(context: Context, build: String?, buildMode: String?): Map<String, Any?> {
+        val export = synchronized(captureLock) {
         ensureRecoveredLoadedLocked(context)
         val settings = FluviKeyguardCardSettings.read(context)
         val runtime = FluviRuntimeCoordinator.status(context)
@@ -573,26 +652,38 @@ internal object KeyguardCardDiagnostics {
         recovered = null
         appendLocked(created, "CAPTURE_STARTED", "user", fields = mapOf("source" to "runtimeMethod"))
         persistLocked(context, created, force = true)
-        snapshotLocked(context, created)
-    }
-
-    fun freezeCapture(context: Context): Map<String, Any?> = synchronized(captureLock) {
-        ensureRecoveredLoadedLocked(context)
-        val active = capture
-        if (active != null && active.state == "REC") {
-            active.endedElapsedMs = SystemClock.elapsedRealtime()
-            active.state = "FROZEN"
-            appendLocked(active, "CAPTURE_FROZEN", "user")
-            persistLocked(context, active, force = true)
+            snapshotForExportLocked(created)
         }
-        snapshotLocked(context, active)
+        return snapshotMap(export, null)
     }
 
-    fun captureSnapshot(context: Context): Map<String, Any?> = synchronized(captureLock) {
-        ensureRecoveredLoadedLocked(context)
-        val active = capture
-        if (active?.state == "REC") expireIfNeededLocked(context, active)
-        snapshotLocked(context, capture)
+    fun freezeCapture(context: Context): Map<String, Any?> {
+        val read = synchronized(captureLock) {
+            ensureRecoveredLoadedLocked(context)
+            val active = capture
+            if (active != null && active.state == "REC") {
+                active.endedElapsedMs = SystemClock.elapsedRealtime()
+                active.state = "FROZEN"
+                appendLocked(active, "CAPTURE_FROZEN", "user")
+                persistLocked(context, active, force = true)
+                // Repeated Copy calls must yield the exact same frozen report,
+                // even if an asynchronous durability acknowledgement arrives.
+                active.frozenExport = snapshotForExportLocked(active)
+            }
+            (active?.frozenExport ?: active?.let(::snapshotForExportLocked)) to recovered
+        }
+        return snapshotMap(read.first, read.second)
+    }
+
+    fun captureSnapshot(context: Context): Map<String, Any?> {
+        val read = synchronized(captureLock) {
+            ensureRecoveredLoadedLocked(context)
+            val active = capture
+            if (active?.state == "REC") expireIfNeededLocked(context, active)
+            val current = capture
+            (current?.frozenExport ?: current?.let(::snapshotForExportLocked)) to recovered
+        }
+        return snapshotMap(read.first, read.second)
     }
 
     fun clearCapture(context: Context): Map<String, Any?> = synchronized(captureLock) {
@@ -600,6 +691,11 @@ internal object KeyguardCardDiagnostics {
         recovered = null
         val clearGeneration = ++nextCaptureGeneration
         captureWriter.execute {
+            synchronized(captureLock) {
+                // A start that followed Clear owns persistence; an old clear
+                // must not delete its recovered report or checkpoint.
+                if (capture != null || nextCaptureGeneration != clearGeneration) return@execute
+            }
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .remove(CAPTURE_REPORT).remove(CAPTURE_ID).remove(CAPTURE_STATE).remove(CAPTURE_PERSISTED_SEQ).commit()
         }
@@ -619,7 +715,13 @@ internal object KeyguardCardDiagnostics {
     /** Called at the first line of each new wake attempt. Existing active
      * capture history is deliberately retained; only the legacy compact
      * status line is replaced for the ordinary settings screen. */
-    fun beginLockAttempt(context: Context, session: Long, wakeEpoch: Long, source: String = "unknown") {
+    fun beginLockAttempt(
+        context: Context,
+        session: Long,
+        wakeEpoch: Long,
+        source: String = "unknown",
+        receivedAtUptimeMs: Long = SystemClock.uptimeMillis(),
+    ): KeyguardDiagnosticContext? {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val line = "${SystemClock.elapsedRealtime()}|KG|WAKE|session=$session|wake=$wakeEpoch"
         prefs.edit()
@@ -628,16 +730,60 @@ internal object KeyguardCardDiagnostics {
             .remove(LAST_EVENT)
             .putInt(LAST_EVENT_COUNT, 0)
             .apply()
-        synchronized(captureLock) {
-            val active = capture ?: return@synchronized
-            if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
+        return synchronized(captureLock) {
+            val active = capture ?: return@synchronized null
+            if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized null
             while (active.attempts.size >= MAX_ATTEMPTS) active.attempts.removeFirst()
-            val attempt = TimingAttempt(active.nextAttemptId++, session, wakeEpoch, SystemClock.uptimeMillis())
+            val attempt = TimingAttempt(active.nextAttemptId++, session, wakeEpoch, receivedAtUptimeMs)
             attempt.presentationMode = active.configuration["presentationMode"] ?: "NA"
             attempt.wakeSource = source
             active.attempts.addLast(attempt)
-            appendLocked(active, "WAKE_ATTEMPT", "begin", serviceSession = session, wakeEpoch = wakeEpoch)
+            val context = KeyguardDiagnosticContext(active.id, attempt.id, session, wakeEpoch)
+            appendLocked(
+                active,
+                "WAKE_ATTEMPT",
+                "begin",
+                serviceSession = session,
+                wakeEpoch = wakeEpoch,
+                observedUptimeMs = receivedAtUptimeMs,
+                diagnosticContext = context,
+            )
+            context
         }
+    }
+
+    fun newShowOperation(
+        context: KeyguardDiagnosticContext?,
+        attachGeneration: Long?,
+        causingInspectionRequestId: Long?,
+    ): KeyguardDiagnosticOperation = synchronized(captureLock) {
+        KeyguardDiagnosticOperation(
+            context = context,
+            showOperationId = ++nextOperationId,
+            attachGeneration = attachGeneration,
+            causingInspectionRequestId = causingInspectionRequestId,
+        )
+    }
+
+    fun newHideOperation(
+        context: KeyguardDiagnosticContext?,
+        attachGeneration: Long?,
+        causingInspectionRequestId: Long?,
+        triggerReceivedUptimeMs: Long?,
+    ): KeyguardDiagnosticOperation = synchronized(captureLock) {
+        KeyguardDiagnosticOperation(
+            context = context,
+            hideOperationId = ++nextOperationId,
+            attachGeneration = attachGeneration,
+            causingInspectionRequestId = causingInspectionRequestId,
+            triggerReceivedUptimeMs = triggerReceivedUptimeMs,
+        )
+    }
+
+    fun recordHiddenNoop(context: Context) = synchronized(captureLock) {
+        val active = capture ?: return@synchronized
+        if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
+        active.hiddenNoopCount += 1
     }
 
     /** Hot-path record. It only mutates a small in-memory ring while capture
@@ -652,10 +798,20 @@ internal object KeyguardCardDiagnostics {
         requestId: Long? = null,
         attachGeneration: Long? = null,
         observedUptimeMs: Long? = null,
+        diagnosticContext: KeyguardDiagnosticContext? = null,
+        operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, Any?> = emptyMap(),
     ) = synchronized(captureLock) {
         val active = capture ?: return@synchronized
         if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
+        val capturedFields = fields.mapNotNull { (key, value) -> value?.let { key to technicalValue(it) } }.toMap()
+            .let { base ->
+                if (stage == "ACCESSIBILITY_EVENT" && base["overlayState"] == "hidden") {
+                    base["eventAgeMs"]?.toLongOrNull()?.let { age ->
+                        base + mapOf("eventAgeMinMs" to age.toString(), "eventAgeMaxMs" to age.toString())
+                    } ?: base
+                } else base
+            }
         appendLocked(
             active = active,
             stage = stage,
@@ -665,7 +821,9 @@ internal object KeyguardCardDiagnostics {
             requestId = requestId,
             attachGeneration = attachGeneration,
             observedUptimeMs = observedUptimeMs,
-            fields = fields.mapNotNull { (key, value) -> value?.let { key to technicalValue(it) } }.toMap(),
+            diagnosticContext = diagnosticContext,
+            operation = operation,
+            fields = capturedFields,
         )
         maybeCheckpointLocked(context, active)
     }
@@ -679,17 +837,32 @@ internal object KeyguardCardDiagnostics {
         requestId: Long? = null,
         attachGeneration: Long? = null,
         observedUptimeMs: Long? = null,
+        diagnosticContext: KeyguardDiagnosticContext? = null,
+        operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, String> = emptyMap(),
     ) {
+        // A completion that belonged to a capture cleared/restarted by the
+        // user must not be relabelled as attempt 1 of the new capture merely
+        // because attempt identifiers are local counters.  Operation context
+        // wins because it is the identity carried through Window callbacks.
+        val ownership = operation?.context ?: diagnosticContext
+        if (ownership?.captureId != null && ownership.captureId != active.id) return
         val event = TimingEvent(
+            captureId = active.id,
+            processInstanceId = active.processInstanceId,
             seq = active.nextSeq++,
             uptimeMs = observedUptimeMs ?: SystemClock.uptimeMillis(),
             elapsedMs = SystemClock.elapsedRealtime(),
-            attemptId = active.attempts.toList().lastOrNull { it.serviceSession == serviceSession && it.wakeEpoch == wakeEpoch }?.id,
-            serviceSession = serviceSession,
-            wakeEpoch = wakeEpoch,
+            attemptId = ownership?.attemptId ?: active.attempts.toList().lastOrNull {
+                it.serviceSession == serviceSession && it.wakeEpoch == wakeEpoch
+            }?.id,
+            serviceSession = ownership?.serviceSession ?: serviceSession,
+            wakeEpoch = ownership?.originWakeEpoch ?: wakeEpoch,
             requestId = requestId,
-            attachGeneration = attachGeneration,
+            attachGeneration = operation?.attachGeneration ?: attachGeneration,
+            showOperationId = operation?.showOperationId,
+            hideOperationId = operation?.hideOperationId,
+            triggerReceivedUptimeMs = operation?.triggerReceivedUptimeMs,
             stage = stage,
             reason = reason,
             fields = fields,
@@ -698,40 +871,122 @@ internal object KeyguardCardDiagnostics {
         if (last != null && last.canCoalesce(event)) {
             last.lastUptimeMs = event.uptimeMs
             last.count += 1
+            val age = event.fields["eventAgeMs"]?.toLongOrNull()
+            if (age != null) {
+                val min = last.fields["eventAgeMinMs"]?.toLongOrNull()?.coerceAtMost(age) ?: age
+                val max = last.fields["eventAgeMaxMs"]?.toLongOrNull()?.coerceAtLeast(age) ?: age
+                last.fields = last.fields + mapOf("eventAgeMinMs" to min.toString(), "eventAgeMaxMs" to max.toString())
+            }
             active.eventsCoalesced += 1
             return
         }
         val size = event.byteSize()
         while (active.events.isNotEmpty() && (active.events.size >= MAX_EVENTS || active.retainedBytes + size > MAX_EVENT_BYTES)) {
-            active.retainedBytes -= active.events.removeFirst().byteSize()
+            // Preserve causal transitions ahead of repetitive observational
+            // noise. If all retained records are transitions, fall back to
+            // the oldest record and mark the export as truncated instead of
+            // pretending the attempt is complete.
+            val entries = active.events.toMutableList()
+            val index = entries.indexOfFirst { !it.isTransition() }.takeIf { it >= 0 } ?: 0
+            val evicted = entries.removeAt(index)
+            active.events.clear()
+            active.events.addAll(entries)
+            active.retainedBytes -= evicted.byteSize()
             active.eventsEvicted += 1
         }
         active.events.addLast(event)
         active.retainedBytes += size
         active.attempts.toList().lastOrNull { it.id == event.attemptId }?.let { attempt ->
+            fun inspectionTimeline(): InspectionTimeline? = event.requestId?.let { request ->
+                attempt.inspections.getOrPut(request) { InspectionTimeline(request) }
+            }
+            fun showEpisode(): ShowEpisode? = event.showOperationId?.let { operationId ->
+                attempt.shows.toList().lastOrNull { it.operationId == operationId }
+            }
+            fun hideEpisode(): HideEpisode? = event.hideOperationId?.let { operationId ->
+                attempt.hides.toList().lastOrNull { it.operationId == operationId }
+            }
             when (stage) {
                 "INSPECTION_QUEUED" -> {
-                    attempt.inspectionCount += 1
+                    attempt.requestsReceived += 1
                     if (attempt.firstInspectionRequestId == null) attempt.firstInspectionRequestId = requestId
+                    inspectionTimeline()?.queuedAtUptimeMs = event.uptimeMs
                 }
-                "INSPECTION_REJECTED" -> attempt.staleInspectionCount += 1
+                "INSPECTION_COALESCED" -> {
+                    attempt.requestsReceived += 1
+                    if (fields["replacedPendingRequestId"] != "NA") attempt.requestsReplaced += 1
+                    if (attempt.firstInspectionRequestId == null) attempt.firstInspectionRequestId = requestId
+                    inspectionTimeline()?.queuedAtUptimeMs = event.uptimeMs
+                }
+                "INSPECTION_STARTED" -> {
+                    attempt.inspectionsStarted += 1
+                    inspectionTimeline()?.startedAtUptimeMs = event.uptimeMs
+                }
+                "INSPECTION_FINISHED" -> inspectionTimeline()?.apply {
+                    finishedAtUptimeMs = event.uptimeMs
+                    windowsReadMs = fields["windowsReadMs"]?.toLongOrNull()
+                    treeScanMs = fields["treeScanMs"]?.toLongOrNull()
+                }
+                "INSPECTION_MAIN_APPLY_STARTED" -> inspectionTimeline()?.mainApplyStartedAtUptimeMs = event.uptimeMs
+                "INSPECTION_APPLIED" -> {
+                    attempt.inspectionsApplied += 1
+                    inspectionTimeline()?.appliedAtUptimeMs = event.uptimeMs
+                }
+                "INSPECTION_REJECTED" -> {
+                    attempt.inspectionsRejected += 1
+                    attempt.staleInspectionCount += 1
+                }
                 "RETRY_SCHEDULED" -> attempt.retryScheduledCount += 1
                 "RETRY_FIRED" -> attempt.retryFiredCount += 1
                 "RETRY_CANCELLED" -> attempt.retryCancelledCount += 1
-                "SHOW_DECIDED" -> {
-                    attempt.showingInspectionRequestId = requestId
-                    attempt.showDecisionAt = event.uptimeMs
+                "SHOW_FOR_ATTACH" -> event.showOperationId?.let { operationId ->
+                    if (showEpisode() == null) {
+                        while (attempt.shows.size >= 8) attempt.shows.removeFirst()
+                        attempt.shows.addLast(
+                            ShowEpisode(
+                                operationId = operationId,
+                                requestId = event.requestId,
+                                decisionAtUptimeMs = event.uptimeMs,
+                            ),
+                        )
+                    }
+                    attempt.showingInspectionRequestId = event.requestId
                     attempt.finalState = "SHOW_DECIDED"
                 }
-                "ADD_VIEW_BEGIN" -> attempt.addViewBeginAt = event.uptimeMs
-                "ADD_VIEW_RETURN" -> { attempt.addViewReturnAt = event.uptimeMs; attempt.attachCount += 1; attempt.finalState = "ATTACHED" }
-                "FIRST_ROOT_DRAW" -> attempt.firstRootDrawAt = event.uptimeMs
-                "FIRST_SHADER_DRAW" -> attempt.firstShaderDrawAt = event.uptimeMs
-                "HIDE_DECIDED" -> { attempt.hideDecisionAt = event.uptimeMs; attempt.finalState = "HIDE_DECIDED" }
-                "REMOVE_VIEW_RETURN" -> { attempt.removeViewReturnAt = event.uptimeMs; attempt.detachCount += 1; attempt.finalState = "DETACHED" }
-            }
-            if (stage in setOf("SCREEN_OFF_RECEIVED", "USER_PRESENT_RECEIVED", "ACCESSIBILITY_EVENT") && attempt.hideSignalAt == null) {
-                attempt.hideSignalAt = event.uptimeMs
+                "ADD_VIEW_BEGIN" -> showEpisode()?.addBeginAtUptimeMs = event.uptimeMs
+                "ADD_VIEW_RETURN" -> showEpisode()?.let {
+                    it.addReturnAtUptimeMs = event.uptimeMs
+                    attempt.attachCount += 1
+                    attempt.finalState = "ATTACHED"
+                }
+                "FIRST_ROOT_DRAW" -> showEpisode()?.firstRootDrawAtUptimeMs = event.uptimeMs
+                "FIRST_SHADER_DRAW" -> showEpisode()?.firstShaderDrawAtUptimeMs = event.uptimeMs
+                "HIDE_DECIDED" -> event.hideOperationId?.let { operationId ->
+                    if (hideEpisode() == null) {
+                        while (attempt.hides.size >= 8) attempt.hides.removeFirst()
+                        attempt.hides.addLast(
+                            HideEpisode(
+                                operationId = operationId,
+                                triggerReceivedAtUptimeMs = event.triggerReceivedUptimeMs,
+                                decisionAtUptimeMs = event.uptimeMs,
+                            ),
+                        )
+                    }
+                    attempt.finalState = "HIDE_DECIDED"
+                }
+                "LOCAL_HIDE_BEGIN" -> hideEpisode()?.attachedBefore = when (fields["attachedBefore"]) {
+                    "true" -> true
+                    "false" -> false
+                    else -> null
+                }
+                "LOCAL_HIDE_APPLIED" -> hideEpisode()?.localHideAppliedAtUptimeMs = event.uptimeMs
+                "REMOVE_VIEW_BEGIN" -> hideEpisode()?.removeBeginAtUptimeMs = event.uptimeMs
+                "REMOVE_VIEW_RETURN" -> hideEpisode()?.let {
+                    it.removeReturnAtUptimeMs = event.uptimeMs
+                    if (it.attachedBefore == true) attempt.detachCount += 1
+                    attempt.finalState = "DETACHED"
+                }
+                "DETACH_FAILED" -> hideEpisode()?.detachFailed = true
             }
         }
     }
@@ -742,6 +997,7 @@ internal object KeyguardCardDiagnostics {
         active.state = "EXPIRED"
         appendLocked(active, "CAPTURE_EXPIRED", "timeout")
         persistLocked(context, active, force = true)
+        active.frozenExport = snapshotForExportLocked(active)
         return true
     }
 
@@ -756,22 +1012,44 @@ internal object KeyguardCardDiagnostics {
         val id = active.id
         val generation = active.generation
         val persistedSeq = active.events.lastOrNull()?.seq ?: 0L
-        active.lastPersistedSeq = persistedSeq
-        val report = formatReport(active, recoveredFromDisk = false, exportLimitBytes = Int.MAX_VALUE)
+        active.queuedForPersistenceSeq = maxOf(active.queuedForPersistenceSeq, persistedSeq)
+        // Capturing this structured copy is small and bounded. Report
+        // formatting happens on the single writer so hide/attach paths never
+        // hold captureLock while serialising hundreds of events.
+        val snapshot = snapshotForExportLocked(active)
         captureWriter.execute {
+            val report = formatReport(snapshot, recoveredFromDisk = false, exportLimitBytes = Int.MAX_VALUE)
             synchronized(captureLock) {
                 // A later clear/new capture owns durability. A stale queued
                 // checkpoint must not resurrect or replace it.
                 if (capture?.generation != generation) return@execute
             }
-            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            val committed = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString(CAPTURE_REPORT, report)
                 .putString(CAPTURE_ID, id)
-                .putString(CAPTURE_STATE, active.state)
+                .putString(CAPTURE_STATE, snapshot.state)
                 .putLong(CAPTURE_PERSISTED_SEQ, persistedSeq)
                 .commit()
+            if (committed) synchronized(captureLock) {
+                capture?.takeIf { it.generation == generation }?.let { current ->
+                    current.lastSuccessfullyPersistedSeq = maxOf(current.lastSuccessfullyPersistedSeq, persistedSeq)
+                    current.unflushedTailMayBeMissing = current.events.lastOrNull()?.seq != current.lastSuccessfullyPersistedSeq
+                }
+            }
         }
     }
+
+    private fun snapshotForExportLocked(active: TimingCapture): TimingCapture = active.copy(
+        frozenExport = null,
+        events = ArrayDeque(active.events.map { it.copy(fields = it.fields.toMap()) }),
+        attempts = ArrayDeque(active.attempts.map { attempt ->
+            attempt.copy(
+                shows = ArrayDeque(attempt.shows.map { it.copy() }),
+                hides = ArrayDeque(attempt.hides.map { it.copy() }),
+                inspections = LinkedHashMap(attempt.inspections.mapValues { (_, timeline) -> timeline.copy() }),
+            )
+        }),
+    )
 
     private fun ensureRecoveredLoadedLocked(context: Context) {
         if (capture != null || recovered != null) return
@@ -784,9 +1062,9 @@ internal object KeyguardCardDiagnostics {
         )
     }
 
-    private fun snapshotLocked(context: Context, active: TimingCapture?): Map<String, Any?> {
+    /** Formats an already-copied capture outside captureLock. */
+    private fun snapshotMap(active: TimingCapture?, restored: RecoveredCapture?): Map<String, Any?> {
         if (active == null) {
-            val restored = recovered
             return if (restored == null) mapOf(
                 "available" to true, "captureState" to "IDLE", "captureId" to "-", "attemptCount" to 0,
                 "eventsRecorded" to 0, "eventsRetained" to 0, "eventsEvicted" to 0, "eventsCoalesced" to 0,
@@ -847,27 +1125,61 @@ internal object KeyguardCardDiagnostics {
             appendLine("eventsCoalesced=${active.eventsCoalesced}")
             appendLine("exportTruncated=false")
             appendLine("recoveredFromDisk=$recoveredFromDisk")
-            appendLine("lastPersistedSeq=${active.lastPersistedSeq}")
-            appendLine("unflushedTailMayBeMissing=${active.state == "REC" || active.unflushedTailMayBeMissing}")
+            appendLine("hiddenNoopCount=${active.hiddenNoopCount}")
+            appendLine("queuedForPersistenceSeq=${active.queuedForPersistenceSeq}")
+            appendLine("lastPersistedSeq=${active.lastSuccessfullyPersistedSeq}")
+            appendLine("unflushedTailMayBeMissing=${active.unflushedTailMayBeMissing || active.events.lastOrNull()?.seq != active.lastSuccessfullyPersistedSeq}")
             appendLine("ATTEMPT_SUMMARIES")
             active.attempts.forEach { append(attemptSummary(it)) }
             appendLine("EVENTS")
         }
         val footer = "END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n"
-        val eventLines = active.events.map { it.toLine() }
-        val kept = ArrayList<String>()
+        val events = active.events.toList()
+        val retainedAttemptIds = active.attempts.takeLast(3).map { it.id }.toSet()
+        val selected = linkedSetOf<TimingEvent>()
         var bytes = (header + footer).toByteArray(Charsets.UTF_8).size
-        // Preserve whole newest events first: a failure near the end must not
-        // disappear silently under the export size cap.
-        for (line in eventLines.asReversed()) {
-            val size = (line + '\n').toByteArray(Charsets.UTF_8).size
-            if (bytes + size > exportLimitBytes) break
-            kept.add(line)
-            bytes += size
+        // Leave room for explicit truncation metadata (attempt and sequence
+        // ranges) so a report selected at the event boundary still remains
+        // within the chat-friendly export target.
+        val eventBudget = (exportLimitBytes - 1_024).coerceAtLeast(bytes)
+
+        fun selectWhole(group: List<TimingEvent>): Boolean {
+            val groupBytes = group.sumOf { (it.toLine() + '\n').toByteArray(Charsets.UTF_8).size }
+            if (bytes + groupBytes > eventBudget) return false
+            selected.addAll(group)
+            bytes += groupBytes
+            return true
         }
-        kept.reverse()
-        val omitted = eventLines.size - kept.size
-        val retention = if (omitted == 0) header else header.replace("exportTruncated=false", "exportTruncated=true\nomittedEventLines=$omitted")
+
+        // Keep complete recent causal attempts, not merely the last physical
+        // buffer rows. A later hidden-state flood therefore cannot displace
+        // the wake → inspect → attach/draw → hide evidence.
+        active.attempts.takeLast(3).asReversed().forEach { attempt ->
+            val group = events.filter { it.attemptId == attempt.id }
+            if (!selectWhole(group)) {
+                // A pathological attempt may not fit whole. Preserve its
+                // transition spine and explicitly mark it incomplete below.
+                selectWhole(group.filter { it.isTransition() })
+            }
+        }
+        // Preserve unassigned transition evidence (for example a callback
+        // immediately preceding the first wake) after complete attempts.
+        selectWhole(events.filter { it.attemptId !in retainedAttemptIds && it.isTransition() })
+        val kept = selected.sortedBy { it.seq }.map { it.toLine() }
+        val omittedEvents = events.filterNot(selected::contains)
+        val omitted = omittedEvents.size
+        val omittedAttempts = active.attempts
+            .filter { attempt -> events.any { it.attemptId == attempt.id } && events.any { it.attemptId == attempt.id && it !in selected } }
+            .joinToString(",") { it.id.toString() }
+        val omittedRanges = omittedEvents
+            .map { it.seq }
+            .sorted()
+            .joinToString(",") { it.toString() }
+            .take(512)
+        val retention = if (omitted == 0) header else header.replace(
+            "exportTruncated=false",
+            "exportTruncated=true\nomittedEventLines=$omitted\nomittedAttemptIds=${omittedAttempts.ifBlank { "none" }}\nomittedSeqs=$omittedRanges",
+        )
         return buildString {
             append(retention)
             kept.forEach { appendLine(it) }
@@ -876,18 +1188,29 @@ internal object KeyguardCardDiagnostics {
     }
 
     private fun attemptSummary(attempt: TimingAttempt): String = buildString {
-        fun delta(end: Long?, start: Long?): String = if (end == null || start == null) "NA(missingEndpoint)" else (end - start).toString()
+        fun delta(end: Long?, start: Long?): String = when {
+            end == null || start == null -> "NA(missingEndpoint)"
+            end < start -> "INVALID_EVENT_ORDER"
+            else -> (end - start).toString()
+        }
+        val show = attempt.shows.lastOrNull()
+        val hide = attempt.hides.lastOrNull()
+        val showingInspection = show?.requestId?.let(attempt.inspections::get)
         appendLine("attemptId=${attempt.id} wakeSource=${attempt.wakeSource} presentationMode=${attempt.presentationMode} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
-        appendLine(" firstInspectionRequestId=${attempt.firstInspectionRequestId ?: "NA"} showingInspectionRequestId=${attempt.showingInspectionRequestId ?: "NA"} inspectionCount=${attempt.inspectionCount} staleInspectionCount=${attempt.staleInspectionCount}")
-        appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount} attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
-        appendLine(" wakeCallbackToFirstRootDrawMs=${delta(attempt.firstRootDrawAt, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(attempt.firstShaderDrawAt, attempt.startedUptimeMs)}")
-        appendLine(" showDecisionToAddViewBeginMs=${delta(attempt.addViewBeginAt, attempt.showDecisionAt)} addViewCallMs=${delta(attempt.addViewReturnAt, attempt.addViewBeginAt)} addViewReturnToFirstRootDrawMs=${delta(attempt.firstRootDrawAt, attempt.addViewReturnAt)}")
-        appendLine(" hideSignalToDecisionMs=${delta(attempt.hideDecisionAt, attempt.hideSignalAt)} hideDecisionToLocalHideMs=NA(notSeparatelyObserved) hideSignalToRemoveReturnMs=${delta(attempt.removeViewReturnAt, attempt.hideSignalAt)}")
+        appendLine(" firstInspectionRequestId=${attempt.firstInspectionRequestId ?: "NA"} showingInspectionRequestId=${show?.requestId ?: "NA"} requestsReceived=${attempt.requestsReceived} requestsReplaced=${attempt.requestsReplaced} inspectionsStarted=${attempt.inspectionsStarted} inspectionsApplied=${attempt.inspectionsApplied} inspectionsRejected=${attempt.inspectionsRejected} staleInspectionCount=${attempt.staleInspectionCount}")
+        val pendingRetries = (attempt.retryScheduledCount - attempt.retryFiredCount - attempt.retryCancelledCount).coerceAtLeast(0)
+        appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:$pendingRetries attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
+        appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"}")
+        appendLine(" wakeCallbackToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
+        appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
+        appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} addViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)}")
+        appendLine(" hideOperationId=${hide?.operationId ?: "NA"} hideTriggerAt=${hide?.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} hideDecisionAt=${hide?.decisionAtUptimeMs ?: "NA"} localHideAppliedAt=${hide?.localHideAppliedAtUptimeMs ?: "NA"} removeViewBeginAt=${hide?.removeBeginAtUptimeMs ?: "NA"} removeViewReturnAt=${hide?.removeReturnAtUptimeMs ?: "NA"} attachedBefore=${hide?.attachedBefore ?: "NA"}")
+        appendLine(" hideSignalToDecisionMs=${delta(hide?.decisionAtUptimeMs, hide?.triggerReceivedAtUptimeMs)} hideDecisionToLocalHideMs=${delta(hide?.localHideAppliedAtUptimeMs, hide?.decisionAtUptimeMs)} removeViewCallMs=${delta(hide?.removeReturnAtUptimeMs, hide?.removeBeginAtUptimeMs)} hideSignalToRemoveReturnMs=${delta(hide?.removeReturnAtUptimeMs, hide?.triggerReceivedAtUptimeMs)}")
         appendLine(
-            " firstRootDrawObserved=${attempt.firstRootDrawAt != null} " +
-                "firstRootDrawStatus=${if (attempt.firstRootDrawAt == null) "NO_DRAW_OBSERVED" else "OBSERVED"} " +
-                "firstShaderDrawObserved=${attempt.firstShaderDrawAt != null} " +
-                "firstShaderDrawStatus=${if (attempt.firstShaderDrawAt == null) "NO_DRAW_OBSERVED" else "OBSERVED"}",
+            " firstRootDrawObserved=${show?.firstRootDrawAtUptimeMs != null} " +
+                "firstRootDrawStatus=${if (show?.firstRootDrawAtUptimeMs == null) "NO_DRAW_OBSERVED" else "OBSERVED"} " +
+                "firstShaderDrawObserved=${show?.firstShaderDrawAtUptimeMs != null} " +
+                "firstShaderDrawStatus=${if (show?.firstShaderDrawAtUptimeMs == null) "NO_DRAW_OBSERVED" else "OBSERVED"}",
         )
     }
 

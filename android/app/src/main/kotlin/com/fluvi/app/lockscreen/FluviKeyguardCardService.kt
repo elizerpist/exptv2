@@ -76,6 +76,8 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var displayRegistered = false
     private var retryCount = 0
     private var retryRunnable: Runnable? = null
+    private var retryToken: RetryToken? = null
+    private var nextRetryId = 0L
     @Volatile private var wakeEpoch = 0L
     @Volatile private var lastSettings: KeyguardCardSettings? = null
     @Volatile private var lastMaterialProfile: KeyguardMaterialProfile? = null
@@ -83,6 +85,11 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var appliedDecision = KeyguardCardVisibility.HIDDEN_DISCONNECTED
     private var overlayAttachGeneration = 0L
     private lateinit var overlay: KeyguardCardWindow
+    /** These identities are diagnostic-only and stay stable across the
+     * generation invalidation that a terminal hide must perform. */
+    private var currentDiagnosticAttempt: KeyguardDiagnosticContext? = null
+    private var activeWindowDiagnosticOperation: KeyguardDiagnosticOperation? = null
+    private var terminalHideState: KeyguardTerminalHideState? = null
 
     /** Capture instrumentation is intentionally observational: callers pass
      * their already-known identifiers and it never requests a new inspection,
@@ -91,19 +98,25 @@ class FluviKeyguardCardService : AccessibilityService() {
         stage: String,
         reason: String,
         request: KeyguardCardInspectionRequest? = null,
+        requestId: Long? = null,
         attachGeneration: Long? = null,
         observedUptimeMs: Long? = null,
+        diagnosticContext: KeyguardDiagnosticContext? = null,
+        operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, Any?> = emptyMap(),
     ) {
+        val capturedContext = operation?.context ?: diagnosticContext ?: request?.diagnosticContext ?: currentDiagnosticAttempt
         KeyguardCardDiagnostics.captureEvent(
             context = this,
             stage = stage,
             reason = reason,
             serviceSession = request?.session ?: session.get(),
             wakeEpoch = request?.wakeGeneration ?: wakeEpoch,
-            requestId = request?.id,
+            requestId = request?.id ?: requestId ?: operation?.causingInspectionRequestId,
             attachGeneration = attachGeneration,
             observedUptimeMs = observedUptimeMs,
+            diagnosticContext = capturedContext,
+            operation = operation,
             fields = fields,
         )
     }
@@ -131,10 +144,15 @@ class FluviKeyguardCardService : AccessibilityService() {
      * follow-up gets fresh inspection authority only if that wake/visibility
      * state still exists when its short backoff expires. */
     private data class RetryToken(
+        val retryId: Long,
+        val retryIndex: Int,
         val requestId: Long,
         val session: Long,
         val visibilityEpoch: Long,
         val wakeGeneration: Long,
+        val scheduledAtUptimeMs: Long,
+        val dueAtUptimeMs: Long,
+        val diagnosticContext: KeyguardDiagnosticContext?,
     )
 
     private var wakeTiming: WakeTiming? = null
@@ -173,7 +191,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             val receivedAt = SystemClock.uptimeMillis()
             traceKeyguard("DISPLAY_EVENT", "changed", observedUptimeMs = receivedAt, fields = mapOf("displayId" to displayId))
             if (fastHideIfSystemExcluded("display", receivedAt)) return
-            scheduleEvaluation("display")
+            scheduleEvaluation("display", triggerReceivedUptimeMs = receivedAt)
         }
     }
 
@@ -192,7 +210,12 @@ class FluviKeyguardCardService : AccessibilityService() {
                 traceKeyguard(event.removePrefix("KG|"), detail, attachGeneration = overlay.currentAttachGeneration)
             },
             onWindowDiagnostic = { stage, detail, attach ->
-                traceKeyguard(stage, detail, attachGeneration = attach)
+                traceKeyguard(
+                    stage,
+                    detail,
+                    attachGeneration = attach,
+                    operation = activeWindowDiagnosticOperation,
+                )
             },
             onFirstRootDraw = ::recordFirstRootDraw,
             onFirstShaderDraw = ::recordFirstShaderDraw,
@@ -235,6 +258,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "displayId" to meta.displayId,
                 "eventTimeUptimeMs" to (meta.eventTimeUptimeMs?.takeIf { it > 0 } ?: "NA"),
                 "eventAgeMs" to (eventAge ?: "NA_invalidOrFuture"),
+                "classification" to "unclassified",
+                "overlayState" to if (::overlay.isInitialized && overlay.isAttached) "attached" else "hidden",
             ),
         )
         // This check intentionally precedes the stale-result gate: an already
@@ -248,7 +273,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // The package-less post-add race reaches INSPECT, not an
                 // eager detach. A positively matched own event needs no work.
             }
-            KeyguardEventAction.INSPECT -> scheduleEvaluation("window", meta.eventTimeUptimeMs)
+            KeyguardEventAction.INSPECT -> scheduleEvaluation(
+                "window",
+                meta.eventTimeUptimeMs,
+                triggerReceivedUptimeMs = callbackReceivedAt,
+            )
         }
     }
 
@@ -380,6 +409,9 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     private fun beginWakeCycle(source: String, receivedAtUptimeMs: Long = SystemClock.uptimeMillis()) {
         wakeEpoch += 1L
+        // A new wake is a new eligible cycle; a prior terminal exclusion must
+        // not suppress its first authoritative inspection.
+        terminalHideState = null
         firstDrawOwner = null
         retryCount = 0
         cancelWakeRetry()
@@ -391,19 +423,30 @@ class FluviKeyguardCardService : AccessibilityService() {
             profileWasDecoded = lastMaterialProfile != null,
             presentationMode = settings.presentationMode.wireValue,
         )
-        KeyguardCardDiagnostics.beginLockAttempt(this, session.get(), wakeEpoch, source)
+        currentDiagnosticAttempt = KeyguardCardDiagnostics.beginLockAttempt(
+            this,
+            session.get(),
+            wakeEpoch,
+            source,
+            receivedAtUptimeMs,
+        )
         traceKeyguard(
             if (source == "wake") "SCREEN_ON_RECEIVED" else "WAKE_CYCLE_STARTED",
             source,
             observedUptimeMs = receivedAtUptimeMs,
             fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true),
         )
-        scheduleEvaluation(source)
+        scheduleEvaluation(source, triggerReceivedUptimeMs = receivedAtUptimeMs)
     }
 
     /** A deliberately small main-thread fast path. Display transition states
      * are not treated as OFF: SCREEN_ON can arrive before STATE_ON settles. */
-    private fun fastHideIfSystemExcluded(source: String, triggerReceivedUptimeMs: Long? = null): Boolean {
+    private fun fastHideIfSystemExcluded(
+        source: String,
+        triggerReceivedUptimeMs: Long? = null,
+        diagnosticContext: KeyguardDiagnosticContext? = currentDiagnosticAttempt,
+        causingInspectionRequestId: Long? = null,
+    ): Boolean {
         if (!::overlay.isInitialized) return false
         val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
         val shouldHide = KeyguardCardFastHideGate.shouldHide(
@@ -412,66 +455,112 @@ class FluviKeyguardCardService : AccessibilityService() {
             keyguardLocked = keyguardManager.isKeyguardLocked,
         )
         if (!shouldHide) return false
-        hideImmediately(source, triggerReceivedUptimeMs = triggerReceivedUptimeMs)
+        hideImmediately(
+            source,
+            triggerReceivedUptimeMs = triggerReceivedUptimeMs,
+            diagnosticContext = diagnosticContext,
+            causingInspectionRequestId = causingInspectionRequestId,
+        )
         return true
     }
 
     private fun scheduleWakeRetry(cause: KeyguardCardInspectionRequest) {
         if (retryCount >= RETRY_DELAYS_MS.size) return
-        if (cancelWakeRetry()) traceKeyguard("RETRY_CANCELLED", "replaced", cause)
+        cancelWakeRetry("replaced")
         val delay = RETRY_DELAYS_MS[retryCount]
         retryCount += 1
+        val scheduledAt = SystemClock.uptimeMillis()
         val token = RetryToken(
+            retryId = ++nextRetryId,
+            retryIndex = retryCount,
             requestId = cause.id,
             session = cause.session,
             visibilityEpoch = visibilityEpoch.get(),
             wakeGeneration = cause.wakeGeneration,
+            scheduledAtUptimeMs = scheduledAt,
+            dueAtUptimeMs = scheduledAt + delay,
+            diagnosticContext = cause.diagnosticContext,
         )
+        retryToken = token
         wakeTiming?.takeIf { it.wakeGeneration == token.wakeGeneration }?.retryCount = retryCount
         traceKeyguard(
             "RETRY_SCHEDULED",
             "hiddenUnknown",
             cause,
             fields = mapOf(
-                "retryIndex" to retryCount,
+                "retryId" to token.retryId,
+                "retryIndex" to token.retryIndex,
                 "requestedDelayMs" to delay,
-                "scheduledAtUptimeMs" to SystemClock.uptimeMillis(),
-                "dueAtUptimeMs" to (SystemClock.uptimeMillis() + delay),
+                "scheduledAtUptimeMs" to token.scheduledAtUptimeMs,
+                "dueAtUptimeMs" to token.dueAtUptimeMs,
                 "causingRequestId" to cause.id,
             ),
         )
         retryRunnable = Runnable {
             retryRunnable = null
+            retryToken = null
             val firedAt = SystemClock.uptimeMillis()
             traceKeyguard(
                 "RETRY_FIRED",
                 "timer",
-                cause,
+                requestId = token.requestId,
                 observedUptimeMs = firedAt,
-                fields = mapOf("retryIndex" to retryCount, "schedulerLatenessMs" to "NA_dueCapturedAtSchedule"),
+                diagnosticContext = token.diagnosticContext,
+                fields = mapOf(
+                    "retryId" to token.retryId,
+                    "retryIndex" to token.retryIndex,
+                    "scheduledAtUptimeMs" to token.scheduledAtUptimeMs,
+                    "dueAtUptimeMs" to token.dueAtUptimeMs,
+                    "schedulerLatenessMs" to (firedAt - token.dueAtUptimeMs),
+                    "causingRequestId" to token.requestId,
+                ),
             )
             if (token.session != session.get() ||
                 token.visibilityEpoch != visibilityEpoch.get() ||
                 token.wakeGeneration != wakeEpoch ||
                 !FluviKeyguardCardServiceRegistry.connected
             ) return@Runnable
-            if (fastHideIfSystemExcluded("retryGate")) return@Runnable
-            scheduleEvaluation("surfaceRetry")
+            // A terminal state observed by the retry is caused by this
+            // callback, not by the timer's ideal due time. Lateness is
+            // recorded separately above.
+            if (fastHideIfSystemExcluded("retryGate", firedAt)) return@Runnable
+            scheduleEvaluation("surfaceRetry", triggerReceivedUptimeMs = firedAt)
         }.also { mainHandler.postDelayed(it, delay) }
     }
 
-    private fun cancelWakeRetry(): Boolean {
+    private fun cancelWakeRetry(reason: String = "superseded"): Boolean {
         val pending = retryRunnable ?: return false
         mainHandler.removeCallbacks(pending)
         retryRunnable = null
+        retryToken?.let { token ->
+            traceKeyguard(
+                "RETRY_CANCELLED",
+                reason,
+                requestId = token.requestId,
+                diagnosticContext = token.diagnosticContext,
+                fields = mapOf(
+                    "retryId" to token.retryId,
+                    "retryIndex" to token.retryIndex,
+                    "scheduledAtUptimeMs" to token.scheduledAtUptimeMs,
+                    "dueAtUptimeMs" to token.dueAtUptimeMs,
+                    "causingRequestId" to token.requestId,
+                    "cancelReason" to reason,
+                ),
+            )
+        }
+        retryToken = null
         return true
     }
 
     /** Captures authority at request creation, not when a delayed worker gets
      * CPU. At most one Binder traversal and one latest follow-up can exist. */
-    private fun scheduleEvaluation(trigger: String, eventTimeUptimeMs: Long? = null) {
+    private fun scheduleEvaluation(
+        trigger: String,
+        eventTimeUptimeMs: Long? = null,
+        triggerReceivedUptimeMs: Long? = null,
+    ) {
         if (!FluviKeyguardCardServiceRegistry.connected) return
-        if (trigger != "surfaceRetry") cancelWakeRetry()
+        if (trigger != "surfaceRetry") cancelWakeRetry("supersededBy:$trigger")
         val now = SystemClock.uptimeMillis()
         val request = KeyguardCardInspectionRequest(
             id = nextInspectionId.incrementAndGet(),
@@ -483,6 +572,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             wakeGeneration = wakeEpoch,
             queuedAtUptimeMs = now,
             eventTimeUptimeMs = eventTimeUptimeMs,
+            diagnosticContext = currentDiagnosticAttempt,
+            triggerReceivedUptimeMs = triggerReceivedUptimeMs,
         )
         wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.let {
             if (it.inspectionQueuedAt == null) it.inspectionQueuedAt = now
@@ -721,6 +812,12 @@ class FluviKeyguardCardService : AccessibilityService() {
         inspectionStartedAt: Long,
         inspectionFinishedAt: Long,
     ) {
+        traceKeyguard(
+            "INSPECTION_MAIN_APPLY_STARTED",
+            request.trigger,
+            request,
+            observedUptimeMs = SystemClock.uptimeMillis(),
+        )
         wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.apply {
             this.inspectionStartedAt = inspectionStartedAt
             this.inspectionFinishedAt = inspectionFinishedAt
@@ -728,7 +825,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         // This current-state test deliberately runs even for an obsolete
         // payload. A phone that is already unlocked/off must not retain this
         // service's old overlay because its Binder answer arrived late.
-        if (fastHideIfSystemExcluded("inspection:${request.trigger}")) {
+        if (fastHideIfSystemExcluded(
+                "inspection:${request.trigger}",
+                triggerReceivedUptimeMs = request.triggerReceivedUptimeMs,
+                diagnosticContext = request.diagnosticContext,
+                causingInspectionRequestId = request.id,
+            )
+        ) {
             wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.let {
                 it.rejectedLateResults += 1
             }
@@ -761,7 +864,12 @@ class FluviKeyguardCardService : AccessibilityService() {
                 return
             }
             KeyguardInspectionAction.HIDE_CURRENT_GATE -> {
-                hideImmediately("currentGate")
+                hideImmediately(
+                    "currentGate",
+                    triggerReceivedUptimeMs = request.triggerReceivedUptimeMs,
+                    diagnosticContext = request.diagnosticContext,
+                    causingInspectionRequestId = request.id,
+                )
                 return
             }
             KeyguardInspectionAction.APPLY -> Unit
@@ -781,25 +889,41 @@ class FluviKeyguardCardService : AccessibilityService() {
         when (decision) {
             KeyguardCardVisibility.SHOW_DISCREET -> {
                 retryCount = 0
-                cancelWakeRetry()
+                cancelWakeRetry("shown")
                 wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.mainKeyguardConfirmedAt = SystemClock.uptimeMillis()
-                traceKeyguard("SHOW_DECIDED", "discreet", request, fields = mapOf("presentationMode" to (lastSettings?.presentationMode?.name ?: "NA")))
                 stopFinancialObservation()
                 showEvent = false
-                applyPresentation(FluviFinancialCardPresenter.discreet(), "discreet:${request.trigger}")
+                applyPresentation(
+                    FluviFinancialCardPresenter.discreet(),
+                    "discreet:${request.trigger}",
+                    diagnosticContext = request.diagnosticContext,
+                    causingInspectionRequestId = request.id,
+                )
             }
             KeyguardCardVisibility.SHOW_FULL -> {
                 retryCount = 0
-                cancelWakeRetry()
+                cancelWakeRetry("shown")
                 wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.mainKeyguardConfirmedAt = SystemClock.uptimeMillis()
-                traceKeyguard("SHOW_DECIDED", "full", request, fields = mapOf("presentationMode" to (lastSettings?.presentationMode?.name ?: "NA")))
                 val focus = (lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)).focus
-                showFullContent(request.session, request.visibilityEpoch, focus.generation, request.trigger)
+                showFullContent(
+                    request.session,
+                    request.visibilityEpoch,
+                    focus.generation,
+                    request.trigger,
+                    request.diagnosticContext,
+                    request.id,
+                )
             }
             else -> {
                 val shouldRetry = decision == KeyguardCardVisibility.HIDDEN_UNKNOWN && retryCount < RETRY_DELAYS_MS.size &&
                     isDisplayOnAndInteractive() && keyguardManager.isKeyguardLocked
-                hideImmediately(decision.name, terminalWake = !shouldRetry)
+                hideImmediately(
+                    decision.name,
+                    terminalWake = !shouldRetry,
+                    triggerReceivedUptimeMs = request.triggerReceivedUptimeMs,
+                    diagnosticContext = request.diagnosticContext,
+                    causingInspectionRequestId = request.id,
+                )
                 if (shouldRetry) scheduleWakeRetry(request)
             }
         }
@@ -810,6 +934,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         expectedEpoch: Long,
         focusGeneration: Long,
         trigger: String,
+        diagnosticContext: KeyguardDiagnosticContext?,
+        causingInspectionRequestId: Long?,
     ) {
         val focusChanged = activeFocusGeneration != focusGeneration
         if (focusChanged) {
@@ -818,11 +944,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             activeFocusGeneration = focusGeneration
         }
         terminalContentFailure?.takeIf { it.first == focusGeneration }?.let { (_, code) ->
-            applyPresentation(FluviFinancialCardPresenter.unavailable(code), "invalidFocus:$trigger")
+            applyPresentation(FluviFinancialCardPresenter.unavailable(code), "invalidFocus:$trigger", diagnosticContext, causingInspectionRequestId)
             return
         }
         transientContentFailure?.takeIf { it.first == focusGeneration }?.let { (_, code) ->
-            applyPresentation(FluviFinancialCardPresenter.unavailable(code), "contentUnavailable:$trigger")
+            applyPresentation(FluviFinancialCardPresenter.unavailable(code), "contentUnavailable:$trigger", diagnosticContext, causingInspectionRequestId)
             return
         }
         val cached = renderedFullContent
@@ -832,15 +958,15 @@ class FluviKeyguardCardService : AccessibilityService() {
             resolveInFlightForFocus = resolvingFocusGeneration == focusGeneration,
         )
         if (cached != null && !focusChanged) {
-            applyPresentation(FluviFinancialCardPresenter.full(cached, showEvent), "cached:$trigger")
+            applyPresentation(FluviFinancialCardPresenter.full(cached, showEvent), "cached:$trigger", diagnosticContext, causingInspectionRequestId)
         } else if (plan.publishLoading) {
             // First full render only. Repeated same-surface inspection keeps
             // the current amount or existing loading presentation untouched.
-            applyPresentation(FluviFinancialCardPresenter.loading(), "loading:$trigger")
+            applyPresentation(FluviFinancialCardPresenter.loading(), "loading:$trigger", diagnosticContext, causingInspectionRequestId)
         }
         beginFinancialObservation(expectedSession, expectedEpoch, focusGeneration)
         if (plan.startResolve) {
-            resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "first")
+            resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "first", diagnosticContext, causingInspectionRequestId)
         }
     }
 
@@ -858,7 +984,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         return@collectLatest
                     }
                     withContext(Dispatchers.Main.immediate) {
-                        resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "coreRevision")
+                        resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "coreRevision", diagnosticContext, causingInspectionRequestId)
                     }
                 }
             } finally {
@@ -872,6 +998,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         expectedEpoch: Long,
         focusGeneration: Long,
         reason: String,
+        diagnosticContext: KeyguardDiagnosticContext?,
+        causingInspectionRequestId: Long?,
     ) {
         check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
         if (contentJob?.isActive == true) {
@@ -917,12 +1045,16 @@ class FluviKeyguardCardService : AccessibilityService() {
                             applyPresentation(
                                 FluviFinancialCardPresenter.unavailable(outcome.diagnosticCode),
                                 "invalidFocus:${outcome.diagnosticCode}",
+                                diagnosticContext,
+                                causingInspectionRequestId,
                             )
                         } else if (stillCurrent && outcome is FullContentResolveResult.Failure) {
                             transientContentFailure = focusGeneration to outcome.diagnosticCode
                             applyPresentation(
                                 FluviFinancialCardPresenter.unavailable(outcome.diagnosticCode),
                                 "contentUnavailable:${outcome.diagnosticCode}",
+                                diagnosticContext,
+                                causingInspectionRequestId,
                             )
                         }
                         KeyguardCardDiagnostics.record(
@@ -936,7 +1068,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         activeFocusGeneration = focusGeneration
                         terminalContentFailure = null
                         transientContentFailure = null
-                        applyPresentation(FluviFinancialCardPresenter.full(content, showEvent), "content")
+                        applyPresentation(FluviFinancialCardPresenter.full(content, showEvent), "content", diagnosticContext, causingInspectionRequestId)
                         KeyguardCardDiagnostics.record(this@FluviKeyguardCardService, "KG|CONTENT_APPLIED", "full", overlay.isAttached)
                     }
                 } finally {
@@ -944,7 +1076,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     resolveQueued = false
                     resolvingFocusGeneration = null
                     contentJob = null
-                    if (rerun) resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "coalescedRevision")
+                    if (rerun) resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "coalescedRevision", diagnosticContext, causingInspectionRequestId)
                 }
             }
         }
@@ -966,50 +1098,100 @@ class FluviKeyguardCardService : AccessibilityService() {
         FullContentResolveResult.Failure("queryFailure")
     }
 
-    private fun applyPresentation(presentation: com.fluvi.app.runtime.FluviFinancialCardPresentation, reason: String) {
+    private fun applyPresentation(
+        presentation: com.fluvi.app.runtime.FluviFinancialCardPresentation,
+        reason: String,
+        diagnosticContext: KeyguardDiagnosticContext? = currentDiagnosticAttempt,
+        causingInspectionRequestId: Long? = null,
+    ) {
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext).also { lastSettings = it }
         // This only changes retained drawing input; no animation frame is
         // allowed to enter showOrUpdate or the financial presentation lane.
         overlay.updateMaterial(lastMaterialProfile, settings)
         wakeTiming?.takeIf { it.wakeGeneration == wakeEpoch && it.attachRequestedAt == null }?.attachRequestedAt =
             SystemClock.uptimeMillis()
-        if (!overlay.isAttached) {
+        val showOperation = if (!overlay.isAttached) {
+            KeyguardCardDiagnostics.newShowOperation(
+                context = diagnosticContext,
+                attachGeneration = overlayAttachGeneration + 1L,
+                causingInspectionRequestId = causingInspectionRequestId,
+            ).also { operation ->
+                traceKeyguard(
+                    "SHOW_FOR_ATTACH",
+                    reason,
+                    requestId = causingInspectionRequestId,
+                    attachGeneration = overlayAttachGeneration + 1L,
+                    diagnosticContext = diagnosticContext,
+                    operation = operation,
+                    fields = mapOf(
+                        "presentationMode" to settings.presentationMode.name,
+                        "rootWasPrepared" to overlay.hasPreparedRoot,
+                        "profileWasDecoded" to (lastMaterialProfile != null),
+                    ),
+                )
+            }
+        } else null
+        if (showOperation != null) {
             val material = overlay.materialDiagnostics()
             traceKeyguard(
-                "SHOW_DECIDED",
+                "SHOW_ATTACH_RENDER_INPUT",
                 reason,
+                requestId = causingInspectionRequestId,
                 attachGeneration = overlayAttachGeneration + 1L,
+                diagnosticContext = diagnosticContext,
+                operation = showOperation,
                 fields = mapOf(
-                    "presentationMode" to settings.presentationMode.name,
-                    "rootWasPrepared" to overlay.hasPreparedRoot,
-                    "profileWasDecoded" to (lastMaterialProfile != null),
                     "hardwareAccelerated" to (material?.hardwareAccelerated ?: "NA"),
                     "rendererBackend" to (material?.activeRenderer ?: "NA"),
                 ),
             )
         }
-        when (val result = overlay.showOrUpdate(presentation, settings)) {
+        activeWindowDiagnosticOperation = showOperation
+        val result = try {
+            overlay.showOrUpdate(presentation, settings)
+        } finally {
+            activeWindowDiagnosticOperation = null
+        }
+        when (result) {
             KeyguardCardWindow.Result.ATTACHED -> {
                 overlayAttachGeneration = overlay.currentAttachGeneration
                 firstDrawOwner = KeyguardFirstDrawOwner(
                     session = session.get(),
                     wakeGeneration = wakeEpoch,
                     attachGeneration = overlayAttachGeneration,
+                    diagnosticOperation = showOperation,
                 )
                 wakeTiming?.takeIf { it.wakeGeneration == wakeEpoch }?.addViewReturnedAt = SystemClock.uptimeMillis()
                 KeyguardCardDiagnostics.attach(this, "attached")
                 KeyguardCardDiagnostics.record(this, "KG|ATTACH", reason, true)
-                traceKeyguard("ATTACH_CONFIRMED", reason, attachGeneration = overlayAttachGeneration)
+                traceKeyguard(
+                    "ATTACH_CONFIRMED",
+                    reason,
+                    requestId = causingInspectionRequestId,
+                    attachGeneration = overlayAttachGeneration,
+                    diagnosticContext = diagnosticContext,
+                    operation = showOperation,
+                )
                 publishWakeTiming("attached")
             }
             KeyguardCardWindow.Result.CONTENT_UPDATED,
-            KeyguardCardWindow.Result.REDACTED -> KeyguardCardDiagnostics.record(this, "KG|CONTENT_UPDATE", "$reason:${result.name}", true)
+            KeyguardCardWindow.Result.REDACTED -> {
+                KeyguardCardDiagnostics.record(this, "KG|CONTENT_UPDATE", "$reason:${result.name}", true)
+                traceKeyguard("CONTENT_UPDATED", reason, requestId = causingInspectionRequestId, diagnosticContext = diagnosticContext)
+            }
             KeyguardCardWindow.Result.LAYOUT_UPDATED -> KeyguardCardDiagnostics.record(this, "KG|LAYOUT_UPDATE", reason, true)
-            KeyguardCardWindow.Result.NO_OP -> Unit
+            KeyguardCardWindow.Result.NO_OP -> traceKeyguard("SURFACE_RECONFIRMED", reason, requestId = causingInspectionRequestId, diagnosticContext = diagnosticContext)
             KeyguardCardWindow.Result.FAILED -> {
                 KeyguardCardDiagnostics.attach(this, "failed")
                 KeyguardCardDiagnostics.record(this, "KG|ATTACH_FAILED", "window", false)
-                traceKeyguard("ATTACH_FAILED", "window", attachGeneration = overlayAttachGeneration + 1L)
+                traceKeyguard(
+                    "ATTACH_FAILED",
+                    "window",
+                    requestId = causingInspectionRequestId,
+                    attachGeneration = overlayAttachGeneration + 1L,
+                    diagnosticContext = diagnosticContext,
+                    operation = showOperation,
+                )
             }
         }
     }
@@ -1046,20 +1228,46 @@ class FluviKeyguardCardService : AccessibilityService() {
         reason: String,
         terminalWake: Boolean = true,
         triggerReceivedUptimeMs: Long? = null,
+        diagnosticContext: KeyguardDiagnosticContext? = currentDiagnosticAttempt,
+        causingInspectionRequestId: Long? = null,
     ) {
+        val wasAttachedBefore = ::overlay.isInitialized && overlay.isAttached
+        if (!KeyguardTerminalHideGate.shouldProcess(
+                terminalWake = terminalWake,
+                overlayAttached = wasAttachedBefore,
+                serviceSession = session.get(),
+                visibilityEpoch = visibilityEpoch.get(),
+                previous = terminalHideState,
+            )
+        ) {
+            // The first terminal transition already invalidated all attach
+            // authority. Repeating it would only churn epochs, diagnostics and
+            // material cleanup while the root is known detached.
+            KeyguardCardDiagnostics.recordHiddenNoop(this)
+            return
+        }
         val exclusionAt = SystemClock.uptimeMillis()
+        val hideOperation = KeyguardCardDiagnostics.newHideOperation(
+            context = diagnosticContext,
+            attachGeneration = overlayAttachGeneration.takeIf { it > 0 },
+            causingInspectionRequestId = causingInspectionRequestId,
+            triggerReceivedUptimeMs = triggerReceivedUptimeMs,
+        )
         traceKeyguard(
             "HIDE_DECIDED",
             reason,
+            requestId = causingInspectionRequestId,
             observedUptimeMs = exclusionAt,
             attachGeneration = overlayAttachGeneration.takeIf { it > 0 },
+            diagnosticContext = diagnosticContext,
+            operation = hideOperation,
             fields = mapOf(
                 "triggerReceivedUptimeMs" to (triggerReceivedUptimeMs ?: "NA"),
                 "terminalWake" to terminalWake,
                 "visibilityEpochBefore" to visibilityEpoch.get(),
             ),
         )
-        visibilityEpoch.incrementAndGet()
+        val invalidatedVisibilityEpoch = visibilityEpoch.incrementAndGet()
         interactionEpoch.incrementAndGet()
         // Invalidate publication before the retained root can be detached.
         // Its already-posted observer cleanup remains responsible for removing
@@ -1067,7 +1275,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         firstDrawOwner = null
         if (terminalWake) {
             wakeEpoch += 1L
-            cancelWakeRetry()
+            cancelWakeRetry("terminalHide")
             synchronized(queueLock) { inspectionQueue.clearPending() }
         }
         appliedDecision = KeyguardCardVisibility.HIDDEN_UNKNOWN
@@ -1075,11 +1283,36 @@ class FluviKeyguardCardService : AccessibilityService() {
         val dragWasActive = ::overlay.isInitialized && overlay.isDragActive
         var removeReturnedAt: Long? = null
         if (::overlay.isInitialized) {
-            val wasAttached = overlay.isAttached
-            traceKeyguard("LOCAL_HIDE_BEGIN", reason, attachGeneration = overlayAttachGeneration.takeIf { it > 0 }, fields = mapOf("attachedBefore" to wasAttached, "dragActive" to dragWasActive))
-            val removed = overlay.hide()
+            traceKeyguard(
+                "LOCAL_HIDE_BEGIN",
+                reason,
+                requestId = causingInspectionRequestId,
+                attachGeneration = overlayAttachGeneration.takeIf { it > 0 },
+                diagnosticContext = diagnosticContext,
+                operation = hideOperation,
+                fields = mapOf("attachedBefore" to wasAttachedBefore, "dragActive" to dragWasActive),
+            )
+            activeWindowDiagnosticOperation = hideOperation
+            val removed = try {
+                overlay.hide()
+            } finally {
+                activeWindowDiagnosticOperation = null
+            }
             removeReturnedAt = SystemClock.uptimeMillis()
-            if (wasAttached && removed) KeyguardCardDiagnostics.record(this, "KG|DETACH", reason, false)
+            if (wasAttachedBefore && removed) KeyguardCardDiagnostics.record(this, "KG|DETACH", reason, false)
+            if (!wasAttachedBefore) traceKeyguard(
+                "HIDE_NOOP_ALREADY_HIDDEN",
+                reason,
+                requestId = causingInspectionRequestId,
+                observedUptimeMs = removeReturnedAt,
+                diagnosticContext = diagnosticContext,
+                operation = hideOperation,
+            )
+            // A failed remove still leaves meaningful terminal cleanup to a
+            // later exclusion signal; do not install the idempotent guard.
+            if (terminalWake && (!wasAttachedBefore || removed || !overlay.isAttached)) {
+                terminalHideState = KeyguardTerminalHideState(session.get(), invalidatedVisibilityEpoch)
+            }
         }
         // Window visibility is already withdrawn; only now cancel potentially
         // blocking work and persist the compact diagnostic summary.
@@ -1097,7 +1330,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         traceKeyguard(
             "HIDE_COMPLETED",
             reason,
+            requestId = causingInspectionRequestId,
             observedUptimeMs = removeReturnedAt ?: SystemClock.uptimeMillis(),
+            diagnosticContext = diagnosticContext,
+            operation = hideOperation,
             fields = mapOf(
                 "signalToDecisionMs" to (triggerReceivedUptimeMs?.let { exclusionAt - it } ?: "NA"),
                 "signalToRemoveReturnMs" to (triggerReceivedUptimeMs?.let { signal -> removeReturnedAt?.minus(signal) } ?: "NA"),
@@ -1116,7 +1352,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         val timing = wakeTiming?.takeIf { it.wakeGeneration == owner.wakeGeneration } ?: return
         if (timing.firstRootDrawAt == null) {
             timing.firstRootDrawAt = event.observedAtUptimeMs
-            traceKeyguard("FIRST_ROOT_DRAW", "observed", attachGeneration = event.attachGeneration, observedUptimeMs = event.observedAtUptimeMs)
+            traceKeyguard(
+                "FIRST_ROOT_DRAW",
+                "observed",
+                attachGeneration = event.attachGeneration,
+                observedUptimeMs = event.observedAtUptimeMs,
+                operation = owner.diagnosticOperation,
+            )
             publishWakeTiming("firstRootDraw")
         }
     }
@@ -1127,7 +1369,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         val timing = wakeTiming?.takeIf { it.wakeGeneration == owner.wakeGeneration } ?: return
         if (timing.firstShaderDrawAt == null) {
             timing.firstShaderDrawAt = event.observedAtUptimeMs
-            traceKeyguard("FIRST_SHADER_DRAW", "observed", attachGeneration = event.attachGeneration, observedUptimeMs = event.observedAtUptimeMs)
+            traceKeyguard(
+                "FIRST_SHADER_DRAW",
+                "observed",
+                attachGeneration = event.attachGeneration,
+                observedUptimeMs = event.observedAtUptimeMs,
+                operation = owner.diagnosticOperation,
+            )
             publishWakeTiming("firstShaderDraw")
         }
     }

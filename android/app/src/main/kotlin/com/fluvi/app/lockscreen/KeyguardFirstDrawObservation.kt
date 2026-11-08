@@ -119,6 +119,7 @@ internal data class KeyguardFirstDrawOwner(
     val session: Long,
     val wakeGeneration: Long,
     val attachGeneration: Long,
+    val diagnosticOperation: KeyguardDiagnosticOperation? = null,
 ) {
     fun accepts(
         event: KeyguardFirstDrawEvent,

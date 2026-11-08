@@ -56,6 +56,47 @@ class KeyguardCardInspectionQueueTest {
         )
     }
 
+    @Test fun `terminal hidden state is idempotent but a new wake or failed detach is not suppressed`() {
+        val completed = KeyguardTerminalHideState(serviceSession = 4, invalidatedVisibilityEpoch = 9)
+
+        assertFalse(
+            KeyguardTerminalHideGate.shouldProcess(
+                terminalWake = true,
+                overlayAttached = false,
+                serviceSession = 4,
+                visibilityEpoch = 9,
+                previous = completed,
+            ),
+        )
+        assertTrue(
+            KeyguardTerminalHideGate.shouldProcess(
+                terminalWake = true,
+                overlayAttached = true,
+                serviceSession = 4,
+                visibilityEpoch = 9,
+                previous = completed,
+            ),
+        )
+        assertTrue(
+            KeyguardTerminalHideGate.shouldProcess(
+                terminalWake = true,
+                overlayAttached = false,
+                serviceSession = 4,
+                visibilityEpoch = 10,
+                previous = completed,
+            ),
+        )
+        assertTrue(
+            KeyguardTerminalHideGate.shouldProcess(
+                terminalWake = false,
+                overlayAttached = false,
+                serviceSession = 4,
+                visibilityEpoch = 9,
+                previous = completed,
+            ),
+        )
+    }
+
     private fun request(id: Long, trigger: String) = KeyguardCardInspectionRequest(
         id = id,
         trigger = trigger,
