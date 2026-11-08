@@ -233,7 +233,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "windowChanges" to meta.windowChanges,
                 "windowId" to meta.windowId,
                 "displayId" to meta.displayId,
-                "eventTimeUptimeMs" to (meta.eventTimeUptimeMs.takeIf { it > 0 } ?: "NA"),
+                "eventTimeUptimeMs" to (meta.eventTimeUptimeMs?.takeIf { it > 0 } ?: "NA"),
                 "eventAgeMs" to (eventAge ?: "NA_invalidOrFuture"),
             ),
         )
