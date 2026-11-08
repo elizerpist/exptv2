@@ -509,6 +509,9 @@ internal object KeyguardCardDiagnostics {
         val startedWallMs: Long,
         val configuration: Map<String, String>,
         var state: String = "REC",
+        // A frozen or expired capture must export the same immutable duration
+        // on every subsequent read.  REC deliberately keeps a live duration.
+        var endedElapsedMs: Long? = null,
         var nextSeq: Long = 1L,
         var nextAttemptId: Long = 1L,
         var retainedBytes: Int = 0,
@@ -577,6 +580,7 @@ internal object KeyguardCardDiagnostics {
         ensureRecoveredLoadedLocked(context)
         val active = capture
         if (active != null && active.state == "REC") {
+            active.endedElapsedMs = SystemClock.elapsedRealtime()
             active.state = "FROZEN"
             appendLocked(active, "CAPTURE_FROZEN", "user")
             persistLocked(context, active, force = true)
@@ -734,6 +738,7 @@ internal object KeyguardCardDiagnostics {
 
     private fun expireIfNeededLocked(context: Context, active: TimingCapture): Boolean {
         if (SystemClock.elapsedRealtime() - active.startedElapsedMs <= ACTIVE_CAPTURE_MS) return false
+        active.endedElapsedMs = SystemClock.elapsedRealtime()
         active.state = "EXPIRED"
         appendLocked(active, "CAPTURE_EXPIRED", "timeout")
         persistLocked(context, active, force = true)
@@ -825,7 +830,8 @@ internal object KeyguardCardDiagnostics {
             appendLine("manufacturer=${Build.MANUFACTURER}")
             appendLine("model=${Build.MODEL}")
             appendLine("startedAt=${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date(active.startedWallMs))}")
-            appendLine("durationElapsedMs=${SystemClock.elapsedRealtime() - active.startedElapsedMs}")
+            val durationEndElapsedMs = active.endedElapsedMs ?: SystemClock.elapsedRealtime()
+            appendLine("durationElapsedMs=${durationEndElapsedMs - active.startedElapsedMs}")
             active.configuration.forEach { (key, value) -> appendLine("$key=$value") }
             appendLine("CLOCKS")
             appendLine("uptimeMs=monotonic_excludes_deep_sleep")
