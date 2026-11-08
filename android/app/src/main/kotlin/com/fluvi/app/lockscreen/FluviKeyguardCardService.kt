@@ -964,13 +964,25 @@ class FluviKeyguardCardService : AccessibilityService() {
             // the current amount or existing loading presentation untouched.
             applyPresentation(FluviFinancialCardPresenter.loading(), "loading:$trigger", diagnosticContext, causingInspectionRequestId)
         }
-        beginFinancialObservation(expectedSession, expectedEpoch, focusGeneration)
+        beginFinancialObservation(
+            expectedSession,
+            expectedEpoch,
+            focusGeneration,
+            diagnosticContext,
+            causingInspectionRequestId,
+        )
         if (plan.startResolve) {
             resolveFullContent(expectedSession, expectedEpoch, focusGeneration, "first", diagnosticContext, causingInspectionRequestId)
         }
     }
 
-    private fun beginFinancialObservation(expectedSession: Long, expectedEpoch: Long, focusGeneration: Long) {
+    private fun beginFinancialObservation(
+        expectedSession: Long,
+        expectedEpoch: Long,
+        focusGeneration: Long,
+        diagnosticContext: KeyguardDiagnosticContext?,
+        causingInspectionRequestId: Long?,
+    ) {
         if (coreObservation?.isActive == true && observedFocusGeneration == focusGeneration) return
         stopFinancialObservation(keepRenderedContent = true)
         observedFocusGeneration = focusGeneration
