@@ -221,7 +221,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             eventTimeUptimeMs = event.eventTime,
         )
         if (!KeyguardCardEventGate.isSurfaceEvent(meta.eventType)) return
-        val eventAge = meta.eventTimeUptimeMs.takeIf { it in 1..callbackReceivedAt }?.let { callbackReceivedAt - it }
+        val eventAge = meta.eventTimeUptimeMs
+            ?.takeIf { it in 1..callbackReceivedAt }
+            ?.let { callbackReceivedAt - it }
         traceKeyguard(
             "ACCESSIBILITY_EVENT",
             "surface",
