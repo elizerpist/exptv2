@@ -51,9 +51,43 @@ internal data class KeyguardCardSettings(
     val showFinancialDetails: Boolean = false,
     val verticalOffsetDp: Int = 0,
     val animationMode: KeyguardCardAnimationMode = KeyguardCardAnimationMode.ORB_ONLY,
+    val presentationMode: KeyguardCardPresentationMode = KeyguardCardPresentationMode.CARD,
+    /** Null means that the legacy bottom-gravity offset has not yet been
+     * converted against a real display/inset geometry. */
+    val cardPosition: KeyguardCardCardPosition? = null,
+    val orbPosition: KeyguardCardOrbPosition? = null,
+    /** Deliberately independent from focus.generation. A drag must never
+     * invalidate financial content or make a late focus request current. */
+    val layoutRevision: Long = 0L,
     val focus: KeyguardCardFocus = KeyguardCardFocus(),
     val generation: Long = 0L,
 )
+
+internal enum class KeyguardCardPresentationMode(val wireValue: String) {
+    CARD("card"),
+    ORB("orb");
+
+    companion object {
+        fun fromWire(value: Any?): KeyguardCardPresentationMode = entries.firstOrNull {
+            it.wireValue == value as? String
+        } ?: CARD
+    }
+}
+
+/** Positions are fractions of the usable *travel* range, rather than pixels
+ * or dp. They therefore survive density, inset and display-size changes. */
+internal data class KeyguardCardCardPosition(val yFraction: Float) {
+    fun normalized() = copy(yFraction = yFraction.finiteFraction())
+}
+
+internal data class KeyguardCardOrbPosition(val xFraction: Float, val yFraction: Float) {
+    fun normalized() = copy(
+        xFraction = xFraction.finiteFraction(),
+        yFraction = yFraction.finiteFraction(),
+    )
+}
+
+internal fun Float.finiteFraction(): Float = if (isFinite()) coerceIn(0f, 1f) else .5f
 
 /** Unknown persisted values use the documented migration default rather than
  * guessing a future background-rendering mode after a downgrade/upgrade. */
@@ -75,6 +109,11 @@ internal object FluviKeyguardCardSettings {
     private const val DETAILS = "details"
     private const val OFFSET = "verticalOffsetDp"
     private const val ANIMATION_MODE = "animationMode"
+    private const val PRESENTATION_MODE = "presentationMode"
+    private const val CARD_Y_FRACTION = "cardPosition.yFraction"
+    private const val ORB_X_FRACTION = "orbPosition.xFraction"
+    private const val ORB_Y_FRACTION = "orbPosition.yFraction"
+    private const val LAYOUT_REVISION = "layoutRevision"
     private const val FOCUS_MIGRATED = "focusMigrated"
     private const val FOCUS_MODE = "focus.mode"
     private const val FOCUS_AXIS = "focus.axis"
@@ -92,6 +131,17 @@ internal object FluviKeyguardCardSettings {
             showFinancialDetails = prefs.getBoolean(DETAILS, false),
             verticalOffsetDp = prefs.getInt(OFFSET, 0).coerceIn(-96, 96),
             animationMode = KeyguardCardAnimationMode.fromWire(prefs.getString(ANIMATION_MODE, null)),
+            presentationMode = KeyguardCardPresentationMode.fromWire(prefs.getString(PRESENTATION_MODE, null)),
+            cardPosition = prefs.takeIf { it.contains(CARD_Y_FRACTION) }?.let {
+                KeyguardCardCardPosition(it.getFloat(CARD_Y_FRACTION, .5f)).normalized()
+            },
+            orbPosition = prefs.takeIf { it.contains(ORB_X_FRACTION) && it.contains(ORB_Y_FRACTION) }?.let {
+                KeyguardCardOrbPosition(
+                    it.getFloat(ORB_X_FRACTION, .5f),
+                    it.getFloat(ORB_Y_FRACTION, .5f),
+                ).normalized()
+            },
+            layoutRevision = prefs.getLong(LAYOUT_REVISION, 0L),
             focus = KeyguardCardFocus(
                 mode = enumValue(prefs.getString(FOCUS_MODE, null), FluviLockScreenCardConfiguration.Mode.balance),
                 timeAxis = enumValue(prefs.getString(FOCUS_AXIS, null), FluviLockScreenCardConfiguration.TimeAxis.month),
@@ -115,15 +165,32 @@ internal object FluviKeyguardCardSettings {
         val animationMode = if (values.containsKey("animationMode")) {
             KeyguardCardAnimationMode.fromWire(values["animationMode"])
         } else old.animationMode
+        val presentationMode = if (values.containsKey("presentationMode")) {
+            KeyguardCardPresentationMode.fromWire(values["presentationMode"])
+        } else old.presentationMode
         val focus = focusFromMap(values, old.focus)
         val focusChanged = focus.copy(generation = 0L) != old.focus.copy(generation = 0L)
         val committedFocus = focus.copy(generation = if (focusChanged) old.focus.generation + 1L else old.focus.generation)
-        val next = KeyguardCardSettings(requested, details, offset, animationMode, committedFocus, old.generation + 1L)
+        val layoutChanged = presentationMode != old.presentationMode
+        val next = KeyguardCardSettings(
+            requested = requested,
+            showFinancialDetails = details,
+            verticalOffsetDp = offset,
+            animationMode = animationMode,
+            presentationMode = presentationMode,
+            cardPosition = old.cardPosition,
+            orbPosition = old.orbPosition,
+            layoutRevision = old.layoutRevision + if (layoutChanged) 1L else 0L,
+            focus = committedFocus,
+            generation = old.generation + 1L,
+        )
         prefs(context).edit()
             .putBoolean(REQUESTED, next.requested)
             .putBoolean(DETAILS, next.showFinancialDetails)
             .putInt(OFFSET, next.verticalOffsetDp)
             .putString(ANIMATION_MODE, next.animationMode.wireValue)
+            .putString(PRESENTATION_MODE, next.presentationMode.wireValue)
+            .putLong(LAYOUT_REVISION, next.layoutRevision)
             .putBoolean(FOCUS_MIGRATED, true)
             .putString(FOCUS_MODE, next.focus.mode.name)
             .putString(FOCUS_AXIS, next.focus.timeAxis.name)
@@ -146,6 +213,66 @@ internal object FluviKeyguardCardSettings {
         return next
     }
 
+    /** Narrow layout authority used by the overlay and by the settings page.
+     * It never sends a full configuration snapshot, changes focus generation,
+     * or emits a financial/content invalidation. */
+    fun patchLayout(
+        context: Context,
+        values: Map<*, *>,
+        expectedLayoutRevision: Long? = null,
+    ): KeyguardCardSettings {
+        val old = read(context)
+        if (expectedLayoutRevision != null && expectedLayoutRevision != old.layoutRevision) return old
+        val mode = if (values.containsKey("presentationMode")) {
+            KeyguardCardPresentationMode.fromWire(values["presentationMode"])
+        } else old.presentationMode
+        val reset = values["resetPosition"] as? Boolean == true
+        val card = when {
+            reset && mode == KeyguardCardPresentationMode.CARD -> null
+            values.containsKey("cardPosition") -> cardPositionFrom(values["cardPosition"]) ?: old.cardPosition
+            else -> old.cardPosition
+        }
+        val orb = when {
+            reset && mode == KeyguardCardPresentationMode.ORB -> null
+            values.containsKey("orbPosition") -> orbPositionFrom(values["orbPosition"]) ?: old.orbPosition
+            else -> old.orbPosition
+        }
+        if (mode == old.presentationMode && card == old.cardPosition && orb == old.orbPosition) return old
+        val next = old.copy(
+            presentationMode = mode,
+            cardPosition = card,
+            orbPosition = orb,
+            layoutRevision = old.layoutRevision + 1L,
+        )
+        writeLayout(context, next)
+        FluviKeyguardCardServiceRegistry.notifyLayoutChanged(next)
+        return next
+    }
+
+    fun migrateCardPosition(context: Context, value: KeyguardCardCardPosition): KeyguardCardSettings {
+        val old = read(context)
+        if (old.cardPosition != null) return old
+        return patchLayout(context, mapOf("cardPosition" to mapOf("yFraction" to value.normalized().yFraction)))
+    }
+
+    private fun writeLayout(context: Context, value: KeyguardCardSettings) {
+        prefs(context).edit()
+            .putString(PRESENTATION_MODE, value.presentationMode.wireValue)
+            .putLong(LAYOUT_REVISION, value.layoutRevision)
+            .apply {
+                value.cardPosition?.let { putFloat(CARD_Y_FRACTION, it.normalized().yFraction) }
+                    ?: remove(CARD_Y_FRACTION)
+                value.orbPosition?.let {
+                    putFloat(ORB_X_FRACTION, it.normalized().xFraction)
+                    putFloat(ORB_Y_FRACTION, it.normalized().yFraction)
+                } ?: run {
+                    remove(ORB_X_FRACTION)
+                    remove(ORB_Y_FRACTION)
+                }
+            }
+            .apply()
+    }
+
     fun statusMap(context: Context): Map<String, Any?> {
         val value = read(context)
         return mapOf(
@@ -153,6 +280,10 @@ internal object FluviKeyguardCardSettings {
             "showFinancialDetails" to value.showFinancialDetails,
             "verticalOffsetDp" to value.verticalOffsetDp,
             "animationMode" to value.animationMode.wireValue,
+            "presentationMode" to value.presentationMode.wireValue,
+            "cardPosition" to value.cardPosition?.let { mapOf("yFraction" to it.yFraction) },
+            "orbPosition" to value.orbPosition?.let { mapOf("xFraction" to it.xFraction, "yFraction" to it.yFraction) },
+            "layoutRevision" to value.layoutRevision,
             "focus" to value.focus.toMap(),
             "generation" to value.generation,
             "systemServiceEnabled" to systemServiceEnabled(context),
@@ -242,6 +373,19 @@ internal object FluviKeyguardCardSettings {
         )
     }
 
+    private fun cardPositionFrom(value: Any?): KeyguardCardCardPosition? {
+        val map = value as? Map<*, *> ?: return null
+        val y = (map["yFraction"] as? Number)?.toFloat() ?: return null
+        return KeyguardCardCardPosition(y).normalized()
+    }
+
+    private fun orbPositionFrom(value: Any?): KeyguardCardOrbPosition? {
+        val map = value as? Map<*, *> ?: return null
+        val x = (map["xFraction"] as? Number)?.toFloat() ?: return null
+        val y = (map["yFraction"] as? Number)?.toFloat() ?: return null
+        return KeyguardCardOrbPosition(x, y).normalized()
+    }
+
     private inline fun <reified T : Enum<T>> enumValue(value: String?, fallback: T): T =
         enumValues<T>().firstOrNull { it.name == value } ?: fallback
 }
@@ -327,6 +471,10 @@ internal object FluviKeyguardCardServiceRegistry {
 
     fun notifySettingsChanged(settings: KeyguardCardSettings) {
         service?.onSettingsChangedFromApplication(settings)
+    }
+
+    fun notifyLayoutChanged(settings: KeyguardCardSettings) {
+        service?.onLayoutChangedFromApplication(settings)
     }
 
     fun notifyFocusChanged() {

@@ -18,17 +18,15 @@ internal enum class KeyguardEventAction { IGNORE_OWN, INSPECT }
  * consequence is that an unknown event schedules a serial inspection instead
  * of eagerly removing a visible overlay. A positively matched own window is
  * ignored; a concurrent PIN/shade event has a different window and remains
- * inspectable.
+ * inspectable. A Fluvi Activity is not treated as overlay feedback merely
+ * because it shares a package name.
  */
 internal object KeyguardCardEventGate {
     fun decide(event: KeyguardAccessibilityEventMeta, ownWindow: Boolean): KeyguardEventAction =
-        if (
-            event.packageName == "com.fluvi.app" ||
-            (ownWindow && (
-                event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
-                    event.windowChanges != 0
-            ))
-        ) {
+        if (ownWindow && (
+            event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
+                event.windowChanges != 0
+        )) {
             KeyguardEventAction.IGNORE_OWN
         } else {
             KeyguardEventAction.INSPECT

@@ -115,6 +115,36 @@ class KeyguardCardVisibilityPolicyTest {
         )
     }
 
+    @Test fun `inspection which predates own pointer or attach cannot name or remove current overlay`() {
+        assertEquals(
+            KeyguardInspectionAction.DROP_STALE,
+            KeyguardCardInspectionGate.decide(
+                expectedSession = 3,
+                currentSession = 3,
+                expectedEpoch = 6,
+                currentEpoch = 6,
+                displayEligibleNow = true,
+                keyguardLockedNow = true,
+                expectedInteractionEpoch = 4,
+                currentInteractionEpoch = 5,
+                expectedAttachGeneration = 8,
+                currentAttachGeneration = 9,
+            ),
+        )
+    }
+
+    @Test fun `fluvi activity event is not mistaken for own overlay feedback`() {
+        val event = KeyguardAccessibilityEventMeta(
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            windowId = 77,
+            displayId = 0,
+            windowChanges = 0,
+            packageName = "com.fluvi.app",
+        )
+
+        assertEquals(KeyguardEventAction.INSPECT, KeyguardCardEventGate.decide(event, ownWindow = false))
+    }
+
     @Test fun `missing roots and truncated walks stay distinguishable unknown states`() {
         assertEquals(
             KeyguardSurfaceReason.ROOT_UNAVAILABLE,

@@ -24,6 +24,9 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
   bool _savingWidget = false;
   bool _savingNative = false;
   int _statusGeneration = 0;
+  double? _cardYPreview;
+  double? _orbXPreview;
+  double? _orbYPreview;
 
   @override
   void initState() {
@@ -109,6 +112,35 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('A natív zárképernyőkártya mentése nem sikerült.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingNative = false);
+    }
+  }
+
+  Future<void> _saveNativeLayout(NativeKeyguardCardLayoutPatch patch) async {
+    if (_savingNative) return;
+    final generation = ++_statusGeneration;
+    setState(() => _savingNative = true);
+    try {
+      final status = await widget.repository.patchNativeKeyguardCardLayout(
+        patch,
+      );
+      if (mounted && generation == _statusGeneration) {
+        setState(() {
+          _status = status;
+          _cardYPreview = null;
+          _orbXPreview = null;
+          _orbYPreview = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('A zárképernyő pozíciójának mentése nem sikerült.'),
           ),
         );
       }
@@ -304,6 +336,56 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
                       'Külön beleegyezés: az összeg, a kategória és az eseménysor a háttérképen is látható lehet.',
                     ),
                   ),
+                  const Divider(height: 1),
+                  ListTile(
+                    title: const Text('Megjelenés'),
+                    subtitle: const Text(
+                      'Kártya: hosszan nyomva függőlegesen mozgatható. Csak orb: hosszan nyomva szabadon áthelyezhető.',
+                    ),
+                    trailing: Wrap(
+                      spacing: 6,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Kártya'),
+                          selected:
+                              native.configuration.presentationMode ==
+                              NativeKeyguardCardPresentationMode.card,
+                          onSelected: _savingNative
+                              ? null
+                              : (selected) {
+                                  if (selected) {
+                                    _saveNativeLayout(
+                                      const NativeKeyguardCardLayoutPatch(
+                                        presentationMode:
+                                            NativeKeyguardCardPresentationMode
+                                                .card,
+                                      ),
+                                    );
+                                  }
+                                },
+                        ),
+                        ChoiceChip(
+                          label: const Text('Csak orb'),
+                          selected:
+                              native.configuration.presentationMode ==
+                              NativeKeyguardCardPresentationMode.orb,
+                          onSelected: _savingNative
+                              ? null
+                              : (selected) {
+                                  if (selected) {
+                                    _saveNativeLayout(
+                                      const NativeKeyguardCardLayoutPatch(
+                                        presentationMode:
+                                            NativeKeyguardCardPresentationMode
+                                                .orb,
+                                      ),
+                                    );
+                                  }
+                                },
+                        ),
+                      ],
+                    ),
+                  ),
                   ListTile(
                     title: const Text('Animáció'),
                     subtitle: const Text(
@@ -334,21 +416,108 @@ class _LockScreenCardPageState extends State<LockScreenCardPage>
                     ),
                   ),
                   const Divider(height: 1),
-                  ListTile(
-                    title: const Text('Függőleges pozíció'),
-                    subtitle: Slider(
-                      value: native.configuration.verticalOffsetDp.toDouble(),
-                      min: -96,
-                      max: 96,
-                      divisions: 12,
-                      label: '${native.configuration.verticalOffsetDp} dp',
-                      onChanged: _savingNative
+                  if (native.configuration.presentationMode ==
+                      NativeKeyguardCardPresentationMode.card)
+                    ListTile(
+                      title: const Text('Pozíció · függőleges'),
+                      subtitle: Slider(
+                        value:
+                            _cardYPreview ??
+                            native.configuration.cardPosition?.yFraction ??
+                            .5,
+                        min: 0,
+                        max: 1,
+                        divisions: 20,
+                        label:
+                            '${(((_cardYPreview ?? native.configuration.cardPosition?.yFraction ?? .5) * 100).round())}%',
+                        onChanged: _savingNative
+                            ? null
+                            : (value) => setState(() => _cardYPreview = value),
+                        onChangeEnd: _savingNative
+                            ? null
+                            : (value) => _saveNativeLayout(
+                                NativeKeyguardCardLayoutPatch(
+                                  cardPosition: NativeKeyguardCardCardPosition(
+                                    value,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    )
+                  else ...[
+                    ListTile(
+                      title: const Text('Pozíció · vízszintes'),
+                      subtitle: Slider(
+                        value:
+                            _orbXPreview ??
+                            native.configuration.orbPosition?.xFraction ??
+                            .5,
+                        min: 0,
+                        max: 1,
+                        divisions: 20,
+                        onChanged: _savingNative
+                            ? null
+                            : (value) => setState(() => _orbXPreview = value),
+                        onChangeEnd: _savingNative
+                            ? null
+                            : (value) => _saveNativeLayout(
+                                NativeKeyguardCardLayoutPatch(
+                                  orbPosition: NativeKeyguardCardOrbPosition(
+                                    value,
+                                    _orbYPreview ??
+                                        native
+                                            .configuration
+                                            .orbPosition
+                                            ?.yFraction ??
+                                        .5,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Pozíció · függőleges'),
+                      subtitle: Slider(
+                        value:
+                            _orbYPreview ??
+                            native.configuration.orbPosition?.yFraction ??
+                            .5,
+                        min: 0,
+                        max: 1,
+                        divisions: 20,
+                        onChanged: _savingNative
+                            ? null
+                            : (value) => setState(() => _orbYPreview = value),
+                        onChangeEnd: _savingNative
+                            ? null
+                            : (value) => _saveNativeLayout(
+                                NativeKeyguardCardLayoutPatch(
+                                  orbPosition: NativeKeyguardCardOrbPosition(
+                                    _orbXPreview ??
+                                        native
+                                            .configuration
+                                            .orbPosition
+                                            ?.xFraction ??
+                                        .5,
+                                    value,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _savingNative
                           ? null
-                          : (value) => _saveNative(
-                              native.configuration.copyWith(
-                                verticalOffsetDp: value.round(),
+                          : () => _saveNativeLayout(
+                              const NativeKeyguardCardLayoutPatch(
+                                resetPosition: true,
                               ),
                             ),
+                      icon: const Icon(Icons.restart_alt),
+                      label: const Text('Pozíció visszaállítása'),
                     ),
                   ),
                 ],

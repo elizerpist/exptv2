@@ -7,6 +7,9 @@ abstract interface class LockScreenCardRepository {
   Future<LockScreenCardStatus> saveNativeKeyguardCard(
     NativeKeyguardCardConfiguration configuration,
   );
+  Future<LockScreenCardStatus> patchNativeKeyguardCardLayout(
+    NativeKeyguardCardLayoutPatch patch,
+  );
   Future<void> openNativeKeyguardSettings();
 
   /// Opens exactly the channel that owns the Fluvi card. This is deliberately
@@ -26,6 +29,8 @@ enum LockScreenCardEventLine { related, processed, hidden }
 enum LockScreenCardPrivacy { discreet, full }
 
 enum NativeKeyguardCardAnimationMode { off, orbOnly, orbAndBackground }
+
+enum NativeKeyguardCardPresentationMode { card, orb }
 
 final class LockScreenCardConfiguration {
   const LockScreenCardConfiguration({
@@ -182,6 +187,10 @@ final class NativeKeyguardCardConfiguration {
     required this.showFinancialDetails,
     required this.verticalOffsetDp,
     required this.animationMode,
+    this.presentationMode = NativeKeyguardCardPresentationMode.card,
+    this.cardPosition,
+    this.orbPosition,
+    this.layoutRevision = 0,
     this.focus = const NativeKeyguardCardFocus(),
   });
 
@@ -189,6 +198,10 @@ final class NativeKeyguardCardConfiguration {
   final bool showFinancialDetails;
   final int verticalOffsetDp;
   final NativeKeyguardCardAnimationMode animationMode;
+  final NativeKeyguardCardPresentationMode presentationMode;
+  final NativeKeyguardCardCardPosition? cardPosition;
+  final NativeKeyguardCardOrbPosition? orbPosition;
+  final int layoutRevision;
   final NativeKeyguardCardFocus focus;
 
   NativeKeyguardCardConfiguration copyWith({
@@ -196,12 +209,17 @@ final class NativeKeyguardCardConfiguration {
     bool? showFinancialDetails,
     int? verticalOffsetDp,
     NativeKeyguardCardAnimationMode? animationMode,
+    NativeKeyguardCardPresentationMode? presentationMode,
     NativeKeyguardCardFocus? focus,
   }) => NativeKeyguardCardConfiguration(
     requested: requested ?? this.requested,
     showFinancialDetails: showFinancialDetails ?? this.showFinancialDetails,
     verticalOffsetDp: verticalOffsetDp ?? this.verticalOffsetDp,
     animationMode: animationMode ?? this.animationMode,
+    presentationMode: presentationMode ?? this.presentationMode,
+    cardPosition: cardPosition,
+    orbPosition: orbPosition,
+    layoutRevision: layoutRevision,
     focus: focus ?? this.focus,
   );
 
@@ -210,7 +228,62 @@ final class NativeKeyguardCardConfiguration {
     'showFinancialDetails': showFinancialDetails,
     'verticalOffsetDp': verticalOffsetDp,
     'animationMode': animationMode.name,
+    'presentationMode': presentationMode.name,
     'focus': focus.toMap(),
+  };
+}
+
+final class NativeKeyguardCardCardPosition {
+  const NativeKeyguardCardCardPosition(this.yFraction);
+
+  factory NativeKeyguardCardCardPosition.fromMap(Map<Object?, Object?> map) =>
+      NativeKeyguardCardCardPosition(
+        ((map['yFraction'] as num?)?.toDouble() ?? .5).clamp(0, 1).toDouble(),
+      );
+
+  final double yFraction;
+
+  Map<String, Object?> toMap() => <String, Object?>{'yFraction': yFraction};
+}
+
+final class NativeKeyguardCardOrbPosition {
+  const NativeKeyguardCardOrbPosition(this.xFraction, this.yFraction);
+
+  factory NativeKeyguardCardOrbPosition.fromMap(Map<Object?, Object?> map) =>
+      NativeKeyguardCardOrbPosition(
+        ((map['xFraction'] as num?)?.toDouble() ?? .5).clamp(0, 1).toDouble(),
+        ((map['yFraction'] as num?)?.toDouble() ?? .5).clamp(0, 1).toDouble(),
+      );
+
+  final double xFraction;
+  final double yFraction;
+
+  Map<String, Object?> toMap() => <String, Object?>{
+    'xFraction': xFraction,
+    'yFraction': yFraction,
+  };
+}
+
+/// Sent independently of the full card configuration so a stale page snapshot
+/// cannot overwrite a location committed by a lock-screen drag.
+final class NativeKeyguardCardLayoutPatch {
+  const NativeKeyguardCardLayoutPatch({
+    this.presentationMode,
+    this.cardPosition,
+    this.orbPosition,
+    this.resetPosition = false,
+  });
+
+  final NativeKeyguardCardPresentationMode? presentationMode;
+  final NativeKeyguardCardCardPosition? cardPosition;
+  final NativeKeyguardCardOrbPosition? orbPosition;
+  final bool resetPosition;
+
+  Map<String, Object?> toMap() => <String, Object?>{
+    if (presentationMode != null) 'presentationMode': presentationMode!.name,
+    if (cardPosition != null) 'cardPosition': cardPosition!.toMap(),
+    if (orbPosition != null) 'orbPosition': orbPosition!.toMap(),
+    if (resetPosition) 'resetPosition': true,
   };
 }
 
@@ -305,33 +378,48 @@ final class NativeKeyguardCardStatus {
     required this.materialDiagnostics,
   });
 
-  factory NativeKeyguardCardStatus.fromMap(Map<Object?, Object?> map) =>
-      NativeKeyguardCardStatus(
-        configuration: NativeKeyguardCardConfiguration(
-          requested: map['requested'] as bool? ?? false,
-          showFinancialDetails: map['showFinancialDetails'] as bool? ?? false,
-          verticalOffsetDp: map['verticalOffsetDp'] as int? ?? 0,
-          animationMode: NativeKeyguardCardAnimationMode.values.firstWhere(
-            (value) => value.name == (map['animationMode'] as String?),
-            orElse: () => NativeKeyguardCardAnimationMode.orbOnly,
-          ),
-          focus: NativeKeyguardCardFocus.fromMap(
-            map['focus'] as Map<Object?, Object?>? ??
-                const <Object?, Object?>{},
-          ),
-        ),
-        systemServiceEnabled: map['systemServiceEnabled'] as bool? ?? false,
-        serviceConnected: map['serviceConnected'] as bool? ?? false,
-        lastDecisionReason:
-            map['lastDecisionReason'] as String? ?? 'Nincs zárképernyő-próba',
-        lastAttachResult:
-            map['lastAttachResult'] as String? ?? 'Nincs csatolási kísérlet',
-        diagnosticSummary: map['diagnosticSummary'] as String? ?? '',
-        materialDiagnostics: NativeKeyguardCardMaterialDiagnostics.fromMap(
-          map['materialDiagnostics'] as Map<Object?, Object?>? ??
-              const <Object?, Object?>{},
-        ),
-      );
+  factory NativeKeyguardCardStatus.fromMap(
+    Map<Object?, Object?> map,
+  ) => NativeKeyguardCardStatus(
+    configuration: NativeKeyguardCardConfiguration(
+      requested: map['requested'] as bool? ?? false,
+      showFinancialDetails: map['showFinancialDetails'] as bool? ?? false,
+      verticalOffsetDp: map['verticalOffsetDp'] as int? ?? 0,
+      animationMode: NativeKeyguardCardAnimationMode.values.firstWhere(
+        (value) => value.name == (map['animationMode'] as String?),
+        orElse: () => NativeKeyguardCardAnimationMode.orbOnly,
+      ),
+      presentationMode: NativeKeyguardCardPresentationMode.values.firstWhere(
+        (value) => value.name == (map['presentationMode'] as String?),
+        orElse: () => NativeKeyguardCardPresentationMode.card,
+      ),
+      cardPosition: map['cardPosition'] is Map<Object?, Object?>
+          ? NativeKeyguardCardCardPosition.fromMap(
+              map['cardPosition'] as Map<Object?, Object?>,
+            )
+          : null,
+      orbPosition: map['orbPosition'] is Map<Object?, Object?>
+          ? NativeKeyguardCardOrbPosition.fromMap(
+              map['orbPosition'] as Map<Object?, Object?>,
+            )
+          : null,
+      layoutRevision: map['layoutRevision'] as int? ?? 0,
+      focus: NativeKeyguardCardFocus.fromMap(
+        map['focus'] as Map<Object?, Object?>? ?? const <Object?, Object?>{},
+      ),
+    ),
+    systemServiceEnabled: map['systemServiceEnabled'] as bool? ?? false,
+    serviceConnected: map['serviceConnected'] as bool? ?? false,
+    lastDecisionReason:
+        map['lastDecisionReason'] as String? ?? 'Nincs zárképernyő-próba',
+    lastAttachResult:
+        map['lastAttachResult'] as String? ?? 'Nincs csatolási kísérlet',
+    diagnosticSummary: map['diagnosticSummary'] as String? ?? '',
+    materialDiagnostics: NativeKeyguardCardMaterialDiagnostics.fromMap(
+      map['materialDiagnostics'] as Map<Object?, Object?>? ??
+          const <Object?, Object?>{},
+    ),
+  );
 
   final NativeKeyguardCardConfiguration configuration;
   final bool systemServiceEnabled;

@@ -28,6 +28,11 @@ final class MethodChannelLockScreenCardRepository
   ) => _read('setNativeKeyguardCard', configuration.toMap());
 
   @override
+  Future<LockScreenCardStatus> patchNativeKeyguardCardLayout(
+    NativeKeyguardCardLayoutPatch patch,
+  ) => _read('patchNativeKeyguardCardLayout', patch.toMap());
+
+  @override
   Future<void> openNativeKeyguardSettings() =>
       _channel.invokeMethod<void>('openNativeKeyguardSettings');
 

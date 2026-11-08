@@ -422,6 +422,21 @@ class MainActivity : FlutterActivity() {
                     }
                     return@setMethodCallHandler
                 }
+                if (call.method == "patchNativeKeyguardCardLayout") {
+                    val values = call.arguments as? Map<*, *>
+                    if (values == null) {
+                        result.error("validation", "Hiányzó zárképernyő-elrendezés.", null)
+                        return@setMethodCallHandler
+                    }
+                    scope.launch {
+                        runCatching {
+                            FluviKeyguardCardSettings.patchLayout(applicationContext, values)
+                            lockScreenCardStatus()
+                        }.onSuccess(result::success)
+                            .onFailure { error -> result.error("native_keyguard_layout_error", error.message, null) }
+                    }
+                    return@setMethodCallHandler
+                }
                 if (call.method == "openNativeKeyguardSettings") {
                     runCatching {
                         startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))

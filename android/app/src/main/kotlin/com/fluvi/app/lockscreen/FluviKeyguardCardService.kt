@@ -42,6 +42,10 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val session = AtomicLong(0L)
     private val visibilityEpoch = AtomicLong(0L)
+    /** Pointer interaction invalidates only inspections that began before the
+     * touch. A new, genuine SystemUI event still starts a fresh inspection and
+     * therefore retains full security authority while a finger is down. */
+    private val interactionEpoch = AtomicLong(0L)
     private val surfaceDispatcher = Dispatchers.IO.limitedParallelism(1)
     private val scope = CoroutineScope(SupervisorJob() + surfaceDispatcher)
     private val queueLock = Any()
@@ -69,6 +73,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var lastSettings: KeyguardCardSettings? = null
     private var showEvent = false
     private var appliedDecision = KeyguardCardVisibility.HIDDEN_DISCONNECTED
+    private var overlayAttachGeneration = 0L
     private lateinit var overlay: KeyguardCardWindow
 
     private val powerManager by lazy { getSystemService(PowerManager::class.java) }
@@ -107,6 +112,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             serviceContext = this,
             onOpen = ::openFocusedFluvi,
             onToggle = ::toggleView,
+            onInteractionStarted = ::onOverlayInteractionStarted,
+            onPositionCommitted = ::onOverlayPositionCommitted,
+            onInteractionDiagnostic = { event, detail ->
+                KeyguardCardDiagnostics.record(this, event, detail, overlay.isAttached)
+            },
         )
         lastSettings = FluviKeyguardCardSettings.read(applicationContext)
         overlay.updateMaterial(FluviKeyguardMaterialStore.read(applicationContext), requireNotNull(lastSettings))
@@ -128,10 +138,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             packageName = event.packageName?.toString(),
         )
         if (!KeyguardCardEventGate.isSurfaceEvent(meta.eventType)) return
-        val own = ::overlay.isInitialized && overlay.isOwnAccessibilityWindow(meta.windowId)
+        val own = ::overlay.isInitialized && overlay.isOwnAccessibilityWindow(meta.windowId, meta.displayId)
         when (KeyguardCardEventGate.decide(meta, own)) {
             KeyguardEventAction.IGNORE_OWN -> {
-                KeyguardCardDiagnostics.record(this, "KG|OWN_WINDOW", "ownSignal", overlay.isAttached)
+                KeyguardCardDiagnostics.record(this, "KG|OWN_EVENT_IGNORED", "ownSignal", overlay.isAttached)
                 // The package-less post-add race reaches INSPECT, not an
                 // eager detach. A positively matched own event needs no work.
             }
@@ -176,6 +186,47 @@ class FluviKeyguardCardService : AccessibilityService() {
                 overlay.updateMaterial(FluviKeyguardMaterialStore.read(applicationContext), settings)
                 scheduleEvaluation("settings")
             }
+        }
+    }
+
+    /** Layout patches intentionally bypass the general settings/evaluation
+     * lane: a drag has already updated the retained root and must not start a
+     * financial resolve, material reload or focus-generation change. */
+    internal fun onLayoutChangedFromApplication(settings: KeyguardCardSettings) {
+        mainHandler.post {
+            lastSettings = settings
+            if (::overlay.isInitialized) overlay.updateLayoutSettings(settings)
+        }
+    }
+
+    private fun onOverlayInteractionStarted() {
+        // This only invalidates reads that predate the pointer stream. A later
+        // real SystemUI event starts a fresh inspection and remains allowed to
+        // hide the overlay even while the finger is down.
+        interactionEpoch.incrementAndGet()
+    }
+
+    private fun onOverlayPositionCommitted(
+        mode: KeyguardCardPresentationMode,
+        card: KeyguardCardCardPosition,
+        orb: KeyguardCardOrbPosition,
+        expectedLayoutRevision: Long,
+    ) {
+        val settings = FluviKeyguardCardSettings.patchLayout(
+            applicationContext,
+            mapOf(
+                "presentationMode" to mode.wireValue,
+                "cardPosition" to mapOf("yFraction" to card.yFraction),
+                "orbPosition" to mapOf("xFraction" to orb.xFraction, "yFraction" to orb.yFraction),
+            ),
+            expectedLayoutRevision = expectedLayoutRevision,
+        )
+        lastSettings = settings
+        // A newer reset/layout patch won the race. Return the attached root
+        // to that persisted geometry without entering the general settings
+        // path or re-resolving financial content.
+        if (settings.layoutRevision != expectedLayoutRevision + 1L) {
+            overlay.updateLayoutSettings(settings)
         }
     }
 
@@ -240,9 +291,18 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // can mutate the main-thread window state.
                 val expectedSession = session.get()
                 val expectedEpoch = visibilityEpoch.get()
+                val expectedInteractionEpoch = interactionEpoch.get()
+                val expectedAttachGeneration = overlayAttachGeneration
                 val result = inspectSurface(expectedSession, expectedEpoch)
                 withContext(Dispatchers.Main.immediate) {
-                    applyInspection(result, expectedSession, expectedEpoch, nextTrigger)
+                    applyInspection(
+                        result,
+                        expectedSession,
+                        expectedEpoch,
+                        expectedInteractionEpoch,
+                        expectedAttachGeneration,
+                        nextTrigger,
+                    )
                 }
                 synchronized(queueLock) {
                     if (!reevaluationQueued) {
@@ -391,9 +451,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         inspection: Inspection,
         expectedSession: Long,
         expectedEpoch: Long,
+        expectedInteractionEpoch: Long,
+        expectedAttachGeneration: Long,
         trigger: String,
     ) {
-        inspection.ownOverlayWindowId?.let(overlay::recordAccessibilityWindowId)
         // A stale Binder walk has no authority over a newer session/epoch.
         // In particular, it must not remove an overlay attached by a later
         // wake inspection.
@@ -402,11 +463,15 @@ class FluviKeyguardCardService : AccessibilityService() {
             currentSession = session.get(),
             expectedEpoch = expectedEpoch,
             currentEpoch = visibilityEpoch.get(),
+            expectedInteractionEpoch = expectedInteractionEpoch,
+            currentInteractionEpoch = interactionEpoch.get(),
+            expectedAttachGeneration = expectedAttachGeneration,
+            currentAttachGeneration = overlayAttachGeneration,
             displayEligibleNow = isDisplayOnAndInteractive(),
             keyguardLockedNow = keyguardManager.isKeyguardLocked,
         )) {
             KeyguardInspectionAction.DROP_STALE -> {
-                KeyguardCardDiagnostics.record(this, "KG|DROP_STALE", "surfaceEpoch", overlay.isAttached)
+                KeyguardCardDiagnostics.record(this, "KG|INSPECTION_STALE", "surfaceEpoch", overlay.isAttached)
                 return
             }
             KeyguardInspectionAction.HIDE_CURRENT_GATE -> {
@@ -415,6 +480,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
             KeyguardInspectionAction.APPLY -> Unit
         }
+        // Recording a window id is also a mutation of current overlay state,
+        // so it belongs behind all session/epoch/attach checks.
+        inspection.ownOverlayWindowId?.let { overlay.recordAccessibilityWindowId(it, expectedAttachGeneration) }
         val decision = inspection.decision
         KeyguardCardDiagnostics.record(this, "KG|SURFACE_DECISION", "${decision.name}:${inspection.surfaceReason.name}", overlay.isAttached)
         appliedDecision = decision
@@ -608,8 +676,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         // This only changes retained drawing input; no animation frame is
         // allowed to enter showOrUpdate or the financial presentation lane.
         overlay.updateMaterial(FluviKeyguardMaterialStore.read(applicationContext), settings)
-        when (val result = overlay.showOrUpdate(presentation, settings.verticalOffsetDp)) {
+        when (val result = overlay.showOrUpdate(presentation, settings)) {
             KeyguardCardWindow.Result.ATTACHED -> {
+                overlayAttachGeneration = overlay.currentAttachGeneration
                 KeyguardCardDiagnostics.attach(this, "attached")
                 KeyguardCardDiagnostics.record(this, "KG|ATTACH", reason, true)
             }
@@ -651,6 +720,7 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     private fun hideImmediately(reason: String) {
         visibilityEpoch.incrementAndGet()
+        interactionEpoch.incrementAndGet()
         appliedDecision = KeyguardCardVisibility.HIDDEN_UNKNOWN
         showEvent = false
         stopFinancialObservation()

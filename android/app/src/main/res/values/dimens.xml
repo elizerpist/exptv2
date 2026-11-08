@@ -4,4 +4,7 @@
          its production root.  Decorative match_parent layers may only fill
          this extent; they can never participate in measuring it. -->
     <dimen name="fluvi_keyguard_card_height">120dp</dimen>
+    <!-- The standalone accessibility-overlay orb is intentionally not the
+         38dp decorative orb inside the compact card. -->
+    <dimen name="fluvi_keyguard_orb_size">64dp</dimen>
 </resources>

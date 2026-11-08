@@ -1,10 +1,15 @@
 package com.fluvi.app.lockscreen
 
 import android.content.Context
+import android.os.Build
+import android.view.Choreographer
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewTreeObserver
+import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.TextView
 import com.fluvi.app.R
 import com.fluvi.app.lockscreen.material.KeyguardCardMaterialController
@@ -13,115 +18,111 @@ import com.fluvi.app.lockscreen.material.KeyguardMaterialDiagnostics
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
 
-/** Main-thread-only owner of exactly one accessibility overlay root.
- *
- * The result is deliberately an operation, rather than a Boolean: callers
- * must be able to distinguish a genuine add/remove from a content update or
- * an idempotent re-evaluation. */
+/** Main-thread owner of one, and only one, accessibility overlay root. Drag
+ * changes only call updateViewLayout; they never remove/re-add this root,
+ * recreate its material controller, or re-enter financial presentation. */
 internal class KeyguardCardWindow(
     private val serviceContext: Context,
     private val onOpen: () -> Unit,
     private val onToggle: () -> Unit,
+    private val onInteractionStarted: () -> Unit,
+    private val onPositionCommitted: (
+        KeyguardCardPresentationMode,
+        KeyguardCardCardPosition,
+        KeyguardCardOrbPosition,
+        Long,
+    ) -> Unit,
+    private val onInteractionDiagnostic: (String, String) -> Unit,
 ) {
-    enum class Result {
-        ATTACHED,
-        CONTENT_UPDATED,
-        LAYOUT_UPDATED,
-        REDACTED,
-        NO_OP,
-        FAILED,
-    }
+    enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
 
     private val manager: WindowManager = serviceContext.getSystemService(WindowManager::class.java)
-    private var root: View? = null
+    private var root: KeyguardCardInteractionLayout? = null
     private val lifecycle = KeyguardCardWindowLifecycle()
     private var appliedPresentation: FluviFinancialCardPresentation? = null
-    private var appliedGeometry: KeyguardCardGeometry? = null
+    private var appliedGeometry: KeyguardOverlayGeometry? = null
     private var accessibilityWindowId: Int? = null
+    private var attachGeneration = 0L
     private var materialController: KeyguardCardMaterialController? = null
     private var materialProfile: KeyguardMaterialProfile? = null
     private var materialSettings = KeyguardCardSettings()
+    private var dragStart: KeyguardOverlayGeometry? = null
+    private var dragPreview: KeyguardOverlayGeometry? = null
+    private var dragLayoutRevision = 0L
+    private var dragMoveCount = 0
+    private var dragLayoutUpdateCount = 0
+    private var dragFrameScheduled = false
+    private val dragFrameCallback = Choreographer.FrameCallback {
+        dragFrameScheduled = false
+        dragPreview?.let(::applyDragPreview)
+    }
 
     val isAttached: Boolean get() = lifecycle.isAttached()
+    val currentAttachGeneration: Long get() = attachGeneration
 
-    /** Returns true only for a positively matched service-owned window. A
-     * package-less event in the short post-add race remains unknown; the
-     * service will inspect it rather than treating it as safe. */
-    fun isOwnAccessibilityWindow(windowId: Int): Boolean {
+    fun isOwnAccessibilityWindow(windowId: Int, displayId: Int): Boolean {
         checkMainThread()
-        return lifecycle.isAttached() && accessibilityWindowId == windowId
+        return lifecycle.isAttached() && displayId == android.view.Display.DEFAULT_DISPLAY && accessibilityWindowId == windowId
     }
 
-    /** The service learns this from public AccessibilityWindowInfo.id while
-     * inspecting its own overlay; View has no public window-id accessor. */
-    fun recordAccessibilityWindowId(windowId: Int) {
+    /** A completed inspection may name an overlay only if that exact attach is
+     * still current. This prevents a stale result from claiming a later root. */
+    fun recordAccessibilityWindowId(windowId: Int, expectedAttachGeneration: Long) {
         checkMainThread()
-        if (lifecycle.isAttached() && windowId >= 0) accessibilityWindowId = windowId
+        if (lifecycle.isAttached() && expectedAttachGeneration == attachGeneration && windowId >= 0) {
+            accessibilityWindowId = windowId
+        }
     }
 
-    fun showOrUpdate(presentation: FluviFinancialCardPresentation, verticalOffsetDp: Int): Result {
+    fun showOrUpdate(presentation: FluviFinancialCardPresentation, settings: KeyguardCardSettings): Result {
         checkMainThread()
-        val geometry = geometry(verticalOffsetDp)
-        val current = root ?: LayoutInflater.from(serviceContext)
-            .inflate(R.layout.fluvi_keyguard_card, null, false)
-            .also { created ->
-                created.setOnClickListener { onOpen() }
-                created.findViewById<View>(R.id.fluvi_financial_snapshot_toggle).setOnClickListener {
-                    onToggle()
-                }
-                materialController = KeyguardCardMaterialController(
-                    orb = created.findViewById(R.id.fluvi_financial_snapshot_orb),
-                    background = created.findViewById(R.id.fluvi_keyguard_material_background),
-                    backgroundVeil = created.findViewById(R.id.fluvi_keyguard_material_veil),
-                )
-                root = created
-            }
+        val previousMode = materialSettings.presentationMode
+        materialSettings = settings
+        val current = root ?: createRoot().also { root = it }
+        val modeChanged = appliedGeometry != null && settings.presentationMode != previousMode
+        if (modeChanged) {
+            current.cancelInteraction("presentationChanged")
+            onInteractionDiagnostic("KG|PRESENTATION_CHANGED", settings.presentationMode.wireValue)
+        }
+        configurePresentation(current, settings.presentationMode)
+        val resolvedGeometry = dragPreview ?: geometry(settings, current)
 
         if (!lifecycle.isAttached()) {
-            apply(current, presentation, force = true)
-            return runCatching { manager.addView(current, parameters(geometry)) }
-                .fold(
-                    onSuccess = {
-                        lifecycle.onAttachSucceeded()
-                        appliedPresentation = presentation
-                        appliedGeometry = geometry
-                        updateMaterialForPresentation(presentation)
-                        materialController?.onAttached()
-                        Result.ATTACHED
-                    },
-                    onFailure = {
-                        lifecycle.onAttachFailed()
-                        appliedPresentation = null
-                        appliedGeometry = null
-                        accessibilityWindowId = null
-                        Result.FAILED
-                    },
-                )
-        }
-
-        val contentChanged = appliedPresentation?.visualKey != presentation.visualKey
-        val geometryChanged = appliedGeometry != geometry
-        if (lifecycle.renderOperation(contentChanged, geometryChanged) == KeyguardCardWindowLifecycle.Operation.NONE) {
-            return Result.NO_OP
-        }
-
-        if (contentChanged) apply(current, presentation, force = false)
-        if (geometryChanged) {
-            val updated = runCatching { manager.updateViewLayout(current, parameters(geometry)) }
-            if (updated.isFailure) {
-                // updateViewLayout may fail after a service-side detach. Do
-                // not issue a second add while this root might still exist.
-                val stillAttached = current.isAttachedToWindow
-                lifecycle.onUpdateFailed(stillAttached)
-                if (!stillAttached) {
+            apply(current, presentation, force = true, mode = settings.presentationMode)
+            return runCatching { manager.addView(current, parameters(resolvedGeometry)) }.fold(
+                onSuccess = {
+                    lifecycle.onAttachSucceeded()
+                    attachGeneration += 1L
+                    appliedPresentation = presentation
+                    appliedGeometry = resolvedGeometry
+                    updateMaterialForPresentation(presentation)
+                    materialController?.onAttached()
+                    if (settings.cardPosition == null) {
+                        // Only an attached window has reliable insets. Persist
+                        // the old BOTTOM-gravity placement once, without
+                        // touching focus/content configuration.
+                        FluviKeyguardCardSettings.migrateCardPosition(
+                            serviceContext,
+                            resolvedGeometry.cardPosition,
+                        )
+                    }
+                    Result.ATTACHED
+                },
+                onFailure = {
+                    lifecycle.onAttachFailed()
                     appliedPresentation = null
                     appliedGeometry = null
                     accessibilityWindowId = null
-                }
-                return Result.FAILED
-            }
-            appliedGeometry = geometry
+                    Result.FAILED
+                },
+            )
         }
+
+        val contentChanged = appliedPresentation?.visualKey != presentation.visualKey
+        val geometryChanged = appliedGeometry != resolvedGeometry
+        if (lifecycle.renderOperation(contentChanged, geometryChanged) == KeyguardCardWindowLifecycle.Operation.NONE) return Result.NO_OP
+        if (contentChanged) apply(current, presentation, force = false, mode = settings.presentationMode)
+        if (geometryChanged && !updateLayout(current, resolvedGeometry)) return Result.FAILED
         val wasFull = appliedPresentation?.full == true
         appliedPresentation = presentation
         updateMaterialForPresentation(presentation)
@@ -132,11 +133,31 @@ internal class KeyguardCardWindow(
         }
     }
 
+    /** Called by the narrow layout patch path. It performs a retained-root
+     * layout update only; no inspection and no financial resolver are touched. */
+    fun updateLayoutSettings(settings: KeyguardCardSettings) {
+        checkMainThread()
+        val current = root ?: return
+        val modeChanged = settings.presentationMode != materialSettings.presentationMode
+        materialSettings = settings
+        if (modeChanged) {
+            current.cancelInteraction("presentationChanged")
+            onInteractionDiagnostic("KG|PRESENTATION_CHANGED", settings.presentationMode.wireValue)
+        }
+        configurePresentation(current, settings.presentationMode)
+        val presentation = appliedPresentation ?: return
+        val next = geometry(settings, current)
+        if (lifecycle.isAttached() && dragPreview == null && appliedGeometry != next) updateLayout(current, next)
+        if (modeChanged) updateMaterialForPresentation(presentation)
+    }
+
     fun hide(): Boolean {
         checkMainThread()
         val current = root ?: return false
-        if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
+        current.cancelInteraction("detach")
+        clearDragFrame()
         materialController?.stop("hide")
+        if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
         val removed = runCatching { manager.removeViewImmediate(current) }
         val stillAttached = current.isAttachedToWindow
         if (removed.isSuccess || !stillAttached) {
@@ -144,21 +165,19 @@ internal class KeyguardCardWindow(
             appliedPresentation = null
             appliedGeometry = null
             accessibilityWindowId = null
-        } else {
-            lifecycle.onUpdateFailed(stillAttached = true)
-        }
+        } else lifecycle.onUpdateFailed(stillAttached = true)
         return removed.isSuccess
     }
 
     fun dispose() {
+        root?.cancelInteraction("dispose")
+        clearDragFrame()
         materialController?.stop("dispose")
         hide()
         root = null
         materialController = null
     }
 
-    /** A material profile change is content-only. It must never issue a
-     * WindowManager operation or reset the financial presentation. */
     fun updateMaterial(profile: KeyguardMaterialProfile?, settings: KeyguardCardSettings) {
         checkMainThread()
         materialProfile = profile
@@ -171,18 +190,72 @@ internal class KeyguardCardWindow(
         return materialController?.diagnostics()
     }
 
-    private fun apply(root: View, presentation: FluviFinancialCardPresentation, force: Boolean) {
+    private fun createRoot(): KeyguardCardInteractionLayout {
+        val created = LayoutInflater.from(serviceContext).inflate(
+            R.layout.fluvi_keyguard_card,
+            null,
+            false,
+        ) as KeyguardCardInteractionLayout
+        created.setOnClickListener { onOpen() }
+        created.findViewById<View>(R.id.fluvi_financial_snapshot_toggle).setOnClickListener { onToggle() }
+        created.listener = object : KeyguardCardInteractionLayout.Listener {
+            override fun onPointerDown() {
+                onInteractionStarted()
+                onInteractionDiagnostic("KG|POINTER_DOWN", "attach=$attachGeneration")
+            }
+
+            override fun onLongPress() {
+                beginDrag()
+                onInteractionDiagnostic("KG|LONG_PRESS", "attach=$attachGeneration")
+            }
+
+            override fun onDrag(deltaRawX: Float, deltaRawY: Float) {
+                val start = dragStart ?: return
+                dragMoveCount += 1
+                dragPreview = previewKeyguardOverlayGeometry(
+                    start,
+                    materialSettings.presentationMode,
+                    deltaRawX,
+                    deltaRawY,
+                )
+                scheduleDragFrame()
+            }
+
+            override fun onDragEnd() = commitDrag()
+
+            override fun onDragCancel(reason: String) = cancelDrag(reason)
+
+            override fun onInteractionFinished() = Unit
+        }
+        materialController = KeyguardCardMaterialController(
+            orb = created.findViewById(R.id.fluvi_financial_snapshot_orb),
+            background = created.findViewById(R.id.fluvi_keyguard_material_background),
+            backgroundVeil = created.findViewById(R.id.fluvi_keyguard_material_veil),
+        )
+        return created
+    }
+
+    private fun apply(
+        root: KeyguardCardInteractionLayout,
+        presentation: FluviFinancialCardPresentation,
+        force: Boolean,
+        mode: KeyguardCardPresentationMode,
+    ) {
         val previous = appliedPresentation
         fun changed(selector: (FluviFinancialCardPresentation) -> Any?): Boolean =
             force || previous == null || selector(previous) != selector(presentation)
-
         if (changed { it.focus }) root.findViewById<TextView>(R.id.fluvi_financial_snapshot_focus).text = presentation.focus
         if (changed { it.primary }) root.findViewById<TextView>(R.id.fluvi_financial_snapshot_primary).text = presentation.primary
         if (changed { it.secondary }) root.findViewById<TextView>(R.id.fluvi_financial_snapshot_secondary).text = presentation.secondary
-        if (changed { it.contentDescription }) root.contentDescription = presentation.contentDescription
+        if (changed { it.contentDescription }) {
+            root.contentDescription = if (mode == KeyguardCardPresentationMode.CARD) {
+                presentation.contentDescription
+            } else {
+                "Fluvi · animált orb"
+            }
+        }
         if (force || previous?.visualKey != presentation.visualKey) {
-            root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
-                .setStaticBitmap(presentation.orb)
+            root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb).setStaticBitmap(presentation.orb)
         }
         val eventText = presentation.event?.let { "${presentation.eventLabel ?: "Utolsó tétel"}: $it" } ?: ""
         if (changed { it.event } || changed { it.eventLabel }) {
@@ -198,41 +271,167 @@ internal class KeyguardCardWindow(
                 contentDescription = if (presentation.showToggle) presentation.toggleLabel else null
             }
         }
-        // This runs only after a semantic content update. It never changes
-        // WindowManager geometry or the retained material renderer.
-        root.post {
-            if (!root.isAttachedToWindow || !KeyguardCardContentOverflow.fit(root)) return@post
-            root.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-                override fun onPreDraw(): Boolean {
-                    if (root.viewTreeObserver.isAlive) {
-                        root.viewTreeObserver.removeOnPreDrawListener(this)
-                    }
-                    KeyguardCardContentOverflow.fit(root)
-                    return true
-                }
-            })
+        if (mode == KeyguardCardPresentationMode.CARD) root.post { fitCardContent(root) }
+    }
+
+    private fun fitCardContent(root: View) {
+        if (!root.isAttachedToWindow || !KeyguardCardContentOverflow.fit(root)) return
+        root.post { if (root.isAttachedToWindow) KeyguardCardContentOverflow.fit(root) }
+    }
+
+    private fun configurePresentation(root: KeyguardCardInteractionLayout, mode: KeyguardCardPresentationMode) {
+        val content = root.findViewById<View>(R.id.fluvi_financial_snapshot_content)
+        val background = root.findViewById<View>(R.id.fluvi_keyguard_material_background)
+        val veil = root.findViewById<View>(R.id.fluvi_keyguard_material_veil)
+        val orb = root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+        val size = if (mode == KeyguardCardPresentationMode.ORB) {
+            serviceContext.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+        } else (38f * serviceContext.resources.displayMetrics.density).toInt()
+        orb.layoutParams = FrameLayout.LayoutParams(
+            size,
+            size,
+            if (mode == KeyguardCardPresentationMode.ORB) Gravity.CENTER else Gravity.TOP or Gravity.END,
+        ).apply {
+            if (mode == KeyguardCardPresentationMode.CARD) {
+                val margin = (12f * serviceContext.resources.displayMetrics.density).toInt()
+                setMargins(margin, margin, margin, margin)
+            }
+        }
+        val card = mode == KeyguardCardPresentationMode.CARD
+        content.visibility = if (card) View.VISIBLE else View.GONE
+        // The material controller owns actual animated-background visibility;
+        // standalone orb starts with both card-only layers absent.
+        if (!card) {
+            background.visibility = View.GONE
+            veil.visibility = View.GONE
+        }
+        root.setBackgroundResource(if (card) R.drawable.fluvi_financial_snapshot_background else android.R.color.transparent)
+        root.clipToOutline = card
+        root.contentDescription = if (card) "Fluvi · Pénzügyi pillanatkép" else "Fluvi · animált orb"
+    }
+
+    private fun geometry(settings: KeyguardCardSettings, root: View?): KeyguardOverlayGeometry =
+        resolveKeyguardOverlayGeometry(
+            bounds = usableBounds(root),
+            density = serviceContext.resources.displayMetrics.density,
+            cardHeightPx = serviceContext.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_card_height),
+            presentationMode = settings.presentationMode,
+            cardPosition = settings.cardPosition,
+            orbPosition = settings.orbPosition,
+            legacyVerticalOffsetDp = settings.verticalOffsetDp,
+            orbSizePx = serviceContext.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size),
+        )
+
+    private fun usableBounds(root: View?): KeyguardUsableBounds {
+        val metrics = serviceContext.resources.displayMetrics
+        var width = metrics.widthPixels
+        var height = metrics.heightPixels
+        var leftInset = 0
+        var topInset = 0
+        var rightInset = 0
+        var bottomInset = 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val insets = root?.rootWindowInsets?.getInsetsIgnoringVisibility(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
+            )
+            if (insets != null) {
+                leftInset = insets.left
+                topInset = insets.top
+                rightInset = insets.right
+                bottomInset = insets.bottom
+            }
+            runCatching { manager.currentWindowMetrics.bounds }.getOrNull()?.let { bounds ->
+                width = bounds.width()
+                height = bounds.height()
+            }
+        }
+        val safeLeft = leftInset.coerceIn(0, (width - 1).coerceAtLeast(0))
+        val safeTop = topInset.coerceIn(0, (height - 1).coerceAtLeast(0))
+        val safeRight = (width - rightInset).coerceAtLeast(safeLeft + 1)
+        val safeBottom = (height - bottomInset).coerceAtLeast(safeTop + 1)
+        return KeyguardUsableBounds(safeLeft, safeTop, safeRight, safeBottom)
+    }
+
+    private fun parameters(geometry: KeyguardOverlayGeometry): WindowManager.LayoutParams =
+        keyguardCardWindowParameters(geometry)
+
+    private fun updateLayout(root: View, geometry: KeyguardOverlayGeometry): Boolean {
+        val updated = runCatching { manager.updateViewLayout(root, parameters(geometry)) }
+        if (updated.isFailure) {
+            val stillAttached = root.isAttachedToWindow
+            lifecycle.onUpdateFailed(stillAttached)
+            if (!stillAttached) {
+                appliedPresentation = null
+                appliedGeometry = null
+                accessibilityWindowId = null
+            }
+            return false
+        }
+        appliedGeometry = geometry
+        return true
+    }
+
+    private fun beginDrag() {
+        val start = appliedGeometry ?: return
+        dragStart = start
+        dragPreview = start
+        dragLayoutRevision = materialSettings.layoutRevision
+        dragMoveCount = 0
+        dragLayoutUpdateCount = 0
+        onInteractionDiagnostic("KG|DRAG_BEGIN", "${materialSettings.presentationMode.wireValue}|attach=$attachGeneration")
+    }
+
+    private fun scheduleDragFrame() {
+        if (!dragFrameScheduled) {
+            dragFrameScheduled = true
+            Choreographer.getInstance().postFrameCallback(dragFrameCallback)
         }
     }
 
-    private fun geometry(verticalOffsetDp: Int): KeyguardCardGeometry {
-        val metrics = serviceContext.resources.displayMetrics
-        return resolveKeyguardCardGeometry(
-            displayWidthPx = metrics.widthPixels,
-            density = metrics.density,
-            heightPx = serviceContext.resources.getDimensionPixelSize(
-                R.dimen.fluvi_keyguard_card_height,
-            ),
-            verticalOffsetDp = verticalOffsetDp,
-        )
+    private fun applyDragPreview(geometry: KeyguardOverlayGeometry) {
+        val current = root ?: return
+        if (lifecycle.isAttached() && updateLayout(current, geometry)) dragLayoutUpdateCount += 1
     }
 
-    private fun parameters(geometry: KeyguardCardGeometry): WindowManager.LayoutParams =
-        keyguardCardWindowParameters(geometry)
+    private fun commitDrag() {
+        val start = dragStart ?: return
+        clearDragFrame(flush = true)
+        val end = dragPreview ?: start
+        dragStart = null
+        dragPreview = null
+        if (end != start) {
+            appliedGeometry = end
+            onPositionCommitted(materialSettings.presentationMode, end.cardPosition, end.orbPosition, dragLayoutRevision)
+            onInteractionDiagnostic(
+                "KG|POSITION_COMMIT",
+                "${materialSettings.presentationMode.wireValue}|moves=$dragMoveCount|updates=$dragLayoutUpdateCount",
+            )
+        }
+        onInteractionDiagnostic("KG|DRAG_END", "moves=$dragMoveCount|updates=$dragLayoutUpdateCount")
+    }
+
+    private fun cancelDrag(reason: String) {
+        val start = dragStart
+        clearDragFrame()
+        dragStart = null
+        dragPreview = null
+        if (start != null && lifecycle.isAttached()) root?.let { updateLayout(it, start) }
+        onInteractionDiagnostic("KG|DRAG_CANCEL", reason)
+    }
+
+    private fun clearDragFrame(flush: Boolean = false) {
+        if (dragFrameScheduled) {
+            Choreographer.getInstance().removeFrameCallback(dragFrameCallback)
+            dragFrameScheduled = false
+        }
+        if (flush) dragPreview?.let(::applyDragPreview)
+    }
 
     private fun updateMaterialForPresentation(presentation: FluviFinancialCardPresentation) {
         materialController?.update(
             profile = materialProfile,
             animationMode = materialSettings.animationMode,
+            presentationMode = materialSettings.presentationMode,
             isFull = presentation.full,
             staticOrb = presentation.orb,
         )

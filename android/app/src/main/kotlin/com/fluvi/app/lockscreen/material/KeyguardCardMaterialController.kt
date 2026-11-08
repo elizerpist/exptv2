@@ -5,6 +5,7 @@ import android.os.Build
 import android.provider.Settings
 import android.view.View
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
+import com.fluvi.app.lockscreen.KeyguardCardPresentationMode
 
 /** Owns scene application and one Choreographer clock for both retained
  * decorative views. It deliberately has no WindowManager or financial API. */
@@ -20,6 +21,7 @@ internal class KeyguardCardMaterialController(
     private var attached = false
     private var profile: KeyguardMaterialProfile? = null
     private var mode = KeyguardCardAnimationMode.ORB_ONLY
+    private var presentationMode = KeyguardCardPresentationMode.CARD
 
     init {
         orb.shape = KeyguardHeaderMaterialView.Shape.ORB
@@ -35,11 +37,13 @@ internal class KeyguardCardMaterialController(
     fun update(
         profile: KeyguardMaterialProfile?,
         animationMode: KeyguardCardAnimationMode,
+        presentationMode: KeyguardCardPresentationMode = KeyguardCardPresentationMode.CARD,
         isFull: Boolean,
         staticOrb: Bitmap?,
     ) {
         this.profile = profile
         this.mode = animationMode
+        this.presentationMode = presentationMode
         val scene = profile?.let {
             KeyguardMaterialScene(
                 profile = if (isFull) it else it.neutralized(),
@@ -50,8 +54,9 @@ internal class KeyguardCardMaterialController(
         val canAnimate = scene != null && animationMode != KeyguardCardAnimationMode.OFF && animationsEnabled()
         orb.setStaticBitmap(staticOrb)
         orb.setScene(scene, enabled = canAnimate)
-        background.setScene(scene, enabled = canAnimate && animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND)
-        val backgroundVisible = animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND && scene != null
+        val backgroundVisible = presentationMode == KeyguardCardPresentationMode.CARD &&
+            animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND && scene != null
+        background.setScene(scene, enabled = canAnimate && backgroundVisible)
         background.visibility = if (backgroundVisible) View.VISIBLE else View.GONE
         // OFF and orb-only retain the precise, already validated static-card
         // appearance. The readability veil only belongs above an animated
@@ -113,7 +118,8 @@ internal class KeyguardCardMaterialController(
         // Do not use View.isHardwareAccelerated as an eager attach-time gate:
         // it is false until the first actual Canvas draw for some overlays.
         val rendererReady = orb.canAnimateMaterial() &&
-            (mode != KeyguardCardAnimationMode.ORB_AND_BACKGROUND || background.canAnimateMaterial())
+            (presentationMode != KeyguardCardPresentationMode.CARD ||
+                mode != KeyguardCardAnimationMode.ORB_AND_BACKGROUND || background.canAnimateMaterial())
         if (rendererReady) {
             orb.resume()
             background.resume()

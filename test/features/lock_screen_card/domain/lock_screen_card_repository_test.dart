@@ -71,6 +71,10 @@ void main() {
         status.nativeCard.configuration.animationMode,
         NativeKeyguardCardAnimationMode.orbOnly,
       );
+      expect(
+        status.nativeCard.configuration.presentationMode,
+        NativeKeyguardCardPresentationMode.card,
+      );
       expect(status.nativeCard.systemServiceEnabled, isFalse);
       expect(status.nativeCard.serviceConnected, isFalse);
     },
@@ -130,5 +134,30 @@ void main() {
     expect(parsed.focus.mode, LockScreenCardMode.budget);
     expect(parsed.focus.categoryId, 'food');
     expect(parsed.focus.valid, isTrue);
+  });
+
+  test('native card and standalone orb positions remain separate on wire', () {
+    const patch = NativeKeyguardCardLayoutPatch(
+      presentationMode: NativeKeyguardCardPresentationMode.orb,
+      cardPosition: NativeKeyguardCardCardPosition(.7),
+      orbPosition: NativeKeyguardCardOrbPosition(.2, .8),
+    );
+
+    expect(patch.toMap(), <String, Object?>{
+      'presentationMode': 'orb',
+      'cardPosition': <String, Object?>{'yFraction': .7},
+      'orbPosition': <String, Object?>{'xFraction': .2, 'yFraction': .8},
+    });
+  });
+
+  test('unknown native presentation migrates safely to card', () {
+    final status = NativeKeyguardCardStatus.fromMap(<Object?, Object?>{
+      'presentationMode': 'future-shape',
+    });
+
+    expect(
+      status.configuration.presentationMode,
+      NativeKeyguardCardPresentationMode.card,
+    );
   });
 }
