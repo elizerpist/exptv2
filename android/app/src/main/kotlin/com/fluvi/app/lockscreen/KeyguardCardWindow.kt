@@ -35,6 +35,10 @@ internal class KeyguardCardWindow(
         Long,
     ) -> Unit,
     private val onInteractionDiagnostic: (String, String) -> Unit,
+    /** Window operations are reported after the operation boundary, never by
+     * a renderer/onDraw callback. The service adds its captured wake/session
+     * identity before storing a diagnostic event. */
+    private val onWindowDiagnostic: (String, String, Long?) -> Unit = { _, _, _ -> },
     private val onFirstRootDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstShaderDraw: (KeyguardFirstDrawEvent) -> Unit = {},
 ) {
@@ -118,6 +122,8 @@ internal class KeyguardCardWindow(
             // reached this checked attach path.
             current.visibility = View.VISIBLE
             apply(current, presentation, force = true, mode = settings.presentationMode)
+            val nextAttach = attachGeneration + 1L
+            onWindowDiagnostic("ADD_VIEW_BEGIN", "windowManager", nextAttach)
             return runCatching { manager.addView(current, parameters(resolvedGeometry)) }.fold(
                 onSuccess = {
                     lifecycle.onAttachSucceeded()
@@ -128,6 +134,7 @@ internal class KeyguardCardWindow(
                     firstShaderDrawAttachGeneration = attachGeneration
                     materialController?.onAttached()
                     observeFirstRootDraw(current, attachGeneration)
+                    onWindowDiagnostic("ADD_VIEW_RETURN", "success", attachGeneration)
                     if (settings.cardPosition == null) {
                         // Only an attached window has reliable insets. Persist
                         // the old BOTTOM-gravity placement once, without
@@ -144,6 +151,7 @@ internal class KeyguardCardWindow(
                     appliedPresentation = null
                     appliedGeometry = null
                     accessibilityWindowId = null
+                    onWindowDiagnostic("ATTACH_FAILED", "${it.javaClass.simpleName}", nextAttach)
                     Result.FAILED
                 },
             )
@@ -192,7 +200,10 @@ internal class KeyguardCardWindow(
     fun hide(): Boolean {
         checkMainThread()
         val current = root ?: return false
-        if (lifecycle.isAttached()) current.visibility = View.INVISIBLE
+        if (lifecycle.isAttached()) {
+            current.visibility = View.INVISIBLE
+            onWindowDiagnostic("LOCAL_HIDE_APPLIED", "invisible", attachGeneration)
+        }
         firstRootDrawObservation?.cancel()
         firstRootDrawObservation = null
         firstShaderDrawAttachGeneration = null
@@ -200,6 +211,7 @@ internal class KeyguardCardWindow(
         clearDragFrame()
         materialController?.stop("hide")
         if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
+        onWindowDiagnostic("REMOVE_VIEW_BEGIN", "windowManager", attachGeneration)
         val removed = runCatching { manager.removeViewImmediate(current) }
         val stillAttached = current.isAttachedToWindow
         if (removed.isSuccess || !stillAttached) {
@@ -208,6 +220,11 @@ internal class KeyguardCardWindow(
             appliedGeometry = null
             accessibilityWindowId = null
         } else lifecycle.onUpdateFailed(stillAttached = true)
+        if (removed.isSuccess) {
+            onWindowDiagnostic("REMOVE_VIEW_RETURN", "success", attachGeneration)
+        } else {
+            onWindowDiagnostic("DETACH_FAILED", "${removed.exceptionOrNull()?.javaClass?.simpleName ?: "unknown"}", attachGeneration)
+        }
         return removed.isSuccess
     }
 

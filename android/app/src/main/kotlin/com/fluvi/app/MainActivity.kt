@@ -68,6 +68,7 @@ import com.fluvi.app.runtime.FluviRuntimeCoordinator
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
 import com.fluvi.app.lockscreen.FluviKeyguardCardSettings
 import com.fluvi.app.lockscreen.FluviKeyguardCardService
+import com.fluvi.app.lockscreen.KeyguardCardDiagnostics
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
@@ -358,6 +359,29 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
+                if (call.method == "startKeyguardDiagnosticCapture") {
+                    val values = call.arguments as? Map<*, *>
+                    result.success(
+                        KeyguardCardDiagnostics.startCapture(
+                            applicationContext,
+                            values?.get("build") as? String,
+                            values?.get("buildMode") as? String,
+                        ),
+                    )
+                    return@setMethodCallHandler
+                }
+                if (call.method == "getKeyguardDiagnosticCapture") {
+                    result.success(KeyguardCardDiagnostics.captureSnapshot(applicationContext))
+                    return@setMethodCallHandler
+                }
+                if (call.method == "freezeKeyguardDiagnosticCapture") {
+                    result.success(KeyguardCardDiagnostics.freezeCapture(applicationContext))
+                    return@setMethodCallHandler
+                }
+                if (call.method == "clearKeyguardDiagnosticCapture") {
+                    result.success(KeyguardCardDiagnostics.clearCapture(applicationContext))
+                    return@setMethodCallHandler
+                }
                 if (call.method == "getFinancialSnapshotWidgetLaunch") {
                     result.success(consumeFinancialSnapshotWidgetLaunch())
                     return@setMethodCallHandler

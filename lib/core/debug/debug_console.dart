@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../diagnostics/fluvi_diagnostic_event.dart';
 import '../diagnostics/fluvi_diagnostic_logger.dart';
+import '../diagnostics/keyguard_timing_capture_bridge.dart';
 import '../../features/automation/domain/automation_models.dart';
 import '../../features/automation/domain/automation_repository.dart';
 
@@ -16,17 +17,19 @@ class DebugConsoleDialog extends StatefulWidget {
     this.physicalReportProvider,
     this.diagnosticStatusProvider,
     this.automationPermissions,
+    this.keyguardTimingCapture,
   });
 
   final String Function()? physicalReportProvider;
   final DebugDiagnosticStatusProvider? diagnosticStatusProvider;
   final AutomationPermissionRepository? automationPermissions;
+  final KeyguardTimingCaptureBridge? keyguardTimingCapture;
 
   @override
   State<DebugConsoleDialog> createState() => _DebugConsoleDialogState();
 }
 
-enum _DebugConsoleSection { logs, report, push }
+enum _DebugConsoleSection { logs, keyguard, report, push }
 
 /// A view-only projection over the one bounded diagnostic ring.  It owns no
 /// second history, export path, or diagnostic retention policy.
@@ -50,6 +53,11 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   PushDiagnosticsSnapshot? _pushSnapshot;
   bool _loadingPush = false;
   bool _pushCopied = false;
+  KeyguardTimingCaptureSnapshot? _keyguardSnapshot;
+  bool _loadingKeyguard = false;
+  bool _copyingKeyguard = false;
+  bool _keyguardCopied = false;
+  String? _keyguardError;
 
   @override
   void initState() {
@@ -256,6 +264,111 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   Future<void> _clearPushDiagnostics() async {
     await widget.automationPermissions?.clearPushDiagnostics();
     await _refreshPush();
+  }
+
+  Future<void> _refreshKeyguard() async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _loadingKeyguard) return;
+    setState(() {
+      _loadingKeyguard = true;
+      _keyguardError = null;
+      _keyguardCopied = false;
+    });
+    try {
+      final snapshot = await bridge.get();
+      if (mounted) setState(() => _keyguardSnapshot = snapshot);
+    } on Object catch (error) {
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _loadingKeyguard = false);
+    }
+  }
+
+  Future<void> _startKeyguardCapture() async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _loadingKeyguard) return;
+    setState(() {
+      _loadingKeyguard = true;
+      _keyguardError = null;
+      _keyguardCopied = false;
+    });
+    try {
+      final snapshot = await bridge.start();
+      if (mounted) setState(() => _keyguardSnapshot = snapshot);
+    } on Object catch (error) {
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _loadingKeyguard = false);
+    }
+  }
+
+  Future<void> _freezeKeyguardCapture() async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _loadingKeyguard) return;
+    setState(() {
+      _loadingKeyguard = true;
+      _keyguardError = null;
+    });
+    try {
+      final snapshot = await bridge.freeze();
+      if (mounted) setState(() => _keyguardSnapshot = snapshot);
+    } on Object catch (error) {
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _loadingKeyguard = false);
+    }
+  }
+
+  Future<void> _copyKeyguardCapture() async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _copyingKeyguard) return;
+    setState(() {
+      _copyingKeyguard = true;
+      _keyguardCopied = false;
+      _keyguardError = null;
+    });
+    try {
+      // A running capture is frozen first so the clipboard receives one
+      // coherent native snapshot rather than a Flutter-side reconstruction.
+      var snapshot = _keyguardSnapshot;
+      if (snapshot == null || snapshot.recording) {
+        snapshot = await bridge.freeze();
+      }
+      if (snapshot.report.isEmpty) {
+        snapshot = await bridge.get();
+      }
+      await Clipboard.setData(ClipboardData(text: snapshot.report));
+      if (mounted) {
+        setState(() {
+          _keyguardSnapshot = snapshot;
+          _keyguardCopied = true;
+        });
+      }
+    } on Object catch (error) {
+      // The native frozen snapshot remains available for a retry after a
+      // platform clipboard failure.
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _copyingKeyguard = false);
+    }
+  }
+
+  Future<void> _clearKeyguardCapture() async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _loadingKeyguard) return;
+    setState(() {
+      _loadingKeyguard = true;
+      _keyguardError = null;
+      _keyguardCopied = false;
+    });
+    try {
+      final snapshot = await bridge.clear();
+      if (mounted) setState(() => _keyguardSnapshot = snapshot);
+    } on Object catch (error) {
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _loadingKeyguard = false);
+    }
   }
 
   @override
@@ -613,6 +726,15 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                   onPressed: () =>
                       setState(() => _section = _DebugConsoleSection.logs),
                 ),
+                _sectionButton(
+                  key: const ValueKey('debug-console-keyguard-tab'),
+                  label: 'ZÁRKÉPERNYŐ',
+                  selected: _section == _DebugConsoleSection.keyguard,
+                  onPressed: () {
+                    setState(() => _section = _DebugConsoleSection.keyguard);
+                    _refreshKeyguard();
+                  },
+                ),
                 if (widget.physicalReportProvider != null)
                   _sectionButton(
                     key: const ValueKey('debug-console-report-tab'),
@@ -727,6 +849,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
             );
     }
     if (_section == _DebugConsoleSection.push) return _pushBody();
+    if (_section == _DebugConsoleSection.keyguard) return _keyguardBody();
     return Column(
       children: [
         Padding(
@@ -771,6 +894,142 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
             key: const ValueKey('debug-console-physical-report'),
             emptyText: 'A riport a Frissítés gombbal készül.',
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _keyguardBody() {
+    final snapshot = _keyguardSnapshot;
+    final unsupported =
+        widget.keyguardTimingCapture == null ||
+        widget.keyguardTimingCapture?.isSupportedPlatform != true;
+    final unavailable =
+        unsupported || (snapshot != null && !snapshot.available);
+    final status = snapshot == null
+        ? 'IDLE · még nincs natív snapshot'
+        : '${snapshot.state} · ${snapshot.captureId} · próbák: ${snapshot.attemptCount} · '
+              'események: ${snapshot.eventsRetained}/${snapshot.eventsRecorded} · '
+              'eldobott: ${snapshot.eventsEvicted}';
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+          child: Text(
+            'Indítsd el a rögzítést, zárd le és ébreszd fel a telefont, majd oldd fel. Ismételd meg háromszor, térj vissza ide, és másold a riportot.',
+            key: const ValueKey('debug-console-keyguard-help'),
+            style: const TextStyle(
+              color: Color(0xFFBAC2DE),
+              fontSize: 10.5,
+              height: 1.35,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('debug-console-keyguard-start'),
+                onPressed: _loadingKeyguard || unavailable
+                    ? null
+                    : _startKeyguardCapture,
+                icon: const Icon(Icons.fiber_manual_record, size: 15),
+                label: const Text('Rögzítés indítása'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('debug-console-keyguard-freeze'),
+                onPressed: _loadingKeyguard || snapshot?.recording != true
+                    ? null
+                    : _freezeKeyguardCapture,
+                icon: const Icon(Icons.stop_circle_outlined, size: 15),
+                label: const Text('Leállítás'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('debug-console-keyguard-copy'),
+                onPressed:
+                    _copyingKeyguard ||
+                        unavailable ||
+                        (snapshot != null &&
+                            !snapshot.recording &&
+                            snapshot.report.isEmpty)
+                    ? null
+                    : _copyKeyguardCapture,
+                icon: Icon(
+                  _copyingKeyguard
+                      ? Icons.hourglass_top
+                      : _keyguardCopied
+                      ? Icons.check
+                      : Icons.copy_outlined,
+                  size: 15,
+                ),
+                label: Text(_copyingKeyguard ? 'Másolás…' : 'Riport másolása'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('debug-console-keyguard-refresh'),
+                onPressed: _loadingKeyguard ? null : _refreshKeyguard,
+                icon: const Icon(Icons.refresh, size: 15),
+                label: const Text('Frissítés'),
+              ),
+              TextButton(
+                key: const ValueKey('debug-console-keyguard-clear'),
+                onPressed: _loadingKeyguard || unavailable
+                    ? null
+                    : _clearKeyguardCapture,
+                child: const Text('Törlés'),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 7),
+          child: SelectableText(
+            unsupported
+                ? 'A zárképernyő-időzítés rögzítése csak Androidon érhető el.'
+                : (snapshot?.message ?? status),
+            key: const ValueKey('debug-console-keyguard-status'),
+            style: TextStyle(
+              color: unavailable
+                  ? const Color(0xFFF9E2AF)
+                  : const Color(0xFF94A3B8),
+              fontSize: 10.5,
+              height: 1.35,
+            ),
+          ),
+        ),
+        if (_keyguardError case final String error)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+            child: Text(
+              error,
+              key: const ValueKey('debug-console-keyguard-error'),
+              style: const TextStyle(color: Color(0xFFF87171), fontSize: 11),
+            ),
+          ),
+        const Divider(height: 1, color: Color(0xFF313244)),
+        Expanded(
+          child: snapshot?.report.isNotEmpty == true
+              ? SingleChildScrollView(
+                  key: const ValueKey('debug-console-keyguard-report'),
+                  padding: const EdgeInsets.all(14),
+                  child: SelectableText(
+                    snapshot!.report,
+                    style: const TextStyle(
+                      color: Color(0xFFCDD6F4),
+                      fontSize: 10.5,
+                      height: 1.35,
+                    ),
+                  ),
+                )
+              : const Center(
+                  child: Text(
+                    'A Frissítés csak a natív diagnosztikai snapshotot olvassa.',
+                    style: TextStyle(color: Color(0xFF94A3B8)),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
         ),
       ],
     );

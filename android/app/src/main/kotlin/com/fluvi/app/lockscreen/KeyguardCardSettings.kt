@@ -2,9 +2,18 @@ package com.fluvi.app.lockscreen
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Build
+import android.os.Process
+import android.os.SystemClock
 import android.provider.Settings
 import com.fluvi.app.runtime.FluviLockScreenCardConfiguration
+import com.fluvi.app.runtime.FluviRuntimeCoordinator
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+import java.util.concurrent.Executors
 
 /**
  * The accessibility overlay owns this focus.  It may share the financial
@@ -400,16 +409,488 @@ internal object KeyguardCardDiagnostics {
     private const val LAST_EVENT = "lastEvent"
     private const val LAST_EVENT_COUNT = "lastEventCount"
     private const val ATTEMPT = "attempt"
+    private const val CAPTURE_REPORT = "timingCapture.report"
+    private const val CAPTURE_ID = "timingCapture.id"
+    private const val CAPTURE_STATE = "timingCapture.state"
+    private const val CAPTURE_PERSISTED_SEQ = "timingCapture.persistedSeq"
+    private const val MAX_EVENTS = 512
+    private const val MAX_EVENT_BYTES = 128 * 1024
+    private const val MAX_ATTEMPTS = 10
+    private const val ACTIVE_CAPTURE_MS = 5 * 60 * 1000L
+    private const val CHECKPOINT_INTERVAL_MS = 12_000L
+    private val captureLock = Any()
+    private val captureWriter = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "fluvi-keyguard-diagnostic-writer").apply { isDaemon = true }
+    }
+    private var capture: TimingCapture? = null
+    private var recovered: RecoveredCapture? = null
+    private var nextCaptureGeneration = 0L
 
-    fun beginLockAttempt(context: Context, session: Long, wakeEpoch: Long) {
+    /** A compact event is intentionally technical-only.  It never accepts a
+     * node text, content description, financial value, or foreign package
+     * name.  All formatting is deferred until a user asks for a snapshot. */
+    private data class TimingEvent(
+        val seq: Long,
+        val uptimeMs: Long,
+        val elapsedMs: Long,
+        val attemptId: Long?,
+        val serviceSession: Long?,
+        val wakeEpoch: Long?,
+        val requestId: Long?,
+        val attachGeneration: Long?,
+        val stage: String,
+        val reason: String,
+        val fields: Map<String, String>,
+        var firstUptimeMs: Long = uptimeMs,
+        var lastUptimeMs: Long = uptimeMs,
+        var count: Int = 1,
+    ) {
+        fun byteSize(): Int = toLine().toByteArray(Charsets.UTF_8).size
+
+        fun canCoalesce(other: TimingEvent): Boolean =
+            stage == other.stage && reason == other.reason && attemptId == other.attemptId &&
+                requestId == other.requestId && attachGeneration == other.attachGeneration &&
+                fields == other.fields && stage !in NON_COALESCIBLE_STAGES
+
+        fun toLine(): String = buildString {
+            append("seq=").append(seq)
+            append(" up=").append(uptimeMs)
+            append(" el=").append(elapsedMs)
+            attemptId?.let { append(" attempt=").append(it) }
+            serviceSession?.let { append(" session=").append(it) }
+            wakeEpoch?.let { append(" wake=").append(it) }
+            requestId?.let { append(" req=").append(it) }
+            attachGeneration?.let { append(" attach=").append(it) }
+            append(" stage=").append(stage)
+            append(" reason=").append(reason)
+            if (count > 1) append(" count=").append(count)
+                .append(" firstUp=").append(firstUptimeMs)
+                .append(" lastUp=").append(lastUptimeMs)
+            fields.forEach { (key, value) -> append(' ').append(key).append('=').append(value) }
+        }
+    }
+
+    private data class TimingAttempt(
+        val id: Long,
+        val serviceSession: Long,
+        val wakeEpoch: Long,
+        val startedUptimeMs: Long,
+        var presentationMode: String = "NA",
+        var wakeSource: String = "NA",
+        var firstInspectionRequestId: Long? = null,
+        var showingInspectionRequestId: Long? = null,
+        var inspectionCount: Int = 0,
+        var staleInspectionCount: Int = 0,
+        var retryScheduledCount: Int = 0,
+        var retryFiredCount: Int = 0,
+        var retryCancelledCount: Int = 0,
+        var attachCount: Int = 0,
+        var detachCount: Int = 0,
+        var firstRootDrawAt: Long? = null,
+        var firstShaderDrawAt: Long? = null,
+        var showDecisionAt: Long? = null,
+        var addViewBeginAt: Long? = null,
+        var addViewReturnAt: Long? = null,
+        var hideSignalAt: Long? = null,
+        var hideDecisionAt: Long? = null,
+        var removeViewReturnAt: Long? = null,
+        var finalState: String = "INCOMPLETE",
+    )
+
+    private data class TimingCapture(
+        val id: String,
+        val generation: Long,
+        val build: String,
+        val buildMode: String,
+        val processInstanceId: String,
+        val pid: Int,
+        val startedUptimeMs: Long,
+        val startedElapsedMs: Long,
+        val startedWallMs: Long,
+        val configuration: Map<String, String>,
+        var state: String = "REC",
+        var nextSeq: Long = 1L,
+        var nextAttemptId: Long = 1L,
+        var retainedBytes: Int = 0,
+        var eventsEvicted: Int = 0,
+        var eventsCoalesced: Int = 0,
+        var lastPersistedSeq: Long = 0L,
+        var lastCheckpointElapsedMs: Long = startedElapsedMs,
+        var unflushedTailMayBeMissing: Boolean = false,
+        val events: ArrayDeque<TimingEvent> = ArrayDeque(),
+        val attempts: ArrayDeque<TimingAttempt> = ArrayDeque(),
+    )
+
+    private data class RecoveredCapture(
+        val id: String,
+        val report: String,
+        val lastPersistedSeq: Long,
+    )
+
+    private val NON_COALESCIBLE_STAGES = setOf(
+        "SHOW_DECIDED", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "FIRST_ROOT_DRAW",
+        "FIRST_SHADER_DRAW", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
+        "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "RETRY_SCHEDULED", "RETRY_FIRED",
+        "RETRY_CANCELLED", "INSPECTION_QUEUED", "INSPECTION_COALESCED",
+        "INSPECTION_STARTED", "INSPECTION_FINISHED", "INSPECTION_APPLIED", "INSPECTION_REJECTED",
+    )
+
+    /** Starts a capture owned by Android, not by a Flutter widget or stream.
+     * The only Flutter supplied values are immutable build labels for the
+     * human-readable header. */
+    fun startCapture(context: Context, build: String?, buildMode: String?): Map<String, Any?> = synchronized(captureLock) {
+        ensureRecoveredLoadedLocked(context)
+        val settings = FluviKeyguardCardSettings.read(context)
+        val runtime = FluviRuntimeCoordinator.status(context)
+        val id = UUID.randomUUID().toString()
+        val nowUp = SystemClock.uptimeMillis()
+        val nowElapsed = SystemClock.elapsedRealtime()
+        val created = TimingCapture(
+            id = id,
+            generation = ++nextCaptureGeneration,
+            build = build?.takeIf { it.isNotBlank() } ?: "unknown",
+            buildMode = buildMode?.takeIf { it.isNotBlank() } ?: "unknown",
+            processInstanceId = "${Process.myPid()}-${UUID.randomUUID().toString().substring(0, 8)}",
+            pid = Process.myPid(),
+            startedUptimeMs = nowUp,
+            startedElapsedMs = nowElapsed,
+            startedWallMs = System.currentTimeMillis(),
+            configuration = linkedMapOf(
+                "serviceConnected" to FluviKeyguardCardServiceRegistry.connected.toString(),
+                "keyguardRequested" to settings.requested.toString(),
+                "foregroundRequested" to runtime.foregroundRequested.toString(),
+                "backgroundRequested" to runtime.backgroundRequested.toString(),
+                "presentationMode" to settings.presentationMode.name,
+                "animationMode" to settings.animationMode.wireValue,
+                "privacyMode" to if (settings.showFinancialDetails) "full" else "discreet",
+                "notificationTimeoutMs" to "0",
+            ),
+        )
+        capture = created
+        recovered = null
+        appendLocked(created, "CAPTURE_STARTED", "user", fields = mapOf("source" to "runtimeMethod"))
+        persistLocked(context, created, force = true)
+        snapshotLocked(context, created)
+    }
+
+    fun freezeCapture(context: Context): Map<String, Any?> = synchronized(captureLock) {
+        ensureRecoveredLoadedLocked(context)
+        val active = capture
+        if (active != null && active.state == "REC") {
+            active.state = "FROZEN"
+            appendLocked(active, "CAPTURE_FROZEN", "user")
+            persistLocked(context, active, force = true)
+        }
+        snapshotLocked(context, active)
+    }
+
+    fun captureSnapshot(context: Context): Map<String, Any?> = synchronized(captureLock) {
+        ensureRecoveredLoadedLocked(context)
+        val active = capture
+        if (active?.state == "REC") expireIfNeededLocked(context, active)
+        snapshotLocked(context, capture)
+    }
+
+    fun clearCapture(context: Context): Map<String, Any?> = synchronized(captureLock) {
+        capture = null
+        recovered = null
+        val clearGeneration = ++nextCaptureGeneration
+        captureWriter.execute {
+            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .remove(CAPTURE_REPORT).remove(CAPTURE_ID).remove(CAPTURE_STATE).remove(CAPTURE_PERSISTED_SEQ).commit()
+        }
+        mapOf(
+            "available" to true,
+            "captureState" to "IDLE",
+            "captureId" to "-",
+            "attemptCount" to 0,
+            "eventsRetained" to 0,
+            "eventsEvicted" to 0,
+            "eventsRecorded" to 0,
+            "clearGeneration" to clearGeneration,
+            "report" to "",
+        )
+    }
+
+    /** Called at the first line of each new wake attempt. Existing active
+     * capture history is deliberately retained; only the legacy compact
+     * status line is replaced for the ordinary settings screen. */
+    fun beginLockAttempt(context: Context, session: Long, wakeEpoch: Long, source: String = "unknown") {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val line = "${android.os.SystemClock.elapsedRealtime()}|KG|WAKE|session=$session|wake=$wakeEpoch"
+        val line = "${SystemClock.elapsedRealtime()}|KG|WAKE|session=$session|wake=$wakeEpoch"
         prefs.edit()
             .putString(EVENTS, line)
             .putString(ATTEMPT, "session=$session|wake=$wakeEpoch")
             .remove(LAST_EVENT)
             .putInt(LAST_EVENT_COUNT, 0)
             .apply()
+        synchronized(captureLock) {
+            val active = capture ?: return@synchronized
+            if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
+            while (active.attempts.size >= MAX_ATTEMPTS) active.attempts.removeFirst()
+            val attempt = TimingAttempt(active.nextAttemptId++, session, wakeEpoch, SystemClock.uptimeMillis())
+            attempt.presentationMode = active.configuration["presentationMode"] ?: "NA"
+            attempt.wakeSource = source
+            active.attempts.addLast(attempt)
+            appendLocked(active, "WAKE_ATTEMPT", "begin", serviceSession = session, wakeEpoch = wakeEpoch)
+        }
+    }
+
+    /** Hot-path record. It only mutates a small in-memory ring while capture
+     * is active; persistence is checkpointed separately and never happens in
+     * an onDraw callback. */
+    fun captureEvent(
+        context: Context,
+        stage: String,
+        reason: String,
+        serviceSession: Long? = null,
+        wakeEpoch: Long? = null,
+        requestId: Long? = null,
+        attachGeneration: Long? = null,
+        observedUptimeMs: Long? = null,
+        fields: Map<String, Any?> = emptyMap(),
+    ) = synchronized(captureLock) {
+        val active = capture ?: return@synchronized
+        if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
+        appendLocked(
+            active = active,
+            stage = stage,
+            reason = reason,
+            serviceSession = serviceSession,
+            wakeEpoch = wakeEpoch,
+            requestId = requestId,
+            attachGeneration = attachGeneration,
+            observedUptimeMs = observedUptimeMs,
+            fields = fields.mapNotNull { (key, value) -> value?.let { key to technicalValue(it) } }.toMap(),
+        )
+        maybeCheckpointLocked(context, active)
+    }
+
+    private fun appendLocked(
+        active: TimingCapture,
+        stage: String,
+        reason: String,
+        serviceSession: Long? = null,
+        wakeEpoch: Long? = null,
+        requestId: Long? = null,
+        attachGeneration: Long? = null,
+        observedUptimeMs: Long? = null,
+        fields: Map<String, String> = emptyMap(),
+    ) {
+        val event = TimingEvent(
+            seq = active.nextSeq++,
+            uptimeMs = observedUptimeMs ?: SystemClock.uptimeMillis(),
+            elapsedMs = SystemClock.elapsedRealtime(),
+            attemptId = active.attempts.toList().lastOrNull { it.serviceSession == serviceSession && it.wakeEpoch == wakeEpoch }?.id,
+            serviceSession = serviceSession,
+            wakeEpoch = wakeEpoch,
+            requestId = requestId,
+            attachGeneration = attachGeneration,
+            stage = stage,
+            reason = reason,
+            fields = fields,
+        )
+        val last = active.events.lastOrNull()
+        if (last != null && last.canCoalesce(event)) {
+            last.lastUptimeMs = event.uptimeMs
+            last.count += 1
+            active.eventsCoalesced += 1
+            return
+        }
+        val size = event.byteSize()
+        while (active.events.isNotEmpty() && (active.events.size >= MAX_EVENTS || active.retainedBytes + size > MAX_EVENT_BYTES)) {
+            active.retainedBytes -= active.events.removeFirst().byteSize()
+            active.eventsEvicted += 1
+        }
+        active.events.addLast(event)
+        active.retainedBytes += size
+        active.attempts.toList().lastOrNull { it.id == event.attemptId }?.let { attempt ->
+            when (stage) {
+                "INSPECTION_QUEUED" -> {
+                    attempt.inspectionCount += 1
+                    if (attempt.firstInspectionRequestId == null) attempt.firstInspectionRequestId = requestId
+                }
+                "INSPECTION_REJECTED" -> attempt.staleInspectionCount += 1
+                "RETRY_SCHEDULED" -> attempt.retryScheduledCount += 1
+                "RETRY_FIRED" -> attempt.retryFiredCount += 1
+                "RETRY_CANCELLED" -> attempt.retryCancelledCount += 1
+                "SHOW_DECIDED" -> {
+                    attempt.showingInspectionRequestId = requestId
+                    attempt.showDecisionAt = event.uptimeMs
+                    attempt.finalState = "SHOW_DECIDED"
+                }
+                "ADD_VIEW_BEGIN" -> attempt.addViewBeginAt = event.uptimeMs
+                "ADD_VIEW_RETURN" -> { attempt.addViewReturnAt = event.uptimeMs; attempt.attachCount += 1; attempt.finalState = "ATTACHED" }
+                "FIRST_ROOT_DRAW" -> attempt.firstRootDrawAt = event.uptimeMs
+                "FIRST_SHADER_DRAW" -> attempt.firstShaderDrawAt = event.uptimeMs
+                "HIDE_DECIDED" -> { attempt.hideDecisionAt = event.uptimeMs; attempt.finalState = "HIDE_DECIDED" }
+                "REMOVE_VIEW_RETURN" -> { attempt.removeViewReturnAt = event.uptimeMs; attempt.detachCount += 1; attempt.finalState = "DETACHED" }
+            }
+            if (stage in setOf("SCREEN_OFF_RECEIVED", "USER_PRESENT_RECEIVED", "ACCESSIBILITY_EVENT") && attempt.hideSignalAt == null) {
+                attempt.hideSignalAt = event.uptimeMs
+            }
+        }
+    }
+
+    private fun expireIfNeededLocked(context: Context, active: TimingCapture): Boolean {
+        if (SystemClock.elapsedRealtime() - active.startedElapsedMs <= ACTIVE_CAPTURE_MS) return false
+        active.state = "EXPIRED"
+        appendLocked(active, "CAPTURE_EXPIRED", "timeout")
+        persistLocked(context, active, force = true)
+        return true
+    }
+
+    private fun maybeCheckpointLocked(context: Context, active: TimingCapture) {
+        if (SystemClock.elapsedRealtime() - active.lastCheckpointElapsedMs < CHECKPOINT_INTERVAL_MS) return
+        persistLocked(context, active, force = false)
+    }
+
+    private fun persistLocked(context: Context, active: TimingCapture, force: Boolean) {
+        if (!force && active.state != "REC") return
+        active.lastCheckpointElapsedMs = SystemClock.elapsedRealtime()
+        val id = active.id
+        val generation = active.generation
+        val persistedSeq = active.events.lastOrNull()?.seq ?: 0L
+        active.lastPersistedSeq = persistedSeq
+        val report = formatReport(active, recoveredFromDisk = false, exportLimitBytes = Int.MAX_VALUE)
+        captureWriter.execute {
+            synchronized(captureLock) {
+                // A later clear/new capture owns durability. A stale queued
+                // checkpoint must not resurrect or replace it.
+                if (capture?.generation != generation) return@execute
+            }
+            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(CAPTURE_REPORT, report)
+                .putString(CAPTURE_ID, id)
+                .putString(CAPTURE_STATE, active.state)
+                .putLong(CAPTURE_PERSISTED_SEQ, persistedSeq)
+                .commit()
+        }
+    }
+
+    private fun ensureRecoveredLoadedLocked(context: Context) {
+        if (capture != null || recovered != null) return
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val report = prefs.getString(CAPTURE_REPORT, null) ?: return
+        recovered = RecoveredCapture(
+            id = prefs.getString(CAPTURE_ID, "recovered") ?: "recovered",
+            report = report,
+            lastPersistedSeq = prefs.getLong(CAPTURE_PERSISTED_SEQ, 0L),
+        )
+    }
+
+    private fun snapshotLocked(context: Context, active: TimingCapture?): Map<String, Any?> {
+        if (active == null) {
+            val restored = recovered
+            return if (restored == null) mapOf(
+                "available" to true, "captureState" to "IDLE", "captureId" to "-", "attemptCount" to 0,
+                "eventsRecorded" to 0, "eventsRetained" to 0, "eventsEvicted" to 0, "eventsCoalesced" to 0,
+                "report" to "",
+            ) else mapOf(
+                "available" to true, "captureState" to "RECOVERED", "captureId" to restored.id,
+                "attemptCount" to "NA", "eventsRecorded" to "NA", "eventsRetained" to "NA", "eventsEvicted" to "NA",
+                "eventsCoalesced" to "NA", "recoveredFromDisk" to true,
+                "report" to recoveredReport(restored.report),
+            )
+        }
+        val report = formatReport(active, recoveredFromDisk = false, exportLimitBytes = 32 * 1024)
+        return mapOf(
+            "available" to true,
+            "captureState" to active.state,
+            "captureId" to active.id,
+            "attemptCount" to active.attempts.size,
+            "eventsRecorded" to (active.nextSeq - 1L),
+            "eventsRetained" to active.events.size,
+            "eventsEvicted" to active.eventsEvicted,
+            "eventsCoalesced" to active.eventsCoalesced,
+            "recoveredFromDisk" to false,
+            "report" to report,
+        )
+    }
+
+    private fun recoveredReport(report: String): String = report
+        .replaceFirst(Regex("captureState=[^\\n]*"), "captureState=RECOVERED")
+        .replaceFirst("RETENTION\n", "RETENTION\nrecoveredFromDisk=true\n")
+
+    private fun formatReport(active: TimingCapture, recoveredFromDisk: Boolean, exportLimitBytes: Int): String {
+        val header = buildString {
+            appendLine("FLUVI_KEYGUARD_TIMING_CAPTURE_V1")
+            appendLine("build=${active.build}")
+            appendLine("buildMode=${active.buildMode}")
+            appendLine("captureId=${active.id}")
+            appendLine("captureState=${active.state}")
+            appendLine("processInstance=${active.processInstanceId}")
+            appendLine("pid=${active.pid}")
+            appendLine("androidApi=${Build.VERSION.SDK_INT}")
+            appendLine("manufacturer=${Build.MANUFACTURER}")
+            appendLine("model=${Build.MODEL}")
+            appendLine("startedAt=${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date(active.startedWallMs))}")
+            appendLine("durationElapsedMs=${SystemClock.elapsedRealtime() - active.startedElapsedMs}")
+            active.configuration.forEach { (key, value) -> appendLine("$key=$value") }
+            appendLine("CLOCKS")
+            appendLine("uptimeMs=monotonic_excludes_deep_sleep")
+            appendLine("elapsedMs=monotonic_includes_deep_sleep")
+            appendLine("systemWakeVisualStart=UNOBSERVED")
+            appendLine("systemUnlockAnimationStart=UNOBSERVED")
+            appendLine("physicalOverlayPresentation=UNOBSERVED")
+            appendLine("physicalOverlayRemoval=UNOBSERVED")
+            appendLine("RETENTION")
+            appendLine("eventsRecorded=${active.nextSeq - 1L}")
+            appendLine("eventsRetained=${active.events.size}")
+            appendLine("eventsEvicted=${active.eventsEvicted}")
+            appendLine("eventsCoalesced=${active.eventsCoalesced}")
+            appendLine("exportTruncated=false")
+            appendLine("recoveredFromDisk=$recoveredFromDisk")
+            appendLine("lastPersistedSeq=${active.lastPersistedSeq}")
+            appendLine("unflushedTailMayBeMissing=${active.state == "REC" || active.unflushedTailMayBeMissing}")
+            appendLine("ATTEMPT_SUMMARIES")
+            active.attempts.forEach { append(attemptSummary(it)) }
+            appendLine("EVENTS")
+        }
+        val footer = "END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n"
+        val eventLines = active.events.map { it.toLine() }
+        val kept = ArrayList<String>()
+        var bytes = (header + footer).toByteArray(Charsets.UTF_8).size
+        // Preserve whole newest events first: a failure near the end must not
+        // disappear silently under the export size cap.
+        for (line in eventLines.asReversed()) {
+            val size = (line + '\n').toByteArray(Charsets.UTF_8).size
+            if (bytes + size > exportLimitBytes) break
+            kept.add(line)
+            bytes += size
+        }
+        kept.reverse()
+        val omitted = eventLines.size - kept.size
+        val retention = if (omitted == 0) header else header.replace("exportTruncated=false", "exportTruncated=true\nomittedEventLines=$omitted")
+        return buildString {
+            append(retention)
+            kept.forEach { appendLine(it) }
+            append(footer)
+        }
+    }
+
+    private fun attemptSummary(attempt: TimingAttempt): String = buildString {
+        fun delta(end: Long?, start: Long?): String = if (end == null || start == null) "NA(missingEndpoint)" else (end - start).toString()
+        appendLine("attemptId=${attempt.id} wakeSource=${attempt.wakeSource} presentationMode=${attempt.presentationMode} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
+        appendLine(" firstInspectionRequestId=${attempt.firstInspectionRequestId ?: "NA"} showingInspectionRequestId=${attempt.showingInspectionRequestId ?: "NA"} inspectionCount=${attempt.inspectionCount} staleInspectionCount=${attempt.staleInspectionCount}")
+        appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount} attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
+        appendLine(" wakeCallbackToFirstRootDrawMs=${delta(attempt.firstRootDrawAt, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(attempt.firstShaderDrawAt, attempt.startedUptimeMs)}")
+        appendLine(" showDecisionToAddViewBeginMs=${delta(attempt.addViewBeginAt, attempt.showDecisionAt)} addViewCallMs=${delta(attempt.addViewReturnAt, attempt.addViewBeginAt)} addViewReturnToFirstRootDrawMs=${delta(attempt.firstRootDrawAt, attempt.addViewReturnAt)}")
+        appendLine(" hideSignalToDecisionMs=${delta(attempt.hideDecisionAt, attempt.hideSignalAt)} hideDecisionToLocalHideMs=NA(notSeparatelyObserved) hideSignalToRemoveReturnMs=${delta(attempt.removeViewReturnAt, attempt.hideSignalAt)}")
+        appendLine(
+            " firstRootDrawObserved=${attempt.firstRootDrawAt != null} " +
+                "firstRootDrawStatus=${if (attempt.firstRootDrawAt == null) "NO_DRAW_OBSERVED" else "OBSERVED"} " +
+                "firstShaderDrawObserved=${attempt.firstShaderDrawAt != null} " +
+                "firstShaderDrawStatus=${if (attempt.firstShaderDrawAt == null) "NO_DRAW_OBSERVED" else "OBSERVED"}",
+        )
+    }
+
+    private fun technicalValue(value: Any): String = value.toString()
+        .replace(Regex("[\\r\\n|=]"), "_")
+        .take(160)
+
+    fun beginLockAttempt(context: Context, session: Long, wakeEpoch: Long) {
+        beginLockAttempt(context, session, wakeEpoch, "unknown")
     }
 
     fun record(context: Context, event: String, reason: String, attached: Boolean? = null) {

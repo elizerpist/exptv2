@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/dashboard_mode_palette.dart';
 import '../../features/automation/domain/automation_repository.dart';
+import '../diagnostics/keyguard_timing_capture_bridge.dart';
 import 'debug_console.dart';
 
 typedef DebugPhysicalReportProvider = String Function();
@@ -14,11 +15,13 @@ class DebugFloatingButton extends StatelessWidget {
     this.physicalReportProvider,
     this.diagnosticStatusProvider,
     this.automationPermissions,
+    this.keyguardTimingCapture,
   });
 
   final DebugPhysicalReportProvider? physicalReportProvider;
   final DebugDiagnosticStatusProvider? diagnosticStatusProvider;
   final AutomationPermissionRepository? automationPermissions;
+  final KeyguardTimingCaptureBridge? keyguardTimingCapture;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +43,7 @@ class DebugFloatingButton extends StatelessWidget {
               physicalReportProvider: physicalReportProvider,
               diagnosticStatusProvider: diagnosticStatusProvider,
               automationPermissions: automationPermissions,
+              keyguardTimingCapture: keyguardTimingCapture,
             ),
           ),
         ),

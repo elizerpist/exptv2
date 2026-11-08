@@ -23,6 +23,7 @@ import '../../core/diagnostics/fluvi_diagnostic_bridge.dart';
 import '../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
+import '../../core/diagnostics/keyguard_timing_capture_bridge.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../core/navigation/creation_slide_up_route.dart';
 import '../../features/manual_transactions/data/method_channel_manual_transaction_repository.dart';
@@ -1417,6 +1418,8 @@ class _FluviAppShellState extends State<FluviAppShell>
                                   diagnosticStatusProvider: _diagnosticStatus,
                                   automationPermissions:
                                       _automationPermissionRepository,
+                                  keyguardTimingCapture:
+                                      KeyguardTimingCaptureBridge(),
                                 ),
                             ],
                           ),
