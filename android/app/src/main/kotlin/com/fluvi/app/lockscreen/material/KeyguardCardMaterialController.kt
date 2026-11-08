@@ -22,7 +22,7 @@ internal class KeyguardCardMaterialController(
     private var profile: KeyguardMaterialProfile? = null
     private var mode = KeyguardCardAnimationMode.ORB_ONLY
     private var presentationMode = KeyguardCardPresentationMode.CARD
-    var onFirstOrbShaderDraw: (() -> Unit)? = null
+    var onFirstOrbShaderDraw: ((Long) -> Unit)? = null
 
     init {
         orb.shape = KeyguardHeaderMaterialView.Shape.ORB
@@ -33,7 +33,7 @@ internal class KeyguardCardMaterialController(
         // WindowManager or the financial resolver.
         orb.onRendererStateChanged = { reconcileClock() }
         background.onRendererStateChanged = { reconcileClock() }
-        orb.onFirstShaderDraw = { onFirstOrbShaderDraw?.invoke() }
+        orb.onFirstShaderDraw = { observedAtUptimeMs -> onFirstOrbShaderDraw?.invoke(observedAtUptimeMs) }
     }
 
     fun update(

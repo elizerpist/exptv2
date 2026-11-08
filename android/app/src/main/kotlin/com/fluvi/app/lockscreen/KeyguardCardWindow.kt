@@ -7,7 +7,8 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -34,8 +35,8 @@ internal class KeyguardCardWindow(
         Long,
     ) -> Unit,
     private val onInteractionDiagnostic: (String, String) -> Unit,
-    private val onFirstRootDraw: () -> Unit = {},
-    private val onFirstShaderDraw: () -> Unit = {},
+    private val onFirstRootDraw: (KeyguardFirstDrawEvent) -> Unit = {},
+    private val onFirstShaderDraw: (KeyguardFirstDrawEvent) -> Unit = {},
 ) {
     enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
 
@@ -46,6 +47,9 @@ internal class KeyguardCardWindow(
     private var appliedGeometry: KeyguardOverlayGeometry? = null
     private var accessibilityWindowId: Int? = null
     private var attachGeneration = 0L
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var firstRootDrawObservation: KeyguardFirstDrawObservation? = null
+    private var firstShaderDrawAttachGeneration: Long? = null
     private var materialController: KeyguardCardMaterialController? = null
     private var materialProfile: KeyguardMaterialProfile? = null
     private var materialSettings = KeyguardCardSettings()
@@ -121,8 +125,9 @@ internal class KeyguardCardWindow(
                     appliedPresentation = presentation
                     appliedGeometry = resolvedGeometry
                     updateMaterialForPresentation(presentation)
+                    firstShaderDrawAttachGeneration = attachGeneration
                     materialController?.onAttached()
-                    observeFirstRootDraw(current)
+                    observeFirstRootDraw(current, attachGeneration)
                     if (settings.cardPosition == null) {
                         // Only an attached window has reliable insets. Persist
                         // the old BOTTOM-gravity placement once, without
@@ -188,6 +193,9 @@ internal class KeyguardCardWindow(
         checkMainThread()
         val current = root ?: return false
         if (lifecycle.isAttached()) current.visibility = View.INVISIBLE
+        firstRootDrawObservation?.cancel()
+        firstRootDrawObservation = null
+        firstShaderDrawAttachGeneration = null
         current.cancelInteraction("detach", restorePosition = false)
         clearDragFrame()
         materialController?.stop("hide")
@@ -204,6 +212,9 @@ internal class KeyguardCardWindow(
     }
 
     fun dispose() {
+        firstRootDrawObservation?.cancel()
+        firstRootDrawObservation = null
+        firstShaderDrawAttachGeneration = null
         root?.cancelInteraction("dispose", restorePosition = false)
         clearDragFrame()
         materialController?.stop("dispose")
@@ -270,7 +281,26 @@ internal class KeyguardCardWindow(
             orb = created.findViewById(R.id.fluvi_financial_snapshot_orb),
             background = created.findViewById(R.id.fluvi_keyguard_material_background),
             backgroundVeil = created.findViewById(R.id.fluvi_keyguard_material_veil),
-        ).also { controller -> controller.onFirstOrbShaderDraw = onFirstShaderDraw }
+        ).also { controller ->
+            controller.onFirstOrbShaderDraw = shaderDraw@{ observedAtUptimeMs ->
+                val capturedAttach = firstShaderDrawAttachGeneration ?: return@shaderDraw
+                // KeyguardHeaderMaterialView invokes this while Canvas draw is
+                // in progress. Service diagnostics must run only after that
+                // dispatch has unwound, and only for this exact attach.
+                mainHandler.post {
+                    if (firstShaderDrawAttachGeneration != capturedAttach ||
+                        !lifecycle.isAttached() ||
+                        attachGeneration != capturedAttach
+                    ) return@post
+                    onFirstShaderDraw(
+                        KeyguardFirstDrawEvent(
+                            attachGeneration = capturedAttach,
+                            observedAtUptimeMs = observedAtUptimeMs,
+                        ),
+                    )
+                }
+            }
+        }
         return created
     }
 
@@ -458,16 +488,24 @@ internal class KeyguardCardWindow(
         onInteractionDiagnostic("KG|DRAG_CANCEL", reason)
     }
 
-    private fun observeFirstRootDraw(current: View) {
-        val observer = current.viewTreeObserver
-        if (!observer.isAlive) return
-        observer.addOnDrawListener(object : ViewTreeObserver.OnDrawListener {
-            override fun onDraw() {
-                val activeObserver = current.viewTreeObserver
-                if (activeObserver.isAlive) activeObserver.removeOnDrawListener(this)
-                onFirstRootDraw()
-            }
-        })
+    private fun observeFirstRootDraw(current: View, capturedAttach: Long) {
+        firstRootDrawObservation?.cancel()
+        lateinit var observation: KeyguardFirstDrawObservation
+        observation = KeyguardFirstDrawObservation(
+            root = current,
+            attachGeneration = capturedAttach,
+            onFirstDraw = rootDraw@{ event ->
+                if (firstRootDrawObservation !== observation) return@rootDraw
+                // Clear our own reference before publishing. A late callback
+                // from a detached/replaced root cannot retain or affect a new
+                // attach.
+                firstRootDrawObservation = null
+                if (!lifecycle.isAttached() || root !== current || attachGeneration != event.attachGeneration) return@rootDraw
+                onFirstRootDraw(event)
+            },
+        )
+        firstRootDrawObservation = observation
+        observation.start()
     }
 
     private fun clearDragFrame(flush: Boolean = false) {

@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.View
@@ -176,7 +177,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     var onRendererStateChanged: ((KeyguardMaterialRendererState) -> Unit)? = null
     /** One timestamp per physical attach is enough for wake diagnostics; this
      * is not a per-frame observation hook. */
-    var onFirstShaderDraw: (() -> Unit)? = null
+    var onFirstShaderDraw: ((Long) -> Unit)? = null
     private var firstShaderDrawForAttach = true
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -416,7 +417,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         shaderDrawCount += 1
         if (firstShaderDrawForAttach) {
             firstShaderDrawForAttach = false
-            onFirstShaderDraw?.invoke()
+            // This callback is only a timestamp capture. Its owner posts any
+            // diagnostics so no persistence, lifecycle, or WindowManager work
+            // is performed from this Canvas draw stack.
+            onFirstShaderDraw?.invoke(SystemClock.uptimeMillis())
         }
         val before = lastTime
         if (before != null && (before.phase != time.phase || before.elapsedSeconds != time.elapsedSeconds)) {

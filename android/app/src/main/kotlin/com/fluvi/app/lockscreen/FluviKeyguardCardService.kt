@@ -114,6 +114,10 @@ class FluviKeyguardCardService : AccessibilityService() {
     )
 
     private var wakeTiming: WakeTiming? = null
+    /** The service state that owned the currently attached root's first-draw
+     * diagnostics. Deferred draw work must match this original identity, not
+     * merely whichever wake happens to be current when it returns. */
+    private var firstDrawOwner: KeyguardFirstDrawOwner? = null
 
     private val powerManager by lazy { getSystemService(PowerManager::class.java) }
     private val keyguardManager by lazy { getSystemService(android.app.KeyguardManager::class.java) }
@@ -153,22 +157,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             onInteractionDiagnostic = { event, detail ->
                 KeyguardCardDiagnostics.record(this, event, detail, overlay.isAttached)
             },
-            onFirstRootDraw = {
-                wakeTiming?.takeIf { it.wakeGeneration == wakeEpoch }?.let {
-                    if (it.firstRootDrawAt == null) {
-                        it.firstRootDrawAt = SystemClock.uptimeMillis()
-                        publishWakeTiming("firstRootDraw")
-                    }
-                }
-            },
-            onFirstShaderDraw = {
-                wakeTiming?.takeIf { it.wakeGeneration == wakeEpoch }?.let {
-                    if (it.firstShaderDrawAt == null) {
-                        it.firstShaderDrawAt = SystemClock.uptimeMillis()
-                        publishWakeTiming("firstShaderDraw")
-                    }
-                }
-            },
+            onFirstRootDraw = ::recordFirstRootDraw,
+            onFirstShaderDraw = ::recordFirstShaderDraw,
         )
         val settings = FluviKeyguardCardSettings.read(applicationContext)
         val profile = FluviKeyguardMaterialStore.read(applicationContext)
@@ -334,6 +324,7 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     private fun beginWakeCycle(source: String) {
         wakeEpoch += 1L
+        firstDrawOwner = null
         retryCount = 0
         cancelWakeRetry()
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
@@ -821,6 +812,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         when (val result = overlay.showOrUpdate(presentation, settings)) {
             KeyguardCardWindow.Result.ATTACHED -> {
                 overlayAttachGeneration = overlay.currentAttachGeneration
+                firstDrawOwner = KeyguardFirstDrawOwner(
+                    session = session.get(),
+                    wakeGeneration = wakeEpoch,
+                    attachGeneration = overlayAttachGeneration,
+                )
                 wakeTiming?.takeIf { it.wakeGeneration == wakeEpoch }?.addViewReturnedAt = SystemClock.uptimeMillis()
                 KeyguardCardDiagnostics.attach(this, "attached")
                 KeyguardCardDiagnostics.record(this, "KG|ATTACH", reason, true)
@@ -869,6 +865,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         val exclusionAt = SystemClock.uptimeMillis()
         visibilityEpoch.incrementAndGet()
         interactionEpoch.incrementAndGet()
+        // Invalidate publication before the retained root can be detached.
+        // Its already-posted observer cleanup remains responsible for removing
+        // only its own listener after the framework draw traversal ends.
+        firstDrawOwner = null
         if (terminalWake) {
             wakeEpoch += 1L
             cancelWakeRetry()
@@ -895,6 +895,29 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "|cancelledWakeJobs=${if (terminalWake) 1 else 0}|dragWasActive=$dragWasActive|rollbackLayoutCallsDuringHide=0",
             false,
         )
+    }
+
+    /** Both callbacks arrive after their draw stacks have unwound. The event
+     * still carries its original attach id, so a wake A callback cannot write
+     * timing into wake B after a fast lock/unlock/reattach sequence. */
+    private fun recordFirstRootDraw(event: KeyguardFirstDrawEvent) {
+        val owner = firstDrawOwner ?: return
+        if (!owner.accepts(event, session.get(), wakeEpoch, overlayAttachGeneration)) return
+        val timing = wakeTiming?.takeIf { it.wakeGeneration == owner.wakeGeneration } ?: return
+        if (timing.firstRootDrawAt == null) {
+            timing.firstRootDrawAt = event.observedAtUptimeMs
+            publishWakeTiming("firstRootDraw")
+        }
+    }
+
+    private fun recordFirstShaderDraw(event: KeyguardFirstDrawEvent) {
+        val owner = firstDrawOwner ?: return
+        if (!owner.accepts(event, session.get(), wakeEpoch, overlayAttachGeneration)) return
+        val timing = wakeTiming?.takeIf { it.wakeGeneration == owner.wakeGeneration } ?: return
+        if (timing.firstShaderDrawAt == null) {
+            timing.firstShaderDrawAt = event.observedAtUptimeMs
+            publishWakeTiming("firstShaderDraw")
+        }
     }
 
     private fun publishWakeTiming(stage: String) {

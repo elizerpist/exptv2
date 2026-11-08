@@ -1,0 +1,201 @@
+package com.fluvi.app.lockscreen
+
+import android.content.Intent
+import android.view.View
+import android.widget.FrameLayout
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.fluvi.app.lockscreen.material.KeyguardMaterialTestActivity
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/** Uses the production observer against Android's real ViewTreeObserver draw
+ * traversal. A direct removeOnDrawListener from onDraw would make this
+ * dispatch throw on current Android releases. */
+@RunWith(AndroidJUnit4::class)
+class KeyguardFirstDrawObservationInstrumentationTest {
+    @Test fun firstDrawPublishesOnceAfterFrameworkDrawDispatch() {
+        val fixture = fixture()
+        try {
+            val published = AtomicInteger()
+            val event = AtomicReference<KeyguardFirstDrawEvent>()
+            val posted = CountDownLatch(1)
+            val pending = mutableListOf<Runnable>()
+            lateinit var observation: KeyguardFirstDrawObservation
+            fixture.instrumentation.runOnMainSync {
+                observation = KeyguardFirstDrawObservation(
+                    root = fixture.root,
+                    attachGeneration = 5L,
+                    nowUptimeMs = { 321L },
+                    postToMain = { runnable ->
+                        synchronized(pending) { pending += runnable }
+                        posted.countDown()
+                    },
+                ) { draw ->
+                    published.incrementAndGet()
+                    event.set(draw)
+                }
+                observation.start()
+                fixture.root.invalidate()
+            }
+
+            assertTrue("real ViewTreeObserver draw never reached observer", posted.await(8, TimeUnit.SECONDS))
+            fixture.instrumentation.runOnMainSync { takePending(pending).run() }
+            fixture.instrumentation.waitForIdleSync()
+            assertEquals(1, published.get())
+            assertEquals(5L, requireNotNull(event.get()).attachGeneration)
+            assertEquals(321L, requireNotNull(event.get()).observedAtUptimeMs)
+
+            fixture.instrumentation.runOnMainSync { fixture.root.invalidate() }
+            fixture.instrumentation.waitForIdleSync()
+            assertEquals("additional draws must not publish again", 1, published.get())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test fun cancellationAfterDrawBeforeDeferredPublicationCleansWithoutPublishing() {
+        val fixture = fixture()
+        try {
+            val published = AtomicInteger()
+            val posted = CountDownLatch(1)
+            val pending = mutableListOf<Runnable>()
+            lateinit var observation: KeyguardFirstDrawObservation
+            fixture.instrumentation.runOnMainSync {
+                observation = observation(
+                    root = fixture.root,
+                    attach = 9L,
+                    pending = pending,
+                    posted = posted,
+                ) { published.incrementAndGet() }
+                observation.start()
+                fixture.root.invalidate()
+            }
+            assertTrue(posted.await(8, TimeUnit.SECONDS))
+            fixture.instrumentation.runOnMainSync {
+                observation.cancel()
+                takePending(pending).run()
+            }
+            fixture.instrumentation.waitForIdleSync()
+            assertEquals("hide/detach may clean up but cannot publish stale draw", 0, published.get())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test fun oldRetainedRootAttachCannotPublishIntoReplacementAttach() {
+        val fixture = fixture()
+        try {
+            val published = mutableListOf<KeyguardFirstDrawEvent>()
+            val firstPosted = CountDownLatch(1)
+            val secondPosted = CountDownLatch(1)
+            val firstPending = mutableListOf<Runnable>()
+            val secondPending = mutableListOf<Runnable>()
+            lateinit var first: KeyguardFirstDrawObservation
+            lateinit var second: KeyguardFirstDrawObservation
+
+            fixture.instrumentation.runOnMainSync {
+                first = observation(fixture.root, 20L, firstPending, firstPosted) { published += it }
+                first.start()
+                fixture.root.invalidate()
+            }
+            assertTrue(firstPosted.await(8, TimeUnit.SECONDS))
+            fixture.instrumentation.runOnMainSync {
+                // Same retained View, but Android gives it a new observer on
+                // detach/reattach. The queued A cleanup must not publish.
+                fixture.activity.setContentView(FrameLayout(fixture.activity))
+                fixture.activity.setContentView(fixture.root)
+                first.cancel()
+                takePending(firstPending).run()
+                second = observation(fixture.root, 21L, secondPending, secondPosted) { published += it }
+                second.start()
+                fixture.root.invalidate()
+            }
+            assertTrue(secondPosted.await(8, TimeUnit.SECONDS))
+            fixture.instrumentation.runOnMainSync { takePending(secondPending).run() }
+            fixture.instrumentation.waitForIdleSync()
+
+            assertEquals(1, published.size)
+            assertEquals(21L, published.single().attachGeneration)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test fun cancellationBeforeFirstDrawLeavesNoDeferredPublication() {
+        val fixture = fixture()
+        try {
+            val published = AtomicInteger()
+            val posted = CountDownLatch(1)
+            val pending = mutableListOf<Runnable>()
+            fixture.instrumentation.runOnMainSync {
+                observation(fixture.root, 34L, pending, posted) { published.incrementAndGet() }.apply {
+                    start()
+                    cancel()
+                }
+                fixture.root.invalidate()
+            }
+            assertTrue("cancel cleanup was not posted", posted.await(8, TimeUnit.SECONDS))
+            fixture.instrumentation.runOnMainSync { takePending(pending).run() }
+            fixture.instrumentation.waitForIdleSync()
+            assertEquals("cancel before draw must not publish", 0, published.get())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    private fun fixture(): Fixture {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        lateinit var root: FrameLayout
+        instrumentation.runOnMainSync {
+            root = FrameLayout(activity).apply {
+                layoutParams = FrameLayout.LayoutParams(240, 160)
+            }
+            activity.setContentView(root)
+        }
+        return Fixture(instrumentation, activity, root)
+    }
+
+    private fun observation(
+        root: View,
+        attach: Long,
+        pending: MutableList<Runnable>,
+        posted: CountDownLatch,
+        onPublished: (KeyguardFirstDrawEvent) -> Unit,
+    ) = KeyguardFirstDrawObservation(
+        root = root,
+        attachGeneration = attach,
+        nowUptimeMs = { 777L },
+        postToMain = { runnable ->
+            synchronized(pending) { pending += runnable }
+            posted.countDown()
+        },
+        onFirstDraw = onPublished,
+    )
+
+    private fun takePending(pending: MutableList<Runnable>): Runnable = synchronized(pending) {
+        assertFalse("expected a deferred cleanup/publication", pending.isEmpty())
+        pending.removeAt(0)
+    }
+
+    private class Fixture(
+        val instrumentation: android.app.Instrumentation,
+        val activity: KeyguardMaterialTestActivity,
+        val root: FrameLayout,
+    ) {
+        fun close() {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+}
