@@ -174,6 +174,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private var transitionCompletedCount = 0
     /** This is called only on main-thread view lifecycle/Canvas state changes. */
     var onRendererStateChanged: ((KeyguardMaterialRendererState) -> Unit)? = null
+    /** One timestamp per physical attach is enough for wake diagnostics; this
+     * is not a per-frame observation hook. */
+    var onFirstShaderDraw: (() -> Unit)? = null
+    private var firstShaderDrawForAttach = true
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
@@ -187,6 +191,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        firstShaderDrawForAttach = true
         notifyRendererState()
     }
 
@@ -409,6 +414,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         paint.shader = null
         paint.alpha = 255
         shaderDrawCount += 1
+        if (firstShaderDrawForAttach) {
+            firstShaderDrawForAttach = false
+            onFirstShaderDraw?.invoke()
+        }
         val before = lastTime
         if (before != null && (before.phase != time.phase || before.elapsedSeconds != time.elapsedSeconds)) {
             phaseAdvanceCount += 1

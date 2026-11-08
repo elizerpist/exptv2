@@ -16,11 +16,14 @@ internal object KeyguardCardInspectionGate {
         currentInteractionEpoch: Long = 0L,
         expectedAttachGeneration: Long = 0L,
         currentAttachGeneration: Long = 0L,
+        expectedWakeGeneration: Long = 0L,
+        currentWakeGeneration: Long = 0L,
     ): KeyguardInspectionAction = when {
         expectedSession != currentSession ||
             expectedEpoch != currentEpoch ||
             expectedInteractionEpoch != currentInteractionEpoch ||
-            expectedAttachGeneration != currentAttachGeneration -> KeyguardInspectionAction.DROP_STALE
+            expectedAttachGeneration != currentAttachGeneration ||
+            expectedWakeGeneration != currentWakeGeneration -> KeyguardInspectionAction.DROP_STALE
         !displayEligibleNow || !keyguardLockedNow -> KeyguardInspectionAction.HIDE_CURRENT_GATE
         else -> KeyguardInspectionAction.APPLY
     }

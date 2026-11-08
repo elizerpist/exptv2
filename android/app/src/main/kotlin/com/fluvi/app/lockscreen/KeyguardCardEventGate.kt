@@ -9,6 +9,9 @@ internal data class KeyguardAccessibilityEventMeta(
     val displayId: Int,
     val windowChanges: Int,
     val packageName: String?,
+    /** AccessibilityEvent.eventTime uses the same uptime time base as the
+     * service receive timestamp, unlike elapsedRealtime during deep sleep. */
+    val eventTimeUptimeMs: Long? = null,
 )
 
 internal enum class KeyguardEventAction { IGNORE_OWN, INSPECT }

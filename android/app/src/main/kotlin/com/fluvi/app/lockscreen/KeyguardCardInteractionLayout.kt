@@ -87,11 +87,14 @@ internal class KeyguardCardInteractionLayout(
         fun onLongPress()
         fun onDrag(deltaRawX: Float, deltaRawY: Float)
         fun onDragEnd()
-        fun onDragCancel(reason: String)
+        /** [restorePosition] is false for a terminal hide. In that case a
+         * rollback updateViewLayout would delay removal for no user benefit. */
+        fun onDragCancel(reason: String, restorePosition: Boolean)
         fun onInteractionFinished()
     }
 
     var listener: Listener? = null
+    val isDragging: Boolean get() = machine.state == KeyguardCardGestureState.DRAGGING
     private val handler = Handler(Looper.getMainLooper())
     private val machine = KeyguardCardGestureStateMachine(ViewConfiguration.get(context).scaledTouchSlop.toFloat())
     private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
@@ -120,7 +123,7 @@ internal class KeyguardCardInteractionLayout(
                 cancelPendingLongPress()
                 if (machine.cancel() != KeyguardCardGestureResult.NONE) {
                     dispatchChildCancel()
-                    listener?.onDragCancel("multiPointer")
+                    listener?.onDragCancel("multiPointer", restorePosition = true)
                     listener?.onInteractionFinished()
                 }
                 return true
@@ -134,7 +137,7 @@ internal class KeyguardCardInteractionLayout(
                     KeyguardCardGestureResult.CANCEL_CHILDREN -> {
                         cancelPendingLongPress()
                         dispatchChildCancel()
-                        listener?.onDragCancel("slopBeforeLongPress")
+                        listener?.onDragCancel("slopBeforeLongPress", restorePosition = true)
                         // Keep the root visible; consume the rest so neither
                         // the root nor a child can click on a later UP.
                         return true
@@ -142,7 +145,7 @@ internal class KeyguardCardInteractionLayout(
                     KeyguardCardGestureResult.CANCEL -> {
                         cancelPendingLongPress()
                         dispatchChildCancel()
-                        listener?.onDragCancel("pointerChanged")
+                        listener?.onDragCancel("pointerChanged", restorePosition = true)
                         listener?.onInteractionFinished()
                         return true
                     }
@@ -163,7 +166,7 @@ internal class KeyguardCardInteractionLayout(
                         true
                     }
                     KeyguardCardGestureResult.CANCEL -> {
-                        listener?.onDragCancel("upAfterCancelled")
+                        listener?.onDragCancel("upAfterCancelled", restorePosition = true)
                         listener?.onInteractionFinished()
                         true
                     }
@@ -174,7 +177,7 @@ internal class KeyguardCardInteractionLayout(
                 cancelPendingLongPress()
                 if (machine.cancel() != KeyguardCardGestureResult.NONE) {
                     dispatchChildCancel()
-                    listener?.onDragCancel("systemCancel")
+                    listener?.onDragCancel("systemCancel", restorePosition = true)
                     listener?.onInteractionFinished()
                 }
                 return true
@@ -183,11 +186,11 @@ internal class KeyguardCardInteractionLayout(
         return super.dispatchTouchEvent(event)
     }
 
-    fun cancelInteraction(reason: String) {
+    fun cancelInteraction(reason: String, restorePosition: Boolean = true) {
         cancelPendingLongPress()
         if (machine.cancel() != KeyguardCardGestureResult.NONE) {
             dispatchChildCancel()
-            listener?.onDragCancel(reason)
+            listener?.onDragCancel(reason, restorePosition)
             listener?.onInteractionFinished()
         }
     }

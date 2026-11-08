@@ -7,6 +7,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -33,6 +34,8 @@ internal class KeyguardCardWindow(
         Long,
     ) -> Unit,
     private val onInteractionDiagnostic: (String, String) -> Unit,
+    private val onFirstRootDraw: () -> Unit = {},
+    private val onFirstShaderDraw: () -> Unit = {},
 ) {
     enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
 
@@ -52,12 +55,18 @@ internal class KeyguardCardWindow(
     private var dragMoveCount = 0
     private var dragLayoutUpdateCount = 0
     private var dragFrameScheduled = false
+    private val rootClickRouter = KeyguardCardClickRouter(
+        onCardOpen = onOpen,
+        onOrbTapConsumed = { onInteractionDiagnostic("KG|ORB_TAP", "action=consumed") },
+    )
     private val dragFrameCallback = Choreographer.FrameCallback {
         dragFrameScheduled = false
         dragPreview?.let(::applyDragPreview)
     }
 
     val isAttached: Boolean get() = lifecycle.isAttached()
+    val isDragActive: Boolean get() = root?.isDragging == true
+    val hasPreparedRoot: Boolean get() = root != null
     val currentAttachGeneration: Long get() = attachGeneration
 
     fun isOwnAccessibilityWindow(windowId: Int, displayId: Int): Boolean {
@@ -74,6 +83,18 @@ internal class KeyguardCardWindow(
         }
     }
 
+    /** Creates/configures the one retained root while detached. It has no
+     * WindowManager presence and therefore grants neither visibility nor touch
+     * authority on an unlocked device. */
+    fun prepareRetainedView(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?) {
+        checkMainThread()
+        materialSettings = settings
+        materialProfile = profile
+        val current = root ?: createRoot().also { root = it }
+        configurePresentation(current, settings.presentationMode)
+        current.visibility = View.VISIBLE
+    }
+
     fun showOrUpdate(presentation: FluviFinancialCardPresentation, settings: KeyguardCardSettings): Result {
         checkMainThread()
         val previousMode = materialSettings.presentationMode
@@ -88,6 +109,10 @@ internal class KeyguardCardWindow(
         val resolvedGeometry = dragPreview ?: geometry(settings, current)
 
         if (!lifecycle.isAttached()) {
+            // A terminal hide makes the retained root locally invisible before
+            // removal. Restore it only after the fresh surface decision has
+            // reached this checked attach path.
+            current.visibility = View.VISIBLE
             apply(current, presentation, force = true, mode = settings.presentationMode)
             return runCatching { manager.addView(current, parameters(resolvedGeometry)) }.fold(
                 onSuccess = {
@@ -97,6 +122,7 @@ internal class KeyguardCardWindow(
                     appliedGeometry = resolvedGeometry
                     updateMaterialForPresentation(presentation)
                     materialController?.onAttached()
+                    observeFirstRootDraw(current)
                     if (settings.cardPosition == null) {
                         // Only an attached window has reliable insets. Persist
                         // the old BOTTOM-gravity placement once, without
@@ -117,6 +143,11 @@ internal class KeyguardCardWindow(
                 },
             )
         }
+
+        // An exceptional remove failure can leave the retained root attached
+        // but locally hidden. Only a new, already-authorized presentation may
+        // make that existing window visible again.
+        if (current.visibility != View.VISIBLE) current.visibility = View.VISIBLE
 
         val contentChanged = appliedPresentation?.visualKey != presentation.visualKey
         val geometryChanged = appliedGeometry != resolvedGeometry
@@ -151,10 +182,13 @@ internal class KeyguardCardWindow(
         if (modeChanged) updateMaterialForPresentation(presentation)
     }
 
+    /** Terminal hide: stop local visibility first and never restore a drag
+     * preview before removeViewImmediate. Normal CANCEL still restores. */
     fun hide(): Boolean {
         checkMainThread()
         val current = root ?: return false
-        current.cancelInteraction("detach")
+        if (lifecycle.isAttached()) current.visibility = View.INVISIBLE
+        current.cancelInteraction("detach", restorePosition = false)
         clearDragFrame()
         materialController?.stop("hide")
         if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
@@ -170,7 +204,7 @@ internal class KeyguardCardWindow(
     }
 
     fun dispose() {
-        root?.cancelInteraction("dispose")
+        root?.cancelInteraction("dispose", restorePosition = false)
         clearDragFrame()
         materialController?.stop("dispose")
         hide()
@@ -196,7 +230,11 @@ internal class KeyguardCardWindow(
             null,
             false,
         ) as KeyguardCardInteractionLayout
-        created.setOnClickListener { onOpen() }
+        // The retained root survives presentation switches; route at click
+        // time instead of capturing the initial presentation in this listener.
+        created.setOnClickListener {
+            rootClickRouter.onRootClick(materialSettings.presentationMode)
+        }
         created.findViewById<View>(R.id.fluvi_financial_snapshot_toggle).setOnClickListener { onToggle() }
         created.listener = object : KeyguardCardInteractionLayout.Listener {
             override fun onPointerDown() {
@@ -223,7 +261,8 @@ internal class KeyguardCardWindow(
 
             override fun onDragEnd() = commitDrag()
 
-            override fun onDragCancel(reason: String) = cancelDrag(reason)
+            override fun onDragCancel(reason: String, restorePosition: Boolean) =
+                cancelDrag(reason, restorePosition)
 
             override fun onInteractionFinished() = Unit
         }
@@ -231,7 +270,7 @@ internal class KeyguardCardWindow(
             orb = created.findViewById(R.id.fluvi_financial_snapshot_orb),
             background = created.findViewById(R.id.fluvi_keyguard_material_background),
             backgroundVeil = created.findViewById(R.id.fluvi_keyguard_material_veil),
-        )
+        ).also { controller -> controller.onFirstOrbShaderDraw = onFirstShaderDraw }
         return created
     }
 
@@ -410,13 +449,25 @@ internal class KeyguardCardWindow(
         onInteractionDiagnostic("KG|DRAG_END", "moves=$dragMoveCount|updates=$dragLayoutUpdateCount")
     }
 
-    private fun cancelDrag(reason: String) {
+    private fun cancelDrag(reason: String, restorePosition: Boolean = true) {
         val start = dragStart
         clearDragFrame()
         dragStart = null
         dragPreview = null
-        if (start != null && lifecycle.isAttached()) root?.let { updateLayout(it, start) }
+        if (restorePosition && start != null && lifecycle.isAttached()) root?.let { updateLayout(it, start) }
         onInteractionDiagnostic("KG|DRAG_CANCEL", reason)
+    }
+
+    private fun observeFirstRootDraw(current: View) {
+        val observer = current.viewTreeObserver
+        if (!observer.isAlive) return
+        observer.addOnDrawListener(object : ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                val activeObserver = current.viewTreeObserver
+                if (activeObserver.isAlive) activeObserver.removeOnDrawListener(this)
+                onFirstRootDraw()
+            }
+        })
     }
 
     private fun clearDragFrame(flush: Boolean = false) {
