@@ -580,6 +580,10 @@ internal object KeyguardCardDiagnostics {
         var firstRootDrawAtUptimeMs: Long? = null,
         var firstShaderDrawAtUptimeMs: Long? = null,
         var firstCurrentMaterialDrawAtUptimeMs: Long? = null,
+        var bootstrapDrawAtUptimeMs: Long? = null,
+        var bootstrapCommitCallbackAtUptimeMs: Long? = null,
+        var livePromotedAtUptimeMs: Long? = null,
+        var firstLiveDrawAtUptimeMs: Long? = null,
         var frameCommitCallbackAtUptimeMs: Long? = null,
     )
 
@@ -758,7 +762,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
+        "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
     private val CAUSAL_SPINE_FIELD_KEYS = setOf(
@@ -796,7 +800,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_MAIN_APPLY_POSTED" -> "FIRST_MAIN_RESULT_POSTED"
         "INSPECTION_MAIN_APPLY_STARTED" -> "FIRST_MAIN_APPLY_STARTED"
         "AWAITING_MAIN_SURFACE" -> "FIRST_AWAITING_MAIN_SURFACE"
-        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED" ->
+        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED" ->
             "${event.stage}:${event.showOperationId ?: "none"}"
         "HIDE_DECIDED", "LOCAL_HIDE_APPLIED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED" ->
             "${event.stage}:${event.hideOperationId ?: "none"}"
@@ -1279,7 +1283,11 @@ internal object KeyguardCardDiagnostics {
                 "FIRST_ROOT_DRAW" -> showEpisode()?.firstRootDrawAtUptimeMs = event.uptimeMs
                 "FIRST_SHADER_DRAW" -> showEpisode()?.firstShaderDrawAtUptimeMs = event.uptimeMs
                 "FIRST_CURRENT_MATERIAL_DRAW" -> showEpisode()?.firstCurrentMaterialDrawAtUptimeMs = event.uptimeMs
+                "FIRST_LIVE_DRAW" -> showEpisode()?.firstLiveDrawAtUptimeMs = event.uptimeMs
                 "FRAME_COMMIT_CALLBACK_RECEIVED" -> showEpisode()?.frameCommitCallbackAtUptimeMs = event.uptimeMs
+                "BOOTSTRAP_DRAW" -> showEpisode()?.bootstrapDrawAtUptimeMs = event.uptimeMs
+                "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED" -> showEpisode()?.bootstrapCommitCallbackAtUptimeMs = event.uptimeMs
+                "MATERIAL_LIVE_PROMOTED" -> showEpisode()?.livePromotedAtUptimeMs = event.uptimeMs
                 "HIDE_DECIDED" -> event.hideOperationId?.let { operationId ->
                     if (hideEpisode() == null) {
                         while (attempt.hides.size >= 8) attempt.hides.removeFirst()
@@ -1470,8 +1478,8 @@ internal object KeyguardCardDiagnostics {
                 listOf(
                     "SERVICE_CONNECTED", "SETTINGS_LOAD_START", "SETTINGS_LOAD_END", "PROFILE_LOAD_START", "PROFILE_LOAD_END",
                     "ROOT_PREPARE_START", "ROOT_PREPARE_END", "MATERIAL_PREPARE_REQUESTED", "MATERIAL_ARTIFACT_READY",
-                    "MATERIAL_PROGRAM_PREPARED", "MATERIAL_PROGRAM_PROMOTED", "FIRST_ATTACH", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW",
-                    "FIRST_CURRENT_MATERIAL_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED",
+                    "MATERIAL_PROGRAM_PREPARED", "MATERIAL_PROGRAM_PROMOTED", "MATERIAL_GPU_PREPARATION_STARTED", "MATERIAL_GPU_PREPARATION_COMPLETED", "MATERIAL_GPU_PREPARATION_FAILED", "FIRST_ATTACH", "FIRST_ROOT_DRAW", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "FIRST_SHADER_DRAW",
+                    "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED",
                 ).forEach { stage -> appendLine("$stage=${cold.stages[stage] ?: "UNOBSERVED"}") }
             }
             appendLine("RETENTION")
@@ -1592,7 +1600,7 @@ internal object KeyguardCardDiagnostics {
         val pendingRetries = (attempt.retryScheduledCount - attempt.retryFiredCount - attempt.retryCancelledCount).coerceAtLeast(0)
         appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:$pendingRetries attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
         appendLine(" awaiting=unknownWhileHidden:${attempt.unknownWhileHiddenCount},unknownWhileHiddenEpochChanges:${attempt.unknownWhileHiddenEpochChanges},pendingPreservedAfterUnknown:${attempt.pendingPreservedAfterUnknown},pendingRejectedAfterUnknown:${attempt.pendingRejectedAfterUnknown},visibleWithdrawalCount:${attempt.visibleWithdrawalCount},retrySuppressedForPendingWork:${attempt.retrySuppressedForPendingWork},retryBudgetExhaustedWhileAwaiting:${attempt.retryBudgetExhaustedWhileAwaiting}")
-        appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstCurrentMaterialDrawAt=${show?.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} frameCommitCallbackAt=${show?.frameCommitCallbackAtUptimeMs ?: "NO_FRAME_COMMIT_OBSERVED"}")
+        appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} bootstrapDrawAt=${show?.bootstrapDrawAtUptimeMs ?: "NO_BOOTSTRAP_DRAW_OBSERVED"} bootstrapCommitCallbackAt=${show?.bootstrapCommitCallbackAtUptimeMs ?: "NO_BOOTSTRAP_COMMIT_OBSERVED"} livePromotedAt=${show?.livePromotedAtUptimeMs ?: "NO_LIVE_PROMOTION_OBSERVED"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstCurrentMaterialDrawAt=${show?.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstLiveDrawAt=${show?.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} frameCommitCallbackAt=${show?.frameCommitCallbackAtUptimeMs ?: "NO_FRAME_COMMIT_OBSERVED"}")
         appendLine(" cycleToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)} screenOnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} wakeCallbackToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
         appendLine(" wakeToFirstInspectionStartMs=${delta(firstStartedInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToFirstEligibleInspectionStartMs=${delta(firstValidInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToShowingInspectionStartMs=${delta(showingInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} latestPendingQueueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)}")
         appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} inspectionFinishToHandoffMs=${delta(showingInspection?.mainHandoffRequestedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} handoffToMainEntryMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.mainHandoffRequestedAtUptimeMs)} mainEntryToDecisionMs=${delta(show?.decisionAtUptimeMs, showingInspection?.mainApplyStartedAtUptimeMs)} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
@@ -1607,7 +1615,7 @@ internal object KeyguardCardDiagnostics {
                 "rootMax:${showingInspection?.rootAcquisitionMaxMs ?: "NA"},childTotal:${showingInspection?.childAcquisitionTotalMs ?: "NA"}," +
                 "childMax:${showingInspection?.childAcquisitionMaxMs ?: "NA"},local:${showingInspection?.localProcessingMs ?: "NA"}",
         )
-        appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} windowManagerAddViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)} currentMaterialDrawToFrameCommitCallbackMs=${delta(show?.frameCommitCallbackAtUptimeMs, show?.firstCurrentMaterialDrawAtUptimeMs)}")
+        appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} windowManagerAddViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToBootstrapDrawMs=${delta(show?.bootstrapDrawAtUptimeMs, show?.addReturnAtUptimeMs)} bootstrapDrawToCommitCallbackMs=${delta(show?.bootstrapCommitCallbackAtUptimeMs, show?.bootstrapDrawAtUptimeMs)} bootstrapCommitToLivePromotionMs=${delta(show?.livePromotedAtUptimeMs, show?.bootstrapCommitCallbackAtUptimeMs)} livePromotionToFirstLiveDrawMs=${delta(show?.firstLiveDrawAtUptimeMs, show?.livePromotedAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)} currentMaterialDrawToFrameCommitCallbackMs=${delta(show?.frameCommitCallbackAtUptimeMs, show?.firstCurrentMaterialDrawAtUptimeMs)}")
         fun inspectionRole(label: String, timeline: InspectionTimeline?) {
             appendLine(
                 " $label req=${timeline?.requestId ?: "NA"} trigger=${timeline?.trigger ?: "NA"} eventTime=${timeline?.eventTimeUptimeMs ?: "NA"} " +

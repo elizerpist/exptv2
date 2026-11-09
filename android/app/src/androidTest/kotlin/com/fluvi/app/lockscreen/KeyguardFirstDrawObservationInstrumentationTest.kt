@@ -41,7 +41,14 @@ class KeyguardFirstDrawObservationInstrumentationTest {
                     event.set(value)
                     callback.countDown()
                 }
-                observation.registerFromCurrentMaterialDraw()
+                // Production installs the callback in pre-draw, then the
+                // material View marks the matching bootstrap geometry from
+                // its draw. This test follows the same ordering rather than
+                // registering manually before invalidate.
+                fixture.root.viewTreeObserver.addOnDrawListener {
+                    observation.markExpectedDrawObserved()
+                }
+                observation.startBeforeNextDraw()
                 fixture.root.invalidate()
             }
 

@@ -24,7 +24,9 @@ import com.fluvi.app.R
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -52,7 +54,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 view = KeyguardHeaderMaterialView(activity).apply {
                     layoutParams = FrameLayout.LayoutParams(160, 160)
                 }
-                controller = KeyguardCardMaterialController(view, KeyguardHeaderMaterialView(activity), View(activity))
+                controller = KeyguardCardMaterialController(
+                    view,
+                    KeyguardHeaderMaterialView(activity),
+                    View(activity),
+                    gpuPreparer = ImmediateGpuPreparer(),
+                )
                 // This is the retained-root path before any setScene(),
                 // attachment, or hardware Canvas. A successful compilation
                 // must be real, not the old null-scene no-op diagnostic.
@@ -73,6 +80,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 )
                 activity.setContentView(FrameLayout(activity).apply { addView(view) })
                 controller!!.onAttached()
+                controller!!.onBootstrapFrameCommitted()
             }
             assertTrue("prepared program was not promoted to a shader draw", waitForPreparedShader(instrumentation, view))
             instrumentation.runOnMainSync {
@@ -109,6 +117,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 controller = KeyguardCardMaterialController(
                     view, background, View(activity),
                     artifacts = KeyguardShaderArtifactStore(activity, reader),
+                    gpuPreparer = ImmediateGpuPreparer(),
                 )
                 controller!!.update(
                     profile = profile(), animationMode = KeyguardCardAnimationMode.ORB_ONLY,
@@ -117,6 +126,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 )
                 activity.setContentView(FrameLayout(activity).apply { addView(view) })
                 controller!!.onAttached()
+                controller!!.onBootstrapFrameCommitted()
             }
             // A hardware Canvas can draw the safe fallback before the artifact
             // lane has handed its result back to the main-thread View.  Start
@@ -307,7 +317,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 root.addView(background)
                 root.addView(veil)
                 root.addView(view)
-                controller = KeyguardCardMaterialController(view, background, veil)
+                controller = KeyguardCardMaterialController(
+                    view,
+                    background,
+                    veil,
+                    gpuPreparer = ImmediateGpuPreparer(),
+                )
                 controller!!.update(
                     profile = profile(),
                     animationMode = KeyguardCardAnimationMode.ORB_ONLY,
@@ -316,6 +331,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 )
                 activity.setContentView(root)
                 controller!!.onAttached()
+                controller!!.onBootstrapFrameCommitted()
             }
             assertTrue("production View never reached a hardware Canvas", waitForRenderer(instrumentation, view))
             instrumentation.waitForIdleSync()
@@ -335,6 +351,139 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         } finally {
             instrumentation.runOnMainSync {
                 controller?.onDetached("test")
+                activity.finish()
+            }
+        }
+    }
+
+    @Test fun bootstrapDrawsBeforeLiveShaderAndPromotesWithoutReplacingRoot() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        lateinit var view: KeyguardHeaderMaterialView
+        lateinit var root: FrameLayout
+        var controller: KeyguardCardMaterialController? = null
+        try {
+            instrumentation.runOnMainSync {
+                view = KeyguardHeaderMaterialView(activity).apply {
+                    layoutParams = FrameLayout.LayoutParams(160, 160)
+                }
+                root = FrameLayout(activity).apply { addView(view) }
+                controller = KeyguardCardMaterialController(
+                    view,
+                    KeyguardHeaderMaterialView(activity),
+                    View(activity),
+                    gpuPreparer = ImmediateGpuPreparer(),
+                )
+                controller!!.update(
+                    profile = profile(),
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    presentationMode = com.fluvi.app.lockscreen.KeyguardCardPresentationMode.ORB,
+                    isFull = true,
+                    staticOrb = null,
+                )
+                activity.setContentView(root)
+                controller!!.onAttached()
+            }
+            assertTrue("bootstrap never drew", waitForBootstrap(instrumentation, view))
+            instrumentation.runOnMainSync {
+                assertTrue(view.isBootstrapActive())
+                assertEquals(0, view.diagnostics().shaderDrawCount)
+                assertEquals(1, root.childCount)
+                controller!!.onBootstrapFrameCommitted()
+            }
+            assertTrue("live shader never followed bootstrap commit", waitForPreparedShader(instrumentation, view))
+            instrumentation.runOnMainSync {
+                assertFalse(view.isBootstrapActive())
+                assertEquals("promotion must keep the same retained root", 1, root.childCount)
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                controller?.dispose()
+                activity.finish()
+            }
+        }
+    }
+
+    @Test fun productionOffscreenPreparationAcquiresGpuOutput() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val artifact = AndroidKeyguardShaderArtifactReader.load(context, "dualTide", false)
+        val completed = CountDownLatch(1)
+        var result: KeyguardGpuMaterialPreparationResult? = null
+        val preparer = AndroidKeyguardGpuMaterialPreparer()
+        try {
+            preparer.prepare(
+                KeyguardGpuMaterialPreparationRequest(
+                    key = "instrumentation-offscreen",
+                    artifact = artifact,
+                    profile = profile(),
+                    shape = KeyguardHeaderMaterialView.Shape.ORB,
+                    width = 96,
+                    height = 96,
+                    cornerRadiusPx = 0f,
+                ),
+            ) {
+                result = it
+                completed.countDown()
+            }
+            assertTrue("offscreen renderer did not complete", completed.await(12, TimeUnit.SECONDS))
+            assertEquals(KeyguardGpuMaterialPreparationStatus.READY, requireNotNull(result).status)
+            assertTrue("offscreen renderer did not acquire ImageReader output", requireNotNull(result).outputAcquired)
+        } finally {
+            preparer.dispose()
+        }
+    }
+
+    @Test fun delayedPreparationCannotPromoteAfterDetach() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        lateinit var view: KeyguardHeaderMaterialView
+        val preparer = DeferredGpuPreparer()
+        var controller: KeyguardCardMaterialController? = null
+        try {
+            instrumentation.runOnMainSync {
+                view = KeyguardHeaderMaterialView(activity).apply {
+                    layoutParams = FrameLayout.LayoutParams(160, 160)
+                }
+                controller = KeyguardCardMaterialController(
+                    view,
+                    KeyguardHeaderMaterialView(activity),
+                    View(activity),
+                    gpuPreparer = preparer,
+                )
+                controller!!.update(
+                    profile = profile(),
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    presentationMode = com.fluvi.app.lockscreen.KeyguardCardPresentationMode.ORB,
+                    isFull = true,
+                    staticOrb = null,
+                )
+                activity.setContentView(FrameLayout(activity).apply { addView(view) })
+                controller!!.onAttached()
+            }
+            assertTrue("preparation was never requested", preparer.requested.await(8, TimeUnit.SECONDS))
+            assertTrue("bootstrap must remain visible while preparation is pending", waitForBootstrap(instrumentation, view))
+            instrumentation.runOnMainSync {
+                controller!!.onBootstrapFrameCommitted()
+                controller!!.onDetached("test-unlock")
+                preparer.complete()
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                assertTrue("late preparation must not open the live gate", view.isBootstrapActive())
+                assertEquals(0, view.diagnostics().shaderDrawCount)
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                controller?.dispose()
                 activity.finish()
             }
         }
@@ -406,6 +555,61 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             Thread.sleep(32)
         }
         return false
+    }
+
+    private fun waitForBootstrap(
+        instrumentation: Instrumentation,
+        view: KeyguardHeaderMaterialView,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+        while (System.nanoTime() < deadline) {
+            var ready = false
+            instrumentation.runOnMainSync { ready = view.diagnostics().bootstrapDrawCount > 0 }
+            if (ready) return true
+            Thread.sleep(32)
+        }
+        return false
+    }
+
+    private class ImmediateGpuPreparer : KeyguardGpuMaterialPreparer {
+        override fun prepare(
+            request: KeyguardGpuMaterialPreparationRequest,
+            onCompleted: (KeyguardGpuMaterialPreparationResult) -> Unit,
+        ) = onCompleted(
+            KeyguardGpuMaterialPreparationResult(
+                request,
+                KeyguardGpuMaterialPreparationStatus.READY,
+                outputAcquired = true,
+            ),
+        )
+
+        override fun dispose() = Unit
+    }
+
+    private class DeferredGpuPreparer : KeyguardGpuMaterialPreparer {
+        val requested = CountDownLatch(1)
+        private val pending = AtomicReference<Pair<KeyguardGpuMaterialPreparationRequest, (KeyguardGpuMaterialPreparationResult) -> Unit>?>()
+
+        override fun prepare(
+            request: KeyguardGpuMaterialPreparationRequest,
+            onCompleted: (KeyguardGpuMaterialPreparationResult) -> Unit,
+        ) {
+            pending.set(request to onCompleted)
+            requested.countDown()
+        }
+
+        fun complete() {
+            val next = requireNotNull(pending.getAndSet(null))
+            next.second(
+                KeyguardGpuMaterialPreparationResult(
+                    next.first,
+                    KeyguardGpuMaterialPreparationStatus.READY,
+                    outputAcquired = true,
+                ),
+            )
+        }
+
+        override fun dispose() = Unit
     }
 
     private fun profile() = requireNotNull(

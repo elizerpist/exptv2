@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.View
+import com.fluvi.app.R
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
 import com.fluvi.app.lockscreen.KeyguardCardPresentationMode
 import java.util.IdentityHashMap
@@ -18,7 +19,10 @@ internal class KeyguardCardMaterialController(
     private val background: KeyguardHeaderMaterialView,
     private val backgroundVeil: View,
     private val artifacts: KeyguardShaderArtifactStore = KeyguardShaderArtifactStore(orb.context),
+    private val gpuPreparer: KeyguardGpuMaterialPreparer = AndroidKeyguardGpuMaterialPreparer(),
 ) {
+    enum class ColdPresentationState { BOOTSTRAP, BOOTSTRAP_SUBMITTED, LIVE }
+
     private val clock = KeyguardMaterialClock { nanos ->
         orb.frame(nanos)
         background.frame(nanos)
@@ -34,10 +38,31 @@ internal class KeyguardCardMaterialController(
     private var preparationRequests = 0
     private var preparationCompletions = 0
     private var preparationFailures = 0
+    private var gpuPreparationRequests = 0
+    private var gpuPreparationCompletions = 0
+    private var gpuPreparationFailures = 0
+    private var coldPresentationState = ColdPresentationState.LIVE
+    private var selectedVisualKey: String? = null
+    private var exercisedVisualKey: String? = null
+    private var bootstrapCommitReceived = false
+    private var selectedBackgroundVisible = false
+    private var expectedGpuPreparationCount = 0
+    private val requiredGpuPreparationKeys = linkedSetOf<String>()
+    private val readyGpuPreparationKeys = object : LinkedHashSet<String>() {
+        override fun add(element: String): Boolean {
+            val changed = super.add(element)
+            while (size > 2) remove(first())
+            return changed
+        }
+    }
     /** Artifact callbacks are asynchronous. This per-View selection prevents
      * an older effect/portal completion from occupying the sole prepared slot
      * after a newer configuration has been selected. */
     private val requestedProgramKeys = IdentityHashMap<KeyguardHeaderMaterialView, String>()
+    /** A late artifact must not make the first authorized attach construct a
+     * View-owned RuntimeShader on the visibility path. It is retained until
+     * the already-visible bootstrap has committed. */
+    private val deferredViewArtifacts = IdentityHashMap<KeyguardHeaderMaterialView, Pair<KeyguardShaderArtifact, String>>()
     private val animatorScaleObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
             val next = readAnimationsEnabled()
@@ -49,6 +74,8 @@ internal class KeyguardCardMaterialController(
         }
     }
     var onFirstOrbShaderDraw: ((Long) -> Unit)? = null
+    var onFirstBootstrapOrbDraw: ((Long) -> Unit)? = null
+    var onLivePromoted: (() -> Unit)? = null
     /** Observational only; it never changes visibility or scene ownership. */
     var onPreparationStage: ((String, Map<String, Any?>) -> Unit)? = null
 
@@ -70,7 +97,14 @@ internal class KeyguardCardMaterialController(
         // WindowManager or the financial resolver.
         orb.onRendererStateChanged = { reconcileClock() }
         background.onRendererStateChanged = { reconcileClock() }
-        orb.onFirstShaderDraw = { observedAtUptimeMs -> onFirstOrbShaderDraw?.invoke(observedAtUptimeMs) }
+        orb.onFirstShaderDraw = { observedAtUptimeMs ->
+            // The shader draw can only happen after the explicit bootstrap
+            // gate opened. Remembering this exact semantic scene lets a
+            // compatible later attachment retain the established warm path.
+            exercisedVisualKey = selectedVisualKey
+            onFirstOrbShaderDraw?.invoke(observedAtUptimeMs)
+        }
+        orb.onFirstBootstrapDraw = { observedAtUptimeMs -> onFirstBootstrapOrbDraw?.invoke(observedAtUptimeMs) }
         orb.onPreparedProgramPromoted = { key ->
             onPreparationStage?.invoke("MATERIAL_PROGRAM_PROMOTED", mapOf("programKey" to key, "surface" to "orb"))
         }
@@ -118,22 +152,45 @@ internal class KeyguardCardMaterialController(
             )
         }
         val canAnimate = scene != null && animationMode != KeyguardCardAnimationMode.OFF && animationsAllowed
+        val sceneVisualKey = scene?.profile?.visualKey
+        selectedVisualKey = sceneVisualKey
+        selectedBackgroundVisible = presentationMode == KeyguardCardPresentationMode.CARD &&
+            animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND && scene != null
+        val needsBootstrap = canAnimate && scene?.profile?.animated == true &&
+            exercisedVisualKey != sceneVisualKey
+        if (needsBootstrap) {
+            coldPresentationState = ColdPresentationState.BOOTSTRAP
+            bootstrapCommitReceived = false
+        } else {
+            coldPresentationState = ColdPresentationState.LIVE
+            bootstrapCommitReceived = false
+        }
         orb.setStaticBitmap(staticOrb)
         orb.setScene(scene, enabled = canAnimate)
-        val backgroundVisible = presentationMode == KeyguardCardPresentationMode.CARD &&
-            animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND && scene != null
+        orb.setBootstrapActive(needsBootstrap)
+        val backgroundVisible = selectedBackgroundVisible
         background.setScene(scene, enabled = canAnimate && backgroundVisible)
+        background.setBootstrapActive(needsBootstrap && backgroundVisible)
         background.visibility = if (backgroundVisible) View.VISIBLE else View.GONE
         // OFF and orb-only retain the precise, already validated static-card
         // appearance. The readability veil only belongs above an animated
         // material background.
         backgroundVeil.visibility = if (backgroundVisible) View.VISIBLE else View.GONE
-        prepareSelectedPrograms(profile, animationMode, presentationMode)
+        prepareSelectedPrograms(profile, animationMode, presentationMode, isFull, installViewProgram = !needsBootstrap)
         reconcileClock(canAnimate)
     }
 
+    /** True means the caller must register its frame-commit observation before
+     * the invalidation below can traverse the bootstrap frame. */
+    fun requiresBootstrapForNextAttach(): Boolean = coldPresentationState != ColdPresentationState.LIVE
+
     fun onAttached() {
         attached = true
+        if (coldPresentationState != ColdPresentationState.LIVE) {
+            bootstrapCommitReceived = false
+            orb.setBootstrapActive(true)
+            background.setBootstrapActive(selectedBackgroundVisible)
+        }
         // Invalidate once so the first Canvas draw can prove whether this
         // actual overlay is hardware accelerated.  No animation callback is
         // required for this traversal.
@@ -155,6 +212,7 @@ internal class KeyguardCardMaterialController(
         runCatching { orb.context.contentResolver.unregisterContentObserver(animatorScaleObserver) }
         stop("dispose")
         artifacts.dispose()
+        gpuPreparer.dispose()
     }
 
     /** Starts build-scoped source loading while the retained root is detached.
@@ -163,12 +221,23 @@ internal class KeyguardCardMaterialController(
         profile: KeyguardMaterialProfile?,
         animationMode: KeyguardCardAnimationMode,
         presentationMode: KeyguardCardPresentationMode,
-    ) = prepareSelectedPrograms(profile, animationMode, presentationMode)
+        isFull: Boolean = true,
+    ) = prepareSelectedPrograms(profile, animationMode, presentationMode, isFull, installViewProgram = true)
+
+    /** Called only after a verified bootstrap commit for the current attached
+     * root. GPU readiness never causes visibility or attachment by itself. */
+    fun onBootstrapFrameCommitted() {
+        if (!attached || coldPresentationState != ColdPresentationState.BOOTSTRAP) return
+        bootstrapCommitReceived = true
+        coldPresentationState = ColdPresentationState.BOOTSTRAP_SUBMITTED
+        promoteLiveIfReady()
+    }
 
     fun diagnostics(): KeyguardMaterialDiagnostics = KeyguardMaterialDiagnostics(
         requestedRenderer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "RuntimeShader/AGSL" else "static-fallback",
         activeRenderer = when {
             mode == KeyguardCardAnimationMode.OFF -> "STATIC_BY_SETTING"
+            coldPresentationState != ColdPresentationState.LIVE -> "BOOTSTRAP_PALETTE"
             orb.rendererFailure() != null -> "COMPILE_OR_UNIFORM_FAILED"
             orb.isRendererReady() -> "RuntimeShader/AGSL"
             else -> "WAITING_FOR_ATTACH_OR_DRAW"
@@ -186,6 +255,10 @@ internal class KeyguardCardMaterialController(
         preparationRequests = preparationRequests,
         preparationCompletions = preparationCompletions,
         preparationFailures = preparationFailures,
+        gpuPreparationRequests = gpuPreparationRequests,
+        gpuPreparationCompletions = gpuPreparationCompletions,
+        gpuPreparationFailures = gpuPreparationFailures,
+        coldPresentationState = coldPresentationState.name,
         artifactLoadCount = artifacts.diagnostics().assetLoadCount,
         artifactMetadataParseCount = artifacts.diagnostics().metadataParseCount,
         rendererFailure = orb.rendererFailure() ?: background.rendererFailure(),
@@ -200,6 +273,12 @@ internal class KeyguardCardMaterialController(
         if (!attached || !canAnimate || profile?.animated != true) {
             orb.pause()
             background.pause()
+            clock.stop()
+            return
+        }
+        if (coldPresentationState != ColdPresentationState.LIVE) {
+            // Bootstrap is a draw gate, not a new scene or phase origin. Keep
+            // the current monotonic anchor intact for the first live frame.
             clock.stop()
             return
         }
@@ -231,22 +310,40 @@ internal class KeyguardCardMaterialController(
         profile: KeyguardMaterialProfile?,
         animationMode: KeyguardCardAnimationMode,
         presentationMode: KeyguardCardPresentationMode,
+        isFull: Boolean,
+        installViewProgram: Boolean,
     ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             profile == null || animationMode == KeyguardCardAnimationMode.OFF
         ) {
             requestedProgramKeys.clear()
+            deferredViewArtifacts.clear()
+            requiredGpuPreparationKeys.clear()
+            expectedGpuPreparationCount = 0
             return
         }
-        prepareFor(orb, profile)
+        val effective = if (isFull) profile else profile.neutralized()
+        requiredGpuPreparationKeys.clear()
+        expectedGpuPreparationCount = if (
+            presentationMode == KeyguardCardPresentationMode.CARD &&
+                animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND
+        ) 2 else 1
+        prepareFor(orb, effective, installViewProgram)
         if (presentationMode == KeyguardCardPresentationMode.CARD &&
             animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND
-        ) prepareFor(background, profile)
-        else requestedProgramKeys.remove(background)
+        ) prepareFor(background, effective, installViewProgram)
+        else {
+            requestedProgramKeys.remove(background)
+            deferredViewArtifacts.remove(background)
+        }
     }
 
-    private fun prepareFor(view: KeyguardHeaderMaterialView, profile: KeyguardMaterialProfile) {
-        val requestedKey = "${profile.effectId}|${profile.usesPortal}"
+    private fun prepareFor(
+        view: KeyguardHeaderMaterialView,
+        profile: KeyguardMaterialProfile,
+        installViewProgram: Boolean,
+    ) {
+        val requestedKey = "${profile.visualKey}|${profile.effectId}|${profile.usesPortal}|${view.shape}"
         requestedProgramKeys[view] = requestedKey
         preparationRequests += 1
         onPreparationStage?.invoke(
@@ -262,22 +359,21 @@ internal class KeyguardCardMaterialController(
                 if (requestedProgramKeys[view] != requestedKey) {
                     onPreparationStage?.invoke("MATERIAL_PROGRAM_STALE", mapOf("programKey" to artifact.programKey))
                 } else {
-                    when (view.installPreparedShader(artifact)) {
-                        KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED,
-                        KeyguardHeaderMaterialView.ProgramPreparationResult.REUSED -> {
-                            onPreparationStage?.invoke(
-                                "MATERIAL_PROGRAM_PREPARED",
-                                mapOf("programKey" to artifact.programKey, "surface" to if (view === orb) "orb" else "background"),
-                            )
-                        }
-                        KeyguardHeaderMaterialView.ProgramPreparationResult.STALE ->
-                            onPreparationStage?.invoke("MATERIAL_PROGRAM_STALE", mapOf("programKey" to artifact.programKey))
-                        KeyguardHeaderMaterialView.ProgramPreparationResult.FAILED -> {
-                            preparationFailures += 1
-                            onPreparationStage?.invoke("MATERIAL_PREPARE_FAILED", mapOf("programKey" to artifact.programKey))
-                        }
-                        KeyguardHeaderMaterialView.ProgramPreparationResult.NOT_APPLICABLE -> Unit
+                    if (installViewProgram) {
+                        installViewProgram(view, artifact, requestedKey)
+                    } else {
+                        // Install the promotion input before asking the
+                        // injected/worker preparer to run. The production
+                        // preparer completes asynchronously, but this order
+                        // is also required for an immediate successful
+                        // completion: it must never open LIVE while the
+                        // matching View-owned shader has not yet been
+                        // retained for promotion.
+                        deferredViewArtifacts[view] = artifact to requestedKey
                     }
+                    // The worker-owned offscreen draw is independent of the
+                    // View instance and can begin before any visible attach.
+                    prepareGpuProgram(view, profile, artifact, requestedKey)
                 }
                 reconcileClock()
             }.onFailure { error ->
@@ -285,6 +381,124 @@ internal class KeyguardCardMaterialController(
                 onPreparationStage?.invoke("MATERIAL_PREPARE_FAILED", mapOf("error" to error.javaClass.simpleName))
             }
         }
+    }
+
+    private fun installViewProgram(
+        view: KeyguardHeaderMaterialView,
+        artifact: KeyguardShaderArtifact,
+        requestedKey: String,
+    ): Boolean {
+        if (requestedProgramKeys[view] != requestedKey) return false
+        return when (view.installPreparedShader(artifact)) {
+            KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED,
+            KeyguardHeaderMaterialView.ProgramPreparationResult.REUSED -> {
+                deferredViewArtifacts.remove(view)
+                onPreparationStage?.invoke(
+                    "MATERIAL_PROGRAM_PREPARED",
+                    mapOf("programKey" to artifact.programKey, "surface" to surfaceName(view)),
+                )
+                true
+            }
+            KeyguardHeaderMaterialView.ProgramPreparationResult.STALE -> {
+                onPreparationStage?.invoke("MATERIAL_PROGRAM_STALE", mapOf("programKey" to artifact.programKey))
+                false
+            }
+            KeyguardHeaderMaterialView.ProgramPreparationResult.FAILED -> {
+                preparationFailures += 1
+                onPreparationStage?.invoke("MATERIAL_PREPARE_FAILED", mapOf("programKey" to artifact.programKey))
+                false
+            }
+            KeyguardHeaderMaterialView.ProgramPreparationResult.NOT_APPLICABLE -> false
+        }
+    }
+
+    private fun prepareGpuProgram(
+        view: KeyguardHeaderMaterialView,
+        profile: KeyguardMaterialProfile,
+        artifact: KeyguardShaderArtifact,
+        requestedKey: String,
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || requestedProgramKeys[view] != requestedKey) return
+        val (width, height) = warmupDimensions(view)
+        val cornerRadiusPx = 22f * orb.resources.displayMetrics.density
+        val gpuKey = "${artifact.programKey}|${profile.visualKey}|${view.shape}|${width}x${height}|r=$cornerRadiusPx"
+        requiredGpuPreparationKeys += gpuKey
+        if (readyGpuPreparationKeys.contains(gpuKey)) {
+            promoteLiveIfReady()
+            return
+        }
+        gpuPreparationRequests += 1
+        onPreparationStage?.invoke("MATERIAL_GPU_PREPARATION_STARTED", mapOf("programKey" to artifact.programKey, "surface" to surfaceName(view)))
+        gpuPreparer.prepare(
+            KeyguardGpuMaterialPreparationRequest(
+                gpuKey,
+                artifact,
+                profile,
+                view.shape,
+                width,
+                height,
+                cornerRadiusPx = cornerRadiusPx,
+            ),
+        ) completion@{ result ->
+            // The requested key captures both the selected program and the
+            // effective (full/neutral) profile. A service-start prewarm is
+            // therefore retained even before the first visible scene exists.
+            if (requestedProgramKeys[view] != requestedKey) return@completion
+            when (result.status) {
+                KeyguardGpuMaterialPreparationStatus.READY -> {
+                    gpuPreparationCompletions += 1
+                    readyGpuPreparationKeys += result.request.key
+                    onPreparationStage?.invoke("MATERIAL_GPU_PREPARATION_COMPLETED", mapOf("programKey" to artifact.programKey, "surface" to surfaceName(view)))
+                    promoteLiveIfReady()
+                }
+                KeyguardGpuMaterialPreparationStatus.FAILED,
+                KeyguardGpuMaterialPreparationStatus.NOT_SUPPORTED -> {
+                    gpuPreparationFailures += 1
+                    onPreparationStage?.invoke(
+                        "MATERIAL_GPU_PREPARATION_FAILED",
+                        mapOf(
+                            "programKey" to artifact.programKey,
+                            "surface" to surfaceName(view),
+                            "reason" to (result.failure?.javaClass?.simpleName ?: result.status.name),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun warmupDimensions(view: KeyguardHeaderMaterialView): Pair<Int, Int> {
+        if (view.width > 0 && view.height > 0) return view.width to view.height
+        val resources = orb.resources
+        return if (view.shape == KeyguardHeaderMaterialView.Shape.ORB) {
+            val size = resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+            size to size
+        } else {
+            val density = resources.displayMetrics.density
+            val width = (resources.displayMetrics.widthPixels - (32f * density).toInt()).coerceAtLeast(1)
+            width to resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_card_height)
+        }
+    }
+
+    private fun surfaceName(view: KeyguardHeaderMaterialView): String = if (view === orb) "orb" else "background"
+
+    private fun promoteLiveIfReady() {
+        if (!attached || !bootstrapCommitReceived || coldPresentationState != ColdPresentationState.BOOTSTRAP_SUBMITTED) return
+        if (requiredGpuPreparationKeys.size < expectedGpuPreparationCount ||
+            !readyGpuPreparationKeys.containsAll(requiredGpuPreparationKeys)
+        ) return
+        val deferred = deferredViewArtifacts.entries.toList()
+        if (deferred.any { (view, pending) -> !installViewProgram(view, pending.first, pending.second) }) return
+        coldPresentationState = ColdPresentationState.LIVE
+        orb.setBootstrapActive(false)
+        background.setBootstrapActive(false)
+        val now = System.nanoTime()
+        orb.prepareFirstLiveFrame(now)
+        background.prepareFirstLiveFrame(now)
+        onLivePromoted?.invoke()
+        orb.invalidate()
+        background.invalidate()
+        reconcileClock()
     }
 }
 
@@ -304,6 +518,10 @@ internal data class KeyguardMaterialDiagnostics(
     val preparationRequests: Int,
     val preparationCompletions: Int,
     val preparationFailures: Int,
+    val gpuPreparationRequests: Int,
+    val gpuPreparationCompletions: Int,
+    val gpuPreparationFailures: Int,
+    val coldPresentationState: String,
     val artifactLoadCount: Int,
     val artifactMetadataParseCount: Int,
     val rendererFailure: String?,

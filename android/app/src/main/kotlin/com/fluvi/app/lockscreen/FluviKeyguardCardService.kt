@@ -297,7 +297,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // timestamp/owner so it cannot sit in front of that operation.
                 val capturedOperation = activeWindowDiagnosticOperation
                 mainHandler.post {
-                    if (stage.startsWith("MATERIAL_") || stage == "ADD_VIEW_RETURN") {
+                    if (stage.startsWith("MATERIAL_") || stage.startsWith("BOOTSTRAP_") || stage == "ADD_VIEW_RETURN") {
                         KeyguardCardDiagnostics.recordColdPreparation(
                             session.get(),
                             if (stage == "ADD_VIEW_RETURN") "FIRST_ATTACH" else stage,
@@ -319,6 +319,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             },
             onFirstRootDraw = ::recordFirstRootDraw,
             onFirstShaderDraw = ::recordFirstShaderDraw,
+            onBootstrapDraw = ::recordBootstrapDraw,
+            onBootstrapCommit = ::recordBootstrapCommit,
+            onLivePromotion = ::recordLivePromotion,
             onFrameCommit = ::recordFirstFrameCommit,
         )
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "SETTINGS_LOAD_START")
@@ -2010,6 +2013,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             timing.firstShaderDrawAt = event.observedAtUptimeMs
             KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_SHADER_DRAW", event.observedAtUptimeMs)
             KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_CURRENT_MATERIAL_DRAW", event.observedAtUptimeMs)
+            KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_LIVE_DRAW", event.observedAtUptimeMs)
             traceKeyguard(
                 "FIRST_SHADER_DRAW",
                 "observed",
@@ -2024,8 +2028,58 @@ class FluviKeyguardCardService : AccessibilityService() {
                 observedUptimeMs = event.observedAtUptimeMs,
                 operation = owner.diagnosticOperation,
             )
+            traceKeyguard(
+                "FIRST_LIVE_DRAW",
+                "observed",
+                attachGeneration = event.attachGeneration,
+                observedUptimeMs = event.observedAtUptimeMs,
+                operation = owner.diagnosticOperation,
+            )
             publishWakeTiming("firstShaderDraw")
         }
+    }
+
+    private fun recordBootstrapDraw(event: KeyguardFirstDrawEvent) {
+        val owner = firstDrawOwner ?: return
+        if (!owner.accepts(event, session.get(), wakeEpoch, overlayAttachGeneration)) return
+        KeyguardCardDiagnostics.recordColdPreparation(session.get(), "BOOTSTRAP_DRAW", event.observedAtUptimeMs)
+        traceKeyguard(
+            "BOOTSTRAP_DRAW",
+            "paletteFallbackNotPhysicalPresentation",
+            attachGeneration = event.attachGeneration,
+            observedUptimeMs = event.observedAtUptimeMs,
+            operation = owner.diagnosticOperation,
+        )
+    }
+
+    private fun recordBootstrapCommit(event: KeyguardFirstDrawEvent) {
+        val owner = firstDrawOwner ?: return
+        if (!owner.accepts(event, session.get(), wakeEpoch, overlayAttachGeneration)) return
+        KeyguardCardDiagnostics.recordColdPreparation(
+            session.get(),
+            "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED",
+            event.observedAtUptimeMs,
+        )
+        traceKeyguard(
+            "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED",
+            "rendererCommittedNotPhysicalPresentation",
+            attachGeneration = event.attachGeneration,
+            observedUptimeMs = event.observedAtUptimeMs,
+            operation = owner.diagnosticOperation,
+        )
+    }
+
+    private fun recordLivePromotion(event: KeyguardFirstDrawEvent) {
+        val owner = firstDrawOwner ?: return
+        if (!owner.accepts(event, session.get(), wakeEpoch, overlayAttachGeneration)) return
+        KeyguardCardDiagnostics.recordColdPreparation(session.get(), "MATERIAL_LIVE_PROMOTED", event.observedAtUptimeMs)
+        traceKeyguard(
+            "MATERIAL_LIVE_PROMOTED",
+            "sameRetainedAttachment",
+            attachGeneration = event.attachGeneration,
+            observedUptimeMs = event.observedAtUptimeMs,
+            operation = owner.diagnosticOperation,
+        )
     }
 
     /** Frame commit is closer to renderer completion than Canvas.onDraw, but
@@ -2084,6 +2138,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             "shaderPreparationRequests" to (values?.preparationRequests ?: 0),
             "shaderPreparationCompletions" to (values?.preparationCompletions ?: 0),
             "shaderPreparationFailures" to (values?.preparationFailures ?: 0),
+            "gpuPreparationRequests" to (values?.gpuPreparationRequests ?: 0),
+            "gpuPreparationCompletions" to (values?.gpuPreparationCompletions ?: 0),
+            "gpuPreparationFailures" to (values?.gpuPreparationFailures ?: 0),
+            "coldPresentationState" to values?.coldPresentationState,
             "shaderArtifactLoadCount" to (values?.artifactLoadCount ?: 0),
             "shaderArtifactMetadataParseCount" to (values?.artifactMetadataParseCount ?: 0),
             "animationStartCount" to (values?.animationStartCount ?: 0),
@@ -2101,6 +2159,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             "shaderCompileFailures" to ((values?.orb?.shaderCompileFailures ?: 0) + (values?.background?.shaderCompileFailures ?: 0)),
             "onDrawCount" to ((values?.orb?.onDrawCount ?: 0) + (values?.background?.onDrawCount ?: 0)),
             "shaderDrawCount" to ((values?.orb?.shaderDrawCount ?: 0) + (values?.background?.shaderDrawCount ?: 0)),
+            "bootstrapDrawCount" to ((values?.orb?.bootstrapDrawCount ?: 0) + (values?.background?.bootstrapDrawCount ?: 0)),
             "fallbackDrawCount" to ((values?.orb?.fallbackDrawCount ?: 0) + (values?.background?.fallbackDrawCount ?: 0)),
             "phaseAdvanceCount" to ((values?.orb?.phaseAdvanceCount ?: 0) + (values?.background?.phaseAdvanceCount ?: 0)),
             "transitionCompletedCount" to ((values?.orb?.transitionCompletedCount ?: 0) + (values?.background?.transitionCompletedCount ?: 0)),

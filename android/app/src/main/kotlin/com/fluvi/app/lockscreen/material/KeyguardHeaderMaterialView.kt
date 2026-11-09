@@ -199,8 +199,18 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
      * state; the controller uses it solely for truthful diagnostics. */
     var onPreparedProgramPromoted: ((String) -> Unit)? = null
     private var firstShaderDrawForAttach = true
+    /** The first attached traversal deliberately uses only this inexpensive,
+     * palette-correct route.  The controller opens the gate only after the
+     * matching bootstrap frame commit and worker-owned GPU preparation. */
+    private var bootstrapActive = false
+    private var firstBootstrapDrawForAttach = true
+    private var bootstrapPaintKey: String? = null
+    private var bootstrapPaintColor = Color.rgb(101, 116, 137)
+    private var bootstrapPaintAlpha = 255
+    private var bootstrapDrawCount = 0
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val bootstrapPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     init {
         isClickable = false
@@ -213,6 +223,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         firstShaderDrawForAttach = true
+        firstBootstrapDrawForAttach = true
         notifyRendererState()
     }
 
@@ -226,6 +237,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        rebuildBootstrapPaint()
         notifyRendererState()
     }
 
@@ -234,6 +246,21 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         fallbackBitmap = value
         if (!materialEnabled) invalidate()
     }
+
+    /** Main-thread gate for cold presentation. This does not alter the scene
+     * or its monotonic clock anchor; it only chooses the first draw route. */
+    fun setBootstrapActive(value: Boolean) {
+        if (bootstrapActive == value) return
+        bootstrapActive = value
+        if (value) firstBootstrapDrawForAttach = true
+        invalidate()
+    }
+
+    fun isBootstrapActive(): Boolean = bootstrapActive
+
+    /** Called from Canvas.onDraw only after the cheap bootstrap geometry was
+     * emitted. The owner posts all observation work after draw dispatch. */
+    var onFirstBootstrapDraw: ((Long) -> Unit)? = null
 
     fun setScene(scene: KeyguardMaterialScene?, enabled: Boolean) {
         materialEnabled = enabled && scene != null
@@ -302,6 +329,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             promotePreparedProgram(next.profile)
         }
         current = next
+        rebuildBootstrapPaint()
         // Source and RuntimeShader preparation are requested by the retained
         // controller before attachment. A hardware Canvas is still required
         // before this view reports renderer readiness or FIRST_SHADER_DRAW.
@@ -387,6 +415,12 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         if (materialEnabled && visibility == VISIBLE && width > 0 && height > 0) invalidate()
     }
 
+    /** Seeds the first live traversal after bootstrap without starting a
+     * second clock or changing the scene anchor. */
+    fun prepareFirstLiveFrame(frameTimeNanos: Long) {
+        frameNanos = frameTimeNanos
+    }
+
     fun pause() {
         if (pausedTime != null) return
         val now = animationTime.nowNanos()
@@ -410,7 +444,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     fun lastCanvasHardwareAcceleratedForDiagnostics(): Boolean = lastCanvasHardwareAccelerated ?: false
     fun isRendererReady(): Boolean = isAttachedToWindow && width > 0 && height > 0 &&
         lastCanvasHardwareAccelerated == true && shaderCurrent != null && shaderFailure == null
-    fun canAnimateMaterial(): Boolean = isRendererReady()
+    fun canAnimateMaterial(): Boolean = isRendererReady() && !bootstrapActive
 
     fun diagnostics(): KeyguardHeaderMaterialViewDiagnostics = KeyguardHeaderMaterialViewDiagnostics(
         onDrawCount = onDrawCount,
@@ -423,6 +457,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         assetOpenCountDuringDraw = 0,
         metadataParseCountDuringDraw = 0,
         shaderCompileCountDuringDraw = 0,
+        bootstrapDrawCount = bootstrapDrawCount,
         transitionCompletedCount = transitionCompletedCount,
         lastCanvasHardwareAccelerated = lastCanvasHardwareAccelerated,
         failureStage = shaderFailure?.stage,
@@ -442,6 +477,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         val scene = current
         if (!materialEnabled || scene == null || width <= 0 || height <= 0) {
             drawFallback(canvas, scene)
+            return
+        }
+        if (bootstrapActive) {
+            drawBootstrap(canvas, scene)
             return
         }
         // The Dashboard's static Header is not the shader's static branch.
@@ -536,6 +575,66 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         paint.alpha = 255
     }
 
+    /** The bootstrap is intentionally independent of RuntimeShader readiness.
+     * Its gradient is rebuilt when semantic input or size changes, never from
+     * the draw loop. */
+    private fun drawBootstrap(canvas: Canvas, scene: KeyguardMaterialScene) {
+        bootstrapDrawCount += 1
+        val activePaint = bootstrapPaint
+        // `setScene` and `onSizeChanged` build the gradient.  A defensive
+        // missing key uses the preallocated Paint's solid color rather than
+        // allocating a Shader from Canvas.onDraw.
+        if (bootstrapPaintKey == null) activePaint.shader = null
+        activePaint.alpha = if (shape == Shape.CARD_BACKGROUND) {
+            (bootstrapPaintAlpha * 52 / 255).coerceIn(0, 255)
+        } else {
+            bootstrapPaintAlpha
+        }
+        when (shape) {
+            Shape.ORB -> canvas.drawCircle(width / 2f, height / 2f, min(width, height) / 2f, activePaint)
+            Shape.CARD_BACKGROUND -> canvas.drawRoundRect(
+                0f,
+                0f,
+                width.toFloat(),
+                height.toFloat(),
+                dp(22f),
+                dp(22f),
+                activePaint,
+            )
+        }
+        activePaint.alpha = 255
+        if (firstBootstrapDrawForAttach) {
+            firstBootstrapDrawForAttach = false
+            onFirstBootstrapDraw?.invoke(SystemClock.uptimeMillis())
+        }
+    }
+
+    private fun rebuildBootstrapPaint() {
+        val profile = current?.profile
+        val colors = profile?.colors ?: intArrayOf(0xff657489.toInt(), 0xff8592a4.toInt(), 0xff657489.toInt())
+        val stops = profile?.stops ?: floatArrayOf(0f, .5f, 1f)
+        val safeColors = colors.take(min(colors.size, stops.size)).toIntArray().takeIf { it.size >= 2 }
+            ?: intArrayOf(0xff657489.toInt(), 0xff8592a4.toInt())
+        val safeStops = stops.take(safeColors.size).toFloatArray()
+        bootstrapPaintKey = "${profile?.visualKey ?: "default"}|${width}x${height}|$shape"
+        bootstrapPaintColor = safeColors.first()
+        bootstrapPaintAlpha = ((profile?.opacity ?: 1f) * 255).toInt().coerceIn(0, 255)
+        bootstrapPaint.shader = if (width > 0 && height > 0) {
+            LinearGradient(
+                0f,
+                height.toFloat(),
+                width.toFloat(),
+                0f,
+                safeColors,
+                safeStops,
+                Shader.TileMode.CLAMP,
+            )
+        } else {
+            null
+        }
+        bootstrapPaint.color = bootstrapPaintColor
+    }
+
     private fun drawStaticHeaderGradient(canvas: Canvas, profile: KeyguardMaterialProfile) {
         val count = min(profile.colors.size, profile.stops.size)
         if (count < 2) {
@@ -602,6 +701,7 @@ internal data class KeyguardHeaderMaterialViewDiagnostics(
     val assetOpenCountDuringDraw: Int,
     val metadataParseCountDuringDraw: Int,
     val shaderCompileCountDuringDraw: Int,
+    val bootstrapDrawCount: Int,
     val transitionCompletedCount: Int,
     val lastCanvasHardwareAccelerated: Boolean?,
     val failureStage: String?,
