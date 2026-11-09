@@ -107,6 +107,10 @@ internal class KeyguardCardWindow(
         materialProfile = profile
         val current = root ?: createRoot().also { root = it }
         configurePresentation(current, settings.presentationMode)
+        // Begin immutable source/metadata loading while detached. A later
+        // authorized attach may install the prepared program without first
+        // opening assets from Canvas.onDraw.
+        materialController?.prepare(profile, settings.animationMode, settings.presentationMode)
         current.visibility = View.VISIBLE
     }
 
@@ -128,19 +132,28 @@ internal class KeyguardCardWindow(
             // reached this checked attach path.
             current.visibility = View.VISIBLE
             apply(current, presentation, force = true, mode = settings.presentationMode)
+            // Configure the retained scene while detached. If the bounded
+            // artifact lane is already ready, RuntimeShader construction is
+            // complete before WindowManager.addView and cannot tax first draw.
+            updateMaterialForPresentation(presentation)
             val nextAttach = attachGeneration + 1L
             onWindowDiagnostic("ADD_VIEW_BEGIN", "windowManager", nextAttach)
-            return runCatching { manager.addView(current, parameters(resolvedGeometry)) }.fold(
+            return runCatching {
+                manager.addView(current, parameters(resolvedGeometry))
+                // This boundary deliberately excludes lifecycle/material and
+                // first-draw observer setup. The timing report must not label
+                // those post-add operations as WindowManager.addView time.
+                onWindowDiagnostic("ADD_VIEW_RETURN", "success", nextAttach)
+            }.fold(
                 onSuccess = {
                     lifecycle.onAttachSucceeded()
                     attachGeneration += 1L
                     appliedPresentation = presentation
                     appliedGeometry = resolvedGeometry
-                    updateMaterialForPresentation(presentation)
                     firstShaderDrawAttachGeneration = attachGeneration
                     materialController?.onAttached()
                     observeFirstRootDraw(current, attachGeneration)
-                    onWindowDiagnostic("ADD_VIEW_RETURN", "success", attachGeneration)
+                    onWindowDiagnostic("POST_ADD_SETUP_COMPLETE", "success", attachGeneration)
                     if (settings.cardPosition == null) {
                         // Only an attached window has reliable insets. Persist
                         // the old BOTTOM-gravity placement once, without
@@ -254,6 +267,7 @@ internal class KeyguardCardWindow(
         checkMainThread()
         materialProfile = profile
         materialSettings = settings
+        materialController?.prepare(profile, settings.animationMode, settings.presentationMode)
         appliedPresentation?.let(::updateMaterialForPresentation)
     }
 
@@ -309,6 +323,9 @@ internal class KeyguardCardWindow(
             background = created.findViewById(R.id.fluvi_keyguard_material_background),
             backgroundVeil = created.findViewById(R.id.fluvi_keyguard_material_veil),
         ).also { controller ->
+            controller.onPreparationStage = { stage, fields ->
+                onWindowDiagnostic(stage, fields["programKey"]?.toString() ?: "material", null)
+            }
             controller.onFirstOrbShaderDraw = shaderDraw@{ observedAtUptimeMs ->
                 val capturedAttach = firstShaderDrawAttachGeneration ?: return@shaderDraw
                 // KeyguardHeaderMaterialView invokes this while Canvas draw is

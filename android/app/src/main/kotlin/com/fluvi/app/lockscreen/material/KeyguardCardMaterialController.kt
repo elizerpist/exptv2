@@ -16,6 +16,7 @@ internal class KeyguardCardMaterialController(
     private val orb: KeyguardHeaderMaterialView,
     private val background: KeyguardHeaderMaterialView,
     private val backgroundVeil: View,
+    private val artifacts: KeyguardShaderArtifactStore = KeyguardShaderArtifactStore(orb.context),
 ) {
     private val clock = KeyguardMaterialClock { nanos ->
         orb.frame(nanos)
@@ -29,6 +30,9 @@ internal class KeyguardCardMaterialController(
     private var animationsAllowed = readAnimationsEnabled()
     private var updateCount = 0
     private var noOpUpdateCount = 0
+    private var preparationRequests = 0
+    private var preparationCompletions = 0
+    private var preparationFailures = 0
     private val animatorScaleObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
             val next = readAnimationsEnabled()
@@ -40,6 +44,8 @@ internal class KeyguardCardMaterialController(
         }
     }
     var onFirstOrbShaderDraw: ((Long) -> Unit)? = null
+    /** Observational only; it never changes visibility or scene ownership. */
+    var onPreparationStage: ((String, Map<String, Any?>) -> Unit)? = null
 
     private data class MaterialConfiguration(
         val profileVisualKey: String?,
@@ -111,6 +117,7 @@ internal class KeyguardCardMaterialController(
         // appearance. The readability veil only belongs above an animated
         // material background.
         backgroundVeil.visibility = if (backgroundVisible) View.VISIBLE else View.GONE
+        prepareSelectedPrograms(profile, animationMode, presentationMode)
         reconcileClock(canAnimate)
     }
 
@@ -136,7 +143,16 @@ internal class KeyguardCardMaterialController(
     fun dispose() {
         runCatching { orb.context.contentResolver.unregisterContentObserver(animatorScaleObserver) }
         stop("dispose")
+        artifacts.dispose()
     }
+
+    /** Starts build-scoped source loading while the retained root is detached.
+     * It grants neither visibility nor touch authority. */
+    fun prepare(
+        profile: KeyguardMaterialProfile?,
+        animationMode: KeyguardCardAnimationMode,
+        presentationMode: KeyguardCardPresentationMode,
+    ) = prepareSelectedPrograms(profile, animationMode, presentationMode)
 
     fun diagnostics(): KeyguardMaterialDiagnostics = KeyguardMaterialDiagnostics(
         requestedRenderer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "RuntimeShader/AGSL" else "static-fallback",
@@ -156,6 +172,11 @@ internal class KeyguardCardMaterialController(
         largeFrameGapCount = clock.largeGapCount,
         configurationUpdateCount = updateCount,
         configurationNoOpCount = noOpUpdateCount,
+        preparationRequests = preparationRequests,
+        preparationCompletions = preparationCompletions,
+        preparationFailures = preparationFailures,
+        artifactLoadCount = artifacts.diagnostics().assetLoadCount,
+        artifactMetadataParseCount = artifacts.diagnostics().metadataParseCount,
         rendererFailure = orb.rendererFailure() ?: background.rendererFailure(),
         orb = orb.diagnostics(),
         background = background.diagnostics(),
@@ -192,6 +213,44 @@ internal class KeyguardCardMaterialController(
         Settings.Global.ANIMATOR_DURATION_SCALE,
         1f,
     ) > 0f
+
+    /** Only the selected program is prepared. Artifact loading happens on its
+     * own bounded lane; every destination View owns its RuntimeShader. */
+    private fun prepareSelectedPrograms(
+        profile: KeyguardMaterialProfile?,
+        animationMode: KeyguardCardAnimationMode,
+        presentationMode: KeyguardCardPresentationMode,
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            profile == null || animationMode == KeyguardCardAnimationMode.OFF
+        ) return
+        prepareFor(orb, profile)
+        if (presentationMode == KeyguardCardPresentationMode.CARD &&
+            animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND
+        ) prepareFor(background, profile)
+    }
+
+    private fun prepareFor(view: KeyguardHeaderMaterialView, profile: KeyguardMaterialProfile) {
+        preparationRequests += 1
+        onPreparationStage?.invoke(
+            "MATERIAL_PREPARE_REQUESTED",
+            mapOf("effectId" to profile.effectId, "usesPortal" to profile.usesPortal),
+        )
+        artifacts.prepare(profile.effectId, profile.usesPortal) { result ->
+            result.onSuccess { artifact ->
+                preparationCompletions += 1
+                onPreparationStage?.invoke("MATERIAL_ARTIFACT_READY", mapOf("programKey" to artifact.programKey))
+                // Callback is delivered on the main looper. The worker never
+                // mutates this instance after handoff.
+                view.installPreparedShader(artifact)
+                onPreparationStage?.invoke("MATERIAL_SHADER_PREPARED", mapOf("programKey" to artifact.programKey))
+                reconcileClock()
+            }.onFailure { error ->
+                preparationFailures += 1
+                onPreparationStage?.invoke("MATERIAL_PREPARE_FAILED", mapOf("error" to error.javaClass.simpleName))
+            }
+        }
+    }
 }
 
 internal data class KeyguardMaterialDiagnostics(
@@ -207,6 +266,11 @@ internal data class KeyguardMaterialDiagnostics(
     val largeFrameGapCount: Int,
     val configurationUpdateCount: Int,
     val configurationNoOpCount: Int,
+    val preparationRequests: Int,
+    val preparationCompletions: Int,
+    val preparationFailures: Int,
+    val artifactLoadCount: Int,
+    val artifactMetadataParseCount: Int,
     val rendererFailure: String?,
     val orb: KeyguardHeaderMaterialViewDiagnostics,
     val background: KeyguardHeaderMaterialViewDiagnostics,

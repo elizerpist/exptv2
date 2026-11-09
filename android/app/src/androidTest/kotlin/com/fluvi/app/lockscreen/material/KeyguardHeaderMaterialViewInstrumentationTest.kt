@@ -4,6 +4,7 @@ import android.app.Instrumentation
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
@@ -22,6 +23,7 @@ import com.fluvi.app.lockscreen.resolveKeyguardCardGeometry
 import com.fluvi.app.R
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -36,6 +38,60 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
+    @Test fun preparedProductionViewDoesNoAssetOrCompileWorkAcrossFrames() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        lateinit var view: KeyguardHeaderMaterialView
+        var controller: KeyguardCardMaterialController? = null
+        val artifactLoads = AtomicInteger(0)
+        try {
+            instrumentation.runOnMainSync {
+                view = KeyguardHeaderMaterialView(activity).apply {
+                    layoutParams = FrameLayout.LayoutParams(160, 160)
+                }
+                val background = KeyguardHeaderMaterialView(activity)
+                val reader = KeyguardShaderArtifactReader { context, effectId, usesPortal ->
+                    artifactLoads.incrementAndGet()
+                    AndroidKeyguardShaderArtifactReader.load(context, effectId, usesPortal)
+                }
+                controller = KeyguardCardMaterialController(
+                    view, background, View(activity),
+                    artifacts = KeyguardShaderArtifactStore(activity, reader),
+                )
+                controller!!.update(
+                    profile = profile(), animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    presentationMode = com.fluvi.app.lockscreen.KeyguardCardPresentationMode.ORB,
+                    isFull = true, staticOrb = null,
+                )
+                activity.setContentView(FrameLayout(activity).apply { addView(view) })
+                controller!!.onAttached()
+            }
+            assertTrue("prepared view never reached a shader draw", waitForRenderer(instrumentation, view))
+            val before = view.diagnostics()
+            val loadsBeforeFrames = artifactLoads.get()
+            instrumentation.runOnMainSync {
+                val canvas = Canvas(Bitmap.createBitmap(160, 160, Bitmap.Config.ARGB_8888))
+                repeat(120) { view.draw(canvas) }
+            }
+            val after = view.diagnostics()
+            assertEquals(loadsBeforeFrames, artifactLoads.get())
+            assertEquals(before.shaderCompileAttempts, after.shaderCompileAttempts)
+            assertEquals(0, after.assetOpenCountDuringDraw)
+            assertEquals(0, after.metadataParseCountDuringDraw)
+            assertEquals(0, after.shaderCompileCountDuringDraw)
+            assertTrue(after.phaseAdvanceCount >= before.phaseAdvanceCount)
+        } finally {
+            instrumentation.runOnMainSync {
+                controller?.dispose()
+                activity.finish()
+            }
+        }
+    }
+
     @Test fun identicalMaterialInputDoesNotReplaceTheRetainedScene() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(

@@ -232,4 +232,42 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertFalse(report.contains("lateOldCapture"))
         assertTrue(report.contains("build=new-sha"))
     }
+
+    @Test fun immutableRequestEnqueueTimeWinsWhenDiagnosticAppendArrivesLate() {
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug")
+        val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 40L, 1L, "wake", 0L))
+        // Worker start can be recorded before a contended capture lock accepts
+        // the producer's queue line. The immutable request timestamp is the
+        // only valid queue boundary.
+        KeyguardCardDiagnostics.captureEvent(
+            context, "INSPECTION_STARTED", "wake", requestId = 7L,
+            observedUptimeMs = 101L, diagnosticContext = attempt,
+            fields = mapOf("authorityCurrentAtStart" to true),
+        )
+        KeyguardCardDiagnostics.captureEvent(
+            context, "INSPECTION_QUEUED", "wake", requestId = 7L,
+            observedUptimeMs = 105L, diagnosticContext = attempt,
+            fields = mapOf("queuedAtUptimeMs" to 100L),
+        )
+        val show = KeyguardCardDiagnostics.newShowOperation(attempt, 1L, 7L)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", requestId = 7L, observedUptimeMs = 110L, diagnosticContext = attempt, operation = show)
+        KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_BEGIN", "window", requestId = 7L, observedUptimeMs = 111L, diagnosticContext = attempt, operation = show)
+        KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "window", requestId = 7L, observedUptimeMs = 112L, diagnosticContext = attempt, operation = show)
+
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.contains("queueMs=1"))
+        assertFalse(report.contains("queueMs=INVALID_EVENT_ORDER"))
+    }
+
+    @Test fun serviceColdPreparationSurvivesACaptureStartedLater() {
+        KeyguardCardDiagnostics.recordColdPreparation(77L, "SERVICE_CONNECTED", 10L)
+        KeyguardCardDiagnostics.recordColdPreparation(77L, "MATERIAL_SHADER_PREPARED", 20L)
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug")
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+
+        assertTrue(report.contains("COLD_PREPARATION"))
+        assertTrue(report.contains("serviceSession=77"))
+        assertTrue(report.contains("SERVICE_CONNECTED=10"))
+        assertTrue(report.contains("MATERIAL_SHADER_PREPARED=20"))
+    }
 }

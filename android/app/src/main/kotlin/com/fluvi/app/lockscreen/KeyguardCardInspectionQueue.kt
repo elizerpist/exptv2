@@ -48,6 +48,48 @@ internal data class KeyguardOwnOverlayIdentity(
     val attachGeneration: Long,
 )
 
+/** Pure owner for the one physical wake observed through several Android
+ * callbacks. It has no knowledge of Views or accessibility nodes, so ordering
+ * behaviour is testable without turning callbacks into a debounce. */
+internal data class KeyguardWakeCycle(
+    val id: Long,
+    val firstSignal: String,
+    val firstObservedAtUptimeMs: Long,
+    val screenOnReceivedAtUptimeMs: Long? = null,
+)
+
+internal data class KeyguardWakeCycleTransition(
+    val cycle: KeyguardWakeCycle,
+    val started: Boolean,
+    val screenOnJoined: Boolean,
+)
+
+internal class KeyguardWakeCycleOwner {
+    private var open: KeyguardWakeCycle? = null
+
+    fun beginOrJoin(nextId: Long, source: String, observedAtUptimeMs: Long): KeyguardWakeCycleTransition {
+        val existing = open
+        if (existing != null) {
+            val updated = if (source == "wake" && existing.screenOnReceivedAtUptimeMs == null) {
+                existing.copy(screenOnReceivedAtUptimeMs = observedAtUptimeMs)
+            } else existing
+            open = updated
+            return KeyguardWakeCycleTransition(updated, started = false, screenOnJoined = source == "wake")
+        }
+        val created = KeyguardWakeCycle(
+            id = nextId,
+            firstSignal = source,
+            firstObservedAtUptimeMs = observedAtUptimeMs,
+            screenOnReceivedAtUptimeMs = observedAtUptimeMs.takeIf { source == "wake" },
+        )
+        open = created
+        return KeyguardWakeCycleTransition(created, started = true, screenOnJoined = false)
+    }
+
+    fun current(): KeyguardWakeCycle? = open
+    fun end() { open = null }
+}
+
 /** A service owns one of these behind its queue lock. It permits one Binder
  * walk and one latest replacement request; it can never grow a wake-event
  * backlog. */

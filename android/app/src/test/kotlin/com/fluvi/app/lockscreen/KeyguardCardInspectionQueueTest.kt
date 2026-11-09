@@ -124,6 +124,21 @@ class KeyguardCardInspectionQueueTest {
         assertEquals(51L, queue.complete(active)?.id)
     }
 
+    @Test fun `screen on joins an early eligible wake without replacing its authority`() {
+        val owner = KeyguardWakeCycleOwner()
+        val early = owner.beginOrJoin(nextId = 7L, source = "display", observedAtUptimeMs = 100L)
+        val screenOn = owner.beginOrJoin(nextId = 8L, source = "wake", observedAtUptimeMs = 112L)
+
+        assertTrue(early.started)
+        assertFalse(screenOn.started)
+        assertTrue(screenOn.screenOnJoined)
+        assertEquals(7L, screenOn.cycle.id)
+        assertEquals(112L, screenOn.cycle.screenOnReceivedAtUptimeMs)
+
+        owner.end()
+        assertTrue(owner.beginOrJoin(nextId = 9L, source = "wake", observedAtUptimeMs = 300L).started)
+    }
+
     private fun request(id: Long, trigger: String) = KeyguardCardInspectionRequest(
         id = id,
         trigger = trigger,

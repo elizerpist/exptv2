@@ -80,6 +80,10 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var retryToken: RetryToken? = null
     private var nextRetryId = 0L
     @Volatile private var wakeEpoch = 0L
+    /** One physical wake can be signalled by DisplayManager, accessibility and
+     * ACTION_SCREEN_ON in either order. The pure owner prevents the late
+     * broadcast from invalidating a compatible early inspection. */
+    private val wakeCycleOwner = KeyguardWakeCycleOwner()
     /** Published from the main-thread lifecycle owner.  Binder traversal uses
      * this immutable snapshot instead of sampling five generations halfway
      * through a node walk. */
@@ -233,7 +237,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     traceKeyguard("USER_PRESENT_RECEIVED", "broadcast", observedUptimeMs = receivedAt, fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true))
                     hideImmediately("userPresent", triggerReceivedUptimeMs = receivedAt)
                 }
-                Intent.ACTION_SCREEN_ON -> beginWakeCycle("wake", receivedAt)
+                Intent.ACTION_SCREEN_ON -> beginOrJoinWakeCycle("wake", receivedAt)
             }
         }
     }
@@ -246,6 +250,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             val receivedAt = SystemClock.uptimeMillis()
             traceKeyguard("DISPLAY_EVENT", "changed", observedUptimeMs = receivedAt, fields = mapOf("displayId" to displayId))
             if (fastHideIfSystemExcluded("display", receivedAt)) return
+            beginOrJoinWakeCycle("display", receivedAt, schedule = false)
             scheduleEvaluation("display", triggerReceivedUptimeMs = receivedAt)
         }
     }
@@ -253,6 +258,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         session.incrementAndGet()
+        KeyguardCardDiagnostics.recordColdPreparation(session.get(), "SERVICE_CONNECTED")
         publishInspectionAuthority()
         FluviKeyguardCardServiceRegistry.connected(this)
         overlay = KeyguardCardWindow(
@@ -266,25 +272,44 @@ class FluviKeyguardCardService : AccessibilityService() {
                 traceKeyguard(event.removePrefix("KG|"), detail, attachGeneration = overlay.currentAttachGeneration)
             },
             onWindowDiagnostic = { stage, detail, attach ->
+                val observedAt = SystemClock.uptimeMillis()
+                if (stage.startsWith("MATERIAL_") || stage == "ADD_VIEW_RETURN") {
+                    KeyguardCardDiagnostics.recordColdPreparation(
+                        session.get(),
+                        if (stage == "ADD_VIEW_RETURN") "FIRST_ATTACH" else stage,
+                        observedAt,
+                    )
+                }
+                if (stage == "ADD_VIEW_RETURN") {
+                    wakeTiming?.takeIf { it.wakeGeneration == wakeEpoch && it.addViewReturnedAt == null }
+                        ?.addViewReturnedAt = observedAt
+                }
                 traceKeyguard(
                     stage,
                     detail,
                     attachGeneration = attach,
+                    observedUptimeMs = observedAt,
                     operation = activeWindowDiagnosticOperation,
                 )
             },
             onFirstRootDraw = ::recordFirstRootDraw,
             onFirstShaderDraw = ::recordFirstShaderDraw,
         )
+        KeyguardCardDiagnostics.recordColdPreparation(session.get(), "SETTINGS_LOAD_START")
         val settings = FluviKeyguardCardSettings.read(applicationContext)
+        KeyguardCardDiagnostics.recordColdPreparation(session.get(), "SETTINGS_LOAD_END")
+        KeyguardCardDiagnostics.recordColdPreparation(session.get(), "PROFILE_LOAD_START")
         val profile = FluviKeyguardMaterialStore.read(applicationContext)
+        KeyguardCardDiagnostics.recordColdPreparation(session.get(), "PROFILE_LOAD_END")
         lastSettings = settings
         lastMaterialProfile = profile
         registerRuntimeSignals()
+        KeyguardCardDiagnostics.recordColdPreparation(session.get(), "ROOT_PREPARE_START")
         overlay.prepareRetainedView(settings, profile)
+        KeyguardCardDiagnostics.recordColdPreparation(session.get(), "ROOT_PREPARE_END")
         KeyguardCardDiagnostics.record(this, "KG|SERVICE_CONNECTED", "connected", false)
         traceKeyguard("SERVICE_CONNECTED", "connected")
-        beginWakeCycle("connected")
+        beginOrJoinWakeCycle("connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -329,11 +354,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // The package-less post-add race reaches INSPECT, not an
                 // eager detach. A positively matched own event needs no work.
             }
-            KeyguardEventAction.INSPECT -> scheduleEvaluation(
-                "window",
-                meta.eventTimeUptimeMs,
-                triggerReceivedUptimeMs = callbackReceivedAt,
-            )
+            KeyguardEventAction.INSPECT -> {
+                beginOrJoinWakeCycle("accessibility", callbackReceivedAt, schedule = false)
+                scheduleEvaluation("window", meta.eventTimeUptimeMs, triggerReceivedUptimeMs = callbackReceivedAt)
+            }
         }
     }
 
@@ -465,8 +489,35 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
     }
 
-    private fun beginWakeCycle(source: String, receivedAtUptimeMs: Long = SystemClock.uptimeMillis()) {
-        wakeEpoch += 1L
+    /** Opens only a genuinely new eligible wake. SCREEN_ON joins a cycle that
+     * was already established by a fresh Display/accessibility signal. */
+    private fun beginOrJoinWakeCycle(
+        source: String,
+        receivedAtUptimeMs: Long = SystemClock.uptimeMillis(),
+        schedule: Boolean = true,
+    ) {
+        val existing = wakeCycleOwner.current()
+        if (existing != null) {
+            if (source == "wake") {
+                val joined = wakeCycleOwner.beginOrJoin(existing.id, source, receivedAtUptimeMs).cycle
+                traceKeyguard(
+                    "SCREEN_ON_RECEIVED",
+                    "joined:${joined.firstSignal}",
+                    observedUptimeMs = receivedAtUptimeMs,
+                    fields = mapOf("wakeCycleId" to joined.id, "joinedExistingCycle" to true),
+                )
+            }
+            // The early inspection already owns the current authority. Do
+            // not replace it merely because another signal names the same
+            // wake; schedule only when no compatible work exists.
+            if (schedule && !hasCompatibleCycleInspection()) {
+                scheduleEvaluation(source, triggerReceivedUptimeMs = receivedAtUptimeMs)
+            }
+            return
+        }
+        if (source != "connected" && (!isDisplayOnAndInteractive() || !keyguardManager.isKeyguardLocked)) return
+        val cycle = wakeCycleOwner.beginOrJoin(wakeEpoch + 1L, source, receivedAtUptimeMs).cycle
+        wakeEpoch = cycle.id
         // A new wake is a new eligible cycle; a prior terminal exclusion must
         // not suppress its first authoritative inspection.
         terminalHideState = null
@@ -512,7 +563,13 @@ class FluviKeyguardCardService : AccessibilityService() {
             observedUptimeMs = receivedAtUptimeMs,
             fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true),
         )
-        scheduleEvaluation(source, triggerReceivedUptimeMs = receivedAtUptimeMs)
+        if (schedule) scheduleEvaluation(source, triggerReceivedUptimeMs = receivedAtUptimeMs)
+    }
+
+    private fun hasCompatibleCycleInspection(): Boolean = synchronized(queueLock) {
+        listOfNotNull(inspectionQueue.activeRequest(), inspectionQueue.pendingRequest()).any { request ->
+            inspectionAuthority.matches(request)
+        }
     }
 
     /** A deliberately small main-thread fast path. Display transition states
@@ -691,7 +748,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                 active.trigger,
                 active,
                 observedUptimeMs = startedAt,
-                fields = mapOf("queueMs" to (startedAt - active.queuedAtUptimeMs)),
+                fields = mapOf(
+                    "queueMs" to (startedAt - active.queuedAtUptimeMs),
+                    "queuedAtUptimeMs" to active.queuedAtUptimeMs,
+                    "authorityCurrentAtStart" to authorityIsCurrent(active),
+                ),
             )
             val result = inspectSurface(active)
             val finishedAt = SystemClock.uptimeMillis()
@@ -708,6 +769,16 @@ class FluviKeyguardCardService : AccessibilityService() {
                     "visitedNodeCount" to result.visitedNodeCount,
                     "rootUnavailable" to result.rootUnavailable,
                     "walkTruncated" to result.walkTruncated,
+                    "getWindowsMs" to result.windowTiming.getWindowsMs,
+                    "relevantWindowCount" to result.windowTiming.relevantWindowCount,
+                    "rootAcquisitionCount" to result.windowTiming.rootAcquisitionCount,
+                    "rootAcquisitionTotalMs" to result.windowTiming.rootAcquisitionTotalMs,
+                    "rootAcquisitionMaxMs" to result.windowTiming.rootAcquisitionMaxMs,
+                    "childAcquisitionCount" to result.windowTiming.childAcquisitionCount,
+                    "childAcquisitionTotalMs" to result.windowTiming.childAcquisitionTotalMs,
+                    "childAcquisitionMaxMs" to result.windowTiming.childAcquisitionMaxMs,
+                    "localProcessingMs" to result.windowTiming.localProcessingMs,
+                    "slowWindowCalls" to result.windowTiming.slowCalls.joinToString(";"),
                     "surfaceClassification" to result.decision.name,
                     "abortedStale" to result.abortedStale,
                     "inspectionsAbortedBeforeRead" to inspectionsAbortedBeforeRead.get(),
@@ -756,6 +827,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val walkTruncated: Boolean = false,
         val windowsReadMs: Long? = null,
         val treeScanMs: Long? = null,
+        val windowTiming: WindowReadTiming = WindowReadTiming(),
         val abortedStale: Boolean = false,
     )
 
@@ -779,8 +851,58 @@ class FluviKeyguardCardService : AccessibilityService() {
         val windowsReadMs: Long,
         val treeScanMs: Long,
         val visitedNodeCount: Int,
+        val timing: WindowReadTiming = WindowReadTiming(),
         val abortedStale: Boolean = false,
     )
+
+    /** Technical-only operation timing. It measures API call duration, not
+     * presumed Binder cost: framework cache hits are intentionally possible. */
+    private data class WindowReadTiming(
+        val getWindowsMs: Long = 0L,
+        val relevantWindowCount: Int = 0,
+        val rootAcquisitionCount: Int = 0,
+        val rootAcquisitionTotalMs: Long = 0L,
+        val rootAcquisitionMaxMs: Long = 0L,
+        val childAcquisitionCount: Int = 0,
+        val childAcquisitionTotalMs: Long = 0L,
+        val childAcquisitionMaxMs: Long = 0L,
+        val localProcessingMs: Long = 0L,
+        val slowCalls: List<String> = emptyList(),
+    )
+
+    private class WindowReadTimingAccumulator(private val getWindowsMs: Long) {
+        var relevantWindows = 0
+        var rootCount = 0
+        var rootTotal = 0L
+        var rootMax = 0L
+        var childCount = 0
+        var childTotal = 0L
+        var childMax = 0L
+        private val slow = mutableListOf<Pair<Long, String>>()
+
+        fun root(window: AccessibilityWindowInfo, displayId: Int, elapsedMs: Long) {
+            rootCount += 1; rootTotal += elapsedMs; rootMax = maxOf(rootMax, elapsedMs)
+            slow += elapsedMs to "root:w=${window.id},t=${window.type},d=$displayId,$elapsedMs"
+        }
+
+        fun child(windowId: Int, index: Int, elapsedMs: Long) {
+            childCount += 1; childTotal += elapsedMs; childMax = maxOf(childMax, elapsedMs)
+            slow += elapsedMs to "child:w=$windowId,i=$index,$elapsedMs"
+        }
+
+        fun snapshot(treeElapsedMs: Long): WindowReadTiming = WindowReadTiming(
+            getWindowsMs = getWindowsMs,
+            relevantWindowCount = relevantWindows,
+            rootAcquisitionCount = rootCount,
+            rootAcquisitionTotalMs = rootTotal,
+            rootAcquisitionMaxMs = rootMax,
+            childAcquisitionCount = childCount,
+            childAcquisitionTotalMs = childTotal,
+            childAcquisitionMaxMs = childMax,
+            localProcessingMs = (treeElapsedMs - rootTotal - childTotal).coerceAtLeast(0L),
+            slowCalls = slow.sortedByDescending { it.first }.take(3).map { it.second },
+        )
+    }
 
     private data class VisibleIds(
         val ids: Set<String>,
@@ -819,7 +941,21 @@ class FluviKeyguardCardService : AccessibilityService() {
             "TREE_SCAN_FINISHED",
             "idOnly",
             request,
-            fields = mapOf("treeScanMs" to read.treeScanMs, "visitedNodeCount" to read.visitedNodeCount, "walkTruncated" to read.walkTruncated),
+            fields = mapOf(
+                "treeScanMs" to read.treeScanMs,
+                "visitedNodeCount" to read.visitedNodeCount,
+                "walkTruncated" to read.walkTruncated,
+                "getWindowsMs" to read.timing.getWindowsMs,
+                "relevantWindowCount" to read.timing.relevantWindowCount,
+                "rootAcquisitionCount" to read.timing.rootAcquisitionCount,
+                "rootAcquisitionTotalMs" to read.timing.rootAcquisitionTotalMs,
+                "rootAcquisitionMaxMs" to read.timing.rootAcquisitionMaxMs,
+                "childAcquisitionCount" to read.timing.childAcquisitionCount,
+                "childAcquisitionTotalMs" to read.timing.childAcquisitionTotalMs,
+                "childAcquisitionMaxMs" to read.timing.childAcquisitionMaxMs,
+                "localProcessingMs" to read.timing.localProcessingMs,
+                "slowWindowCalls" to read.timing.slowCalls.joinToString(";"),
+            ),
         )
         if (read.abortedStale || !authorityIsCurrent(request)) {
             if (!read.abortedStale) inspectionsAbortedDuringWalk.incrementAndGet()
@@ -833,6 +969,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 walkTruncated = read.walkTruncated,
                 windowsReadMs = read.windowsReadMs,
                 treeScanMs = read.treeScanMs,
+                windowTiming = read.timing,
                 abortedStale = true,
             )
         }
@@ -853,6 +990,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             walkTruncated = read.walkTruncated,
             windowsReadMs = read.windowsReadMs,
             treeScanMs = read.treeScanMs,
+            windowTiming = read.timing,
         )
     }
 
@@ -883,6 +1021,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val currentWindows = windows
         val windowsReadMs = SystemClock.uptimeMillis() - readStartedAt
         val treeStartedAt = SystemClock.uptimeMillis()
+        val timing = WindowReadTimingAccumulator(windowsReadMs)
         var unavailableRoot = false
         var walkTruncated = false
         var visitedNodeCount = 0
@@ -900,6 +1039,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             // Secondary displays cannot decide this default-display overlay's
             // eligibility, so do not pay a root Binder call for them.
             if (displayId != Display.DEFAULT_DISPLAY) continue
+            timing.relevantWindows += 1
             val exactKnownOwn = knownOwn != null && knownOwn.windowId == window.id &&
                 knownOwn.displayId == displayId && knownOwn.attachGeneration == request.attachGeneration &&
                 window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
@@ -922,7 +1062,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                     SystemClock.uptimeMillis() - treeStartedAt, visitedNodeCount, abortedStale = true,
                 )
             }
+            val rootStartedAt = SystemClock.uptimeMillis()
             val root = runCatching { window.root }.getOrNull()
+            timing.root(window, displayId, SystemClock.uptimeMillis() - rootStartedAt)
             if (!authorityIsCurrent(request)) {
                 root?.recycle()
                 inspectionsAbortedDuringWalk.incrementAndGet()
@@ -935,7 +1077,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             val rootPackage = root?.packageName?.toString()
             val own = rootPackage == this.packageName && window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
             val ids = if (rootPackage in setOf("com.android.systemui", "com.android.keyguard", "android")) {
-                root?.let { visibleResourceIds(it, request) }?.also {
+                root?.let { visibleResourceIds(it, request, window.id, timing) }?.also {
                     walkTruncated = walkTruncated || it.truncated
                     visitedNodeCount += it.visitedNodeCount
                     if (it.abortedStale) {
@@ -961,12 +1103,18 @@ class FluviKeyguardCardService : AccessibilityService() {
                 visibleViewIds = ids,
             )
         }
-        SystemWindowsRead(snapshots, unavailableRoot, walkTruncated, windowsReadMs, SystemClock.uptimeMillis() - treeStartedAt, visitedNodeCount)
+        val treeElapsedMs = SystemClock.uptimeMillis() - treeStartedAt
+        SystemWindowsRead(snapshots, unavailableRoot, walkTruncated, windowsReadMs, treeElapsedMs, visitedNodeCount, timing.snapshot(treeElapsedMs))
     }.getOrDefault(SystemWindowsRead(emptyList(), rootUnavailable = false, walkTruncated = false, windowsReadMs = 0L, treeScanMs = 0L, visitedNodeCount = 0))
 
     /** Bounded, ID-only traversal. Never read node.text, event.text,
      * contentDescription, input values, screenshots, or foreign app trees. */
-    private fun visibleResourceIds(root: AccessibilityNodeInfo, request: KeyguardCardInspectionRequest): VisibleIds {
+    private fun visibleResourceIds(
+        root: AccessibilityNodeInfo,
+        request: KeyguardCardInspectionRequest,
+        windowId: Int,
+        timing: WindowReadTimingAccumulator,
+    ): VisibleIds {
         val ids = linkedSetOf<String>()
         var visited = 0
         var truncated = false
@@ -991,7 +1139,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                         abortedStale = true
                         return
                     }
+                    val childStartedAt = SystemClock.uptimeMillis()
                     val child = node.getChild(index)
+                    timing.child(windowId, index, SystemClock.uptimeMillis() - childStartedAt)
                     if (!authorityIsCurrent(request)) {
                         nodeReadsAfterInvalidation.incrementAndGet()
                         child?.recycle()
@@ -1396,7 +1546,6 @@ class FluviKeyguardCardService : AccessibilityService() {
                     attachGeneration = overlayAttachGeneration,
                     diagnosticOperation = showOperation,
                 )
-                wakeTiming?.takeIf { it.wakeGeneration == wakeEpoch }?.addViewReturnedAt = SystemClock.uptimeMillis()
                 KeyguardCardDiagnostics.attach(this, "attached")
                 KeyguardCardDiagnostics.record(this, "KG|ATTACH", reason, true)
                 traceKeyguard(
@@ -1509,6 +1658,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         // only its own listener after the framework draw traversal ends.
         firstDrawOwner = null
         if (terminalWake) {
+            // A later SCREEN_ON must allocate a new physical cycle. A visible
+            // surface change inside the same wake does not pass this path.
+            wakeCycleOwner.end()
             wakeEpoch += 1L
             cancelWakeRetry("terminalHide")
             synchronized(queueLock) { inspectionQueue.clearPending() }
@@ -1589,6 +1741,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val timing = wakeTiming?.takeIf { it.wakeGeneration == owner.wakeGeneration } ?: return
         if (timing.firstRootDrawAt == null) {
             timing.firstRootDrawAt = event.observedAtUptimeMs
+            KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_ROOT_DRAW", event.observedAtUptimeMs)
             traceKeyguard(
                 "FIRST_ROOT_DRAW",
                 "observed",
@@ -1606,6 +1759,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         val timing = wakeTiming?.takeIf { it.wakeGeneration == owner.wakeGeneration } ?: return
         if (timing.firstShaderDrawAt == null) {
             timing.firstShaderDrawAt = event.observedAtUptimeMs
+            KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_SHADER_DRAW", event.observedAtUptimeMs)
+            KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_CURRENT_MATERIAL_DRAW", event.observedAtUptimeMs)
             traceKeyguard(
                 "FIRST_SHADER_DRAW",
                 "observed",
@@ -1651,6 +1806,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             "activeRenderer" to values?.activeRenderer,
             "hardwareAccelerated" to (values?.hardwareAccelerated ?: false),
             "shaderCreationCount" to (values?.shaderCreationCount ?: 0),
+            "shaderPreparationRequests" to (values?.preparationRequests ?: 0),
+            "shaderPreparationCompletions" to (values?.preparationCompletions ?: 0),
+            "shaderPreparationFailures" to (values?.preparationFailures ?: 0),
+            "shaderArtifactLoadCount" to (values?.artifactLoadCount ?: 0),
+            "shaderArtifactMetadataParseCount" to (values?.artifactMetadataParseCount ?: 0),
             "animationStartCount" to (values?.animationStartCount ?: 0),
             "animationStopCount" to (values?.animationStopCount ?: 0),
             "drawCount" to (values?.frameCallbackCount ?: 0),
