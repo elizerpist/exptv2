@@ -258,6 +258,12 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     fun isBootstrapActive(): Boolean = bootstrapActive
 
+    /** Functional acknowledgement for every non-empty bootstrap draw. It is
+     * intentionally separate from the diagnostic first-draw callback: an
+     * observer armed during attachment must still be able to acknowledge a
+     * later bootstrap traversal if the diagnostic first draw came earlier. */
+    var onBootstrapGeometryDrawn: (() -> Unit)? = null
+
     /** Called from Canvas.onDraw only after the cheap bootstrap geometry was
      * emitted. The owner posts all observation work after draw dispatch. */
     var onFirstBootstrapDraw: ((Long) -> Unit)? = null
@@ -603,6 +609,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             )
         }
         activePaint.alpha = 255
+        onBootstrapGeometryDrawn?.invoke()
         if (firstBootstrapDrawForAttach) {
             firstBootstrapDrawForAttach = false
             onFirstBootstrapDraw?.invoke(SystemClock.uptimeMillis())

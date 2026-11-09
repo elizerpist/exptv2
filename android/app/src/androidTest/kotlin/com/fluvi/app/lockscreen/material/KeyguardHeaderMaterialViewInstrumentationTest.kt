@@ -18,6 +18,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
 import com.fluvi.app.lockscreen.KeyguardCardContentOverflow
+import com.fluvi.app.lockscreen.KeyguardFrameCommitObservation
 import com.fluvi.app.lockscreen.keyguardCardWindowParameters
 import com.fluvi.app.lockscreen.resolveKeyguardCardGeometry
 import com.fluvi.app.R
@@ -80,7 +81,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 )
                 activity.setContentView(FrameLayout(activity).apply { addView(view) })
                 controller!!.onAttached()
-                controller!!.onBootstrapFrameCommitted()
+                controller!!.onBootstrapFrameCommitted(requireNotNull(controller!!.currentBootstrapToken()))
             }
             assertTrue("prepared program was not promoted to a shader draw", waitForPreparedShader(instrumentation, view))
             instrumentation.runOnMainSync {
@@ -126,7 +127,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 )
                 activity.setContentView(FrameLayout(activity).apply { addView(view) })
                 controller!!.onAttached()
-                controller!!.onBootstrapFrameCommitted()
+                controller!!.onBootstrapFrameCommitted(requireNotNull(controller!!.currentBootstrapToken()))
             }
             // A hardware Canvas can draw the safe fallback before the artifact
             // lane has handed its result back to the main-thread View.  Start
@@ -331,7 +332,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 )
                 activity.setContentView(root)
                 controller!!.onAttached()
-                controller!!.onBootstrapFrameCommitted()
+                controller!!.onBootstrapFrameCommitted(requireNotNull(controller!!.currentBootstrapToken()))
             }
             assertTrue("production View never reached a hardware Canvas", waitForRenderer(instrumentation, view))
             instrumentation.waitForIdleSync()
@@ -366,6 +367,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         lateinit var view: KeyguardHeaderMaterialView
         lateinit var root: FrameLayout
         var controller: KeyguardCardMaterialController? = null
+        val livePromotion = CountDownLatch(1)
         try {
             instrumentation.runOnMainSync {
                 view = KeyguardHeaderMaterialView(activity).apply {
@@ -385,16 +387,32 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     isFull = true,
                     staticOrb = null,
                 )
+                val token = requireNotNull(controller!!.currentBootstrapToken())
+                lateinit var commit: KeyguardFrameCommitObservation
+                commit = KeyguardFrameCommitObservation(
+                    root = view,
+                    attachGeneration = 1L,
+                    bootstrapToken = token,
+                ) { event ->
+                    // This is the same functional route used by the retained
+                    // keyguard root: a real bootstrap Canvas draw marks the
+                    // observation, then Android delivers the frame commit.
+                    controller!!.onBootstrapFrameCommitted(event.bootstrapToken)
+                }
+                controller!!.onBootstrapGeometryDrawn = { drawToken ->
+                    commit.markExpectedDrawObserved(1L, drawToken)
+                }
+                controller!!.onLivePromoted = { promoted ->
+                    if (promoted == token) livePromotion.countDown()
+                }
+                // The View is still detached here. The production observer
+                // must retain this arm through the real Window attachment.
+                commit.startBeforeNextDraw()
                 activity.setContentView(root)
                 controller!!.onAttached()
             }
             assertTrue("bootstrap never drew", waitForBootstrap(instrumentation, view))
-            instrumentation.runOnMainSync {
-                assertTrue(view.isBootstrapActive())
-                assertEquals(0, view.diagnostics().shaderDrawCount)
-                assertEquals(1, root.childCount)
-                controller!!.onBootstrapFrameCommitted()
-            }
+            assertTrue("real frame commit did not promote live material", livePromotion.await(8, TimeUnit.SECONDS))
             assertTrue("live shader never followed bootstrap commit", waitForPreparedShader(instrumentation, view))
             instrumentation.runOnMainSync {
                 assertFalse(view.isBootstrapActive())
@@ -472,7 +490,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             assertTrue("preparation was never requested", preparer.requested.await(8, TimeUnit.SECONDS))
             assertTrue("bootstrap must remain visible while preparation is pending", waitForBootstrap(instrumentation, view))
             instrumentation.runOnMainSync {
-                controller!!.onBootstrapFrameCommitted()
+                controller!!.onBootstrapFrameCommitted(requireNotNull(controller!!.currentBootstrapToken()))
                 controller!!.onDetached("test-unlock")
                 preparer.complete()
             }

@@ -12,6 +12,15 @@ import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
 import com.fluvi.app.lockscreen.KeyguardCardPresentationMode
 import java.util.IdentityHashMap
 
+/** Identifies the exact bootstrap material which is permitted to enter LIVE
+ * after a committed frame. The visual key carries privacy/effect selection;
+ * the monotonic generation prevents an old callback from promoting a newer
+ * scene that happens to share a View. */
+internal data class KeyguardBootstrapFrameToken(
+    val bootstrapGeneration: Long,
+    val visualKey: String,
+)
+
 /** Owns scene application and one Choreographer clock for both retained
  * decorative views. It deliberately has no WindowManager or financial API. */
 internal class KeyguardCardMaterialController(
@@ -44,6 +53,11 @@ internal class KeyguardCardMaterialController(
     private var coldPresentationState = ColdPresentationState.LIVE
     private var selectedVisualKey: String? = null
     private var exercisedVisualKey: String? = null
+    /** A bootstrap commit belongs to an exact semantic material selection, not
+     * merely to whatever scene happens to be current when a renderer callback
+     * is delivered. */
+    private var bootstrapGeneration = 0L
+    private var bootstrapVisualKey: String? = null
     private var bootstrapCommitReceived = false
     private var selectedBackgroundVisible = false
     private var expectedGpuPreparationCount = 0
@@ -74,8 +88,11 @@ internal class KeyguardCardMaterialController(
         }
     }
     var onFirstOrbShaderDraw: ((Long) -> Unit)? = null
+    /** Functional, per-bootstrap-draw acknowledgement. This must stay
+     * separate from the one-shot diagnostic callback below. */
+    var onBootstrapGeometryDrawn: ((KeyguardBootstrapFrameToken) -> Unit)? = null
     var onFirstBootstrapOrbDraw: ((Long) -> Unit)? = null
-    var onLivePromoted: (() -> Unit)? = null
+    var onLivePromoted: ((KeyguardBootstrapFrameToken) -> Unit)? = null
     /** Observational only; it never changes visibility or scene ownership. */
     var onPreparationStage: ((String, Map<String, Any?>) -> Unit)? = null
 
@@ -103,6 +120,9 @@ internal class KeyguardCardMaterialController(
             // compatible later attachment retain the established warm path.
             exercisedVisualKey = selectedVisualKey
             onFirstOrbShaderDraw?.invoke(observedAtUptimeMs)
+        }
+        orb.onBootstrapGeometryDrawn = {
+            currentBootstrapToken()?.let { token -> onBootstrapGeometryDrawn?.invoke(token) }
         }
         orb.onFirstBootstrapDraw = { observedAtUptimeMs -> onFirstBootstrapOrbDraw?.invoke(observedAtUptimeMs) }
         orb.onPreparedProgramPromoted = { key ->
@@ -159,11 +179,18 @@ internal class KeyguardCardMaterialController(
         val needsBootstrap = canAnimate && scene?.profile?.animated == true &&
             exercisedVisualKey != sceneVisualKey
         if (needsBootstrap) {
-            coldPresentationState = ColdPresentationState.BOOTSTRAP
-            bootstrapCommitReceived = false
+            if (coldPresentationState == ColdPresentationState.LIVE ||
+                bootstrapVisualKey != sceneVisualKey
+            ) {
+                bootstrapGeneration += 1L
+                bootstrapVisualKey = sceneVisualKey
+                coldPresentationState = ColdPresentationState.BOOTSTRAP
+                bootstrapCommitReceived = false
+            }
         } else {
             coldPresentationState = ColdPresentationState.LIVE
             bootstrapCommitReceived = false
+            bootstrapVisualKey = null
         }
         orb.setStaticBitmap(staticOrb)
         orb.setScene(scene, enabled = canAnimate)
@@ -183,6 +210,13 @@ internal class KeyguardCardMaterialController(
     /** True means the caller must register its frame-commit observation before
      * the invalidation below can traverse the bootstrap frame. */
     fun requiresBootstrapForNextAttach(): Boolean = coldPresentationState != ColdPresentationState.LIVE
+
+    /** Immutable ownership for a single bootstrap/commit/live transition. */
+    fun currentBootstrapToken(): KeyguardBootstrapFrameToken? =
+        bootstrapVisualKey?.let { visualKey ->
+            if (coldPresentationState == ColdPresentationState.LIVE) null
+            else KeyguardBootstrapFrameToken(bootstrapGeneration, visualKey)
+        }
 
     fun onAttached() {
         attached = true
@@ -226,11 +260,14 @@ internal class KeyguardCardMaterialController(
 
     /** Called only after a verified bootstrap commit for the current attached
      * root. GPU readiness never causes visibility or attachment by itself. */
-    fun onBootstrapFrameCommitted() {
-        if (!attached || coldPresentationState != ColdPresentationState.BOOTSTRAP) return
+    fun onBootstrapFrameCommitted(token: KeyguardBootstrapFrameToken): Boolean {
+        if (!attached || coldPresentationState != ColdPresentationState.BOOTSTRAP ||
+            currentBootstrapToken() != token
+        ) return false
         bootstrapCommitReceived = true
         coldPresentationState = ColdPresentationState.BOOTSTRAP_SUBMITTED
         promoteLiveIfReady()
+        return true
     }
 
     fun diagnostics(): KeyguardMaterialDiagnostics = KeyguardMaterialDiagnostics(
@@ -489,13 +526,15 @@ internal class KeyguardCardMaterialController(
         ) return
         val deferred = deferredViewArtifacts.entries.toList()
         if (deferred.any { (view, pending) -> !installViewProgram(view, pending.first, pending.second) }) return
+        val promotedToken = currentBootstrapToken() ?: return
         coldPresentationState = ColdPresentationState.LIVE
+        bootstrapVisualKey = null
         orb.setBootstrapActive(false)
         background.setBootstrapActive(false)
         val now = System.nanoTime()
         orb.prepareFirstLiveFrame(now)
         background.prepareFirstLiveFrame(now)
-        onLivePromoted?.invoke()
+        onLivePromoted?.invoke(promotedToken)
         orb.invalidate()
         background.invalidate()
         reconcileClock()

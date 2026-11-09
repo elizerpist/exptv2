@@ -16,6 +16,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import com.fluvi.app.R
 import com.fluvi.app.lockscreen.material.KeyguardCardMaterialController
+import com.fluvi.app.lockscreen.material.KeyguardBootstrapFrameToken
 import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
 import com.fluvi.app.lockscreen.material.KeyguardMaterialDiagnostics
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
@@ -59,10 +60,17 @@ internal class KeyguardCardWindow(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var firstRootDrawObservation: KeyguardFirstDrawObservation? = null
     private var firstFrameCommitObservation: KeyguardFrameCommitObservation? = null
+    /** The most recently accepted functional commit. Diagnostic publication is
+     * posted after that transition and must not describe a superseded scene. */
+    private var acceptedBootstrapToken: KeyguardBootstrapFrameToken? = null
     private var firstShaderDrawAttachGeneration: Long? = null
     private var materialController: KeyguardCardMaterialController? = null
     private var materialProfile: KeyguardMaterialProfile? = null
     private var materialSettings = KeyguardCardSettings()
+    /** Legacy position migration reads and writes SharedPreferences. It is
+     * retained, but never allowed to sit between addView() and the first
+     * requested traversal. */
+    private var pendingCardPositionMigration: Pair<Long, KeyguardCardCardPosition>? = null
     /** `configurePresentation` mutates real View layout/visibility state.
      * Repeated MAIN_CONFIRMED inspections therefore need an explicit semantic
      * key instead of discovering they were no-ops after those mutations. */
@@ -158,6 +166,13 @@ internal class KeyguardCardWindow(
             // complete before WindowManager.addView and cannot tax first draw.
             updateMaterialForPresentation(presentation)
             val nextAttach = attachGeneration + 1L
+            // Arm before addView. On overlay hosts where attach finishes after
+            // addView returns, the observation retains this request through
+            // the attach callback and installs pre-draw on the real observer.
+            val bootstrapToken = materialController?.currentBootstrapToken()
+            if (bootstrapToken != null) {
+                ensureFrameCommitObservation(current, nextAttach, bootstrapToken).startBeforeNextDraw()
+            }
             reportWindowDiagnostic("ADD_VIEW_BEGIN", "windowManager", nextAttach)
             return runCatching {
                 manager.addView(current, parameters(resolvedGeometry))
@@ -172,30 +187,31 @@ internal class KeyguardCardWindow(
                     appliedPresentation = presentation
                     appliedGeometry = resolvedGeometry
                     firstShaderDrawAttachGeneration = attachGeneration
-                    firstFrameCommitObservation?.cancel()
-                    firstFrameCommitObservation = null
-                    val bootstrap = materialController?.requiresBootstrapForNextAttach() == true
-                    if (bootstrap) {
-                        // This installs the FrameCommit callback from root
-                        // pre-draw, before controller invalidation can reach
-                        // the bootstrap Canvas traversal.
-                        ensureFrameCommitObservation(current, attachGeneration).startBeforeNextDraw()
-                    }
+                    // The pre-attach arm above must remain intact. Re-arm
+                    // only if material selection changed synchronously during
+                    // addView; never wait for a later accessibility event.
+                    observeBootstrapBeforeNextDraw()
                     materialController?.onAttached()
                     observeFirstRootDraw(current, attachGeneration)
                     reportWindowDiagnostic("POST_ADD_SETUP_COMPLETE", "success", attachGeneration)
                     if (settings.cardPosition == null) {
-                        // Only an attached window has reliable insets. Persist
-                        // the old BOTTOM-gravity placement once, without
-                        // touching focus/content configuration.
-                        FluviKeyguardCardSettings.migrateCardPosition(
-                            serviceContext,
-                            resolvedGeometry.cardPosition,
-                        )
+                        // Only an attached window has reliable insets. Defer
+                        // this one-time preference migration until the first
+                        // root draw has completed; it is not needed to render
+                        // the initially authorized geometry.
+                        pendingCardPositionMigration = attachGeneration to resolvedGeometry.cardPosition
                     }
                     Result.ATTACHED
                 },
                 onFailure = {
+                    bootstrapToken?.let { token ->
+                        firstFrameCommitObservation
+                            ?.takeIf { observation -> observation.matches(current, nextAttach, token) }
+                            ?.also { observation ->
+                                observation.cancel()
+                                firstFrameCommitObservation = null
+                            }
+                    }
                     lifecycle.onAttachFailed()
                     appliedPresentation = null
                     appliedGeometry = null
@@ -214,6 +230,9 @@ internal class KeyguardCardWindow(
         val contentChanged = appliedPresentation?.visualKey != presentation.visualKey
         val geometryChanged = appliedGeometry != resolvedGeometry
         if (lifecycle.renderOperation(contentChanged, geometryChanged) == KeyguardCardWindowLifecycle.Operation.NONE) {
+            // A no-op surface confirmation must not strand a bootstrap whose
+            // pre-attach observer raced the actual View attachment.
+            observeBootstrapBeforeNextDraw()
             return if (presentationConfigurationChanged) Result.LAYOUT_UPDATED else Result.NO_OP
         }
         if (contentChanged) apply(current, presentation, force = false, mode = settings.presentationMode)
@@ -260,6 +279,8 @@ internal class KeyguardCardWindow(
         firstRootDrawObservation = null
         firstFrameCommitObservation?.cancel()
         firstFrameCommitObservation = null
+        acceptedBootstrapToken = null
+        pendingCardPositionMigration = null
         firstShaderDrawAttachGeneration = null
         current.cancelInteraction("detach", restorePosition = false)
         clearDragFrame()
@@ -285,6 +306,10 @@ internal class KeyguardCardWindow(
     fun dispose() {
         firstRootDrawObservation?.cancel()
         firstRootDrawObservation = null
+        firstFrameCommitObservation?.cancel()
+        firstFrameCommitObservation = null
+        acceptedBootstrapToken = null
+        pendingCardPositionMigration = null
         firstShaderDrawAttachGeneration = null
         root?.cancelInteraction("dispose", restorePosition = false)
         clearDragFrame()
@@ -367,13 +392,26 @@ internal class KeyguardCardWindow(
             controller.onPreparationStage = { stage, fields ->
                 reportWindowDiagnostic(stage, fields["programKey"]?.toString() ?: "material", null)
             }
+            controller.onBootstrapGeometryDrawn = bootstrapGeometry@{ token ->
+                val capturedAttach = firstShaderDrawAttachGeneration ?: return@bootstrapGeometry
+                val currentRoot = root ?: return@bootstrapGeometry
+                if (!lifecycle.isAttached() || attachGeneration != capturedAttach) return@bootstrapGeometry
+                // Canvas.onDraw uses this tiny, functional acknowledgement on
+                // every bootstrap traversal. It does not take diagnostics
+                // locks and it remains valid even if the diagnostic
+                // first-bootstrap callback already fired before an observer
+                // was armed.
+                firstFrameCommitObservation
+                    ?.takeIf { it.matches(currentRoot, capturedAttach, token) }
+                    ?.markExpectedDrawObserved(capturedAttach, token)
+            }
             controller.onFirstBootstrapOrbDraw = bootstrapDraw@{ observedAtUptimeMs ->
                 val capturedAttach = firstShaderDrawAttachGeneration ?: return@bootstrapDraw
                 val currentRoot = root
                 if (currentRoot != null && attachGeneration == capturedAttach && lifecycle.isAttached()) {
-                    firstFrameCommitObservation?.markExpectedDrawObserved()
                     // The material View invokes this while Canvas draw is in
-                    // progress. Keep all diagnostics outside that dispatch.
+                    // progress. Functional acknowledgement is deliberately
+                    // separate above; keep diagnostics outside dispatch.
                     mainHandler.post {
                         if (lifecycle.isAttached() && root === currentRoot && attachGeneration == capturedAttach) {
                             onBootstrapDraw(KeyguardFirstDrawEvent(capturedAttach, observedAtUptimeMs))
@@ -381,20 +419,29 @@ internal class KeyguardCardWindow(
                     }
                 }
             }
-            controller.onLivePromoted = {
+            controller.onLivePromoted = livePromoted@{ token ->
                 val capturedAttach = firstShaderDrawAttachGeneration
-                if (capturedAttach != null && lifecycle.isAttached() && attachGeneration == capturedAttach) {
-                    onLivePromotion(KeyguardFirstDrawEvent(capturedAttach, SystemClock.uptimeMillis()))
+                val currentRoot = root
+                // The controller transition is already complete at this
+                // point. Defer capture publication so it never extends the
+                // frame-commit-to-LIVE critical path.
+                mainHandler.post {
+                    if (capturedAttach != null && currentRoot != null &&
+                        lifecycle.isAttached() && root === currentRoot &&
+                        attachGeneration == capturedAttach && acceptedBootstrapToken == token
+                    ) onLivePromotion(KeyguardFirstDrawEvent(capturedAttach, SystemClock.uptimeMillis()))
                 }
             }
             controller.onFirstOrbShaderDraw = shaderDraw@{ observedAtUptimeMs ->
                 val capturedAttach = firstShaderDrawAttachGeneration ?: return@shaderDraw
+                val currentRoot = root ?: return@shaderDraw
                 // KeyguardHeaderMaterialView invokes this while Canvas draw is
                 // in progress. Service diagnostics must run only after that
                 // dispatch has unwound, and only for this exact attach.
                 mainHandler.post {
                     if (firstShaderDrawAttachGeneration != capturedAttach ||
                         !lifecycle.isAttached() ||
+                        root !== currentRoot ||
                         attachGeneration != capturedAttach
                     ) return@post
                     onFirstShaderDraw(
@@ -403,6 +450,10 @@ internal class KeyguardCardWindow(
                             observedAtUptimeMs = observedAtUptimeMs,
                         ),
                     )
+                    // The one-time legacy position persistence is unrelated
+                    // to the first visible shader frame. Keep it behind that
+                    // frame rather than between bootstrap commit and LIVE.
+                    migrateCardPositionAfterFirstRootDraw(currentRoot, capturedAttach)
                 }
             }
         }
@@ -629,10 +680,28 @@ internal class KeyguardCardWindow(
                 firstRootDrawObservation = null
                 if (!lifecycle.isAttached() || root !== current || attachGeneration != event.attachGeneration) return@rootDraw
                 onFirstRootDraw(event)
+                // Static/no-animation presentations have no later live
+                // shader draw. Animated bootstrap waits until that live draw
+                // so preference I/O cannot delay frame commitment/promotion.
+                if (materialController?.requiresBootstrapForNextAttach() != true) {
+                    migrateCardPositionAfterFirstRootDraw(current, event.attachGeneration)
+                }
             },
         )
         firstRootDrawObservation = observation
         observation.start()
+    }
+
+    private fun migrateCardPositionAfterFirstRootDraw(current: View, capturedAttach: Long) {
+        val pending = pendingCardPositionMigration
+            ?.takeIf { (generation, _) -> generation == capturedAttach }
+            ?: return
+        pendingCardPositionMigration = null
+        mainHandler.post {
+            if (lifecycle.isAttached() && root === current && attachGeneration == capturedAttach) {
+                FluviKeyguardCardSettings.migrateCardPosition(serviceContext, pending.second)
+            }
+        }
     }
 
     /** Registration occurs from root pre-draw before bootstrap Canvas work.
@@ -642,40 +711,51 @@ internal class KeyguardCardWindow(
     private fun ensureFrameCommitObservation(
         current: View,
         capturedAttach: Long,
+        bootstrapToken: KeyguardBootstrapFrameToken,
     ): KeyguardFrameCommitObservation {
-        firstFrameCommitObservation?.let { return it }
+        firstFrameCommitObservation?.let { existing ->
+            if (existing.matches(current, capturedAttach, bootstrapToken)) return existing
+            existing.cancel()
+            firstFrameCommitObservation = null
+        }
+        acceptedBootstrapToken = null
         lateinit var observation: KeyguardFrameCommitObservation
         observation = KeyguardFrameCommitObservation(
             root = current,
             attachGeneration = capturedAttach,
+            bootstrapToken = bootstrapToken,
             onCommitted = frameCommit@{ event ->
                 if (firstFrameCommitObservation !== observation) return@frameCommit
-                firstFrameCommitObservation = null
-                if (!lifecycle.isAttached() || root !== current || attachGeneration != event.attachGeneration) {
-                    return@frameCommit
-                }
-                // The renderer's callback is not a place to take the
-                // capture-store lock. Preserve its observation timestamp,
-                // then publish after this callback has returned. Re-check the
-                // exact attach so an old frame cannot report into a reattach.
-                mainHandler.post {
-                    if (!lifecycle.isAttached() || root !== current || attachGeneration != event.attachGeneration) {
-                        return@post
+                val transition = transition@{
+                    if (firstFrameCommitObservation !== observation ||
+                        !lifecycle.isAttached() || root !== current ||
+                        attachGeneration != event.attachGeneration ||
+                        materialController?.currentBootstrapToken() != event.bootstrapToken
+                    ) return@transition
+                    // Run the functional controller transition as soon as the
+                    // commit reaches the View owner. Capture work is posted
+                    // only after this small, owned state change.
+                    if (materialController?.onBootstrapFrameCommitted(event.bootstrapToken) != true) {
+                        firstFrameCommitObservation = null
+                        return@transition
                     }
-                    materialController?.onBootstrapFrameCommitted()
-                    onBootstrapCommit(
-                        KeyguardFirstDrawEvent(
+                    firstFrameCommitObservation = null
+                    acceptedBootstrapToken = event.bootstrapToken
+                    mainHandler.post diagnostic@{
+                        if (!lifecycle.isAttached() || root !== current ||
+                            attachGeneration != event.attachGeneration ||
+                            acceptedBootstrapToken != event.bootstrapToken
+                        ) return@diagnostic
+                        val diagnosticEvent = KeyguardFirstDrawEvent(
                             attachGeneration = event.attachGeneration,
                             observedAtUptimeMs = event.observedAtUptimeMs,
-                        ),
-                    )
-                    onFrameCommit(
-                        KeyguardFirstDrawEvent(
-                            attachGeneration = event.attachGeneration,
-                            observedAtUptimeMs = event.observedAtUptimeMs,
-                        ),
-                    )
+                        )
+                        onBootstrapCommit(diagnosticEvent)
+                        onFrameCommit(diagnosticEvent)
+                    }
                 }
+                if (Looper.myLooper() == Looper.getMainLooper()) transition()
+                else mainHandler.post(transition)
             },
         )
         firstFrameCommitObservation = observation
@@ -707,9 +787,8 @@ internal class KeyguardCardWindow(
         val current = root ?: return
         val capturedAttach = firstShaderDrawAttachGeneration ?: return
         if (!lifecycle.isAttached() || attachGeneration != capturedAttach) return
-        if (materialController?.requiresBootstrapForNextAttach() == true) {
-            ensureFrameCommitObservation(current, capturedAttach).startBeforeNextDraw()
-        }
+        val bootstrapToken = materialController?.currentBootstrapToken() ?: return
+        ensureFrameCommitObservation(current, capturedAttach, bootstrapToken).startBeforeNextDraw()
     }
 
     private fun checkMainThread() {
