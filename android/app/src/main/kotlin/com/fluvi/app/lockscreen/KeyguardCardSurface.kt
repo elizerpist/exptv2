@@ -27,7 +27,18 @@ internal enum class KeyguardSurfaceReason {
 internal data class KeyguardSurfaceClassification(
     val surface: KeyguardSurface,
     val reason: KeyguardSurfaceReason,
+    /** Counts only classifier marker categories, never screen text. */
+    val markers: KeyguardSurfaceMarkers = KeyguardSurfaceMarkers(),
 )
+
+internal data class KeyguardSurfaceMarkers(
+    val main: Int = 0,
+    val credential: Int = 0,
+    val shade: Int = 0,
+    val occlusion: Int = 0,
+) {
+    fun compact(): String = "main:$main,credential:$credential,shade:$shade,occlusion:$occlusion"
+}
 
 internal data class KeyguardWindowSnapshot(
     val packageName: String?,
@@ -88,26 +99,33 @@ internal object KeyguardSurfaceClassifier {
         )
         val system = visible.filter { it.packageName in systemPackages }
         val ids = system.flatMapTo(linkedSetOf()) { it.visibleViewIds }
+        val markers = KeyguardSurfaceMarkers(
+            main = ids.count { it in mainIds },
+            credential = ids.count { it in credentialIds || it.contains("bouncer", ignoreCase = true) },
+            shade = ids.count { it in shadeIds },
+            occlusion = ids.count { it in occludedIds || it.contains("global_actions", ignoreCase = true) },
+        )
         // Priority is deliberately security-first. A positive clock/carrier
         // marker can never override a visible bouncer or shade marker.
         if (ids.any { it in credentialIds || it.contains("bouncer", ignoreCase = true) }) {
-            return KeyguardSurfaceClassification(KeyguardSurface.CREDENTIAL, KeyguardSurfaceReason.CREDENTIAL_MARKER)
+            return KeyguardSurfaceClassification(KeyguardSurface.CREDENTIAL, KeyguardSurfaceReason.CREDENTIAL_MARKER, markers)
         }
         if (ids.any { it in occludedIds || it.contains("global_actions", ignoreCase = true) }) {
-            return KeyguardSurfaceClassification(KeyguardSurface.OCCLUDED, KeyguardSurfaceReason.FOREIGN_ABOVE)
+            return KeyguardSurfaceClassification(KeyguardSurface.OCCLUDED, KeyguardSurfaceReason.FOREIGN_ABOVE, markers)
         }
-        if (ids.any { it in shadeIds }) return KeyguardSurfaceClassification(KeyguardSurface.SHADE, KeyguardSurfaceReason.SHADE_MARKER)
+        if (ids.any { it in shadeIds }) return KeyguardSurfaceClassification(KeyguardSurface.SHADE, KeyguardSurfaceReason.SHADE_MARKER, markers)
         val foreignAboveSystem = visible.any { window ->
             window.packageName != null &&
                 window.packageName !in systemPackages &&
                 window.packageName != "com.fluvi.app" &&
                 window.layer >= (system.maxOfOrNull { it.layer } ?: Int.MAX_VALUE)
         }
-        if (foreignAboveSystem) return KeyguardSurfaceClassification(KeyguardSurface.OCCLUDED, KeyguardSurfaceReason.FOREIGN_ABOVE)
-        if (ids.any { it in mainIds }) return KeyguardSurfaceClassification(KeyguardSurface.MAIN_KEYGUARD, KeyguardSurfaceReason.MAIN_CONFIRMED)
+        if (foreignAboveSystem) return KeyguardSurfaceClassification(KeyguardSurface.OCCLUDED, KeyguardSurfaceReason.FOREIGN_ABOVE, markers)
+        if (ids.any { it in mainIds }) return KeyguardSurfaceClassification(KeyguardSurface.MAIN_KEYGUARD, KeyguardSurfaceReason.MAIN_CONFIRMED, markers)
         return KeyguardSurfaceClassification(
             KeyguardSurface.UNKNOWN,
             if (walkTruncated) KeyguardSurfaceReason.WALK_TRUNCATED else KeyguardSurfaceReason.NO_MAIN_MARKER,
+            markers,
         )
     }
 }

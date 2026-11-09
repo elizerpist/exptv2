@@ -139,6 +139,104 @@ class KeyguardCardInspectionQueueTest {
         assertTrue(owner.beginOrJoin(nextId = 9L, source = "wake", observedAtUptimeMs = 300L).started)
     }
 
+    @Test fun `unknown while detached preserves compatible pending inspection without authority churn`() {
+        val queue = KeyguardCardInspectionQueue()
+        val active = request(1, "wake")
+        val successor = request(2, "window")
+        val authority = KeyguardInspectionAuthority(1, 1, 1, 1, 1)
+        assertTrue(queue.offer(active))
+        assertFalse(queue.offer(successor))
+
+        val transition = KeyguardAwaitingSurfacePolicy.onUnknown(
+            current = KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE,
+            overlayAttached = false,
+            hasCompatiblePendingRequest = authority.matches(checkNotNull(queue.pendingRequest())),
+            retryAvailable = true,
+        )
+
+        assertFalse(transition.withdrawVisibleOverlay)
+        assertFalse(transition.invalidatesVisibleAuthority)
+        assertEquals(KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING, transition.followup)
+        assertEquals(successor, queue.complete(active))
+        assertTrue(authority.matches(checkNotNull(queue.activeRequest())))
+    }
+
+    @Test fun `detached unknown schedules fallback only when no successor exists`() {
+        val queue = KeyguardCardInspectionQueue()
+        val active = request(1, "wake")
+        assertTrue(queue.offer(active))
+
+        val transition = KeyguardAwaitingSurfacePolicy.onUnknown(
+            current = KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE,
+            overlayAttached = false,
+            hasCompatiblePendingRequest = queue.pendingRequest() != null,
+            retryAvailable = true,
+        )
+
+        assertEquals(KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK, transition.followup)
+        assertNull(queue.complete(active))
+        // The completed active cause was not counted as future work, so a
+        // bounded fallback is still permitted to make progress.
+    }
+
+    @Test fun `fresh event beats scheduled fallback without adding another pending request`() {
+        val queue = KeyguardCardInspectionQueue()
+        val active = request(1, "wake")
+        val event = request(2, "window")
+        assertTrue(queue.offer(active))
+        assertFalse(queue.offer(event))
+
+        val timerTransition = KeyguardAwaitingSurfacePolicy.onUnknown(
+            current = KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE,
+            overlayAttached = false,
+            hasCompatiblePendingRequest = queue.pendingRequest() != null,
+            retryAvailable = true,
+        )
+
+        assertEquals(KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING, timerTransition.followup)
+        assertEquals(event, queue.complete(active))
+        assertNull(queue.pendingRequest())
+    }
+
+    @Test fun `retry exhaustion leaves physical wake open awaiting a later event`() {
+        val owner = KeyguardWakeCycleOwner()
+        val cycle = owner.beginOrJoin(10L, "display", 100L).cycle
+
+        val transition = KeyguardAwaitingSurfacePolicy.onUnknown(
+            current = KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE,
+            overlayAttached = false,
+            hasCompatiblePendingRequest = false,
+            retryAvailable = false,
+        )
+
+        assertEquals(KeyguardUnknownSurfaceFollowup.WAIT_FOR_EVENT, transition.followup)
+        assertEquals(KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE, transition.nextState)
+        assertEquals(cycle, owner.current())
+        assertFalse(owner.beginOrJoin(11L, "window", 120L).started)
+    }
+
+    @Test fun `visible unknown withdraws once then subsequent detached unknown is awaiting only`() {
+        val first = KeyguardAwaitingSurfacePolicy.onUnknown(
+            current = KeyguardSurfacePresentationState.VISIBLE,
+            overlayAttached = true,
+            hasCompatiblePendingRequest = false,
+            retryAvailable = true,
+        )
+        val second = KeyguardAwaitingSurfacePolicy.onUnknown(
+            current = first.nextState,
+            overlayAttached = false,
+            hasCompatiblePendingRequest = false,
+            retryAvailable = true,
+        )
+
+        assertTrue(first.withdrawVisibleOverlay)
+        assertTrue(first.invalidatesVisibleAuthority)
+        assertEquals(KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE, first.nextState)
+        assertFalse(second.withdrawVisibleOverlay)
+        assertFalse(second.invalidatesVisibleAuthority)
+        assertEquals(KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE, second.nextState)
+    }
+
     private fun request(id: Long, trigger: String) = KeyguardCardInspectionRequest(
         id = id,
         trigger = trigger,

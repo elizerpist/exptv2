@@ -112,6 +112,11 @@ class FluviKeyguardCardService : AccessibilityService() {
     @Volatile private var lastMaterialProfile: KeyguardMaterialProfile? = null
     private var showEvent = false
     private var appliedDecision = KeyguardCardVisibility.HIDDEN_DISCONNECTED
+    /** Surface uncertainty is distinct from a terminal device exclusion.  The
+     * window lifecycle remains authoritative for attachment; this state keeps
+     * UNKNOWN results from churning authority while that lifecycle is already
+     * detached. */
+    private var surfacePresentationState = KeyguardSurfacePresentationState.TERMINALLY_EXCLUDED
     private var overlayAttachGeneration = 0L
     private lateinit var overlay: KeyguardCardWindow
     /** These identities are diagnostic-only and stay stable across the
@@ -214,6 +219,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         val requestId: Long,
         val session: Long,
         val visibilityEpoch: Long,
+        val interactionEpoch: Long,
+        val attachGeneration: Long,
         val wakeGeneration: Long,
         val scheduledAtUptimeMs: Long,
         val dueAtUptimeMs: Long,
@@ -527,6 +534,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         // A new wake is a new eligible cycle; a prior terminal exclusion must
         // not suppress its first authoritative inspection.
         terminalHideState = null
+        surfacePresentationState = KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE
         publishInspectionAuthority()
         firstDrawOwner = null
         retryCount = 0
@@ -615,6 +623,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             requestId = cause.id,
             session = cause.session,
             visibilityEpoch = visibilityEpoch.get(),
+            interactionEpoch = interactionEpoch.get(),
+            attachGeneration = overlayAttachGeneration,
             wakeGeneration = cause.wakeGeneration,
             scheduledAtUptimeMs = scheduledAt,
             dueAtUptimeMs = scheduledAt + delay,
@@ -656,6 +666,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             )
             if (token.session != session.get() ||
                 token.visibilityEpoch != visibilityEpoch.get() ||
+                token.interactionEpoch != interactionEpoch.get() ||
+                token.attachGeneration != overlayAttachGeneration ||
                 token.wakeGeneration != wakeEpoch ||
                 !FluviKeyguardCardServiceRegistry.connected
             ) return@Runnable
@@ -663,6 +675,17 @@ class FluviKeyguardCardService : AccessibilityService() {
             // callback, not by the timer's ideal due time. Lateness is
             // recorded separately above.
             if (fastHideIfSystemExcluded("retryGate", firedAt)) return@Runnable
+            if (hasCompatibleCycleInspection()) {
+                traceKeyguard(
+                    "RETRY_SUPPRESSED_FOR_PENDING",
+                    "compatibleWork",
+                    requestId = token.requestId,
+                    observedUptimeMs = firedAt,
+                    diagnosticContext = token.diagnosticContext,
+                    fields = mapOf("retryId" to token.retryId, "retryIndex" to token.retryIndex),
+                )
+                return@Runnable
+            }
             scheduleEvaluation("surfaceRetry", triggerReceivedUptimeMs = firedAt)
         }.also { mainHandler.postDelayed(it, delay) }
     }
@@ -737,6 +760,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "queuedAtUptimeMs" to now,
                 "eventTimeUptimeMs" to (eventTimeUptimeMs ?: "NA"),
                 "replacedPendingRequestId" to (queueOffer.second ?: "NA"),
+                "requestVisibilityEpoch" to request.visibilityEpoch,
+                "requestInteractionEpoch" to request.interactionEpoch,
+                "requestWakeGeneration" to request.wakeGeneration,
             ),
         )
         if (queueOffer.first) inspectionScope.launch { processInspectionQueue(request) }
@@ -798,6 +824,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     "localProcessingMs" to result.windowTiming.localProcessingMs,
                     "slowWindowCalls" to result.windowTiming.slowCalls.joinToString(";"),
                     "surfaceClassification" to result.decision.name,
+                    "surfaceMarkers" to result.surfaceMarkers,
                     "abortedStale" to result.abortedStale,
                     "inspectionsAbortedBeforeRead" to inspectionsAbortedBeforeRead.get(),
                     "inspectionsAbortedDuringWalk" to inspectionsAbortedDuringWalk.get(),
@@ -838,6 +865,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val signals: KeyguardCardSignals,
         val decision: KeyguardCardVisibility,
         val surfaceReason: KeyguardSurfaceReason,
+        val surfaceMarkers: String = KeyguardSurfaceMarkers().compact(),
         val ownOverlayWindowId: Int? = null,
         val windowCount: Int = 0,
         val visitedNodeCount: Int = 0,
@@ -1013,6 +1041,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             signals,
             KeyguardCardVisibilityPolicy.decide(signals),
             classification.reason,
+            classification.markers.compact(),
             read.snapshots.firstOrNull { it.ownOverlay }?.windowId?.takeIf { it >= 0 },
             windowCount = read.snapshots.size,
             visitedNodeCount = read.visitedNodeCount,
@@ -1312,7 +1341,13 @@ class FluviKeyguardCardService : AccessibilityService() {
             "INSPECTION_APPLIED",
             inspection.surfaceReason.name,
             request,
-            fields = mapOf("decision" to decision.name),
+            fields = mapOf(
+                "decision" to decision.name,
+                "surfaceClassification" to inspection.surfaceReason.name,
+                "surfaceMarkers" to inspection.surfaceMarkers,
+                "visibilityEpochAtApply" to visibilityEpoch.get(),
+                "pendingRequestIdAtApply" to (synchronized(queueLock) { inspectionQueue.pendingRequest()?.id } ?: "NA"),
+            ),
         )
         appliedDecision = decision
         when (decision) {
@@ -1344,19 +1379,113 @@ class FluviKeyguardCardService : AccessibilityService() {
                 )
             }
             else -> {
-                val shouldRetry = decision == KeyguardCardVisibility.HIDDEN_UNKNOWN && retryCount < RETRY_DELAYS_MS.size &&
-                    isDisplayOnAndInteractive() && keyguardManager.isKeyguardLocked
-                hideImmediately(
-                    decision.name,
-                    terminalWake = !shouldRetry,
-                    triggerReceivedUptimeMs = request.triggerReceivedUptimeMs,
-                    diagnosticContext = request.diagnosticContext,
-                    causingInspectionRequestId = request.id,
-                )
-                if (shouldRetry) scheduleWakeRetry(request)
+                if (decision == KeyguardCardVisibility.HIDDEN_UNKNOWN) {
+                    handleUnknownSurface(inspection, request)
+                } else {
+                    hideImmediately(
+                        decision.name,
+                        triggerReceivedUptimeMs = request.triggerReceivedUptimeMs,
+                        diagnosticContext = request.diagnosticContext,
+                        causingInspectionRequestId = request.id,
+                    )
+                }
             }
         }
     }
+
+    /**
+     * A missing main-keyguard marker is an observation, not proof that the
+     * wake ended.  In particular, it must not invalidate a newer request while
+     * this retained root is already detached.
+     */
+    private fun handleUnknownSurface(
+        inspection: Inspection,
+        request: KeyguardCardInspectionRequest,
+    ) {
+        val compatiblePending = synchronized(queueLock) {
+            inspectionQueue.pendingRequest()?.takeIf(inspectionAuthority::matches)
+        }
+        val hadCompatiblePending = compatiblePending != null
+        val retryAvailable = retryCount < RETRY_DELAYS_MS.size &&
+            isDisplayOnAndInteractive() && keyguardManager.isKeyguardLocked
+        val wasAttached = overlay.isAttached
+        val beforeVisibilityEpoch = visibilityEpoch.get()
+        val transition = KeyguardAwaitingSurfacePolicy.onUnknown(
+            current = surfacePresentationState,
+            overlayAttached = wasAttached,
+            hasCompatiblePendingRequest = hadCompatiblePending,
+            retryAvailable = retryAvailable,
+        )
+        surfacePresentationState = transition.nextState
+        traceKeyguard(
+            "AWAITING_MAIN_SURFACE",
+            inspection.surfaceReason.name,
+            request,
+            fields = mapOf(
+                "overlayAttached" to wasAttached,
+                "presentationState" to transition.nextState.name,
+                "followupAction" to transition.followup.name,
+                "pendingRequestId" to (compatiblePending?.id ?: "NA"),
+                "visibilityEpochBefore" to beforeVisibilityEpoch,
+                // The detached branch deliberately leaves authority alone.
+                "visibilityEpochAfter" to visibilityEpoch.get(),
+            ),
+        )
+
+        if (transition.withdrawVisibleOverlay) {
+            hideImmediately(
+                reason = decisionNameForUnknownWithdrawal(inspection),
+                terminalWake = false,
+                triggerReceivedUptimeMs = request.triggerReceivedUptimeMs,
+                diagnosticContext = request.diagnosticContext,
+                causingInspectionRequestId = request.id,
+                awaitingSurfaceWithdrawal = true,
+            )
+            when (transition.followup) {
+                KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING -> {
+                    // The queued request was captured under the withdrawn
+                    // generation. Replace it exactly once under current
+                    // authority; never relabel its old answer as fresh.
+                    traceKeyguard(
+                        "PENDING_REPLACED_AFTER_UNKNOWN",
+                        "withdrawalAuthorityChanged",
+                        requestId = compatiblePending?.id,
+                        diagnosticContext = request.diagnosticContext,
+                        fields = mapOf("causingRequestId" to request.id),
+                    )
+                    preservePendingReconciliation("unknownVisible", requirePending = true)
+                }
+                KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK -> scheduleWakeRetry(request)
+                KeyguardUnknownSurfaceFollowup.WAIT_FOR_EVENT -> traceKeyguard(
+                    "RETRY_BUDGET_EXHAUSTED_AWAITING",
+                    "unknownVisible",
+                    request,
+                )
+            }
+            return
+        }
+
+        // Already hidden: do not call hideImmediately. A compatible pending
+        // request has the same authority and can run as soon as this active
+        // request completes. The active cause itself never counts as future
+        // work here.
+        when (transition.followup) {
+            KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING -> traceKeyguard(
+                "RETRY_SUPPRESSED_FOR_PENDING",
+                "unknownAlreadyHidden",
+                request,
+            )
+            KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK -> scheduleWakeRetry(request)
+            KeyguardUnknownSurfaceFollowup.WAIT_FOR_EVENT -> traceKeyguard(
+                "RETRY_BUDGET_EXHAUSTED_AWAITING",
+                "unknownAlreadyHidden",
+                request,
+            )
+        }
+    }
+
+    private fun decisionNameForUnknownWithdrawal(inspection: Inspection): String =
+        "${KeyguardCardVisibility.HIDDEN_UNKNOWN.name}:${inspection.surfaceReason.name}"
 
     private fun showFullContent(
         expectedSession: Long,
@@ -1596,6 +1725,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         when (result) {
             KeyguardCardWindow.Result.ATTACHED -> {
                 overlayAttachGeneration = overlay.currentAttachGeneration
+                surfacePresentationState = KeyguardSurfacePresentationState.VISIBLE
                 knownOwnOverlayIdentity = null
                 publishInspectionAuthority()
                 preservePendingReconciliation("attach", requirePending = true)
@@ -1619,12 +1749,20 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
             KeyguardCardWindow.Result.CONTENT_UPDATED,
             KeyguardCardWindow.Result.REDACTED -> {
+                if (overlay.isAttached) surfacePresentationState = KeyguardSurfacePresentationState.VISIBLE
                 KeyguardCardDiagnostics.record(this, "KG|CONTENT_UPDATE", "$reason:${result.name}", true)
                 traceKeyguard("CONTENT_UPDATED", reason, requestId = causingInspectionRequestId, diagnosticContext = diagnosticContext)
             }
-            KeyguardCardWindow.Result.LAYOUT_UPDATED -> KeyguardCardDiagnostics.record(this, "KG|LAYOUT_UPDATE", reason, true)
-            KeyguardCardWindow.Result.NO_OP -> traceKeyguard("SURFACE_RECONFIRMED", reason, requestId = causingInspectionRequestId, diagnosticContext = diagnosticContext)
+            KeyguardCardWindow.Result.LAYOUT_UPDATED -> {
+                if (overlay.isAttached) surfacePresentationState = KeyguardSurfacePresentationState.VISIBLE
+                KeyguardCardDiagnostics.record(this, "KG|LAYOUT_UPDATE", reason, true)
+            }
+            KeyguardCardWindow.Result.NO_OP -> {
+                if (overlay.isAttached) surfacePresentationState = KeyguardSurfacePresentationState.VISIBLE
+                traceKeyguard("SURFACE_RECONFIRMED", reason, requestId = causingInspectionRequestId, diagnosticContext = diagnosticContext)
+            }
             KeyguardCardWindow.Result.FAILED -> {
+                surfacePresentationState = KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE
                 KeyguardCardDiagnostics.attach(this, "failed")
                 KeyguardCardDiagnostics.record(this, "KG|ATTACH_FAILED", "window", false)
                 traceKeyguard(
@@ -1670,6 +1808,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     private fun hideImmediately(
         reason: String,
         terminalWake: Boolean = true,
+        awaitingSurfaceWithdrawal: Boolean = false,
         triggerReceivedUptimeMs: Long? = null,
         diagnosticContext: KeyguardDiagnosticContext? = currentDiagnosticAttempt,
         causingInspectionRequestId: Long? = null,
@@ -1707,6 +1846,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             fields = mapOf(
                 "triggerReceivedUptimeMs" to (triggerReceivedUptimeMs ?: "NA"),
                 "terminalWake" to terminalWake,
+                "awaitingSurfaceWithdrawal" to awaitingSurfaceWithdrawal,
                 "visibilityEpochBefore" to visibilityEpoch.get(),
             ),
         )
@@ -1726,6 +1866,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         knownOwnOverlayIdentity = null
         publishInspectionAuthority()
+        surfacePresentationState = if (terminalWake) {
+            KeyguardSurfacePresentationState.TERMINALLY_EXCLUDED
+        } else {
+            KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE
+        }
         appliedDecision = KeyguardCardVisibility.HIDDEN_UNKNOWN
         showEvent = false
         val dragWasActive = ::overlay.isInitialized && overlay.isDragActive
@@ -1738,7 +1883,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                 attachGeneration = overlayAttachGeneration.takeIf { it > 0 },
                 diagnosticContext = diagnosticContext,
                 operation = hideOperation,
-                fields = mapOf("attachedBefore" to wasAttachedBefore, "dragActive" to dragWasActive),
+                fields = mapOf(
+                    "attachedBefore" to wasAttachedBefore,
+                    "dragActive" to dragWasActive,
+                    "awaitingSurfaceWithdrawal" to awaitingSurfaceWithdrawal,
+                ),
             )
             activeWindowDiagnosticOperation = hideOperation
             val removed = try {

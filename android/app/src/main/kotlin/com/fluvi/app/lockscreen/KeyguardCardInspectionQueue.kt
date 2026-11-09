@@ -149,3 +149,63 @@ internal object KeyguardTerminalHideGate {
     ): Boolean = !terminalWake || overlayAttached || previous?.serviceSession != serviceSession ||
         previous.invalidatedVisibilityEpoch != visibilityEpoch
 }
+
+/**
+ * Surface uncertainty is not itself a terminal device transition.  Keep this
+ * deliberately small and close to the inspection queue: it describes only
+ * what an already-authorised inspection may do after it cannot prove the
+ * main keyguard surface.  The service remains the owner of the actual Window
+ * lifecycle and the terminal gates.
+ */
+internal enum class KeyguardSurfacePresentationState {
+    AWAITING_MAIN_SURFACE,
+    VISIBLE,
+    WITHDRAWN_AWAITING_SURFACE,
+    TERMINALLY_EXCLUDED,
+}
+
+internal enum class KeyguardUnknownSurfaceFollowup {
+    CONTINUE_PENDING,
+    SCHEDULE_FALLBACK,
+    WAIT_FOR_EVENT,
+}
+
+internal data class KeyguardUnknownSurfaceTransition(
+    val nextState: KeyguardSurfacePresentationState,
+    val withdrawVisibleOverlay: Boolean,
+    val invalidatesVisibleAuthority: Boolean,
+    val followup: KeyguardUnknownSurfaceFollowup,
+)
+
+/** Production transition policy used by [FluviKeyguardCardService].  In
+ * particular, the active request which is currently being applied is never
+ * passed as [hasCompatiblePendingRequest]; only a queued successor counts as
+ * future work. */
+internal object KeyguardAwaitingSurfacePolicy {
+    fun onUnknown(
+        current: KeyguardSurfacePresentationState,
+        overlayAttached: Boolean,
+        hasCompatiblePendingRequest: Boolean,
+        retryAvailable: Boolean,
+    ): KeyguardUnknownSurfaceTransition {
+        val withdrawing = overlayAttached
+        val next = if (withdrawing) {
+            KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE
+        } else if (current == KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE) {
+            KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE
+        } else {
+            KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE
+        }
+        val followup = when {
+            hasCompatiblePendingRequest -> KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING
+            retryAvailable -> KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK
+            else -> KeyguardUnknownSurfaceFollowup.WAIT_FOR_EVENT
+        }
+        return KeyguardUnknownSurfaceTransition(
+            nextState = next,
+            withdrawVisibleOverlay = withdrawing,
+            invalidatesVisibleAuthority = withdrawing,
+            followup = followup,
+        )
+    }
+}

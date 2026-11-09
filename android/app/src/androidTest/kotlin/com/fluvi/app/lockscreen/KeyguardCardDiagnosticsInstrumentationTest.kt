@@ -108,6 +108,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("hideSignalToRemoveReturnMs=5"))
         assertTrue(report.contains("actualWithdrawalHideOp=${hide.hideOperationId}"))
         assertTrue(report.contains("terminalCleanupHideOp=${cleanup.hideOperationId}"))
+        assertTrue(report.contains("FIRST_INSPECTION req=44"))
+        assertTrue(report.contains("SHOWING_INSPECTION req=44"))
+        assertTrue(report.contains("ACTUAL_WITHDRAWAL_INSPECTION req=44"))
         assertTrue(report.contains("triggerToLocalHideMs=3"))
         assertFalse(report.contains("showDecisionToAddViewBeginMs=-"))
     }

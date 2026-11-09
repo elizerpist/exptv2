@@ -442,6 +442,7 @@ internal object KeyguardCardDiagnostics {
     private const val MAX_EVENTS = 512
     private const val MAX_EVENT_BYTES = 128 * 1024
     private const val MAX_ATTEMPTS = 10
+    private const val MAX_INSPECTION_LEDGER = 16
     private const val ACTIVE_CAPTURE_MS = 5 * 60 * 1000L
     private const val CHECKPOINT_INTERVAL_MS = 12_000L
     private val captureLock = Any()
@@ -566,6 +567,7 @@ internal object KeyguardCardDiagnostics {
 
     private data class HideEpisode(
         val operationId: Long,
+        val requestId: Long?,
         val attachGeneration: Long?,
         val triggerReceivedAtUptimeMs: Long?,
         val decisionAtUptimeMs: Long,
@@ -604,7 +606,21 @@ internal object KeyguardCardDiagnostics {
         var rootAcquisitionMaxMs: Long? = null,
         var childAcquisitionTotalMs: Long? = null,
         var childAcquisitionMaxMs: Long? = null,
+        var childAcquisitionCount: Long? = null,
         var localProcessingMs: Long? = null,
+        var trigger: String? = null,
+        var eventTimeUptimeMs: Long? = null,
+        var visibilityEpochAtRequest: Long? = null,
+        var visibilityEpochAtApply: Long? = null,
+        var pendingRequestIdAtApply: Long? = null,
+        var surfaceReason: String? = null,
+        var surfaceClassification: String? = null,
+        var surfaceMarkers: String? = null,
+        var rootUnavailable: String? = null,
+        var walkTruncated: String? = null,
+        var visitedNodeCount: Long? = null,
+        var rejectionReason: String? = null,
+        var followupAction: String? = null,
     )
 
     private data class TimingAttempt(
@@ -626,6 +642,13 @@ internal object KeyguardCardDiagnostics {
         var retryScheduledCount: Int = 0,
         var retryFiredCount: Int = 0,
         var retryCancelledCount: Int = 0,
+        var unknownWhileHiddenCount: Int = 0,
+        var unknownWhileHiddenEpochChanges: Int = 0,
+        var pendingPreservedAfterUnknown: Int = 0,
+        var pendingRejectedAfterUnknown: Int = 0,
+        var visibleWithdrawalCount: Int = 0,
+        var retrySuppressedForPendingWork: Int = 0,
+        var retryBudgetExhaustedWhileAwaiting: Int = 0,
         var attachCount: Int = 0,
         var detachCount: Int = 0,
         val shows: ArrayDeque<ShowEpisode> = ArrayDeque(),
@@ -705,6 +728,7 @@ internal object KeyguardCardDiagnostics {
         "SCREEN_ON_RECEIVED", "WAKE_CYCLE_STARTED", "WORKER_OCCUPIED_AT_WAKE", "INSPECTION_QUEUED", "INSPECTION_COALESCED",
         "INSPECTION_STARTED", "INSPECTION_FINISHED", "INSPECTION_MAIN_APPLY_POSTED", "INSPECTION_MAIN_APPLY_STARTED", "INSPECTION_APPLIED",
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
+        "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
         "FIRST_SHADER_DRAW", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
@@ -717,6 +741,8 @@ internal object KeyguardCardDiagnostics {
         "profileWasDecoded", "presentationMode", "surfaceClassification",
         "activeOriginalSession", "activeOriginalWake", "activeOriginalVisibilityEpoch",
         "activeOriginalInteractionEpoch", "activeOriginalAttachGeneration", "activeQueuedAtUptimeMs",
+        "surfaceMarkers", "rootUnavailable", "walkTruncated", "visitedNodeCount", "followupAction",
+        "pendingRequestId", "pendingRequestIdAtApply", "visibilityEpochBefore", "visibilityEpochAfter",
     )
 
     fun recordColdPreparation(serviceSession: Long, stage: String, observedUptimeMs: Long = SystemClock.uptimeMillis()) {
@@ -739,6 +765,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_FINISHED" -> "FIRST_INSPECTION_FINISHED"
         "INSPECTION_MAIN_APPLY_POSTED" -> "FIRST_MAIN_RESULT_POSTED"
         "INSPECTION_MAIN_APPLY_STARTED" -> "FIRST_MAIN_APPLY_STARTED"
+        "AWAITING_MAIN_SURFACE" -> "FIRST_AWAITING_MAIN_SURFACE"
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW" ->
             "${event.stage}:${event.showOperationId ?: "none"}"
         "HIDE_DECIDED", "LOCAL_HIDE_APPLIED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED" ->
@@ -1045,7 +1072,17 @@ internal object KeyguardCardDiagnostics {
                 }
             }
             fun inspectionTimeline(): InspectionTimeline? = event.requestId?.let { request ->
-                attempt.inspections.getOrPut(request) { InspectionTimeline(request) }
+                if (request !in attempt.inspections && attempt.inspections.size >= MAX_INSPECTION_LEDGER) {
+                    val pinned = buildSet {
+                        attempt.firstInspectionRequestId?.let { add(it) }
+                        attempt.showingInspectionRequestId?.let { add(it) }
+                        attempt.hides.mapNotNullTo(this) { it.requestId }
+                    }
+                    attempt.inspections.keys.firstOrNull { it !in pinned }?.let(attempt.inspections::remove)
+                }
+                attempt.inspections.getOrPut(request) { InspectionTimeline(request) }.also { timeline ->
+                    if (timeline.trigger == null) timeline.trigger = reason
+                }
             }
             fun showEpisode(): ShowEpisode? = event.showOperationId?.let { operationId ->
                 attempt.shows.toList().lastOrNull { it.operationId == operationId }
@@ -1063,6 +1100,10 @@ internal object KeyguardCardDiagnostics {
                     // legitimately log it after INSPECTION_STARTED.
                     inspectionTimeline()?.queuedAtUptimeMs =
                         fields["queuedAtUptimeMs"]?.toLongOrNull() ?: event.uptimeMs
+                    inspectionTimeline()?.apply {
+                        eventTimeUptimeMs = fields["eventTimeUptimeMs"]?.toLongOrNull()
+                        visibilityEpochAtRequest = fields["requestVisibilityEpoch"]?.toLongOrNull()
+                    }
                 }
                 "INSPECTION_COALESCED" -> {
                     attempt.requestsReceived += 1
@@ -1070,6 +1111,10 @@ internal object KeyguardCardDiagnostics {
                     if (attempt.firstInspectionRequestId == null) attempt.firstInspectionRequestId = requestId
                     inspectionTimeline()?.queuedAtUptimeMs =
                         fields["queuedAtUptimeMs"]?.toLongOrNull() ?: event.uptimeMs
+                    inspectionTimeline()?.apply {
+                        eventTimeUptimeMs = fields["eventTimeUptimeMs"]?.toLongOrNull()
+                        visibilityEpochAtRequest = fields["requestVisibilityEpoch"]?.toLongOrNull()
+                    }
                 }
                 "INSPECTION_STARTED" -> {
                     attempt.inspectionsStarted += 1
@@ -1103,7 +1148,14 @@ internal object KeyguardCardDiagnostics {
                     rootAcquisitionMaxMs = fields["rootAcquisitionMaxMs"]?.toLongOrNull()
                     childAcquisitionTotalMs = fields["childAcquisitionTotalMs"]?.toLongOrNull()
                     childAcquisitionMaxMs = fields["childAcquisitionMaxMs"]?.toLongOrNull()
+                    childAcquisitionCount = fields["childAcquisitionCount"]?.toLongOrNull()
                     localProcessingMs = fields["localProcessingMs"]?.toLongOrNull()
+                    surfaceReason = reason
+                    surfaceClassification = fields["surfaceClassification"]
+                    surfaceMarkers = fields["surfaceMarkers"]
+                    rootUnavailable = fields["rootUnavailable"]
+                    walkTruncated = fields["walkTruncated"]
+                    visitedNodeCount = fields["visitedNodeCount"]?.toLongOrNull()
                 }
                 "INSPECTION_MAIN_APPLY_POSTED" -> inspectionTimeline()?.mainResultPostedAtUptimeMs = event.uptimeMs
                 "INSPECTION_MAIN_APPLY_STARTED" -> inspectionTimeline()?.apply {
@@ -1112,15 +1164,38 @@ internal object KeyguardCardDiagnostics {
                 }
                 "INSPECTION_APPLIED" -> {
                     attempt.inspectionsApplied += 1
-                    inspectionTimeline()?.appliedAtUptimeMs = event.uptimeMs
+                    inspectionTimeline()?.apply {
+                        appliedAtUptimeMs = event.uptimeMs
+                        visibilityEpochAtApply = fields["visibilityEpochAtApply"]?.toLongOrNull()
+                        pendingRequestIdAtApply = fields["pendingRequestIdAtApply"]?.toLongOrNull()
+                        surfaceClassification = fields["surfaceClassification"] ?: surfaceClassification
+                        surfaceMarkers = fields["surfaceMarkers"] ?: surfaceMarkers
+                    }
                 }
                 "INSPECTION_REJECTED" -> {
                     attempt.inspectionsRejected += 1
                     attempt.staleInspectionCount += 1
+                    inspectionTimeline()?.rejectionReason = fields["rejectionReason"] ?: reason
                 }
                 "RETRY_SCHEDULED" -> attempt.retryScheduledCount += 1
                 "RETRY_FIRED" -> attempt.retryFiredCount += 1
                 "RETRY_CANCELLED" -> attempt.retryCancelledCount += 1
+                "PENDING_REPLACED_AFTER_UNKNOWN" -> attempt.pendingRejectedAfterUnknown += 1
+                "RETRY_SUPPRESSED_FOR_PENDING" -> attempt.retrySuppressedForPendingWork += 1
+                "RETRY_BUDGET_EXHAUSTED_AWAITING" -> attempt.retryBudgetExhaustedWhileAwaiting += 1
+                "AWAITING_MAIN_SURFACE" -> {
+                    if (fields["overlayAttached"] == "false") {
+                        attempt.unknownWhileHiddenCount += 1
+                        val before = fields["visibilityEpochBefore"]?.toLongOrNull()
+                        val after = fields["visibilityEpochAfter"]?.toLongOrNull()
+                        if (before != null && after != null && before != after) attempt.unknownWhileHiddenEpochChanges += 1
+                    }
+                    inspectionTimeline()?.followupAction = fields["followupAction"]
+                    when (fields["followupAction"]) {
+                        "CONTINUE_PENDING" -> attempt.pendingPreservedAfterUnknown += 1
+                        "SCHEDULE_FALLBACK", "WAIT_FOR_EVENT" -> Unit
+                    }
+                }
                 "SHOW_FOR_ATTACH" -> event.showOperationId?.let { operationId ->
                     if (showEpisode() == null) {
                         while (attempt.shows.size >= 8) attempt.shows.removeFirst()
@@ -1150,18 +1225,26 @@ internal object KeyguardCardDiagnostics {
                         attempt.hides.addLast(
                             HideEpisode(
                                 operationId = operationId,
+                                requestId = event.requestId,
                                 attachGeneration = event.attachGeneration,
                                 triggerReceivedAtUptimeMs = event.triggerReceivedUptimeMs,
                                 decisionAtUptimeMs = event.uptimeMs,
                             ),
                         )
                     }
+                    inspectionTimeline()
                     attempt.finalState = "HIDE_DECIDED"
                 }
-                "LOCAL_HIDE_BEGIN" -> hideEpisode()?.attachedBefore = when (fields["attachedBefore"]) {
-                    "true" -> true
-                    "false" -> false
-                    else -> null
+                "LOCAL_HIDE_BEGIN" -> hideEpisode()?.let { hide ->
+                    val attached = when (fields["attachedBefore"]) {
+                        "true" -> true
+                        "false" -> false
+                        else -> null
+                    }
+                    hide.attachedBefore = attached
+                    if (attached == true && fields["awaitingSurfaceWithdrawal"] == "true") {
+                        attempt.visibleWithdrawalCount += 1
+                    }
                 }
                 "LOCAL_HIDE_APPLIED" -> hideEpisode()?.localHideAppliedAtUptimeMs = event.uptimeMs
                 "REMOVE_VIEW_BEGIN" -> hideEpisode()?.removeBeginAtUptimeMs = event.uptimeMs
@@ -1419,6 +1502,8 @@ internal object KeyguardCardDiagnostics {
         }
         val terminalCleanup = attempt.hides.lastOrNull()
         val showingInspection = show?.requestId?.let(attempt.inspections::get)
+        val firstInspection = attempt.firstInspectionRequestId?.let(attempt.inspections::get)
+        val withdrawalInspection = actualWithdrawal?.requestId?.let(attempt.inspections::get)
         val firstStartedInspection = attempt.inspections.values.firstOrNull { it.startedAtUptimeMs != null }
         val firstValidInspection = attempt.inspections.values.firstOrNull {
             it.startedAtUptimeMs != null && it.authorityCurrentAtStart == true
@@ -1428,6 +1513,7 @@ internal object KeyguardCardDiagnostics {
         appendLine(" firstInspectionRequestId=${attempt.firstInspectionRequestId ?: "NA"} showingInspectionRequestId=${show?.requestId ?: "NA"} requestsReceived=${attempt.requestsReceived} requestsReplaced=${attempt.requestsReplaced} inspectionsStarted=${attempt.inspectionsStarted} inspectionsApplied=${attempt.inspectionsApplied} inspectionsRejected=${attempt.inspectionsRejected} staleInspectionCount=${attempt.staleInspectionCount}")
         val pendingRetries = (attempt.retryScheduledCount - attempt.retryFiredCount - attempt.retryCancelledCount).coerceAtLeast(0)
         appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:$pendingRetries attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
+        appendLine(" awaiting=unknownWhileHidden:${attempt.unknownWhileHiddenCount},unknownWhileHiddenEpochChanges:${attempt.unknownWhileHiddenEpochChanges},pendingPreservedAfterUnknown:${attempt.pendingPreservedAfterUnknown},pendingRejectedAfterUnknown:${attempt.pendingRejectedAfterUnknown},visibleWithdrawalCount:${attempt.visibleWithdrawalCount},retrySuppressedForPendingWork:${attempt.retrySuppressedForPendingWork},retryBudgetExhaustedWhileAwaiting:${attempt.retryBudgetExhaustedWhileAwaiting}")
         appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"}")
         appendLine(" cycleToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)} screenOnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} wakeCallbackToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
         appendLine(" wakeToFirstInspectionStartMs=${delta(firstStartedInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToFirstEligibleInspectionStartMs=${delta(firstValidInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToShowingInspectionStartMs=${delta(showingInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} latestPendingQueueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)}")
@@ -1444,6 +1530,18 @@ internal object KeyguardCardDiagnostics {
                 "childMax:${showingInspection?.childAcquisitionMaxMs ?: "NA"},local:${showingInspection?.localProcessingMs ?: "NA"}",
         )
         appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} windowManagerAddViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)}")
+        fun inspectionRole(label: String, timeline: InspectionTimeline?) {
+            appendLine(
+                " $label req=${timeline?.requestId ?: "NA"} trigger=${timeline?.trigger ?: "NA"} eventTime=${timeline?.eventTimeUptimeMs ?: "NA"} " +
+                    "queued=${timeline?.queuedAtUptimeMs ?: "NA"} started=${timeline?.startedAtUptimeMs ?: "NA"} finished=${timeline?.finishedAtUptimeMs ?: "NA"} mainApply=${timeline?.mainApplyStartedAtUptimeMs ?: "NA"} " +
+                    "authorityAtStart=${timeline?.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${timeline?.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${timeline?.visibilityEpochAtApply ?: "NA"} pendingAtApply=${timeline?.pendingRequestIdAtApply ?: "NA"} " +
+                    "classification=${timeline?.surfaceClassification ?: "NA"} reason=${timeline?.surfaceReason ?: "NA"} markers=${timeline?.surfaceMarkers ?: "NA"} rootUnavailable=${timeline?.rootUnavailable ?: "NA"} walkTruncated=${timeline?.walkTruncated ?: "NA"} visited=${timeline?.visitedNodeCount ?: "NA"} " +
+                    "reader=${timeline?.readerStrategy ?: "NA"} fallback=${timeline?.fallbackReason ?: "NA"} activeRootMs=${timeline?.activeRootTotalMs ?: "NA"} perWindowRootMs=${timeline?.perWindowRootTotalMs ?: "NA"} childCalls=${timeline?.childAcquisitionCount ?: "NA"} childMs=${timeline?.childAcquisitionTotalMs ?: "NA"} localMs=${timeline?.localProcessingMs ?: "NA"} rejected=${timeline?.rejectionReason ?: "NA"} followup=${timeline?.followupAction ?: "NA"}",
+            )
+        }
+        inspectionRole("FIRST_INSPECTION", firstInspection)
+        inspectionRole("SHOWING_INSPECTION", showingInspection)
+        inspectionRole("ACTUAL_WITHDRAWAL_INSPECTION", withdrawalInspection)
         appendLine(" actualWithdrawalHideOp=${actualWithdrawal?.operationId ?: "NA"} actualHideAttachedBefore=${actualWithdrawal?.attachedBefore ?: "NA"} actualHideTriggerAt=${actualWithdrawal?.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} actualHideDecisionAt=${actualWithdrawal?.decisionAtUptimeMs ?: "NA"} actualLocalHideAppliedAt=${actualWithdrawal?.localHideAppliedAtUptimeMs ?: "NA"} actualRemoveViewBeginAt=${actualWithdrawal?.removeBeginAtUptimeMs ?: "NA"} actualRemoveViewReturnAt=${actualWithdrawal?.removeReturnAtUptimeMs ?: "NA"}")
         appendLine(" triggerToLocalHideMs=${delta(actualWithdrawal?.localHideAppliedAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} triggerToRemoveReturnMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} hideDecisionToLocalHideMs=${delta(actualWithdrawal?.localHideAppliedAtUptimeMs, actualWithdrawal?.decisionAtUptimeMs)} removeViewCallMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.removeBeginAtUptimeMs)}")
         // Kept as compatibility aliases for the pre-operation report reader;
