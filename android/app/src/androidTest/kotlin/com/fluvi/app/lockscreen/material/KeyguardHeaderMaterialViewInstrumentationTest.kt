@@ -70,7 +70,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 activity.setContentView(FrameLayout(activity).apply { addView(view) })
                 controller!!.onAttached()
             }
-            assertTrue("prepared view never reached a shader draw", waitForRenderer(instrumentation, view))
+            // A hardware Canvas can draw the safe fallback before the artifact
+            // lane has handed its result back to the main-thread View.  Start
+            // the 120-frame invariant only after the prepared RuntimeShader
+            // actually drew, otherwise the test would count the intentional
+            // one-time preparation as frame-path work.
+            assertTrue("prepared view never reached a shader draw", waitForPreparedShader(instrumentation, view))
             val before = view.diagnostics()
             val loadsBeforeFrames = artifactLoads.get()
             instrumentation.runOnMainSync {
@@ -312,6 +317,25 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         while (System.nanoTime() < deadline) {
             var ready = false
             instrumentation.runOnMainSync { ready = view.diagnostics().lastCanvasHardwareAccelerated == true }
+            if (ready) return true
+            Thread.sleep(32)
+        }
+        return false
+    }
+
+    private fun waitForPreparedShader(
+        instrumentation: Instrumentation,
+        view: KeyguardHeaderMaterialView,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+        while (System.nanoTime() < deadline) {
+            var ready = false
+            instrumentation.runOnMainSync {
+                val diagnostics = view.diagnostics()
+                ready = diagnostics.lastCanvasHardwareAccelerated == true &&
+                    diagnostics.shaderCompileSuccesses > 0 &&
+                    diagnostics.shaderDrawCount > 0
+            }
             if (ready) return true
             Thread.sleep(32)
         }
