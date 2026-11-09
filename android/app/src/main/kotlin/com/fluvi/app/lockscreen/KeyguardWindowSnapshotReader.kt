@@ -7,6 +7,48 @@ import android.view.Display
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 
+/** Scalar-only window facts used by the active-root decision and its JVM
+ * regression tests. They intentionally carry neither a node nor package
+ * content. */
+internal data class KeyguardWindowReaderWindowMetadata(
+    val id: Int,
+    val type: Int,
+    val displayId: Int,
+    val active: Boolean,
+)
+
+internal object KeyguardWindowSnapshotReaderPolicy {
+    fun activeCandidate(
+        windows: List<KeyguardWindowReaderWindowMetadata>,
+        knownOwn: KeyguardOwnOverlayIdentity?,
+        attachGeneration: Long,
+    ): KeyguardWindowReaderWindowMetadata? = windows
+        .filter { window ->
+            window.displayId == Display.DEFAULT_DISPLAY && window.active &&
+                !isExactKnownOwn(window, knownOwn, attachGeneration)
+        }
+        .singleOrNull()
+
+    fun acceptsActiveRoot(
+        candidate: KeyguardWindowReaderWindowMetadata,
+        returnedWindowId: Int?,
+        returnedPackageName: CharSequence?,
+        currentWindows: List<KeyguardWindowReaderWindowMetadata>,
+    ): Boolean = returnedWindowId == candidate.id && returnedPackageName != null &&
+        currentWindows.any { it.id == candidate.id && it.displayId == Display.DEFAULT_DISPLAY }
+
+    fun isExactKnownOwn(
+        window: KeyguardWindowReaderWindowMetadata,
+        knownOwn: KeyguardOwnOverlayIdentity?,
+        attachGeneration: Long,
+    ): Boolean {
+        val known = knownOwn ?: return false
+        return known.windowId == window.id && known.displayId == window.displayId &&
+            known.attachGeneration == attachGeneration &&
+            window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
+    }
+}
+
 /**
  * One bounded, data-minimising boundary for reading the accessibility window
  * tree.  The API 33 active-root route is an optimisation only: every result is
@@ -175,24 +217,25 @@ internal class KeyguardWindowSnapshotReader(
         )
 
         val primary = currentWindows.filter { displayId(it) == Display.DEFAULT_DISPLAY }
-        val activeCandidates = primary.filter { window ->
-            window.isActive && !isExactKnownOwn(window, request)
-        }
-        val canBatch = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && activeCandidates.size == 1
+        val metadata = primary.map(::metadata)
+        val activeCandidate = KeyguardWindowSnapshotReaderPolicy.activeCandidate(
+            metadata, request.knownOwn, request.attachGeneration,
+        )
+        val canBatch = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && activeCandidate != null
         var activeRoot: AccessibilityNodeInfo? = null
         var activeWindowId: Int? = null
 
         if (canBatch && timing.cacheClearResult == "cleared" && authorityIsCurrent()) {
-            val candidate = activeCandidates.single()
+            val candidate = requireNotNull(activeCandidate)
             timing.activeCandidateWindowId = candidate.id
             val startedAt = SystemClock.uptimeMillis()
             activeRoot = runCatching { service.getRootInActiveWindow(prefetch) }.getOrNull()
             timing.activeRoot(candidate.id, SystemClock.uptimeMillis() - startedAt)
             val returned = activeRoot
             timing.returnedRootWindowId = returned?.windowId
-            val candidateStillPrimary = primary.any { it.id == candidate.id && displayId(it) == Display.DEFAULT_DISPLAY }
-            val accepted = authorityIsCurrent() && returned != null &&
-                returned.windowId == candidate.id && candidateStillPrimary && returned.packageName != null
+            val accepted = authorityIsCurrent() && KeyguardWindowSnapshotReaderPolicy.acceptsActiveRoot(
+                candidate, returned?.windowId, returned?.packageName, metadata,
+            )
             if (accepted) {
                 timing.strategy = "ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW"
                 timing.activeRootAccepted = true
@@ -202,7 +245,7 @@ internal class KeyguardWindowSnapshotReader(
                     !authorityIsCurrent() -> "authorityStaleAfterActiveRoot"
                     returned == null -> "activeRootNull"
                     returned.windowId != candidate.id -> "activeRootWindowMismatch"
-                    !candidateStillPrimary -> "activeCandidateNotPrimary"
+                    metadata.none { it.id == candidate.id && it.displayId == Display.DEFAULT_DISPLAY } -> "activeCandidateNotPrimary"
                     else -> "activeRootPackageMissing"
                 }
                 returned?.recycle()
@@ -211,8 +254,8 @@ internal class KeyguardWindowSnapshotReader(
         } else if (timing.fallbackReason == null) {
             timing.fallbackReason = when {
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU -> "apiBelow33"
-                activeCandidates.isEmpty() -> "noActiveCandidate"
-                activeCandidates.size > 1 -> "ambiguousActiveCandidates"
+                activeCandidate == null && metadata.none { it.active && !KeyguardWindowSnapshotReaderPolicy.isExactKnownOwn(it, request.knownOwn, request.attachGeneration) } -> "noActiveCandidate"
+                activeCandidate == null -> "ambiguousActiveCandidates"
                 timing.cacheClearResult != "cleared" -> timing.cacheClearResult
                 else -> "authorityStaleBeforeActiveRoot"
             }
@@ -327,11 +370,17 @@ internal class KeyguardWindowSnapshotReader(
     }
 
     private fun isExactKnownOwn(window: AccessibilityWindowInfo, request: Request): Boolean {
-        val known = request.knownOwn ?: return false
-        return known.windowId == window.id && known.displayId == displayId(window) &&
-            known.attachGeneration == request.attachGeneration &&
-            window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
+        return KeyguardWindowSnapshotReaderPolicy.isExactKnownOwn(
+            metadata(window), request.knownOwn, request.attachGeneration,
+        )
     }
+
+    private fun metadata(window: AccessibilityWindowInfo) = KeyguardWindowReaderWindowMetadata(
+        id = window.id,
+        type = window.type,
+        displayId = displayId(window),
+        active = window.isActive,
+    )
 
     private fun displayId(window: AccessibilityWindowInfo): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) window.displayId else Display.DEFAULT_DISPLAY
