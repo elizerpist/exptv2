@@ -4,6 +4,7 @@ import android.content.Intent
 import android.view.View
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTestActivity
 import java.util.concurrent.CountDownLatch
@@ -21,6 +22,43 @@ import org.junit.runner.RunWith
  * dispatch throw on current Android releases. */
 @RunWith(AndroidJUnit4::class)
 class KeyguardFirstDrawObservationInstrumentationTest {
+    @Test
+    @SdkSuppress(minSdkVersion = 29)
+    fun frameCommitPublishesOnceForAnAttachedFrame() {
+        val fixture = fixture()
+        try {
+            val committed = AtomicInteger()
+            val event = AtomicReference<KeyguardFrameCommitEvent>()
+            val callback = CountDownLatch(1)
+            lateinit var observation: KeyguardFrameCommitObservation
+            fixture.instrumentation.runOnMainSync {
+                observation = KeyguardFrameCommitObservation(
+                    root = fixture.root,
+                    attachGeneration = 8L,
+                    nowUptimeMs = { 888L },
+                ) { value ->
+                    committed.incrementAndGet()
+                    event.set(value)
+                    callback.countDown()
+                }
+                observation.registerFromCurrentMaterialDraw()
+                fixture.root.invalidate()
+            }
+
+            assertTrue("frame-commit callback was not observed", callback.await(8, TimeUnit.SECONDS))
+            fixture.instrumentation.waitForIdleSync()
+            assertEquals(1, committed.get())
+            assertEquals(8L, requireNotNull(event.get()).attachGeneration)
+            assertEquals(888L, requireNotNull(event.get()).observedAtUptimeMs)
+
+            fixture.instrumentation.runOnMainSync { fixture.root.invalidate() }
+            fixture.instrumentation.waitForIdleSync()
+            assertEquals("one observation must not register a second callback", 1, committed.get())
+        } finally {
+            fixture.close()
+        }
+    }
+
     @Test fun firstDrawPublishesOnceAfterFrameworkDrawDispatch() {
         val fixture = fixture()
         try {

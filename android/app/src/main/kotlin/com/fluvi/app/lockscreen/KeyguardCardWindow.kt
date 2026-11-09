@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -38,9 +39,10 @@ internal class KeyguardCardWindow(
     /** Window operations are reported after the operation boundary, never by
      * a renderer/onDraw callback. The service adds its captured wake/session
      * identity before storing a diagnostic event. */
-    private val onWindowDiagnostic: (String, String, Long?) -> Unit = { _, _, _ -> },
+    private val onWindowDiagnostic: (String, String, Long?, Long) -> Unit = { _, _, _, _ -> },
     private val onFirstRootDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstShaderDraw: (KeyguardFirstDrawEvent) -> Unit = {},
+    private val onFrameCommit: (KeyguardFirstDrawEvent) -> Unit = {},
 ) {
     enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
 
@@ -53,6 +55,7 @@ internal class KeyguardCardWindow(
     private var attachGeneration = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
     private var firstRootDrawObservation: KeyguardFirstDrawObservation? = null
+    private var firstFrameCommitObservation: KeyguardFrameCommitObservation? = null
     private var firstShaderDrawAttachGeneration: Long? = null
     private var materialController: KeyguardCardMaterialController? = null
     private var materialProfile: KeyguardMaterialProfile? = null
@@ -83,6 +86,16 @@ internal class KeyguardCardWindow(
     val currentAttachGeneration: Long get() = attachGeneration
 
     internal fun presentationConfigurationApplicationsForTest(): Int = presentationConfigurationApplyCount
+
+    /** Timestamp at the operation boundary; delivery is deliberately allowed
+     * to be deferred by the service so capture bookkeeping never precedes a
+     * visibility-critical WindowManager call. */
+    private fun reportWindowDiagnostic(
+        stage: String,
+        detail: String,
+        generation: Long?,
+        observedAtUptimeMs: Long = SystemClock.uptimeMillis(),
+    ) = onWindowDiagnostic(stage, detail, generation, observedAtUptimeMs)
 
     fun isOwnAccessibilityWindow(windowId: Int, displayId: Int): Boolean {
         checkMainThread()
@@ -137,13 +150,13 @@ internal class KeyguardCardWindow(
             // complete before WindowManager.addView and cannot tax first draw.
             updateMaterialForPresentation(presentation)
             val nextAttach = attachGeneration + 1L
-            onWindowDiagnostic("ADD_VIEW_BEGIN", "windowManager", nextAttach)
+            reportWindowDiagnostic("ADD_VIEW_BEGIN", "windowManager", nextAttach)
             return runCatching {
                 manager.addView(current, parameters(resolvedGeometry))
                 // This boundary deliberately excludes lifecycle/material and
                 // first-draw observer setup. The timing report must not label
                 // those post-add operations as WindowManager.addView time.
-                onWindowDiagnostic("ADD_VIEW_RETURN", "success", nextAttach)
+                reportWindowDiagnostic("ADD_VIEW_RETURN", "success", nextAttach)
             }.fold(
                 onSuccess = {
                     lifecycle.onAttachSucceeded()
@@ -151,9 +164,11 @@ internal class KeyguardCardWindow(
                     appliedPresentation = presentation
                     appliedGeometry = resolvedGeometry
                     firstShaderDrawAttachGeneration = attachGeneration
+                    firstFrameCommitObservation?.cancel()
+                    firstFrameCommitObservation = null
                     materialController?.onAttached()
                     observeFirstRootDraw(current, attachGeneration)
-                    onWindowDiagnostic("POST_ADD_SETUP_COMPLETE", "success", attachGeneration)
+                    reportWindowDiagnostic("POST_ADD_SETUP_COMPLETE", "success", attachGeneration)
                     if (settings.cardPosition == null) {
                         // Only an attached window has reliable insets. Persist
                         // the old BOTTOM-gravity placement once, without
@@ -170,7 +185,7 @@ internal class KeyguardCardWindow(
                     appliedPresentation = null
                     appliedGeometry = null
                     accessibilityWindowId = null
-                    onWindowDiagnostic("ATTACH_FAILED", "${it.javaClass.simpleName}", nextAttach)
+                    reportWindowDiagnostic("ATTACH_FAILED", "${it.javaClass.simpleName}", nextAttach)
                     Result.FAILED
                 },
             )
@@ -223,16 +238,18 @@ internal class KeyguardCardWindow(
         val current = root ?: return false
         if (lifecycle.isAttached()) {
             current.visibility = View.INVISIBLE
-            onWindowDiagnostic("LOCAL_HIDE_APPLIED", "invisible", attachGeneration)
+            reportWindowDiagnostic("LOCAL_HIDE_APPLIED", "invisible", attachGeneration)
         }
         firstRootDrawObservation?.cancel()
         firstRootDrawObservation = null
+        firstFrameCommitObservation?.cancel()
+        firstFrameCommitObservation = null
         firstShaderDrawAttachGeneration = null
         current.cancelInteraction("detach", restorePosition = false)
         clearDragFrame()
         materialController?.stop("hide")
         if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
-        onWindowDiagnostic("REMOVE_VIEW_BEGIN", "windowManager", attachGeneration)
+        reportWindowDiagnostic("REMOVE_VIEW_BEGIN", "windowManager", attachGeneration)
         val removed = runCatching { manager.removeViewImmediate(current) }
         val stillAttached = current.isAttachedToWindow
         if (removed.isSuccess || !stillAttached) {
@@ -242,9 +259,9 @@ internal class KeyguardCardWindow(
             accessibilityWindowId = null
         } else lifecycle.onUpdateFailed(stillAttached = true)
         if (removed.isSuccess) {
-            onWindowDiagnostic("REMOVE_VIEW_RETURN", "success", attachGeneration)
+            reportWindowDiagnostic("REMOVE_VIEW_RETURN", "success", attachGeneration)
         } else {
-            onWindowDiagnostic("DETACH_FAILED", "${removed.exceptionOrNull()?.javaClass?.simpleName ?: "unknown"}", attachGeneration)
+            reportWindowDiagnostic("DETACH_FAILED", "${removed.exceptionOrNull()?.javaClass?.simpleName ?: "unknown"}", attachGeneration)
         }
         return removed.isSuccess
     }
@@ -324,10 +341,14 @@ internal class KeyguardCardWindow(
             backgroundVeil = created.findViewById(R.id.fluvi_keyguard_material_veil),
         ).also { controller ->
             controller.onPreparationStage = { stage, fields ->
-                onWindowDiagnostic(stage, fields["programKey"]?.toString() ?: "material", null)
+                reportWindowDiagnostic(stage, fields["programKey"]?.toString() ?: "material", null)
             }
             controller.onFirstOrbShaderDraw = shaderDraw@{ observedAtUptimeMs ->
                 val capturedAttach = firstShaderDrawAttachGeneration ?: return@shaderDraw
+                val currentRoot = root
+                if (currentRoot != null && attachGeneration == capturedAttach && lifecycle.isAttached()) {
+                    ensureFrameCommitObservation(currentRoot, capturedAttach).registerFromCurrentMaterialDraw()
+                }
                 // KeyguardHeaderMaterialView invokes this while Canvas draw is
                 // in progress. Service diagnostics must run only after that
                 // dispatch has unwound, and only for this exact attach.
@@ -572,6 +593,46 @@ internal class KeyguardCardWindow(
         )
         firstRootDrawObservation = observation
         observation.start()
+    }
+
+    /** Registration is called by the first current-material shader draw.  The
+     * eventual callback is one-shot and may arrive after a detach, so its
+     * owner check mirrors the first-draw observation rather than treating a
+     * renderer callback as visibility authority. */
+    private fun ensureFrameCommitObservation(
+        current: View,
+        capturedAttach: Long,
+    ): KeyguardFrameCommitObservation {
+        firstFrameCommitObservation?.let { return it }
+        lateinit var observation: KeyguardFrameCommitObservation
+        observation = KeyguardFrameCommitObservation(
+            root = current,
+            attachGeneration = capturedAttach,
+            onCommitted = frameCommit@{ event ->
+                if (firstFrameCommitObservation !== observation) return@frameCommit
+                firstFrameCommitObservation = null
+                if (!lifecycle.isAttached() || root !== current || attachGeneration != event.attachGeneration) {
+                    return@frameCommit
+                }
+                // The renderer's callback is not a place to take the
+                // capture-store lock. Preserve its observation timestamp,
+                // then publish after this callback has returned. Re-check the
+                // exact attach so an old frame cannot report into a reattach.
+                mainHandler.post {
+                    if (!lifecycle.isAttached() || root !== current || attachGeneration != event.attachGeneration) {
+                        return@post
+                    }
+                    onFrameCommit(
+                        KeyguardFirstDrawEvent(
+                            attachGeneration = event.attachGeneration,
+                            observedAtUptimeMs = event.observedAtUptimeMs,
+                        ),
+                    )
+                }
+            },
+        )
+        firstFrameCommitObservation = observation
+        return observation
     }
 
     private fun clearDragFrame(flush: Boolean = false) {

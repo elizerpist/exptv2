@@ -116,7 +116,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     }
 
     @Test fun hiddenAccessibilityFloodCoalescesWithoutEvictingThreeAttempts() {
-        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug")
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug", "FULL")
         val attempts = (1L..3L).map { wake ->
             checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 8L, wake, "wake", wake * 100L))
         }
@@ -260,6 +260,70 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
         assertTrue(report.contains("queueMs=1"))
         assertFalse(report.contains("queueMs=INVALID_EVENT_ORDER"))
+    }
+
+    @Test fun handoffTimingUsesTheDispatchBoundaryRatherThanDiagnosticArrivalOrder() {
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug", "LIGHT")
+        val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 41L, 1L, "wake", 0L))
+        KeyguardCardDiagnostics.captureEvent(
+            context, "INSPECTION_QUEUED", "wake", requestId = 8L,
+            observedUptimeMs = 10L, diagnosticContext = attempt,
+            fields = mapOf("queuedAtUptimeMs" to 10L),
+        )
+        KeyguardCardDiagnostics.captureEvent(
+            context, "INSPECTION_STARTED", "wake", requestId = 8L,
+            observedUptimeMs = 20L, diagnosticContext = attempt,
+            fields = mapOf("authorityCurrentAtStart" to true),
+        )
+        KeyguardCardDiagnostics.captureEvent(
+            context, "INSPECTION_FINISHED", "mainKeyguard", requestId = 8L,
+            observedUptimeMs = 100L, diagnosticContext = attempt,
+        )
+        // The reporting calls can arrive later than their original observed
+        // timestamps. The immutable requested handoff remains the boundary.
+        KeyguardCardDiagnostics.captureEvent(
+            context, "INSPECTION_MAIN_APPLY_STARTED", "wake", requestId = 8L,
+            observedUptimeMs = 130L, diagnosticContext = attempt,
+            fields = mapOf(
+                "diagnosticPreparationFinishedAtUptimeMs" to 108L,
+                "mainHandoffRequestedAtUptimeMs" to 110L,
+                "mainApplyEnteredAtUptimeMs" to 130L,
+            ),
+        )
+        KeyguardCardDiagnostics.captureEvent(
+            context, "INSPECTION_MAIN_APPLY_POSTED", "wake", requestId = 8L,
+            observedUptimeMs = 110L, diagnosticContext = attempt,
+            fields = mapOf(
+                "inspectionFinishedAtUptimeMs" to 100L,
+                "diagnosticPreparationFinishedAtUptimeMs" to 108L,
+                "mainHandoffRequestedAtUptimeMs" to 110L,
+            ),
+        )
+        val show = KeyguardCardDiagnostics.newShowOperation(attempt, 1L, 8L)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", requestId = 8L, observedUptimeMs = 140L, diagnosticContext = attempt, operation = show)
+        KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_BEGIN", "window", requestId = 8L, observedUptimeMs = 145L, diagnosticContext = attempt, operation = show)
+        KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "window", requestId = 8L, observedUptimeMs = 150L, diagnosticContext = attempt, operation = show)
+
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.contains("inspectionFinishToHandoffMs=10"))
+        assertTrue(report.contains("handoffToMainEntryMs=20"))
+        assertTrue(report.contains("mainEntryToDecisionMs=10"))
+    }
+
+    @Test fun lightCaptureKeepsMilestonesWithoutRawAccessibilityFlood() {
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug", "LIGHT")
+        val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 42L, 1L, "wake", 0L))
+        repeat(300) { index ->
+            KeyguardCardDiagnostics.captureEvent(
+                context, "ACCESSIBILITY_EVENT", "surface", observedUptimeMs = 100L + index,
+                diagnosticContext = attempt,
+                fields = mapOf("overlayState" to "hidden", "eventType" to 2048),
+            )
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.contains("captureMode=LIGHT"))
+        assertTrue(report.contains("diagnosticDroppedRecords="))
+        assertFalse(report.contains("stage=ACCESSIBILITY_EVENT"))
     }
 
     @Test fun serviceColdPreparationSurvivesACaptureStartedLater() {

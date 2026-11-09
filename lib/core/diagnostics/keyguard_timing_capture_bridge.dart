@@ -1,6 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+enum KeyguardTimingCaptureMode {
+  light('LIGHT'),
+  full('FULL');
+
+  const KeyguardTimingCaptureMode(this.wireValue);
+
+  final String wireValue;
+}
+
 /// Small read/control bridge for the Android-owned keyguard timing capture.
 /// It deliberately has no dependency on lock-screen-card repositories, so a
 /// debug refresh can never trigger a financial preview, surface inspection or
@@ -28,9 +37,15 @@ class KeyguardTimingCaptureBridge {
 
   bool get isSupportedPlatform => _isAndroid();
 
-  Future<KeyguardTimingCaptureSnapshot> start() => _invoke(
+  Future<KeyguardTimingCaptureSnapshot> start({
+    KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
+  }) => _invoke(
     'startKeyguardDiagnosticCapture',
-    <String, Object?>{'build': buildCommit, 'buildMode': buildMode},
+    <String, Object?>{
+      'build': buildCommit,
+      'buildMode': buildMode,
+      'captureMode': mode.wireValue,
+    },
   );
 
   Future<KeyguardTimingCaptureSnapshot> freeze() =>
@@ -68,7 +83,9 @@ class KeyguardTimingCaptureSnapshot {
     required this.eventsRetained,
     required this.eventsEvicted,
     required this.eventsCoalesced,
+    required this.diagnosticDroppedRecords,
     required this.report,
+    this.captureMode = 'LIGHT',
     this.recoveredFromDisk = false,
     this.message,
   });
@@ -85,7 +102,9 @@ class KeyguardTimingCaptureSnapshot {
       eventsRetained: value('eventsRetained', '0'),
       eventsEvicted: value('eventsEvicted', '0'),
       eventsCoalesced: value('eventsCoalesced', '0'),
+      diagnosticDroppedRecords: value('diagnosticDroppedRecords', '0'),
       report: value('report', ''),
+      captureMode: value('captureMode', 'LIGHT'),
       recoveredFromDisk: map['recoveredFromDisk'] == true,
     );
   }
@@ -100,6 +119,7 @@ class KeyguardTimingCaptureSnapshot {
         eventsRetained: '0',
         eventsEvicted: '0',
         eventsCoalesced: '0',
+        diagnosticDroppedRecords: '0',
         report: '',
         message: 'A zárképernyő-időzítés rögzítése csak Androidon érhető el.',
       );
@@ -112,7 +132,9 @@ class KeyguardTimingCaptureSnapshot {
   final String eventsRetained;
   final String eventsEvicted;
   final String eventsCoalesced;
+  final String diagnosticDroppedRecords;
   final String report;
+  final String captureMode;
   final bool recoveredFromDisk;
   final String? message;
 

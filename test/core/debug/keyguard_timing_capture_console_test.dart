@@ -34,9 +34,13 @@ void main() {
     tester,
   ) async {
     final calls = <String>[];
+    Object? startArguments;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(runtime, (call) async {
           calls.add(call.method);
+          if (call.method == 'startKeyguardDiagnosticCapture') {
+            startArguments = call.arguments;
+          }
           return switch (call.method) {
             'startKeyguardDiagnosticCapture' => response('REC', 'LIVE'),
             'freezeKeyguardDiagnosticCapture' => response(
@@ -69,6 +73,7 @@ void main() {
     );
     await tester.pump();
     expect(calls, contains('startKeyguardDiagnosticCapture'));
+    expect((startArguments as Map)['captureMode'], 'LIGHT');
     expect(find.textContaining('REC'), findsOneWidget);
   });
 

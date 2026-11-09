@@ -366,6 +366,7 @@ class MainActivity : FlutterActivity() {
                             applicationContext,
                             values?.get("build") as? String,
                             values?.get("buildMode") as? String,
+                            values?.get("captureMode") as? String,
                         ),
                     )
                     return@setMethodCallHandler

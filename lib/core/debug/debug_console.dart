@@ -58,6 +58,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   bool _copyingKeyguard = false;
   bool _keyguardCopied = false;
   String? _keyguardError;
+  KeyguardTimingCaptureMode _keyguardCaptureMode =
+      KeyguardTimingCaptureMode.light;
 
   @override
   void initState() {
@@ -293,7 +295,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       _keyguardCopied = false;
     });
     try {
-      final snapshot = await bridge.start();
+      final snapshot = await bridge.start(mode: _keyguardCaptureMode);
       if (mounted) setState(() => _keyguardSnapshot = snapshot);
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
@@ -908,9 +910,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
         unsupported || (snapshot != null && !snapshot.available);
     final status = snapshot == null
         ? 'IDLE · még nincs natív snapshot'
-        : '${snapshot.state} · ${snapshot.captureId} · próbák: ${snapshot.attemptCount} · '
+        : '${snapshot.state} · ${snapshot.captureId} · ${snapshot.captureMode} · próbák: ${snapshot.attemptCount} · '
               'események: ${snapshot.eventsRetained}/${snapshot.eventsRecorded} · '
-              'eldobott: ${snapshot.eventsEvicted}';
+              'kiszorított: ${snapshot.eventsEvicted} · részletesen nem tárolt: ${snapshot.diagnosticDroppedRecords}';
     return Column(
       children: [
         Padding(
@@ -931,6 +933,28 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
             spacing: 8,
             runSpacing: 6,
             children: [
+              ChoiceChip(
+                key: const ValueKey('debug-console-keyguard-light'),
+                label: const Text('LIGHT'),
+                selected: _keyguardCaptureMode == KeyguardTimingCaptureMode.light,
+                onSelected: _loadingKeyguard
+                    ? null
+                    : (_) => setState(
+                        () => _keyguardCaptureMode =
+                            KeyguardTimingCaptureMode.light,
+                      ),
+              ),
+              ChoiceChip(
+                key: const ValueKey('debug-console-keyguard-full'),
+                label: const Text('FULL'),
+                selected: _keyguardCaptureMode == KeyguardTimingCaptureMode.full,
+                onSelected: _loadingKeyguard
+                    ? null
+                    : (_) => setState(
+                        () => _keyguardCaptureMode =
+                            KeyguardTimingCaptureMode.full,
+                      ),
+              ),
               OutlinedButton.icon(
                 key: const ValueKey('debug-console-keyguard-start'),
                 onPressed: _loadingKeyguard || unavailable

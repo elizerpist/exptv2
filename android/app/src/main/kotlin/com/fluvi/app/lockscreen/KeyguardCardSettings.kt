@@ -14,6 +14,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The accessibility overlay owns this focus.  It may share the financial
@@ -421,6 +422,18 @@ internal data class KeyguardDiagnosticOperation(
     val triggerReceivedUptimeMs: Long? = null,
 )
 
+/** Capture collection changes evidence retention only.  It never changes an
+ * inspection, visibility decision, retry, renderer or WindowManager path. */
+internal enum class KeyguardDiagnosticCaptureMode {
+    LIGHT,
+    FULL;
+
+    companion object {
+        fun fromWire(value: String?): KeyguardDiagnosticCaptureMode =
+            entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: LIGHT
+    }
+}
+
 /** A bounded, technical-only log for diagnostic builds. No node tree, text,
  * financial field, or foreign application identity is ever retained. */
 internal object KeyguardCardDiagnostics {
@@ -478,7 +491,10 @@ internal object KeyguardCardDiagnostics {
     private var capture: TimingCapture? = null
     private var recovered: RecoveredCapture? = null
     private var nextCaptureGeneration = 0L
-    private var nextOperationId = 0L
+    /** Operation IDs are allocated before a visibility mutation but must not
+     * wait for the capture store.  Ownership remains immutable and capture
+     * availability does not affect the window lifecycle. */
+    private val nextOperationId = AtomicLong(0L)
     /** One service-lifetime record remains available when the user starts a
      * capture after the slow first presentation already happened. */
     private data class ColdPreparationRecord(
@@ -563,6 +579,8 @@ internal object KeyguardCardDiagnostics {
         var addReturnAtUptimeMs: Long? = null,
         var firstRootDrawAtUptimeMs: Long? = null,
         var firstShaderDrawAtUptimeMs: Long? = null,
+        var firstCurrentMaterialDrawAtUptimeMs: Long? = null,
+        var frameCommitCallbackAtUptimeMs: Long? = null,
     )
 
     private data class HideEpisode(
@@ -584,7 +602,8 @@ internal object KeyguardCardDiagnostics {
         var startedAtUptimeMs: Long? = null,
         var authorityCurrentAtStart: Boolean? = null,
         var finishedAtUptimeMs: Long? = null,
-        var mainResultPostedAtUptimeMs: Long? = null,
+        var diagnosticPreparationFinishedAtUptimeMs: Long? = null,
+        var mainHandoffRequestedAtUptimeMs: Long? = null,
         var mainApplyStartedAtUptimeMs: Long? = null,
         var appliedAtUptimeMs: Long? = null,
         var windowsReadMs: Long? = null,
@@ -695,6 +714,7 @@ internal object KeyguardCardDiagnostics {
         val startedElapsedMs: Long,
         val startedWallMs: Long,
         val configuration: Map<String, String>,
+        val captureMode: KeyguardDiagnosticCaptureMode,
         var state: String = "REC",
         // A frozen or expired capture must export the same immutable duration
         // on every subsequent read.  REC deliberately keeps a live duration.
@@ -705,6 +725,14 @@ internal object KeyguardCardDiagnostics {
         var eventsEvicted: Int = 0,
         var eventsCoalesced: Int = 0,
         var hiddenNoopCount: Int = 0,
+        var diagnosticDroppedRecords: Int = 0,
+        var captureLockWaitNs: Long = 0L,
+        var captureLockHeldNs: Long = 0L,
+        var diagnosticProducerTotalNs: Long = 0L,
+        var diagnosticProducerMaxNs: Long = 0L,
+        var legacyDiagnosticProducerTotalNs: Long = 0L,
+        var legacyWriteCount: Long = 0L,
+        var checkpointCount: Long = 0L,
         var queuedForPersistenceSeq: Long = 0L,
         var lastSuccessfullyPersistedSeq: Long = 0L,
         var lastCheckpointElapsedMs: Long = startedElapsedMs,
@@ -730,12 +758,14 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "FIRST_SHADER_DRAW", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
+        "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
     private val CAUSAL_SPINE_FIELD_KEYS = setOf(
         "queueMs", "inspectionTotalMs", "windowsReadMs", "treeScanMs", "mainApplyQueueMs",
-        "mainDeliveryMs", "rejectionReason", "decision", "abortedStale", "attachedBefore",
+        "inspectionFinishToHandoffMs", "handoffToMainEntryMs", "mainEntryToDecisionMs",
+        "diagnosticPreparationFinishedAtUptimeMs", "mainHandoffRequestedAtUptimeMs", "mainApplyEnteredAtUptimeMs",
+        "rejectionReason", "decision", "abortedStale", "attachedBefore",
         "attachedAfter", "triggerReceivedUptimeMs", "terminalWake", "retryId", "retryIndex",
         "requestedDelayMs", "schedulerLatenessMs", "causingRequestId", "rootWasPrepared",
         "profileWasDecoded", "presentationMode", "surfaceClassification",
@@ -766,7 +796,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_MAIN_APPLY_POSTED" -> "FIRST_MAIN_RESULT_POSTED"
         "INSPECTION_MAIN_APPLY_STARTED" -> "FIRST_MAIN_APPLY_STARTED"
         "AWAITING_MAIN_SURFACE" -> "FIRST_AWAITING_MAIN_SURFACE"
-        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW" ->
+        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED" ->
             "${event.stage}:${event.showOperationId ?: "none"}"
         "HIDE_DECIDED", "LOCAL_HIDE_APPLIED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED" ->
             "${event.stage}:${event.hideOperationId ?: "none"}"
@@ -776,7 +806,12 @@ internal object KeyguardCardDiagnostics {
     /** Starts a capture owned by Android, not by a Flutter widget or stream.
      * The only Flutter supplied values are immutable build labels for the
      * human-readable header. */
-    fun startCapture(context: Context, build: String?, buildMode: String?): Map<String, Any?> {
+    fun startCapture(
+        context: Context,
+        build: String?,
+        buildMode: String?,
+        mode: String? = null,
+    ): Map<String, Any?> {
         val export = synchronized(captureLock) {
         ensureRecoveredLoadedLocked(context)
         val settings = FluviKeyguardCardSettings.read(context)
@@ -784,6 +819,7 @@ internal object KeyguardCardDiagnostics {
         val id = UUID.randomUUID().toString()
         val nowUp = SystemClock.uptimeMillis()
         val nowElapsed = SystemClock.elapsedRealtime()
+        val captureMode = KeyguardDiagnosticCaptureMode.fromWire(mode)
         val created = TimingCapture(
             id = id,
             generation = ++nextCaptureGeneration,
@@ -804,6 +840,7 @@ internal object KeyguardCardDiagnostics {
                 "privacyMode" to if (settings.showFinancialDetails) "full" else "discreet",
                 "notificationTimeoutMs" to "0",
             ),
+            captureMode = captureMode,
             coldPreparation = coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) },
         )
         capture = created
@@ -909,29 +946,27 @@ internal object KeyguardCardDiagnostics {
         context: KeyguardDiagnosticContext?,
         attachGeneration: Long?,
         causingInspectionRequestId: Long?,
-    ): KeyguardDiagnosticOperation = synchronized(captureLock) {
+    ): KeyguardDiagnosticOperation =
         KeyguardDiagnosticOperation(
             context = context,
-            showOperationId = ++nextOperationId,
+            showOperationId = nextOperationId.incrementAndGet(),
             attachGeneration = attachGeneration,
             causingInspectionRequestId = causingInspectionRequestId,
         )
-    }
 
     fun newHideOperation(
         context: KeyguardDiagnosticContext?,
         attachGeneration: Long?,
         causingInspectionRequestId: Long?,
         triggerReceivedUptimeMs: Long?,
-    ): KeyguardDiagnosticOperation = synchronized(captureLock) {
+    ): KeyguardDiagnosticOperation =
         KeyguardDiagnosticOperation(
             context = context,
-            hideOperationId = ++nextOperationId,
+            hideOperationId = nextOperationId.incrementAndGet(),
             attachGeneration = attachGeneration,
             causingInspectionRequestId = causingInspectionRequestId,
             triggerReceivedUptimeMs = triggerReceivedUptimeMs,
         )
-    }
 
     fun recordHiddenNoop(context: Context) = synchronized(captureLock) {
         val active = capture ?: return@synchronized
@@ -954,7 +989,10 @@ internal object KeyguardCardDiagnostics {
         diagnosticContext: KeyguardDiagnosticContext? = null,
         operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, Any?> = emptyMap(),
-    ) = synchronized(captureLock) {
+    ) {
+        val producerStartedAtNs = SystemClock.elapsedRealtimeNanos()
+        synchronized(captureLock) {
+        val lockAcquiredAtNs = SystemClock.elapsedRealtimeNanos()
         val active = capture ?: return@synchronized
         if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
         val capturedFields = fields.mapNotNull { (key, value) -> value?.let { key to technicalValue(it) } }.toMap()
@@ -978,7 +1016,17 @@ internal object KeyguardCardDiagnostics {
             operation = operation,
             fields = capturedFields,
         )
-        maybeCheckpointLocked(context, active)
+        // Captures are durably checkpointed at explicit lifecycle boundaries
+        // (start/freeze/expiry).  Building a full export snapshot here would
+        // put lock-held copy work on the show/hide callback path.
+        val finishedAtNs = SystemClock.elapsedRealtimeNanos()
+        val heldNs = (finishedAtNs - lockAcquiredAtNs).coerceAtLeast(0L)
+        val producerNs = (finishedAtNs - producerStartedAtNs).coerceAtLeast(0L)
+        active.captureLockWaitNs += (lockAcquiredAtNs - producerStartedAtNs).coerceAtLeast(0L)
+        active.captureLockHeldNs += heldNs
+        active.diagnosticProducerTotalNs += producerNs
+        active.diagnosticProducerMaxNs = maxOf(active.diagnosticProducerMaxNs, producerNs)
+        }
     }
 
     private fun appendLocked(
@@ -1020,35 +1068,42 @@ internal object KeyguardCardDiagnostics {
             reason = reason,
             fields = fields,
         )
-        val last = active.events.lastOrNull()
-        if (last != null && last.canCoalesce(event)) {
-            last.lastUptimeMs = event.uptimeMs
-            last.count += 1
-            val age = event.fields["eventAgeMs"]?.toLongOrNull()
-            if (age != null) {
-                val min = last.fields["eventAgeMinMs"]?.toLongOrNull()?.coerceAtMost(age) ?: age
-                val max = last.fields["eventAgeMaxMs"]?.toLongOrNull()?.coerceAtLeast(age) ?: age
-                last.fields = last.fields + mapOf("eventAgeMinMs" to min.toString(), "eventAgeMaxMs" to max.toString())
+        val retainRawEvent = active.captureMode == KeyguardDiagnosticCaptureMode.FULL || stage in TRANSITION_STAGES
+        if (retainRawEvent) {
+            val last = active.events.lastOrNull()
+            if (last != null && last.canCoalesce(event)) {
+                last.lastUptimeMs = event.uptimeMs
+                last.count += 1
+                val age = event.fields["eventAgeMs"]?.toLongOrNull()
+                if (age != null) {
+                    val min = last.fields["eventAgeMinMs"]?.toLongOrNull()?.coerceAtMost(age) ?: age
+                    val max = last.fields["eventAgeMaxMs"]?.toLongOrNull()?.coerceAtLeast(age) ?: age
+                    last.fields = last.fields + mapOf("eventAgeMinMs" to min.toString(), "eventAgeMaxMs" to max.toString())
+                }
+                active.eventsCoalesced += 1
+            } else {
+                val size = event.byteSize()
+                while (active.events.isNotEmpty() && (active.events.size >= MAX_EVENTS || active.retainedBytes + size > MAX_EVENT_BYTES)) {
+                    // Preserve causal transitions ahead of repetitive observational
+                    // noise. If all retained records are transitions, fall back to
+                    // the oldest record and mark the export as truncated instead of
+                    // pretending the attempt is complete.
+                    val entries = active.events.toMutableList()
+                    val index = entries.indexOfFirst { !it.isTransition() }.takeIf { it >= 0 } ?: 0
+                    val evicted = entries.removeAt(index)
+                    active.events.clear()
+                    active.events.addAll(entries)
+                    active.retainedBytes -= evicted.byteSize()
+                    active.eventsEvicted += 1
+                }
+                active.events.addLast(event)
+                active.retainedBytes += size
             }
-            active.eventsCoalesced += 1
-            return
+        } else {
+            // LIGHT keeps the scalar reducer and protected milestones but not
+            // an event line for ordinary high-frequency observations.
+            active.diagnosticDroppedRecords += 1
         }
-        val size = event.byteSize()
-        while (active.events.isNotEmpty() && (active.events.size >= MAX_EVENTS || active.retainedBytes + size > MAX_EVENT_BYTES)) {
-            // Preserve causal transitions ahead of repetitive observational
-            // noise. If all retained records are transitions, fall back to
-            // the oldest record and mark the export as truncated instead of
-            // pretending the attempt is complete.
-            val entries = active.events.toMutableList()
-            val index = entries.indexOfFirst { !it.isTransition() }.takeIf { it >= 0 } ?: 0
-            val evicted = entries.removeAt(index)
-            active.events.clear()
-            active.events.addAll(entries)
-            active.retainedBytes -= evicted.byteSize()
-            active.eventsEvicted += 1
-        }
-        active.events.addLast(event)
-        active.retainedBytes += size
         active.attempts.toList().lastOrNull { it.id == event.attemptId }?.let { attempt ->
             causalSpineKey(event)?.let { semanticKey ->
                 // A causal spine is a semantic record, not a second FIFO.
@@ -1157,10 +1212,14 @@ internal object KeyguardCardDiagnostics {
                     walkTruncated = fields["walkTruncated"]
                     visitedNodeCount = fields["visitedNodeCount"]?.toLongOrNull()
                 }
-                "INSPECTION_MAIN_APPLY_POSTED" -> inspectionTimeline()?.mainResultPostedAtUptimeMs = event.uptimeMs
+                "INSPECTION_MAIN_APPLY_POSTED" -> inspectionTimeline()?.apply {
+                    diagnosticPreparationFinishedAtUptimeMs = fields["diagnosticPreparationFinishedAtUptimeMs"]?.toLongOrNull()
+                    mainHandoffRequestedAtUptimeMs = fields["mainHandoffRequestedAtUptimeMs"]?.toLongOrNull()
+                }
                 "INSPECTION_MAIN_APPLY_STARTED" -> inspectionTimeline()?.apply {
                     mainApplyStartedAtUptimeMs = event.uptimeMs
-                    mainResultPostedAtUptimeMs = fields["mainResultPostedAtUptimeMs"]?.toLongOrNull()
+                    diagnosticPreparationFinishedAtUptimeMs = fields["diagnosticPreparationFinishedAtUptimeMs"]?.toLongOrNull()
+                    mainHandoffRequestedAtUptimeMs = fields["mainHandoffRequestedAtUptimeMs"]?.toLongOrNull()
                 }
                 "INSPECTION_APPLIED" -> {
                     attempt.inspectionsApplied += 1
@@ -1219,6 +1278,8 @@ internal object KeyguardCardDiagnostics {
                 }
                 "FIRST_ROOT_DRAW" -> showEpisode()?.firstRootDrawAtUptimeMs = event.uptimeMs
                 "FIRST_SHADER_DRAW" -> showEpisode()?.firstShaderDrawAtUptimeMs = event.uptimeMs
+                "FIRST_CURRENT_MATERIAL_DRAW" -> showEpisode()?.firstCurrentMaterialDrawAtUptimeMs = event.uptimeMs
+                "FRAME_COMMIT_CALLBACK_RECEIVED" -> showEpisode()?.frameCommitCallbackAtUptimeMs = event.uptimeMs
                 "HIDE_DECIDED" -> event.hideOperationId?.let { operationId ->
                     if (hideEpisode() == null) {
                         while (attempt.hides.size >= 8) attempt.hides.removeFirst()
@@ -1275,6 +1336,7 @@ internal object KeyguardCardDiagnostics {
 
     private fun persistLocked(context: Context, active: TimingCapture, force: Boolean) {
         if (!force && active.state != "REC") return
+        active.checkpointCount += 1L
         active.lastCheckpointElapsedMs = SystemClock.elapsedRealtime()
         val id = active.id
         val generation = active.generation
@@ -1339,11 +1401,15 @@ internal object KeyguardCardDiagnostics {
             return if (restored == null) mapOf(
                 "available" to true, "captureState" to "IDLE", "captureId" to "-", "attemptCount" to 0,
                 "eventsRecorded" to 0, "eventsRetained" to 0, "eventsEvicted" to 0, "eventsCoalesced" to 0,
+                "diagnosticDroppedRecords" to 0,
+                "captureMode" to KeyguardDiagnosticCaptureMode.LIGHT.name,
                 "report" to "",
             ) else mapOf(
                 "available" to true, "captureState" to "RECOVERED", "captureId" to restored.id,
                 "attemptCount" to "NA", "eventsRecorded" to "NA", "eventsRetained" to "NA", "eventsEvicted" to "NA",
                 "eventsCoalesced" to "NA", "recoveredFromDisk" to true,
+                "diagnosticDroppedRecords" to "NA",
+                "captureMode" to "RECOVERED",
                 "report" to recoveredReport(restored.report),
             )
         }
@@ -1357,6 +1423,8 @@ internal object KeyguardCardDiagnostics {
             "eventsRetained" to active.events.size,
             "eventsEvicted" to active.eventsEvicted,
             "eventsCoalesced" to active.eventsCoalesced,
+            "diagnosticDroppedRecords" to active.diagnosticDroppedRecords,
+            "captureMode" to active.captureMode.name,
             "recoveredFromDisk" to false,
             "report" to report,
         )
@@ -1376,6 +1444,7 @@ internal object KeyguardCardDiagnostics {
             appendLine("buildMode=${active.buildMode}")
             appendLine("captureId=${active.id}")
             appendLine("captureState=${active.state}")
+            appendLine("captureMode=${active.captureMode.name}")
             appendLine("processInstance=${active.processInstanceId}")
             appendLine("pid=${active.pid}")
             appendLine("androidApi=${Build.VERSION.SDK_INT}")
@@ -1402,7 +1471,7 @@ internal object KeyguardCardDiagnostics {
                     "SERVICE_CONNECTED", "SETTINGS_LOAD_START", "SETTINGS_LOAD_END", "PROFILE_LOAD_START", "PROFILE_LOAD_END",
                     "ROOT_PREPARE_START", "ROOT_PREPARE_END", "MATERIAL_PREPARE_REQUESTED", "MATERIAL_ARTIFACT_READY",
                     "MATERIAL_PROGRAM_PREPARED", "MATERIAL_PROGRAM_PROMOTED", "FIRST_ATTACH", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW",
-                    "FIRST_CURRENT_MATERIAL_DRAW",
+                    "FIRST_CURRENT_MATERIAL_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED",
                 ).forEach { stage -> appendLine("$stage=${cold.stages[stage] ?: "UNOBSERVED"}") }
             }
             appendLine("RETENTION")
@@ -1417,6 +1486,15 @@ internal object KeyguardCardDiagnostics {
             appendLine("queuedForPersistenceSeq=${active.queuedForPersistenceSeq}")
             appendLine("lastPersistedSeq=${active.lastSuccessfullyPersistedSeq}")
             appendLine("unflushedTailMayBeMissing=${active.unflushedTailMayBeMissing || active.events.lastOrNull()?.seq != active.lastSuccessfullyPersistedSeq}")
+            appendLine("DIAGNOSTIC_COST")
+            appendLine("captureLockWaitNs=${active.captureLockWaitNs}")
+            appendLine("captureLockHeldNs=${active.captureLockHeldNs}")
+            appendLine("diagnosticProducerTotalNs=${active.diagnosticProducerTotalNs}")
+            appendLine("diagnosticProducerMaxNs=${active.diagnosticProducerMaxNs}")
+            appendLine("legacyDiagnosticProducerTotalNs=${active.legacyDiagnosticProducerTotalNs}")
+            appendLine("legacyWriteCount=${active.legacyWriteCount}")
+            appendLine("checkpointCount=${active.checkpointCount}")
+            appendLine("diagnosticDroppedRecords=${active.diagnosticDroppedRecords}")
             appendLine("ATTEMPT_SUMMARIES")
             attemptsForCausalEvidence.forEach { append(attemptSummary(it)) }
             appendLine("CAUSAL_SPINES")
@@ -1514,10 +1592,10 @@ internal object KeyguardCardDiagnostics {
         val pendingRetries = (attempt.retryScheduledCount - attempt.retryFiredCount - attempt.retryCancelledCount).coerceAtLeast(0)
         appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:$pendingRetries attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
         appendLine(" awaiting=unknownWhileHidden:${attempt.unknownWhileHiddenCount},unknownWhileHiddenEpochChanges:${attempt.unknownWhileHiddenEpochChanges},pendingPreservedAfterUnknown:${attempt.pendingPreservedAfterUnknown},pendingRejectedAfterUnknown:${attempt.pendingRejectedAfterUnknown},visibleWithdrawalCount:${attempt.visibleWithdrawalCount},retrySuppressedForPendingWork:${attempt.retrySuppressedForPendingWork},retryBudgetExhaustedWhileAwaiting:${attempt.retryBudgetExhaustedWhileAwaiting}")
-        appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"}")
+        appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstCurrentMaterialDrawAt=${show?.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} frameCommitCallbackAt=${show?.frameCommitCallbackAtUptimeMs ?: "NO_FRAME_COMMIT_OBSERVED"}")
         appendLine(" cycleToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)} screenOnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} wakeCallbackToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
         appendLine(" wakeToFirstInspectionStartMs=${delta(firstStartedInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToFirstEligibleInspectionStartMs=${delta(firstValidInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToShowingInspectionStartMs=${delta(showingInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} latestPendingQueueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)}")
-        appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} mainResultDeliveryMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.mainResultPostedAtUptimeMs)} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
+        appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} inspectionFinishToHandoffMs=${delta(showingInspection?.mainHandoffRequestedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} handoffToMainEntryMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.mainHandoffRequestedAtUptimeMs)} mainEntryToDecisionMs=${delta(show?.decisionAtUptimeMs, showingInspection?.mainApplyStartedAtUptimeMs)} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
         appendLine(
             " windowReader=strategy:${showingInspection?.readerStrategy ?: "NA"},prefetch:${showingInspection?.prefetchFlags ?: "NA"}," +
                 "cacheEnabled:${showingInspection?.cacheEnabled ?: "NA"},cacheClear:${showingInspection?.cacheClearResult ?: "NA"}," +
@@ -1529,11 +1607,11 @@ internal object KeyguardCardDiagnostics {
                 "rootMax:${showingInspection?.rootAcquisitionMaxMs ?: "NA"},childTotal:${showingInspection?.childAcquisitionTotalMs ?: "NA"}," +
                 "childMax:${showingInspection?.childAcquisitionMaxMs ?: "NA"},local:${showingInspection?.localProcessingMs ?: "NA"}",
         )
-        appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} windowManagerAddViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)}")
+        appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} windowManagerAddViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)} currentMaterialDrawToFrameCommitCallbackMs=${delta(show?.frameCommitCallbackAtUptimeMs, show?.firstCurrentMaterialDrawAtUptimeMs)}")
         fun inspectionRole(label: String, timeline: InspectionTimeline?) {
             appendLine(
                 " $label req=${timeline?.requestId ?: "NA"} trigger=${timeline?.trigger ?: "NA"} eventTime=${timeline?.eventTimeUptimeMs ?: "NA"} " +
-                    "queued=${timeline?.queuedAtUptimeMs ?: "NA"} started=${timeline?.startedAtUptimeMs ?: "NA"} finished=${timeline?.finishedAtUptimeMs ?: "NA"} mainApply=${timeline?.mainApplyStartedAtUptimeMs ?: "NA"} " +
+                    "queued=${timeline?.queuedAtUptimeMs ?: "NA"} started=${timeline?.startedAtUptimeMs ?: "NA"} finished=${timeline?.finishedAtUptimeMs ?: "NA"} diagnosticPrepared=${timeline?.diagnosticPreparationFinishedAtUptimeMs ?: "NA"} handoff=${timeline?.mainHandoffRequestedAtUptimeMs ?: "NA"} mainApply=${timeline?.mainApplyStartedAtUptimeMs ?: "NA"} " +
                     "authorityAtStart=${timeline?.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${timeline?.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${timeline?.visibilityEpochAtApply ?: "NA"} pendingAtApply=${timeline?.pendingRequestIdAtApply ?: "NA"} " +
                     "classification=${timeline?.surfaceClassification ?: "NA"} reason=${timeline?.surfaceReason ?: "NA"} markers=${timeline?.surfaceMarkers ?: "NA"} rootUnavailable=${timeline?.rootUnavailable ?: "NA"} walkTruncated=${timeline?.walkTruncated ?: "NA"} visited=${timeline?.visitedNodeCount ?: "NA"} " +
                     "reader=${timeline?.readerStrategy ?: "NA"} fallback=${timeline?.fallbackReason ?: "NA"} activeRootMs=${timeline?.activeRootTotalMs ?: "NA"} perWindowRootMs=${timeline?.perWindowRootTotalMs ?: "NA"} childCalls=${timeline?.childAcquisitionCount ?: "NA"} childMs=${timeline?.childAcquisitionTotalMs ?: "NA"} localMs=${timeline?.localProcessingMs ?: "NA"} rejected=${timeline?.rejectionReason ?: "NA"} followup=${timeline?.followupAction ?: "NA"}",
@@ -1606,7 +1684,15 @@ internal object KeyguardCardDiagnostics {
     }
 
     fun record(context: Context, event: String, reason: String, attached: Boolean? = null) {
+        val startedAtNs = SystemClock.elapsedRealtimeNanos()
         val state = "$event|$reason|${attached ?: "-"}"
+        // LIGHT is the default performance capture. Keep the existing
+        // in-memory legacy summary current, but do not turn every ordinary
+        // event into a background SharedPreferences write. FULL and normal
+        // operation retain the durable legacy behavior.
+        val suppressLegacyPersistence = synchronized(captureLock) {
+            capture?.let { it.state == "REC" && it.captureMode == KeyguardDiagnosticCaptureMode.LIGHT } == true
+        }
         val schedule = synchronized(legacyLock) {
             ensureLegacyLoadedLocked(context)
             if (legacy.lastEvent == state) {
@@ -1619,9 +1705,15 @@ internal object KeyguardCardDiagnostics {
             }
             legacy.lastReason = reason
             legacy.revision += 1L
-            queueLegacyWriteLocked()
+            if (!suppressLegacyPersistence) queueLegacyWriteLocked() else false
         }
         if (schedule) persistLegacyAsync(context.applicationContext)
+        val elapsedNs = (SystemClock.elapsedRealtimeNanos() - startedAtNs).coerceAtLeast(0L)
+        synchronized(captureLock) {
+            capture?.takeIf { it.state == "REC" }?.let { active ->
+                active.legacyDiagnosticProducerTotalNs += elapsedNs
+            }
+        }
     }
 
     fun attach(context: Context, result: String) {
@@ -1720,6 +1812,9 @@ internal object KeyguardCardDiagnostics {
                     legacy.writeQueued = true
                     scheduleAgain = true
                 }
+            }
+            if (committed) synchronized(captureLock) {
+                capture?.takeIf { it.state == "REC" }?.let { it.legacyWriteCount += 1L }
             }
             if (scheduleAgain) persistLegacyAsync(applicationContext)
         }
