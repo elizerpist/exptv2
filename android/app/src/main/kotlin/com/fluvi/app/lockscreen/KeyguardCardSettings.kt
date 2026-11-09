@@ -444,6 +444,32 @@ internal object KeyguardCardDiagnostics {
     private val captureWriter = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "fluvi-keyguard-diagnostic-writer").apply { isDaemon = true }
     }
+    /** The legacy status shown by older debug surfaces must never rebuild a
+     * SharedPreferences string or call apply() from visibility callbacks. */
+    private const val MAX_LEGACY_EVENTS = 48
+    private val legacyLock = Any()
+    private data class LegacyState(
+        var loaded: Boolean = false,
+        val events: ArrayDeque<String> = ArrayDeque(),
+        var lastReason: String = "Nincs zárképernyő-próba",
+        var lastAttach: String = "Nincs csatolási kísérlet",
+        var attempt: String? = null,
+        var lastEvent: String? = null,
+        var lastEventCount: Int = 1,
+        var revision: Long = 0L,
+        var persistedRevision: Long = 0L,
+        var writeQueued: Boolean = false,
+    )
+    private data class LegacySnapshot(
+        val events: String,
+        val lastReason: String,
+        val lastAttach: String,
+        val attempt: String?,
+        val lastEvent: String?,
+        val lastEventCount: Int,
+        val revision: Long,
+    )
+    private val legacy = LegacyState()
     private var capture: TimingCapture? = null
     private var recovered: RecoveredCapture? = null
     private var nextCaptureGeneration = 0L
@@ -490,10 +516,12 @@ internal object KeyguardCardDiagnostics {
 
         fun isTransition(): Boolean = stage in KeyguardCardDiagnostics.TRANSITION_STAGES
 
-        fun toLine(): String = buildString {
+        fun toLine(compact: Boolean = true): String = buildString {
             append("seq=").append(seq)
-            append(" capture=").append(captureId)
-            append(" process=").append(processInstanceId)
+            if (!compact) {
+                append(" capture=").append(captureId)
+                append(" process=").append(processInstanceId)
+            }
             append(" up=").append(uptimeMs)
             append(" el=").append(elapsedMs)
             attemptId?.let { append(" attempt=").append(it) }
@@ -516,6 +544,7 @@ internal object KeyguardCardDiagnostics {
     private data class ShowEpisode(
         val operationId: Long,
         val requestId: Long?,
+        val attachGeneration: Long?,
         val decisionAtUptimeMs: Long,
         var addBeginAtUptimeMs: Long? = null,
         var addReturnAtUptimeMs: Long? = null,
@@ -525,6 +554,7 @@ internal object KeyguardCardDiagnostics {
 
     private data class HideEpisode(
         val operationId: Long,
+        val attachGeneration: Long?,
         val triggerReceivedAtUptimeMs: Long?,
         val decisionAtUptimeMs: Long,
         var localHideAppliedAtUptimeMs: Long? = null,
@@ -539,6 +569,7 @@ internal object KeyguardCardDiagnostics {
         var queuedAtUptimeMs: Long? = null,
         var startedAtUptimeMs: Long? = null,
         var finishedAtUptimeMs: Long? = null,
+        var mainResultPostedAtUptimeMs: Long? = null,
         var mainApplyStartedAtUptimeMs: Long? = null,
         var appliedAtUptimeMs: Long? = null,
         var windowsReadMs: Long? = null,
@@ -568,8 +599,34 @@ internal object KeyguardCardDiagnostics {
         val shows: ArrayDeque<ShowEpisode> = ArrayDeque(),
         val hides: ArrayDeque<HideEpisode> = ArrayDeque(),
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
+        /** This compact causal spine is independent of the raw event ring.
+         * A later hidden-state storm cannot evict an earlier wake/attach/hide
+         * operation that explains a physical attempt. */
+        val causalSpine: ArrayDeque<CausalSpineEvent> = ArrayDeque(),
         var finalState: String = "INCOMPLETE",
     )
+
+    private data class CausalSpineEvent(
+        val seq: Long,
+        val uptimeMs: Long,
+        val stage: String,
+        val reason: String,
+        val requestId: Long?,
+        val attachGeneration: Long?,
+        val showOperationId: Long?,
+        val hideOperationId: Long?,
+        val fields: Map<String, String>,
+    ) {
+        fun toLine(): String = buildString {
+            append("seq=").append(seq).append(" up=").append(uptimeMs)
+            requestId?.let { append(" req=").append(it) }
+            attachGeneration?.let { append(" attach=").append(it) }
+            showOperationId?.let { append(" showOp=").append(it) }
+            hideOperationId?.let { append(" hideOp=").append(it) }
+            append(" stage=").append(stage).append(" reason=").append(reason)
+            fields.forEach { (key, value) -> append(' ').append(key).append('=').append(value) }
+        }
+    }
 
     private data class TimingCapture(
         val id: String,
@@ -608,12 +665,31 @@ internal object KeyguardCardDiagnostics {
     )
 
     private val TRANSITION_STAGES = setOf(
-        "SCREEN_ON_RECEIVED", "WAKE_CYCLE_STARTED", "INSPECTION_QUEUED", "INSPECTION_COALESCED",
-        "INSPECTION_STARTED", "INSPECTION_FINISHED", "INSPECTION_MAIN_APPLY_STARTED", "INSPECTION_APPLIED",
+        "SCREEN_ON_RECEIVED", "WAKE_CYCLE_STARTED", "WORKER_OCCUPIED_AT_WAKE", "INSPECTION_QUEUED", "INSPECTION_COALESCED",
+        "INSPECTION_STARTED", "INSPECTION_FINISHED", "INSPECTION_MAIN_APPLY_POSTED", "INSPECTION_MAIN_APPLY_STARTED", "INSPECTION_APPLIED",
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
         "FIRST_SHADER_DRAW", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
-        "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "CAPTURE_FROZEN",
+        "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
+    )
+    private const val MAX_CAUSAL_SPINE_EVENTS = 64
+    private val CAUSAL_SPINE_STAGES = setOf(
+        "WAKE_ATTEMPT", "SCREEN_ON_RECEIVED", "WAKE_CYCLE_STARTED", "WORKER_OCCUPIED_AT_WAKE",
+        "INSPECTION_QUEUED", "INSPECTION_COALESCED", "INSPECTION_STARTED",
+        "INSPECTION_FINISHED", "INSPECTION_MAIN_APPLY_POSTED", "INSPECTION_MAIN_APPLY_STARTED",
+        "INSPECTION_APPLIED", "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
+        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED",
+        "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW", "HIDE_DECIDED", "LOCAL_HIDE_APPLIED",
+        "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED",
+    )
+    private val CAUSAL_SPINE_FIELD_KEYS = setOf(
+        "queueMs", "inspectionTotalMs", "windowsReadMs", "treeScanMs", "mainApplyQueueMs",
+        "mainDeliveryMs", "rejectionReason", "decision", "abortedStale", "attachedBefore",
+        "attachedAfter", "triggerReceivedUptimeMs", "terminalWake", "retryId", "retryIndex",
+        "requestedDelayMs", "schedulerLatenessMs", "causingRequestId", "rootWasPrepared",
+        "profileWasDecoded", "presentationMode", "surfaceClassification",
+        "activeOriginalSession", "activeOriginalWake", "activeOriginalVisibilityEpoch",
+        "activeOriginalInteractionEpoch", "activeOriginalAttachGeneration", "activeQueuedAtUptimeMs",
     )
 
     /** Starts a capture owned by Android, not by a Flutter widget or stream.
@@ -722,14 +798,8 @@ internal object KeyguardCardDiagnostics {
         source: String = "unknown",
         receivedAtUptimeMs: Long = SystemClock.uptimeMillis(),
     ): KeyguardDiagnosticContext? {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val line = "${SystemClock.elapsedRealtime()}|KG|WAKE|session=$session|wake=$wakeEpoch"
-        prefs.edit()
-            .putString(EVENTS, line)
-            .putString(ATTEMPT, "session=$session|wake=$wakeEpoch")
-            .remove(LAST_EVENT)
-            .putInt(LAST_EVENT_COUNT, 0)
-            .apply()
+        resetLegacyAttempt(context, line, "session=$session|wake=$wakeEpoch")
         return synchronized(captureLock) {
             val active = capture ?: return@synchronized null
             if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized null
@@ -897,6 +967,22 @@ internal object KeyguardCardDiagnostics {
         active.events.addLast(event)
         active.retainedBytes += size
         active.attempts.toList().lastOrNull { it.id == event.attemptId }?.let { attempt ->
+            if (stage in CAUSAL_SPINE_STAGES) {
+                while (attempt.causalSpine.size >= MAX_CAUSAL_SPINE_EVENTS) attempt.causalSpine.removeFirst()
+                attempt.causalSpine.addLast(
+                    CausalSpineEvent(
+                        seq = event.seq,
+                        uptimeMs = event.uptimeMs,
+                        stage = stage,
+                        reason = reason,
+                        requestId = event.requestId,
+                        attachGeneration = event.attachGeneration,
+                        showOperationId = event.showOperationId,
+                        hideOperationId = event.hideOperationId,
+                        fields = event.fields.filterKeys { key -> key in CAUSAL_SPINE_FIELD_KEYS },
+                    ),
+                )
+            }
             fun inspectionTimeline(): InspectionTimeline? = event.requestId?.let { request ->
                 attempt.inspections.getOrPut(request) { InspectionTimeline(request) }
             }
@@ -927,7 +1013,11 @@ internal object KeyguardCardDiagnostics {
                     windowsReadMs = fields["windowsReadMs"]?.toLongOrNull()
                     treeScanMs = fields["treeScanMs"]?.toLongOrNull()
                 }
-                "INSPECTION_MAIN_APPLY_STARTED" -> inspectionTimeline()?.mainApplyStartedAtUptimeMs = event.uptimeMs
+                "INSPECTION_MAIN_APPLY_POSTED" -> inspectionTimeline()?.mainResultPostedAtUptimeMs = event.uptimeMs
+                "INSPECTION_MAIN_APPLY_STARTED" -> inspectionTimeline()?.apply {
+                    mainApplyStartedAtUptimeMs = event.uptimeMs
+                    mainResultPostedAtUptimeMs = fields["mainResultPostedAtUptimeMs"]?.toLongOrNull()
+                }
                 "INSPECTION_APPLIED" -> {
                     attempt.inspectionsApplied += 1
                     inspectionTimeline()?.appliedAtUptimeMs = event.uptimeMs
@@ -946,6 +1036,7 @@ internal object KeyguardCardDiagnostics {
                             ShowEpisode(
                                 operationId = operationId,
                                 requestId = event.requestId,
+                                attachGeneration = event.attachGeneration,
                                 decisionAtUptimeMs = event.uptimeMs,
                             ),
                         )
@@ -967,6 +1058,7 @@ internal object KeyguardCardDiagnostics {
                         attempt.hides.addLast(
                             HideEpisode(
                                 operationId = operationId,
+                                attachGeneration = event.attachGeneration,
                                 triggerReceivedAtUptimeMs = event.triggerReceivedUptimeMs,
                                 decisionAtUptimeMs = event.uptimeMs,
                             ),
@@ -1047,6 +1139,7 @@ internal object KeyguardCardDiagnostics {
                 shows = ArrayDeque(attempt.shows.map { it.copy() }),
                 hides = ArrayDeque(attempt.hides.map { it.copy() }),
                 inspections = LinkedHashMap(attempt.inspections.mapValues { (_, timeline) -> timeline.copy() }),
+                causalSpine = ArrayDeque(attempt.causalSpine.map { it.copy(fields = it.fields.toMap()) }),
             )
         }),
     )
@@ -1131,6 +1224,11 @@ internal object KeyguardCardDiagnostics {
             appendLine("unflushedTailMayBeMissing=${active.unflushedTailMayBeMissing || active.events.lastOrNull()?.seq != active.lastSuccessfullyPersistedSeq}")
             appendLine("ATTEMPT_SUMMARIES")
             active.attempts.forEach { append(attemptSummary(it)) }
+            appendLine("CAUSAL_SPINES")
+            active.attempts.takeLast(3).forEach { attempt ->
+                appendLine("attemptId=${attempt.id} causalSpineComplete=${causalSpineComplete(attempt)} causalEvents=${attempt.causalSpine.size}")
+                attempt.causalSpine.forEach { appendLine(" ${it.toLine()}") }
+            }
             appendLine("EVENTS")
         }
         val footer = "END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n"
@@ -1171,11 +1269,7 @@ internal object KeyguardCardDiagnostics {
         val omittedAttempts = active.attempts
             .filter { attempt -> events.any { it.attemptId == attempt.id } && events.any { it.attemptId == attempt.id && it !in selected } }
             .joinToString(",") { it.id.toString() }
-        val omittedRanges = omittedEvents
-            .map { it.seq }
-            .sorted()
-            .joinToString(",") { it.toString() }
-            .take(512)
+        val omittedRanges = compactSequenceRanges(omittedEvents.map { it.seq }.sorted(), maxCharacters = 512)
         val retention = if (omitted == 0) header else header.replace(
             "exportTruncated=false",
             "exportTruncated=true\nomittedEventLines=$omitted\nomittedAttemptIds=${omittedAttempts.ifBlank { "none" }}\nomittedSeqs=$omittedRanges",
@@ -1193,25 +1287,80 @@ internal object KeyguardCardDiagnostics {
             end < start -> "INVALID_EVENT_ORDER"
             else -> (end - start).toString()
         }
-        val show = attempt.shows.lastOrNull()
-        val hide = attempt.hides.lastOrNull()
+        val show = attempt.shows.lastOrNull { it.addReturnAtUptimeMs != null } ?: attempt.shows.lastOrNull()
+        /** A detached terminal cleanup is useful, but it must never overwrite
+         * the operation which actually withdrew the attached root. */
+        val actualWithdrawal = attempt.hides.lastOrNull { hide ->
+            hide.attachedBefore == true && hide.removeReturnAtUptimeMs != null &&
+                (show?.attachGeneration == null || hide.attachGeneration == null ||
+                    show.attachGeneration == hide.attachGeneration)
+        }
+        val terminalCleanup = attempt.hides.lastOrNull()
         val showingInspection = show?.requestId?.let(attempt.inspections::get)
+        val firstValidInspection = attempt.inspections.values.firstOrNull { it.startedAtUptimeMs != null }
+        val causalSpineComplete = causalSpineComplete(attempt)
         appendLine("attemptId=${attempt.id} wakeSource=${attempt.wakeSource} presentationMode=${attempt.presentationMode} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
         appendLine(" firstInspectionRequestId=${attempt.firstInspectionRequestId ?: "NA"} showingInspectionRequestId=${show?.requestId ?: "NA"} requestsReceived=${attempt.requestsReceived} requestsReplaced=${attempt.requestsReplaced} inspectionsStarted=${attempt.inspectionsStarted} inspectionsApplied=${attempt.inspectionsApplied} inspectionsRejected=${attempt.inspectionsRejected} staleInspectionCount=${attempt.staleInspectionCount}")
         val pendingRetries = (attempt.retryScheduledCount - attempt.retryFiredCount - attempt.retryCancelledCount).coerceAtLeast(0)
         appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:$pendingRetries attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
         appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"}")
         appendLine(" wakeCallbackToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
-        appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
+        appendLine(" wakeToFirstValidInspectionStartMs=${delta(firstValidInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToShowingInspectionStartMs=${delta(showingInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} latestPendingQueueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)}")
+        appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} mainResultDeliveryMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.mainResultPostedAtUptimeMs)} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
         appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} addViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)}")
-        appendLine(" hideOperationId=${hide?.operationId ?: "NA"} hideTriggerAt=${hide?.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} hideDecisionAt=${hide?.decisionAtUptimeMs ?: "NA"} localHideAppliedAt=${hide?.localHideAppliedAtUptimeMs ?: "NA"} removeViewBeginAt=${hide?.removeBeginAtUptimeMs ?: "NA"} removeViewReturnAt=${hide?.removeReturnAtUptimeMs ?: "NA"} attachedBefore=${hide?.attachedBefore ?: "NA"}")
-        appendLine(" hideSignalToDecisionMs=${delta(hide?.decisionAtUptimeMs, hide?.triggerReceivedAtUptimeMs)} hideDecisionToLocalHideMs=${delta(hide?.localHideAppliedAtUptimeMs, hide?.decisionAtUptimeMs)} removeViewCallMs=${delta(hide?.removeReturnAtUptimeMs, hide?.removeBeginAtUptimeMs)} hideSignalToRemoveReturnMs=${delta(hide?.removeReturnAtUptimeMs, hide?.triggerReceivedAtUptimeMs)}")
+        appendLine(" actualWithdrawalHideOp=${actualWithdrawal?.operationId ?: "NA"} actualHideAttachedBefore=${actualWithdrawal?.attachedBefore ?: "NA"} actualHideTriggerAt=${actualWithdrawal?.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} actualHideDecisionAt=${actualWithdrawal?.decisionAtUptimeMs ?: "NA"} actualLocalHideAppliedAt=${actualWithdrawal?.localHideAppliedAtUptimeMs ?: "NA"} actualRemoveViewBeginAt=${actualWithdrawal?.removeBeginAtUptimeMs ?: "NA"} actualRemoveViewReturnAt=${actualWithdrawal?.removeReturnAtUptimeMs ?: "NA"}")
+        appendLine(" triggerToLocalHideMs=${delta(actualWithdrawal?.localHideAppliedAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} triggerToRemoveReturnMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} hideDecisionToLocalHideMs=${delta(actualWithdrawal?.localHideAppliedAtUptimeMs, actualWithdrawal?.decisionAtUptimeMs)} removeViewCallMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.removeBeginAtUptimeMs)}")
+        // Kept as compatibility aliases for the pre-operation report reader;
+        // both now refer only to the actual attached-root withdrawal.
+        appendLine(" hideSignalToDecisionMs=${delta(actualWithdrawal?.decisionAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} hideSignalToRemoveReturnMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)}")
+        appendLine(" terminalCleanupHideOp=${terminalCleanup?.operationId ?: "NA"} terminalCleanupAttachedBefore=${terminalCleanup?.attachedBefore ?: "NA"} terminalCleanupDecisionAt=${terminalCleanup?.decisionAtUptimeMs ?: "NA"}")
+        appendLine(" causalSpineComplete=$causalSpineComplete causalSpineEvents=${attempt.causalSpine.size} causalSpineIndependentOfRawRing=true")
         appendLine(
             " firstRootDrawObserved=${show?.firstRootDrawAtUptimeMs != null} " +
                 "firstRootDrawStatus=${if (show?.firstRootDrawAtUptimeMs == null) "NO_DRAW_OBSERVED" else "OBSERVED"} " +
                 "firstShaderDrawObserved=${show?.firstShaderDrawAtUptimeMs != null} " +
                 "firstShaderDrawStatus=${if (show?.firstShaderDrawAtUptimeMs == null) "NO_DRAW_OBSERVED" else "OBSERVED"}",
         )
+    }
+
+    private fun causalSpineComplete(attempt: TimingAttempt): Boolean {
+        val stages = attempt.causalSpine.map { it.stage }.toSet()
+        val hadShow = attempt.shows.isNotEmpty()
+        val hadActualWithdrawal = attempt.hides.any { it.attachedBefore == true && it.removeReturnAtUptimeMs != null }
+        return "WAKE_ATTEMPT" in stages &&
+            (!hadShow || ("SHOW_FOR_ATTACH" in stages && "ADD_VIEW_RETURN" in stages)) &&
+            (!hadActualWithdrawal || ("HIDE_DECIDED" in stages && "REMOVE_VIEW_RETURN" in stages))
+    }
+
+    /** Never truncate a comma-separated sequence in the middle of an ID. */
+    private fun compactSequenceRanges(sequences: List<Long>, maxCharacters: Int): String {
+        if (sequences.isEmpty()) return "none"
+        val tokens = mutableListOf<String>()
+        var start = sequences.first()
+        var previous = start
+        fun flush() {
+            tokens += if (start == previous) start.toString() else "$start-$previous"
+        }
+        sequences.drop(1).forEach { current ->
+            if (current == previous + 1L) previous = current
+            else {
+                flush()
+                start = current
+                previous = current
+            }
+        }
+        flush()
+        val result = StringBuilder()
+        tokens.forEach { token ->
+            val prefix = if (result.isEmpty()) "" else ","
+            if (result.length + prefix.length + token.length > maxCharacters) {
+                if (result.isNotEmpty()) result.append(",")
+                result.append("more")
+                return result.toString()
+            }
+            result.append(prefix).append(token)
+        }
+        return result.toString()
     }
 
     private fun technicalValue(value: Any): String = value.toString()
@@ -1223,44 +1372,123 @@ internal object KeyguardCardDiagnostics {
     }
 
     fun record(context: Context, event: String, reason: String, attached: Boolean? = null) {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val state = "$event|$reason|${attached ?: "-"}"
-        if (prefs.getString(LAST_EVENT, null) == state) {
-            prefs.edit().putInt(LAST_EVENT_COUNT, prefs.getInt(LAST_EVENT_COUNT, 1) + 1).apply()
-            return
+        val schedule = synchronized(legacyLock) {
+            ensureLegacyLoadedLocked(context)
+            if (legacy.lastEvent == state) {
+                legacy.lastEventCount += 1
+            } else {
+                while (legacy.events.size >= MAX_LEGACY_EVENTS) legacy.events.removeFirst()
+                legacy.events.addLast("${SystemClock.elapsedRealtime()}|$state")
+                legacy.lastEvent = state
+                legacy.lastEventCount = 1
+            }
+            legacy.lastReason = reason
+            legacy.revision += 1L
+            queueLegacyWriteLocked()
         }
-        val line = "${android.os.SystemClock.elapsedRealtime()}|$state"
-        // Sequence has no takeLast extension on the Kotlin version used by
-        // this project. The diagnostic buffer is deliberately tiny, so make
-        // the bounded list explicit before retaining the most recent lines.
-        val old = prefs.getString(EVENTS, "").orEmpty().lineSequence()
-            .filter(String::isNotBlank)
-            .toList()
-            .takeLast(47)
-        prefs.edit()
-            .putString(EVENTS, (old + line).joinToString("\n"))
-            .putString(LAST_REASON, reason)
-            .putString(LAST_EVENT, state)
-            .putInt(LAST_EVENT_COUNT, 1)
-            .apply()
+        if (schedule) persistLegacyAsync(context.applicationContext)
     }
 
     fun attach(context: Context, result: String) {
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(LAST_ATTACH, result).apply()
+        val schedule = synchronized(legacyLock) {
+            ensureLegacyLoadedLocked(context)
+            legacy.lastAttach = result
+            legacy.revision += 1L
+            queueLegacyWriteLocked()
+        }
+        if (schedule) persistLegacyAsync(context.applicationContext)
     }
 
-    fun lastReason(context: Context): String = context.applicationContext
-        .getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LAST_REASON, "Nincs zárképernyő-próba") ?: "Nincs zárképernyő-próba"
+    fun lastReason(context: Context): String = synchronized(legacyLock) {
+        ensureLegacyLoadedLocked(context)
+        legacy.lastReason
+    }
 
-    fun lastAttachResult(context: Context): String = context.applicationContext
-        .getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LAST_ATTACH, "Nincs csatolási kísérlet") ?: "Nincs csatolási kísérlet"
+    fun lastAttachResult(context: Context): String = synchronized(legacyLock) {
+        ensureLegacyLoadedLocked(context)
+        legacy.lastAttach
+    }
 
-    fun summary(context: Context): String {
+    fun summary(context: Context): String = synchronized(legacyLock) {
+        ensureLegacyLoadedLocked(context)
+        val events = legacy.events.joinToString("\n")
+        if (legacy.lastEventCount > 1) "$events\nrepeat=${legacy.lastEventCount}" else events
+    }
+
+    private fun resetLegacyAttempt(context: Context, line: String, attempt: String) {
+        val schedule = synchronized(legacyLock) {
+            ensureLegacyLoadedLocked(context)
+            legacy.events.clear()
+            legacy.events.addLast(line)
+            legacy.lastReason = attempt
+            legacy.attempt = attempt
+            legacy.lastEvent = null
+            legacy.lastEventCount = 0
+            legacy.revision += 1L
+            queueLegacyWriteLocked()
+        }
+        if (schedule) persistLegacyAsync(context.applicationContext)
+    }
+
+    private fun ensureLegacyLoadedLocked(context: Context) {
+        if (legacy.loaded) return
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val events = prefs.getString(EVENTS, "").orEmpty()
-        val repeated = prefs.getInt(LAST_EVENT_COUNT, 1)
-        return if (repeated > 1) "$events\nrepeat=$repeated" else events
+        prefs.getString(EVENTS, "").orEmpty().lineSequence().filter(String::isNotBlank)
+            .toList().takeLast(MAX_LEGACY_EVENTS).forEach { legacy.events.addLast(it) }
+        legacy.lastReason = prefs.getString(LAST_REASON, legacy.lastReason) ?: legacy.lastReason
+        legacy.lastAttach = prefs.getString(LAST_ATTACH, legacy.lastAttach) ?: legacy.lastAttach
+        legacy.attempt = prefs.getString(ATTEMPT, null)
+        legacy.lastEvent = prefs.getString(LAST_EVENT, null)
+        legacy.lastEventCount = prefs.getInt(LAST_EVENT_COUNT, 1)
+        legacy.loaded = true
+    }
+
+    /** @return whether this caller acquired the one bounded writer slot. */
+    private fun queueLegacyWriteLocked(): Boolean {
+        if (legacy.writeQueued) return false
+        legacy.writeQueued = true
+        return true
+    }
+
+    /** Runs only on the existing serial diagnostic writer.  The visibility
+     * caller has already released [legacyLock], and no event causes a second
+     * queued writer while this snapshot is pending. */
+    private fun persistLegacyAsync(applicationContext: Context) {
+        captureWriter.execute {
+            val snapshot = synchronized(legacyLock) {
+                LegacySnapshot(
+                    events = legacy.events.joinToString("\n"),
+                    lastReason = legacy.lastReason,
+                    lastAttach = legacy.lastAttach,
+                    attempt = legacy.attempt,
+                    lastEvent = legacy.lastEvent,
+                    lastEventCount = legacy.lastEventCount,
+                    revision = legacy.revision,
+                )
+            }
+            val committed = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(EVENTS, snapshot.events)
+                .putString(LAST_REASON, snapshot.lastReason)
+                .putString(LAST_ATTACH, snapshot.lastAttach)
+                .putString(ATTEMPT, snapshot.attempt)
+                .putString(LAST_EVENT, snapshot.lastEvent)
+                .putInt(LAST_EVENT_COUNT, snapshot.lastEventCount)
+                .commit()
+            var scheduleAgain = false
+            synchronized(legacyLock) {
+                if (committed) legacy.persistedRevision = maxOf(legacy.persistedRevision, snapshot.revision)
+                legacy.writeQueued = false
+                // A successful write may have raced newer in-memory events.
+                // Queue exactly one successor; a failed write remains dirty
+                // and is retried by the next ordinary diagnostic mutation.
+                if (committed && legacy.revision > legacy.persistedRevision) {
+                    legacy.writeQueued = true
+                    scheduleAgain = true
+                }
+            }
+            if (scheduleAgain) persistLegacyAsync(applicationContext)
+        }
     }
 }
 

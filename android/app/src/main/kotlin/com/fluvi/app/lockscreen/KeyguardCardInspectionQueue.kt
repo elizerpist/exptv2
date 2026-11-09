@@ -18,6 +18,36 @@ internal data class KeyguardCardInspectionRequest(
     val triggerReceivedUptimeMs: Long? = null,
 )
 
+/**
+ * The worker never reads the service's individual mutable generation fields.
+ * Its owner publishes this one immutable value whenever lifecycle authority
+ * changes, so a Binder call that cannot be interrupted still stops before the
+ * next platform/node request when it returns.
+ */
+internal data class KeyguardInspectionAuthority(
+    val serviceSession: Long,
+    val visibilityEpoch: Long,
+    val wakeGeneration: Long,
+    val interactionEpoch: Long,
+    val attachGeneration: Long,
+) {
+    fun matches(request: KeyguardCardInspectionRequest): Boolean =
+        serviceSession == request.session &&
+            visibilityEpoch == request.visibilityEpoch &&
+            wakeGeneration == request.wakeGeneration &&
+            interactionEpoch == request.interactionEpoch &&
+            attachGeneration == request.attachGeneration
+}
+
+/** Known, positively identified accessibility-overlay ownership.  It is
+ * deliberately narrower than a package match: an Activity or another service
+ * overlay must still follow the safe discovery path. */
+internal data class KeyguardOwnOverlayIdentity(
+    val windowId: Int,
+    val displayId: Int,
+    val attachGeneration: Long,
+)
+
 /** A service owns one of these behind its queue lock. It permits one Binder
  * walk and one latest replacement request; it can never grow a wake-event
  * backlog. */

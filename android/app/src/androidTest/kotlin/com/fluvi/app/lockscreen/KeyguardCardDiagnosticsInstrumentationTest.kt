@@ -95,12 +95,20 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "invisible", requestId = 44L, observedUptimeMs = 1003L, diagnosticContext = attempt, operation = hide)
         KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_BEGIN", "window", requestId = 44L, observedUptimeMs = 1004L, diagnosticContext = attempt, operation = hide)
         KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "success", requestId = 44L, observedUptimeMs = 1005L, diagnosticContext = attempt, operation = hide)
+        // A later terminal cleanup is diagnostically useful but must not
+        // replace the timing of the actual attached-root withdrawal above.
+        val cleanup = KeyguardCardDiagnostics.newHideOperation(attempt, 1L, 45L, 1010L)
+        KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "lateCleanup", requestId = 45L, observedUptimeMs = 1012L, diagnosticContext = attempt, operation = cleanup)
+        KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "lateCleanup", requestId = 45L, observedUptimeMs = 1013L, diagnosticContext = attempt, operation = cleanup, fields = mapOf("attachedBefore" to false))
 
         val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
         assertTrue(report.contains("showDecisionToAddViewBeginMs=10"))
         assertTrue(report.contains("wakeCallbackToFirstRootDrawMs=150"))
         assertTrue(report.contains("hideSignalToDecisionMs=2"))
         assertTrue(report.contains("hideSignalToRemoveReturnMs=5"))
+        assertTrue(report.contains("actualWithdrawalHideOp=${hide.hideOperationId}"))
+        assertTrue(report.contains("terminalCleanupHideOp=${cleanup.hideOperationId}"))
+        assertTrue(report.contains("triggerToLocalHideMs=3"))
         assertFalse(report.contains("showDecisionToAddViewBeginMs=-"))
     }
 
@@ -146,6 +154,46 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("count=500"))
         assertTrue(report.contains("hiddenNoopCount=500"))
         assertTrue((frozen["eventsCoalesced"] as Int) >= 499)
+    }
+
+    @Test fun actualWithdrawalKeepsItsTimingWhenLaterCleanupIsDetached() {
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug")
+        val attempt = checkNotNull(
+            KeyguardCardDiagnostics.beginLockAttempt(
+                context, 6L, 14L, "wake", 331_507_499L,
+            ),
+        )
+        val withdrawal = KeyguardCardDiagnostics.newHideOperation(
+            attempt, attachGeneration = 9L, causingInspectionRequestId = 150L,
+            triggerReceivedUptimeMs = 331_508_793L,
+        )
+        KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "inspection", requestId = 150L,
+            observedUptimeMs = 331_508_957L, diagnosticContext = attempt, operation = withdrawal)
+        KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "inspection", requestId = 150L,
+            observedUptimeMs = 331_508_959L, diagnosticContext = attempt, operation = withdrawal,
+            fields = mapOf("attachedBefore" to true))
+        KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "invisible", requestId = 150L,
+            observedUptimeMs = 331_508_961L, diagnosticContext = attempt, operation = withdrawal)
+        KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_BEGIN", "window", requestId = 150L,
+            observedUptimeMs = 331_508_962L, diagnosticContext = attempt, operation = withdrawal)
+        KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "success", requestId = 150L,
+            observedUptimeMs = 331_508_972L, diagnosticContext = attempt, operation = withdrawal)
+        val cleanup = KeyguardCardDiagnostics.newHideOperation(
+            attempt, attachGeneration = 9L, causingInspectionRequestId = null,
+            triggerReceivedUptimeMs = 331_509_006L,
+        )
+        KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "terminal", observedUptimeMs = 331_509_008L,
+            diagnosticContext = attempt, operation = cleanup)
+        KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "terminal", observedUptimeMs = 331_509_009L,
+            diagnosticContext = attempt, operation = cleanup, fields = mapOf("attachedBefore" to false))
+
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.contains("actualWithdrawalHideOp=${withdrawal.hideOperationId}"))
+        assertTrue(report.contains("terminalCleanupHideOp=${cleanup.hideOperationId}"))
+        assertTrue(report.contains("triggerToLocalHideMs=168"))
+        assertTrue(report.contains("triggerToRemoveReturnMs=179"))
+        assertTrue(report.contains("hideDecisionToLocalHideMs=4"))
+        assertTrue(report.contains("removeViewCallMs=10"))
     }
 
     @Test fun retryAccountingRetainsFiredCancelledAndPendingTokens() {

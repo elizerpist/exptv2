@@ -2,6 +2,9 @@ package com.fluvi.app.lockscreen.material
 
 import android.graphics.Bitmap
 import android.os.Build
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.View
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
@@ -22,7 +25,30 @@ internal class KeyguardCardMaterialController(
     private var profile: KeyguardMaterialProfile? = null
     private var mode = KeyguardCardAnimationMode.ORB_ONLY
     private var presentationMode = KeyguardCardPresentationMode.CARD
+    private var appliedConfiguration: MaterialConfiguration? = null
+    private var animationsAllowed = readAnimationsEnabled()
+    private var updateCount = 0
+    private var noOpUpdateCount = 0
+    private val animatorScaleObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            val next = readAnimationsEnabled()
+            if (next == animationsAllowed) return
+            animationsAllowed = next
+            // This is a user animation preference transition, not a new
+            // material scene. Keep the scene/phase and only reconcile clock.
+            reconcileClock()
+        }
+    }
     var onFirstOrbShaderDraw: ((Long) -> Unit)? = null
+
+    private data class MaterialConfiguration(
+        val profileVisualKey: String?,
+        val animationMode: KeyguardCardAnimationMode,
+        val presentationMode: KeyguardCardPresentationMode,
+        val full: Boolean,
+        /** Bitmap's object identity is the relevant fallback input. */
+        val staticOrb: Bitmap?,
+    )
 
     init {
         orb.shape = KeyguardHeaderMaterialView.Shape.ORB
@@ -34,6 +60,13 @@ internal class KeyguardCardMaterialController(
         orb.onRendererStateChanged = { reconcileClock() }
         background.onRendererStateChanged = { reconcileClock() }
         orb.onFirstShaderDraw = { observedAtUptimeMs -> onFirstOrbShaderDraw?.invoke(observedAtUptimeMs) }
+        runCatching {
+            orb.context.contentResolver.registerContentObserver(
+                Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
+                false,
+                animatorScaleObserver,
+            )
+        }
     }
 
     fun update(
@@ -43,9 +76,23 @@ internal class KeyguardCardMaterialController(
         isFull: Boolean,
         staticOrb: Bitmap?,
     ) {
+        val configuration = MaterialConfiguration(
+            profileVisualKey = profile?.let { if (isFull) it.visualKey else it.neutralized().visualKey },
+            animationMode = animationMode,
+            presentationMode = presentationMode,
+            full = isFull,
+            staticOrb = staticOrb,
+        )
         this.profile = profile
         this.mode = animationMode
         this.presentationMode = presentationMode
+        if (appliedConfiguration == configuration) {
+            noOpUpdateCount += 1
+            reconcileClock()
+            return
+        }
+        appliedConfiguration = configuration
+        updateCount += 1
         val scene = profile?.let {
             KeyguardMaterialScene(
                 profile = if (isFull) it else it.neutralized(),
@@ -53,7 +100,7 @@ internal class KeyguardCardMaterialController(
                 appliedAtNanos = System.nanoTime(),
             )
         }
-        val canAnimate = scene != null && animationMode != KeyguardCardAnimationMode.OFF && animationsEnabled()
+        val canAnimate = scene != null && animationMode != KeyguardCardAnimationMode.OFF && animationsAllowed
         orb.setStaticBitmap(staticOrb)
         orb.setScene(scene, enabled = canAnimate)
         val backgroundVisible = presentationMode == KeyguardCardPresentationMode.CARD &&
@@ -86,6 +133,11 @@ internal class KeyguardCardMaterialController(
 
     fun stop(reason: String) = onDetached(reason)
 
+    fun dispose() {
+        runCatching { orb.context.contentResolver.unregisterContentObserver(animatorScaleObserver) }
+        stop("dispose")
+    }
+
     fun diagnostics(): KeyguardMaterialDiagnostics = KeyguardMaterialDiagnostics(
         requestedRenderer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "RuntimeShader/AGSL" else "static-fallback",
         activeRenderer = when {
@@ -102,13 +154,15 @@ internal class KeyguardCardMaterialController(
         frameIntervalP50 = clock.framePercentile(.5),
         frameIntervalP95 = clock.framePercentile(.95),
         largeFrameGapCount = clock.largeGapCount,
+        configurationUpdateCount = updateCount,
+        configurationNoOpCount = noOpUpdateCount,
         rendererFailure = orb.rendererFailure() ?: background.rendererFailure(),
         orb = orb.diagnostics(),
         background = background.diagnostics(),
     )
 
     private fun reconcileClock(forceCanAnimate: Boolean? = null) {
-        val canAnimate = forceCanAnimate ?: (profile != null && mode != KeyguardCardAnimationMode.OFF && animationsEnabled())
+        val canAnimate = forceCanAnimate ?: (profile != null && mode != KeyguardCardAnimationMode.OFF && animationsAllowed)
         // A genuinely static Header scene is rendered once; the selected
         // visual mode alone must not leave a 60 Hz callback running.
         if (!attached || !canAnimate || profile?.animated != true) {
@@ -133,7 +187,7 @@ internal class KeyguardCardMaterialController(
         }
     }
 
-    private fun animationsEnabled(): Boolean = Settings.Global.getFloat(
+    private fun readAnimationsEnabled(): Boolean = Settings.Global.getFloat(
         orb.context.contentResolver,
         Settings.Global.ANIMATOR_DURATION_SCALE,
         1f,
@@ -151,6 +205,8 @@ internal data class KeyguardMaterialDiagnostics(
     val frameIntervalP50: Long,
     val frameIntervalP95: Long,
     val largeFrameGapCount: Int,
+    val configurationUpdateCount: Int,
+    val configurationNoOpCount: Int,
     val rendererFailure: String?,
     val orb: KeyguardHeaderMaterialViewDiagnostics,
     val background: KeyguardHeaderMaterialViewDiagnostics,

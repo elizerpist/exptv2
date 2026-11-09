@@ -97,6 +97,33 @@ class KeyguardCardInspectionQueueTest {
         )
     }
 
+    @Test fun `published authority invalidates an old traversal without relabelling it current`() {
+        val request = request(44, "window")
+        val current = KeyguardInspectionAuthority(
+            serviceSession = 1L,
+            visibilityEpoch = 1L,
+            wakeGeneration = 1L,
+            interactionEpoch = 1L,
+            attachGeneration = 1L,
+        )
+        assertTrue(current.matches(request))
+        assertFalse(current.copy(interactionEpoch = 2L).matches(request))
+        assertFalse(current.copy(attachGeneration = 2L).matches(request))
+        assertFalse(current.copy(wakeGeneration = 2L).matches(request))
+    }
+
+    @Test fun `same-authority burst keeps active work and only newest pending request`() {
+        val queue = KeyguardCardInspectionQueue()
+        val active = request(1, "wake")
+        assertTrue(queue.offer(active))
+        repeat(50) { index ->
+            assertFalse(queue.offer(request(index + 2L, "window")))
+            assertEquals(active, queue.activeRequest())
+        }
+        assertEquals(51L, queue.pendingRequest()?.id)
+        assertEquals(51L, queue.complete(active)?.id)
+    }
+
     private fun request(id: Long, trigger: String) = KeyguardCardInspectionRequest(
         id = id,
         trigger = trigger,

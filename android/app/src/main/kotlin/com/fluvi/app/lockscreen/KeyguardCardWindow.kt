@@ -57,6 +57,11 @@ internal class KeyguardCardWindow(
     private var materialController: KeyguardCardMaterialController? = null
     private var materialProfile: KeyguardMaterialProfile? = null
     private var materialSettings = KeyguardCardSettings()
+    /** `configurePresentation` mutates real View layout/visibility state.
+     * Repeated MAIN_CONFIRMED inspections therefore need an explicit semantic
+     * key instead of discovering they were no-ops after those mutations. */
+    private var appliedPresentationConfiguration: PresentationConfigurationKey? = null
+    private var presentationConfigurationApplyCount = 0
     private var dragStart: KeyguardOverlayGeometry? = null
     private var dragPreview: KeyguardOverlayGeometry? = null
     private var dragLayoutRevision = 0L
@@ -76,6 +81,8 @@ internal class KeyguardCardWindow(
     val isDragActive: Boolean get() = root?.isDragging == true
     val hasPreparedRoot: Boolean get() = root != null
     val currentAttachGeneration: Long get() = attachGeneration
+
+    internal fun presentationConfigurationApplicationsForTest(): Int = presentationConfigurationApplyCount
 
     fun isOwnAccessibilityWindow(windowId: Int, displayId: Int): Boolean {
         checkMainThread()
@@ -105,15 +112,14 @@ internal class KeyguardCardWindow(
 
     fun showOrUpdate(presentation: FluviFinancialCardPresentation, settings: KeyguardCardSettings): Result {
         checkMainThread()
-        val previousMode = materialSettings.presentationMode
+        val modeChanged = appliedPresentationConfiguration?.mode?.let { it != settings.presentationMode } == true
         materialSettings = settings
         val current = root ?: createRoot().also { root = it }
-        val modeChanged = appliedGeometry != null && settings.presentationMode != previousMode
         if (modeChanged) {
             current.cancelInteraction("presentationChanged")
             onInteractionDiagnostic("KG|PRESENTATION_CHANGED", settings.presentationMode.wireValue)
         }
-        configurePresentation(current, settings.presentationMode)
+        val presentationConfigurationChanged = configurePresentation(current, settings.presentationMode)
         val resolvedGeometry = dragPreview ?: geometry(settings, current)
 
         if (!lifecycle.isAttached()) {
@@ -164,7 +170,9 @@ internal class KeyguardCardWindow(
 
         val contentChanged = appliedPresentation?.visualKey != presentation.visualKey
         val geometryChanged = appliedGeometry != resolvedGeometry
-        if (lifecycle.renderOperation(contentChanged, geometryChanged) == KeyguardCardWindowLifecycle.Operation.NONE) return Result.NO_OP
+        if (lifecycle.renderOperation(contentChanged, geometryChanged) == KeyguardCardWindowLifecycle.Operation.NONE) {
+            return if (presentationConfigurationChanged) Result.LAYOUT_UPDATED else Result.NO_OP
+        }
         if (contentChanged) apply(current, presentation, force = false, mode = settings.presentationMode)
         if (geometryChanged && !updateLayout(current, resolvedGeometry)) return Result.FAILED
         val wasFull = appliedPresentation?.full == true
@@ -182,7 +190,7 @@ internal class KeyguardCardWindow(
     fun updateLayoutSettings(settings: KeyguardCardSettings) {
         checkMainThread()
         val current = root ?: return
-        val modeChanged = settings.presentationMode != materialSettings.presentationMode
+        val modeChanged = appliedPresentationConfiguration?.mode?.let { it != settings.presentationMode } == true
         materialSettings = settings
         if (modeChanged) {
             current.cancelInteraction("presentationChanged")
@@ -236,8 +244,10 @@ internal class KeyguardCardWindow(
         clearDragFrame()
         materialController?.stop("dispose")
         hide()
+        materialController?.dispose()
         root = null
         materialController = null
+        appliedPresentationConfiguration = null
     }
 
     fun updateMaterial(profile: KeyguardMaterialProfile?, settings: KeyguardCardSettings) {
@@ -365,7 +375,28 @@ internal class KeyguardCardWindow(
         root.post { if (root.isAttachedToWindow) KeyguardCardContentOverflow.fit(root) }
     }
 
-    private fun configurePresentation(root: KeyguardCardInteractionLayout, mode: KeyguardCardPresentationMode) {
+    private data class PresentationConfigurationKey(
+        val mode: KeyguardCardPresentationMode,
+        val densityDpi: Int,
+        val orientation: Int,
+        val screenWidthDp: Int,
+        val screenHeightDp: Int,
+        val layoutDirection: Int,
+    )
+
+    private fun configurePresentation(root: KeyguardCardInteractionLayout, mode: KeyguardCardPresentationMode): Boolean {
+        val configuration = serviceContext.resources.configuration
+        val key = PresentationConfigurationKey(
+            mode = mode,
+            densityDpi = serviceContext.resources.displayMetrics.densityDpi,
+            orientation = configuration.orientation,
+            screenWidthDp = configuration.screenWidthDp,
+            screenHeightDp = configuration.screenHeightDp,
+            layoutDirection = root.layoutDirection,
+        )
+        if (appliedPresentationConfiguration == key) return false
+        appliedPresentationConfiguration = key
+        presentationConfigurationApplyCount += 1
         val content = root.findViewById<View>(R.id.fluvi_financial_snapshot_content)
         val background = root.findViewById<View>(R.id.fluvi_keyguard_material_background)
         val veil = root.findViewById<View>(R.id.fluvi_keyguard_material_veil)
@@ -394,6 +425,7 @@ internal class KeyguardCardWindow(
         root.setBackgroundResource(if (card) R.drawable.fluvi_financial_snapshot_background else android.R.color.transparent)
         root.clipToOutline = card
         root.contentDescription = if (card) "Fluvi · Pénzügyi pillanatkép" else "Fluvi · animált orb"
+        return true
     }
 
     private fun geometry(settings: KeyguardCardSettings, root: View?): KeyguardOverlayGeometry =

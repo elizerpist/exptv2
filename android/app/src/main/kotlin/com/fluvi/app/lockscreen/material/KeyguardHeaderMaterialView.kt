@@ -210,6 +210,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     fun setStaticBitmap(value: Bitmap?) {
+        if (fallbackBitmap === value) return
         fallbackBitmap = value
         if (!materialEnabled) invalidate()
     }

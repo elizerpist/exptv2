@@ -36,6 +36,46 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
+    @Test fun identicalMaterialInputDoesNotReplaceTheRetainedScene() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        try {
+            instrumentation.runOnMainSync {
+                val controller = KeyguardCardMaterialController(
+                    KeyguardHeaderMaterialView(activity),
+                    KeyguardHeaderMaterialView(activity),
+                    View(activity),
+                )
+                repeat(10) {
+                    controller.update(
+                        profile = profile(),
+                        animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                        presentationMode = com.fluvi.app.lockscreen.KeyguardCardPresentationMode.ORB,
+                        isFull = true,
+                        staticOrb = null,
+                    )
+                }
+                val same = controller.diagnostics()
+                assertEquals(1, same.configurationUpdateCount)
+                assertEquals(9, same.configurationNoOpCount)
+                controller.update(
+                    profile = profile(),
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    presentationMode = com.fluvi.app.lockscreen.KeyguardCardPresentationMode.ORB,
+                    isFull = false,
+                    staticOrb = null,
+                )
+                assertEquals(2, controller.diagnostics().configurationUpdateCount)
+                controller.dispose()
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
     @Test fun productionKeyguardCardHasOneFixedMeasuredWindowExtent() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(
