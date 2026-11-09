@@ -38,6 +38,54 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
+    @Test fun detachedPreparationConstructsAndPromotesTheSelectedProgram() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        lateinit var view: KeyguardHeaderMaterialView
+        var controller: KeyguardCardMaterialController? = null
+        try {
+            instrumentation.runOnMainSync {
+                view = KeyguardHeaderMaterialView(activity).apply {
+                    layoutParams = FrameLayout.LayoutParams(160, 160)
+                }
+                controller = KeyguardCardMaterialController(view, KeyguardHeaderMaterialView(activity), View(activity))
+                // This is the retained-root path before any setScene(),
+                // attachment, or hardware Canvas. A successful compilation
+                // must be real, not the old null-scene no-op diagnostic.
+                controller!!.prepare(
+                    profile(), KeyguardCardAnimationMode.ORB_ONLY,
+                    com.fluvi.app.lockscreen.KeyguardCardPresentationMode.ORB,
+                )
+            }
+            assertTrue("detached view never prepared a program", waitForDetachedPrepared(instrumentation, view))
+            var attemptsBeforeAttach = 0
+            instrumentation.runOnMainSync {
+                attemptsBeforeAttach = view.diagnostics().shaderCompileAttempts
+                assertEquals(0, controller!!.diagnostics().frameCallbackCount)
+                controller!!.update(
+                    profile = profile(), animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    presentationMode = com.fluvi.app.lockscreen.KeyguardCardPresentationMode.ORB,
+                    isFull = true, staticOrb = null,
+                )
+                activity.setContentView(FrameLayout(activity).apply { addView(view) })
+                controller!!.onAttached()
+            }
+            assertTrue("prepared program was not promoted to a shader draw", waitForPreparedShader(instrumentation, view))
+            instrumentation.runOnMainSync {
+                assertEquals(attemptsBeforeAttach, view.diagnostics().shaderCompileAttempts)
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                controller?.dispose()
+                activity.finish()
+            }
+        }
+    }
+
     @Test fun preparedProductionViewDoesNoAssetOrCompileWorkAcrossFrames() {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -337,6 +385,24 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     diagnostics.shaderDrawCount > 0
             }
             if (ready) return true
+            Thread.sleep(32)
+        }
+        return false
+    }
+
+    private fun waitForDetachedPrepared(
+        instrumentation: Instrumentation,
+        view: KeyguardHeaderMaterialView,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+        while (System.nanoTime() < deadline) {
+            var prepared = false
+            instrumentation.runOnMainSync {
+                val diagnostics = view.diagnostics()
+                prepared = !view.isAttachedToWindow && diagnostics.shaderCompileSuccesses > 0 &&
+                    diagnostics.shaderDrawCount == 0
+            }
+            if (prepared) return true
             Thread.sleep(32)
         }
         return false

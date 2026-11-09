@@ -424,6 +424,10 @@ internal data class KeyguardDiagnosticOperation(
 /** A bounded, technical-only log for diagnostic builds. No node tree, text,
  * financial field, or foreign application identity is ever retained. */
 internal object KeyguardCardDiagnostics {
+    /** One identity per Android process. Cold preparation and a later user
+     * capture must not look like two process starts merely because each used
+     * to generate its own UUID suffix. */
+    private val processInstanceId = "${Process.myPid()}-${UUID.randomUUID().toString().substring(0, 8)}"
     private const val PREFS = "fluvi_native_keyguard_card_diagnostics"
     private const val EVENTS = "events"
     private const val LAST_REASON = "lastReason"
@@ -584,6 +588,18 @@ internal object KeyguardCardDiagnostics {
         var windowsReadMs: Long? = null,
         var treeScanMs: Long? = null,
         var getWindowsMs: Long? = null,
+        var readerStrategy: String? = null,
+        var prefetchFlags: String? = null,
+        var cacheEnabled: String? = null,
+        var cacheClearResult: String? = null,
+        var activeCandidateWindowId: String? = null,
+        var returnedRootWindowId: String? = null,
+        var activeRootAccepted: String? = null,
+        var fallbackReason: String? = null,
+        var activeRootCallCount: Long? = null,
+        var activeRootTotalMs: Long? = null,
+        var perWindowRootCallCount: Long? = null,
+        var perWindowRootTotalMs: Long? = null,
         var rootAcquisitionTotalMs: Long? = null,
         var rootAcquisitionMaxMs: Long? = null,
         var childAcquisitionTotalMs: Long? = null,
@@ -598,6 +614,7 @@ internal object KeyguardCardDiagnostics {
         val startedUptimeMs: Long,
         var presentationMode: String = "NA",
         var wakeSource: String = "NA",
+        var screenOnReceivedAtUptimeMs: Long? = null,
         var firstInspectionRequestId: Long? = null,
         var showingInspectionRequestId: Long? = null,
         var requestsReceived: Int = 0,
@@ -707,7 +724,7 @@ internal object KeyguardCardDiagnostics {
             val current = coldPreparation?.takeIf { it.serviceSession == serviceSession }
                 ?: ColdPreparationRecord(
                     serviceSession = serviceSession,
-                    processInstanceId = "${Process.myPid()}-${UUID.randomUUID().toString().substring(0, 8)}",
+                    processInstanceId = processInstanceId,
                 ).also { coldPreparation = it }
             current.stages.putIfAbsent(stage, observedUptimeMs)
         }
@@ -745,7 +762,7 @@ internal object KeyguardCardDiagnostics {
             generation = ++nextCaptureGeneration,
             build = build?.takeIf { it.isNotBlank() } ?: "unknown",
             buildMode = buildMode?.takeIf { it.isNotBlank() } ?: "unknown",
-            processInstanceId = "${Process.myPid()}-${UUID.randomUUID().toString().substring(0, 8)}",
+            processInstanceId = processInstanceId,
             pid = Process.myPid(),
             startedUptimeMs = nowUp,
             startedElapsedMs = nowElapsed,
@@ -1037,6 +1054,7 @@ internal object KeyguardCardDiagnostics {
                 attempt.hides.toList().lastOrNull { it.operationId == operationId }
             }
             when (stage) {
+                "SCREEN_ON_RECEIVED" -> attempt.screenOnReceivedAtUptimeMs = event.uptimeMs
                 "INSPECTION_QUEUED" -> {
                     attempt.requestsReceived += 1
                     if (attempt.firstInspectionRequestId == null) attempt.firstInspectionRequestId = requestId
@@ -1069,6 +1087,18 @@ internal object KeyguardCardDiagnostics {
                     windowsReadMs = fields["windowsReadMs"]?.toLongOrNull()
                     treeScanMs = fields["treeScanMs"]?.toLongOrNull()
                     getWindowsMs = fields["getWindowsMs"]?.toLongOrNull()
+                    readerStrategy = fields["readerStrategy"]
+                    prefetchFlags = fields["prefetchFlags"]
+                    cacheEnabled = fields["cacheEnabled"]
+                    cacheClearResult = fields["cacheClearResult"]
+                    activeCandidateWindowId = fields["activeCandidateWindowId"]
+                    returnedRootWindowId = fields["returnedRootWindowId"]
+                    activeRootAccepted = fields["activeRootAccepted"]
+                    fallbackReason = fields["fallbackReason"]
+                    activeRootCallCount = fields["activeRootCallCount"]?.toLongOrNull()
+                    activeRootTotalMs = fields["activeRootTotalMs"]?.toLongOrNull()
+                    perWindowRootCallCount = fields["perWindowRootCallCount"]?.toLongOrNull()
+                    perWindowRootTotalMs = fields["perWindowRootTotalMs"]?.toLongOrNull()
                     rootAcquisitionTotalMs = fields["rootAcquisitionTotalMs"]?.toLongOrNull()
                     rootAcquisitionMaxMs = fields["rootAcquisitionMaxMs"]?.toLongOrNull()
                     childAcquisitionTotalMs = fields["childAcquisitionTotalMs"]?.toLongOrNull()
@@ -1288,7 +1318,7 @@ internal object KeyguardCardDiagnostics {
                 listOf(
                     "SERVICE_CONNECTED", "SETTINGS_LOAD_START", "SETTINGS_LOAD_END", "PROFILE_LOAD_START", "PROFILE_LOAD_END",
                     "ROOT_PREPARE_START", "ROOT_PREPARE_END", "MATERIAL_PREPARE_REQUESTED", "MATERIAL_ARTIFACT_READY",
-                    "MATERIAL_SHADER_PREPARED", "FIRST_ATTACH", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW",
+                    "MATERIAL_PROGRAM_PREPARED", "MATERIAL_PROGRAM_PROMOTED", "FIRST_ATTACH", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW",
                     "FIRST_CURRENT_MATERIAL_DRAW",
                 ).forEach { stage -> appendLine("$stage=${cold.stages[stage] ?: "UNOBSERVED"}") }
             }
@@ -1394,15 +1424,25 @@ internal object KeyguardCardDiagnostics {
             it.startedAtUptimeMs != null && it.authorityCurrentAtStart == true
         }
         val causalSpineComplete = causalSpineComplete(attempt)
-        appendLine("attemptId=${attempt.id} wakeSource=${attempt.wakeSource} presentationMode=${attempt.presentationMode} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
+        appendLine("attemptId=${attempt.id} wakeSource=${attempt.wakeSource} wakeCycleStartedAt=${attempt.startedUptimeMs} screenOnReceivedAt=${attempt.screenOnReceivedAtUptimeMs ?: "NA"} presentationMode=${attempt.presentationMode} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
         appendLine(" firstInspectionRequestId=${attempt.firstInspectionRequestId ?: "NA"} showingInspectionRequestId=${show?.requestId ?: "NA"} requestsReceived=${attempt.requestsReceived} requestsReplaced=${attempt.requestsReplaced} inspectionsStarted=${attempt.inspectionsStarted} inspectionsApplied=${attempt.inspectionsApplied} inspectionsRejected=${attempt.inspectionsRejected} staleInspectionCount=${attempt.staleInspectionCount}")
         val pendingRetries = (attempt.retryScheduledCount - attempt.retryFiredCount - attempt.retryCancelledCount).coerceAtLeast(0)
         appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:$pendingRetries attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
         appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"}")
-        appendLine(" wakeCallbackToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
+        appendLine(" cycleToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)} screenOnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} wakeCallbackToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
         appendLine(" wakeToFirstInspectionStartMs=${delta(firstStartedInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToFirstEligibleInspectionStartMs=${delta(firstValidInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToShowingInspectionStartMs=${delta(showingInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} latestPendingQueueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)}")
         appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} mainResultDeliveryMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.mainResultPostedAtUptimeMs)} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
-        appendLine(" windowReader=getWindows:${showingInspection?.getWindowsMs ?: "NA"},rootTotal:${showingInspection?.rootAcquisitionTotalMs ?: "NA"},rootMax:${showingInspection?.rootAcquisitionMaxMs ?: "NA"},childTotal:${showingInspection?.childAcquisitionTotalMs ?: "NA"},childMax:${showingInspection?.childAcquisitionMaxMs ?: "NA"},local:${showingInspection?.localProcessingMs ?: "NA"}")
+        appendLine(
+            " windowReader=strategy:${showingInspection?.readerStrategy ?: "NA"},prefetch:${showingInspection?.prefetchFlags ?: "NA"}," +
+                "cacheEnabled:${showingInspection?.cacheEnabled ?: "NA"},cacheClear:${showingInspection?.cacheClearResult ?: "NA"}," +
+                "activeCandidate:${showingInspection?.activeCandidateWindowId ?: "NA"},returnedRoot:${showingInspection?.returnedRootWindowId ?: "NA"}," +
+                "activeAccepted:${showingInspection?.activeRootAccepted ?: "NA"},fallback:${showingInspection?.fallbackReason ?: "NA"}," +
+                "getWindows:${showingInspection?.getWindowsMs ?: "NA"},activeRootCalls:${showingInspection?.activeRootCallCount ?: "NA"}," +
+                "activeRootTotal:${showingInspection?.activeRootTotalMs ?: "NA"},perWindowRootCalls:${showingInspection?.perWindowRootCallCount ?: "NA"}," +
+                "perWindowRootTotal:${showingInspection?.perWindowRootTotalMs ?: "NA"},rootTotal:${showingInspection?.rootAcquisitionTotalMs ?: "NA"}," +
+                "rootMax:${showingInspection?.rootAcquisitionMaxMs ?: "NA"},childTotal:${showingInspection?.childAcquisitionTotalMs ?: "NA"}," +
+                "childMax:${showingInspection?.childAcquisitionMaxMs ?: "NA"},local:${showingInspection?.localProcessingMs ?: "NA"}",
+        )
         appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} windowManagerAddViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)}")
         appendLine(" actualWithdrawalHideOp=${actualWithdrawal?.operationId ?: "NA"} actualHideAttachedBefore=${actualWithdrawal?.attachedBefore ?: "NA"} actualHideTriggerAt=${actualWithdrawal?.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} actualHideDecisionAt=${actualWithdrawal?.decisionAtUptimeMs ?: "NA"} actualLocalHideAppliedAt=${actualWithdrawal?.localHideAppliedAtUptimeMs ?: "NA"} actualRemoveViewBeginAt=${actualWithdrawal?.removeBeginAtUptimeMs ?: "NA"} actualRemoveViewReturnAt=${actualWithdrawal?.removeReturnAtUptimeMs ?: "NA"}")
         appendLine(" triggerToLocalHideMs=${delta(actualWithdrawal?.localHideAppliedAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} triggerToRemoveReturnMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} hideDecisionToLocalHideMs=${delta(actualWithdrawal?.localHideAppliedAtUptimeMs, actualWithdrawal?.decisionAtUptimeMs)} removeViewCallMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.removeBeginAtUptimeMs)}")

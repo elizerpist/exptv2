@@ -151,6 +151,19 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 ) : View(context, attrs) {
     enum class Shape { ORB, CARD_BACKGROUND }
 
+    /** Preparation is deliberately distinct from attachment and first Canvas
+     * use. A retained detached view can own one compiled candidate without
+     * gaining visibility or scheduling an animation callback. */
+    enum class ProgramPreparationResult { COMPILED, REUSED, STALE, NOT_APPLICABLE, FAILED }
+
+    private data class PreparedProgram(
+        val programKey: String,
+        val effectId: String,
+        val usesPortal: Boolean,
+        val shader: KeyguardHeaderShader,
+        val metadata: KeyguardHeaderShader.Metadata,
+    )
+
     var shape: Shape = Shape.ORB
     private var current: KeyguardMaterialScene? = null
     private var previous: KeyguardMaterialScene? = null
@@ -163,6 +176,8 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private var shaderPrevious: KeyguardHeaderShader? = null
     private var shaderFailure: KeyguardMaterialRendererFailure? = null
     private var attemptedProgramKey: String? = null
+    private var failedProgramKey: String? = null
+    private var preparedProgram: PreparedProgram? = null
     /** Metadata belongs to the prepared immutable artifact, not to onDraw. */
     private var preparedMetadata: KeyguardHeaderShader.Metadata? = null
     private var lastCanvasHardwareAccelerated: Boolean? = null
@@ -180,6 +195,9 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     /** One timestamp per physical attach is enough for wake diagnostics; this
      * is not a per-frame observation hook. */
     var onFirstShaderDraw: ((Long) -> Unit)? = null
+    /** Main-thread-only observational hook. Promotion changes no visibility
+     * state; the controller uses it solely for truthful diagnostics. */
+    var onPreparedProgramPromoted: ((String) -> Unit)? = null
     private var firstShaderDrawForAttach = true
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -269,12 +287,19 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         // base; the new effect gets its own program on the next real draw.
         // This is strictly a retained View concern, never a WindowManager
         // operation, so rapid profile changes cannot recreate the overlay.
-        if (currentScene?.profile?.effectId != next.profile.effectId ||
+        val programChanged = currentScene?.profile?.effectId != next.profile.effectId ||
             currentScene?.profile?.usesPortal != next.profile.usesPortal
-        ) {
-            shaderPrevious = shaderCurrent
+        if (programChanged) {
+            // A null -> first scene used to clear the program which had just
+            // been prepared by the detached retained root. Promote the exact
+            // prepared candidate instead; only a real prior scene becomes a
+            // transition base.
+            if (currentScene != null) shaderPrevious = shaderCurrent
             shaderCurrent = null
             attemptedProgramKey = null
+            shaderFailure = null
+            failedProgramKey = null
+            promotePreparedProgram(next.profile)
         }
         current = next
         // Source and RuntimeShader preparation are requested by the retained
@@ -288,30 +313,74 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
      * immutable source/metadata. RuntimeShader construction is intentionally
      * outside onDraw, so a first visible frame can never open or parse assets.
      */
-    fun installPreparedShader(artifact: KeyguardShaderArtifact) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val profile = current?.profile ?: return
-        if (profile.effectId != artifact.effectId || profile.usesPortal != artifact.usesPortal) return
-        if (shaderCurrent != null && attemptedProgramKey == artifact.programKey) return
-        if (shaderFailure != null && attemptedProgramKey == artifact.programKey) return
-        attemptedProgramKey = artifact.programKey
+    fun installPreparedShader(artifact: KeyguardShaderArtifact): ProgramPreparationResult {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return ProgramPreparationResult.NOT_APPLICABLE
+        val profile = current?.profile
+        // A hidden retained root may still remember its old scene. Its next
+        // selected program is a valid detached candidate, not a stale result.
+        // Conversely, an attached mismatched scene must never be replaced by
+        // an asynchronous completion from another selection.
+        if (profile != null && !matches(profile, artifact) && isAttachedToWindow) {
+            return ProgramPreparationResult.STALE
+        }
+        if (shaderCurrent != null && attemptedProgramKey == artifact.programKey) return ProgramPreparationResult.REUSED
+        if (preparedProgram?.programKey == artifact.programKey) return ProgramPreparationResult.REUSED
+        if (shaderFailure != null && failedProgramKey == artifact.programKey) return ProgramPreparationResult.FAILED
         preparedMetadata = artifact.metadata
         shaderCompileAttempts += 1
-        runCatching { KeyguardHeaderShader(artifact) }
-            .onSuccess {
-                shaderCurrent = it
-                shaderCompileSuccesses += 1
-                shaderFailure = null
-                notifyRendererState()
-                invalidate()
-            }
-            .onFailure { error ->
-                shaderCompileFailures += 1
-                shaderFailure = KeyguardMaterialRendererFailure.compile(error, artifact.metadata)
-                notifyRendererState()
-                invalidate()
-            }
+        return runCatching { KeyguardHeaderShader(artifact) }
+            .fold(
+                onSuccess = { shader ->
+                    val compiled = PreparedProgram(
+                        programKey = artifact.programKey,
+                        effectId = artifact.effectId,
+                        usesPortal = artifact.usesPortal,
+                        shader = shader,
+                        metadata = artifact.metadata,
+                    )
+                    if (profile != null && matches(profile, artifact)) {
+                        shaderCurrent = shader
+                        attemptedProgramKey = artifact.programKey
+                    } else {
+                        // Exactly one detached candidate per View. It is
+                        // promoted only when the first scene asks for this
+                        // specialized source program.
+                        preparedProgram = compiled
+                    }
+                    shaderCompileSuccesses += 1
+                    shaderFailure = null
+                    failedProgramKey = null
+                    notifyRendererState()
+                    invalidate()
+                    ProgramPreparationResult.COMPILED
+                },
+                onFailure = { error ->
+                    shaderCompileFailures += 1
+                    shaderFailure = KeyguardMaterialRendererFailure.compile(error, artifact.metadata)
+                    failedProgramKey = artifact.programKey
+                    notifyRendererState()
+                    invalidate()
+                    ProgramPreparationResult.FAILED
+                },
+            )
     }
+
+    private fun promotePreparedProgram(profile: KeyguardMaterialProfile): Boolean {
+        val prepared = preparedProgram ?: return false
+        if (prepared.effectId != profile.effectId || prepared.usesPortal != profile.usesPortal) return false
+        preparedProgram = null
+        shaderCurrent = prepared.shader
+        attemptedProgramKey = prepared.programKey
+        preparedMetadata = prepared.metadata
+        shaderFailure = null
+        failedProgramKey = null
+        onPreparedProgramPromoted?.invoke(prepared.programKey)
+        notifyRendererState()
+        return true
+    }
+
+    private fun matches(profile: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact): Boolean =
+        profile.effectId == artifact.effectId && profile.usesPortal == artifact.usesPortal
 
     fun frame(frameTimeNanos: Long) {
         frameNanos = frameTimeNanos
@@ -336,7 +405,8 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     fun rendererFailure(): String? = shaderFailure?.summary
     fun rendererFailureStage(): String? = shaderFailure?.stage
     fun rendererFailureMessage(): String? = shaderFailure?.message
-    fun shaderCreationCount(): Int = (shaderCurrent?.creationCount ?: 0) + (shaderPrevious?.creationCount ?: 0)
+    fun shaderCreationCount(): Int = (shaderCurrent?.creationCount ?: 0) +
+        (shaderPrevious?.creationCount ?: 0) + (preparedProgram?.shader?.creationCount ?: 0)
     fun lastCanvasHardwareAcceleratedForDiagnostics(): Boolean = lastCanvasHardwareAccelerated ?: false
     fun isRendererReady(): Boolean = isAttachedToWindow && width > 0 && height > 0 &&
         lastCanvasHardwareAccelerated == true && shaderCurrent != null && shaderFailure == null

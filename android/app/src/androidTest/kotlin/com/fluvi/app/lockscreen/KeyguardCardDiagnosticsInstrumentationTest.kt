@@ -261,13 +261,13 @@ class KeyguardCardDiagnosticsInstrumentationTest {
 
     @Test fun serviceColdPreparationSurvivesACaptureStartedLater() {
         KeyguardCardDiagnostics.recordColdPreparation(77L, "SERVICE_CONNECTED", 10L)
-        KeyguardCardDiagnostics.recordColdPreparation(77L, "MATERIAL_SHADER_PREPARED", 20L)
+        KeyguardCardDiagnostics.recordColdPreparation(77L, "MATERIAL_PROGRAM_PREPARED", 20L)
         KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug")
         val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
 
         assertTrue(report.contains("COLD_PREPARATION"))
         assertTrue(report.contains("serviceSession=77"))
         assertTrue(report.contains("SERVICE_CONNECTED=10"))
-        assertTrue(report.contains("MATERIAL_SHADER_PREPARED=20"))
+        assertTrue(report.contains("MATERIAL_PROGRAM_PREPARED=20"))
     }
 }

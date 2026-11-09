@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.view.View
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
 import com.fluvi.app.lockscreen.KeyguardCardPresentationMode
+import java.util.IdentityHashMap
 
 /** Owns scene application and one Choreographer clock for both retained
  * decorative views. It deliberately has no WindowManager or financial API. */
@@ -33,6 +34,10 @@ internal class KeyguardCardMaterialController(
     private var preparationRequests = 0
     private var preparationCompletions = 0
     private var preparationFailures = 0
+    /** Artifact callbacks are asynchronous. This per-View selection prevents
+     * an older effect/portal completion from occupying the sole prepared slot
+     * after a newer configuration has been selected. */
+    private val requestedProgramKeys = IdentityHashMap<KeyguardHeaderMaterialView, String>()
     private val animatorScaleObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
             val next = readAnimationsEnabled()
@@ -66,6 +71,12 @@ internal class KeyguardCardMaterialController(
         orb.onRendererStateChanged = { reconcileClock() }
         background.onRendererStateChanged = { reconcileClock() }
         orb.onFirstShaderDraw = { observedAtUptimeMs -> onFirstOrbShaderDraw?.invoke(observedAtUptimeMs) }
+        orb.onPreparedProgramPromoted = { key ->
+            onPreparationStage?.invoke("MATERIAL_PROGRAM_PROMOTED", mapOf("programKey" to key, "surface" to "orb"))
+        }
+        background.onPreparedProgramPromoted = { key ->
+            onPreparationStage?.invoke("MATERIAL_PROGRAM_PROMOTED", mapOf("programKey" to key, "surface" to "background"))
+        }
         runCatching {
             orb.context.contentResolver.registerContentObserver(
                 Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
@@ -223,14 +234,20 @@ internal class KeyguardCardMaterialController(
     ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             profile == null || animationMode == KeyguardCardAnimationMode.OFF
-        ) return
+        ) {
+            requestedProgramKeys.clear()
+            return
+        }
         prepareFor(orb, profile)
         if (presentationMode == KeyguardCardPresentationMode.CARD &&
             animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND
         ) prepareFor(background, profile)
+        else requestedProgramKeys.remove(background)
     }
 
     private fun prepareFor(view: KeyguardHeaderMaterialView, profile: KeyguardMaterialProfile) {
+        val requestedKey = "${profile.effectId}|${profile.usesPortal}"
+        requestedProgramKeys[view] = requestedKey
         preparationRequests += 1
         onPreparationStage?.invoke(
             "MATERIAL_PREPARE_REQUESTED",
@@ -242,8 +259,26 @@ internal class KeyguardCardMaterialController(
                 onPreparationStage?.invoke("MATERIAL_ARTIFACT_READY", mapOf("programKey" to artifact.programKey))
                 // Callback is delivered on the main looper. The worker never
                 // mutates this instance after handoff.
-                view.installPreparedShader(artifact)
-                onPreparationStage?.invoke("MATERIAL_SHADER_PREPARED", mapOf("programKey" to artifact.programKey))
+                if (requestedProgramKeys[view] != requestedKey) {
+                    onPreparationStage?.invoke("MATERIAL_PROGRAM_STALE", mapOf("programKey" to artifact.programKey))
+                } else {
+                    when (view.installPreparedShader(artifact)) {
+                        KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED,
+                        KeyguardHeaderMaterialView.ProgramPreparationResult.REUSED -> {
+                            onPreparationStage?.invoke(
+                                "MATERIAL_PROGRAM_PREPARED",
+                                mapOf("programKey" to artifact.programKey, "surface" to if (view === orb) "orb" else "background"),
+                            )
+                        }
+                        KeyguardHeaderMaterialView.ProgramPreparationResult.STALE ->
+                            onPreparationStage?.invoke("MATERIAL_PROGRAM_STALE", mapOf("programKey" to artifact.programKey))
+                        KeyguardHeaderMaterialView.ProgramPreparationResult.FAILED -> {
+                            preparationFailures += 1
+                            onPreparationStage?.invoke("MATERIAL_PREPARE_FAILED", mapOf("programKey" to artifact.programKey))
+                        }
+                        KeyguardHeaderMaterialView.ProgramPreparationResult.NOT_APPLICABLE -> Unit
+                    }
+                }
                 reconcileClock()
             }.onFailure { error ->
                 preparationFailures += 1

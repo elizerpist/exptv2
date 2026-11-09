@@ -95,6 +95,12 @@ class FluviKeyguardCardService : AccessibilityService() {
         attachGeneration = 0L,
     )
     @Volatile private var knownOwnOverlayIdentity: KeyguardOwnOverlayIdentity? = null
+    /** The reader owns no visibility authority.  It only receives immutable
+     * request identity and cooperatively stops after this service publishes a
+     * newer authority snapshot. */
+    private val windowSnapshotReader by lazy {
+        KeyguardWindowSnapshotReader(this, packageName)
+    }
     private val inspectionsAbortedBeforeRead = AtomicLong(0L)
     private val inspectionsAbortedDuringWalk = AtomicLong(0L)
     private val nodeReadsAfterInvalidation = AtomicLong(0L)
@@ -774,6 +780,18 @@ class FluviKeyguardCardService : AccessibilityService() {
                     "rootAcquisitionCount" to result.windowTiming.rootAcquisitionCount,
                     "rootAcquisitionTotalMs" to result.windowTiming.rootAcquisitionTotalMs,
                     "rootAcquisitionMaxMs" to result.windowTiming.rootAcquisitionMaxMs,
+                    "readerStrategy" to result.windowTiming.readerStrategy,
+                    "prefetchFlags" to result.windowTiming.prefetchFlags,
+                    "cacheEnabled" to (result.windowTiming.cacheEnabled ?: "NA"),
+                    "cacheClearResult" to result.windowTiming.cacheClearResult,
+                    "activeCandidateWindowId" to (result.windowTiming.activeCandidateWindowId ?: "NA"),
+                    "returnedRootWindowId" to (result.windowTiming.returnedRootWindowId ?: "NA"),
+                    "activeRootAccepted" to result.windowTiming.activeRootAccepted,
+                    "fallbackReason" to (result.windowTiming.fallbackReason ?: "NA"),
+                    "activeRootCallCount" to result.windowTiming.activeRootCallCount,
+                    "activeRootTotalMs" to result.windowTiming.activeRootTotalMs,
+                    "perWindowRootCallCount" to result.windowTiming.rootAcquisitionCount,
+                    "perWindowRootTotalMs" to result.windowTiming.rootAcquisitionTotalMs,
                     "childAcquisitionCount" to result.windowTiming.childAcquisitionCount,
                     "childAcquisitionTotalMs" to result.windowTiming.childAcquisitionTotalMs,
                     "childAcquisitionMaxMs" to result.windowTiming.childAcquisitionMaxMs,
@@ -827,7 +845,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val walkTruncated: Boolean = false,
         val windowsReadMs: Long? = null,
         val treeScanMs: Long? = null,
-        val windowTiming: WindowReadTiming = WindowReadTiming(),
+        val windowTiming: KeyguardWindowSnapshotReader.Timing = KeyguardWindowSnapshotReader.Timing(),
         val abortedStale: Boolean = false,
     )
 
@@ -851,7 +869,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val windowsReadMs: Long,
         val treeScanMs: Long,
         val visitedNodeCount: Int,
-        val timing: WindowReadTiming = WindowReadTiming(),
+        val timing: KeyguardWindowSnapshotReader.Timing = KeyguardWindowSnapshotReader.Timing(),
         val abortedStale: Boolean = false,
     )
 
@@ -890,7 +908,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             slow += elapsedMs to "child:w=$windowId,i=$index,$elapsedMs"
         }
 
-        fun snapshot(treeElapsedMs: Long): WindowReadTiming = WindowReadTiming(
+        fun snapshot(treeElapsedMs: Long): KeyguardWindowSnapshotReader.Timing = KeyguardWindowSnapshotReader.Timing(
             getWindowsMs = getWindowsMs,
             relevantWindowCount = relevantWindows,
             rootAcquisitionCount = rootCount,
@@ -950,6 +968,18 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "rootAcquisitionCount" to read.timing.rootAcquisitionCount,
                 "rootAcquisitionTotalMs" to read.timing.rootAcquisitionTotalMs,
                 "rootAcquisitionMaxMs" to read.timing.rootAcquisitionMaxMs,
+                "readerStrategy" to read.timing.readerStrategy,
+                "prefetchFlags" to read.timing.prefetchFlags,
+                "cacheEnabled" to (read.timing.cacheEnabled ?: "NA"),
+                "cacheClearResult" to read.timing.cacheClearResult,
+                "activeCandidateWindowId" to (read.timing.activeCandidateWindowId ?: "NA"),
+                "returnedRootWindowId" to (read.timing.returnedRootWindowId ?: "NA"),
+                "activeRootAccepted" to read.timing.activeRootAccepted,
+                "fallbackReason" to (read.timing.fallbackReason ?: "NA"),
+                "activeRootCallCount" to read.timing.activeRootCallCount,
+                "activeRootTotalMs" to read.timing.activeRootTotalMs,
+                "perWindowRootCallCount" to read.timing.rootAcquisitionCount,
+                "perWindowRootTotalMs" to read.timing.rootAcquisitionTotalMs,
                 "childAcquisitionCount" to read.timing.childAcquisitionCount,
                 "childAcquisitionTotalMs" to read.timing.childAcquisitionTotalMs,
                 "childAcquisitionMaxMs" to read.timing.childAcquisitionMaxMs,
@@ -1009,7 +1039,36 @@ class FluviKeyguardCardService : AccessibilityService() {
         )
     }
 
-    private fun readSystemWindows(request: KeyguardCardInspectionRequest): SystemWindowsRead = runCatching {
+    private fun readSystemWindows(request: KeyguardCardInspectionRequest): SystemWindowsRead {
+        val result = windowSnapshotReader.read(
+            request = KeyguardWindowSnapshotReader.Request(
+                knownOwn = knownOwnOverlayIdentity,
+                attachGeneration = request.attachGeneration,
+            ),
+            authorityIsCurrent = { authorityIsCurrent(request) },
+        )
+        if (result.abortedStale) inspectionsAbortedDuringWalk.incrementAndGet()
+        if (result.nodeReadsAfterInvalidation > 0) {
+            nodeReadsAfterInvalidation.addAndGet(result.nodeReadsAfterInvalidation.toLong())
+        }
+        return SystemWindowsRead(
+            snapshots = result.snapshots,
+            rootUnavailable = result.rootUnavailable,
+            walkTruncated = result.walkTruncated,
+            windowsReadMs = result.windowsReadMs,
+            treeScanMs = result.treeScanMs,
+            visitedNodeCount = result.visitedNodeCount,
+            timing = result.timing,
+            abortedStale = result.abortedStale,
+        )
+    }
+
+    /** Kept temporarily as a narrow, testable reference while the API-33
+     * reader owns production acquisition.  It is never called by production
+     * classification; uncertain active-root reads fall back inside the reader
+     * before a surface decision is made. */
+    @Suppress("unused")
+    private fun readSystemWindowsLegacy(request: KeyguardCardInspectionRequest): SystemWindowsRead = runCatching {
         if (!authorityIsCurrent(request)) {
             inspectionsAbortedBeforeRead.incrementAndGet()
             return@runCatching SystemWindowsRead(
