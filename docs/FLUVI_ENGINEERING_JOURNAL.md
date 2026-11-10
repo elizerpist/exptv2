@@ -5449,3 +5449,299 @@ The smallest missing discriminating evidence is target-process Main/RenderThread
 Because the shipped production runtime is unchanged, **do not ask the user to repeat the same capture as if this were a performance candidate**. The APK is provided to complete the exact-source forensic delivery, not as a recommended lag fix. A future phone retest needs a demonstrated runtime correction or specifically discriminating instrumentation first; merely another LIGHT/FULL sequence would not close this boundary. No new user-visible acceptance is invented.
 
 Final app worktree remains the feature branch, application1f plus documentation; tooling branch1492c43f is clean and remote-matched. This final report is committed/pushed separately with `[skip ci]`; its commit identifies the report rather than the APK. The two pre-existing untracked failure directories are the only unrelated work. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+
+## 2026-11-10 — Reviewer: 1f0a199 physical lag rejection; concrete main-thread system-gate repair
+
+### User feedback and division of work
+
+- User still sees lag on Nothing A142 and explicitly rejects performance acceptance for `1f0a199096a50a86c335918408c30db3ff375e9c`. Earlier flicker/late appearance/late removal remain open until the user accepts them; no new physical launcher-widget evidence is supplied.
+- User reports approximately twenty unsuccessful builds. This is a user-reported history, not a reviewer-verified count of twenty runtime fixes.
+- Latest explicit instruction: the prompt writer must perform diagnosis; the coding-agent prompt must prescribe the concrete technical repair. Do not delegate another open-ended root-cause investigation.
+- Reviewer correction: the previous forensic scope allowed repeated fixture-only iterations without a runtime repair. Better observability is not phone performance progress. The next task below is a bounded production refactor, with tests as verification.
+- Reviewer edits only this journal. No application, tests, workflow, milestones or tooling files are changed by this review.
+
+### Exact application, changes, delivery and CI audit
+
+- Repository `elizerpist/exptv2`, branch `fix/orb-v4-latency-lockscreen`.
+- Physically tested source `1f0a199096a50a86c335918408c30db3ff375e9c`; parent `151659ff6a7846b6ea00c9230c8ccc0b54ae83b1`.
+- Pre-review remote documentation HEAD `0d9bbaf24df542cb62d29c150a18797c0f57ee83`; the tested-source-to-HEAD delta contains only this journal (+149/-0). Do not label documentation HEAD as the tested application.
+- Reviewed the complete new journal report sequence since reviewer commit `3636864bda8f3d7de6b393f3cbb6271cd1e008cb`, commit bodies, actual comparison and changed fixture/script sources. The previous journal prefix remains historical reviewed evidence; no claim of rereading every historical megabyte today.
+- Verified nine source-bearing commits:
+  1. `62193fc319cddfe341ef56728e980090dfce6563`: connected production-service fixture and bounded CI trace.
+  2. `810085c1afbb53c11e5ab2fa37fe5af95bd7a2d5`: Perfetto stdin setup.
+  3. `37ce5429962eec28e0aacb99f3d3ed8c8bb12629`: exact secure-settings writes/readback.
+  4. `e3b7a53a729765bc682123f4c16ebcd3915c5a21`: current-window output baseline and recorder-exit checks.
+  5. `99b5822f46b6038c3fb39d3b30b878640e60fb10`: independent episode recovery/cold checkpoint.
+  6. `35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447`: disposable-emulator Launcher ANR cleanup.
+  7. `da0a7a7b527795831706d215e93f347aa0cd3670`: synchronized independent test sleep input.
+  8. `39b4dd225ff7cb60788d96c09e4b1daa1449cf59`: bounded failure-only evidence.
+  9. `1f0a199096a50a86c335918408c30db3ff375e9c`: actual process-root withdrawal and final episode endpoint assertions.
+- Combined changes are journal, two Android instrumentation fixtures, workflow retention integration and five trace/runtime scripts/configuration files. **No production Kotlin, Dart, shader or material implementation changed relative to the rejected 4b application.** These commits cannot establish a runtime repair.
+- Exact workflow [42882998297](https://github.com/elizerpist/exptv2/actions/runs/42882998297): overall failure; core, Flutter, native runtime and Human APK jobs succeed. Downloaded native job log independently shows 37/37 tests with zero failures and connected-service `OK (1 test)`.
+- Downloaded dashboard job log independently shows A-readiness timeout at `_pumpUntilDashboardReady:2759`, then missing `A_summary_sum_year_month`. **UNCLASSIFIED**, not automatically an inherited year/Mind/B failure.
+- Release `fluvi-human-diagnostic-1f0a199` targets exact tested SHA. APK metadata: 120116842 bytes, SHA-256 `6b1b48c8a871b5bd72dc64d07f6b5b06e80d326077f9260c5ba5981231c80736`. Embedded-source binary verification is recorded by the coding agent; this reviewer independently checked release/job metadata, not a second APK binary download.
+- Durable forensic bundle metadata: 16105651 bytes, SHA-256 `0833c43002a3c108563676049ecb7ccae43d66f67ce71e67c16b7813d1a64046`. Agent's emulator trace analysis is reported evidence, not independently recomputed phone attribution. The emulator's prior-frame RenderThread/postAndWait stall is not proof of the phone's callback-to-draw stall.
+- Current assets and relevant `MILESTONE_COMMITS.md` read. Protected physical performance floor remains `6e962187e90e2a82431b1f91b224d2b52a6e0ba7`; earlier dashboard milestones remain regression boundaries.
+
+### Current graph and source audit
+
+- Matching tooling commit `1492c43f1606c832c83b2e5620dd74b362298c22`, branch `tooling/keyguard-episode-observability-graph`; manifest source is exact `1f0a199`.
+- Raw index: 67515079 bytes; SHA-256 `5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59`. Dart source is unchanged; equal index hash is consistent with the actual production delta.
+- Reviewer independently verified current-index hashes of cached symbol shard000 and reference shards002/008, then queried raw JSONL records. Exact class-only references: Bridge2 production; Snapshot8 production; DebugConsoleDialog2 production. Prefix queries including member/constructor references: Bridge20 (12 production/8 test), Snapshot48 (44/4), DebugConsoleDialog26 (24/2). These are reference occurrences, not distinct callers. They are different query scopes from the agent's constructor/class neighborhood counts.
+- Verified current bridge definition and debug-console consumer source. Capture bridge remains read/control-only; no financial query or frame producer is introduced through this UI.
+- Native service, gate/queue and rendering owners are **outside Dart SCIP coverage**. Native impact below is manual current-source analysis, not a fabricated graph result.
+- Current service blob `f2ee2f80044fc055e5bca84371b00219f5ba2d25`: `FluviKeyguardCardService.kt`.
+- Exact causal owner: main-thread `applyInspection` (around1380–1540) invokes `fastHideIfSystemExcluded` (around691–716); its measured SYSTEM_GATE scope performs DisplayManager/PowerManager/KeyguardManager state acquisition. `applyInspection` then obtains display/keyguard state again for `KeyguardCardInspectionGate.decide` (around1427).
+- Other repeated main-side state acquisition exists in callback/retry/reconciliation paths and `handleUnknownSurface`. The latter evaluates retry eligibility with remote-capable reads before its visible-overlay withdrawal.
+- Rendering uses the same main owner/Choreographer. Window ownership, retained root and material clock must stay there; move the recurring state acquisition, not the renderer.
+- Read current `KeyguardCardInspectionGate.kt`, `KeyguardCardEventGate.kt` and complete `KeyguardCardInspectionQueueTest.kt`. Existing single-active/latest-pending, epoch, stale-wake and UNKNOWN transition invariants are mandatory.
+- Android15 AOSP `KeyguardManager.isKeyguardLocked()` source calls `mWM.isKeyguardLocked()`; reference: https://github.com/aosp-mirror/platform_frameworks_base/blob/android15-release/core/java/android/app/KeyguardManager.java . This establishes a remote-capable synchronous boundary, not which individual API consumed this phone's48ms.
+
+### Physical capture audit
+
+Primary evidence is both complete user-pasted captures, not a new Drive document. Drive search returned only the earlier 09:10 document; it is not a replacement for these21:13/21:14 captures.
+
+Both captures: profile, Nothing A142/API35, process `23238-8342cf1e`, session1, ORB/orbOnly, full privacy, foreground/background false, dualTide portal hash `24f2d163e2cf8ad536f4f2c6314cc9839ae711bdef9920dbfd94465f175808df`,168×168.
+
+| Capture/attempt | Wake→live ms | Screen-on→live ms | Showing handoff→main ms | Trigger→local hide ms | Trigger→remove return ms | Export summary max draw gap ms |
+|---|---:|---:|---:|---:|---:|---:|
+| LIGHT1 |294|281|1|22|36|129|
+| LIGHT2 |168|168|39|22|31|100|
+| LIGHT3 |300|289|0|27|37|93|
+| LIGHT4 |218|218|43|16|32|94|
+| FULL1 |231|231|64|5|13|24|
+| FULL2 |118|98|1|19|33|110|
+| FULL3 |181|181|54|45|88|89|
+
+- LIGHT `af8d3657-97e1-4377-8074-c4d62554f672`:19623ms;668 recorded,300 evicted,96 LIGHT-filtered/dropped,272 retained;271 raw event lines omitted;10 gap records exported/2 omitted; no omitted critical records/incomplete attempts reported.
+- FULL `345941e2-bc5e-433a-b4f6-9245935892ba`:10207ms;615 recorded,337 evicted,278 retained;277 raw event lines omitted;9 gap records exported/0 omitted; no omitted critical records/incomplete attempts reported.
+- Capture IDs distinguish repeated attempt IDs. Retained attempts contain one attach and one actual withdrawal each; detached cleanup is not another visible withdrawal. No retained reattach proves neither flicker absence nor full-ring completeness.
+- Both COLD_PREPARATION sections are the same service-session history; FULL is not a second cold initialization. GPU preparation completed13395ms before LIGHT's first wake.
+- L3 initially received ROOT_UNAVAILABLE, then a different request supplied SHOW_FULL. Do not substitute the showing inspection's shorter timing for the first inspection.
+- FULL1 is direct terminal accessibility withdrawal, with req=NA; do not invent a missing withdrawal inspection.
+- Relevant withdrawal eventTime→callback delays: LIGHT118/80/87/75ms, FULL2 104ms/FULL3 15ms. Callback→hide alone excludes these delays. eventTime is not physical unlock-animation onset.
+- Five of the six large near-withdrawal gaps contain the later withdrawal inspection's source eventTime. FULL3 does **not**: its source eventTime459717342 is after gap end459717321.551ms. Proximity is not proof of cause.
+- The exporter summary's integer draw-gap value and the nanosecond sample are preserved separately; do not silently replace one with the other.
+- Both exports truncated; persistence tail warnings remain. No physical presentation/removal, system visual onset or live frame-commit evidence. `work=` empty covers only instrumented owned scopes. Worker aggregate lock-held totals are not main-thread stalls.
+- LIGHT producer maximum24.099615ms is overhead evidence without a correlation to every gap; FULL maximum5.043385ms does not prove FULL faster, since the sessions/scenarios differ.
+- No statistically controlled before/after claim is justified by these small, retained, differently phased samples.
+- Reviewer froze the relevant transcribed numeric extract below:4225 UTF-8 bytes, SHA-256 `f17910d7a85de98003520a70482ffc037b2122e92deb9890585dbcba654da2e7`. It is an **extract, not the original export bytes**. The original pasted text was reviewed; original binary-file hashes and full phone trace are missing.
+
+### Proven contributing cause and explicit limits
+
+**PROVEN:** LIGHT attempt1/show2/draw sequence5 contains an87.042153ms CPU-submission gap. On the same main thread:
+- request11 INSPECTION_APPLY occupies60.598077ms elapsed /3.703384ms CPU;
+- its nested SYSTEM_GATE occupies48.311461ms elapsed /0.556846ms CPU;
+- a separate SYSTEM_GATE request0 occupies10.868615ms elapsed /0.360385ms CPU;
+- the non-overlapping outer-span union is71.466692ms (82.11% of this gap). The nested48.31ms must not be added again.
+- current shader draw is0.392ms elapsed /0.371153ms CPU.
+
+This directly establishes that repeated system-gate acquisition/apply work occupies the animation's main owner during a measured stall. Low thread-CPU vs elapsed time is compatible with waiting/descheduling; the log does not distinguish those mechanisms or isolate one Android API.
+
+**UNPROVEN:** the cause of the six89–129ms near-withdrawal gaps. Their post-owned-callback-to-draw portions are48.692/48.402/51.338/49.448/56.107/54.633ms; current draw CPU is0.154–0.222ms, with empty recorded owned-work samples. These gaps cannot honestly be blamed on the measured SYSTEM_GATE event above. GPU/compositor/framework waits, uninstrumented main work, scheduling and diagnostic interference are not isolated. This does not justify a shader rewrite or renderer-thread migration.
+
+**MISSING:** phone sched/Binder/RenderThread trace; original raw-export files; physical presentation timestamps; controlled candidate comparison; user acceptance; new launcher-widget evidence.
+
+### Concrete next production repair — prescribed, not a new investigation assignment
+
+Implement a narrowly scoped system-gate ownership refactor in the native service:
+
+1. Separate system-state acquisition from the pure gate decision. Add an injectable production `KeyguardSystemStateReader` and one service-owned bounded `KeyguardSystemGateSampler` (names may follow local conventions). Recurring system reads run on a dedicated serial I/O lane, independent of the potentially blocked accessibility-tree lane; at most one active read plus one latest pending request. No per-frame polling, per-event job fan-out, main-thread wait/join, shared blocking lock, timed retry storm or privilege change.
+2. Carry immutable request/result identity: serviceSession, wakeGeneration, visibilityEpoch, interactionEpoch, attachGeneration, monotonically ordered gateRequestId, capture/read times and reason. These values are identity, not a TTL permission cache. Do not hold AccessibilityNodeInfo/Event or View objects in this lane. Late Binder completion is rejected by identity; coroutine cancellation is not assumed to interrupt Binder.
+3. Main retains exclusive authority over window, epochs, decision, retries and rendering. Direct SCREEN_OFF/USER_PRESENT, interrupt/disconnect/disable and privacy tightening invalidate pending positive publication and hide/redact immediately without waiting for a sampler/tree read. Privacy tightening must never attach a new root.
+4. Replace recurring main remote calls in callback/retry/reconciliation/UNKNOWN/steady same-authority inspection paths with local identity checks plus bounded sampling. Preserve relevant event classification and immediate terminal branches. Already-visible same-permission inspection may maintain existing content, but cannot turn an old positive sample into permission for a new attach or new disclosure.
+5. Keep the final fresh system-state guard at each real new attach or permission-increasing transition. Read one fresh snapshot at that commit boundary and feed both fast-exclusion/final-gate policy from it; remove duplicate same-boundary reads. This rare main boundary is deliberate to retain apply-time eligibility after a worker result waits in the main queue. Actual new financial-data publication keeps its existing current-state/privacy guard in this task.
+6. A valid current negative surface result performs local withdrawal before retry-eligibility acquisition; detached UNKNOWN still preserves compatible pending work and does not churn epochs. Current system exclusion is a separate observation, not a stale surface payload's authority: a stale payload cannot suppress a fresh current exclusion, while an old-generation negative cannot detach a newer attachment. Never coalesce an already accepted terminal exclusion away behind a positive.
+7. No diagnostic-only final candidate. Demonstrate the production parent failing and the repair passing a controlled delayed-reader regression: main/actual retained-orb progress while the recurring provider call remains blocked; immediate terminal hide/redaction during that pending call; stale positive rejection; old-wake negative rejection; event-burst bound; unchanged fresh final-show authorization. Pair pure-policy tests with real service/window output. Do not simulate successful shader output with counter-only mocks.
+8. Preserve renderer/program/palette/phase, single clock/root, window flags/input/z-order, surface classifier/freshness, financial semantics, launcher pipeline and all dashboard milestones. No FPS cap, lower resolution, static bitmap, delayed hide, permissive UNKNOWN, permission cache TTL or weakened test assertion.
+9. Verify source/test/build chain and deliver one production-change candidate with before/after gate-call counts/main occupancy and actual native draw/phase/queue evidence. Do not claim all remaining gaps solved without evidence. Do not ask the user to install another fixture-only or production-identical APK.
+
+This is a justified repair to an observed lag contributor, not a claim that every physical symptom has been causally explained. User-only physical validation remains PENDING.
+
+### Frozen reviewer extract
+
+To reproduce the extract hash, hash the following JSON as UTF-8 with one final newline, excluding the fence.
+
+```json
+{
+  "kind": "reviewer_transcribed_evidence_extract_NOT_original_export_bytes",
+  "source": "User-pasted complete LIGHT and FULL captures in Fluvi conversation, reviewed 2026-11-10",
+  "build": "1f0a199096a50a86c335918408c30db3ff375e9c",
+  "processInstance": "23238-8342cf1e",
+  "pid": 23238,
+  "serviceSession": 1,
+  "device": "Nothing A142 API35",
+  "config": "profile ORB orbOnly privacy=full foreground=false background=false 168x168",
+  "light": {
+    "captureId": "af8d3657-97e1-4377-8074-c4d62554f672",
+    "durationElapsedMs": 19623,
+    "eventsRecorded": 668,
+    "eventsRetained": 272,
+    "eventsEvicted": 300,
+    "diagnosticDroppedRecords": 96,
+    "exportBytesReported": 31166,
+    "drawGapEvidenceExported": 10,
+    "drawGapEvidenceOmitted": 2
+  },
+  "full": {
+    "captureId": "345941e2-bc5e-433a-b4f6-9245935892ba",
+    "durationElapsedMs": 10207,
+    "eventsRecorded": 615,
+    "eventsRetained": 278,
+    "eventsEvicted": 337,
+    "diagnosticDroppedRecords": 0,
+    "exportBytesReported": 30363,
+    "drawGapEvidenceExported": 9,
+    "drawGapEvidenceOmitted": 0
+  },
+  "columns": [
+    "attempt",
+    "wakeToLiveMs",
+    "screenOnToLiveMs",
+    "showingHandoffToMainMs",
+    "triggerToLocalHideMs",
+    "triggerToRemoveReturnMs",
+    "summaryMaxGapMs"
+  ],
+  "observations": [
+    [
+      "L1",
+      294,
+      281,
+      1,
+      22,
+      36,
+      129
+    ],
+    [
+      "L2",
+      168,
+      168,
+      39,
+      22,
+      31,
+      100
+    ],
+    [
+      "L3",
+      300,
+      289,
+      0,
+      27,
+      37,
+      93
+    ],
+    [
+      "L4",
+      218,
+      218,
+      43,
+      16,
+      32,
+      94
+    ],
+    [
+      "F1",
+      231,
+      231,
+      64,
+      5,
+      13,
+      24
+    ],
+    [
+      "F2",
+      118,
+      98,
+      1,
+      19,
+      33,
+      110
+    ],
+    [
+      "F3",
+      181,
+      181,
+      54,
+      45,
+      88,
+      89
+    ]
+  ],
+  "worstGapEndpointColumns": [
+    "prevEndNs",
+    "cbInNs",
+    "cbOutNs",
+    "drawStartNs",
+    "drawEndNs",
+    "drawCpuNs"
+  ],
+  "worstGapEndpoints": {
+    "L1": [
+      459670344379551,
+      459670423603167,
+      459670424533090,
+      459670473225013,
+      459670473445705,
+      214385
+    ],
+    "L2": [
+      459673982744475,
+      459674033675859,
+      459674033967782,
+      459674082369706,
+      459674082593090,
+      221538
+    ],
+    "L3": [
+      459677409020090,
+      459677451031860,
+      459677451278244,
+      459677502616475,
+      459677502806244,
+      185846
+    ],
+    "L4": [
+      459681073765014,
+      459681117081629,
+      459681117350321,
+      459681166798014,
+      459681166992783,
+      189846
+    ],
+    "F1": [
+      459711529130015,
+      459711552344477,
+      459711552821015,
+      459711553321708,
+      459711553550246,
+      222385
+    ],
+    "F2": [
+      459714047343785,
+      459714100724400,
+      459714101009631,
+      459714157116400,
+      459714157314323,
+      193462
+    ],
+    "F3": [
+      459717232354554,
+      459717266488785,
+      459717266759477,
+      459717321392477,
+      459717321551170,
+      153846
+    ]
+  },
+  "criticalRecord": "DRAW_GAP attempt=1 showOp=2 attach=1 surface=orb sample=1 attach=1 prevEndNs=459669313449321 startNs=459669400099474 endNs=459669400491474 prevCbNs=459669310420474 frameNs=459669391615241 cbInNs=459669398925321 cbOutNs=459669399449628 priorCbNs=459669310420474 callbacks=1 paired=true cpuNs=371153 configureNs=142539 submitNs=42769 seq=5 gapNs=87042153 currentProgram=dualTide|true|24f2d163e2cf8ad536f4f2c6314cc9839ae711bdef9920dbfd94465f175808df|3 px=168x168 workSession=1 tid=23238 workOmitted=7 workEvicted=45 workIncomplete=false work=2:11:459669335513705:459669396111782:3703384:60598077;1:11:459669344285013:459669392596474:556846:48311461;1:0:459669318896398:459669329765013:360385:10868615",
+  "limits": [
+    "Physical presentation/removal and system visual starts UNOBSERVED",
+    "Native CPU submission gaps are not physical frame presentation intervals",
+    "Nested work scopes nonadditive; selected work records incomplete coverage",
+    "Original export files unavailable; hash applies only to this transcribed extract",
+    "FULL cold-preparation is same-process historical first attachment"
+  ]
+}
+```
