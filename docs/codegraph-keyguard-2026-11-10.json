@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "task": "Connected production accessibility-overlay fixture: exact-source Dart graph and native test/trace inventory",
-  "source_head": "62193fc319cddfe341ef56728e980090dfce6563",
-  "source_parent": "3636864bda8f3d7de6b393f3cbb6271cd1e008cb",
-  "source_ref": "62193fc319cddfe341ef56728e980090dfce6563",
+  "source_head": "37ce5429962eec28e0aacb99f3d3ed8c8bb12629",
+  "source_parent": "0926083b489d8bfab383af347d113fbe2a07a540",
+  "source_ref": "37ce5429962eec28e0aacb99f3d3ed8c8bb12629",
   "source_worktree": "/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source",
   "source_tracked_clean": true,
   "generator_commit": "e84430e4a3cd4723eb3d9d084fde675f713e34b6",
@@ -11,7 +11,7 @@
   "index_sha256": "5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
   "index_bytes": 67515079,
   "index_regenerated_from_source": true,
-  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad through 4b4c3f3 and 62193fc3. SCIP was rerun after checking out 62193fc3; identical index bytes do not assert Android test/CI equivalence.",
+  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad through 4b4c3f3 and 37ce5429. SCIP was rerun after checking out 37ce5429; identical index bytes do not assert Android test/CI equivalence.",
   "scip_dart_version": "1.6.2",
   "language_documents": {
     "Dart": 807
@@ -27,9 +27,9 @@
     "reference_edges": 42214,
     "verified_shards": 102,
     "failed_shard_hashes": 0,
-    "artifact_digest": "6d58017797b5c95c7b1fe57e2bd0f341bd09cfbf5992d5c2090d53848bfb8c91",
+    "artifact_digest": "3a9cac8556b3f043a845cd66001341f975d31529e35b0fbd8d0383cb4ee83874",
     "artifact_digest_command": "cd docs/codegraph; rg --files | sort | xargs sha256sum | sha256sum",
-    "manifest_sha256": "4d491ba6101226dfebd71a231aef8f7b56723f5d3f65d579b15b0606fee8a03e"
+    "manifest_sha256": "87ed33bee9f68ef8d5b95ca76c495a68599febeb405d0c195e098b79732c7c44"
   },
   "query_output": "codegraph-keyguard-queries-2026-11-10.txt",
   "query_locations": "Raw query output retains zero-based SCIP coordinates; source verification uses one-based source lines.",
@@ -103,11 +103,11 @@
       "test_consumers": [
         "test/features/dashboard/presentation/dashboard_header_orb_material_test.dart"
       ],
-      "impact": "Shared producer reaches native keyguard and launcher export. These Dart producers/consumers were not changed by the native evidence and fixture commits through 62193fc3."
+      "impact": "Shared producer reaches native keyguard and launcher export. These Dart producers/consumers were not changed by the native evidence and fixture commits through 37ce5429."
     }
   ],
   "manual_native_inventory": {
-    "basis": "rg references plus complete fixture/script reads in exact 62193fc3 checkout; NOT SCIP. Android production and Dart source are byte-unchanged from 4b4c3f3. New instrumentation/CI relationships are manual source inventory; actual execution is separately reported.",
+    "basis": "rg references plus complete fixture/script reads in exact 37ce5429 checkout; NOT SCIP. Android production and Dart source are byte-unchanged from 4b4c3f3. New instrumentation/CI relationships are manual source inventory; actual execution is separately reported.",
     "KeyguardMainWorkEvidence": {
       "definition": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardMainWorkEvidence.kt",
       "production_consumers": [
@@ -218,8 +218,8 @@
       ]
     },
     "KeyguardServiceOverlayInstrumentationTest": {
-      "definition": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:45",
-      "entry": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:58",
+      "definition": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:46",
+      "entry": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:59",
       "production_consumers_exercised_by_source": [
         "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:321",
         "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:328",
@@ -228,22 +228,23 @@
         "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:39"
       ],
       "test_boundary_refs": {
-        "automation": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:62",
-        "settings_profile": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:90",
-        "capture": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:106",
-        "service_enable": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:115",
-        "quiet_interval": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:127",
-        "tap": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:153",
-        "rapid_transition": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:164",
-        "freeze": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:184",
-        "restore": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:191",
-        "actual_episodes": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:227",
-        "snapshot": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:267",
-        "overlay_metadata": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:285",
-        "screenshot": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:310",
-        "finite_await": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:366"
+        "automation": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:63",
+        "settings_profile": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:91",
+        "capture": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:107",
+        "service_enable": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:116",
+        "quiet_interval": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:128",
+        "tap": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:154",
+        "rapid_transition": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:165",
+        "freeze": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:185",
+        "restore": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:193",
+        "actual_episodes": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:228",
+        "snapshot": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:268",
+        "overlay_metadata": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:286",
+        "screenshot": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:311",
+        "finite_await": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:367",
+        "exact_secure_setting_write_readback": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:397"
       },
-      "ownership": "Android binds FluviKeyguardCardService via temporary test-owned secure settings on disposable API35 emulator. The service's existing reader/classifier/window/controller/clock path owns authorization and rendering. No test WindowManager/type substitution, synthetic positive result, GPU-preparer replacement or manual commit acknowledgement.",
+      "ownership": "Android binds FluviKeyguardCardService via temporary test-owned secure settings on disposable API35 emulator. setSecure uses Settings.Secure.putString/getString under short-lived instrumentation WRITE_SECURE_SETTINGS identity with readback; finally drops that identity. This avoids literal shell quotes from Runtime.exec(String). No production permission is added. The service's existing reader/classifier/window/controller/clock path owns authorization and rendering. No test WindowManager/type substitution, synthetic positive result, GPU-preparer replacement or manual commit acknowledgement.",
       "workload": "ORB/orbOnly, dualTide Portal selected through the existing decoder, production 64dp rendered at 168px at density 420. Synthetic palette/Portal controls explicitly not the unprovided phone profile. Cold, quiet-live, short tap, warm unlock, rapid wake/unlock and authorized reentry are inspected.",
       "output_contract": "Actual live shader/phase counters plus hardware state and current program hash; exactly one TYPE_ACCESSIBILITY_OVERLAY at 168x168; absent overlay after terminal transitions; optional compositor crop motion when screenshot is available.",
       "limits": [
@@ -269,11 +270,11 @@
         "trace_buffer_kib": 65536,
         "artifact_retention_days": 14
       },
-      "status": "pipefail and explicit JUnit OK (1 test) verification preserve false-zero runner failures; prior suite status remains nonzero; artifacts upload with always().",
+      "status": "pipefail and explicit JUnit OK (1 test) verification preserve false-zero runner failures; prior suite status remains nonzero; artifacts upload with always(). Perfetto configuration uses stdin instead of an unreadable /data/local/tmp file. A recorder still running after the bounded 5s flush wait records INCOMPLETE and fails, rather than silently asserting a complete trace.",
       "capture_scope": "Finite CI-only sched/thread/graphics/WindowManager/input/Binder/GC/FrameTimeline/log evidence around actual connected-service workload; no human-APK profiler or permission changes.",
       "known_evidence_limits": [
         "SQL prints coverage counts; zero app/scenario/FrameTimeline rows do not currently fail analysis, so coverage must be checked before attribution",
-        "Recorder shutdown polls for 5s but does not assert exit before pulling; inspect incomplete/dropped trace indicators",
+        "Trace may still be pulled for evidence after an INCOMPLETE recorder status; nonzero test status means it must not be treated as a complete trace",
         "Downloaded launcher SHA is now correctly named processor-launcher.sha256; actual processor version recorded separately",
         "SQL/pbtxt runtime parsing not locally executed; only shell syntax validated"
       ]
@@ -281,7 +282,7 @@
   },
   "commands": [
     "Ubuntu proot, PATH=/home/flutteruser/flutter/bin:$PATH; exact source: flutter pub get; git diff --exit-code; git diff --cached --exit-code; dart pub global run scip_dart ./",
-    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head 62193fc319cddfe341ef56728e980090dfce6563 --source-ref 62193fc319cddfe341ef56728e980090dfce6563 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
+    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head 37ce5429962eec28e0aacb99f3d3ed8c8bb12629 --source-ref 37ce5429962eec28e0aacb99f3d3ed8c8bb12629 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
     "tools/codegraph: dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol <KeyguardTimingCaptureBridge|KeyguardTimingCaptureSnapshot|DebugConsoleDialog|DashboardKeyguardMaterialBridge|DashboardHeaderMaterialSnapshot>",
     "tools/codegraph: dart test --reporter expanded => 16 PASS",
     "tools/codegraph: dart analyze => No issues found",
@@ -298,15 +299,17 @@
   },
   "physical_validation": "PENDING_USER",
   "limits": "Graph verification is not Android rendering, physical cadence, latency, or visibility validation. No application code or journal was edited by the tooling refresh. No APK build is requested by this tooling-only commit. The generated index is Dart-only; native owner inventory is independently source-verified and explicitly outside SCIP coverage.",
-  "tooling_start_head": "13a92097497609964d6a6c84f8be91273fb9abe2",
+  "tooling_start_head": "b743cc715b04acd63739bde39f4234636a329c89",
   "source_delta_audit": {
-    "comparison": "4b4c3f3fd4f8a143decd69e335d5f89ab21f0926..62193fc319cddfe341ef56728e980090dfce6563",
+    "comparison": "4b4c3f3fd4f8a143decd69e335d5f89ab21f0926..37ce5429962eec28e0aacb99f3d3ed8c8bb12629",
     "production_unchanged_command": "git diff --name-status 4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 HEAD -- android/app/src/main lib test",
     "production_unchanged_result": "empty",
     "scope": [
       "journal-only intermediate commits",
       "New KeyguardServiceOverlayInstrumentationTest",
-      "Bounded system-trace runner/config/SQL/analyzer and CI retention integration"
+      "Bounded system-trace runner/config/SQL/analyzer and CI retention integration",
+      "810085c1: Perfetto config via stdin; explicit incomplete recorder-flush failure",
+      "37ce5429: exact secure-setting provider write/readback with temporary instrumentation permission"
     ],
     "limit": "No production performance repair is contained in this delta. Existing 4b user-reported lag rejection remains applicable until a separate measured production correction."
   },
@@ -374,7 +377,7 @@
       "shards_verified": 102,
       "kotlin_coverage": false
     },
-    "next_generation": "Preserved historical 4b host-coverage audit. Current 62193fc3 adds a separately inventoried service-host fixture; this does not retroactively expand the baseline tests."
+    "next_generation": "Preserved historical 4b host-coverage audit. The 62193fc3 service-host fixture and its corrections through current 37ce5429 are separately inventoried; this does not retroactively expand the baseline tests."
   },
   "baseline_android_ci_audit": {
     "run": 42825624196,
@@ -393,16 +396,40 @@
     ],
     "limits": "Read-only verification of final API35 job status/log. No claim of physical Nothing-device performance. Overall workflow/Human APK were still in progress at this observation; the application agent reports their final outcomes."
   },
-  "current_android_ci_observation": {
+  "previous_candidate_ci_observation": {
     "run": 42849271595,
     "source_head": "62193fc319cddfe341ef56728e980090dfce6563",
+    "observed_state": "completed",
+    "jobs": {
+      "core": "success",
+      "flutter": "success",
+      "runtime": "failure",
+      "runtime_job_id": 129949553799
+    },
+    "actual_log_evidence": [
+      "Starting 37 tests on emulator-5554 - 15",
+      "BUILD SUCCESSFUL in 4m 15s",
+      "Could not open /data/local/tmp/fluvi-keyguard-service.pbtxt (errno: 13, Permission denied)"
+    ],
+    "service_fixture_result": "NOT RUN: Perfetto startup failed before am instrument invocation",
+    "limit": "Existing 37-test suite success is separate from the new service fixture. Its failed setup is not a production performance result."
+  },
+  "intermediate_candidate_ci_observation": {
+    "run": 42852683805,
+    "source_head": "810085c1afbb53c11e5ab2fa37fe5af95bd7a2d5",
+    "conclusion": "cancelled",
+    "limit": "No native execution success is inferred from this cancelled intermediate run."
+  },
+  "current_android_ci_observation": {
+    "run": 42853507857,
+    "source_head": "37ce5429962eec28e0aacb99f3d3ed8c8bb12629",
     "observed_state": "in_progress",
     "jobs": {
       "core": "success",
       "flutter": "success",
       "runtime": "in_progress",
-      "runtime_job_id": 129949553799
+      "runtime_job_id": 129964232928
     },
-    "limit": "Snapshot during graph preparation, not the final CI outcome. No new service-fixture execution PASS is claimed."
+    "limit": "Snapshot during graph preparation, not the final CI outcome. Application owner reports final native/fixture results; no service-fixture PASS is claimed here."
   }
 }
