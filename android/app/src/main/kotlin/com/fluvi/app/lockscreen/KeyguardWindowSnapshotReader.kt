@@ -53,6 +53,32 @@ internal object KeyguardWindowSnapshotReaderPolicy {
     fun shouldClearCache(freshness: KeyguardWindowFreshness): Boolean =
         freshness.requiresCacheClear
 
+    /** Shared production/test boundary. The acknowledgement is evidence of
+     * clearing (or disabled caching), never of merely scheduling a retry. */
+    fun establishFreshness(
+        freshness: KeyguardWindowFreshness,
+        apiLevel: Int,
+        cacheEnabled: Boolean?,
+        authorityIsCurrent: () -> Boolean,
+        clearCache: () -> Boolean,
+        onEstablished: () -> Unit,
+    ): String {
+        val result = when {
+            apiLevel < 33 -> "apiBelow33"
+            cacheEnabled == false -> "cacheDisabled"
+            cacheEnabled == null -> "cacheUnavailable"
+            !authorityIsCurrent() -> "authorityStaleBeforeCacheClear"
+            !shouldClearCache(freshness) -> "notRequiredFrameworkManaged"
+            else -> runCatching {
+                if (clearCache()) "cleared:${freshness.name}" else "clearReturnedFalse"
+            }.getOrElse { "clearFailed:${it.javaClass.simpleName}" }
+        }
+        if (authorityIsCurrent() && (result.startsWith("cleared:") || result == "cacheDisabled")) {
+            onEstablished()
+        }
+        return result
+    }
+
     /** Strategy selection intentionally has no cache-clear-result input. */
     fun canUseBatchedActiveRoot(
         apiLevel: Int,
@@ -222,7 +248,11 @@ internal class KeyguardWindowSnapshotReader(
     /** The caller owns all lifecycle generations.  This reader never samples
      * mutable View state; it merely stops requesting nodes after authority has
      * become stale. */
-    fun read(request: Request, authorityIsCurrent: () -> Boolean): Result {
+    fun read(
+        request: Request,
+        authorityIsCurrent: () -> Boolean,
+        onFreshnessEstablished: () -> Unit = {},
+    ): Result {
         if (!authorityIsCurrent()) return Result(
             emptyList(), false, false, 0L, 0L, 0, Timing(), abortedStale = true,
         )
@@ -233,16 +263,10 @@ internal class KeyguardWindowSnapshotReader(
         val cacheEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             runCatching { service.isCacheEnabled }.getOrNull()
         } else null
-        val cacheClearResult = when {
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU -> "apiBelow33"
-            cacheEnabled == false -> "cacheDisabled"
-            cacheEnabled == null -> "cacheUnavailable"
-            !authorityIsCurrent() -> "authorityStaleBeforeCacheClear"
-            !KeyguardWindowSnapshotReaderPolicy.shouldClearCache(request.freshness) -> "notRequiredFrameworkManaged"
-            else -> runCatching {
-                if (service.clearCache()) "cleared:${request.freshness.name}" else "clearReturnedFalse"
-            }.getOrElse { "clearFailed:${it.javaClass.simpleName}" }
-        }
+        val cacheClearResult = KeyguardWindowSnapshotReaderPolicy.establishFreshness(
+            request.freshness, Build.VERSION.SDK_INT, cacheEnabled, authorityIsCurrent,
+            clearCache = { service.clearCache() }, onEstablished = onFreshnessEstablished,
+        )
         if (!authorityIsCurrent()) return Result(
             emptyList(), false, false, 0L, 0L, 0,
             Timing(

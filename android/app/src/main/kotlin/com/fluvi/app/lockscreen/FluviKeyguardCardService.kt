@@ -95,6 +95,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         attachGeneration = 0L,
     )
     @Volatile private var knownOwnOverlayIdentity: KeyguardOwnOverlayIdentity? = null
+    private val inspectionFreshness = KeyguardInspectionFreshness()
     /** The reader owns no visibility authority.  It only receives immutable
      * request identity and cooperatively stops after this service publishes a
      * newer authority snapshot. */
@@ -129,13 +130,15 @@ class FluviKeyguardCardService : AccessibilityService() {
      * generation transition.  It never reads View state and is safe for the
      * one-wide Binder worker to consume. */
     private fun publishInspectionAuthority() {
-        inspectionAuthority = KeyguardInspectionAuthority(
+        val current = KeyguardInspectionAuthority(
             serviceSession = session.get(),
             visibilityEpoch = visibilityEpoch.get(),
             wakeGeneration = wakeEpoch,
             interactionEpoch = interactionEpoch.get(),
             attachGeneration = overlayAttachGeneration,
         )
+        inspectionFreshness.publish(current)
+        inspectionAuthority = current
     }
 
     private fun authorityIsCurrent(request: KeyguardCardInspectionRequest): Boolean =
@@ -806,6 +809,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (trigger != "surfaceRetry") cancelWakeRetry("supersededBy:$trigger")
         val now = SystemClock.uptimeMillis()
         val authority = inspectionAuthority
+        inspectionFreshness.require(authority, freshness)
         val request = KeyguardCardInspectionRequest(
             id = nextInspectionId.incrementAndGet(),
             trigger = trigger,
@@ -1151,13 +1155,18 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     private fun readSystemWindows(request: KeyguardCardInspectionRequest): SystemWindowsRead {
+        // Resolve the outstanding requirement at acquisition, not when an
+        // event happened to replace a timer/pending request. A successful
+        // boundary is consumed once, without clearing on every later event.
+        val freshness = inspectionFreshness.beforeRead(request)
         val result = windowSnapshotReader.read(
             request = KeyguardWindowSnapshotReader.Request(
                 knownOwn = knownOwnOverlayIdentity,
                 attachGeneration = request.attachGeneration,
-                freshness = request.windowFreshness,
+                freshness = freshness?.reason ?: KeyguardWindowFreshness.FRAMEWORK_EVENT,
             ),
-            authorityIsCurrent = { authorityIsCurrent(request) },
+            authorityIsCurrent = { freshness != null && authorityIsCurrent(request) },
+            onFreshnessEstablished = { freshness?.let(inspectionFreshness::boundaryEstablished) },
         )
         if (result.abortedStale) inspectionsAbortedDuringWalk.incrementAndGet()
         if (result.nodeReadsAfterInvalidation > 0) {
@@ -1548,6 +1557,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 causingInspectionRequestId = request.id,
                 awaitingSurfaceWithdrawal = true,
             )
+            // Withdrawal changed authority. Record the obligation under the
+            // new authority even when the retry budget is exhausted.
+            inspectionFreshness.require(inspectionAuthority, successorFreshness)
             when (transition.followup) {
                 KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING -> {
                     // The queued request was captured under the withdrawn
@@ -1581,6 +1593,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         // request has the same authority and can run as soon as this active
         // request completes. The active cause itself never counts as future
         // work here.
+        inspectionFreshness.require(inspectionAuthority, successorFreshness)
         when (transition.followup) {
             KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING -> traceKeyguard(
                 "RETRY_SUPPRESSED_FOR_PENDING",

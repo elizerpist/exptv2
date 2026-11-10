@@ -1188,6 +1188,7 @@ internal object KeyguardCardDiagnostics {
                     val pinned = buildSet {
                         attempt.firstInspectionRequestId?.let { add(it) }
                         attempt.showingInspectionRequestId?.let { add(it) }
+                        firstPresentation(attempt)?.requestId?.let { add(it) }
                         attempt.hides.mapNotNullTo(this) { it.requestId }
                     }
                     attempt.inspections.keys.firstOrNull { it !in pinned }?.let(attempt.inspections::remove)
@@ -1315,7 +1316,18 @@ internal object KeyguardCardDiagnostics {
                 }
                 "SHOW_FOR_ATTACH" -> event.showOperationId?.let { operationId ->
                     if (showEpisode() == null) {
-                        while (attempt.shows.size >= 8) attempt.shows.removeFirst()
+                        while (attempt.shows.size >= 8) {
+                            // Keep the first observed milestones, not just the
+                            // newest add. A later no-draw reattach cannot erase
+                            // the cycle's successful first presentation.
+                            val pinned = listOfNotNull(
+                                attempt.shows.firstOrNull(),
+                                firstDrawEpisode(attempt) { it.firstRootDrawAtUptimeMs },
+                                firstDrawEpisode(attempt) { it.firstShaderDrawAtUptimeMs },
+                                firstDrawEpisode(attempt) { it.firstLiveDrawAtUptimeMs },
+                            ).toSet()
+                            attempt.shows.remove(attempt.shows.first { it !in pinned })
+                        }
                         attempt.shows.addLast(
                             ShowEpisode(
                                 operationId = operationId,
@@ -1575,7 +1587,7 @@ internal object KeyguardCardDiagnostics {
             attemptsForCausalEvidence.forEach { attempt ->
                 appendLine("attemptId=${attempt.id} causalSpineComplete=${causalSpineComplete(attempt)} causalEvents=${attempt.causalSpine.size}")
                 attempt.causalSpine.forEach { appendLine(" ${it.toLine()}") }
-                val show = attempt.shows.lastOrNull { it.addReturnAtUptimeMs != null } ?: attempt.shows.lastOrNull()
+                val show = firstPresentation(attempt)
                 val showing = show?.requestId?.let(attempt.inspections::get)
                 if (showing != null) {
                     appendLine(" showingInspection req=${showing.requestId} queued=${showing.queuedAtUptimeMs ?: "NA"} started=${showing.startedAtUptimeMs ?: "NA"} finished=${showing.finishedAtUptimeMs ?: "NA"} mainApply=${showing.mainApplyStartedAtUptimeMs ?: "NA"} authorityAtStart=${showing.authorityCurrentAtStart ?: "NA"}")
@@ -1638,13 +1650,25 @@ internal object KeyguardCardDiagnostics {
         return sized
     }
 
+    private fun firstDrawEpisode(attempt: TimingAttempt, time: (ShowEpisode) -> Long?): ShowEpisode? =
+        attempt.shows.filter { time(it) != null }.minByOrNull { time(it)!! }
+
+    private fun firstPresentation(attempt: TimingAttempt): ShowEpisode? =
+        firstDrawEpisode(attempt) { it.firstLiveDrawAtUptimeMs }
+            ?: firstDrawEpisode(attempt) { it.firstRootDrawAtUptimeMs }
+            ?: attempt.shows.firstOrNull { it.addReturnAtUptimeMs != null }
+            ?: attempt.shows.firstOrNull()
+
     private fun attemptSummary(attempt: TimingAttempt): String = buildString {
         fun delta(end: Long?, start: Long?): String = when {
             end == null || start == null -> "NA(missingEndpoint)"
             end < start -> "INVALID_EVENT_ORDER"
             else -> (end - start).toString()
         }
-        val show = attempt.shows.lastOrNull { it.addReturnAtUptimeMs != null } ?: attempt.shows.lastOrNull()
+        val show = firstPresentation(attempt)
+        val firstRoot = firstDrawEpisode(attempt) { it.firstRootDrawAtUptimeMs }
+        val firstShader = firstDrawEpisode(attempt) { it.firstShaderDrawAtUptimeMs }
+        val firstLive = firstDrawEpisode(attempt) { it.firstLiveDrawAtUptimeMs }
         /** A detached terminal cleanup is useful, but it must never overwrite
          * the operation which actually withdrew the attached root. */
         val actualWithdrawal = attempt.hides.lastOrNull { hide ->
@@ -1667,7 +1691,8 @@ internal object KeyguardCardDiagnostics {
         appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:$pendingRetries attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
         appendLine(" awaiting=unknownWhileHidden:${attempt.unknownWhileHiddenCount},unknownWhileHiddenEpochChanges:${attempt.unknownWhileHiddenEpochChanges},pendingPreservedAfterUnknown:${attempt.pendingPreservedAfterUnknown},pendingRejectedAfterUnknown:${attempt.pendingRejectedAfterUnknown},visibleWithdrawalCount:${attempt.visibleWithdrawalCount},retrySuppressedForPendingWork:${attempt.retrySuppressedForPendingWork},retryBudgetExhaustedWhileAwaiting:${attempt.retryBudgetExhaustedWhileAwaiting}")
         appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} bootstrapDrawAt=${show?.bootstrapDrawAtUptimeMs ?: "NO_BOOTSTRAP_DRAW_OBSERVED"} bootstrapCommitCallbackAt=${show?.bootstrapCommitCallbackAtUptimeMs ?: "NO_BOOTSTRAP_COMMIT_OBSERVED"} livePromotedAt=${show?.livePromotedAtUptimeMs ?: "NO_LIVE_PROMOTION_OBSERVED"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstCurrentMaterialDrawAt=${show?.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstLiveDrawAt=${show?.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} frameCommitCallbackAt=${show?.frameCommitCallbackAtUptimeMs ?: "NO_FRAME_COMMIT_OBSERVED"}")
-        appendLine(" cycleToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)} screenOnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} wakeCallbackToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(show?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
+        appendLine(" summaryShowSelection=earliestLiveElseRootElseAttach cycleFirstRootShowOp=${firstRoot?.operationId ?: "NA"} cycleFirstShaderShowOp=${firstShader?.operationId ?: "NA"} cycleFirstLiveShowOp=${firstLive?.operationId ?: "NA"}")
+        appendLine(" cycleToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.startedUptimeMs)} screenOnToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} wakeCallbackToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
         appendLine(" wakeToFirstInspectionStartMs=${delta(firstStartedInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToFirstEligibleInspectionStartMs=${delta(firstValidInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToShowingInspectionStartMs=${delta(showingInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} latestPendingQueueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)}")
         appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} inspectionFinishToHandoffMs=${delta(showingInspection?.mainHandoffRequestedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} handoffToMainEntryMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.mainHandoffRequestedAtUptimeMs)} mainEntryToDecisionMs=${delta(show?.decisionAtUptimeMs, showingInspection?.mainApplyStartedAtUptimeMs)} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
         appendLine(
@@ -1700,12 +1725,20 @@ internal object KeyguardCardDiagnostics {
         // both now refer only to the actual attached-root withdrawal.
         appendLine(" hideSignalToDecisionMs=${delta(actualWithdrawal?.decisionAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} hideSignalToRemoveReturnMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)}")
         appendLine(" terminalCleanupHideOp=${terminalCleanup?.operationId ?: "NA"} terminalCleanupAttachedBefore=${terminalCleanup?.attachedBefore ?: "NA"} terminalCleanupDecisionAt=${terminalCleanup?.decisionAtUptimeMs ?: "NA"}")
+        if (attempt.shows.size > 1) attempt.shows.forEach { episode ->
+            val withdrawal = attempt.hides.firstOrNull {
+                episode.attachGeneration != null && it.attachGeneration == episode.attachGeneration &&
+                    it.attachedBefore == true && it.removeReturnAtUptimeMs != null &&
+                    it.decisionAtUptimeMs >= episode.decisionAtUptimeMs
+            }
+            appendLine(" EPISODE showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} req=${episode.requestId ?: "NA"} decision=${episode.decisionAtUptimeMs} add=${episode.addBeginAtUptimeMs ?: "NA"}/${episode.addReturnAtUptimeMs ?: "NA"} root=${episode.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} shader=${episode.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} live=${episode.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} withdrawal=${withdrawal?.operationId ?: "NA"} localHide=${withdrawal?.localHideAppliedAtUptimeMs ?: "NA"} removeReturn=${withdrawal?.removeReturnAtUptimeMs ?: "NA"}")
+        }
         appendLine(" causalSpineComplete=$causalSpineComplete causalSpineEvents=${attempt.causalSpine.size} causalSpineIndependentOfRawRing=true")
         appendLine(
-            " firstRootDrawObserved=${show?.firstRootDrawAtUptimeMs != null} " +
-                "firstRootDrawStatus=${if (show?.firstRootDrawAtUptimeMs == null) "NO_DRAW_OBSERVED" else "OBSERVED"} " +
-                "firstShaderDrawObserved=${show?.firstShaderDrawAtUptimeMs != null} " +
-                "firstShaderDrawStatus=${if (show?.firstShaderDrawAtUptimeMs == null) "NO_DRAW_OBSERVED" else "OBSERVED"}",
+            " firstRootDrawObserved=${firstRoot != null} " +
+                "firstRootDrawStatus=${if (firstRoot == null) "NO_DRAW_OBSERVED" else "OBSERVED"} " +
+                "firstShaderDrawObserved=${firstShader != null} " +
+                "firstShaderDrawStatus=${if (firstShader == null) "NO_DRAW_OBSERVED" else "OBSERVED"}",
         )
     }
 

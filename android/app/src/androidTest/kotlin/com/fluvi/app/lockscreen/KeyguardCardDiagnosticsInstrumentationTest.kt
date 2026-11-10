@@ -66,6 +66,55 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(after.contains("captureState=FROZEN"))
     }
 
+    @Test fun cycleFirstLiveSurvivesLaterAttachmentRemovedWithoutDrawing() {
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug")
+        val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(
+            context, 3L, 6L, "display", receivedAtUptimeMs = 416204935L,
+        ))
+        fun event(stage: String, at: Long, operation: KeyguardDiagnosticOperation, fields: Map<String, Any?> = emptyMap()) {
+            KeyguardCardDiagnostics.captureEvent(
+                context, stage, "test", observedUptimeMs = at,
+                diagnosticContext = attempt, operation = operation, fields = fields,
+            )
+        }
+        val first = KeyguardCardDiagnostics.newShowOperation(attempt, 6L, 60L)
+        event("SHOW_FOR_ATTACH", 416205200L, first)
+        event("ADD_VIEW_BEGIN", 416205210L, first)
+        event("ADD_VIEW_RETURN", 416205220L, first)
+        event("FIRST_ROOT_DRAW", 416205240L, first)
+        event("FIRST_SHADER_DRAW", 416205244L, first)
+        event("FIRST_LIVE_DRAW", 416205244L, first)
+        val firstHide = KeyguardCardDiagnostics.newHideOperation(attempt, 6L, 61L, 416205300L)
+        event("HIDE_DECIDED", 416205310L, firstHide)
+        event("LOCAL_HIDE_BEGIN", 416205311L, firstHide, mapOf("attachedBefore" to true))
+        event("LOCAL_HIDE_APPLIED", 416205312L, firstHide)
+        event("REMOVE_VIEW_RETURN", 416205320L, firstHide)
+        val second = KeyguardCardDiagnostics.newShowOperation(attempt, 7L, 62L)
+        event("SHOW_FOR_ATTACH", 416205400L, second)
+        event("ADD_VIEW_BEGIN", 416205410L, second)
+        event("ADD_VIEW_RETURN", 416205420L, second)
+        val secondHide = KeyguardCardDiagnostics.newHideOperation(attempt, 7L, 63L, 416205421L)
+        event("HIDE_DECIDED", 416205422L, secondHide)
+        event("LOCAL_HIDE_BEGIN", 416205423L, secondHide, mapOf("attachedBefore" to true))
+        event("LOCAL_HIDE_APPLIED", 416205424L, secondHide)
+        event("REMOVE_VIEW_RETURN", 416205430L, secondHide)
+
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.contains("cycleToFirstLiveDrawMs=309"))
+        assertTrue(report.contains("cycleToFirstShaderDrawMs=309"))
+        assertTrue(report.contains("firstRootDrawObserved=true"))
+        assertTrue(report.contains("actualWithdrawalHideOp=${firstHide.hideOperationId}"))
+        val episodes = report.lineSequence().filter { it.startsWith(" EPISODE ") }.toList()
+        assertEquals(2, episodes.size)
+        assertTrue(episodes[0].contains("attach=6"))
+        assertTrue(episodes[0].contains("live=416205244"))
+        assertTrue(episodes[0].contains("withdrawal=${firstHide.hideOperationId}"))
+        assertTrue(episodes[1].contains("attach=7"))
+        assertTrue(episodes[1].contains("live=NO_DRAW_OBSERVED"))
+        assertTrue(episodes[1].contains("withdrawal=${secondHide.hideOperationId}"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32 * 1024)
+    }
+
     @Test fun attachAndHideTimingsKeepTheirOriginalOperations() {
         KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug")
         val attempt = checkNotNull(
