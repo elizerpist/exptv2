@@ -37,6 +37,9 @@ internal class KeyguardCardMaterialController(
         background.frame(nanos)
     }
     private var attached = false
+    private var attachmentCallbacksStart = 0
+    private var attachmentStartsStart = 0
+    private var attachmentStopsStart = 0
     private var profile: KeyguardMaterialProfile? = null
     private var mode = KeyguardCardAnimationMode.ORB_ONLY
     private var presentationMode = KeyguardCardPresentationMode.CARD
@@ -219,6 +222,15 @@ internal class KeyguardCardMaterialController(
         }
 
     fun onAttached() {
+        if (!attached) {
+            // add/remove can finish before View.onAttachedToWindow dispatch.
+            // Such an undrawn attachment must not inherit the prior cadence.
+            orb.beginAttachmentDrawEvidence()
+            background.beginAttachmentDrawEvidence()
+            attachmentCallbacksStart = clock.callbackCount
+            attachmentStartsStart = clock.startCount
+            attachmentStopsStart = clock.stopCount
+        }
         attached = true
         if (coldPresentationState != ColdPresentationState.LIVE) {
             bootstrapCommitReceived = false
@@ -241,6 +253,20 @@ internal class KeyguardCardMaterialController(
     }
 
     fun stop(reason: String) = onDetached(reason)
+
+    /** Snapshot only at an attachment boundary, after visibility work. No
+     * percentile sorting or material-key construction on the draw path. */
+    fun attachmentRenderSummary() = KeyguardAttachmentRenderSummary(
+        clockCallbacks = clock.callbackCount - attachmentCallbacksStart,
+        shaderCalls = orb.attachmentShaderCalls(),
+        phaseAdvances = orb.attachmentPhaseAdvances(),
+        animationStarts = clock.startCount - attachmentStartsStart,
+        animationStops = clock.stopCount - attachmentStopsStart,
+        clockRunning = clock.isRunning,
+        liveState = coldPresentationState.name,
+        orb = orb.attachmentDrawCadence(),
+        background = background.attachmentDrawCadence(),
+    )
 
     fun dispose() {
         runCatching { orb.context.contentResolver.unregisterContentObserver(animatorScaleObserver) }
@@ -540,6 +566,12 @@ internal class KeyguardCardMaterialController(
         reconcileClock()
     }
 }
+
+internal data class KeyguardAttachmentRenderSummary(
+    val clockCallbacks: Int, val shaderCalls: Int, val phaseAdvances: Int,
+    val animationStarts: Int, val animationStops: Int, val clockRunning: Boolean,
+    val liveState: String, val orb: KeyguardDrawCadence.Snapshot, val background: KeyguardDrawCadence.Snapshot,
+)
 
 internal data class KeyguardMaterialDiagnostics(
     val requestedRenderer: String,

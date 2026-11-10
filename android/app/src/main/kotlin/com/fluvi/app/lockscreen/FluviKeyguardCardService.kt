@@ -843,6 +843,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             request,
             fields = mapOf(
                 "queuedAtUptimeMs" to now,
+                "triggerReceivedUptimeMs" to (triggerReceivedUptimeMs ?: "NA"),
                 "eventTimeUptimeMs" to (eventTimeUptimeMs ?: "NA"),
                 "replacedPendingRequestId" to (queueOffer.second ?: "NA"),
                 "requestVisibilityEpoch" to request.visibilityEpoch,
@@ -881,6 +882,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // one latest valid request begin immediately instead of
                 // waiting behind a guaranteed stale rejection.
                 val next = synchronized(queueLock) { inspectionQueue.complete(active) }
+                traceInspectionResult(active, result, startedAt, finishedAt)
                 traceKeyguard(
                     "INSPECTION_REJECTED",
                     "abortedStale",
@@ -942,6 +944,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         val abortedDuring = inspectionsAbortedDuringWalk.get()
         val readsAfter = nodeReadsAfterInvalidation.get()
         val fields = { mapOf(
+            "queuedAtUptimeMs" to request.queuedAtUptimeMs,
+            "startedAtUptimeMs" to startedAt,
+            "triggerReceivedUptimeMs" to (request.triggerReceivedUptimeMs ?: "NA"),
+            "eventTimeUptimeMs" to (request.eventTimeUptimeMs ?: "NA"),
+            "requestVisibilityEpoch" to request.visibilityEpoch,
+            "requestInteractionEpoch" to request.interactionEpoch,
+            "requestWakeGeneration" to request.wakeGeneration,
             "inspectionTotalMs" to (finishedAt - startedAt),
             "windowsReadMs" to (result.windowsReadMs ?: "NA"),
             "treeScanMs" to (result.treeScanMs ?: "NA"),
@@ -972,6 +981,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             "childAcquisitionMaxMs" to result.windowTiming.childAcquisitionMaxMs,
             "localProcessingMs" to result.windowTiming.localProcessingMs,
             "slowWindowCalls" to result.windowTiming.slowCalls.joinToString(";"),
+            "walkTruncationReasons" to result.windowTiming.walkTruncationReasons.joinToString(",").ifEmpty { "none" },
             "surfaceClassification" to result.decision.name,
             "surfaceMarkers" to result.surfaceMarkers,
             "abortedStale" to result.abortedStale,
@@ -2000,6 +2010,34 @@ class FluviKeyguardCardService : AccessibilityService() {
                 activeWindowDiagnosticOperation = null
             }
             removeReturnedAt = SystemClock.uptimeMillis()
+            if (wasAttachedBefore && KeyguardCardDiagnostics.wantsEvent("ATTACHMENT_RENDER_SUMMARY")) {
+                val summary = overlay.attachmentRenderSummary()
+                if (summary != null) traceKeyguard(
+                    "ATTACHMENT_RENDER_SUMMARY", "withdrawalBoundary",
+                    requestId = causingInspectionRequestId,
+                    observedUptimeMs = removeReturnedAt,
+                    operation = hideOperation,
+                    deferredFields = { mapOf(
+                        "clockCallbacks" to summary.clockCallbacks,
+                        "shaderFrames" to summary.orb.frames,
+                        "shaderCalls" to summary.shaderCalls,
+                        "phaseAdvances" to summary.phaseAdvances,
+                        "firstPhase" to (summary.orb.firstPhase ?: "NA"),
+                        "lastPhase" to (summary.orb.lastPhase ?: "NA"),
+                        "firstShaderTraversalAt" to (summary.orb.firstAt ?: "NA"),
+                        "lastShaderTraversalAt" to (summary.orb.lastAt ?: "NA"),
+                        "drawGapCount" to summary.orb.gaps,
+                        "drawGapTotalMs" to summary.orb.gapTotalMs,
+                        "drawGapMaxMs" to summary.orb.gapMaxMs,
+                        "drawInvalidOrder" to summary.orb.invalidOrder,
+                        "backgroundFrames" to summary.background.frames,
+                        "animationStarts" to summary.animationStarts,
+                        "animationStops" to summary.animationStops,
+                        "clockRunning" to summary.clockRunning,
+                        "liveState" to summary.liveState,
+                    ) },
+                )
+            }
             if (wasAttachedBefore && removed) KeyguardCardDiagnostics.record(this, "KG|DETACH", reason, false)
             if (!wasAttachedBefore) traceKeyguard(
                 "HIDE_NOOP_ALREADY_HIDDEN",

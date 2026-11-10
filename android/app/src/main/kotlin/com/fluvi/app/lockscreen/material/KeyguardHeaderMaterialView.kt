@@ -24,6 +24,7 @@ internal class KeyguardMaterialClock(
     private val onFrame: (Long) -> Unit,
 ) : Choreographer.FrameCallback {
     private var running = false
+    val isRunning: Boolean get() = running
     private var callbackPending = false
     private var lastFrameNanos = 0L
     var startCount = 0
@@ -184,6 +185,9 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private var lastTime: KeyguardMaterialTime? = null
     private var onDrawCount = 0
     private var shaderDrawCount = 0
+    private val attachmentCadence = KeyguardDrawCadence()
+    private var attachmentShaderCallsStart = 0
+    private var attachmentPhaseAdvancesStart = 0
     private var fallbackDrawCount = 0
     private var phaseAdvanceCount = 0
     private var shaderCompileAttempts = 0
@@ -224,6 +228,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         super.onAttachedToWindow()
         firstShaderDrawForAttach = true
         firstBootstrapDrawForAttach = true
+        beginAttachmentDrawEvidence()
         notifyRendererState()
     }
 
@@ -452,6 +457,15 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         lastCanvasHardwareAccelerated == true && shaderCurrent != null && shaderFailure == null
     fun canAnimateMaterial(): Boolean = isRendererReady() && !bootstrapActive
 
+    fun attachmentDrawCadence(): KeyguardDrawCadence.Snapshot = attachmentCadence.snapshot()
+    fun beginAttachmentDrawEvidence() {
+        attachmentCadence.reset()
+        attachmentShaderCallsStart = shaderDrawCount
+        attachmentPhaseAdvancesStart = phaseAdvanceCount
+    }
+    fun attachmentShaderCalls(): Int = shaderDrawCount - attachmentShaderCallsStart
+    fun attachmentPhaseAdvances(): Int = phaseAdvanceCount - attachmentPhaseAdvancesStart
+
     fun diagnostics(): KeyguardHeaderMaterialViewDiagnostics = KeyguardHeaderMaterialViewDiagnostics(
         onDrawCount = onDrawCount,
         shaderDrawCount = shaderDrawCount,
@@ -505,6 +519,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             return
         }
         val old = previous
+        val shaderCallsBeforeTraversal = shaderDrawCount
         val progress = if (old == null) 1f else ((frameNanos - transitionStartedNanos) / 180_000_000f).coerceIn(0f, 1f)
         if (old != null && progress < 1f) {
             drawShader(canvas, shaderPrevious ?: currentShader, old, 1f)
@@ -513,6 +528,11 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             if (old != null) transitionCompletedCount += 1
             previous = null
             drawShader(canvas, currentShader, scene, 1f)
+        }
+        if (shaderDrawCount > shaderCallsBeforeTraversal) {
+            // A transition can issue two shader calls in one traversal. Count
+            // that traversal once, only after actual shader geometry was sent.
+            attachmentCadence.drawn(SystemClock.uptimeMillis(), lastTime?.phase ?: Float.NaN)
         }
     }
 

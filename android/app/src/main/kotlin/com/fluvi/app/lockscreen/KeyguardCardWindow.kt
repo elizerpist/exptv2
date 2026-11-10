@@ -95,6 +95,7 @@ internal class KeyguardCardWindow(
     val isDragActive: Boolean get() = root?.isDragging == true
     val hasPreparedRoot: Boolean get() = root != null
     val currentAttachGeneration: Long get() = attachGeneration
+    fun attachmentRenderSummary() = materialController?.attachmentRenderSummary()
 
     internal fun presentationConfigurationApplicationsForTest(): Int = presentationConfigurationApplyCount
 

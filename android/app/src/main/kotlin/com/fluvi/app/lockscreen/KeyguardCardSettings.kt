@@ -607,6 +607,10 @@ internal object KeyguardCardDiagnostics {
         var livePromotedAtUptimeMs: Long? = null,
         var firstLiveDrawAtUptimeMs: Long? = null,
         var frameCommitCallbackAtUptimeMs: Long? = null,
+        /** The operation owns its cause independently of the rolling request
+         * ledger. Later INSPECTION_FINISHED records complete this same object. */
+        var cause: InspectionTimeline? = null,
+        var renderSummary: Map<String, String> = emptyMap(),
     )
 
     private data class HideEpisode(
@@ -620,6 +624,7 @@ internal object KeyguardCardDiagnostics {
         var removeReturnAtUptimeMs: Long? = null,
         var attachedBefore: Boolean? = null,
         var detachFailed: Boolean = false,
+        var cause: InspectionTimeline? = null,
     )
 
     private data class InspectionTimeline(
@@ -655,6 +660,7 @@ internal object KeyguardCardDiagnostics {
         var childAcquisitionCount: Long? = null,
         var localProcessingMs: Long? = null,
         var trigger: String? = null,
+        var triggerReceivedUptimeMs: Long? = null,
         var eventTimeUptimeMs: Long? = null,
         var visibilityEpochAtRequest: Long? = null,
         var visibilityEpochAtApply: Long? = null,
@@ -664,6 +670,8 @@ internal object KeyguardCardDiagnostics {
         var surfaceMarkers: String? = null,
         var rootUnavailable: String? = null,
         var walkTruncated: String? = null,
+        var walkTruncationReasons: String? = null,
+        var slowWindowCalls: String? = null,
         var visitedNodeCount: Long? = null,
         var rejectionReason: String? = null,
         var followupAction: String? = null,
@@ -697,6 +705,9 @@ internal object KeyguardCardDiagnostics {
         var retryBudgetExhaustedWhileAwaiting: Int = 0,
         var attachCount: Int = 0,
         var detachCount: Int = 0,
+        var omittedShowEpisodes: Int = 0,
+        var omittedHideEpisodes: Int = 0,
+        var omittedSpineEvents: Int = 0,
         val shows: ArrayDeque<ShowEpisode> = ArrayDeque(),
         val hides: ArrayDeque<HideEpisode> = ArrayDeque(),
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
@@ -802,6 +813,11 @@ internal object KeyguardCardDiagnostics {
         "surfaceMarkers", "rootUnavailable", "walkTruncated", "visitedNodeCount", "followupAction",
         "pendingRequestId", "pendingRequestIdAtApply", "visibilityEpochBefore", "visibilityEpochAfter",
     )
+    private val RENDER_SUMMARY_KEYS = setOf(
+        "clockCallbacks", "shaderFrames", "shaderCalls", "phaseAdvances", "firstPhase", "lastPhase",
+        "drawGapCount", "drawGapTotalMs", "drawGapMaxMs", "animationStarts", "animationStops",
+        "clockRunning", "liveState", "backgroundFrames", "firstShaderTraversalAt", "lastShaderTraversalAt", "drawInvalidOrder",
+    )
 
     fun recordColdPreparation(serviceSession: Long, stage: String, observedUptimeMs: Long = SystemClock.uptimeMillis()) {
         reduction.offer {
@@ -853,8 +869,8 @@ internal object KeyguardCardDiagnostics {
         val created = TimingCapture(
             id = id,
             generation = ++nextCaptureGeneration,
-            build = build?.takeIf { it.isNotBlank() } ?: "unknown",
-            buildMode = buildMode?.takeIf { it.isNotBlank() } ?: "unknown",
+            build = build?.takeIf { it.isNotBlank() }?.let(::technicalValue) ?: "unknown",
+            buildMode = buildMode?.takeIf { it.isNotBlank() }?.let(::technicalValue) ?: "unknown",
             processInstanceId = processInstanceId,
             pid = Process.myPid(),
             startedUptimeMs = nowUp,
@@ -1063,7 +1079,7 @@ internal object KeyguardCardDiagnostics {
             reason = reason,
             serviceSession = serviceSession,
             wakeEpoch = wakeEpoch,
-            requestId = requestId,
+            requestId = requestId ?: operation?.causingInspectionRequestId,
             attachGeneration = attachGeneration,
             observedUptimeMs = observedAt,
             observedElapsedMs = observedElapsed,
@@ -1184,27 +1200,31 @@ internal object KeyguardCardDiagnostics {
                 }
             }
             fun inspectionTimeline(): InspectionTimeline? = event.requestId?.let { request ->
+                // Finishes may arrive after SHOW/HIDE because detailed capture
+                // is deliberately deferred until visibility work has finished.
+                val owned = attempt.shows.firstOrNull { it.cause?.requestId == request }?.cause
+                    ?: attempt.hides.firstOrNull { it.cause?.requestId == request }?.cause
+                if (owned != null) return@let owned
                 if (request !in attempt.inspections && attempt.inspections.size >= MAX_INSPECTION_LEDGER) {
-                    val pinned = buildSet {
-                        attempt.firstInspectionRequestId?.let { add(it) }
-                        attempt.showingInspectionRequestId?.let { add(it) }
-                        firstPresentation(attempt)?.requestId?.let { add(it) }
-                        attempt.hides.mapNotNullTo(this) { it.requestId }
-                    }
-                    attempt.inspections.keys.firstOrNull { it !in pinned }?.let(attempt.inspections::remove)
+                    attempt.inspections.keys.firstOrNull { it != attempt.firstInspectionRequestId }
+                        ?.let(attempt.inspections::remove)
                 }
                 attempt.inspections.getOrPut(request) { InspectionTimeline(request) }.also { timeline ->
                     if (timeline.trigger == null) timeline.trigger = reason
                 }
             }
             fun showEpisode(): ShowEpisode? = event.showOperationId?.let { operationId ->
-                attempt.shows.toList().lastOrNull { it.operationId == operationId }
+                attempt.shows.toList().lastOrNull {
+                    it.operationId == operationId && it.attachGeneration == event.attachGeneration
+                }
             }
             fun hideEpisode(): HideEpisode? = event.hideOperationId?.let { operationId ->
-                attempt.hides.toList().lastOrNull { it.operationId == operationId }
+                attempt.hides.toList().lastOrNull {
+                    it.operationId == operationId && it.attachGeneration == event.attachGeneration
+                }
             }
             when (stage) {
-                "SCREEN_ON_RECEIVED" -> attempt.screenOnReceivedAtUptimeMs = event.uptimeMs
+                "SCREEN_ON_RECEIVED" -> if (attempt.screenOnReceivedAtUptimeMs == null) attempt.screenOnReceivedAtUptimeMs = event.uptimeMs
                 "INSPECTION_QUEUED" -> {
                     attempt.requestsReceived += 1
                     if (attempt.firstInspectionRequestId == null) attempt.firstInspectionRequestId = requestId
@@ -1215,6 +1235,7 @@ internal object KeyguardCardDiagnostics {
                         fields["queuedAtUptimeMs"]?.toLongOrNull() ?: event.uptimeMs
                     inspectionTimeline()?.apply {
                         eventTimeUptimeMs = fields["eventTimeUptimeMs"]?.toLongOrNull()
+                        triggerReceivedUptimeMs = fields["triggerReceivedUptimeMs"]?.toLongOrNull()
                         visibilityEpochAtRequest = fields["requestVisibilityEpoch"]?.toLongOrNull()
                     }
                 }
@@ -1226,6 +1247,7 @@ internal object KeyguardCardDiagnostics {
                         fields["queuedAtUptimeMs"]?.toLongOrNull() ?: event.uptimeMs
                     inspectionTimeline()?.apply {
                         eventTimeUptimeMs = fields["eventTimeUptimeMs"]?.toLongOrNull()
+                        triggerReceivedUptimeMs = fields["triggerReceivedUptimeMs"]?.toLongOrNull()
                         visibilityEpochAtRequest = fields["requestVisibilityEpoch"]?.toLongOrNull()
                     }
                 }
@@ -1241,6 +1263,14 @@ internal object KeyguardCardDiagnostics {
                     }
                 }
                 "INSPECTION_FINISHED" -> inspectionTimeline()?.apply {
+                    // The request timestamps are authoritative even when
+                    // bounded pressure evicted an earlier non-owning ledger
+                    // entry before this operation pinned its cause.
+                    queuedAtUptimeMs = fields["queuedAtUptimeMs"]?.toLongOrNull() ?: queuedAtUptimeMs
+                    startedAtUptimeMs = fields["startedAtUptimeMs"]?.toLongOrNull() ?: startedAtUptimeMs
+                    triggerReceivedUptimeMs = fields["triggerReceivedUptimeMs"]?.toLongOrNull() ?: triggerReceivedUptimeMs
+                    eventTimeUptimeMs = fields["eventTimeUptimeMs"]?.toLongOrNull() ?: eventTimeUptimeMs
+                    visibilityEpochAtRequest = fields["requestVisibilityEpoch"]?.toLongOrNull() ?: visibilityEpochAtRequest
                     finishedAtUptimeMs = event.uptimeMs
                     windowsReadMs = fields["windowsReadMs"]?.toLongOrNull()
                     treeScanMs = fields["treeScanMs"]?.toLongOrNull()
@@ -1269,6 +1299,8 @@ internal object KeyguardCardDiagnostics {
                     surfaceMarkers = fields["surfaceMarkers"]
                     rootUnavailable = fields["rootUnavailable"]
                     walkTruncated = fields["walkTruncated"]
+                    walkTruncationReasons = fields["walkTruncationReasons"]
+                    slowWindowCalls = fields["slowWindowCalls"]
                     visitedNodeCount = fields["visitedNodeCount"]?.toLongOrNull()
                 }
                 "INSPECTION_MAIN_APPLY_POSTED" -> inspectionTimeline()?.apply {
@@ -1327,6 +1359,7 @@ internal object KeyguardCardDiagnostics {
                                 firstDrawEpisode(attempt) { it.firstLiveDrawAtUptimeMs },
                             ).toSet()
                             attempt.shows.remove(attempt.shows.first { it !in pinned })
+                            attempt.omittedShowEpisodes += 1
                         }
                         attempt.shows.addLast(
                             ShowEpisode(
@@ -1334,6 +1367,7 @@ internal object KeyguardCardDiagnostics {
                                 requestId = event.requestId,
                                 attachGeneration = event.attachGeneration,
                                 decisionAtUptimeMs = event.uptimeMs,
+                                cause = inspectionTimeline(),
                             ),
                         )
                     }
@@ -1354,9 +1388,27 @@ internal object KeyguardCardDiagnostics {
                 "BOOTSTRAP_DRAW" -> showEpisode()?.let { if (it.bootstrapDrawAtUptimeMs == null) it.bootstrapDrawAtUptimeMs = event.uptimeMs }
                 "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED" -> showEpisode()?.let { if (it.bootstrapCommitCallbackAtUptimeMs == null) it.bootstrapCommitCallbackAtUptimeMs = event.uptimeMs }
                 "MATERIAL_LIVE_PROMOTED" -> showEpisode()?.let { if (it.livePromotedAtUptimeMs == null) it.livePromotedAtUptimeMs = event.uptimeMs }
+                "ATTACHMENT_RENDER_SUMMARY" -> (showEpisode() ?: attempt.shows.lastOrNull {
+                    event.attachGeneration != null && it.attachGeneration == event.attachGeneration
+                })?.let {
+                    it.renderSummary = fields.filterKeys { key -> key in RENDER_SUMMARY_KEYS }
+                }
                 "HIDE_DECIDED" -> event.hideOperationId?.let { operationId ->
                     if (hideEpisode() == null) {
-                        while (attempt.hides.size >= 8) attempt.hides.removeFirst()
+                        // Eight retained shows can each own a withdrawal;
+                        // one additional slot retains the latest detached
+                        // terminal cleanup without displacing those causes.
+                        while (attempt.hides.size >= 9) {
+                            // A retained show keeps its matching actual
+                            // withdrawal ahead of detached cleanup noise.
+                            val discard = attempt.hides.firstOrNull { hide ->
+                                hide.attachedBefore != true || attempt.shows.none {
+                                    it.attachGeneration == hide.attachGeneration
+                                }
+                            } ?: attempt.hides.first()
+                            attempt.hides.remove(discard)
+                            attempt.omittedHideEpisodes += 1
+                        }
                         attempt.hides.addLast(
                             HideEpisode(
                                 operationId = operationId,
@@ -1364,6 +1416,7 @@ internal object KeyguardCardDiagnostics {
                                 attachGeneration = event.attachGeneration,
                                 triggerReceivedAtUptimeMs = event.triggerReceivedUptimeMs,
                                 decisionAtUptimeMs = event.uptimeMs,
+                                cause = inspectionTimeline(),
                             ),
                         )
                     }
@@ -1390,6 +1443,14 @@ internal object KeyguardCardDiagnostics {
                 }
                 "DETACH_FAILED" -> hideEpisode()?.detachFailed = true
             }
+            // The semantic spine has the same bounded operation ownership as
+            // its episode records. It is not an unbounded historical cache.
+            val obsoleteSpine = attempt.causalSpine.filter { milestone ->
+                (milestone.showOperationId != null && attempt.shows.none { it.operationId == milestone.showOperationId }) ||
+                    (milestone.hideOperationId != null && attempt.hides.none { it.operationId == milestone.hideOperationId })
+            }
+            attempt.causalSpine.removeAll(obsoleteSpine.toSet())
+            attempt.omittedSpineEvents += obsoleteSpine.size
         }
     }
 
@@ -1422,7 +1483,7 @@ internal object KeyguardCardDiagnostics {
         // hold captureLock while serialising hundreds of events.
         val snapshot = snapshotForExportLocked(active)
         captureWriter.execute {
-            val report = formatReport(snapshot, recoveredFromDisk = false, exportLimitBytes = Int.MAX_VALUE)
+            val report = formatReport(snapshot, recoveredFromDisk = false, exportLimitBytes = 32 * 1024)
             synchronized(captureLock) {
                 // A later clear/new capture owns durability. A stale queued
                 // checkpoint must not resurrect or replace it.
@@ -1460,8 +1521,8 @@ internal object KeyguardCardDiagnostics {
     )
 
     private fun copyAttempt(attempt: TimingAttempt): TimingAttempt = attempt.copy(
-        shows = ArrayDeque(attempt.shows.map { it.copy() }),
-        hides = ArrayDeque(attempt.hides.map { it.copy() }),
+        shows = ArrayDeque(attempt.shows.map { it.copy(cause = it.cause?.copy(), renderSummary = it.renderSummary.toMap()) }),
+        hides = ArrayDeque(attempt.hides.map { it.copy(cause = it.cause?.copy()) }),
         inspections = LinkedHashMap(attempt.inspections.mapValues { (_, timeline) -> timeline.copy() }),
         causalSpine = ArrayDeque(attempt.causalSpine.map { it.copy(fields = it.fields.toMap()) }),
     )
@@ -1512,9 +1573,32 @@ internal object KeyguardCardDiagnostics {
         )
     }
 
-    private fun recoveredReport(report: String): String = report
-        .replaceFirst(Regex("captureState=[^\\n]*"), "captureState=RECOVERED")
-        .replaceFirst("RETENTION\n", "RETENTION\nrecoveredFromDisk=true\n")
+    private fun recoveredReport(report: String): String {
+        var restored = report.replaceFirst(Regex("captureState=[^\\n]*"), "captureState=RECOVERED")
+            .replaceFirst("recoveredFromDisk=false", "recoveredFromDisk=true")
+        // Earlier installed builds persisted unbudgeted headers. Such an old
+        // report cannot acquire missing evidence on recovery. Keep complete
+        // lines and state its loss explicitly instead of violating Copy's cap.
+        if (restored.toByteArray(Charsets.UTF_8).size > 32 * 1024 - 64) {
+            val lines = restored.lineSequence().filter { it != "END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1" }.toList()
+            var used = 0
+            val kept = lines.takeWhile {
+                val next = (it + '\n').toByteArray(Charsets.UTF_8).size
+                KeyguardExportBudget.canAppend(used, next, 32 * 1024 - 512).also { fits -> if (fits) used += next }
+            }
+            restored = kept.joinToString("\n", postfix = "\n")
+                .replace("causalSpineComplete=true", "causalSpineComplete=false") +
+                "legacyRecoveredEvidenceTruncated=true omittedRecoveredLines=${lines.size - kept.size} recoverySelection=legacyPrefix\nEND_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n"
+        }
+        return withExportBytes(restored)
+    }
+
+    private fun withExportBytes(report: String): String {
+        val sizeLine = Regex("exportBytes=[^\\n]*")
+        var sized = report.replaceFirst(sizeLine, "exportBytes=0")
+        repeat(3) { sized = report.replaceFirst(sizeLine, "exportBytes=${sized.toByteArray(Charsets.UTF_8).size}") }
+        return sized
+    }
 
     private fun formatReport(active: TimingCapture, recoveredFromDisk: Boolean, exportLimitBytes: Int): String {
         val attemptsForCausalEvidence = active.attempts.toList().let { attempts ->
@@ -1530,8 +1614,8 @@ internal object KeyguardCardDiagnostics {
             appendLine("processInstance=${active.processInstanceId}")
             appendLine("pid=${active.pid}")
             appendLine("androidApi=${Build.VERSION.SDK_INT}")
-            appendLine("manufacturer=${Build.MANUFACTURER}")
-            appendLine("model=${Build.MODEL}")
+            appendLine("manufacturer=${technicalValue(Build.MANUFACTURER)}")
+            appendLine("model=${technicalValue(Build.MODEL)}")
             appendLine("startedAt=${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date(active.startedWallMs))}")
             val durationEndElapsedMs = active.endedElapsedMs ?: SystemClock.elapsedRealtime()
             appendLine("durationElapsedMs=${durationEndElapsedMs - active.startedElapsedMs}")
@@ -1543,6 +1627,8 @@ internal object KeyguardCardDiagnostics {
             appendLine("systemUnlockAnimationStart=UNOBSERVED")
             appendLine("physicalOverlayPresentation=UNOBSERVED")
             appendLine("physicalOverlayRemoval=UNOBSERVED")
+            appendLine("frameCommitMeaning=callback_receipt_not_physical_presentation liveFrameCommit=UNOBSERVED")
+            appendLine("drawObservationMeaning=NO_DRAW_OBSERVED_is_not_proof_of_no_rendering")
             appendLine("COLD_PREPARATION")
             val cold = active.coldPreparation
             if (cold == null) {
@@ -1581,72 +1667,86 @@ internal object KeyguardCardDiagnostics {
             appendLine("diagnosticDroppedRecords=${active.diagnosticDroppedRecords}")
             appendLine("diagnosticQueueOverflow=${active.diagnosticQueueOverflow}")
             appendLine("diagnosticConsumerFailures=${active.diagnosticConsumerFailures}")
-            appendLine("ATTEMPT_SUMMARIES")
-            attemptsForCausalEvidence.forEach { append(attemptSummary(it)) }
-            appendLine("CAUSAL_SPINES")
-            attemptsForCausalEvidence.forEach { attempt ->
-                appendLine("attemptId=${attempt.id} causalSpineComplete=${causalSpineComplete(attempt)} causalEvents=${attempt.causalSpine.size}")
-                attempt.causalSpine.forEach { appendLine(" ${it.toLine()}") }
-                val show = firstPresentation(attempt)
-                val showing = show?.requestId?.let(attempt.inspections::get)
-                if (showing != null) {
-                    appendLine(" showingInspection req=${showing.requestId} queued=${showing.queuedAtUptimeMs ?: "NA"} started=${showing.startedAtUptimeMs ?: "NA"} finished=${showing.finishedAtUptimeMs ?: "NA"} mainApply=${showing.mainApplyStartedAtUptimeMs ?: "NA"} authorityAtStart=${showing.authorityCurrentAtStart ?: "NA"}")
-                }
-            }
-            appendLine("EVENTS")
+            appendLine("nativeDrawObservations=callbackAndCanvas flutterBuildRasterTiming=N/A")
         }
         val footer = "END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n"
         val events = active.events.toList()
-        val retainedAttemptIds = attemptsForCausalEvidence.map { it.id }.toSet()
-        val selected = linkedSetOf<TimingEvent>()
-        var bytes = (header + footer).toByteArray(Charsets.UTF_8).size
-        // Leave room for explicit truncation metadata (attempt and sequence
-        // ranges) so a report selected at the event boundary still remains
-        // within the chat-friendly export target.
-        val eventBudget = (exportLimitBytes - 1_024).coerceAtLeast(bytes)
-
-        fun selectWhole(group: List<TimingEvent>): Boolean {
-            val groupBytes = group.sumOf { (it.toLine() + '\n').toByteArray(Charsets.UTF_8).size }
-            if (bytes + groupBytes > eventBudget) return false
-            selected.addAll(group)
-            bytes += groupBytes
+        // Header, section labels, omission metadata and footer all consume
+        // the same UTF-8 budget. Protected evidence is compact, not exempt.
+        val selected = linkedMapOf<String, String>()
+        val omittedRecords = mutableListOf<String>()
+        val incompleteAttempts = linkedSetOf<Long>()
+        var bytes = (header + footer + "ATTEMPT_SUMMARIES\nEPISODES\nCAUSAL_SPINES\nEVENTS\n").toByteArray(Charsets.UTF_8).size
+        val metadataReserve = 2_048
+        val contentLimit = exportLimitBytes - metadataReserve - 64 // recovery/header byte-count replacements
+        fun select(id: String, text: String, attemptId: Long? = null): Boolean {
+            val size = text.toByteArray(Charsets.UTF_8).size
+            if (!KeyguardExportBudget.canAppend(bytes, size, contentLimit)) {
+                omittedRecords += id
+                attemptId?.let(incompleteAttempts::add)
+                return false
+            }
+            selected[id] = text
+            bytes += size
             return true
         }
-
-        // Keep complete recent causal attempts, not merely the last physical
-        // buffer rows. A later hidden-state flood therefore cannot displace
-        // the wake → inspect → attach/draw → hide evidence.
-        active.attempts.takeLast(3).asReversed().forEach { attempt ->
-            val group = events.filter { it.attemptId == attempt.id }
-            if (!selectWhole(group)) {
-                // A pathological attempt may not fit whole. Preserve its
-                // transition spine and explicitly mark it incomplete below.
-                selectWhole(group.filter { it.isTransition() })
+        // First reserve every selected attempt's short cycle summary. Then
+        // retain whole episode/cause blocks round-robin, so one pathological
+        // attempt cannot silently replace the other wakes' evidence.
+        attemptsForCausalEvidence.forEach { attempt ->
+            select("a${attempt.id}:summary", attemptSummary(attempt), attempt.id)
+        }
+        val episodeBlocks = attemptsForCausalEvidence.associateWith(::episodeRecords)
+        repeat(episodeBlocks.values.maxOfOrNull { it.size } ?: 0) { index ->
+            attemptsForCausalEvidence.forEach { attempt ->
+                episodeBlocks.getValue(attempt).getOrNull(index)?.let { (id, text) -> select(id, text, attempt.id) }
             }
         }
-        // Preserve unassigned transition evidence (for example a callback
-        // immediately preceding the first wake) after complete attempts.
-        selectWhole(events.filter { it.attemptId !in retainedAttemptIds && it.isTransition() })
-        val kept = selected.sortedBy { it.seq }.map { it.toLine() }
-        val omittedEvents = events.filterNot(selected::contains)
-        val omitted = omittedEvents.size
-        val omittedAttempts = active.attempts
-            .filter { attempt -> events.any { it.attemptId == attempt.id } && events.any { it.attemptId == attempt.id && it !in selected } }
-            .joinToString(",") { it.id.toString() }
-        val omittedRanges = compactSequenceRanges(omittedEvents.map { it.seq }.sorted(), maxCharacters = 512)
-        val retention = if (omitted == 0) header else header.replace(
-            "exportTruncated=false",
-            "exportTruncated=true\nomittedEventLines=$omitted\nomittedAttemptIds=${omittedAttempts.ifBlank { "none" }}\nomittedSeqs=$omittedRanges",
-        )
+        // Original milestone rows are optional because the complete episode
+        // records above carry their timestamps and operation ownership.
+        attemptsForCausalEvidence.forEach { attempt ->
+            val lines = attempt.causalSpine.joinToString("") { " attempt=${attempt.id} ${it.toLine()}\n" }
+            select("a${attempt.id}:spineRows", lines)
+        }
+        val keptEvents = linkedSetOf<TimingEvent>()
+        attemptsForCausalEvidence.asReversed().forEach { attempt ->
+            val group = events.filter { it.attemptId == attempt.id }
+            if (select("a${attempt.id}:raw", group.joinToString("") { it.toLine() + "\n" })) keptEvents.addAll(group)
+        }
+        val unassigned = events.filter { it.attemptId == null }
+        if (select("unassigned:raw", unassigned.joinToString("") { it.toLine() + "\n" })) keptEvents.addAll(unassigned)
+        val omittedEvents = events.filterNot(keptEvents::contains)
+        val omittedAttempts = omittedEvents.mapNotNull { it.attemptId }.distinct().sorted()
+        val metadata = buildString {
+            appendLine("retainedAttemptIds=${attemptsForCausalEvidence.joinToString(",") { it.id.toString() }}")
+            appendLine("omittedEventLines=${omittedEvents.size}")
+            appendLine("omittedAttemptIds=${omittedAttempts.joinToString(",").ifBlank { "none" }}")
+            appendLine("omittedSeqs=${compactSequenceRanges(omittedEvents.map { it.seq }.sorted(), 384)}")
+            appendLine("omittedEvidenceRecords=${omittedRecords.size}")
+            val criticalOmissions = omittedRecords.filterNot { it.endsWith(":raw") || it.endsWith(":spineRows") }
+            appendLine("omittedCriticalRecordIds=${compactRecordIds(criticalOmissions, 768)}")
+            appendLine("incompleteExportAttemptIds=${incompleteAttempts.joinToString(",").ifBlank { "none" }}")
+            appendLine("rawEventsTruncated=${omittedEvents.isNotEmpty()} rawOmissionDoesNotMeanNoDraw=true")
+        }
+        check(metadata.toByteArray(Charsets.UTF_8).size <= metadataReserve)
         val report = buildString {
-            append(retention)
-            kept.forEach { appendLine(it) }
+            append(header.replace("exportTruncated=false", "exportTruncated=${omittedEvents.isNotEmpty() || omittedRecords.isNotEmpty()}"))
+            append(metadata)
+            appendLine("ATTEMPT_SUMMARIES")
+            selected.filterKeys { it.endsWith(":summary") }.forEach { (id, text) ->
+                val attemptId = id.substringAfter('a').substringBefore(':').toLong()
+                append(if (attemptId in incompleteAttempts) text.replace("causalSpineComplete=true", "causalSpineComplete=false") else text)
+            }
+            appendLine("EPISODES")
+            selected.filterKeys { !it.endsWith(":summary") && !it.endsWith(":spineRows") && !it.endsWith(":raw") }.values.forEach(::append)
+            appendLine("CAUSAL_SPINES")
+            selected.filterKeys { it.endsWith(":spineRows") }.values.forEach(::append)
+            appendLine("EVENTS")
+            keptEvents.sortedBy { it.seq }.forEach { appendLine(it.toLine()) }
             append(footer)
         }
-        var sized = report.replaceFirst("exportBytes=PENDING", "exportBytes=0")
-        repeat(3) {
-            sized = report.replaceFirst("exportBytes=PENDING", "exportBytes=${sized.toByteArray(Charsets.UTF_8).size}")
-        }
+        val sized = withExportBytes(report)
+        check(sized.toByteArray(Charsets.UTF_8).size <= exportLimitBytes)
         return sized
     }
 
@@ -1659,99 +1759,119 @@ internal object KeyguardCardDiagnostics {
             ?: attempt.shows.firstOrNull { it.addReturnAtUptimeMs != null }
             ?: attempt.shows.firstOrNull()
 
-    private fun attemptSummary(attempt: TimingAttempt): String = buildString {
-        fun delta(end: Long?, start: Long?): String = when {
-            end == null || start == null -> "NA(missingEndpoint)"
-            end < start -> "INVALID_EVENT_ORDER"
-            else -> (end - start).toString()
+    private fun delta(end: Long?, start: Long?): String = when {
+        end == null || start == null -> "NA(missingEndpoint)"
+        end < start -> "INVALID_EVENT_ORDER"
+        else -> (end - start).toString()
+    }
+
+    private fun actualWithdrawal(attempt: TimingAttempt, show: ShowEpisode): HideEpisode? =
+        attempt.hides.firstOrNull {
+            show.attachGeneration != null && it.attachGeneration == show.attachGeneration &&
+                it.attachedBefore == true && it.removeReturnAtUptimeMs != null &&
+                it.decisionAtUptimeMs >= show.decisionAtUptimeMs
         }
+
+    /** Compact cycle aggregates are independent of every attachment's own
+     * evidence. Missing/omitted episodes never overwrite the earliest draw. */
+    private fun attemptSummary(attempt: TimingAttempt): String = buildString {
         val show = firstPresentation(attempt)
         val firstRoot = firstDrawEpisode(attempt) { it.firstRootDrawAtUptimeMs }
         val firstShader = firstDrawEpisode(attempt) { it.firstShaderDrawAtUptimeMs }
         val firstLive = firstDrawEpisode(attempt) { it.firstLiveDrawAtUptimeMs }
-        /** A detached terminal cleanup is useful, but it must never overwrite
-         * the operation which actually withdrew the attached root. */
-        val actualWithdrawal = attempt.hides.lastOrNull { hide ->
-            hide.attachedBefore == true && hide.removeReturnAtUptimeMs != null &&
-                (show?.attachGeneration == null || hide.attachGeneration == null ||
-                    show.attachGeneration == hide.attachGeneration)
-        }
-        val terminalCleanup = attempt.hides.lastOrNull()
-        val showingInspection = show?.requestId?.let(attempt.inspections::get)
+        val withdrawal = show?.let { actualWithdrawal(attempt, it) }
+            ?: attempt.hides.lastOrNull { it.attachedBefore == true && it.removeReturnAtUptimeMs != null }
+        val showing = show?.cause
         val firstInspection = attempt.firstInspectionRequestId?.let(attempt.inspections::get)
-        val withdrawalInspection = actualWithdrawal?.requestId?.let(attempt.inspections::get)
-        val firstStartedInspection = attempt.inspections.values.firstOrNull { it.startedAtUptimeMs != null }
-        val firstValidInspection = attempt.inspections.values.firstOrNull {
-            it.startedAtUptimeMs != null && it.authorityCurrentAtStart == true
-        }
-        val causalSpineComplete = causalSpineComplete(attempt)
         appendLine("attemptId=${attempt.id} wakeSource=${attempt.wakeSource} wakeCycleStartedAt=${attempt.startedUptimeMs} screenOnReceivedAt=${attempt.screenOnReceivedAtUptimeMs ?: "NA"} presentationMode=${attempt.presentationMode} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
         appendLine(" firstInspectionRequestId=${attempt.firstInspectionRequestId ?: "NA"} showingInspectionRequestId=${show?.requestId ?: "NA"} requestsReceived=${attempt.requestsReceived} requestsReplaced=${attempt.requestsReplaced} inspectionsStarted=${attempt.inspectionsStarted} inspectionsApplied=${attempt.inspectionsApplied} inspectionsRejected=${attempt.inspectionsRejected} staleInspectionCount=${attempt.staleInspectionCount}")
-        val pendingRetries = (attempt.retryScheduledCount - attempt.retryFiredCount - attempt.retryCancelledCount).coerceAtLeast(0)
-        appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:$pendingRetries attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
+        appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:${(attempt.retryScheduledCount - attempt.retryFiredCount - attempt.retryCancelledCount).coerceAtLeast(0)} attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
         appendLine(" awaiting=unknownWhileHidden:${attempt.unknownWhileHiddenCount},unknownWhileHiddenEpochChanges:${attempt.unknownWhileHiddenEpochChanges},pendingPreservedAfterUnknown:${attempt.pendingPreservedAfterUnknown},pendingRejectedAfterUnknown:${attempt.pendingRejectedAfterUnknown},visibleWithdrawalCount:${attempt.visibleWithdrawalCount},retrySuppressedForPendingWork:${attempt.retrySuppressedForPendingWork},retryBudgetExhaustedWhileAwaiting:${attempt.retryBudgetExhaustedWhileAwaiting}")
-        appendLine(" showOperationId=${show?.operationId ?: "NA"} showDecisionAt=${show?.decisionAtUptimeMs ?: "NA"} addBeginAt=${show?.addBeginAtUptimeMs ?: "NA"} addReturnAt=${show?.addReturnAtUptimeMs ?: "NA"} bootstrapDrawAt=${show?.bootstrapDrawAtUptimeMs ?: "NO_BOOTSTRAP_DRAW_OBSERVED"} bootstrapCommitCallbackAt=${show?.bootstrapCommitCallbackAtUptimeMs ?: "NO_BOOTSTRAP_COMMIT_OBSERVED"} livePromotedAt=${show?.livePromotedAtUptimeMs ?: "NO_LIVE_PROMOTION_OBSERVED"} firstRootDrawAt=${show?.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstShaderDrawAt=${show?.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstCurrentMaterialDrawAt=${show?.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} firstLiveDrawAt=${show?.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} frameCommitCallbackAt=${show?.frameCommitCallbackAtUptimeMs ?: "NO_FRAME_COMMIT_OBSERVED"}")
-        appendLine(" summaryShowSelection=earliestLiveElseRootElseAttach cycleFirstRootShowOp=${firstRoot?.operationId ?: "NA"} cycleFirstShaderShowOp=${firstShader?.operationId ?: "NA"} cycleFirstLiveShowOp=${firstLive?.operationId ?: "NA"}")
-        appendLine(" cycleToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.startedUptimeMs)} screenOnToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} wakeCallbackToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
-        appendLine(" wakeToFirstInspectionStartMs=${delta(firstStartedInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToFirstEligibleInspectionStartMs=${delta(firstValidInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} wakeToShowingInspectionStartMs=${delta(showingInspection?.startedAtUptimeMs, attempt.startedUptimeMs)} latestPendingQueueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)}")
-        appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} inspectionFinishToHandoffMs=${delta(showingInspection?.mainHandoffRequestedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} handoffToMainEntryMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.mainHandoffRequestedAtUptimeMs)} mainEntryToDecisionMs=${delta(show?.decisionAtUptimeMs, showingInspection?.mainApplyStartedAtUptimeMs)} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
-        appendLine(
-            " windowReader=strategy:${showingInspection?.readerStrategy ?: "NA"},prefetch:${showingInspection?.prefetchFlags ?: "NA"}," +
-                "cacheEnabled:${showingInspection?.cacheEnabled ?: "NA"},freshness:${showingInspection?.freshnessPolicy ?: "NA"},cacheClear:${showingInspection?.cacheClearResult ?: "NA"}," +
-                "activeCandidate:${showingInspection?.activeCandidateWindowId ?: "NA"},returnedRoot:${showingInspection?.returnedRootWindowId ?: "NA"}," +
-                "activeAccepted:${showingInspection?.activeRootAccepted ?: "NA"},fallback:${showingInspection?.fallbackReason ?: "NA"}," +
-                "getWindows:${showingInspection?.getWindowsMs ?: "NA"},activeRootCalls:${showingInspection?.activeRootCallCount ?: "NA"}," +
-                "activeRootTotal:${showingInspection?.activeRootTotalMs ?: "NA"},perWindowRootCalls:${showingInspection?.perWindowRootCallCount ?: "NA"}," +
-                "perWindowRootTotal:${showingInspection?.perWindowRootTotalMs ?: "NA"},rootTotal:${showingInspection?.rootAcquisitionTotalMs ?: "NA"}," +
-                "rootMax:${showingInspection?.rootAcquisitionMaxMs ?: "NA"},childTotal:${showingInspection?.childAcquisitionTotalMs ?: "NA"}," +
-                "childMax:${showingInspection?.childAcquisitionMaxMs ?: "NA"},local:${showingInspection?.localProcessingMs ?: "NA"}",
-        )
-        appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} windowManagerAddViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToBootstrapDrawMs=${delta(show?.bootstrapDrawAtUptimeMs, show?.addReturnAtUptimeMs)} bootstrapDrawToCommitCallbackMs=${delta(show?.bootstrapCommitCallbackAtUptimeMs, show?.bootstrapDrawAtUptimeMs)} bootstrapCommitToLivePromotionMs=${delta(show?.livePromotedAtUptimeMs, show?.bootstrapCommitCallbackAtUptimeMs)} livePromotionToFirstLiveDrawMs=${delta(show?.firstLiveDrawAtUptimeMs, show?.livePromotedAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)} liveFrameCommitCallbackMs=NA(notObservedForLiveShader)")
-        fun inspectionRole(label: String, timeline: InspectionTimeline?) {
-            appendLine(
-                " $label req=${timeline?.requestId ?: "NA"} trigger=${timeline?.trigger ?: "NA"} eventTime=${timeline?.eventTimeUptimeMs ?: "NA"} " +
-                    "queued=${timeline?.queuedAtUptimeMs ?: "NA"} started=${timeline?.startedAtUptimeMs ?: "NA"} finished=${timeline?.finishedAtUptimeMs ?: "NA"} diagnosticPrepared=${timeline?.diagnosticPreparationFinishedAtUptimeMs ?: "NA"} handoff=${timeline?.mainHandoffRequestedAtUptimeMs ?: "NA"} mainApply=${timeline?.mainApplyStartedAtUptimeMs ?: "NA"} " +
-                    "authorityAtStart=${timeline?.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${timeline?.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${timeline?.visibilityEpochAtApply ?: "NA"} pendingAtApply=${timeline?.pendingRequestIdAtApply ?: "NA"} " +
-                    "classification=${timeline?.surfaceClassification ?: "NA"} reason=${timeline?.surfaceReason ?: "NA"} markers=${timeline?.surfaceMarkers ?: "NA"} rootUnavailable=${timeline?.rootUnavailable ?: "NA"} walkTruncated=${timeline?.walkTruncated ?: "NA"} visited=${timeline?.visitedNodeCount ?: "NA"} " +
-                    "reader=${timeline?.readerStrategy ?: "NA"} freshness=${timeline?.freshnessPolicy ?: "NA"} fallback=${timeline?.fallbackReason ?: "NA"} activeRootMs=${timeline?.activeRootTotalMs ?: "NA"} perWindowRootMs=${timeline?.perWindowRootTotalMs ?: "NA"} childCalls=${timeline?.childAcquisitionCount ?: "NA"} childMs=${timeline?.childAcquisitionTotalMs ?: "NA"} localMs=${timeline?.localProcessingMs ?: "NA"} rejected=${timeline?.rejectionReason ?: "NA"} followup=${timeline?.followupAction ?: "NA"}",
-            )
-        }
-        inspectionRole("FIRST_INSPECTION", firstInspection)
-        inspectionRole("SHOWING_INSPECTION", showingInspection)
-        inspectionRole("ACTUAL_WITHDRAWAL_INSPECTION", withdrawalInspection)
-        appendLine(" actualWithdrawalHideOp=${actualWithdrawal?.operationId ?: "NA"} actualHideAttachedBefore=${actualWithdrawal?.attachedBefore ?: "NA"} actualHideTriggerAt=${actualWithdrawal?.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} actualHideDecisionAt=${actualWithdrawal?.decisionAtUptimeMs ?: "NA"} actualLocalHideAppliedAt=${actualWithdrawal?.localHideAppliedAtUptimeMs ?: "NA"} actualRemoveViewBeginAt=${actualWithdrawal?.removeBeginAtUptimeMs ?: "NA"} actualRemoveViewReturnAt=${actualWithdrawal?.removeReturnAtUptimeMs ?: "NA"}")
-        appendLine(" triggerToLocalHideMs=${delta(actualWithdrawal?.localHideAppliedAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} triggerToRemoveReturnMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} hideDecisionToLocalHideMs=${delta(actualWithdrawal?.localHideAppliedAtUptimeMs, actualWithdrawal?.decisionAtUptimeMs)} removeViewCallMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.removeBeginAtUptimeMs)}")
-        // Kept as compatibility aliases for the pre-operation report reader;
-        // both now refer only to the actual attached-root withdrawal.
-        appendLine(" hideSignalToDecisionMs=${delta(actualWithdrawal?.decisionAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)} hideSignalToRemoveReturnMs=${delta(actualWithdrawal?.removeReturnAtUptimeMs, actualWithdrawal?.triggerReceivedAtUptimeMs)}")
-        appendLine(" terminalCleanupHideOp=${terminalCleanup?.operationId ?: "NA"} terminalCleanupAttachedBefore=${terminalCleanup?.attachedBefore ?: "NA"} terminalCleanupDecisionAt=${terminalCleanup?.decisionAtUptimeMs ?: "NA"}")
-        if (attempt.shows.size > 1) attempt.shows.forEach { episode ->
-            val withdrawal = attempt.hides.firstOrNull {
-                episode.attachGeneration != null && it.attachGeneration == episode.attachGeneration &&
-                    it.attachedBefore == true && it.removeReturnAtUptimeMs != null &&
-                    it.decisionAtUptimeMs >= episode.decisionAtUptimeMs
-            }
-            appendLine(" EPISODE showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} req=${episode.requestId ?: "NA"} decision=${episode.decisionAtUptimeMs} add=${episode.addBeginAtUptimeMs ?: "NA"}/${episode.addReturnAtUptimeMs ?: "NA"} root=${episode.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} shader=${episode.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} live=${episode.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} withdrawal=${withdrawal?.operationId ?: "NA"} localHide=${withdrawal?.localHideAppliedAtUptimeMs ?: "NA"} removeReturn=${withdrawal?.removeReturnAtUptimeMs ?: "NA"}")
-        }
-        appendLine(" causalSpineComplete=$causalSpineComplete causalSpineEvents=${attempt.causalSpine.size} causalSpineIndependentOfRawRing=true")
-        appendLine(
-            " firstRootDrawObserved=${firstRoot != null} " +
-                "firstRootDrawStatus=${if (firstRoot == null) "NO_DRAW_OBSERVED" else "OBSERVED"} " +
-                "firstShaderDrawObserved=${firstShader != null} " +
-                "firstShaderDrawStatus=${if (firstShader == null) "NO_DRAW_OBSERVED" else "OBSERVED"}",
-        )
+        appendLine(" cycleFirstRootShowOp=${firstRoot?.operationId ?: "NA"} cycleFirstShaderShowOp=${firstShader?.operationId ?: "NA"} cycleFirstLiveShowOp=${firstLive?.operationId ?: "NA"} firstRootDrawObserved=${firstRoot != null} firstShaderDrawObserved=${firstShader != null}")
+        appendLine(" cycleToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.startedUptimeMs)}")
+        appendLine(" screenOnToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} wakeCallbackToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
+        appendLine(" queueMs=${delta(showing?.startedAtUptimeMs, showing?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showing?.finishedAtUptimeMs, showing?.startedAtUptimeMs)} inspectionFinishToHandoffMs=${delta(showing?.mainHandoffRequestedAtUptimeMs, showing?.finishedAtUptimeMs)} handoffToMainEntryMs=${delta(showing?.mainApplyStartedAtUptimeMs, showing?.mainHandoffRequestedAtUptimeMs)} mainEntryToDecisionMs=${delta(show?.decisionAtUptimeMs, showing?.mainApplyStartedAtUptimeMs)} showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
+        appendLine(" actualWithdrawalHideOp=${withdrawal?.operationId ?: "NA"} terminalCleanupHideOp=${attempt.hides.lastOrNull()?.operationId ?: "NA"} triggerToLocalHideMs=${delta(withdrawal?.localHideAppliedAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} triggerToRemoveReturnMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} hideDecisionToLocalHideMs=${delta(withdrawal?.localHideAppliedAtUptimeMs, withdrawal?.decisionAtUptimeMs)} removeViewCallMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.removeBeginAtUptimeMs)} hideSignalToDecisionMs=${delta(withdrawal?.decisionAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} hideSignalToRemoveReturnMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)}")
+        appendLine(" causalSpineComplete=${causalSpineComplete(attempt)} causalSpineIndependentOfRawRing=true retainedShowEpisodes=${attempt.shows.size} retainedHideEpisodes=${attempt.hides.size} omittedShowEpisodes=${attempt.omittedShowEpisodes} omittedHideEpisodes=${attempt.omittedHideEpisodes} omittedSpineEvents=${attempt.omittedSpineEvents}")
+        append(inspectionCause("FIRST_INSPECTION", firstInspection))
     }
 
+    private fun inspectionCause(label: String, cause: InspectionTimeline?): String = buildString {
+        append(" $label req=${cause?.requestId ?: "NA"}")
+        if (cause == null) { appendLine(" evidence=MISSING_REQUEST"); return@buildString }
+        append(" trigger=${cause.trigger ?: "NA"} callbackReceived=${cause.triggerReceivedUptimeMs ?: "NA(missingTrigger)"} eventTime=${cause.eventTimeUptimeMs ?: "NA(sourceUnavailable)"}")
+        append(" queued=${cause.queuedAtUptimeMs ?: "NA"} started=${cause.startedAtUptimeMs ?: "NA"} finished=${cause.finishedAtUptimeMs ?: "NA"} handoff=${cause.mainHandoffRequestedAtUptimeMs ?: "NA"} mainApply=${cause.mainApplyStartedAtUptimeMs ?: "NA"} applied=${cause.appliedAtUptimeMs ?: "NA"}")
+        append(" authorityAtStart=${cause.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${cause.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${cause.visibilityEpochAtApply ?: "NA"} pendingAtApply=${cause.pendingRequestIdAtApply ?: "NA"}")
+        append(" classification=${cause.surfaceClassification ?: "NA"} reason=${cause.surfaceReason ?: "NA"} markers=${cause.surfaceMarkers ?: "NA"} rootUnavailable=${cause.rootUnavailable ?: "NA"} walkTruncated=${cause.walkTruncated ?: "NA"} truncationReasons=${cause.walkTruncationReasons ?: "UNOBSERVED"} visited=${cause.visitedNodeCount ?: "NA"}")
+        append(" reader=${cause.readerStrategy ?: "NA"} freshness=${cause.freshnessPolicy ?: "NA"} cacheClear=${cause.cacheClearResult ?: "NA"} fallback=${cause.fallbackReason ?: "NA"}")
+        append(" activeCandidate=${cause.activeCandidateWindowId ?: "NA"} returnedRoot=${cause.returnedRootWindowId ?: "NA"} activeAccepted=${cause.activeRootAccepted ?: "NA"} activeRootMs=${cause.activeRootTotalMs ?: "NA"} perWindowRootMs=${cause.perWindowRootTotalMs ?: "NA"} childCalls=${cause.childAcquisitionCount ?: "NA"} childMs=${cause.childAcquisitionTotalMs ?: "NA"} childMaxMs=${cause.childAcquisitionMaxMs ?: "NA"} localMs=${cause.localProcessingMs ?: "NA"}")
+        appendLine(" slowCalls=${cause.slowWindowCalls ?: "NA"} rejected=${cause.rejectionReason ?: "NA"} followup=${cause.followupAction ?: "NA"}")
+    }
+
+    private fun episodeRecords(attempt: TimingAttempt): List<Pair<String, String>> {
+        val first = firstPresentation(attempt)
+        val pairedHides = mutableSetOf<Long>()
+        val records = attempt.shows.map { episode ->
+            val withdrawal = actualWithdrawal(attempt, episode)
+            withdrawal?.let { pairedHides += it.operationId }
+            "a${attempt.id}:show${episode.operationId}" to buildString {
+                appendLine(" EPISODE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} req=${episode.requestId ?: "NA"} decision=${episode.decisionAtUptimeMs} add=${episode.addBeginAtUptimeMs ?: "NA"}/${episode.addReturnAtUptimeMs ?: "NA"} root=${episode.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} shader=${episode.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} currentMaterial=${episode.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} live=${episode.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} bootstrapDrawAt=${episode.bootstrapDrawAtUptimeMs ?: "NO_BOOTSTRAP_DRAW_OBSERVED"} bootstrapCommit=${episode.bootstrapCommitCallbackAtUptimeMs ?: "UNOBSERVED"} promoted=${episode.livePromotedAtUptimeMs ?: "UNOBSERVED"} frameCommit=${episode.frameCommitCallbackAtUptimeMs ?: "UNOBSERVED"} withdrawal=${withdrawal?.operationId ?: "NA"} localHide=${withdrawal?.localHideAppliedAtUptimeMs ?: "NA"} removeReturn=${withdrawal?.removeReturnAtUptimeMs ?: "NA"}")
+                append(inspectionCause(if (episode == first) "SHOWING_INSPECTION" else "SHOW_CAUSE", episode.cause))
+                if (withdrawal != null) {
+                    append(hideRecord(withdrawal))
+                    append(inspectionCause(if (episode == first) "ACTUAL_WITHDRAWAL_INSPECTION" else "WITHDRAWAL_CAUSE", withdrawal.cause))
+                }
+                append(" RENDER attach=${episode.attachGeneration ?: "NA"} showOp=${episode.operationId}")
+                if (episode.renderSummary.isEmpty()) append(" evidence=UNOBSERVED")
+                else episode.renderSummary.forEach { (key, value) -> append(" $key=$value") }
+                appendLine()
+            }
+        }.toMutableList()
+        attempt.hides.filter { it.operationId !in pairedHides }.forEach { hide ->
+            records += "a${attempt.id}:hide${hide.operationId}" to
+                (hideRecord(hide) + inspectionCause("HIDE_CAUSE", hide.cause))
+        }
+        return records
+    }
+
+    private fun hideRecord(hide: HideEpisode): String =
+        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
+
     private fun causalSpineComplete(attempt: TimingAttempt): Boolean {
-        val stages = attempt.causalSpine.map { it.stage }.toSet()
-        val hadShow = attempt.shows.isNotEmpty()
-        val hadActualWithdrawal = attempt.hides.any { it.attachedBefore == true && it.removeReturnAtUptimeMs != null }
-        return "WAKE_ATTEMPT" in stages &&
-            (!hadShow || ("SHOW_FOR_ATTACH" in stages && "ADD_VIEW_RETURN" in stages)) &&
-            (!hadActualWithdrawal || ("HIDE_DECIDED" in stages && "REMOVE_VIEW_RETURN" in stages))
+        fun has(stage: String, show: Long? = null, hide: Long? = null, attach: Long? = null) = attempt.causalSpine.any {
+            it.stage == stage && it.showOperationId == show && it.hideOperationId == hide && it.attachGeneration == attach
+        }
+        fun completeCause(cause: InspectionTimeline?) = cause != null &&
+            cause.queuedAtUptimeMs != null && cause.startedAtUptimeMs != null &&
+            cause.finishedAtUptimeMs != null && cause.surfaceClassification != null
+        return has("WAKE_ATTEMPT") && attempt.omittedShowEpisodes == 0 && attempt.omittedHideEpisodes == 0 &&
+            attempt.shows.all { show ->
+                has("SHOW_FOR_ATTACH", show.operationId, attach = show.attachGeneration) &&
+                    (show.addReturnAtUptimeMs != null && has("ADD_VIEW_RETURN", show.operationId, attach = show.attachGeneration) ||
+                        has("ATTACH_FAILED", show.operationId, attach = show.attachGeneration)) &&
+                    (show.requestId == null || (show.cause?.requestId == show.requestId && completeCause(show.cause)))
+            } && attempt.hides.filter { it.attachedBefore == true }.all { hide ->
+                has("HIDE_DECIDED", hide = hide.operationId, attach = hide.attachGeneration) &&
+                    (hide.removeReturnAtUptimeMs != null && has("REMOVE_VIEW_RETURN", hide = hide.operationId, attach = hide.attachGeneration) || hide.detachFailed) &&
+                    (hide.requestId == null || (hide.cause?.requestId == hide.requestId && completeCause(hide.cause)))
+            }
     }
 
     /** Never truncate a comma-separated sequence in the middle of an ID. */
+    private fun compactRecordIds(ids: List<String>, maxCharacters: Int): String {
+        if (ids.isEmpty()) return "none"
+        val output = StringBuilder()
+        ids.forEachIndexed { index, id ->
+            if (output.length + id.length + 24 > maxCharacters) {
+                output.append(",more:").append(ids.size - index)
+                return output.toString()
+            }
+            if (output.isNotEmpty()) output.append(',')
+            output.append(id)
+        }
+        return output.toString()
+    }
+
     private fun compactSequenceRanges(sequences: List<Long>, maxCharacters: Int): String {
         if (sequences.isEmpty()) return "none"
         val tokens = mutableListOf<String>()

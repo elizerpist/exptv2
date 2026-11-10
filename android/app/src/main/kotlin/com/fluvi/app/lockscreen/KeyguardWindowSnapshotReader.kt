@@ -157,6 +157,7 @@ internal class KeyguardWindowSnapshotReader(
         val childAcquisitionMaxMs: Long = 0L,
         val localProcessingMs: Long = 0L,
         val slowCalls: List<String> = emptyList(),
+        val walkTruncationReasons: Set<String> = emptySet(),
     )
 
     data class Result(
@@ -198,6 +199,7 @@ internal class KeyguardWindowSnapshotReader(
         var childCount = 0
         var childTotal = 0L
         var childMax = 0L
+        val truncationReasons = linkedSetOf<String>()
         private val slow = mutableListOf<Pair<Long, String>>()
 
         fun activeRoot(windowId: Int, elapsed: Long) {
@@ -242,6 +244,7 @@ internal class KeyguardWindowSnapshotReader(
             childAcquisitionMaxMs = childMax,
             localProcessingMs = (treeElapsed - activeRootTotal - rootTotal - childTotal).coerceAtLeast(0L),
             slowCalls = slow.sortedByDescending { it.first }.take(3).map { it.second },
+            walkTruncationReasons = truncationReasons.toSet(),
         )
     }
 
@@ -427,7 +430,11 @@ internal class KeyguardWindowSnapshotReader(
         fun visit(node: AccessibilityNodeInfo?) {
             if (node == null || aborted) return
             if (!authorityIsCurrent()) { aborted = true; return }
-            if (visited >= MAX_VISITED_NODES) { truncated = true; return }
+            if (visited >= MAX_VISITED_NODES) {
+                truncated = true
+                timing.truncationReasons += "NODE_LIMIT"
+                return
+            }
             visited += 1
             try {
                 if (!node.isVisibleToUser) return
@@ -436,11 +443,12 @@ internal class KeyguardWindowSnapshotReader(
                 for (index in 0 until node.childCount) {
                     if (!authorityIsCurrent()) { aborted = true; return }
                     val startedAt = SystemClock.uptimeMillis()
-                    val child = runCatching {
+                    val acquisition = runCatching {
                         if (prefetchFlags != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             node.getChild(index, prefetchFlags)
                         } else node.getChild(index)
-                    }.getOrNull()
+                    }
+                    val child = acquisition.getOrNull()
                     timing.child(windowId, index, SystemClock.uptimeMillis() - startedAt)
                     if (!authorityIsCurrent()) {
                         child?.recycle()
@@ -450,7 +458,10 @@ internal class KeyguardWindowSnapshotReader(
                     }
                     // A advertised child which disappeared/failed is an
                     // incomplete observation, never a complete MAIN proof.
-                    if (child == null) truncated = true
+                    if (child == null) {
+                        truncated = true
+                        timing.truncationReasons += if (acquisition.isFailure) "CHILD_ACQUISITION_EXCEPTION" else "NULL_CHILD"
+                    }
                     visit(child)
                     child?.recycle()
                     if (aborted) return
@@ -459,6 +470,7 @@ internal class KeyguardWindowSnapshotReader(
                 // An incomplete SystemUI tree must remain UNKNOWN, never a
                 // partial positive proof of the keyguard.
                 truncated = true
+                timing.truncationReasons += "NODE_ACCESS_EXCEPTION"
             }
         }
         visit(root)

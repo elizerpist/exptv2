@@ -540,6 +540,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 drawOwner = null
                 assertTrue(window.hide())
                 assertFalse(window.isAttached)
+                val episode = requireNotNull(window.attachmentRenderSummary())
+                assertTrue(episode.orb.frames > 2)
+                assertTrue(episode.shaderCalls >= episode.orb.frames)
+                assertTrue(episode.clockCallbacks > 0)
+                assertTrue(episode.orb.gaps > 0)
+                assertTrue(episode.orb.lastPhase != episode.orb.firstPhase)
+                assertFalse(episode.clockRunning)
                 assertEquals(1, manager.adds)
                 assertEquals(1, manager.removes)
                 assertEquals(KeyguardCardWindow.Result.ATTACHED,
@@ -580,6 +587,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertEquals(2, shaders.size)
                 assertEquals(3, manager.adds)
                 assertEquals(3, manager.removes)
+                assertEquals(0L, requireNotNull(window.attachmentRenderSummary()).orb.frames)
+                assertEquals(null, requireNotNull(window.attachmentRenderSummary()).orb.firstAt)
             }
         } finally {
             instrumentation.runOnMainSync {
