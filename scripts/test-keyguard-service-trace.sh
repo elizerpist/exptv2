@@ -58,21 +58,25 @@ if [[ ! "$trace_pid" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 test_result=0
-timeout 110s adb shell am instrument -w -r \
+timeout -k 5s 110s adb shell am instrument -w -r \
   -e sourceSha "$(git rev-parse HEAD)" \
   -e class com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest \
   com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$evidence_dir/instrumentation.txt" || test_result=$?
 # am instrument may exit 0 on a JUnit failure; require the actual runner result.
 grep -Eq '^OK \(1 test\)' "$evidence_dir/instrumentation.txt" || test_result=1
-adb shell kill -INT "$trace_pid" || true
+timeout -k 2s 10s adb shell kill -INT "$trace_pid" || test_result=1
 # API35 SELinux permits SIGINT but denied signull (kill -0) in run
 # 42853507857. Permission denial is NOT process exit: it caused an empty
 # trace to be pulled while Perfetto was still flushing. Inspect the process
 # table instead, require a successful query, and retain the last table.
 recorder_stopped=false
 for ((i=0; i<60; i++)); do
-  if ! adb shell ps -A -o PID,NAME > "$evidence_dir/recorder-processes.txt"; then
+  # Run42920244421 completed the exact lost-successor RED at23:22:18,
+  # then remained at this empty process-table read until the30m job limit.
+  # Bound the host ADB command too; a missing completion remains a FAILURE,
+  # never permission to claim the recorder stopped or bypass runtime gates.
+  if ! timeout -k 2s 5s adb shell ps -A -o PID,NAME > "$evidence_dir/recorder-processes.txt"; then
     break
   fi
   if ! awk -v pid="$trace_pid" '$1 == pid { found=1 } END { exit !found }' \
@@ -89,12 +93,12 @@ if [[ "$recorder_stopped" != true ]]; then
 else
   printf 'STOPPED: recorder exited before trace pull\n' > "$evidence_dir/recorder-status.txt"
 fi
-adb pull /data/misc/perfetto-traces/fluvi-keyguard-service.perfetto-trace "$evidence_dir/"
+timeout -k 2s 30s adb pull /data/misc/perfetto-traces/fluvi-keyguard-service.perfetto-trace "$evidence_dir/" || test_result=1
 test -s "$evidence_dir/fluvi-keyguard-service.perfetto-trace" || test_result=1
-adb logcat -d -v monotonic > "$evidence_dir/logcat.txt"
-adb shell dumpsys accessibility > "$evidence_dir/accessibility-final.txt"
-adb shell dumpsys window > "$evidence_dir/window-final.txt"
-adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-service-probe \
+timeout -k 2s 10s adb logcat -d -v monotonic > "$evidence_dir/logcat.txt" || test_result=1
+timeout -k 2s 10s adb shell dumpsys accessibility > "$evidence_dir/accessibility-final.txt" || test_result=1
+timeout -k 2s 10s adb shell dumpsys window > "$evidence_dir/window-final.txt" || test_result=1
+timeout -k 2s 10s adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-service-probe \
   > "$evidence_dir/probe.tar" || true
 sha256sum "$evidence_dir/fluvi-keyguard-service.perfetto-trace" > "$evidence_dir/trace.sha256"
 exit "$test_result"

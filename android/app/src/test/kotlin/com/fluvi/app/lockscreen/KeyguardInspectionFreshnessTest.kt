@@ -83,7 +83,9 @@ class KeyguardInspectionFreshnessTest {
         freshness.require(withdrawn, KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION)
         assertNull(freshness.beforeRead(old))
         // Reconciliation reacquires; it does not relabel the old result.
-        val replacement = request(3, withdrawn)
+        val replacement = checkNotNull(checkNotNull(queue.pendingRequest()).reacquireAfterWithdrawal(
+            withdrawn, 3, 3, KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION,
+        ))
         queue.offer(replacement)
         assertEquals(replacement, queue.complete(old))
         val ticket = requireNotNull(freshness.beforeRead(replacement))

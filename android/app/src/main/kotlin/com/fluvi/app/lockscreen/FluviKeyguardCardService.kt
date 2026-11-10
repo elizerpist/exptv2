@@ -743,6 +743,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     private fun scheduleWakeRetry(
         cause: KeyguardCardInspectionRequest,
         freshness: KeyguardWindowFreshness,
+        reason: String = "hiddenUnknown",
     ) {
         if (retryCount >= RETRY_DELAYS_MS.size) return
         cancelWakeRetry("replaced")
@@ -767,7 +768,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         wakeTiming?.takeIf { it.wakeGeneration == token.wakeGeneration }?.retryCount = retryCount
         traceKeyguard(
             "RETRY_SCHEDULED",
-            "hiddenUnknown",
+            reason,
             cause,
             fields = mapOf(
                 "retryId" to token.retryId,
@@ -860,14 +861,16 @@ class FluviKeyguardCardService : AccessibilityService() {
         eventTimeUptimeMs: Long? = null,
         triggerReceivedUptimeMs: Long? = null,
         freshness: KeyguardWindowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT,
+        reconciliationIntent: KeyguardCardInspectionRequest? = null,
     ) {
         if (!FluviKeyguardCardServiceRegistry.connected) return
-        if (trigger != "surfaceRetry") cancelWakeRetry("supersededBy:$trigger")
         val now = SystemClock.uptimeMillis()
         val authority = inspectionAuthority
-        inspectionFreshness.require(authority, freshness)
-        val request = KeyguardCardInspectionRequest(
-            id = nextInspectionId.incrementAndGet(),
+        val nextId = nextInspectionId.incrementAndGet()
+        val request = if (reconciliationIntent != null) {
+            reconciliationIntent.reacquireAfterWithdrawal(authority, nextId, now, freshness) ?: return
+        } else KeyguardCardInspectionRequest(
+            id = nextId,
             trigger = trigger,
             session = authority.serviceSession,
             visibilityEpoch = authority.visibilityEpoch,
@@ -880,6 +883,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             diagnosticContext = currentDiagnosticAttempt,
             triggerReceivedUptimeMs = triggerReceivedUptimeMs,
         )
+        if (request.trigger != "surfaceRetry") cancelWakeRetry("supersededBy:${request.trigger}")
+        inspectionFreshness.require(authority, request.windowFreshness)
         wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.let {
             if (it.inspectionQueuedAt == null) it.inspectionQueuedAt = now
             request.eventTimeUptimeMs?.takeIf { eventTime -> eventTime <= now }?.let { eventTime ->
@@ -900,8 +905,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             request,
             fields = mapOf(
                 "queuedAtUptimeMs" to now,
-                "triggerReceivedUptimeMs" to (triggerReceivedUptimeMs ?: "NA"),
-                "eventTimeUptimeMs" to (eventTimeUptimeMs ?: "NA"),
+                "triggerReceivedUptimeMs" to (request.triggerReceivedUptimeMs ?: "NA"),
+                "eventTimeUptimeMs" to (request.eventTimeUptimeMs ?: "NA"),
                 "replacedPendingRequestId" to (queueOffer.second ?: "NA"),
                 "requestVisibilityEpoch" to request.visibilityEpoch,
                 "requestInteractionEpoch" to request.interactionEpoch,
@@ -1533,8 +1538,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 )
             }
             else -> {
-                if (decision == KeyguardCardVisibility.HIDDEN_UNKNOWN) {
-                    handleUnknownSurface(inspection, request)
+                if (decision == KeyguardCardVisibility.HIDDEN_UNKNOWN || decision == KeyguardCardVisibility.HIDDEN_OCCLUDED) {
+                    handleRecoverableSurface(inspection, request, decision)
                 } else {
                     hideImmediately(
                         decision.name,
@@ -1583,13 +1588,14 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     /**
-     * A missing main-keyguard marker is an observation, not proof that the
-     * wake ended.  In particular, it must not invalidate a newer request while
-     * this retained root is already detached.
+     * UNKNOWN and OCCLUDED exclude presentation without proving that the
+     * physical wake ended. A detached observation must not invalidate newer
+     * work. Real withdrawal revokes the old answer, then reacquires the intent.
      */
-    private fun handleUnknownSurface(
+    private fun handleRecoverableSurface(
         inspection: Inspection,
         request: KeyguardCardInspectionRequest,
+        decision: KeyguardCardVisibility,
     ) {
         val compatiblePending = synchronized(queueLock) {
             inspectionQueue.pendingRequest()?.takeIf(inspectionAuthority::matches)
@@ -1599,6 +1605,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         // fallback fires, independently of local withdrawal and tree work.
         val retryAvailable = retryCount < RETRY_DELAYS_MS.size
         val wasAttached = overlay.isAttached
+        val awaitingReason = if (decision == KeyguardCardVisibility.HIDDEN_OCCLUDED) "occluded" else "unknown"
         // A missing/incomplete tree needs one deliberate freshness boundary
         // before a timer retry. A normal event-driven NO_MAIN observation does
         // not: the framework already invalidated the cache for that event.
@@ -1620,7 +1627,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         surfacePresentationState = transition.nextState
         if (transition.withdrawVisibleOverlay) {
             hideImmediately(
-                reason = decisionNameForUnknownWithdrawal(inspection),
+                reason = "${decision.name}:${inspection.surfaceReason.name}",
                 terminalWake = false,
                 triggerReceivedUptimeMs = request.triggerReceivedUptimeMs,
                 diagnosticContext = request.diagnosticContext,
@@ -1633,6 +1640,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             inspection.surfaceReason.name,
             request,
             fields = mapOf(
+                "decision" to decision.name,
                 "overlayAttached" to wasAttached,
                 "presentationState" to transition.nextState.name,
                 "followupAction" to transition.followup.name,
@@ -1652,24 +1660,26 @@ class FluviKeyguardCardService : AccessibilityService() {
                     // The queued request was captured under the withdrawn
                     // generation. Replace it exactly once under current
                     // authority; never relabel its old answer as fresh.
-                    traceKeyguard(
+                    if (decision == KeyguardCardVisibility.HIDDEN_UNKNOWN) traceKeyguard(
                         "PENDING_REPLACED_AFTER_UNKNOWN",
                         "withdrawalAuthorityChanged",
                         requestId = compatiblePending?.id,
                         diagnosticContext = request.diagnosticContext,
                         fields = mapOf("causingRequestId" to request.id),
                     )
-                    preservePendingReconciliation(
-                        "unknownVisible",
-                        requirePending = true,
+                    val intent = checkNotNull(compatiblePending)
+                    freshReconciliationsScheduled.incrementAndGet()
+                    scheduleEvaluation(
+                        intent.trigger,
                         freshness = successorFreshness,
+                        reconciliationIntent = intent,
                     )
                 }
                 KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK ->
-                    scheduleWakeRetry(request, successorFreshness)
+                    scheduleWakeRetry(request, successorFreshness, awaitingReason)
                 KeyguardUnknownSurfaceFollowup.WAIT_FOR_EVENT -> traceKeyguard(
                     "RETRY_BUDGET_EXHAUSTED_AWAITING",
-                    "unknownVisible",
+                    "${awaitingReason}Visible",
                     request,
                 )
             }
@@ -1684,21 +1694,18 @@ class FluviKeyguardCardService : AccessibilityService() {
         when (transition.followup) {
             KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING -> traceKeyguard(
                 "RETRY_SUPPRESSED_FOR_PENDING",
-                "unknownAlreadyHidden",
+                "${awaitingReason}AlreadyHidden",
                 request,
             )
             KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK ->
-                scheduleWakeRetry(request, successorFreshness)
+                scheduleWakeRetry(request, successorFreshness, awaitingReason)
             KeyguardUnknownSurfaceFollowup.WAIT_FOR_EVENT -> traceKeyguard(
                 "RETRY_BUDGET_EXHAUSTED_AWAITING",
-                "unknownAlreadyHidden",
+                "${awaitingReason}AlreadyHidden",
                 request,
             )
         }
     }
-
-    private fun decisionNameForUnknownWithdrawal(inspection: Inspection): String =
-        "${KeyguardCardVisibility.HIDDEN_UNKNOWN.name}:${inspection.surfaceReason.name}"
 
     private fun showFullContent(
         expectedSession: Long,

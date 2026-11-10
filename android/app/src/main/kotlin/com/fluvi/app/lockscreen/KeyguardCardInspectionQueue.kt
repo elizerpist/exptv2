@@ -19,7 +19,28 @@ internal data class KeyguardCardInspectionRequest(
      * relabelled with the wake/attempt that happens to be current later. */
     val diagnosticContext: KeyguardDiagnosticContext? = null,
     val triggerReceivedUptimeMs: Long? = null,
-)
+) {
+    /** Carry an unserved event, never an acquired answer, across a local
+     * withdrawal in the SAME service/wake. The new request must reacquire
+     * under current authority; event/callback origins remain immutable. */
+    fun reacquireAfterWithdrawal(
+        authority: KeyguardInspectionAuthority,
+        newId: Long,
+        queuedAt: Long,
+        freshness: KeyguardWindowFreshness,
+    ): KeyguardCardInspectionRequest? {
+        if (session != authority.serviceSession || wakeGeneration != authority.wakeGeneration) return null
+        require(newId != id)
+        return copy(
+            id = newId,
+            visibilityEpoch = authority.visibilityEpoch,
+            interactionEpoch = authority.interactionEpoch,
+            attachGeneration = authority.attachGeneration,
+            queuedAtUptimeMs = queuedAt,
+            windowFreshness = if (windowFreshness.requiresCacheClear && !freshness.requiresCacheClear) windowFreshness else freshness,
+        )
+    }
+}
 
 /**
  * The worker never reads the service's individual mutable generation fields.
@@ -214,7 +235,8 @@ internal data class KeyguardUnknownSurfaceTransition(
     val followup: KeyguardUnknownSurfaceFollowup,
 )
 
-/** Production transition policy used by [FluviKeyguardCardService].  In
+/** Production waiting policy for UNKNOWN and recoverable OCCLUDED, used by
+ * [FluviKeyguardCardService]. Neither is permission to show. In
  * particular, the active request which is currently being applied is never
  * passed as [hasCompatiblePendingRequest]; only a queued successor counts as
  * future work. */

@@ -39,7 +39,9 @@ import java.io.File
  * Disposable API-35 emulator fixture, NOT a replacement host or a phone
  * performance assertion. Android binds the production AccessibilityService;
  * its actual reader/classifier must authorize the actual accessibility window.
- * No window manager, reader, clock, GPU preparer, or commit callback is faked.
+ * No window manager, clock, GPU preparer, or commit callback is faked. The
+ * ordered occlusion regression appends one controlled NEGATIVE snapshot;
+ * positive recovery still requires the real reader/classifier/admission.
  *
  * The CI runner sets density=420 before launching this process and starts a
  * finite system trace. Only effect/Portal/mode/raster size match the known
@@ -165,7 +167,8 @@ class KeyguardServiceOverlayInstrumentationTest {
             marked("orb-short-tap") { tap(cold.window.bounds) }
             awaitLive("after-tap", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
             assertEquals("Short orb tap must retain its attachment", cold.window.id, requireOverlay().id)
-            blockedRecurringReaderDoesNotOwnMain(cold)
+            val recoveredCold = recoverFromVisibleOcclusion(cold)
+            blockedRecurringReaderDoesNotOwnMain(recoveredCold)
             unlockAndAssertWithdrawn("cold-unlock")
             // Retention intentionally keeps first + latest three attempts;
             // setup/terminal signals can otherwise evict this actual cold
@@ -313,6 +316,10 @@ class KeyguardServiceOverlayInstrumentationTest {
                 val intent = checkNotNull(pendingEvent)
                 val current = service.inspectionStateForTest()
                 assertFalse("Occlusion must remain excluded", current.attached)
+                assertEquals("Local root is withdrawn before any successor can show", 0,
+                    WindowInspector.getGlobalWindowViews().count {
+                        (it.layoutParams as? WindowManager.LayoutParams)?.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+                    })
                 assertTrue("Recoverable occlusion erased the newer unserved inspection", current.pending != null)
                 assertEquals("Recoverable occlusion must not end the wake", previous.wake, current.wake)
                 val next = checkNotNull(current.pending)
@@ -320,6 +327,9 @@ class KeyguardServiceOverlayInstrumentationTest {
                 if (wasVisible) {
                     assertFalse("Withdrawn generation must be revoked", current.authority.matches(request))
                     assertTrue("Visible withdrawal requires a NEW acquisition request", next.id != intent.id)
+                    assertEquals(previous.authority.visibilityEpoch + 1L, current.authority.visibilityEpoch)
+                    assertEquals(previous.authority.interactionEpoch + 1L, current.authority.interactionEpoch)
+                    assertEquals(KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION, next.windowFreshness)
                 } else {
                     assertEquals(previous.authority, current.authority)
                     assertEquals(intent.id, next.id)
@@ -327,6 +337,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                 assertEquals(intent.eventTimeUptimeMs, next.eventTimeUptimeMs)
                 assertEquals(intent.triggerReceivedUptimeMs, next.triggerReceivedUptimeMs)
                 assertEquals(intent.trigger, next.trigger)
+                assertEquals(intent.diagnosticContext, next.diagnosticContext)
                 assertEquals("Occlusion must not replenish fallback budget", previous.retryCount, current.retryCount)
                 expected.set(next)
             }.onFailure { failure.compareAndSet(null, it) }
@@ -478,6 +489,49 @@ class KeyguardServiceOverlayInstrumentationTest {
 
     private data class Overlay(val id: Int, val bounds: Rect)
     private data class Episode(val material: Material, val window: Overlay)
+
+    private fun recoverFromVisibleOcclusion(previous: Episode): Episode = marked("visible-occlusion-recovery") {
+        val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
+        val probe = OcclusionSuccessorProbe(wasVisible = true)
+        occlusionProbe = probe
+        try {
+            instrumentation.runOnMainSync {
+                assertTrue("Visible regression begins on the current live root", service.inspectionStateForTest().attached)
+                probe.install()
+                val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOWS_CHANGED)
+                try {
+                    event.packageName = "com.android.systemui"
+                    event.eventTime = SystemClock.uptimeMillis()
+                    service.onAccessibilityEvent(event)
+                } finally { event.recycle() }
+            }
+            probe.awaitSuccessor()
+            // Remote metadata can lag local removal. Do not accidentally
+            // accept the old window/cumulative renderer counters as recovery.
+            await("withdrawn window metadata replaced", 5_000) {
+                val windows = ownOverlays()
+                windows.size == 1 && windows.single().id != previous.window.id
+            }
+            val window = requireOverlay()
+            val baseline = snapshot("recovered-attachment-${window.id}")
+            val live = awaitLive("occlusion-fresh-recovery", baseline, 2, window.id)
+            assertEquals(previous.window.bounds, window.bounds)
+            assertEquals("dualTide", live.effect)
+            assertEquals(EXPECTED_PORTAL_HASH, live.generatedAgslHash)
+            instrumentation.runOnMainSync {
+                assertEquals("Recovery retains exactly one actual process root", 1,
+                    WindowInspector.getGlobalWindowViews().count {
+                        (it.layoutParams as? WindowManager.LayoutParams)?.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+                    })
+            }
+            record("OCCLUSION_RECOVERY", "oldWindow=${previous.window.id} newWindow=${window.id}" +
+                " freshShaderDelta=${live.shader-baseline.shader} freshPhaseDelta=${live.phase-baseline.phase}")
+            Episode(live, window)
+        } finally {
+            probe.close()
+            occlusionProbe = null
+        }
+    }
 
     private fun episode(name: String, probe: OcclusionSuccessorProbe? = null): Episode = marked(name) {
         // An unlocked KeyguardManager flag is not completion of the previous

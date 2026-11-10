@@ -66,6 +66,23 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(after.contains("captureState=FROZEN"))
     }
 
+    @Test fun recoverableOcclusionKeepsItsIdentityWithoutIncrementingUnknownCounters() {
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug", "LIGHT")
+        val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 1L, 1L, "wake"))
+        for ((id, decision) in listOf(35L to "HIDDEN_OCCLUDED", 37L to "HIDDEN_UNKNOWN")) {
+            KeyguardCardDiagnostics.captureEvent(context, "AWAITING_MAIN_SURFACE", if (decision == "HIDDEN_OCCLUDED") "FOREIGN_ABOVE" else "NO_MAIN_MARKER",
+                requestId = id, diagnosticContext = attempt, fields = mapOf(
+                    "decision" to decision, "overlayAttached" to false, "followupAction" to "CONTINUE_PENDING",
+                    "visibilityEpochBefore" to 5, "visibilityEpochAfter" to 5,
+                ))
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.contains("unknownWhileHidden:1"))
+        assertTrue(report.contains("unknownWhileHiddenEpochChanges:0"))
+        assertTrue(report.contains("pendingPreservedAfterUnknown:1"))
+        assertTrue(report.contains("HIDDEN_OCCLUDED"))
+    }
+
     @Test fun cycleFirstLiveSurvivesLaterAttachmentRemovedWithoutDrawing() {
         KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug")
         val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(

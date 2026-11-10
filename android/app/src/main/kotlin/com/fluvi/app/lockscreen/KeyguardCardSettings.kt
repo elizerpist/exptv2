@@ -1366,7 +1366,10 @@ internal object KeyguardCardDiagnostics {
                 "RETRY_SUPPRESSED_FOR_PENDING" -> attempt.retrySuppressedForPendingWork += 1
                 "RETRY_BUDGET_EXHAUSTED_AWAITING" -> attempt.retryBudgetExhaustedWhileAwaiting += 1
                 "AWAITING_MAIN_SURFACE" -> {
-                    if (fields["overlayAttached"] == "false") {
+                    // Older records omit decision and describe UNKNOWN only.
+                    // Recoverable OCCLUDED retains its identity, not an UNKNOWN count.
+                    val unknown = fields["decision"] == null || fields["decision"] == "HIDDEN_UNKNOWN"
+                    if (unknown && fields["overlayAttached"] == "false") {
                         attempt.unknownWhileHiddenCount += 1
                         val before = fields["visibilityEpochBefore"]?.toLongOrNull()
                         val after = fields["visibilityEpochAfter"]?.toLongOrNull()
@@ -1374,7 +1377,7 @@ internal object KeyguardCardDiagnostics {
                     }
                     inspectionTimeline()?.followupAction = fields["followupAction"]
                     when (fields["followupAction"]) {
-                        "CONTINUE_PENDING" -> attempt.pendingPreservedAfterUnknown += 1
+                        "CONTINUE_PENDING" -> if (unknown) attempt.pendingPreservedAfterUnknown += 1
                         "SCHEDULE_FALLBACK", "WAIT_FOR_EVENT" -> Unit
                     }
                 }

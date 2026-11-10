@@ -7,6 +7,70 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KeyguardCardInspectionQueueTest {
+    @Test fun `withdrawal reacquires latest event without rewriting its origins`() {
+        val owner = KeyguardInspectionAuthority(1, 1, 1, 1, 1)
+        val withdrawn = owner.copy(visibilityEpoch = 2, interactionEpoch = 2)
+        val context = KeyguardDiagnosticContext("capture", 6, 1, 1)
+        val cause = request(35, "olderOcclusion")
+        val event = request(36, "window").copy(
+            queuedAtUptimeMs = 171291, eventTimeUptimeMs = 171287,
+            triggerReceivedUptimeMs = 171291, diagnosticContext = context,
+            windowFreshness = KeyguardWindowFreshness.MISSING_FRESHNESS_EVIDENCE,
+        )
+        val queue = KeyguardCardInspectionQueue()
+        queue.offer(cause)
+        queue.offer(event)
+        val next = checkNotNull(event.reacquireAfterWithdrawal(
+            withdrawn, 37, 171292, KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION,
+        ))
+        assertFalse(withdrawn.matches(cause))
+        assertFalse(withdrawn.matches(event))
+        assertTrue(withdrawn.matches(next))
+        assertEquals(event.trigger, next.trigger)
+        assertEquals(event.eventTimeUptimeMs, next.eventTimeUptimeMs)
+        assertEquals(event.triggerReceivedUptimeMs, next.triggerReceivedUptimeMs)
+        assertEquals(event.diagnosticContext, next.diagnosticContext)
+        assertEquals(171292L, next.queuedAtUptimeMs)
+        assertEquals(KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION, next.windowFreshness)
+        assertFalse(queue.offer(next)) // one worker, never a parallel walk
+        assertEquals(next, queue.complete(cause))
+        assertNull(queue.pendingRequest())
+        assertNull(queue.complete(cause)) // late completion cannot release the successor
+    }
+
+    @Test fun `reconciliation cannot carry an event across terminal session or wake boundaries`() {
+        val event = request(36, "window")
+        val authority = KeyguardInspectionAuthority(1, 2, 1, 2, 1)
+        for (terminal in listOf(authority.copy(serviceSession = 2), authority.copy(wakeGeneration = 2))) {
+            assertNull(event.reacquireAfterWithdrawal(terminal, 37, 100, KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION))
+        }
+        val queue = KeyguardCardInspectionQueue()
+        queue.offer(request(35, "occlusion"))
+        queue.offer(checkNotNull(event.reacquireAfterWithdrawal(authority, 37, 100, KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION)))
+        queue.clearPending() // the existing terminal owner cancels intent, not an IPC
+        assertNull(queue.complete(checkNotNull(queue.activeRequest())))
+    }
+
+    @Test fun `recovery event bursts retain one latest request and unperformed freshness`() {
+        val authority = KeyguardInspectionAuthority(1, 2, 1, 2, 1)
+        val cause = request(35, "occlusion")
+        val next = checkNotNull(request(36, "window").copy(
+            windowFreshness = KeyguardWindowFreshness.MISSING_FRESHNESS_EVIDENCE,
+        ).reacquireAfterWithdrawal(authority, 37, 100, KeyguardWindowFreshness.FRAMEWORK_EVENT))
+        val queue = KeyguardCardInspectionQueue()
+        queue.offer(cause)
+        queue.offer(next)
+        repeat(100) { index ->
+            assertFalse(queue.offer(next.copy(id = 38L + index, windowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT)))
+            assertEquals(cause, queue.activeRequest())
+        }
+        val latest = checkNotNull(queue.complete(cause))
+        assertEquals(137L, latest.id)
+        assertTrue(authority.matches(latest))
+        assertEquals(KeyguardWindowFreshness.MISSING_FRESHNESS_EVIDENCE, latest.windowFreshness)
+        assertNull(queue.pendingRequest())
+    }
+
     @Test fun `latest event cannot erase an unperformed wake freshness boundary`() {
         val queue = KeyguardCardInspectionQueue()
         val old = request(1, "oldWake").copy(wakeGeneration = 1L)
@@ -238,6 +302,33 @@ class KeyguardCardInspectionQueueTest {
         assertEquals(KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE, transition.nextState)
         assertEquals(cycle, owner.current())
         assertFalse(owner.beginOrJoin(11L, "window", 120L).started)
+    }
+
+    @Test fun `repeated occlusion with exhausted fallback remains excluded and event recoverable`() {
+        val owner = KeyguardWakeCycleOwner()
+        val cycle = owner.beginOrJoin(1, "display", 100).cycle
+        val queue = KeyguardCardInspectionQueue()
+        val main = KeyguardWindowSnapshot("com.android.systemui", 1, 1, 0,
+            visibleViewIds = setOf("com.android.systemui:id/keyguard_clock_switch"))
+        val foreign = KeyguardWindowSnapshot("other.app", 1, 2, 0)
+        repeat(8) { index ->
+            val observation = request(index + 1L, "window")
+            assertTrue(queue.offer(observation))
+            assertEquals(KeyguardSurface.OCCLUDED, KeyguardSurfaceClassifier.classify(listOf(main, foreign)))
+            val transition = KeyguardAwaitingSurfacePolicy.onUnknown(
+                KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE,
+                overlayAttached = false, hasCompatiblePendingRequest = false, retryAvailable = false,
+            )
+            assertFalse(transition.withdrawVisibleOverlay)
+            assertEquals(KeyguardUnknownSurfaceFollowup.WAIT_FOR_EVENT, transition.followup)
+            assertNull(queue.complete(observation))
+            assertEquals(cycle, owner.current())
+        }
+        val laterEvent = request(9, "window")
+        assertTrue(queue.offer(laterEvent))
+        assertFalse(owner.beginOrJoin(2, "window", 200).started)
+        assertEquals(KeyguardSurface.MAIN_KEYGUARD, KeyguardSurfaceClassifier.classify(listOf(main)))
+        assertEquals(laterEvent, queue.activeRequest())
     }
 
     @Test fun `visible unknown withdraws once then subsequent detached unknown is awaiting only`() {
