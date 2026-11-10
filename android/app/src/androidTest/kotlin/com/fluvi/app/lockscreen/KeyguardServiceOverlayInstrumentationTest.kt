@@ -19,6 +19,8 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.WindowManager
+import android.view.inspector.WindowInspector
 import android.view.accessibility.AccessibilityWindowInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -178,7 +180,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("rapid display wake", 3_000) { power.isInteractive }
                 shell("wm dismiss-keyguard")
                 await("rapid unlock", 3_000) { !keyguard.isKeyguardLocked }
-                await("rapid terminal withdrawal", 5_000) { ownOverlays().isEmpty() }
+                await("rapid terminal withdrawal", 5_000) { overlaysWithdrawn() }
             }
             val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual live phases", reentry.material.phase > warm.material.phase)
@@ -195,6 +197,16 @@ class KeyguardServiceOverlayInstrumentationTest {
             if (captureStarted) runCatching {
                 val report = KeyguardCardDiagnostics.freezeCapture(context)["report"].toString()
                 File(output, "capture.txt").writeText(report)
+                if (testFailure == null) {
+                    // This fixture explicitly finishes with terminal removal.
+                    // Require its Main-owned withdrawal evidence, not just
+                    // disappearance from the accessibility metadata list.
+                    val episodes = report.lineSequence().filter { it.startsWith(" EPISODE ") }.toList()
+                    assertTrue("Completed fixture lost all episode evidence", episodes.isNotEmpty())
+                    assertFalse("Completed terminal fixture lacks retained withdrawal evidence", episodes.any {
+                        it.contains(" withdrawal=NA") || it.contains(" removeReturn=NA")
+                    })
+                }
                 report.lineSequence().filter { it.startsWith("ATTEMPT ") || it.startsWith(" EPISODE ") ||
                     it.startsWith("DRAW_") || it.startsWith("RENDER_") }.forEach { Log.i(TAG, it) }
             }.onFailure {
@@ -280,14 +292,30 @@ class KeyguardServiceOverlayInstrumentationTest {
             shell("input keyevent KEYCODE_SLEEP")
         }
         await("screen off", 3_000) { !power.isInteractive }
-        await("screen-off withdrawal", 4_000) { ownOverlays().isEmpty() }
+        await("screen-off withdrawal", 4_000) { overlaysWithdrawn() }
     }
 
     private fun unlockAndAssertWithdrawn(label: String) = marked(label) {
         shell("wm dismiss-keyguard")
         await("$label unlocked", 4_000) { !keyguard.isKeyguardLocked }
-        await("$label overlay removed", 5_000) { ownOverlays().isEmpty() }
-        record("WITHDRAWN", "name=$label keyguardLocked=${keyguard.isKeyguardLocked} ownOverlayCount=0")
+        await("$label overlay removed", 5_000) { overlaysWithdrawn() }
+        record("WITHDRAWN", "name=$label keyguardLocked=${keyguard.isKeyguardLocked}" +
+            " accessibilityOverlayCount=0 processOverlayRootCount=0")
+    }
+
+    private fun overlaysWithdrawn(): Boolean {
+        if (ownOverlays().isNotEmpty()) return false
+        var roots = -1
+        instrumentation.runOnMainSync {
+            // Public API29+, actual process WindowManager roots. Accessibility
+            // metadata can disappear before removal/diagnostic publication
+            // finishes. Observe the owning Main path too, not a fake hide.
+            roots = WindowInspector.getGlobalWindowViews().count {
+                (it.layoutParams as? WindowManager.LayoutParams)?.type ==
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+            }
+        }
+        return roots == 0
     }
 
     private fun awaitLive(label: String, baseline: Material, minimumAdvances: Long, expectedWindowId: Int): Material {
