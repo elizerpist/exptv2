@@ -157,6 +157,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             marked("orb-short-tap") { tap(cold.window.bounds) }
             awaitLive("after-tap", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
             assertEquals("Short orb tap must retain its attachment", cold.window.id, requireOverlay().id)
+            blockedRecurringReaderDoesNotOwnMain(cold)
             unlockAndAssertWithdrawn("cold-unlock")
             // Retention intentionally keeps first + latest three attempts;
             // setup/terminal signals can otherwise evict this actual cold
@@ -184,7 +185,6 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
             val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual live phases", reentry.material.phase > warm.material.phase)
-            blockedRecurringReaderDoesNotOwnMain(reentry)
             unlockAndAssertWithdrawn("final-unlock")
             record("RESULT", "OUTPUT_LIVENESS_PASS performanceAndNothingDevice=UNVERIFIED")
         } catch (failure: Throwable) {
