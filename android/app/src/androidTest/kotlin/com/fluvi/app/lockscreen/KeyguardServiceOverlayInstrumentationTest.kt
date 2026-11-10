@@ -1,5 +1,6 @@
 package com.fluvi.app.lockscreen
 
+import android.Manifest
 import android.app.KeyguardManager
 import android.app.UiAutomation
 import android.accessibilityservice.AccessibilityServiceInfo
@@ -394,8 +395,18 @@ class KeyguardServiceOverlayInstrumentationTest {
     ).bufferedReader().use { it.readText() }
 
     private fun setSecure(key: String, value: String?) {
-        if (value == null) shell("settings delete secure $key")
-        else shell("settings put secure $key '${value.replace("'", "'\\''")}'")
+        // UiAutomation executes commands through Runtime.exec(String), not a
+        // shell: shell-style quotes would become part of the stored component
+        // or numeric value. Write exact nullable values through the public
+        // provider API under this short-lived instrumentation-only identity.
+        automation.adoptShellPermissionIdentity(Manifest.permission.WRITE_SECURE_SETTINGS)
+        try {
+            assertTrue("Secure setting write failed: $key", Settings.Secure.putString(context.contentResolver, key, value))
+            assertEquals("Secure setting must round-trip without command quoting: $key",
+                value, Settings.Secure.getString(context.contentResolver, key))
+        } finally {
+            automation.dropShellPermissionIdentity()
+        }
     }
 
     private fun withoutOurService(value: String?): String = value.orEmpty().split(':').filter {
