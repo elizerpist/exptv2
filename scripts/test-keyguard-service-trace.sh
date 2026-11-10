@@ -35,18 +35,31 @@ timeout 110s adb shell am instrument -w -r \
 # am instrument may exit 0 on a JUnit failure; require the actual runner result.
 grep -Eq '^OK \(1 test\)' "$evidence_dir/instrumentation.txt" || test_result=1
 adb shell kill -INT "$trace_pid" || true
-for ((i=0; i<20; i++)); do
-  if ! adb shell kill -0 "$trace_pid" 2>/dev/null; then break; fi
+# API35 SELinux permits SIGINT but denied signull (kill -0) in run
+# 42853507857. Permission denial is NOT process exit: it caused an empty
+# trace to be pulled while Perfetto was still flushing. Inspect the process
+# table instead, require a successful query, and retain the last table.
+recorder_stopped=false
+for ((i=0; i<60; i++)); do
+  if ! adb shell ps -A -o PID,NAME > "$evidence_dir/recorder-processes.txt"; then
+    break
+  fi
+  if ! awk -v pid="$trace_pid" '$1 == pid { found=1 } END { exit !found }' \
+      "$evidence_dir/recorder-processes.txt"; then
+    recorder_stopped=true
+    break
+  fi
   sleep 0.25
 done
-if adb shell kill -0 "$trace_pid" 2>/dev/null; then
-  printf 'INCOMPLETE: recorder did not stop within the bounded flush wait\n' \
+if [[ "$recorder_stopped" != true ]]; then
+  printf 'INCOMPLETE: recorder exit was not established within the bounded flush wait\n' \
     > "$evidence_dir/recorder-status.txt"
   test_result=1
 else
   printf 'STOPPED: recorder exited before trace pull\n' > "$evidence_dir/recorder-status.txt"
 fi
 adb pull /data/misc/perfetto-traces/fluvi-keyguard-service.perfetto-trace "$evidence_dir/"
+test -s "$evidence_dir/fluvi-keyguard-service.perfetto-trace" || test_result=1
 adb logcat -d -v monotonic > "$evidence_dir/logcat.txt"
 adb shell dumpsys accessibility > "$evidence_dir/accessibility-final.txt"
 adb shell dumpsys window > "$evidence_dir/window-final.txt"

@@ -120,7 +120,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("Android-bound production service", 10_000) { FluviKeyguardCardServiceRegistry.connected }
             }
 
-            val cold = episode("cold", baseline = snapshot("before-cold"))
+            val cold = episode("cold")
             val firstImage = copyOrb(cold.window, "cold-orb-a.png")
             // A quiet, explicitly marked interval, not a FPS target. No
             // diagnostic polling, input, screenshots or window reads during
@@ -152,11 +152,11 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
             // A real touch is delivered to the production accessibility root.
             marked("orb-short-tap") { tap(cold.window.bounds) }
-            val afterTap = awaitLive("after-tap", steady, minimumAdvances = 1)
+            awaitLive("after-tap", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
             assertEquals("Short orb tap must retain its attachment", cold.window.id, requireOverlay().id)
             unlockAndAssertWithdrawn("cold-unlock")
 
-            val warm = episode("warm", afterTap)
+            val warm = episode("warm")
             unlockAndAssertWithdrawn("warm-unlock")
             // Start a real wake and revoke it promptly, without waiting for
             // acquisition/preparation. A late result must not leave a window
@@ -169,7 +169,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("rapid unlock", 3_000) { !keyguard.isKeyguardLocked }
                 await("rapid terminal withdrawal", 5_000) { ownOverlays().isEmpty() }
             }
-            val reentry = episode("reattach-after-rapid", warm.material)
+            val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual live phases", reentry.material.phase > warm.material.phase)
             unlockAndAssertWithdrawn("final-unlock")
             record("RESULT", "OUTPUT_LIVENESS_PASS performanceAndNothingDevice=UNVERIFIED")
@@ -225,12 +225,18 @@ class KeyguardServiceOverlayInstrumentationTest {
     private data class Overlay(val id: Int, val bounds: Rect)
     private data class Episode(val material: Material, val window: Overlay)
 
-    private fun episode(name: String, baseline: Material): Episode = marked(name) {
+    private fun episode(name: String): Episode = marked(name) {
         screenOff()
         shell("input keyevent KEYCODE_WAKEUP")
         await("$name keyguard eligible device gates", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
-        val material = awaitLive(name, baseline, minimumAdvances = 2)
-        val window = requireOverlay()
+        // Material counters and last LIVE/hardware state survive detach.
+        // A prior episode's snapshot can therefore be satisfied by draws
+        // that happened before its removal. Observe THIS actual attachment
+        // first, then require fresh output beyond its own counter baseline.
+        val window = awaitOverlay(name)
+        val baseline = snapshot("$name-attached-window-${window.id}")
+        val material = awaitLive(name, baseline, minimumAdvances = 2, expectedWindowId = window.id)
+        assertEquals("Episode must retain the observed attachment", window.id, requireOverlay().id)
         assertEquals("Production overlay width", 168, window.bounds.width())
         assertEquals("Production overlay height", 168, window.bounds.height())
         assertEquals("Actually drawn effect identity", "dualTide", material.effect)
@@ -255,14 +261,28 @@ class KeyguardServiceOverlayInstrumentationTest {
         record("WITHDRAWN", "name=$label keyguardLocked=${keyguard.isKeyguardLocked} ownOverlayCount=0")
     }
 
-    private fun awaitLive(label: String, baseline: Material, minimumAdvances: Long): Material {
+    private fun awaitLive(label: String, baseline: Material, minimumAdvances: Long, expectedWindowId: Int): Material {
         var latest = baseline
         await("$label actual live shader/phase output", 18_000, pollMs = 500) {
+            assertEquals("LIVE output must belong to the current attachment", expectedWindowId, requireOverlay().id)
             latest = snapshot(label)
-            latest.state == "LIVE" && latest.hardware && latest.shader > baseline.shader &&
+            val advanced = latest.state == "LIVE" && latest.hardware && latest.shader > baseline.shader &&
                 latest.phase >= baseline.phase + minimumAdvances
+            if (advanced) assertEquals("Attachment must still own the sampled LIVE output", expectedWindowId, requireOverlay().id)
+            advanced
         }
         return latest
+    }
+
+    private fun awaitOverlay(label: String): Overlay {
+        var current: Overlay? = null
+        await("$label actual accessibility attachment", 18_000, pollMs = 500) {
+            val overlays = ownOverlays()
+            assertTrue("Never permit duplicate Fluvi accessibility overlays", overlays.size <= 1)
+            current = overlays.singleOrNull()
+            current != null
+        }
+        return checkNotNull(current)
     }
 
     private fun snapshot(label: String): Material {
