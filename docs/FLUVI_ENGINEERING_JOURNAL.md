@@ -4516,3 +4516,122 @@ These are fixed-output production View/controller controls, not a complete OFF-v
 The new artifact retention initially referenced `android/app/build`, but Gradle's failure log proves the real report is `build/app/reports/androidTests/connected/debug/index.html`. Only the filtered post-test log was retained; this availability defect is explicit. Follow-up **4b4c3f3fd4f8a143decd69e335d5f89ab21f0926** corrects those two artifact paths and adds one post-sampling diagnostic line with PixelCopy motion/shader/phase/hardware facts. NO renderer, assertion, sample count, deadline or application runtime change. Local shell syntax, boundaries, whitespace and full staged diff PASS. Commit/push succeeded on the existing branch. An attempted same-job rerun was refused while the overall run was still in progress; the new exact-source CI is the repeat, with the failing motion assertion intact. Previous failure remains part of the report even if the repeat passes.
 
 Graph for011f was completed/pushed as `1a28cdeb3ff6e9130847b52965888d4de56f9fde` (16 tests/five actual queries/102 shard checks PASS); final-source graph will be regenerated for4b after final verification. Production source remains identical to c4a4ba2. **Forensic-only, physical validation PENDING — USER ONLY.**
+
+### Final-source native / Flutter verification — 4b4c3f3
+
+Exact build source: **4b4c3f3fd4f8a143decd69e335d5f89ab21f0926**. Production implementation remains byte-identical to c4a4ba2; the two later application/build-input commits change test/CI evidence only. Run [42825624196](https://github.com/elizerpist/exptv2/actions/runs/42825624196) checks this exact SHA. Downloaded XML and per-test logs were inspected, not inferred from compilation or job names.
+
+| Check / exact command | Actual result |
+| --- | --- |
+| `git diff --check`; staged diff/whitespace review; `bash -n scripts/test-keyguard-runtime.sh` | PASS locally, repeated at final-source review |
+| `./scripts/verify-fluvi-boundaries.sh` | PASS locally and CI |
+| From `android/`: `./gradlew :fluvi-core:testDebugUnitTest --no-daemon` | PASS,150 tests,0 failure/error/skip, final-source XML |
+| From `android/`: `./gradlew :app:testDebugUnitTest --no-daemon` | PASS,121 tests including90 lockscreen,0 failure/error/skip |
+| `flutter analyze --no-fatal-infos` | PASS exit status;20 informational notices retained, not zero issues |
+| `./scripts/test-fluvi-fast.sh` | PASS, curated1031 plus3 and4 focused tests; no Dart source change |
+| `cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon` | PASS; production and instrumentation source compiled |
+| `bash scripts/test-keyguard-runtime.sh` | PASS,37 API35 tests,0 failure/error/skip;221.702s total XML test time |
+| Nightly suites / same-run baseline profile job | NOT RUN: workflow conditions skipped them; not claimed PASS |
+| Nothing-device controlled before/after comparison | NOT RUN: target physical device unavailable to the coding environment; user-only validation |
+
+The runtime script's exact Gradle invocation is `./gradlew :app:connectedDebugAndroidTest --no-daemon -Pandroid.testInstrumentationRunnerArguments.class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest,com.fluvi.app.lockscreen.KeyguardFirstDrawObservationInstrumentationTest,com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest`. It preserves test failure status and only afterwards collects the filtered numeric log. Environment: GitHub Ubuntu/KVM, API35 Android15 x86_64, emulator15081367, pixel_7 profile,4 cores/2048M, swangle, Vulkan disabled, animations enabled. This exercises Android hardware-Canvas/RuntimeShader APIs through the emulator graphics backend, NOT the Nothing GPU or physical display.
+
+All37 tests actually executed. In particular: real WindowManager ORB and CARD automatic bootstrap/commit/LIVE; same-root warm reattachment; actual phase/output workload; delayed preparation after detach; remove-before-draw; deferred observer cleanup; stale attachment/capture rejection; genuine detached shader preparation; fixed card extent; zero warm asset/compile work; actual-withdrawal identity; immutable queue/handoff boundaries; late operation causes; capture-off path; LIGHT pressure and complete UTF-8 export cap. The pressure test includes all header/metadata/footer bytes in its `<=32768` assertion and keeps critical episode causes before optional records. No final phone report or phone byte count is fabricated from that assertion.
+
+Final `FluviDrawProbe` output, independently downloaded with all60 runtime artifact files:
+
+| Fixture | Attachment | Actual orb traversals | Phase advances | Max traversal gap ms | Numeric bookkeeping ns |
+| --- | --- | ---: | ---: | ---: | ---: |
+| CARD probe ON | first |125|124|424|763335|
+| CARD probe ON | warm |126|126|356|635043|
+| ORB probe ON | first |126|125|271|639288|
+| ORB probe ON | warm |127|127|249|627980|
+| ORB probe OFF | first |144|143|283|0|
+| ORB probe OFF | warm |127|127|253|0|
+
+Each of the six fixed-output waits reports required121/observed122 phase advances. Independent existing PixelCopy smoke now reports `pixelMotion=true shaderCalls=207 phaseAdvances=206 hardware=true`, with its five-sample assertion unchanged. The preceding011f PixelCopy failure is NOT erased or established as harmless flakiness by this pass. Read-only fixture audit found two limitations: its initial wait checks hardware availability rather than pairing every copied frame with an advancing live draw/commit, and its old Activity fixture detaches the controller without disposing the settings/artifact owner. Neither is demonstrated as the phone stall cause; neither was bundled into this patch. The new production-window workloads do dispose their owned Window/controller.
+
+Probe ON/OFF here is a numeric-probe control in the production View/controller fixture, NOT a complete service LIGHT/OFF benchmark. Samples are sequential on a shared emulator and differ in scheduling; the max-gap numbers are NOT a measured improvement/regression against d731 or the phone. `observerNs` excludes timer-read cost, total perturbation, full service/capture reduction and physical GPU work. It is not a claimed observer overhead ceiling. Larger emulator gaps with output and phase progression illustrate why these correctness tests cannot certify smoothness. No invented FPS/refresh target is used; the finite60s wait is liveness for fixed output, not quality acceptance.
+
+011f dashboard job eventually failed `Mind heatmap must publish while the pointer is still down`, `_profileMindYearHeatmapSlider.dragThumb:1624`, then missing B_year_month_rail_populated. An independently downloaded d731 dashboard log contains the same pointer-down assertion as well as its year-range exception. This is comparative evidence for that specific assertion, not proof that every candidate dashboard failure is inherited. The c4 readiness-timeout failure remains separately unclassified. No dashboard implementation/test assertion was weakened or fixed in this task. Final4b dashboard outcome is recorded with delivery below.
+
+Remaining forensic boundary is unchanged: the phone's86/94/81ms successful-traversal gaps have no temporally matching callback/CPU/owned-work endpoints in the original capture. The new candidate can distinguish these on the next bounded capture, but the current evidence does not identify the responsible runtime owner. Therefore **no runtime performance repair or Nothing before/after improvement is claimed**.
+
+### Final exact-source graph / consumer delivery
+
+Tooling commit **13a92097497609964d6a6c84f8be91273fb9abe2**, pushed to `tooling/keyguard-episode-observability-graph`; local HEAD and `git ls-remote` agree, worktree clean, `[skip ci]`, no workflow dispatched. Indexed application **4b4c3f3fd4f8a143decd69e335d5f89ab21f0926**, parent68db22e240b45875f4414540603865bf0cbc5d94. This is not the later documentation HEAD. `scip-dart1.6.2` was actually rerun in the exact-source checkout; generator implementation `e84430e4a3cd4723eb3d9d084fde675f713e34b6`.
+
+- Raw index:67,515,079bytes; SHA-256 `5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59` (independently rehashed). Identical bytes are expected because Dart sources did not change; this does not imply Kotlin equivalence or reuse of a relabelled old generation.
+- [Manifest](https://github.com/elizerpist/exptv2/blob/13a92097497609964d6a6c84f8be91273fb9abe2/docs/codegraph/manifest.json): SHA-256 `18837e37df07715dd637a1cc6222a54872f1c237b03dec90078599dfbccdfa2e` independently checked.807 Dart documents,568,695 occurrences,20,252 repository symbols,136,383 references. All102 shard hashes PASS. Graph artifact digest `2cfa1a9f64d08f48b80fe093d70b839697f4c94d1abdebb262cdadc5399aacf4`.
+- [Exact commands, source verification and native inventory](https://github.com/elizerpist/exptv2/blob/13a92097497609964d6a6c84f8be91273fb9abe2/docs/codegraph-keyguard-2026-11-10.json); [unabridged actual query results](https://github.com/elizerpist/exptv2/blob/13a92097497609964d6a6c84f8be91273fb9abe2/docs/codegraph-keyguard-queries-2026-11-10.txt).
+- `dart test --reporter expanded`:16 PASS. `dart analyze`: no issues. `git diff --check`: PASS. Generation uses `dart pub global run scip_dart ./`, then `dart run bin/fluvi_codegraph.dart generate --index <exact-source>/index.scip --graph ../../docs/codegraph --source-head 4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 --source-ref 4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59` in Ubuntu/proot.
+
+Actual final `query --symbol` results, source consumers verified:
+
+| Symbol family | Production / test references | Relevant consumers |
+| --- | --- | --- |
+| KeyguardTimingCaptureBridge |3 /5| App shell, console, floating button; console/bridge tests |
+| KeyguardTimingCaptureSnapshot |12 /0| Bridge and console |
+| DebugConsoleDialog |3 /2| Console/floating button; console tests |
+| DashboardKeyguardMaterialBridge |2 /0| Dashboard; class-family query alone does not establish absence of other tests |
+| DashboardHeaderMaterialSnapshot |12 /12| Keyguard export, launcher export, material source; material tests; all untouched |
+
+**Kotlin is unsupported by this SCIP graph.** The separate exact-source native reference inventory covers definitions, service→window→controller→View/clock, primitive evidence helpers, existing draw publication/cadence and deferred summary/export, with production/test caller paths. It is explicitly `rg`/direct source verification, not Kotlin graph coverage. No shared Dart financial/material producer was changed. Graph success is not renderer or phone-performance verification.
+
+### Exact human diagnostic artifact
+
+- `SOURCE_COMMIT=4b4c3f3fd4f8a143decd69e335d5f89ab21f0926`
+- `SOURCE_BRANCH=fix/orb-v4-latency-lockscreen`
+- `BASELINE_D731_ANCESTRY=true`
+- `BUILD_STATUS=PASS` for the Human APK job; this is NOT an overall workflow conclusion.
+- Workflow `.github/workflows/fluvi-core.yml`, [run42825624196 / job129872261423](https://github.com/elizerpist/exptv2/actions/runs/42825624196/job/129872261423), exact-source checkout. Build succeeded2026-11-10T13:59:54Z.
+- Command: `FLUVI_BUILD_COMMIT=4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 ./scripts/build-human-diagnostic-apk.sh`. Normal profile `lib/main.dart`, not the dashboard integration-test harness. The unchanged script enables `FLUVI_ONSCREEN_DIAGNOSTICS=true`, `FLUVI_BUILD_PURPOSE=human_diagnostic`, existing demo/physical diagnostic configuration and `FLUVI_VERBOSE_FLOW=false`.
+- `APK_NAME=fluvi_HUMAN_DIAGNOSTIC_4b4c3f3.apk`
+- `APK_SIZE=120116842` bytes (independently `stat` checked after download).
+- `APK_SHA256=d5e37d3a7583991303432630aadfeec082806a0c04dc58245db43dfba5a9ec3c` (independently `sha256sum` checked; equals GitHub asset digest).
+- [Direct normal human APK](https://github.com/elizerpist/exptv2/releases/download/fluvi-human-diagnostic-4b4c3f3/fluvi_HUMAN_DIAGNOSTIC_4b4c3f3.apk), release/tag `fluvi-human-diagnostic-4b4c3f3`, asset731640951. Release target and remote tag both resolve to the exact source SHA.
+- Download **completed** at `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_4b4c3f3.apk`; existing unrelated artifacts were not overwritten/deleted. Used `gh release download fluvi-human-diagnostic-4b4c3f3 --pattern fluvi_HUMAN_DIAGNOSTIC_4b4c3f3.apk --dir /storage/emulated/0/Download/fluvi`.
+- Binary verification: `unzip -p <APK> lib/arm64-v8a/libapp.so | strings` contains the FULL source SHA and the normal `lib/main.dart` source path. The capture bridge reads this same compile-time `FLUVI_BUILD_COMMIT`; onsite panel/copy execution and installed APK bytes remain user-side, not claimed independently verified. Human-purpose/panel enablement verified from exact build script/env, not invented from an absent string.
+
+No local Flutter APK was built; local ARM64 AAPT2 limitation was handled through the established GitHub workflow. No extra permission, app, service, process or runtime mode is required for this candidate.
+
+### Disposition / smallest remaining phone check
+
+| Area | Delivered result | Symptom status |
+| --- | --- | --- |
+| W-SHOW | Existing timing/eligibility/automatic LIVE contracts preserved and real-window tests pass; no source-proven latency correction | OPEN, device validation pending |
+| W-HIDE | Terminal invalidation/local-hide order unchanged; stale and actual-withdrawal regressions pass | OPEN, no physical disappearance claim |
+| W-LOCK-ANIM | Bounded timestamped callback/draw/CPU/own-work evidence with actual output and ownership verification | FORENSIC CANDIDATE; responsible phone runtime cause UNPROVEN |
+| W-HOME-ANIM | Launcher untouched and no matching capture | OUT OF SCOPE / OPEN |
+
+There is no candidate Nothing-device before/after measurement. No traversal average is display FPS; no callback/commit/window return is physical presentation/removal. Original d731 timing remains the baseline, not an achieved result. The unavailable evidence is the time-aligned cause of the phone's within-attachment gaps, full arbitrary-main-thread work, compositor behavior and user visual acceptance. Own-main spans are bounded/partial; producer scope excludes argument construction before ingress. Missing or evicted optional records remain explicit. More diagnostics do not equal a runtime repair.
+
+One phone procedure, after installing the exact APK: retain the same ORB/settings, start a **LIGHT** capture in the existing debug console, perform the first/colder wake plus several warm lock/wake/unlock cycles, leave the orb visible for a longer animation interval, include one quick repeated transition, then freeze/copy once and note any visible lag/flash and its approximate position in the sequence. No manual stopwatch, ADB, root, computer or external app. This single capture should separate delayed frame callback, delayed traversal, expensive CPU submission and overlapping measured own-main work without changing rendering quality or visibility policy.
+
+**Delivered status: implemented and automated-contract verified forensic candidate; NOT a verified performance repair. PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+### Commit / push ledger and final protected-state review
+
+| Full SHA | Scope / result |
+| --- | --- |
+| c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514 | Application forensic implementation/tests; pushed, exact-source CI executed with the failures preserved above |
+| b1fce2af817dab5f1e08260eeff406bb000dfc8b | Append-only implementation/local evidence journal, `[skip ci]`, pushed |
+| 011f277192061477c48cdbfbd0298009195913f3 | Fixed-output test deadline and bounded post-test CI evidence; pushed, exact-source CI executed |
+| 68db22e240b45875f4414540603865bf0cbc5d94 | Append-only c4 failure/follow-up journal, `[skip ci]`, pushed |
+| 4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 | Final APK source: runtime-report paths/post-sampling fixture evidence; pushed, native/Flutter/Human jobs PASS |
+| c8bab103a190c85464846ef63e14d333d0a86611 | Append-only011f output/failure journal, `[skip ci]`, pushed |
+| 13a92097497609964d6a6c84f8be91273fb9abe2 | Separate final-source tooling graph/queries/inventory, `[skip ci]`, pushed and remote verified |
+
+Final application branch remains `fix/orb-v4-latency-lockscreen`; final APK/application source4b4c3f3. Pre-final-report local/remote documentation HEAD bothc8bab103, confirmed with `git ls-remote`; the append-only commit containing this delivery report is a later documentation HEAD, not a different built application. Final journal commit uses `[skip ci]` and is pushed without dispatching another APK. No accepted milestone/history rewrite, no reset, no unrelated file staging. Full application diff and final report diff/whitespace were reviewed. Final graph branch is clean at13a9209; graph source worktree is tracked-clean at4b with the deliberately generated untracked `index.scip` (not a user modification or claimed application change).
+
+The app's only unrelated untracked paths remain `test/features/automation/presentation/failures/` and `test/features/manual_transactions/failures/`, left untouched and unstaged. Runtime native sources are unchanged afterc4; final app/source delta contains the scoped11 implementation/test files, CI runner/workflow and this journal. No dashboard/launcher/Flutter/material-asset/geometry/input/state-policy change. Runtime XML/log artifacts have the workflow's14-day retention; their exact counts and numeric output are preserved in this shared journal. Published Human APK is a release asset, not the expiring automated harness artifact.
+
+### Final overall CI result and dashboard comparison
+
+Run42825624196 completed **FAILURE**2026-11-10T14:07:58Z. Core, Flutter, API35 native runtime and Human APK jobs **SUCCESS**; dashboard profiling **FAILURE**; conditional nightly/baseline jobs **SKIPPED**. This candidate must NOT be called overall CI-green or unqualified TEST-CLEAN.
+
+Exact failed command: `./scripts/run-dashboard-profile.sh --use-application-binary=build/app/outputs/flutter-apk/app-profile.apk`, using the existing automated profile harness on the configured API35 emulator. [Final dashboard job129865524202](https://github.com/elizerpist/exptv2/actions/runs/42825624196/job/129865524202), independently downloaded full log: `RangeError (year): Invalid value: Not in inclusive range 2027..2051: 2026` at `PreparedBudgetLimitSnapshot._yearOffset:221`, then `Mind heatmap must publish while the pointer is still down` at `_profileMindYearHeatmapSlider.dragThumb:1624`, then `Bad state: Dashboard profile B_year_month_rail_populated must be a report map`. Exit1, no complete dashboard performance report. All three signatures also occur in the independently downloaded d731 baseline run42803602666/job129790266330 log. This specific final failure is baseline-reproduced; it is not evidence that the keyguard patch caused it. No blanket claim is made about the distinct c4 readiness timeout or every historical failure.
+
+Verified `git diff --name-status d731827576802f3c35105e26237a436cfea1ebf9 4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 -- lib test integration_test test_driver fluvi-core scripts/run-dashboard-profile.sh` is empty. Dashboard profiling was neither silently fixed nor its assertion weakened. [Retained final dashboard evidence](https://github.com/elizerpist/exptv2/actions/runs/42825624196/artifacts/13772085954) is separate from the delivered normal Human APK.
+
+Final remote ref fetched again before the append-only report commit: application branch atc8bab103, no concurrent journal change to overwrite. All implementation/graph/build work feasible in this environment is complete. The physical stall cause remains **UNPROVEN** and this is **forensic-only delivery**, with exact-source APK and graph available. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
