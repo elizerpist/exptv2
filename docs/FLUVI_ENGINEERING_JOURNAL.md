@@ -5745,3 +5745,20 @@ To reproduce the extract hash, hash the following JSON as UTF-8 with one final n
   ]
 }
 ```
+
+## 2026-11-10 — system-gate ownership repair, baseline reproducer
+
+Application seam/test commit: `829a5447f99569da3f71e77e8a1421482a580e81`.
+Initial worktree `fluvi-pulse-header-wave-interactions`, branch `fix/orb-v4-latency-lockscreen`, HEAD `0d9bbaf24df542cb62d29c150a18797c0f57ee83`; fetched origin and fast-forwarded only the journal to `a99eafd70cb8559d2d4e96bca0f056e57c3801bd`. Compared application paths to physically reported `1f0a199096a50a86c335918408c30db3ff375e9c`: no intervening production delta. Untracked automation/manual-transactions golden-failure directories preserved. No reset or history replacement.
+
+Read the complete accessible rule assets in Download: `FLUVI_PROMPT_WRITER_RULES.md` (SHA256 `f5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297`) and `FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md` (`dc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c`). Numbered project-attachment aliases are not accessible by those names. Reviewed home AGENTS, complete milestones and journal history/preceding report, then the complete new reviewer append. Protected dashboard milestone and exclusions remain unchanged. No new milestone.
+
+Evidence is the reviewer's frozen 4225-byte extract above, not independent original phone files. LIGHT/FULL capture identity and retention limits remain as recorded. The 48.311461ms gate scope is nested within the 60.598077ms apply scope; their sum is not an elapsed delay. The source-owned defect is recurring platform acquisition on the animation Main owner; individual getter contribution, other withdrawal gaps and physical endpoints remain unproven/unobserved.
+
+This first commit intentionally retains synchronous recurring scheduling behind an injectable immutable reader. The real Android-bound service fixture now blocks that reader and requires actual retained-overlay shader/phase advances and local removal BEFORE independent release. An eight-second independent watchdog bounds the failing old Main path; it is a test cleanup mechanism, not a production delay or pacing threshold. A sampler primitive exists but is not integrated at this commit. No performance repair is claimed for this seam revision.
+
+Executed `git diff --check`, `git diff --cached --check`, complete staged diff review and `./scripts/verify-fluvi-boundaries.sh`: PASS. Pushed exact SHA and verified remote. CI `42898647396` is running the parent-scheduling RED experiment; result pending at this entry. Local native execution is limited by ARM64/proot AAPT2 and no local emulator; the actual local command/result and CI result will follow. Do not install this intermediate RED revision as the repaired candidate.
+
+Baseline graph manifest checked at tooling `1492c43f1606c832c83b2e5620dd74b362298c22`: source `1f0a199`, raw index `5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59`. Actual `fluvi_codegraph.dart query` calls returned Bridge 8 references (3 production/5 test), Snapshot 12 production, Console 5 (3 production/2 test), checked against source searches. This is Dart coverage only. Native ownership inventory: service event/apply/retry/reconciliation/publication paths → new reader/sampler; existing snapshot reader/classifier/inspection authority → service decisions → retained window/controller/one material clock. Native tests consume the exact same sampler/admission policy and actual service; no Kotlin SCIP claim.
+
+Physical validation: **PENDING — USER ONLY**. The production ownership integration follows in a separate cohesive commit.
