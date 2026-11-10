@@ -1,7 +1,7 @@
 {
   "task": "Production keyguard system-gate ownership refactor",
-  "source_head": "6ffeb23decd18708b5e7f44b857d961fa6bd4423",
-  "source_parent": "c959943d71ec4e2ef468dd83497558cefdbcc7cd",
+  "source_head": "21ebac3529ad59a00ce336c5f0e93bb21883ccd1",
+  "source_parent": "934cf6a46e1665f982fba4a277f4c5b3475603a2",
   "production_repair_commit": "31a012ac990154b932bf1cdf010526a9888f857d",
   "source_worktree": "/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source",
   "source_tracked_clean": true,
@@ -69,6 +69,7 @@
     }
   },
   "source_checks": "rg references and direct definition/caller/test reads at exact final source; no Kotlin reference-graph claim",
+  "service_fixture_boundary": "Actual TYPE_ACCESSIBILITY_OVERLAY shader/phase progress after reader entry; immediate Main-owned detachment and zero process roots, separate remote metadata convergence; revoked old positive distinguished from explicitly resumed fresh eligibility",
   "physical_validation": "PENDING_USER",
   "ci_results_location": "Application branch docs/FLUVI_ENGINEERING_JOURNAL.md; graph generation alone is not runtime or physical verification"
 }
