@@ -4495,3 +4495,24 @@ Follow-up application/build-source commit **011f277192061477c48cdbfbd02980091959
 c4 graph generation completed at tooling commit `8fe2286b9db0334c3a8e848d3ef7028f498c4338`, SCIP1.6.2,807 Dart documents; raw hash unchanged `5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59` because Dart source is unchanged. All102 shard hashes and16 tooling tests passed, actual five-family queries retained, Kotlin inventory separate. Because the final build-source SHA is now011f2771, this c4 graph is NOT relabelled as final; exact011f regeneration/query is requested separately.
 
 **Physical validation: PENDING — USER ONLY. No runtime performance improvement claimed.**
+
+### 011f2771 fixed-output result, separate pixel-output failure and report retention
+
+Run [42822357579](https://github.com/elizerpist/exptv2/actions/runs/42822357579), first attempt: core150/app121 (90 lockscreen) PASS independently counted from XML; Flutter1031+3+4 PASS and analysis exits successfully with20 info notices. API35 compiled and executed37 tests, **36 PASS /1 FAIL**. All six cold/warm fixed-output workloads now complete: required121, observed122 phase advances. The earlier8s failure is therefore not a stopped production clock in these fixtures. The unrelated-to-those-workloads, pre-existing `productionAssetCompilesAndDrawsOnHardwareCanvas` fails `production shader produced no motion across five samples`; its prior hardware, shader-call and phase-advance assertions pass. That test passed in the previous c4 run with identical production code. Cause is not yet established: do NOT relabel this as harmless flakiness or user-device success. Its assertion/sample sequence is unchanged. Human APK again correctly SKIPPED. Dashboard job was still running at this entry; no outcome fabricated.
+
+Actual retained `FluviDrawProbe` samples (API35 x86_64/swangle emulator, NOT Nothing timing):
+
+| Fixture | Attachment | Actual orb traversals | Phase advances | Max traversal gap ms | Numeric bookkeeping ns |
+| --- | --- | ---: | ---: | ---: | ---: |
+| CARD probe ON | first |125|124|580|868719|
+| CARD probe ON | warm |127|127|241|936748|
+| ORB probe ON | first |126|125|137|1592269|
+| ORB probe ON | warm |126|126|141|716806|
+| ORB probe OFF | first |125|124|198|0|
+| ORB probe OFF | warm |127|127|140|0|
+
+These are fixed-output production View/controller controls, not a complete OFF-versus-LIGHT capture benchmark: the test supplies the numeric-probe enable predicate and does not run the whole service/capture worker. Timer-read overhead is excluded from bookkeeping, tests are sequential and emulator scheduling is uncontrolled. No inferred display FPS, latency improvement or Nothing overhead bound. Existing actual-output and phase assertions remain required; observer maxima/aggregate CPU are not a causal explanation.
+
+The new artifact retention initially referenced `android/app/build`, but Gradle's failure log proves the real report is `build/app/reports/androidTests/connected/debug/index.html`. Only the filtered post-test log was retained; this availability defect is explicit. Follow-up **4b4c3f3fd4f8a143decd69e335d5f89ab21f0926** corrects those two artifact paths and adds one post-sampling diagnostic line with PixelCopy motion/shader/phase/hardware facts. NO renderer, assertion, sample count, deadline or application runtime change. Local shell syntax, boundaries, whitespace and full staged diff PASS. Commit/push succeeded on the existing branch. An attempted same-job rerun was refused while the overall run was still in progress; the new exact-source CI is the repeat, with the failing motion assertion intact. Previous failure remains part of the report even if the repeat passes.
+
+Graph for011f was completed/pushed as `1a28cdeb3ff6e9130847b52965888d4de56f9fde` (16 tests/five actual queries/102 shard checks PASS); final-source graph will be regenerated for4b after final verification. Production source remains identical to c4a4ba2. **Forensic-only, physical validation PENDING — USER ONLY.**
