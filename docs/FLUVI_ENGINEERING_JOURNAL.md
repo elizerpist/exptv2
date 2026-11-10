@@ -5864,4 +5864,100 @@ Runs `42902147702` (31a) and `42903043755` (6ff) both passed all 37 lower native
 
 Test correction `21ebac3529ad59a00ce336c5f0e93bb21883ccd1`, run [42905947628](https://github.com/elizerpist/exptv2/actions/runs/42905947628): assert service detached and **zero actual process accessibility-overlay roots within the same Main callback as interrupt**, with reader still blocked. Separately require remote-window disappearance within the existing bounded two-second observation interval and before release. The old positive is now captured before blocking. New subsequent checks are separately withheld during stale-answer verification, then explicitly enabled for fresh admission-veto coverage: a newly authorized wake must not be mistaken for publication of a revoked old answer. No runtime scheduling, visual output assertion, watchdog deadline or production visibility policy changed. Whitespace and boundary checks PASS; candidate runtime is pending. The final source/graph/APK will use this revision or its validated correction, not failed 6ff. The 6ff graph remains correctly versioned historical evidence, not relabelled final.
 
+### Exact-source rerun, without changing production or assertions
+
+Run42905947628 attempt1: core150/app132 unit tests and Flutter1031+3+4 PASS; all37 lower native tests PASS. The real-service test failed **before reaching the blocked-reader regression**, at cold actual attachment. Capture `030c09d0-0c93-4c89-8265-85984b0aa5c0` records req26 at279319–279982, `HIDDEN_OCCLUDED:FOREIGN_ABOVE`, main markers2, complete traversal. The later failure snapshot at294418 has only SystemUI window6; it explicitly is **not** the earlier inspection snapshot. This does not prove the earlier exclusion was wrong, identify the removed window, or establish an environment-only failure. No classifier/cache/window policy or assertion was relaxed to get a show.
+
+One bounded identical-source rerun was requested with `gh run rerun 42905947628 --failed`; attempt2 retains **21ebac35**. Attempt1 artifacts/logs are downloaded separately under `fluvi-system-gate-validation.P7zDjo/candidate21-runtime` and `candidate21-native.log`, so a later pass cannot erase this failure. Human build was correctly skipped for attempt1. Dashboard again failed A interaction readiness then missing A_summary_sum_year_month; baseline1f job130067417800 was independently downloaded and has the same signatures. Underlying dashboard cause remains unclassified, not silently repaired.
+
+Final-source tooling at `c04bbfae6cd7e9777eee9271d41ab05ab609cc8e` now indexes exact21ebac35 (parent934cf6a4). Actual regeneration and the five queries were rerun; 102 shard hashes verified again. Raw SCIP hash remains unchanged; new manifest SHA256 is `b793851723a367e1e8daf2a852c0a1c3fe13fcdf837ec6a0a02d02b5319881d2`. Native inventory explicitly distinguishes immediate process-root withdrawal from remote metadata convergence. Kotlin coverage is still absent from SCIP. Tooling worktree and remote are clean/matching; application worktree preserves only the two unrelated failure directories plus this report append.
+
+### Attempt2: production gate regression GREEN, protected suite still failing
+
+Run42905947628 attempt2/capture `dbe6a173-400e-4979-ba3a-2f0cf4cbc59d`, process2713, real accessibility overlay: all new gate assertions passed. Cold window8 and warm window10 were actual168×168 dualTide Portal LIVE/hardware roots. The quiet full-palette compositor sample changed (`motion=true`, phase8→87). After blocked-reader entry, cold shader/phase99/98→105/104 and warm130/129→136/135: **six new shader draws and six phase advances in each case before release**. The fixture's aggregate `shaderDelta=8` includes two earlier pre-entry frames, which are deliberately excluded from this statement. These are liveness/output observations, NOT display FPS or a phone pacing improvement.
+
+At uptime278513 the fixture confirms worker-owned acquisition, privacy and local hide before release, and recurringMainReads=0. At278539 it confirms late-positive rejection and a fresh Main admission veto. At288228 it confirms actual visible UNKNOWN withdrawal before release; process/remote roots are absent at cold and warm unlock. Immediate local-root and remote-convergence assertions both passed. Thus the parent scheduling RED at00f2855e and this exact-production-owner GREEN establish the requested causal contract, independently of the later failures.
+
+Attempt2 is nevertheless **FAIL**, not a green workflow: the unchanged Activity-panel `productionAssetCompilesAndDrawsOnHardwareCanvas` test reports no PixelCopy motion across five samples (36/37 lower tests passed;43 shader calls/42 phase advances/hardware=true). Its material and test source are byte-unchanged from1f; the system-gate service is not the owner of that lower-level panel fixture. The subsequent real-service scenario passed cold, warm and the new gate tests, then timed out at reattach-after-rapid with FOREIGN_ABOVE. Its later failure-window snapshot contains only SystemUI, not the earlier inspection snapshot. Neither failure is silently called fixed or fully explained.
+
+Artifact13806897699 was downloaded by exact ID to a separate `candidate21-attempt2-runtime` directory because multiple run attempts have the same artifact name. Trace SHA256 `c31c222c4ab7a0e72e146fc127a93c5caa1fe7d196357af05662e7c3307b9c65`; coverage139100 sched rows/299272 thread-state rows/269312 slices/616 frame-timeline rows;36 ftrace setup notices retained. Missing evidence: lower-level PixelCopy images were not recovered—the supposed tar contains `run-as: unknown package: com.fluvi.app` after the Gradle runner uninstalled its target. This artifact-retention limitation is recorded, not substituted with passing screenshots.
+
+A final **native-job-only** repetition (`gh run rerun 42905947628 --job 130155349302`, attempt3) keeps exact21ebac35, unchanged output assertions, deadlines and production behavior. New evidence justifying this additional repetition beyond the initial one is the completed causal GREEN plus the distinct, unchanged panel-motion failure; it is not a new runtime hypothesis or an assertion bypass. Earlier failures remain unresolved and retained even if the last repetition passes. Dashboard remains failed and is not rerun by this command. No Human APK is claimed until its actual job/download completes.
+
+### Final verification result — implementation present, delivery BLOCKED
+
+Attempt3 is **FAIL**. All37 lower-level instrumentation tests passed, including the unchanged panel-motion test that failed in attempt2. The actual service test again failed before the gate regression, at cold attachment with `HIDDEN_OCCLUDED:FOREIGN_ABOVE`. Capture `15a8a593-0c5c-43e1-96cc-bb8587f5c075`, process2720: service connected167986; cold timeout186313; later failure snapshot has only SystemUI window2. The earlier classification snapshot is not identical to that later snapshot. This repeats an unresolved first-show/re-entry boundary; it is not proof of a harmless environment-only issue, nor authorization to show over foreign/uncertain data. No fourth unchanged repetition, permissive classifier, guessed delay, test assertion removal or CI-gate bypass was used.
+
+Final read-only boundary check: the retained attempt3 report shows req35 (171217–171290) reading SystemUI window2 and a separate type3 window5, then reporting FOREIGN_ABOVE. Req36, a newer window event (event171287, received/queued171291), enters pending immediately before req35's terminal hide at171291. That hide clears pending work; the application record contains no subsequent inspection before the fixture times out. The same non-UNKNOWN exclusion→default terminal hide→clearPending control path is present in tested1f source (verified with `git show`), not introduced by this refactor. This identifies a concrete recovery boundary worth a separately scoped reproducer; it does **not** prove window5 was invalid, req36 represented its removal, or that reacquisition would have returned MAIN. Changing surface-exclusion/wake policy to force CI success is outside the demonstrated recurring-system-read correction and was not bundled into it. The existing failure remains a release blocker rather than being excused by its pre-existing source path.
+
+The three exact21ebac35 runtime artifacts remain separately identifiable:
+
+| Attempt | Native artifact ID | Real-service outcome |
+|---|---:|---|
+| 1 |13806586280|Cold attachment timeout; gate regression not reached|
+| 2 |13806897699|All new blocked-reader/privacy/terminal/admission/UNKNOWN assertions passed; later rapid re-entry timeout; separate panel-motion test failed|
+| 3 |13809025345|37 lower tests passed; cold attachment timeout; gate regression not reached|
+
+The final job is [130164611185](https://github.com/elizerpist/exptv2/actions/runs/42905947628/job/130164611185). Its source is exact21ebac35, not documentation HEAD. The workflow remains **FAILED**; Human APK job130169452084 is **SKIPPED** by the existing native verification dependency. GitHub is available: this is a failed correctness gate, not a build-service outage. No failed run is reported green, and no old APK/debug instrumentation APK is substituted for a repaired Human build.
+
+#### Before/after contract evidence, not phone-speed claims
+
+| Boundary | Parent scheduling | Candidate scheduling |
+|---|---|---|
+| Recurring system acquisition owner |Main; blocked production call reproduced in00f2855e|Independent one-active/one-pending I/O lane; actual service assertion recurringMainReads=0|
+| Main returns before blocked read release |FAIL, returns only after independent release|PASS in attempt2|
+| Actual retained shader/phase advances after read entry, before release |Assertion not reached; do not manufacture a zero sample|PASS: cold99/98→105/104 and warm130/129→136/135|
+| Privacy/local removal while recurring call is blocked |Not reached in parent RED|PASS: redacted attached root, immediate detached owner/zero process roots, then remote metadata convergence|
+| Late positive / fresh admission / visible UNKNOWN |Separate unit policies; real regression not reached in parent|PASS in actual service attempt2; old answer rejected, fresh admission veto executed on Main, UNKNOWN withdrawn before retry eligibility|
+| Whole protected native suite |Parent causal RED intended; earlier seam also had rapid fixture failure|Not consistently green; final real-service cold failure remains|
+| Nothing-device latency/pacing |Supplied1f sample87.042153ms gap with measured overlapping Main gate work|NOT MEASURED; no claimed numerical improvement|
+
+Sampler unit tests execute actual production scheduling with controlled dispatch:1000 replacement offers produce only request1 and latest1001 reads, one worker task at a time, maximum pending1. All five authority identity changes reject old negative results; terminal revocation also rejects an in-flight positive when an idempotent cleanup does not change the View epoch. New attachment/disclosure increase still requires a fresh Main snapshot; unavailable and transitional state cannot authorize SHOW. These contracts do not prove the other phone gaps resolved.
+
+#### Commands and remaining coverage limits
+
+- PASS boundary/whitespace/staged-source reviews, local production JVM33 and focused Flutter5 as recorded above.
+- PASS CI core150/app132 tests from independently downloaded56 XML suites, zero failures/errors. This includes the full affected lockscreen unit group and existing protected app units.
+- PASS CI `flutter analyze --no-fatal-infos` **with20 informational issues**, not a clean/no-issues analysis. PASS `./scripts/test-fluvi-fast.sh` with1031+3+4 tests. No Dart files changed from1f. Full nightly suites were SKIPPED by existing workflow conditions, not claimed executed.
+- API35 compile executed through `:app:assembleDebug :app:assembleDebugAndroidTest --no-daemon`; lower runtime command is `:app:connectedDebugAndroidTest --no-daemon -Pandroid.testInstrumentationRunnerArguments.class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest,com.fluvi.app.lockscreen.KeyguardFirstDrawObservationInstrumentationTest,com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest`. Counts/results by attempt are above. `scripts/test-keyguard-service-trace.sh` invokes the actual Android-bound service fixture with `adb shell am instrument -w -r -e sourceSha <exact SHA> -e class com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner`; it fails the overall runtime job correctly when the real-service test fails.
+- Local Android unit/compile invocation was executed but blocked by AAPT2 startup before tests. No local APK build or local hardware runtime is claimed.
+- Immediate blocked-reader integration directly exercises interrupt, privacy and UNKNOWN. SCREEN_OFF/USER_PRESENT are covered by existing real-device-gate fixture transitions and source-owned direct-hide paths, not separately forced blocked-reader variants for every broadcast. Disable/disconnect/disposal use the audited same terminal path and bounded sampler unit tests; do not inflate that into separately executed real-service cases.
+- Dashboard A-readiness/missing A report failure has exact matching baseline/candidate log signatures. Its cause remains unclassified. No dashboard fix or broad inherited-failure declaration was made.
+- Native compositor/physical presentation, physical removal, matched Nothing cold/warm before/after and capture-OFF/LIGHT/FULL observer overhead remain UNOBSERVED/NOT RUN on the target. The available real-service run is LIGHT/debug/emulated GPU, synthetic palette controls with matched effect/Portal/168px configuration. Flutter build/raster timing is N/A for this native pipeline.
+
+#### Commits, graph and build identity
+
+Production repair: `31a012ac990154b932bf1cdf010526a9888f857d`; causal-origin/test follow-up: `6ffeb23decd18708b5e7f44b857d961fa6bd4423`; final candidate including strengthened local-root test: **`21ebac3529ad59a00ce336c5f0e93bb21883ccd1`**. Production Kotlin/Dart/material files are identical between6ff and21;21 is not claimed as another runtime speed repair. All pushes and remote refs were verified. Baseline RED worktree remains isolated at00f2855e; no history was reset.
+
+Final graph: **`c04bbfae6cd7e9777eee9271d41ab05ab609cc8e`**, source21ebac35, manifest/hash/query/native-inventory details above. Application report commits are documentation-only and use `[skip ci]`; they do not identify a newer installed runtime. The report's parent documentation HEAD is `284b26399331b14fc7077a54d6cfcdfdf7f10c64`; the commit containing this final section is the final documentation HEAD available via GitHub/Git history. Feature branch remains `fix/orb-v4-latency-lockscreen`. Tracked application worktree is clean after committing this report; the two unrelated untracked failure directories remain. Tooling worktree is clean; detached index-source worktree is at21ebac35 with its generated untracked index.scip. Other worktrees were not changed.
+
+```text
+SOURCE_COMMIT=21ebac3529ad59a00ce336c5f0e93bb21883ccd1
+SOURCE_BRANCH=fix/orb-v4-latency-lockscreen
+BASELINE_1F0A199_ANCESTRY=YES
+BUILD_WORKFLOW=Fluvi Verification / run42905947628 / attempt3
+BUILD_COMMAND=FLUVI_BUILD_COMMIT=<SOURCE_COMMIT> ./scripts/build-human-diagnostic-apk.sh
+BUILD_STATUS=NOT_RUN_NATIVE_GATE_FAILED
+APK_NAME=NOT_PRODUCED
+APK_SIZE=NA
+APK_SHA256=NA
+EMBEDDED_SOURCE_IDENTITY=NOT_VERIFIED_NO_APK
+DOWNLOAD_LOCATION=NONE_NO_NEW_HUMAN_APK
+HANDOFF_STATUS=INCOMPLETE_VERIFICATION_BLOCKED
+PHYSICAL_VALIDATION=PENDING_USER
+```
+
+| Symptom | Result |
+|---|---|
+| W-LOCK-ANIM |Concrete recurring Main-read ownership defect repaired; causal blocked-reader assertions GREEN with actual shader output. Overall phone pacing remains unaccepted/unmeasured.|
+| W-SHOW |Fresh admission safety retained and veto tested. Cold/re-entry real-service timeouts remain unresolved; NOT PASS.|
+| W-HIDE |Blocked-reader immediate local withdrawal/privacy/late-result safety demonstrated. Whole-device unlock latency and physical disappearance remain unverified.|
+| W-HOME-ANIM |Untouched, out of scope and still OPEN; no current evidence or acceptance.|
+
+**Production refactor implemented; targeted automated causal contract verified; full verification and APK handoff NOT completed.** No new physical retest is requested with production-identical or failed-gate code. Before a Human APK can be handed off, the unresolved real-service cold/re-entry exclusion boundary needs a scoped causal resolution while preserving the fresh classifier; the intermittent lower-level PixelCopy failure also remains recorded. The current evidence is insufficient to alter classification, cache/prefetch strategy or renderer quality safely merely to make the pipeline pass.
+
+When an exact-source Human build eventually passes its required delivery gate, the intended existing-panel procedure remains: same ORB settings, one colder wake and several warm lock/wake/unlock cycles, leave the live orb visible for a longer interval, then freeze/copy and note visible lag/flash. That is **not** a request to repeat the current rejected build now. No user ADB/root/computer workflow is required.
+
+**PHYSICAL VALIDATION — PENDING, USER ONLY. No claim of physical resolution.**
+
 **PHYSICAL VALIDATION — PENDING, USER ONLY.**
