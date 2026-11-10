@@ -2121,6 +2121,7 @@ internal object FluviKeyguardCardServiceRegistry {
     @Volatile var connected: Boolean = false
         private set
     @Volatile private var service: FluviKeyguardCardService? = null
+    internal fun serviceForInstrumentation(): FluviKeyguardCardService? = service
 
     fun connected(service: FluviKeyguardCardService) {
         this.service = service

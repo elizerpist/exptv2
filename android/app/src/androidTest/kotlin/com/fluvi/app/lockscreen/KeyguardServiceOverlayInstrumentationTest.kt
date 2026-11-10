@@ -184,6 +184,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
             val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual live phases", reentry.material.phase > warm.material.phase)
+            blockedRecurringReaderDoesNotOwnMain(reentry)
             unlockAndAssertWithdrawn("final-unlock")
             record("RESULT", "OUTPUT_LIVENESS_PASS performanceAndNothingDevice=UNVERIFIED")
         } catch (failure: Throwable) {
@@ -245,6 +246,48 @@ class KeyguardServiceOverlayInstrumentationTest {
         val shader: Long, val phase: Long, val state: String, val hardware: Boolean,
         val effect: String?, val generatedAgslHash: String?,
     )
+    /** The real service/TYPE_ACCESSIBILITY_OVERLAY must keep drawing BEFORE
+     * release of the injected platform read. Independent release bounds RED
+     * execution too: the old synchronous Main call cannot hang the runner.
+     */
+    private fun blockedRecurringReaderDoesNotOwnMain(episode: Episode) {
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val watchdog = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
+        val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
+        val real = AndroidKeyguardSystemStateReader(context)
+        val old = service.systemStateReaderOverride
+        val workerRead = java.util.concurrent.atomic.AtomicBoolean(false)
+        service.systemStateReaderOverride = KeyguardSystemStateReader { purpose ->
+            if (purpose == KeyguardSystemReadPurpose.RECURRING) {
+                workerRead.set(android.os.Looper.myLooper() != android.os.Looper.getMainLooper())
+                entered.countDown()
+                check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            }
+            real.read(purpose)
+        }
+        watchdog.schedule({ release.countDown() }, 8, java.util.concurrent.TimeUnit.SECONDS)
+        try {
+            val before = snapshot("blocked-reader-before")
+            instrumentation.runOnMainSync { service.requestSystemCheckForTest() }
+            assertTrue("Recurring reader entered", entered.await(2, java.util.concurrent.TimeUnit.SECONDS))
+            assertEquals("Main callback must return before reader release", 1L, release.count)
+            assertTrue("Recurring system acquisition must be worker-owned", workerRead.get())
+            val after = awaitLive("blocked-reader-live", before, 2, episode.window.id)
+            assertEquals("Actual shader output/phase must advance while read remains blocked", 1L, release.count)
+            assertTrue(after.shader > before.shader && after.phase > before.phase)
+            instrumentation.runOnMainSync { service.onInterrupt() }
+            assertTrue("Terminal hide must remove the actual root before reader release", overlaysWithdrawn())
+            assertEquals("Terminal hide never joins the reader", 1L, release.count)
+            record("SYSTEM_GATE_REGRESSION", "workerRead=true shaderDelta=${after.shader-before.shader}" +
+                " phaseDelta=${after.phase-before.phase} hideBeforeRelease=true")
+        } finally {
+            release.countDown()
+            service.systemStateReaderOverride = old
+            watchdog.shutdownNow()
+        }
+    }
+
     private data class Overlay(val id: Int, val bounds: Rect)
     private data class Episode(val material: Material, val window: Overlay)
 

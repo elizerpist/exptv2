@@ -42,6 +42,12 @@ import kotlinx.coroutines.withContext
  */
 class FluviKeyguardCardService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val platformSystemStateReader by lazy { AndroidKeyguardSystemStateReader(this) }
+    @Volatile internal var systemStateReaderOverride: KeyguardSystemStateReader? = null
+    private fun readSystemState(purpose: KeyguardSystemReadPurpose): KeyguardSystemState =
+        (systemStateReaderOverride ?: platformSystemStateReader).read(purpose)
+
+    internal fun requestSystemCheckForTest() { fastHideIfSystemExcluded("blockedReaderRegression") }
     private val mainWorkEvidence = KeyguardMainWorkEvidence()
     private val session = AtomicLong(0L)
     private val visibilityEpoch = AtomicLong(0L)
@@ -697,12 +703,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     ): Boolean {
         if (!::overlay.isInitialized) return false
         val shouldHide = withMainWorkEvidence(KeyguardMainWorkEvidence.SYSTEM_GATE, causingInspectionRequestId ?: 0L) {
-            val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
-            KeyguardCardFastHideGate.shouldHide(
-                displayInteractive = powerManager.isInteractive,
-                displayOff = display?.state == Display.STATE_OFF,
-                keyguardLocked = keyguardManager.isKeyguardLocked,
-            )
+            readSystemState(KeyguardSystemReadPurpose.RECURRING).excluded
         }
         if (!shouldHide) return false
         hideImmediately(
