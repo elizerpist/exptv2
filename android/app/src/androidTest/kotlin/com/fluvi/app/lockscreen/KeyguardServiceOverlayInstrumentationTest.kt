@@ -18,6 +18,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.MotionEvent
 import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -179,20 +180,6 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("rapid unlock", 3_000) { !keyguard.isKeyguardLocked }
                 await("rapid terminal withdrawal", 5_000) { ownOverlays().isEmpty() }
             }
-            // wm dismiss-keyguard returns without a completion callback. In
-            // run42856983444 a subsequent independent wake overlapped that
-            // asynchronous exit; SystemUI then returned to GONE. That is not
-            // permission for Fluvi to show. Separate scenarios using the
-            // public test-only event-idle barrier, not a shipped delay or a
-            // compositor-completion claim. The rapid exclusion above is
-            // still exercised without this barrier.
-            marked("fixture-platform-settle") {
-                val remaining = deadline - SystemClock.uptimeMillis()
-                assertTrue("Fixture budget exhausted before platform settling", remaining >= 500L)
-                automation.waitForIdle(500L, minOf(5_000L, remaining))
-                assertFalse("Independent reentry must start unlocked", keyguard.isKeyguardLocked)
-                assertTrue("Settled terminal state must not retain an overlay", ownOverlays().isEmpty())
-            }
             val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual live phases", reentry.material.phase > warm.material.phase)
             unlockAndAssertWithdrawn("final-unlock")
@@ -250,7 +237,15 @@ class KeyguardServiceOverlayInstrumentationTest {
     private data class Episode(val material: Material, val window: Overlay)
 
     private fun episode(name: String): Episode = marked(name) {
-        screenOff()
+        // An unlocked KeyguardManager flag is not completion of the previous
+        // remote animation. Runs42856983444 and42865721964 relocked while
+        // SystemUI still finished that exit and subsequently returned to GONE.
+        // Use the public UiAutomation input contract for independent episodes:
+        // it synchronizes window animations/transactions before DOWN and after
+        // UP. This is fixture setup, not an app delay, synthetic SHOW, or a
+        // physical-presentation measurement. The rapid scenario intentionally
+        // retains unsynchronized shell input and immediate exclusion assertions.
+        marked("$name-synchronized-sleep") { screenOff(synchronizeInput = true) }
         shell("input keyevent KEYCODE_WAKEUP")
         await("$name keyguard eligible device gates", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
         // Material counters and last LIVE/hardware state survive detach.
@@ -272,8 +267,18 @@ class KeyguardServiceOverlayInstrumentationTest {
         Episode(material, window)
     }
 
-    private fun screenOff() {
-        shell("input keyevent KEYCODE_SLEEP")
+    private fun screenOff(synchronizeInput: Boolean = false) {
+        if (synchronizeInput) {
+            assertTrue("Fixture budget exhausted before independent episode", SystemClock.uptimeMillis() < deadline)
+            val downAt = SystemClock.uptimeMillis()
+            for (action in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+                val event = KeyEvent(downAt, SystemClock.uptimeMillis(), action, KeyEvent.KEYCODE_SLEEP,
+                    0, 0, -1, 0, 0, InputDevice.SOURCE_KEYBOARD)
+                assertTrue("Synchronized sleep input was rejected", automation.injectInputEvent(event, true))
+            }
+        } else {
+            shell("input keyevent KEYCODE_SLEEP")
+        }
         await("screen off", 3_000) { !power.isInteractive }
         await("screen-off withdrawal", 4_000) { ownOverlays().isEmpty() }
     }
