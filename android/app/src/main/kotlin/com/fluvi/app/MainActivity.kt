@@ -359,28 +359,26 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
-                if (call.method == "startKeyguardDiagnosticCapture") {
+                if (call.method in setOf("startKeyguardDiagnosticCapture", "getKeyguardDiagnosticCapture", "freezeKeyguardDiagnosticCapture", "clearKeyguardDiagnosticCapture")) {
+                    // FIFO capture barriers/export may wait for the reducer;
+                    // they must never occupy Android's visibility/UI owner.
                     val values = call.arguments as? Map<*, *>
-                    result.success(
-                        KeyguardCardDiagnostics.startCapture(
-                            applicationContext,
-                            values?.get("build") as? String,
-                            values?.get("buildMode") as? String,
-                            values?.get("captureMode") as? String,
-                        ),
-                    )
-                    return@setMethodCallHandler
-                }
-                if (call.method == "getKeyguardDiagnosticCapture") {
-                    result.success(KeyguardCardDiagnostics.captureSnapshot(applicationContext))
-                    return@setMethodCallHandler
-                }
-                if (call.method == "freezeKeyguardDiagnosticCapture") {
-                    result.success(KeyguardCardDiagnostics.freezeCapture(applicationContext))
-                    return@setMethodCallHandler
-                }
-                if (call.method == "clearKeyguardDiagnosticCapture") {
-                    result.success(KeyguardCardDiagnostics.clearCapture(applicationContext))
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                when (call.method) {
+                                    "startKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.startCapture(
+                                        applicationContext, values?.get("build") as? String,
+                                        values?.get("buildMode") as? String, values?.get("captureMode") as? String,
+                                    )
+                                    "getKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.captureSnapshot(applicationContext)
+                                    "freezeKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.freezeCapture(applicationContext)
+                                    else -> KeyguardCardDiagnostics.clearCapture(applicationContext)
+                                }
+                            }
+                        }.onSuccess { result.success(it) }
+                            .onFailure { result.error("KEYGUARD_CAPTURE", it.message, null) }
+                    }
                     return@setMethodCallHandler
                 }
                 if (call.method == "getFinancialSnapshotWidgetLaunch") {

@@ -459,6 +459,26 @@ internal object KeyguardCardDiagnostics {
     private const val ACTIVE_CAPTURE_MS = 5 * 60 * 1000L
     private const val CHECKPOINT_INTERVAL_MS = 12_000L
     private val captureLock = Any()
+    private val reduction = KeyguardDiagnosticQueue(Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "fluvi-keyguard-diagnostic-reducer").apply { isDaemon = true }
+    })
+    private class CaptureIngress(
+        val id: String,
+        val mode: KeyguardDiagnosticCaptureMode,
+        val droppedAtStart: Long,
+        val failuresAtStart: Long,
+    ) {
+        val nextAttempt = AtomicLong(1L)
+        val hiddenNoops = AtomicLong()
+        val producerTotalNs = AtomicLong()
+        val producerMaxNs = AtomicLong()
+        val legacyProducerTotalNs = AtomicLong()
+        val skippedRecords = AtomicLong()
+    }
+    @Volatile private var ingress: CaptureIngress? = null
+    // Retain counters after ingress is closed, so a frozen snapshot includes
+    // the final producer totals without requiring any producer-side lock.
+    private var lastIngress: CaptureIngress? = null
     private val captureWriter = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "fluvi-keyguard-diagnostic-writer").apply { isDaemon = true }
     }
@@ -488,6 +508,8 @@ internal object KeyguardCardDiagnostics {
         val revision: Long,
     )
     private val legacy = LegacyState()
+    @Volatile private var latestLegacyReason: String? = null
+    @Volatile private var latestLegacyAttach: String? = null
     private var capture: TimingCapture? = null
     private var recovered: RecoveredCapture? = null
     private var nextCaptureGeneration = 0L
@@ -725,12 +747,13 @@ internal object KeyguardCardDiagnostics {
         // on every subsequent read.  REC deliberately keeps a live duration.
         var endedElapsedMs: Long? = null,
         var nextSeq: Long = 1L,
-        var nextAttemptId: Long = 1L,
         var retainedBytes: Int = 0,
         var eventsEvicted: Int = 0,
         var eventsCoalesced: Int = 0,
         var hiddenNoopCount: Int = 0,
         var diagnosticDroppedRecords: Int = 0,
+        var diagnosticQueueOverflow: Long = 0L,
+        var diagnosticConsumerFailures: Long = 0L,
         var captureLockWaitNs: Long = 0L,
         var captureLockHeldNs: Long = 0L,
         var diagnosticProducerTotalNs: Long = 0L,
@@ -781,6 +804,7 @@ internal object KeyguardCardDiagnostics {
     )
 
     fun recordColdPreparation(serviceSession: Long, stage: String, observedUptimeMs: Long = SystemClock.uptimeMillis()) {
+        reduction.offer {
         synchronized(captureLock) {
             val current = coldPreparation?.takeIf { it.serviceSession == serviceSession }
                 ?: ColdPreparationRecord(
@@ -788,6 +812,7 @@ internal object KeyguardCardDiagnostics {
                     processInstanceId = processInstanceId,
                 ).also { coldPreparation = it }
             current.stages.putIfAbsent(stage, observedUptimeMs)
+        }
         }
     }
 
@@ -816,7 +841,7 @@ internal object KeyguardCardDiagnostics {
         build: String?,
         buildMode: String?,
         mode: String? = null,
-    ): Map<String, Any?> {
+    ): Map<String, Any?> = reduction.read {
         val export = synchronized(captureLock) {
         ensureRecoveredLoadedLocked(context)
         val settings = FluviKeyguardCardSettings.read(context)
@@ -849,15 +874,20 @@ internal object KeyguardCardDiagnostics {
             coldPreparation = coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) },
         )
         capture = created
+        CaptureIngress(id, captureMode, reduction.dropped.get(), reduction.failed.get()).also {
+            lastIngress = it
+            ingress = it
+        }
         recovered = null
         appendLocked(created, "CAPTURE_STARTED", "user", fields = mapOf("source" to "runtimeMethod"))
         persistLocked(context, created, force = true)
             snapshotForExportLocked(created)
         }
-        return snapshotMap(export, null)
+        snapshotMap(export, null)
     }
 
-    fun freezeCapture(context: Context): Map<String, Any?> {
+    fun freezeCapture(context: Context): Map<String, Any?> = reduction.read {
+        ingress = null
         val read = synchronized(captureLock) {
             ensureRecoveredLoadedLocked(context)
             val active = capture
@@ -872,10 +902,10 @@ internal object KeyguardCardDiagnostics {
             }
             (active?.frozenExport ?: active?.let(::snapshotForExportLocked)) to recovered
         }
-        return snapshotMap(read.first, read.second)
+        snapshotMap(read.first, read.second)
     }
 
-    fun captureSnapshot(context: Context): Map<String, Any?> {
+    fun captureSnapshot(context: Context): Map<String, Any?> = reduction.read {
         val read = synchronized(captureLock) {
             ensureRecoveredLoadedLocked(context)
             val active = capture
@@ -883,10 +913,12 @@ internal object KeyguardCardDiagnostics {
             val current = capture
             (current?.frozenExport ?: current?.let(::snapshotForExportLocked)) to recovered
         }
-        return snapshotMap(read.first, read.second)
+        snapshotMap(read.first, read.second)
     }
 
-    fun clearCapture(context: Context): Map<String, Any?> = synchronized(captureLock) {
+    fun clearCapture(context: Context): Map<String, Any?> = reduction.read { synchronized(captureLock) {
+        ingress = null
+        lastIngress = null
         capture = null
         recovered = null
         val clearGeneration = ++nextCaptureGeneration
@@ -910,7 +942,7 @@ internal object KeyguardCardDiagnostics {
             "clearGeneration" to clearGeneration,
             "report" to "",
         )
-    }
+    } }
 
     /** Called at the first line of each new wake attempt. Existing active
      * capture history is deliberately retained; only the legacy compact
@@ -922,18 +954,21 @@ internal object KeyguardCardDiagnostics {
         source: String = "unknown",
         receivedAtUptimeMs: Long = SystemClock.uptimeMillis(),
     ): KeyguardDiagnosticContext? {
-        val line = "${SystemClock.elapsedRealtime()}|KG|WAKE|session=$session|wake=$wakeEpoch"
-        resetLegacyAttempt(context, line, "session=$session|wake=$wakeEpoch")
-        return synchronized(captureLock) {
-            val active = capture ?: return@synchronized null
-            if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized null
+        val receivedElapsedMs = SystemClock.elapsedRealtime()
+        latestLegacyReason = "session=$session|wake=$wakeEpoch"
+        val token = ingress
+        val ownership = token?.let { KeyguardDiagnosticContext(it.id, it.nextAttempt.getAndIncrement(), session, wakeEpoch) }
+        reduction.offer {
+            resetLegacyAttempt(context, "$receivedElapsedMs|KG|WAKE|session=$session|wake=$wakeEpoch", "session=$session|wake=$wakeEpoch")
+            synchronized(captureLock) {
+            val active = capture?.takeIf { it.id == token?.id } ?: return@synchronized
+            if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
             while (active.attempts.size >= MAX_ATTEMPTS) active.attempts.removeFirst()
-            val attempt = TimingAttempt(active.nextAttemptId++, session, wakeEpoch, receivedAtUptimeMs)
+            val attempt = TimingAttempt(requireNotNull(ownership?.attemptId), session, wakeEpoch, receivedAtUptimeMs)
             if (active.firstAttempt == null) active.firstAttempt = attempt
             attempt.presentationMode = active.configuration["presentationMode"] ?: "NA"
             attempt.wakeSource = source
             active.attempts.addLast(attempt)
-            val context = KeyguardDiagnosticContext(active.id, attempt.id, session, wakeEpoch)
             appendLocked(
                 active,
                 "WAKE_ATTEMPT",
@@ -941,10 +976,12 @@ internal object KeyguardCardDiagnostics {
                 serviceSession = session,
                 wakeEpoch = wakeEpoch,
                 observedUptimeMs = receivedAtUptimeMs,
-                diagnosticContext = context,
+                observedElapsedMs = receivedElapsedMs,
+                diagnosticContext = ownership,
             )
-            context
+            }
         }
+        return ownership
     }
 
     fun newShowOperation(
@@ -973,15 +1010,20 @@ internal object KeyguardCardDiagnostics {
             triggerReceivedUptimeMs = triggerReceivedUptimeMs,
         )
 
-    fun recordHiddenNoop(context: Context) = synchronized(captureLock) {
-        val active = capture ?: return@synchronized
-        if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
-        active.hiddenNoopCount += 1
+    fun recordHiddenNoop(@Suppress("UNUSED_PARAMETER") context: Context) { ingress?.hiddenNoops?.incrementAndGet() }
+
+    /** Check before constructing optional verbose fields. LIGHT keeps the
+     * complete INSPECTION_FINISHED aggregate instead of three copies. */
+    fun wantsEvent(stage: String): Boolean {
+        val token = ingress ?: return false
+        return token.mode == KeyguardDiagnosticCaptureMode.FULL ||
+            stage !in LIGHT_REDUNDANT_STAGES
     }
 
-    /** Hot-path record. It only mutates a small in-memory ring while capture
-     * is active; persistence is checkpointed separately and never happens in
-     * an onDraw callback. */
+    private val LIGHT_REDUNDANT_STAGES = setOf("ACCESSIBILITY_EVENT", "WINDOWS_READ_FINISHED", "TREE_SCAN_FINISHED")
+
+    /** Producers enqueue immutable ownership and original times. String/map
+     * conversion, timeline reduction and retention run on the sole consumer. */
     fun captureEvent(
         context: Context,
         stage: String,
@@ -994,13 +1036,20 @@ internal object KeyguardCardDiagnostics {
         diagnosticContext: KeyguardDiagnosticContext? = null,
         operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, Any?> = emptyMap(),
+        deferredFields: (() -> Map<String, Any?>)? = null,
     ) {
         val producerStartedAtNs = SystemClock.elapsedRealtimeNanos()
+        val token = ingress ?: return
+        if (!wantsEvent(stage)) { token.skippedRecords.incrementAndGet(); return }
+        val observedAt = observedUptimeMs ?: SystemClock.uptimeMillis()
+        val observedElapsed = SystemClock.elapsedRealtime()
+        reduction.offer {
+        val lockRequestedAtNs = SystemClock.elapsedRealtimeNanos()
         synchronized(captureLock) {
         val lockAcquiredAtNs = SystemClock.elapsedRealtimeNanos()
-        val active = capture ?: return@synchronized
+        val active = capture?.takeIf { it.id == token.id } ?: return@synchronized
         if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
-        val capturedFields = fields.mapNotNull { (key, value) -> value?.let { key to technicalValue(it) } }.toMap()
+        val capturedFields = (deferredFields?.invoke() ?: fields).mapNotNull { (key, value) -> value?.let { key to technicalValue(it) } }.toMap()
             .let { base ->
                 if (stage == "ACCESSIBILITY_EVENT" && base["overlayState"] == "hidden") {
                     base["eventAgeMs"]?.toLongOrNull()?.let { age ->
@@ -1016,7 +1065,8 @@ internal object KeyguardCardDiagnostics {
             wakeEpoch = wakeEpoch,
             requestId = requestId,
             attachGeneration = attachGeneration,
-            observedUptimeMs = observedUptimeMs,
+            observedUptimeMs = observedAt,
+            observedElapsedMs = observedElapsed,
             diagnosticContext = diagnosticContext,
             operation = operation,
             fields = capturedFields,
@@ -1026,12 +1076,13 @@ internal object KeyguardCardDiagnostics {
         // put lock-held copy work on the show/hide callback path.
         val finishedAtNs = SystemClock.elapsedRealtimeNanos()
         val heldNs = (finishedAtNs - lockAcquiredAtNs).coerceAtLeast(0L)
-        val producerNs = (finishedAtNs - producerStartedAtNs).coerceAtLeast(0L)
-        active.captureLockWaitNs += (lockAcquiredAtNs - producerStartedAtNs).coerceAtLeast(0L)
+        active.captureLockWaitNs += lockAcquiredAtNs - lockRequestedAtNs
         active.captureLockHeldNs += heldNs
-        active.diagnosticProducerTotalNs += producerNs
-        active.diagnosticProducerMaxNs = maxOf(active.diagnosticProducerMaxNs, producerNs)
         }
+        }
+        val producerNs = SystemClock.elapsedRealtimeNanos() - producerStartedAtNs
+        token.producerTotalNs.addAndGet(producerNs)
+        token.producerMaxNs.updateAndGet { maxOf(it, producerNs) }
     }
 
     private fun appendLocked(
@@ -1043,6 +1094,7 @@ internal object KeyguardCardDiagnostics {
         requestId: Long? = null,
         attachGeneration: Long? = null,
         observedUptimeMs: Long? = null,
+        observedElapsedMs: Long? = null,
         diagnosticContext: KeyguardDiagnosticContext? = null,
         operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, String> = emptyMap(),
@@ -1058,7 +1110,7 @@ internal object KeyguardCardDiagnostics {
             processInstanceId = active.processInstanceId,
             seq = active.nextSeq++,
             uptimeMs = observedUptimeMs ?: SystemClock.uptimeMillis(),
-            elapsedMs = SystemClock.elapsedRealtime(),
+            elapsedMs = observedElapsedMs ?: SystemClock.elapsedRealtime(),
             attemptId = ownership?.attemptId ?: active.attempts.toList().lastOrNull {
                 it.serviceSession == serviceSession && it.wakeEpoch == wakeEpoch
             }?.id,
@@ -1282,14 +1334,14 @@ internal object KeyguardCardDiagnostics {
                     attempt.attachCount += 1
                     attempt.finalState = "ATTACHED"
                 }
-                "FIRST_ROOT_DRAW" -> showEpisode()?.firstRootDrawAtUptimeMs = event.uptimeMs
-                "FIRST_SHADER_DRAW" -> showEpisode()?.firstShaderDrawAtUptimeMs = event.uptimeMs
-                "FIRST_CURRENT_MATERIAL_DRAW" -> showEpisode()?.firstCurrentMaterialDrawAtUptimeMs = event.uptimeMs
-                "FIRST_LIVE_DRAW" -> showEpisode()?.firstLiveDrawAtUptimeMs = event.uptimeMs
-                "FRAME_COMMIT_CALLBACK_RECEIVED" -> showEpisode()?.frameCommitCallbackAtUptimeMs = event.uptimeMs
-                "BOOTSTRAP_DRAW" -> showEpisode()?.bootstrapDrawAtUptimeMs = event.uptimeMs
-                "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED" -> showEpisode()?.bootstrapCommitCallbackAtUptimeMs = event.uptimeMs
-                "MATERIAL_LIVE_PROMOTED" -> showEpisode()?.livePromotedAtUptimeMs = event.uptimeMs
+                "FIRST_ROOT_DRAW" -> showEpisode()?.let { if (it.firstRootDrawAtUptimeMs == null) it.firstRootDrawAtUptimeMs = event.uptimeMs }
+                "FIRST_SHADER_DRAW" -> showEpisode()?.let { if (it.firstShaderDrawAtUptimeMs == null) it.firstShaderDrawAtUptimeMs = event.uptimeMs }
+                "FIRST_CURRENT_MATERIAL_DRAW" -> showEpisode()?.let { if (it.firstCurrentMaterialDrawAtUptimeMs == null) it.firstCurrentMaterialDrawAtUptimeMs = event.uptimeMs }
+                "FIRST_LIVE_DRAW" -> showEpisode()?.let { if (it.firstLiveDrawAtUptimeMs == null) it.firstLiveDrawAtUptimeMs = event.uptimeMs }
+                "FRAME_COMMIT_CALLBACK_RECEIVED" -> showEpisode()?.let { if (it.frameCommitCallbackAtUptimeMs == null) it.frameCommitCallbackAtUptimeMs = event.uptimeMs }
+                "BOOTSTRAP_DRAW" -> showEpisode()?.let { if (it.bootstrapDrawAtUptimeMs == null) it.bootstrapDrawAtUptimeMs = event.uptimeMs }
+                "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED" -> showEpisode()?.let { if (it.bootstrapCommitCallbackAtUptimeMs == null) it.bootstrapCommitCallbackAtUptimeMs = event.uptimeMs }
+                "MATERIAL_LIVE_PROMOTED" -> showEpisode()?.let { if (it.livePromotedAtUptimeMs == null) it.livePromotedAtUptimeMs = event.uptimeMs }
                 "HIDE_DECIDED" -> event.hideOperationId?.let { operationId ->
                     if (hideEpisode() == null) {
                         while (attempt.hides.size >= 8) attempt.hides.removeFirst()
@@ -1333,6 +1385,7 @@ internal object KeyguardCardDiagnostics {
         if (SystemClock.elapsedRealtime() - active.startedElapsedMs <= ACTIVE_CAPTURE_MS) return false
         active.endedElapsedMs = SystemClock.elapsedRealtime()
         active.state = "EXPIRED"
+        if (ingress?.id == active.id) ingress = null
         appendLocked(active, "CAPTURE_EXPIRED", "timeout")
         persistLocked(context, active, force = true)
         active.frozenExport = snapshotForExportLocked(active)
@@ -1379,6 +1432,13 @@ internal object KeyguardCardDiagnostics {
     }
 
     private fun snapshotForExportLocked(active: TimingCapture): TimingCapture = active.copy(
+        diagnosticDroppedRecords = active.diagnosticDroppedRecords + (lastIngress?.takeIf { it.id == active.id }?.skippedRecords?.get()?.toInt() ?: 0),
+        hiddenNoopCount = lastIngress?.takeIf { it.id == active.id }?.hiddenNoops?.get()?.toInt() ?: active.hiddenNoopCount,
+        diagnosticProducerTotalNs = lastIngress?.takeIf { it.id == active.id }?.producerTotalNs?.get() ?: active.diagnosticProducerTotalNs,
+        diagnosticProducerMaxNs = lastIngress?.takeIf { it.id == active.id }?.producerMaxNs?.get() ?: active.diagnosticProducerMaxNs,
+        legacyDiagnosticProducerTotalNs = lastIngress?.takeIf { it.id == active.id }?.legacyProducerTotalNs?.get() ?: active.legacyDiagnosticProducerTotalNs,
+        diagnosticQueueOverflow = lastIngress?.takeIf { it.id == active.id }?.let { reduction.dropped.get() - it.droppedAtStart } ?: active.diagnosticQueueOverflow,
+        diagnosticConsumerFailures = lastIngress?.takeIf { it.id == active.id }?.let { reduction.failed.get() - it.failuresAtStart } ?: active.diagnosticConsumerFailures,
         frozenExport = null,
         coldPreparation = coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) }
             ?: active.coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) },
@@ -1497,6 +1557,8 @@ internal object KeyguardCardDiagnostics {
             appendLine("lastPersistedSeq=${active.lastSuccessfullyPersistedSeq}")
             appendLine("unflushedTailMayBeMissing=${active.unflushedTailMayBeMissing || active.events.lastOrNull()?.seq != active.lastSuccessfullyPersistedSeq}")
             appendLine("DIAGNOSTIC_COST")
+            appendLine("diagnosticReductionThread=dedicatedWorker")
+            appendLine("captureLockMeasurementOwner=diagnosticConsumer")
             appendLine("captureLockWaitNs=${active.captureLockWaitNs}")
             appendLine("captureLockHeldNs=${active.captureLockHeldNs}")
             appendLine("diagnosticProducerTotalNs=${active.diagnosticProducerTotalNs}")
@@ -1505,6 +1567,8 @@ internal object KeyguardCardDiagnostics {
             appendLine("legacyWriteCount=${active.legacyWriteCount}")
             appendLine("checkpointCount=${active.checkpointCount}")
             appendLine("diagnosticDroppedRecords=${active.diagnosticDroppedRecords}")
+            appendLine("diagnosticQueueOverflow=${active.diagnosticQueueOverflow}")
+            appendLine("diagnosticConsumerFailures=${active.diagnosticConsumerFailures}")
             appendLine("ATTEMPT_SUMMARIES")
             attemptsForCausalEvidence.forEach { append(attemptSummary(it)) }
             appendLine("CAUSAL_SPINES")
@@ -1685,8 +1749,9 @@ internal object KeyguardCardDiagnostics {
         return result.toString()
     }
 
+    private val technicalSeparators = Regex("[\\r\\n|=]")
     private fun technicalValue(value: Any): String = value.toString()
-        .replace(Regex("[\\r\\n|=]"), "_")
+        .replace(technicalSeparators, "_")
         .take(160)
 
     fun beginLockAttempt(context: Context, session: Long, wakeEpoch: Long) {
@@ -1695,21 +1760,23 @@ internal object KeyguardCardDiagnostics {
 
     fun record(context: Context, event: String, reason: String, attached: Boolean? = null) {
         val startedAtNs = SystemClock.elapsedRealtimeNanos()
+        latestLegacyReason = reason
+        val token = ingress
+        val observedElapsedMs = SystemClock.elapsedRealtime()
+        reduction.offer {
         val state = "$event|$reason|${attached ?: "-"}"
         // LIGHT is the default performance capture. Keep the existing
         // in-memory legacy summary current, but do not turn every ordinary
         // event into a background SharedPreferences write. FULL and normal
         // operation retain the durable legacy behavior.
-        val suppressLegacyPersistence = synchronized(captureLock) {
-            capture?.let { it.state == "REC" && it.captureMode == KeyguardDiagnosticCaptureMode.LIGHT } == true
-        }
+        val suppressLegacyPersistence = token?.mode == KeyguardDiagnosticCaptureMode.LIGHT
         val schedule = synchronized(legacyLock) {
             ensureLegacyLoadedLocked(context)
             if (legacy.lastEvent == state) {
                 legacy.lastEventCount += 1
             } else {
                 while (legacy.events.size >= MAX_LEGACY_EVENTS) legacy.events.removeFirst()
-                legacy.events.addLast("${SystemClock.elapsedRealtime()}|$state")
+                legacy.events.addLast("$observedElapsedMs|$state")
                 legacy.lastEvent = state
                 legacy.lastEventCount = 1
             }
@@ -1718,15 +1785,14 @@ internal object KeyguardCardDiagnostics {
             if (!suppressLegacyPersistence) queueLegacyWriteLocked() else false
         }
         if (schedule) persistLegacyAsync(context.applicationContext)
-        val elapsedNs = (SystemClock.elapsedRealtimeNanos() - startedAtNs).coerceAtLeast(0L)
-        synchronized(captureLock) {
-            capture?.takeIf { it.state == "REC" }?.let { active ->
-                active.legacyDiagnosticProducerTotalNs += elapsedNs
-            }
         }
+        val elapsedNs = (SystemClock.elapsedRealtimeNanos() - startedAtNs).coerceAtLeast(0L)
+        token?.legacyProducerTotalNs?.addAndGet(elapsedNs)
     }
 
     fun attach(context: Context, result: String) {
+        latestLegacyAttach = result
+        reduction.offer {
         val schedule = synchronized(legacyLock) {
             ensureLegacyLoadedLocked(context)
             legacy.lastAttach = result
@@ -1734,14 +1800,15 @@ internal object KeyguardCardDiagnostics {
             queueLegacyWriteLocked()
         }
         if (schedule) persistLegacyAsync(context.applicationContext)
+        }
     }
 
-    fun lastReason(context: Context): String = synchronized(legacyLock) {
+    fun lastReason(context: Context): String = latestLegacyReason ?: synchronized(legacyLock) {
         ensureLegacyLoadedLocked(context)
         legacy.lastReason
     }
 
-    fun lastAttachResult(context: Context): String = synchronized(legacyLock) {
+    fun lastAttachResult(context: Context): String = latestLegacyAttach ?: synchronized(legacyLock) {
         ensureLegacyLoadedLocked(context)
         legacy.lastAttach
     }

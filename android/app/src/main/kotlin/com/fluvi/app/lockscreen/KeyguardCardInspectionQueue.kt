@@ -106,7 +106,17 @@ internal class KeyguardCardInspectionQueue {
             active = request
             return true
         }
-        pending = request
+        // Coalescing may replace an unstarted wake request with an ordinary
+        // window event. Preserve its still-unperformed freshness boundary,
+        // while keeping the new event/time/authority as the actual request.
+        val previous = pending
+        pending = if (previous != null && previous.windowFreshness.requiresCacheClear &&
+            !request.windowFreshness.requiresCacheClear &&
+            previous.session == request.session && previous.wakeGeneration == request.wakeGeneration &&
+            previous.visibilityEpoch == request.visibilityEpoch &&
+            previous.interactionEpoch == request.interactionEpoch &&
+            previous.attachGeneration == request.attachGeneration
+        ) request.copy(windowFreshness = previous.windowFreshness) else request
         return false
     }
 

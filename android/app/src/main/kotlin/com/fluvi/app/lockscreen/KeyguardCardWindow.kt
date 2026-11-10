@@ -47,10 +47,10 @@ internal class KeyguardCardWindow(
     private val onBootstrapCommit: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onLivePromotion: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFrameCommit: (KeyguardFirstDrawEvent) -> Unit = {},
+    private val manager: WindowManager = serviceContext.getSystemService(WindowManager::class.java),
 ) {
     enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
 
-    private val manager: WindowManager = serviceContext.getSystemService(WindowManager::class.java)
     private var root: KeyguardCardInteractionLayout? = null
     private val lifecycle = KeyguardCardWindowLifecycle()
     private var appliedPresentation: FluviFinancialCardPresentation? = null

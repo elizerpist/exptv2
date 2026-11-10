@@ -182,7 +182,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         diagnosticContext: KeyguardDiagnosticContext? = null,
         operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, Any?> = emptyMap(),
+        deferredFields: (() -> Map<String, Any?>)? = null,
     ) {
+        if (!KeyguardCardDiagnostics.wantsEvent(stage)) return
         val capturedContext = operation?.context ?: diagnosticContext ?: request?.diagnosticContext ?: currentDiagnosticAttempt
         KeyguardCardDiagnostics.captureEvent(
             context = this,
@@ -196,6 +198,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             diagnosticContext = capturedContext,
             operation = operation,
             fields = fields,
+            deferredFields = deferredFields,
         )
     }
 
@@ -377,7 +380,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         // This check intentionally precedes the stale-result gate: an already
         // unlocked device must not wait for a Binder tree walk to finish.
         if (fastHideIfSystemExcluded("accessibility", callbackReceivedAt)) {
-            traceKeyguard(
+            if (KeyguardCardDiagnostics.wantsEvent("ACCESSIBILITY_EVENT")) traceKeyguard(
                 "ACCESSIBILITY_EVENT",
                 "excluded",
                 observedUptimeMs = callbackReceivedAt,
@@ -395,7 +398,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         val own = ::overlay.isInitialized && overlay.isOwnAccessibilityWindow(meta.windowId, meta.displayId)
         val action = KeyguardCardEventGate.decide(meta, own)
-        traceKeyguard(
+        if (KeyguardCardDiagnostics.wantsEvent("ACCESSIBILITY_EVENT")) traceKeyguard(
             "ACCESSIBILITY_EVENT",
             if (action == KeyguardEventAction.IGNORE_OWN) "ownIgnored" else "surface",
             observedUptimeMs = callbackReceivedAt,
@@ -902,10 +905,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                     )
                 }
                 // The visibility operation has completed, so release the
-                // serial reader slot before detailed capture reduction. This
-                // does not launch a second walker: this coroutine still owns
-                // the one queue loop, but a newer event can now occupy the
-                // bounded pending slot while diagnostics are reduced.
+                // serial reader slot. Capture reduction has its own bounded
+                // consumer; this loop only enqueues references and proceeds
+                // to the next acquisition without waiting for that consumer.
                 val next = synchronized(queueLock) { inspectionQueue.complete(active) }
                 traceInspectionResult(active, result, startedAt, finishedAt)
                 traceKeyguard(
@@ -924,17 +926,19 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
     }
 
-    /** Formats the detailed worker record only after the corresponding main
-     * visibility operation has run.  The timestamps remain those observed on
-     * the worker; this ordering merely removes capture-lock work from ahead of
-     * the handoff. */
+    /** Capture immutable results, build verbose fields on the diagnostic
+     * consumer. No reduction/formatting runs ahead of the next tree walk. */
     private fun traceInspectionResult(
         request: KeyguardCardInspectionRequest,
         result: Inspection,
         startedAt: Long,
         finishedAt: Long,
     ) {
-        val fields = mapOf(
+        if (!KeyguardCardDiagnostics.wantsEvent("INSPECTION_FINISHED")) return
+        val abortedBefore = inspectionsAbortedBeforeRead.get()
+        val abortedDuring = inspectionsAbortedDuringWalk.get()
+        val readsAfter = nodeReadsAfterInvalidation.get()
+        val fields = { mapOf(
             "inspectionTotalMs" to (finishedAt - startedAt),
             "windowsReadMs" to (result.windowsReadMs ?: "NA"),
             "treeScanMs" to (result.treeScanMs ?: "NA"),
@@ -968,13 +972,13 @@ class FluviKeyguardCardService : AccessibilityService() {
             "surfaceClassification" to result.decision.name,
             "surfaceMarkers" to result.surfaceMarkers,
             "abortedStale" to result.abortedStale,
-            "inspectionsAbortedBeforeRead" to inspectionsAbortedBeforeRead.get(),
-            "inspectionsAbortedDuringWalk" to inspectionsAbortedDuringWalk.get(),
-            "nodeReadsAfterInvalidation" to nodeReadsAfterInvalidation.get(),
-        )
-        traceKeyguard("WINDOWS_READ_FINISHED", "binder", request, observedUptimeMs = finishedAt, fields = fields)
-        traceKeyguard("TREE_SCAN_FINISHED", "idOnly", request, observedUptimeMs = finishedAt, fields = fields)
-        traceKeyguard("INSPECTION_FINISHED", result.surfaceReason.name, request, observedUptimeMs = finishedAt, fields = fields)
+            "inspectionsAbortedBeforeRead" to abortedBefore,
+            "inspectionsAbortedDuringWalk" to abortedDuring,
+            "nodeReadsAfterInvalidation" to readsAfter,
+        ) }
+        traceKeyguard("WINDOWS_READ_FINISHED", "apiCall", request, observedUptimeMs = finishedAt, deferredFields = fields)
+        traceKeyguard("TREE_SCAN_FINISHED", "idOnly", request, observedUptimeMs = finishedAt, deferredFields = fields)
+        traceKeyguard("INSPECTION_FINISHED", result.surfaceReason.name, request, observedUptimeMs = finishedAt, deferredFields = fields)
     }
 
     private data class Inspection(

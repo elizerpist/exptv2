@@ -85,6 +85,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_BEGIN", "window", requestId = 44L, observedUptimeMs = 110L, diagnosticContext = attempt, operation = show)
         KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "success", requestId = 44L, observedUptimeMs = 130L, diagnosticContext = attempt, operation = show)
         KeyguardCardDiagnostics.captureEvent(context, "FIRST_ROOT_DRAW", "observed", requestId = 44L, observedUptimeMs = 150L, diagnosticContext = attempt, operation = show)
+        KeyguardCardDiagnostics.captureEvent(context, "FIRST_ROOT_DRAW", "duplicate", requestId = 44L, observedUptimeMs = 700L, diagnosticContext = attempt, operation = show)
+        KeyguardCardDiagnostics.captureEvent(context, "BOOTSTRAP_DRAW", "observed", observedUptimeMs = 151L, diagnosticContext = attempt, operation = show)
+        KeyguardCardDiagnostics.captureEvent(context, "BOOTSTRAP_DRAW", "duplicate", observedUptimeMs = 701L, diagnosticContext = attempt, operation = show)
         KeyguardCardDiagnostics.captureEvent(context, "SURFACE_RECONFIRMED", "laterInspection", requestId = 45L, observedUptimeMs = 800L, diagnosticContext = attempt)
 
         // An unrelated accessibility callback must not become the hide start.
@@ -104,6 +107,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
         assertTrue(report.contains("showDecisionToAddViewBeginMs=10"))
         assertTrue(report.contains("wakeCallbackToFirstRootDrawMs=150"))
+        assertTrue(report.contains("bootstrapDrawAt=151"))
         assertTrue(report.contains("hideSignalToDecisionMs=2"))
         assertTrue(report.contains("hideSignalToRemoveReturnMs=5"))
         assertTrue(report.contains("actualWithdrawalHideOp=${hide.hideOperationId}"))
@@ -336,5 +340,60 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("serviceSession=77"))
         assertTrue(report.contains("SERVICE_CONNECTED=10"))
         assertTrue(report.contains("MATERIAL_PROGRAM_PREPARED=20"))
+    }
+
+    @Test fun lightAndOffSkipVerboseBuildersBeforeReduction() {
+        val builds = java.util.concurrent.atomic.AtomicInteger()
+        val fields = { builds.incrementAndGet(); mapOf<String, Any?>("windowId" to 17) }
+        KeyguardCardDiagnostics.captureEvent(context, "ACCESSIBILITY_EVENT", "off", deferredFields = fields)
+        KeyguardCardDiagnostics.captureSnapshot(context)
+        assertEquals(0, builds.get())
+        KeyguardCardDiagnostics.startCapture(context, "light-sha", "debug", "LIGHT")
+        repeat(100) {
+            KeyguardCardDiagnostics.captureEvent(context, "ACCESSIBILITY_EVENT", "light", deferredFields = fields)
+        }
+        KeyguardCardDiagnostics.freezeCapture(context)
+        assertEquals(0, builds.get())
+        KeyguardCardDiagnostics.startCapture(context, "full-sha", "debug", "FULL")
+        KeyguardCardDiagnostics.captureEvent(context, "ACCESSIBILITY_EVENT", "full", deferredFields = fields)
+        KeyguardCardDiagnostics.freezeCapture(context)
+        assertEquals(1, builds.get())
+    }
+
+    @Test fun blockedReductionDoesNotBlockProducersAndFreezeKeepsOriginalOwnership() {
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        KeyguardCardDiagnostics.startCapture(context, "async-sha", "debug", "LIGHT")
+        val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9L, 1L, "wake", 100L))
+        KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "wake", requestId = 7L, diagnosticContext = attempt, observedUptimeMs = 101L)
+        KeyguardCardDiagnostics.captureEvent(
+            context, "INSPECTION_FINISHED", "main", requestId = 7L,
+            diagnosticContext = attempt, observedUptimeMs = 200L,
+            deferredFields = {
+                entered.countDown()
+                check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                mapOf("inspectionTotalMs" to 90L)
+            },
+        )
+        try {
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            // These are the exact production ingress methods used by window
+            // and service callbacks. The consumer remains deliberately held.
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                KeyguardCardDiagnostics.record(context, "KG|TEST", "stillResponsive", false)
+                KeyguardCardDiagnostics.recordHiddenNoop(context)
+                KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_STARTED", "pending", requestId = 8L, diagnosticContext = attempt, observedUptimeMs = 201L)
+            }
+            assertEquals(1L, release.count)
+        } finally {
+            release.countDown()
+        }
+        val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(frozen.contains("req=7"))
+        assertTrue(frozen.contains("finished=200"))
+        assertTrue(frozen.contains("hiddenNoopCount=1"))
+        assertTrue(frozen.contains("diagnosticQueueOverflow=0"))
+        assertTrue(frozen.contains("diagnosticConsumerFailures=0"))
+        assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
     }
 }

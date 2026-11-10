@@ -12,6 +12,8 @@ import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.view.PixelCopy
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +21,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
 import com.fluvi.app.lockscreen.KeyguardCardContentOverflow
 import com.fluvi.app.lockscreen.KeyguardFrameCommitObservation
+import com.fluvi.app.lockscreen.KeyguardCardWindow
+import com.fluvi.app.lockscreen.KeyguardCardSettings
+import com.fluvi.app.lockscreen.KeyguardCardPresentationMode
+import com.fluvi.app.lockscreen.KeyguardCardCardPosition
+import com.fluvi.app.lockscreen.KeyguardCardOrbPosition
+import com.fluvi.app.runtime.FluviFinancialCardPresenter
 import com.fluvi.app.lockscreen.keyguardCardWindowParameters
 import com.fluvi.app.lockscreen.resolveKeyguardCardGeometry
 import com.fluvi.app.R
@@ -423,6 +431,166 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 controller?.dispose()
                 activity.finish()
             }
+        }
+    }
+
+    @Test fun productionOrbWindowAutomaticallyCommitsAndRendersLiveAcrossReattach() {
+        exerciseProductionWindow(KeyguardCardPresentationMode.ORB)
+    }
+
+    @Test fun productionCardWindowAutomaticallyStartsItsAnimatedBackground() {
+        exerciseProductionWindow(KeyguardCardPresentationMode.CARD)
+    }
+
+    private fun exerciseProductionWindow(mode: KeyguardCardPresentationMode) {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        lateinit var window: KeyguardCardWindow
+        var createdWindow: KeyguardCardWindow? = null
+        lateinit var manager: TestPanelWindowManager
+        val live = CountDownLatch(1)
+        val committed = AtomicInteger()
+        val promoted = AtomicInteger()
+        val settings = KeyguardCardSettings(
+            requested = true,
+            showFinancialDetails = true,
+            presentationMode = mode,
+            animationMode = KeyguardCardAnimationMode.ORB_AND_BACKGROUND,
+            cardPosition = KeyguardCardCardPosition(.5f),
+            orbPosition = KeyguardCardOrbPosition(.5f, .5f),
+        )
+        try {
+            instrumentation.runOnMainSync {
+                manager = TestPanelWindowManager(activity)
+                window = KeyguardCardWindow(
+                    serviceContext = activity,
+                    onOpen = {},
+                    onToggle = {},
+                    onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> },
+                    onFirstShaderDraw = { live.countDown() },
+                    onBootstrapCommit = { committed.incrementAndGet() },
+                    onLivePromotion = { promoted.incrementAndGet() },
+                    manager = manager,
+                )
+                createdWindow = window
+                // The production window creates its controller, prepares on
+                // the real GPU lane, registers before attach and promotes
+                // from Android's actual commit callback. This test never
+                // invokes or replaces a functional commit/promotion callback.
+                window.prepareRetainedView(settings, profile())
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+            }
+            assertTrue("production window did not automatically reach live shader drawing",
+                live.await(12, TimeUnit.SECONDS))
+            instrumentation.waitForIdleSync()
+            lateinit var retainedRoot: View
+            var phaseBefore = 0L
+            instrumentation.runOnMainSync {
+                retainedRoot = requireNotNull(manager.currentRoot)
+                val d = requireNotNull(window.materialDiagnostics())
+                assertTrue(d.hardwareAccelerated)
+                assertEquals("LIVE", d.coldPresentationState)
+                assertTrue(d.orb.bootstrapDrawCount > 0)
+                assertTrue(d.orb.shaderDrawCount > 0)
+                if (mode == KeyguardCardPresentationMode.CARD) assertTrue(d.background.shaderDrawCount > 0)
+                assertEquals("expected a real bootstrap commit", 1, committed.get())
+                assertEquals("expected one automatic live promotion", 1, promoted.get())
+                assertEquals(1, manager.adds)
+                assertEquals(0, manager.removes)
+                assertEquals(manager.lastWidth, retainedRoot.width)
+                assertEquals(manager.lastHeight, retainedRoot.height)
+                phaseBefore = d.orb.phaseAdvanceCount.toLong()
+            }
+            awaitWindowPhaseAdvance(instrumentation, window, retainedRoot, phaseBefore)
+            instrumentation.runOnMainSync {
+                assertTrue(window.hide())
+                assertFalse(window.isAttached)
+                assertEquals(1, manager.adds)
+                assertEquals(1, manager.removes)
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+                assertTrue("reattach must reuse the retained root", retainedRoot === manager.currentRoot)
+                phaseBefore = requireNotNull(window.materialDiagnostics()).orb.phaseAdvanceCount.toLong()
+            }
+            awaitWindowPhaseAdvance(instrumentation, window, retainedRoot, phaseBefore)
+            instrumentation.runOnMainSync {
+                assertEquals(2, manager.adds)
+                assertEquals(1, manager.removes)
+                assertEquals("warm reattach must not repeat cold bootstrap", 1, committed.get())
+                assertEquals(1, promoted.get())
+                assertEquals(manager.lastWidth, retainedRoot.width)
+                assertEquals(manager.lastHeight, retainedRoot.height)
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                createdWindow?.dispose()
+                activity.finish()
+            }
+        }
+    }
+
+    private fun awaitWindowPhaseAdvance(
+        instrumentation: Instrumentation,
+        window: KeyguardCardWindow,
+        root: View,
+        phaseBefore: Long,
+    ) {
+        val advanced = CountDownLatch(1)
+        val listener = ViewTreeObserver.OnDrawListener {
+            if ((window.materialDiagnostics()?.orb?.phaseAdvanceCount?.toLong() ?: 0L) > phaseBefore + 2L) {
+                advanced.countDown()
+            }
+        }
+        instrumentation.runOnMainSync { root.viewTreeObserver.addOnDrawListener(listener) }
+        try {
+            assertTrue("live clock did not advance shader frames", advanced.await(8, TimeUnit.SECONDS))
+        } finally {
+            instrumentation.runOnMainSync {
+                if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnDrawListener(listener)
+            }
+        }
+    }
+
+    /** Adapts only the privileged overlay token to the test Activity's panel
+     * token. Real WindowManager, ViewRoot, hardware traversal, commit delivery
+     * and removal all run with the production retained root. */
+    private class TestPanelWindowManager(private val activity: KeyguardMaterialTestActivity) :
+        WindowManager by activity.getSystemService(WindowManager::class.java) {
+        private val delegate = activity.getSystemService(WindowManager::class.java)
+        var adds = 0
+        var removes = 0
+        var lastWidth = 0
+        var lastHeight = 0
+        var currentRoot: View? = null
+
+        private fun panelParameters(params: ViewGroup.LayoutParams) = WindowManager.LayoutParams().apply {
+            copyFrom(params as WindowManager.LayoutParams)
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL
+            token = activity.window.decorView.windowToken
+            lastWidth = width
+            lastHeight = height
+        }
+
+        override fun addView(view: View, params: ViewGroup.LayoutParams) {
+            delegate.addView(view, panelParameters(params))
+            adds += 1
+            currentRoot = view
+        }
+
+        override fun updateViewLayout(view: View, params: ViewGroup.LayoutParams) =
+            delegate.updateViewLayout(view, panelParameters(params))
+
+        override fun removeViewImmediate(view: View) {
+            delegate.removeViewImmediate(view)
+            removes += 1
+            currentRoot = null
         }
     }
 

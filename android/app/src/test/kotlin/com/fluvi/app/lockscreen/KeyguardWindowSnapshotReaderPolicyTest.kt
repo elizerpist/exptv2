@@ -86,7 +86,7 @@ class KeyguardWindowSnapshotReaderPolicyTest {
         // A normal event does not clear the whole cache, but can still use
         // the validated active-root path when Android reports the cache live.
         assertTrue(
-            KeyguardWindowSnapshotReaderPolicy.canUseInterruptibleActiveRoot(
+            KeyguardWindowSnapshotReaderPolicy.canUseBatchedActiveRoot(
                 apiLevel = 35,
                 cacheEnabled = true,
                 hasUnambiguousCandidate = true,
@@ -94,7 +94,7 @@ class KeyguardWindowSnapshotReaderPolicyTest {
             ),
         )
         assertFalse(
-            KeyguardWindowSnapshotReaderPolicy.canUseInterruptibleActiveRoot(
+            KeyguardWindowSnapshotReaderPolicy.canUseBatchedActiveRoot(
                 apiLevel = 35,
                 cacheEnabled = false,
                 hasUnambiguousCandidate = true,
@@ -102,7 +102,7 @@ class KeyguardWindowSnapshotReaderPolicyTest {
             ),
         )
         assertFalse(
-            KeyguardWindowSnapshotReaderPolicy.canUseInterruptibleActiveRoot(
+            KeyguardWindowSnapshotReaderPolicy.canUseBatchedActiveRoot(
                 apiLevel = 32,
                 cacheEnabled = true,
                 hasUnambiguousCandidate = true,
@@ -113,7 +113,7 @@ class KeyguardWindowSnapshotReaderPolicyTest {
         // normal events do not require that explicit boundary in the first
         // place.
         assertFalse(
-            KeyguardWindowSnapshotReaderPolicy.canUseInterruptibleActiveRoot(
+            KeyguardWindowSnapshotReaderPolicy.canUseBatchedActiveRoot(
                 apiLevel = 35,
                 cacheEnabled = true,
                 hasUnambiguousCandidate = true,
@@ -122,16 +122,15 @@ class KeyguardWindowSnapshotReaderPolicyTest {
         )
     }
 
-    @Test fun prefetch_strategy_keeps_descendant_batches_interruptible() {
-        val flags = KeyguardWindowSnapshotReaderPolicy.interruptiblePrefetchFlags(apiLevel = 35)
+    @Test fun prefetch_configuration_matches_measured_batched_baseline_not_a_speed_assertion() {
+        val flags = KeyguardWindowSnapshotReaderPolicy.batchedPrefetchFlags(apiLevel = 35)
         assertTrue(
             (flags and android.view.accessibility.AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_HYBRID) != 0,
         )
-        assertEquals(
-            0,
-            flags and android.view.accessibility.AccessibilityNodeInfo.FLAG_PREFETCH_UNINTERRUPTIBLE,
+        assertTrue(
+            (flags and android.view.accessibility.AccessibilityNodeInfo.FLAG_PREFETCH_UNINTERRUPTIBLE) != 0,
         )
-        assertEquals(0, KeyguardWindowSnapshotReaderPolicy.interruptiblePrefetchFlags(apiLevel = 32))
+        assertEquals(0, KeyguardWindowSnapshotReaderPolicy.batchedPrefetchFlags(apiLevel = 32))
     }
 
     private fun window(

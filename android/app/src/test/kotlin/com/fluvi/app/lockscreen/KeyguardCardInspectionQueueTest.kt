@@ -7,6 +7,31 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KeyguardCardInspectionQueueTest {
+    @Test fun `latest event cannot erase an unperformed wake freshness boundary`() {
+        val queue = KeyguardCardInspectionQueue()
+        val old = request(1, "oldWake").copy(wakeGeneration = 1L)
+        val wake = request(2, "wake").copy(wakeGeneration = 2L, windowFreshness = KeyguardWindowFreshness.LIFECYCLE_BOUNDARY)
+        val window = wake.copy(id = 3L, trigger = "window", queuedAtUptimeMs = 30L, windowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT)
+        queue.offer(old)
+        queue.offer(wake)
+        queue.offer(window)
+        val next = requireNotNull(queue.complete(old))
+        assertEquals(window.id, next.id)
+        assertEquals(window.queuedAtUptimeMs, next.queuedAtUptimeMs)
+        assertEquals(window.wakeGeneration, next.wakeGeneration)
+        assertEquals(KeyguardWindowFreshness.LIFECYCLE_BOUNDARY, next.windowFreshness)
+    }
+
+    @Test fun `freshness obligation from another authority is not relabelled`() {
+        val queue = KeyguardCardInspectionQueue()
+        val active = request(1, "active")
+        queue.offer(active)
+        queue.offer(request(2, "wake").copy(windowFreshness = KeyguardWindowFreshness.LIFECYCLE_BOUNDARY))
+        val current = request(3, "window").copy(visibilityEpoch = active.visibilityEpoch + 1L)
+        queue.offer(current)
+        assertEquals(current, queue.complete(active))
+    }
+
     @Test fun `one active inspection retains only the newest coalesced request`() {
         val queue = KeyguardCardInspectionQueue()
         val first = request(1, "wake")

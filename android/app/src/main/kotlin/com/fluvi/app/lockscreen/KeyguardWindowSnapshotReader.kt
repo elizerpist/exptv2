@@ -41,19 +41,20 @@ internal enum class KeyguardWindowFreshness {
 }
 
 internal object KeyguardWindowSnapshotReaderPolicy {
-    /** API-33's overloads keep descendant prefetch interruptible.  In
-     * particular, do not add FLAG_PREFETCH_UNINTERRUPTIBLE to the wake path:
-     * that can make the root call wait for a whole prefetch batch. */
-    fun interruptiblePrefetchFlags(apiLevel: Int = Build.VERSION.SDK_INT): Int =
+    /** Restore the measured 47002e5 batching configuration. A root may wait
+     * for its batch; the tradeoff is fewer subsequent remote child waits.
+     * Flags specify acquisition, not a performance guarantee. */
+    fun batchedPrefetchFlags(apiLevel: Int = Build.VERSION.SDK_INT): Int =
         if (apiLevel >= Build.VERSION_CODES.TIRAMISU) {
-            AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_HYBRID
+            AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_HYBRID or
+                AccessibilityNodeInfo.FLAG_PREFETCH_UNINTERRUPTIBLE
         } else 0
 
     fun shouldClearCache(freshness: KeyguardWindowFreshness): Boolean =
         freshness.requiresCacheClear
 
     /** Strategy selection intentionally has no cache-clear-result input. */
-    fun canUseInterruptibleActiveRoot(
+    fun canUseBatchedActiveRoot(
         apiLevel: Int,
         cacheEnabled: Boolean?,
         hasUnambiguousCandidate: Boolean,
@@ -258,9 +259,9 @@ internal class KeyguardWindowSnapshotReader(
         timing.cacheEnabled = cacheEnabled
         timing.freshnessPolicy = request.freshness.name
         timing.cacheClearResult = cacheClearResult
-        val prefetch = KeyguardWindowSnapshotReaderPolicy.interruptiblePrefetchFlags()
+        val prefetch = KeyguardWindowSnapshotReaderPolicy.batchedPrefetchFlags()
         timing.prefetchFlags = prefetch
-        timing.strategy = if (prefetch != 0) "PER_WINDOW_INTERRUPTIBLE" else "LEGACY_PER_WINDOW"
+        timing.strategy = "LEGACY_PER_WINDOW"
 
         if (!authorityIsCurrent()) return Result(
             emptyList(), false, false, windowsReadMs,
@@ -279,7 +280,7 @@ internal class KeyguardWindowSnapshotReader(
         // remains available when evidence requires it.
         val freshnessBoundaryEstablished = !KeyguardWindowSnapshotReaderPolicy.shouldClearCache(request.freshness) ||
             cacheClearResult.startsWith("cleared:")
-        val canBatch = KeyguardWindowSnapshotReaderPolicy.canUseInterruptibleActiveRoot(
+        val canBatch = KeyguardWindowSnapshotReaderPolicy.canUseBatchedActiveRoot(
             apiLevel = Build.VERSION.SDK_INT,
             cacheEnabled = cacheEnabled,
             hasUnambiguousCandidate = activeCandidate != null,
@@ -300,7 +301,7 @@ internal class KeyguardWindowSnapshotReader(
                 candidate, returned?.windowId, returned?.packageName, metadata,
             )
             if (accepted) {
-                timing.strategy = "ACTIVE_ROOT_INTERRUPTIBLE_PLUS_PER_WINDOW"
+                timing.strategy = "ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW"
                 timing.activeRootAccepted = true
                 activeWindowId = candidate.id
             } else {
@@ -350,13 +351,9 @@ internal class KeyguardWindowSnapshotReader(
                 activeRoot.also { activeRoot = null }
             } else {
                 val rootStarted = SystemClock.uptimeMillis()
-                runCatching {
-                    if (prefetch != 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        window.getRoot(prefetch)
-                    } else {
-                        window.root
-                    }
-                }.getOrNull().also {
+                // Match the 47002e5 fallback. Android's per-window root route
+                // bypasses the cache and strips descendant prefetch flags.
+                runCatching { window.root }.getOrNull().also {
                     timing.root(window, displayId(window), SystemClock.uptimeMillis() - rootStarted)
                 }
             }
@@ -371,7 +368,7 @@ internal class KeyguardWindowSnapshotReader(
             val rootPackage = root?.packageName?.toString()
             val own = rootPackage == ownPackageName && window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
             val visible = if (rootPackage in SYSTEM_PACKAGES && root != null) {
-                visibleIds(root, window.id, prefetch.takeIf { it != 0 }, authorityIsCurrent, timing).also {
+                visibleIds(root, window.id, prefetch.takeIf { timing.activeRootAccepted }, authorityIsCurrent, timing).also {
                     walkTruncated = walkTruncated || it.truncated
                     visited += it.visited
                     readsAfterInvalidation += it.readsAfterInvalidation
@@ -427,6 +424,9 @@ internal class KeyguardWindowSnapshotReader(
                         aborted = true
                         return
                     }
+                    // A advertised child which disappeared/failed is an
+                    // incomplete observation, never a complete MAIN proof.
+                    if (child == null) truncated = true
                     visit(child)
                     child?.recycle()
                     if (aborted) return
