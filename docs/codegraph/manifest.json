@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "source_head": "c3e62bb0835456601d7c6036715b31bb5cec4fd2",
-  "source_parent": "50e34a51021fab6268bf6515f770bb9ebee864bd",
-  "source_ref": "c3e62bb0835456601d7c6036715b31bb5cec4fd2",
+  "source_head": "d731827576802f3c35105e26237a436cfea1ebf9",
+  "source_parent": "36db746b87828de704db12e8768e4b47660382a1",
+  "source_ref": "d731827576802f3c35105e26237a436cfea1ebf9",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "f2b53838b101b4ca481885057885f2c7e3defc758ecf55c1075ca950abb8394d",
-  "document_count": 613,
-  "occurrence_count": 442747,
-  "defined_symbol_count": 59271,
-  "repository_defined_symbol_count": 15340,
+  "index_sha256": "5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
+  "document_count": 807,
+  "occurrence_count": 568695,
+  "defined_symbol_count": 76136,
+  "repository_defined_symbol_count": 20252,
   "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
   "artifacts": [
     {
       "name": "symbols",
       "storage": "jsonl_shards",
-      "record_count": 15340,
+      "record_count": 20252,
       "paths": [
         "symbols.index.json",
         "symbols/part-000.jsonl",
@@ -24,14 +24,17 @@
         "symbols/part-004.jsonl",
         "symbols/part-005.jsonl",
         "symbols/part-006.jsonl",
-        "symbols/part-007.jsonl"
+        "symbols/part-007.jsonl",
+        "symbols/part-008.jsonl",
+        "symbols/part-009.jsonl",
+        "symbols/part-010.jsonl"
       ],
-      "byte_count": 6533899
+      "byte_count": 8531111
     },
     {
       "name": "refs",
       "storage": "jsonl_shards",
-      "record_count": 110753,
+      "record_count": 136383,
       "paths": [
         "refs.index.json",
         "refs/part-000.jsonl",
@@ -89,14 +92,27 @@
         "refs/part-052.jsonl",
         "refs/part-053.jsonl",
         "refs/part-054.jsonl",
-        "refs/part-055.jsonl"
+        "refs/part-055.jsonl",
+        "refs/part-056.jsonl",
+        "refs/part-057.jsonl",
+        "refs/part-058.jsonl",
+        "refs/part-059.jsonl",
+        "refs/part-060.jsonl",
+        "refs/part-061.jsonl",
+        "refs/part-062.jsonl",
+        "refs/part-063.jsonl",
+        "refs/part-064.jsonl",
+        "refs/part-065.jsonl",
+        "refs/part-066.jsonl",
+        "refs/part-067.jsonl",
+        "refs/part-068.jsonl"
       ],
-      "byte_count": 36021382
+      "byte_count": 44175910
     },
     {
       "name": "edges",
       "storage": "jsonl_shards",
-      "record_count": 32590,
+      "record_count": 42214,
       "paths": [
         "edges.index.json",
         "edges/part-000.jsonl",
@@ -115,18 +131,23 @@
         "edges/part-013.jsonl",
         "edges/part-014.jsonl",
         "edges/part-015.jsonl",
-        "edges/part-016.jsonl"
+        "edges/part-016.jsonl",
+        "edges/part-017.jsonl",
+        "edges/part-018.jsonl",
+        "edges/part-019.jsonl",
+        "edges/part-020.jsonl",
+        "edges/part-021.jsonl"
       ],
-      "byte_count": 11596156
+      "byte_count": 14874325
     },
     {
       "name": "changed-impact",
       "storage": "json",
-      "record_count": 12,
+      "record_count": 0,
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 124678
+      "byte_count": 1601
     }
   ]
 }
