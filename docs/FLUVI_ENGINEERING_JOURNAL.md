@@ -5792,3 +5792,76 @@ Application commit `6ffeb23decd18708b5e7f44b857d961fa6bd4423` (parent documentat
 Fresh Drive metadata/search audit (read-only): `1Yu8vZ-p9TF89yG_Dilz0GWnrEguzfNotmmaloLcLm3g`, “Névtelen dokumentum”, still modified `2026-11-10T09:10:40.454Z`. Search for Fluvi after09:10:40 returned only that historical document; keyguard after09:10:41 returned none. No new matching phone report was found. Its unchanged historical contents were not re-fetched or merged with the current LIGHT/FULL extract. The connected Drive skill governed metadata-first discovery only; no Drive writes occurred.
 
 SCIP regeneration actually reran at clean tracked `6ffeb23d` in the dedicated index-source worktree. Raw index: 67,515,079 bytes, SHA256 `5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59`. Equal Dart bytes are expected because this repair is native Kotlin. Provenance-checked graph generation, impact queries and separate native inventory are in progress; final tooling commit and CI/APK results will follow. Physical acceptance remains pending.
+
+## 2026-11-10 — system-gate production repair: consolidated verification and delivery
+
+### Baseline, scope and causal finding
+
+Physically tested application remains `1f0a199096a50a86c335918408c30db3ff375e9c`, not its documentation descendants. Source/evidence/rule/Drive preflight and every intermediate result are recorded in the preceding three entries. Initial local documentation HEAD was `0d9bbaf24df542cb62d29c150a18797c0f57ee83`; only journal changes intervened through reviewer `a99eafd70cb8559d2d4e96bca0f056e57c3801bd`. The two unrelated untracked golden-failure directories remain untouched. No milestone, dashboard, launcher, shader, renderer, clock, visual geometry or accessibility classification change is included.
+
+PROVEN: repeated synchronous system-state acquisition ran on the retained orb's Main owner; `applyInspection` then repeated eligibility acquisition. The supplied LIGHT observation overlaps a real 87.042153ms traversal gap with 60.598077ms apply wall time, including a nested 48.311461ms gate. Nonoverlapping outer work totals 71.466692ms. Those are observed app work spans, not physical display times or proof of one particular Android getter/Binder cause.
+
+PROVEN BY CONTROLLED REPRODUCER: the parent scheduling fails with a deliberately blocked reader after actual LIVE shader output on the production `TYPE_ACCESSIBILITY_OVERLAY`. The repaired scheduling's result is reported below. Earlier tests checked liveness without forcing this synchronous ownership boundary, so passing them did not exclude this defect.
+
+UNPROVEN: causes of the other 89–129ms withdrawal-related gaps, phone-side before/after pacing or first-show/unlock improvement, and physical flicker resolution. MISSING: phone system trace, original complete export files and corrected-build physical feedback. The supplied 4225-byte hash identifies the transcribed extract only. FULL cold-preparation is same-process history; capture-local attempt IDs and omissions are not merged across captures. No newer matching Drive document was found; historical document metadata remains unchanged.
+
+### Changed contracts and retained ownership
+
+`AndroidKeyguardSystemStateReader` owns the actual public platform getters; immutable `KeyguardSystemState` distinguishes unavailable/transitional state from definite OFF. `KeyguardSystemStateSampler` has one active worker call and one latest pending request, independent of the one-wide tree reader. Every request carries session/wake/visibility/interaction/attach identities, gate ID and causal timestamps. No live View, Event or node is retained. Main never joins or holds a lock behind the reader. Disposal revokes publication and submission; it does not pretend to cancel a blocked platform call.
+
+```text
+Main event/retry -> bounded system I/O lane -> Main identity check
+tree inspection -> Main local stale check -> same-permission update
+                                      -> ONE fresh admission read for attach/increase
+direct terminal/privacy signal -> Main invalidate + hide/redact (no worker wait)
+Main retained root -> existing controller -> existing single material clock
+```
+
+`FluviKeyguardCardService` routes recurring callbacks/retries/stale-payload exclusion checks to the sampler. Existing inspection-worker signals can maintain an already-authorized same-permission attachment, but cannot grant a new attachment or increased disclosure. One fresh Main ADMISSION snapshot remains for those transitions and is reused across final policies. A separate fresh Main PUBLICATION guard remains for actual new financial data, after cheap local stale rejection. Both can still block Main by design; they are counted separately from recurring acquisition. This is not a promise to remove all Main platform work.
+
+Terminal SCREEN_OFF/USER_PRESENT/interrupt/opt-out invalidates before local invisibility and removal. Sampler revocation also protects an idempotent repeated terminal call. Privacy tightening redacts an attached root without system acquisition and cannot attach a detached root. Current visible UNKNOWN withdraws before retry eligibility work; hidden UNKNOWN preserves pending inspection/freshness. Completed cause requests are excluded from future-work suppression via `KeyguardCardInspectionQueue.hasCurrentWork`. Renewed work reacquires under new authority rather than reusing an old answer.
+
+Production files: service, new reader/state/sampler, queue, signals/policy, and registry test accessor. Test files: sampler/admission unit suite, queue regression and real-service fixture; a local JVM harness compiles these actual production components. `TYPE_ACCESSIBILITY_OVERLAY`, flags, z-order, layout/paint/clipping bounds, tap/drag and saved positions remain unchanged. No parallel ViewRoot, animation clock, financial store or recurring polling loop was added.
+
+### Baseline RED and available verification
+
+Parent experiment `00f2855e86cf13b6f15563b899474f3f2142c6d3`, isolated branch `test/keyguard-system-gate-parent-red`, run [42901690787](https://github.com/elizerpist/exptv2/actions/runs/42901690787): **expected RED** at `Main callback must return before reader release expected:<1> but was:<0>`. Actual cold overlay was LIVE/hardware, 168×168, dualTide Portal hash `24f2d163e2cf8ad536f4f2c6314cc9839ae711bdef9920dbfd94465f175808df`; shader/phase counters reached 101/100 before blocking. The independent watchdog released the old Main-blocking call after eight seconds; that is bounded test cleanup, not a performance threshold. The 37 lower-level instrumentation tests passed. The real-service regression then failed as intended. Parent evidence includes `instrumentation.txt`, `logcat.txt`, trace, environment/window snapshots and trace analysis in its retained runtime artifact.
+
+The preceding seam run `42898647396` instead failed at rapid-reentry device gates before the new assertion. It is retained as an unrelated fixture/reproduction limitation, NOT counted as the causal RED. The revised parent merely moved the same assertion after first confirmed live output; it did not change production scheduling or relax assertions. Candidate precision follow-up samples its counter baseline after reader entry, so earlier frames cannot satisfy the test.
+
+Final source at this entry: `6ffeb23decd18708b5e7f44b857d961fa6bd4423`; workflow [42903043755](https://github.com/elizerpist/exptv2/actions/runs/42903043755).
+
+| Check | Actual result |
+|---|---|
+| `git diff --check`, staged diff review, `./scripts/verify-fluvi-boundaries.sh` | PASS |
+| Ubuntu production JVM `bash scripts/test-keyguard-system-gate-jvm.sh /root/.gradle/wrapper/dists/gradle-8.14-all/c2qonpi39x1mddn7hk5gh9iqj/gradle-8.14/lib` | PASS, 33 tests |
+| Ubuntu focused Flutter console/bridge command recorded above | PASS, 5 tests |
+| Local Android combined unit/compile command recorded above | BLOCKED by ARM64/proot AAPT2 daemon startup before tests; not a test pass |
+| CI `./gradlew :fluvi-core:testDebugUnitTest --no-daemon` | PASS, 150 tests / 28 XML suites / zero failures or errors |
+| CI `./gradlew :app:testDebugUnitTest --no-daemon` | PASS, 132 tests / 28 XML suites / zero failures or errors |
+| CI Flutter analysis + curated correctness workflow | PASS; runtime log reports 1031, 3 and 4 passed tests in its three invocations |
+| 6ff candidate API35 real-window + real-service checks | 37 lower tests PASS; real-service test FAIL at remote-window withdrawal assertion; see correction below |
+| 6ff candidate dashboard profiler | FAIL: A interaction-readiness timeout, then missing A_summary_sum_year_month report map; same signatures present in supplied 1f baseline and controlled parent, underlying cause still UNCLASSIFIED |
+| 6ff Human profile APK delivery | SKIPPED because native service job failed; not handed off |
+
+The unit XMLs and parent runtime artifacts were independently downloaded to `fluvi-system-gate-validation.P7zDjo`. Initial local JVM harness compilation failed because its temporary input omitted existing reader-policy functions; extracting the actual pure functions fixed the harness, with no copied fake policy/assertion removal. There is no local API35 emulator. CI uses API35 x86_64, Pixel7 profile, KVM, swangle and unchanged animation settings; this is not the Nothing GPU/device. Actual draw/phase progression proves independence from the blocked call, not smoothness or physical FPS. Capture OFF/LIGHT/FULL phone overhead and cold/warm end-to-end performance are NOT measured in a controlled device comparison here.
+
+### Final-source graph and impact evidence
+
+Published separate tooling commit `b47e44398f8df6208643bf327b97698d2d2c7367` on `tooling/keyguard-episode-observability-graph`. `scip_dart 1.6.2` actually reran in the tracked-clean detached source worktree at **6ffeb23d**. Generator commit `e84430e4a3cd4723eb3d9d084fde675f713e34b6`. Index 67,515,079 bytes, SHA256 `5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59`; manifest SHA256 `452475580ae544982cd01ee9fc9466ca66a4bf616f5e14fe7b7513cc4f18256c`. All 102 shard hashes verified. `dart test`:16 PASS; `dart analyze`: no issues.
+
+Executed queries: KeyguardTimingCaptureBridge 8 refs (3 production/5 test), KeyguardTimingCaptureSnapshot 12 production, DebugConsoleDialog 5 (3/2), DashboardKeyguardMaterialBridge 2 production, DashboardHeaderMaterialSnapshot 24 (12/12). Consumer files and raw query output are in `docs/codegraph-system-gate-2026-11-10.json` and `docs/codegraph-system-gate-queries-2026-11-10.txt` on that tooling commit; relationships were source-checked. Raw query locations are zero-based. Old graph audit files remain historical, not relabelled current.
+
+Coverage: 807 Dart documents; **no Kotlin SCIP coverage**. The separate native source inventory records reader → service purposes, sampler ingress/delivery, admission, signals, queue future-work predicate, retained window/controller/clock and production/test consumers. Unchanged Dart index bytes are expected for this native repair. Empty graph changed-symbol results do not mean zero native impact.
+
+### Outcome and remaining delivery evidence
+
+The production repair is implemented in `31a012ac990154b932bf1cdf010526a9888f857d`, with causal/test precision follow-up `6ffeb23d`; seam `829a5447f99569da3f71e77e8a1421482a580e81` was deliberately not the repair. Documentation commits `c74ac815`, `c959943d71ec4e2ef468dd83497558cefdbcc7cd`, `934cf6a46e1665f982fba4a277f4c5b3475603a2` preserve the chronological history. Feature and tooling pushes were verified against remote refs. Final runtime/build results, artifact identity and final Git state follow below; they are not inferred from compilation.
+
+### Candidate failure retained; local versus remote withdrawal observation
+
+Runs `42902147702` (31a) and `42903043755` (6ff) both passed all 37 lower native tests, then failed `Terminal hide must remove the actual root before reader release`. They did not fail the blocked-reader Main-return or actual shader/phase-progress checks. In 31a capture `7aac327b-90e5-4c2f-8098-d46e8a4e4cb1`, counters advanced 101/100 → 103/102 while blocked; WindowManager/input disposal at uptime342007–342256 preceded the assertion at342262. `overlaysWithdrawn()` returned on a still-present remote UiAutomation window before inspecting local roots, so this assertion did not identify whether the local retained root remained. This is not automatically a runtime success; the missing local boundary must be asserted directly.
+
+Test correction `21ebac3529ad59a00ce336c5f0e93bb21883ccd1`, run [42905947628](https://github.com/elizerpist/exptv2/actions/runs/42905947628): assert service detached and **zero actual process accessibility-overlay roots within the same Main callback as interrupt**, with reader still blocked. Separately require remote-window disappearance within the existing bounded two-second observation interval and before release. The old positive is now captured before blocking. New subsequent checks are separately withheld during stale-answer verification, then explicitly enabled for fresh admission-veto coverage: a newly authorized wake must not be mistaken for publication of a revoked old answer. No runtime scheduling, visual output assertion, watchdog deadline or production visibility policy changed. Whitespace and boundary checks PASS; candidate runtime is pending. The final source/graph/APK will use this revision or its validated correction, not failed 6ff. The 6ff graph remains correctly versioned historical evidence, not relabelled final.
+
+**PHYSICAL VALIDATION — PENDING, USER ONLY.**
