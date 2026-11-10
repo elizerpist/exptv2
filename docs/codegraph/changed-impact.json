@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "source_head": "35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447",
-  "base_head": "a38be4854abb02111f11b4f1d239acc81c100a95",
+  "source_head": "da0a7a7b527795831706d215e93f347aa0cd3670",
+  "base_head": "7e0f35e996fe7cf88531ff9ddbbfc795b37d7c15",
   "changed_files": [
-    "scripts/test-keyguard-service-trace.sh"
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
