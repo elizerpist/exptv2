@@ -286,9 +286,10 @@ class KeyguardServiceOverlayInstrumentationTest {
             assertTrue("Recurring reader entered", entered.await(2, java.util.concurrent.TimeUnit.SECONDS))
             assertEquals("Main callback must return before reader release", 1L, release.count)
             assertTrue("Recurring system acquisition must be worker-owned", workerRead.get())
-            val after = awaitLive("blocked-reader-live", before, 2, episode.window.id)
+            val blockedBaseline = snapshot("reader-entered-before-draw")
+            val after = awaitLive("blocked-reader-live", blockedBaseline, 2, episode.window.id)
             assertEquals("Actual shader output/phase must advance while read remains blocked", 1L, release.count)
-            assertTrue(after.shader > before.shader && after.phase > before.phase)
+            assertTrue(after.shader > blockedBaseline.shader && after.phase > blockedBaseline.phase)
             if (unknownWithdrawal) {
                 unavailableInspection.set(true)
                 instrumentation.runOnMainSync {

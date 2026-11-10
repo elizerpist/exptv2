@@ -444,7 +444,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         )
         when (action) {
             KeyguardEventAction.IGNORE_OWN -> {
-                requestSystemCheck("accessibilityOwn", callbackReceivedAt)
+                requestSystemCheck("accessibilityOwn", callbackReceivedAt, eventTime = meta.eventTimeUptimeMs)
                 KeyguardCardDiagnostics.record(this, "KG|OWN_EVENT_IGNORED", "ownSignal", overlay.isAttached)
                 // The package-less post-add race reaches INSPECT, not an
                 // eager detach. A positively matched own event needs no work.
@@ -607,7 +607,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     ): KeyguardWakeCycleTransition? {
         val existing = wakeCycleOwner.current()
         if (existing != null) {
-            if (freshState == null) requestSystemCheck(source, receivedAtUptimeMs)
+            if (freshState == null) requestSystemCheck(source, receivedAtUptimeMs, eventTime = eventTime)
             val transition = if (source == "wake") {
                 val joined = wakeCycleOwner.beginOrJoin(existing.id, source, receivedAtUptimeMs)
                 traceKeyguard(
