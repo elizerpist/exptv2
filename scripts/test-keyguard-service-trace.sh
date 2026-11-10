@@ -11,15 +11,17 @@ adb shell wm density >> "$evidence_dir/display.txt"
 # Production64dp orb at the supplied phone's observed168px. The emulator is
 # disposable; this does not alter an application dimension or shipped flag.
 adb shell wm density 420
-adb push scripts/keyguard-service-trace.pbtxt /data/local/tmp/fluvi-keyguard-service.pbtxt
 # Only this finite fixture is traced. Reinstall the exact precompiled APKs in
 # case the preceding Gradle runner cleaned its installation; preserve its XML.
 adb install -r build/app/outputs/apk/debug/app-debug.apk
 adb install -r build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell am force-stop com.fluvi.app
-trace_pid=$(adb shell perfetto --background-wait --txt \
-  -c /data/local/tmp/fluvi-keyguard-service.pbtxt \
-  -o /data/misc/perfetto-traces/fluvi-keyguard-service.perfetto-trace | tr -d '\r')
+# API35 CI reported Permission denied opening the pushed /data/local/tmp
+# config. The documented stdin route avoids that file-access boundary
+# without changing device permissions.
+trace_pid=$(adb shell perfetto --background-wait --txt -c - \
+  -o /data/misc/perfetto-traces/fluvi-keyguard-service.perfetto-trace \
+  < scripts/keyguard-service-trace.pbtxt | tr -d '\r')
 if [[ ! "$trace_pid" =~ ^[0-9]+$ ]]; then
   printf 'Perfetto did not return a recorder PID: %s\n' "$trace_pid" >&2
   exit 1
@@ -37,6 +39,13 @@ for ((i=0; i<20; i++)); do
   if ! adb shell kill -0 "$trace_pid" 2>/dev/null; then break; fi
   sleep 0.25
 done
+if adb shell kill -0 "$trace_pid" 2>/dev/null; then
+  printf 'INCOMPLETE: recorder did not stop within the bounded flush wait\n' \
+    > "$evidence_dir/recorder-status.txt"
+  test_result=1
+else
+  printf 'STOPPED: recorder exited before trace pull\n' > "$evidence_dir/recorder-status.txt"
+fi
 adb pull /data/misc/perfetto-traces/fluvi-keyguard-service.perfetto-trace "$evidence_dir/"
 adb logcat -d -v monotonic > "$evidence_dir/logcat.txt"
 adb shell dumpsys accessibility > "$evidence_dir/accessibility-final.txt"
