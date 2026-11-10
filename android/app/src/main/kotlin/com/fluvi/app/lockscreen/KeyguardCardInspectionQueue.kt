@@ -135,6 +135,12 @@ internal class KeyguardCardInspectionQueue {
 
     fun activeRequest(): KeyguardCardInspectionRequest? = active
     fun pendingRequest(): KeyguardCardInspectionRequest? = pending
+
+    /** Applying UNKNOWN has not released active yet. That completed cause is
+     * not future work capable of replacing its fallback observation. */
+    fun hasCurrentWork(authority: KeyguardInspectionAuthority, excludingId: Long? = null): Boolean =
+        (active?.let { it.id != excludingId && authority.matches(it) } == true) ||
+            (pending?.let { it.id != excludingId && authority.matches(it) } == true)
 }
 
 /** Fast hide is intentionally based only on immediately knowable terminal

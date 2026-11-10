@@ -169,16 +169,20 @@ internal data class KeyguardCardSignals(
     val keyguardLocked: Boolean,
     val surface: KeyguardSurface,
     val showFinancialDetails: Boolean,
+    val systemStateAvailable: Boolean = true,
+    val displayOff: Boolean = !displayOn,
 )
 
 internal object KeyguardCardVisibilityPolicy {
     fun decide(signals: KeyguardCardSignals): KeyguardCardVisibility = when {
         !signals.requested -> KeyguardCardVisibility.HIDDEN_OPT_OUT
         !signals.serviceConnected -> KeyguardCardVisibility.HIDDEN_DISCONNECTED
+        !signals.systemStateAvailable -> KeyguardCardVisibility.HIDDEN_UNKNOWN
         !signals.userUnlocked -> KeyguardCardVisibility.HIDDEN_BEFORE_FIRST_UNLOCK
         !signals.primaryDisplay -> KeyguardCardVisibility.HIDDEN_OTHER_DISPLAY
-        !signals.interactive || !signals.displayOn -> KeyguardCardVisibility.HIDDEN_SCREEN
+        !signals.interactive || signals.displayOff -> KeyguardCardVisibility.HIDDEN_SCREEN
         !signals.keyguardLocked -> KeyguardCardVisibility.HIDDEN_UNLOCKED
+        !signals.displayOn -> KeyguardCardVisibility.HIDDEN_UNKNOWN
         signals.surface == KeyguardSurface.CREDENTIAL -> KeyguardCardVisibility.HIDDEN_CREDENTIAL
         signals.surface == KeyguardSurface.SHADE -> KeyguardCardVisibility.HIDDEN_SHADE
         signals.surface == KeyguardSurface.OCCLUDED -> KeyguardCardVisibility.HIDDEN_OCCLUDED

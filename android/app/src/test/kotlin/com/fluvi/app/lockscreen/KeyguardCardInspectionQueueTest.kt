@@ -262,6 +262,18 @@ class KeyguardCardInspectionQueueTest {
         assertEquals(KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE, second.nextState)
     }
 
+    @Test fun `applied unknown cause is not future work that can suppress fallback`() {
+        val queue = KeyguardCardInspectionQueue()
+        val authority = KeyguardInspectionAuthority(1, 1, 1, 1, 1)
+        val cause = request(1, "unknown")
+        queue.offer(cause)
+        assertFalse(queue.hasCurrentWork(authority, excludingId = cause.id))
+        queue.offer(request(2, "window"))
+        assertTrue(queue.hasCurrentWork(authority, excludingId = cause.id))
+        queue.complete(cause)
+        assertTrue(queue.hasCurrentWork(authority, excludingId = cause.id))
+    }
+
     private fun request(id: Long, trigger: String) = KeyguardCardInspectionRequest(
         id = id,
         trigger = trigger,

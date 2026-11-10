@@ -157,6 +157,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             marked("orb-short-tap") { tap(cold.window.bounds) }
             awaitLive("after-tap", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
             assertEquals("Short orb tap must retain its attachment", cold.window.id, requireOverlay().id)
+            blockedRecurringReaderDoesNotOwnMain(cold)
             unlockAndAssertWithdrawn("cold-unlock")
             // Retention intentionally keeps first + latest three attempts;
             // setup/terminal signals can otherwise evict this actual cold
@@ -170,6 +171,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
 
             val warm = episode("warm")
+            blockedRecurringReaderDoesNotOwnMain(warm, unknownWithdrawal = true)
             unlockAndAssertWithdrawn("warm-unlock")
             // Start a real wake and revoke it promptly, without waiting for
             // acquisition/preparation. A late result must not leave a window
@@ -184,7 +186,6 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
             val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual live phases", reentry.material.phase > warm.material.phase)
-            blockedRecurringReaderDoesNotOwnMain(reentry)
             unlockAndAssertWithdrawn("final-unlock")
             record("RESULT", "OUTPUT_LIVENESS_PASS performanceAndNothingDevice=UNVERIFIED")
         } catch (failure: Throwable) {
@@ -250,7 +251,7 @@ class KeyguardServiceOverlayInstrumentationTest {
      * release of the injected platform read. Independent release bounds RED
      * execution too: the old synchronous Main call cannot hang the runner.
      */
-    private fun blockedRecurringReaderDoesNotOwnMain(episode: Episode) {
+    private fun blockedRecurringReaderDoesNotOwnMain(episode: Episode, unknownWithdrawal: Boolean = false) {
         val entered = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
         val watchdog = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
@@ -258,13 +259,25 @@ class KeyguardServiceOverlayInstrumentationTest {
         val real = AndroidKeyguardSystemStateReader(context)
         val old = service.systemStateReaderOverride
         val workerRead = java.util.concurrent.atomic.AtomicBoolean(false)
+        val unavailableInspection = java.util.concurrent.atomic.AtomicBoolean(false)
+        val denyAdmission = java.util.concurrent.atomic.AtomicBoolean(false)
+        val admissionRead = java.util.concurrent.CountDownLatch(1)
         service.systemStateReaderOverride = KeyguardSystemStateReader { purpose ->
             if (purpose == KeyguardSystemReadPurpose.RECURRING) {
                 workerRead.set(android.os.Looper.myLooper() != android.os.Looper.getMainLooper())
                 entered.countDown()
                 check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
             }
-            real.read(purpose)
+            if (purpose == KeyguardSystemReadPurpose.INSPECTION && unavailableInspection.get()) {
+                KeyguardSystemState(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(), available = false)
+            } else {
+                val state = real.read(purpose)
+                if (purpose == KeyguardSystemReadPurpose.ADMISSION && denyAdmission.get()) {
+                    assertEquals("Admission remains on the View owner", android.os.Looper.getMainLooper(), android.os.Looper.myLooper())
+                    admissionRead.countDown()
+                    state.copy(keyguardLocked = false)
+                } else state
+            }
         }
         watchdog.schedule({ release.countDown() }, 8, java.util.concurrent.TimeUnit.SECONDS)
         try {
@@ -276,11 +289,61 @@ class KeyguardServiceOverlayInstrumentationTest {
             val after = awaitLive("blocked-reader-live", before, 2, episode.window.id)
             assertEquals("Actual shader output/phase must advance while read remains blocked", 1L, release.count)
             assertTrue(after.shader > before.shader && after.phase > before.phase)
+            if (unknownWithdrawal) {
+                unavailableInspection.set(true)
+                instrumentation.runOnMainSync {
+                    val event = android.view.accessibility.AccessibilityEvent.obtain(
+                        android.view.accessibility.AccessibilityEvent.TYPE_WINDOWS_CHANGED)
+                    try { service.onAccessibilityEvent(event) } finally { event.recycle() }
+                }
+                await("UNKNOWN withdraws before retry eligibility acquisition", 2_000) { overlaysWithdrawn() }
+                assertEquals("UNKNOWN withdrawal must not join recurring eligibility work", 1L, release.count)
+                instrumentation.runOnMainSync { service.onInterrupt() }
+                record("SYSTEM_GATE_REGRESSION", "unknownWithdrawalBeforeRelease=true shaderDelta=${after.shader-before.shader}")
+                return
+            }
+            val discreet = FluviKeyguardCardSettings.read(context).copy(showFinancialDetails = false)
+            instrumentation.runOnMainSync { service.onSettingsChangedFromApplication(discreet) }
+            instrumentation.runOnMainSync {
+                val state = service.materialDiagnostics()
+                assertEquals("Privacy tightening redacts the existing root", "SHOW_DISCREET", state["appliedVisibility"])
+                assertEquals(true, state["overlayAttached"])
+                assertEquals("No recurring system read belongs to Main", 0L, state["systemRecurringMainReads"])
+                assertEquals(1L, release.count)
+            }
             instrumentation.runOnMainSync { service.onInterrupt() }
             assertTrue("Terminal hide must remove the actual root before reader release", overlaysWithdrawn())
             assertEquals("Terminal hide never joins the reader", 1L, release.count)
+            instrumentation.runOnMainSync { service.onSettingsChangedFromApplication(discreet) }
+            instrumentation.runOnMainSync {
+                assertEquals("Tightening privacy must not attach a detached root", false,
+                    service.materialDiagnostics()["overlayAttached"])
+            }
             record("SYSTEM_GATE_REGRESSION", "workerRead=true shaderDelta=${after.shader-before.shader}" +
-                " phaseDelta=${after.phase-before.phase} hideBeforeRelease=true")
+                " phaseDelta=${after.phase-before.phase} hideBeforeRelease=true privacyBeforeRelease=true recurringMainReads=0")
+            var rejectedBefore = 0L
+            instrumentation.runOnMainSync {
+                rejectedBefore = service.materialDiagnostics()["systemSamplerStaleRejected"] as Long
+            }
+            release.countDown()
+            await("late sampler positive rejected after terminal hide", 2_000) {
+                var rejected = 0L
+                instrumentation.runOnMainSync { rejected = service.materialDiagnostics()["systemSamplerStaleRejected"] as Long }
+                rejected > rejectedBefore
+            }
+            assertTrue("Late positive cannot reattach", overlaysWithdrawn())
+            // New event and genuine tree classification may propose SHOW;
+            // fresh admission must still veto it after worker-positive delay.
+            denyAdmission.set(true)
+            instrumentation.runOnMainSync {
+                val event = android.view.accessibility.AccessibilityEvent.obtain(
+                    android.view.accessibility.AccessibilityEvent.TYPE_WINDOWS_CHANGED)
+                try { service.onAccessibilityEvent(event) } finally { event.recycle() }
+            }
+            assertTrue("Actual new attachment must reach fresh admission", admissionRead.await(6, java.util.concurrent.TimeUnit.SECONDS))
+            instrumentation.runOnMainSync { }
+            assertTrue("Worker-positive cannot bypass fresh negative admission", overlaysWithdrawn())
+            record("SYSTEM_GATE_REGRESSION", "latePositiveRejected=true freshAdmissionVeto=true")
         } finally {
             release.countDown()
             service.systemStateReaderOverride = old

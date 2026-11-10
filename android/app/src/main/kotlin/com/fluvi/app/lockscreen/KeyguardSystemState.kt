@@ -19,6 +19,12 @@ internal data class KeyguardSystemState(
 
 internal enum class KeyguardSystemReadPurpose { RECURRING, INSPECTION, ADMISSION, PUBLICATION }
 
+internal object KeyguardSystemAdmission {
+    fun requiresFreshRead(attached: Boolean, current: KeyguardCardVisibility, proposed: KeyguardCardVisibility): Boolean =
+        (proposed == KeyguardCardVisibility.SHOW_FULL || proposed == KeyguardCardVisibility.SHOW_DISCREET) &&
+            (!attached || (proposed == KeyguardCardVisibility.SHOW_FULL && current != KeyguardCardVisibility.SHOW_FULL))
+}
+
 internal fun interface KeyguardSystemStateReader {
     fun read(purpose: KeyguardSystemReadPurpose): KeyguardSystemState
 }
@@ -34,6 +40,10 @@ internal data class KeyguardSystemGateRequest(
     val eventTime: Long? = null,
     val retry: Boolean = false,
     val freshness: KeyguardWindowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT,
+    val screenOnReceivedAt: Long? = if (wakeSource == "wake") receivedAt else null,
+    val completedInspectionId: Long? = null,
+    val evaluationReason: String = reason,
+    val evaluationReceivedAt: Long = receivedAt,
 )
 
 /** Main owns this queue, including completion. The worker owns only read().
@@ -50,6 +60,9 @@ internal class KeyguardSystemStateSampler(
     private var active: KeyguardSystemGateRequest? = null
     private var pending: KeyguardSystemGateRequest? = null
     private var disposed = false
+    private var delivering = false
+    private var revocation = 0L
+    private var activeRevocation = 0L
     var maximumActive = 0; private set
     var maximumPending = 0; private set
     var rejected = 0L; private set
@@ -57,29 +70,47 @@ internal class KeyguardSystemStateSampler(
     fun offer(request: KeyguardSystemGateRequest) {
         if (disposed) return
         if (active == null) start(request) else {
-            // A check-only completion must not erase an unserved real event.
+            // Latest gate request wins; its check must not erase an unserved
+            // real event's separate causal identity/freshness obligation.
             val previous = pending
             pending = if (!request.evaluate && previous?.evaluate == true && previous.authority == request.authority) {
-                previous
-            } else request
+                request.copy(evaluate = true, wakeSource = previous.wakeSource,
+                    eventTime = previous.eventTime, retry = previous.retry, freshness = previous.freshness,
+                    screenOnReceivedAt = previous.screenOnReceivedAt ?: request.screenOnReceivedAt,
+                    completedInspectionId = previous.completedInspectionId,
+                    evaluationReason = previous.evaluationReason, evaluationReceivedAt = previous.evaluationReceivedAt)
+            } else if (previous?.authority == request.authority) request.copy(
+                screenOnReceivedAt = previous.screenOnReceivedAt ?: request.screenOnReceivedAt,
+                freshness = if (previous.freshness.requiresCacheClear && !request.freshness.requiresCacheClear)
+                    previous.freshness else request.freshness,
+            ) else request
             maximumPending = 1
         }
     }
 
-    fun clearPending() { pending = null }
-    fun dispose() { disposed = true; pending = null }
+    fun clearPending() { pending = null; revocation++ }
+    fun dispose() { disposed = true; clearPending() }
+
+    fun renewPending(renew: (KeyguardSystemGateRequest) -> KeyguardSystemGateRequest) {
+        val unserved = pending ?: active?.takeIf { !delivering && activeRevocation == revocation } ?: return
+        offer(renew(unserved)) // A new read under new authority, not a reused answer.
+    }
 
     private fun start(request: KeyguardSystemGateRequest) {
         active = request
+        val readRevocation = revocation
+        activeRevocation = readRevocation
         maximumActive = 1
         worker {
             val state = runCatching { reader().read(KeyguardSystemReadPurpose.RECURRING) }
-                .getOrElse { KeyguardSystemState(request.queuedAt, request.queuedAt, available = false) }
+                .getOrElse { KeyguardSystemState(-1L, -1L, available = false) }
             main {
                 try {
-                    if (!disposed && request.authority == current()) receive(request, state)
+                    delivering = true
+                    if (!disposed && readRevocation == revocation && request.authority == current()) receive(request, state)
                     else rejected++
                 } finally {
+                    delivering = false
                     active = null
                     val next = pending
                     pending = null
