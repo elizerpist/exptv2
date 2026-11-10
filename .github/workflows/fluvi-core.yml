@@ -189,6 +189,10 @@ jobs:
             cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
           script: bash scripts/test-keyguard-runtime.sh
 
+      - name: Analyze bounded production overlay trace
+        if: always() && hashFiles('android/keyguard-service-evidence/fluvi-keyguard-service.perfetto-trace') != ''
+        run: bash scripts/analyze-keyguard-service-trace.sh
+
       - name: Retain native runtime and observer evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -198,6 +202,7 @@ jobs:
             build/app/reports/androidTests/connected/**
             build/app/outputs/androidTest-results/connected/**
             android/keyguard-draw-probe.log
+            android/keyguard-service-evidence/**
           retention-days: 14
 
   test-native-nightly:
