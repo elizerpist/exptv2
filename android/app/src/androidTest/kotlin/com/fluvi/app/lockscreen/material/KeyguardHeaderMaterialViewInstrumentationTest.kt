@@ -22,6 +22,9 @@ import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
 import com.fluvi.app.lockscreen.KeyguardCardContentOverflow
 import com.fluvi.app.lockscreen.KeyguardFrameCommitObservation
 import com.fluvi.app.lockscreen.KeyguardCardWindow
+import com.fluvi.app.lockscreen.KeyguardDrawPublication
+import com.fluvi.app.lockscreen.KeyguardFirstDrawOwner
+import com.fluvi.app.lockscreen.KeyguardFirstDrawEvent
 import com.fluvi.app.lockscreen.KeyguardCardSettings
 import com.fluvi.app.lockscreen.KeyguardCardPresentationMode
 import com.fluvi.app.lockscreen.KeyguardCardCardPosition
@@ -453,6 +456,27 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         var createdWindow: KeyguardCardWindow? = null
         lateinit var manager: TestPanelWindowManager
         val live = CountDownLatch(1)
+        val secondLive = CountDownLatch(1)
+        val publications = KeyguardDrawPublication()
+        var drawOwner: KeyguardFirstDrawOwner? = null
+        val roots = mutableListOf<KeyguardFirstDrawEvent>()
+        val shaders = mutableListOf<KeyguardFirstDrawEvent>()
+        fun record(event: KeyguardFirstDrawEvent, stage: KeyguardDrawPublication.Stage) {
+            val owner = drawOwner ?: return
+            if (!owner.accepts(event, 1, 5, window.currentAttachGeneration)) return
+            // The exact owner/reducer invoked by the service, not a test copy
+            // of its former cycle-first publication condition.
+            publications.record(owner.identity, stage, event.observedAtUptimeMs) {
+                if (stage == KeyguardDrawPublication.Stage.ROOT) roots += event else {
+                    shaders += event
+                    if (shaders.size == 1) live.countDown() else secondLive.countDown()
+                }
+            }
+        }
+        fun ownAttachment() {
+            drawOwner = KeyguardFirstDrawOwner(1, 5, window.currentAttachGeneration)
+            publications.attach(requireNotNull(drawOwner).identity)
+        }
         val committed = AtomicInteger()
         val promoted = AtomicInteger()
         val settings = KeyguardCardSettings(
@@ -473,7 +497,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     onInteractionStarted = {},
                     onPositionCommitted = { _, _, _, _ -> },
                     onInteractionDiagnostic = { _, _ -> },
-                    onFirstShaderDraw = { live.countDown() },
+                    onFirstRootDraw = { record(it, KeyguardDrawPublication.Stage.ROOT) },
+                    onFirstShaderDraw = { record(it, KeyguardDrawPublication.Stage.SHADER) },
                     onBootstrapCommit = { committed.incrementAndGet() },
                     onLivePromotion = { promoted.incrementAndGet() },
                     manager = manager,
@@ -486,6 +511,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 window.prepareRetainedView(settings, profile())
                 assertEquals(KeyguardCardWindow.Result.ATTACHED,
                     window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+                ownAttachment()
             }
             assertTrue("production window did not automatically reach live shader drawing",
                 live.await(12, TimeUnit.SECONDS))
@@ -510,15 +536,20 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             }
             awaitWindowPhaseAdvance(instrumentation, window, retainedRoot, phaseBefore)
             instrumentation.runOnMainSync {
+                publications.detach()
+                drawOwner = null
                 assertTrue(window.hide())
                 assertFalse(window.isAttached)
                 assertEquals(1, manager.adds)
                 assertEquals(1, manager.removes)
                 assertEquals(KeyguardCardWindow.Result.ATTACHED,
                     window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+                ownAttachment()
                 assertTrue("reattach must reuse the retained root", retainedRoot === manager.currentRoot)
                 phaseBefore = requireNotNull(window.materialDiagnostics()).orb.phaseAdvanceCount.toLong()
             }
+            assertTrue("second actual shader draw was suppressed by the service publication owner",
+                secondLive.await(8, TimeUnit.SECONDS))
             awaitWindowPhaseAdvance(instrumentation, window, retainedRoot, phaseBefore)
             instrumentation.runOnMainSync {
                 assertEquals(2, manager.adds)
@@ -527,6 +558,28 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertEquals(1, promoted.get())
                 assertEquals(manager.lastWidth, retainedRoot.width)
                 assertEquals(manager.lastHeight, retainedRoot.height)
+                assertEquals(listOf(1L, 2L), roots.map { it.attachGeneration })
+                assertEquals(listOf(1L, 2L), shaders.map { it.attachGeneration })
+                assertEquals(roots.first().observedAtUptimeMs, publications.firstRootAt)
+                assertEquals(shaders.first().observedAtUptimeMs, publications.firstShaderAt)
+                publications.detach()
+                drawOwner = null
+                assertTrue(window.hide())
+                // An add/remove entirely before traversal must remain without
+                // draws; owning an attachment does not synthesize evidence.
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+                ownAttachment()
+                publications.detach()
+                drawOwner = null
+                assertTrue(window.hide())
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                assertEquals(2, roots.size)
+                assertEquals(2, shaders.size)
+                assertEquals(3, manager.adds)
+                assertEquals(3, manager.removes)
             }
         } finally {
             instrumentation.runOnMainSync {

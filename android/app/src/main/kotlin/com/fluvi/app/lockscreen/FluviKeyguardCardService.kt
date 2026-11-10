@@ -217,8 +217,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         var mainKeyguardConfirmedAt: Long? = null,
         var attachRequestedAt: Long? = null,
         var addViewReturnedAt: Long? = null,
-        var firstRootDrawAt: Long? = null,
-        var firstShaderDrawAt: Long? = null,
+        val draws: KeyguardDrawPublication = KeyguardDrawPublication(),
         var retryCount: Int = 0,
         var rejectedLateResults: Int = 0,
         var eventAgeMs: Long? = null,
@@ -1864,6 +1863,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     attachGeneration = overlayAttachGeneration,
                     diagnosticOperation = showOperation,
                 )
+                wakeTiming?.draws?.attach(requireNotNull(firstDrawOwner).identity)
                 KeyguardCardDiagnostics.attach(this, "attached")
                 KeyguardCardDiagnostics.record(this, "KG|ATTACH", reason, true)
                 traceKeyguard(
@@ -1970,6 +1970,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         // Its already-posted observer cleanup remains responsible for removing
         // only its own listener after the framework draw traversal ends.
         firstDrawOwner = null
+        wakeTiming?.draws?.detach()
         if (terminalWake) {
             // A later SCREEN_ON must allocate a new physical cycle. A visible
             // surface change inside the same wake does not pass this path.
@@ -2083,8 +2084,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val owner = firstDrawOwner ?: return
         if (!owner.accepts(event, session.get(), wakeEpoch, overlayAttachGeneration)) return
         val timing = wakeTiming?.takeIf { it.wakeGeneration == owner.wakeGeneration } ?: return
-        if (timing.firstRootDrawAt == null) {
-            timing.firstRootDrawAt = event.observedAtUptimeMs
+        timing.draws.record(owner.identity, KeyguardDrawPublication.Stage.ROOT, event.observedAtUptimeMs) {
             KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_ROOT_DRAW", event.observedAtUptimeMs)
             traceKeyguard(
                 "FIRST_ROOT_DRAW",
@@ -2101,8 +2101,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val owner = firstDrawOwner ?: return
         if (!owner.accepts(event, session.get(), wakeEpoch, overlayAttachGeneration)) return
         val timing = wakeTiming?.takeIf { it.wakeGeneration == owner.wakeGeneration } ?: return
-        if (timing.firstShaderDrawAt == null) {
-            timing.firstShaderDrawAt = event.observedAtUptimeMs
+        timing.draws.record(owner.identity, KeyguardDrawPublication.Stage.SHADER, event.observedAtUptimeMs) {
             KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_SHADER_DRAW", event.observedAtUptimeMs)
             KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_CURRENT_MATERIAL_DRAW", event.observedAtUptimeMs)
             KeyguardCardDiagnostics.recordColdPreparation(session.get(), "FIRST_LIVE_DRAW", event.observedAtUptimeMs)
@@ -2198,15 +2197,15 @@ class FluviKeyguardCardService : AccessibilityService() {
         val queue = timing.inspectionStartedAt?.minus(timing.inspectionQueuedAt ?: timing.inspectionStartedAt ?: 0L)
         val inspect = timing.inspectionFinishedAt?.minus(timing.inspectionStartedAt ?: timing.inspectionFinishedAt ?: 0L)
         val confirmedToAttach = timing.attachRequestedAt?.minus(timing.mainKeyguardConfirmedAt ?: timing.attachRequestedAt ?: 0L)
-        val attachToDraw = timing.firstRootDrawAt?.minus(timing.addViewReturnedAt ?: timing.firstRootDrawAt ?: 0L)
-        val callbackToDraw = timing.firstRootDrawAt?.minus(timing.wakeReceivedAt)
+        val attachToDraw = timing.draws.firstRootAt?.minus(timing.addViewReturnedAt ?: timing.draws.firstRootAt ?: 0L)
+        val callbackToDraw = timing.draws.firstRootAt?.minus(timing.wakeReceivedAt)
         KeyguardCardDiagnostics.record(
             this,
             "KG|WAKE_TIMING",
             "stage=$stage|wake=${timing.wakeGeneration}|eventAgeMs=${timing.eventAgeMs ?: -1L}|inspectionQueueMs=${queue ?: -1L}|" +
                 "inspectionDurationMs=${inspect ?: -1L}|confirmedToAttachMs=${confirmedToAttach ?: -1L}|" +
                 "attachToFirstDrawMs=${attachToDraw ?: -1L}|callbackToFirstDrawMs=${callbackToDraw ?: -1L}|" +
-                "firstShaderDrawAt=${timing.firstShaderDrawAt ?: -1L}|" +
+                "firstShaderDrawAt=${timing.draws.firstShaderAt ?: -1L}|" +
                 "retryCount=${timing.retryCount}|rootWasPrepared=${timing.rootWasPrepared}|" +
                 "profileWasDecoded=${timing.profileWasDecoded}|presentationMode=${timing.presentationMode}|" +
                 "rejectedLateResults=${timing.rejectedLateResults}",
