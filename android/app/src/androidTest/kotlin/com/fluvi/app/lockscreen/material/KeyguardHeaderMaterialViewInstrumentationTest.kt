@@ -445,7 +445,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         exerciseProductionWindow(KeyguardCardPresentationMode.CARD)
     }
 
-    private fun exerciseProductionWindow(mode: KeyguardCardPresentationMode) {
+    @Test fun productionOrbCaptureOffStillDrawsWithoutDetailedProbeWork() {
+        exerciseProductionWindow(KeyguardCardPresentationMode.ORB, evidence = false)
+    }
+
+    private fun exerciseProductionWindow(mode: KeyguardCardPresentationMode, evidence: Boolean = true) {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(
@@ -502,6 +506,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     onBootstrapCommit = { committed.incrementAndGet() },
                     onLivePromotion = { promoted.incrementAndGet() },
                     manager = manager,
+                    drawEvidenceEnabled = { evidence },
                 )
                 createdWindow = window
                 // The production window creates its controller, prepares on
@@ -517,7 +522,6 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 live.await(12, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
             lateinit var retainedRoot: View
-            var phaseBefore = 0L
             instrumentation.runOnMainSync {
                 retainedRoot = requireNotNull(manager.currentRoot)
                 val d = requireNotNull(window.materialDiagnostics())
@@ -532,9 +536,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertEquals(0, manager.removes)
                 assertEquals(manager.lastWidth, retainedRoot.width)
                 assertEquals(manager.lastHeight, retainedRoot.height)
-                phaseBefore = d.orb.phaseAdvanceCount.toLong()
             }
-            awaitWindowPhaseAdvance(instrumentation, window, retainedRoot, phaseBefore)
+            awaitWindowPhaseAdvance(instrumentation, retainedRoot)
             instrumentation.runOnMainSync {
                 publications.detach()
                 drawOwner = null
@@ -547,17 +550,42 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertTrue(episode.orb.gaps > 0)
                 assertTrue(episode.orb.lastPhase != episode.orb.firstPhase)
                 assertFalse(episode.clockRunning)
+                val probe = episode.orbGaps
+                if (evidence) {
+                    assertEquals(1L, probe.attachment)
+                    assertEquals(episode.orb.frames, probe.observedDraws)
+                    assertTrue(probe.gaps.isNotEmpty())
+                    assertTrue(probe.gaps.size <= 3)
+                    assertTrue(probe.gaps.any { it.paired == 1L })
+                    assertTrue(probe.gaps.all { it.previousEndNs <= it.currentStartNs &&
+                        it.currentStartNs <= it.currentEndNs && it.width > 0 && it.height > 0 &&
+                        it.program != null })
+                    assertTrue(probe.gaps.filter { it.paired == 1L }.all {
+                        it.frameNs <= it.callbackEntryNs && it.callbackEntryNs <= it.callbackExitNs &&
+                            it.callbackExitNs <= it.currentStartNs
+                    })
+                    assertEquals(0L, probe.rejected)
+                } else {
+                    assertEquals(0L, probe.observedDraws)
+                    assertEquals(0L, probe.observerNs)
+                    assertTrue(probe.gaps.isEmpty())
+                }
+                // Numeric probe cost is not total instrumentation overhead;
+                // timer reads and emulator scheduling remain separate. This
+                // is a workload control, not a Nothing performance verdict.
+                android.util.Log.i("FluviDrawProbe", "mode=$mode evidence=$evidence cold=true" +
+                    " frames=${episode.orb.frames} phase=${episode.phaseAdvances}" +
+                    " maxGapMs=${episode.orb.gapMaxMs} observerNs=${probe.observerNs}")
                 assertEquals(1, manager.adds)
                 assertEquals(1, manager.removes)
                 assertEquals(KeyguardCardWindow.Result.ATTACHED,
                     window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
                 ownAttachment()
                 assertTrue("reattach must reuse the retained root", retainedRoot === manager.currentRoot)
-                phaseBefore = requireNotNull(window.materialDiagnostics()).orb.phaseAdvanceCount.toLong()
             }
             assertTrue("second actual shader draw was suppressed by the service publication owner",
                 secondLive.await(8, TimeUnit.SECONDS))
-            awaitWindowPhaseAdvance(instrumentation, window, retainedRoot, phaseBefore)
+            awaitWindowPhaseAdvance(instrumentation, retainedRoot)
             instrumentation.runOnMainSync {
                 assertEquals(2, manager.adds)
                 assertEquals(1, manager.removes)
@@ -572,6 +600,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 publications.detach()
                 drawOwner = null
                 assertTrue(window.hide())
+                val warm = requireNotNull(window.attachmentRenderSummary())
+                if (evidence) {
+                    assertEquals(2L, warm.orbGaps.attachment)
+                    assertTrue(warm.orbGaps.gaps.all { it.previousEndNs > 0 })
+                    assertEquals(0L, warm.orbGaps.rejected)
+                }
+                android.util.Log.i("FluviDrawProbe", "mode=$mode evidence=$evidence cold=false" +
+                    " frames=${warm.orb.frames} phase=${warm.phaseAdvances}" +
+                    " maxGapMs=${warm.orb.gapMaxMs} observerNs=${warm.orbGaps.observerNs}")
                 // An add/remove entirely before traversal must remain without
                 // draws; owning an attachment does not synthesize evidence.
                 assertEquals(KeyguardCardWindow.Result.ATTACHED,
@@ -589,6 +626,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertEquals(3, manager.removes)
                 assertEquals(0L, requireNotNull(window.attachmentRenderSummary()).orb.frames)
                 assertEquals(null, requireNotNull(window.attachmentRenderSummary()).orb.firstAt)
+                assertEquals(0L, requireNotNull(window.attachmentRenderSummary()).orbGaps.observedDraws)
+                assertTrue(requireNotNull(window.attachmentRenderSummary()).orbGaps.gaps.isEmpty())
             }
         } finally {
             instrumentation.runOnMainSync {
@@ -600,17 +639,23 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
     private fun awaitWindowPhaseAdvance(
         instrumentation: Instrumentation,
-        window: KeyguardCardWindow,
         root: View,
-        phaseBefore: Long,
     ) {
         val advanced = CountDownLatch(1)
+        lateinit var material: KeyguardHeaderMaterialView
+        var phaseBefore = 0
         val listener = ViewTreeObserver.OnDrawListener {
-            if ((window.materialDiagnostics()?.orb?.phaseAdvanceCount?.toLong() ?: 0L) > phaseBefore + 2L) {
+            // Scalar production counter only. Full materialDiagnostics sorts
+            // callback percentiles and must not perturb this pacing fixture.
+            if (material.attachmentPhaseAdvances() > phaseBefore + 120) {
                 advanced.countDown()
             }
         }
-        instrumentation.runOnMainSync { root.viewTreeObserver.addOnDrawListener(listener) }
+        instrumentation.runOnMainSync {
+            material = root.findViewById(R.id.fluvi_financial_snapshot_orb)
+            phaseBefore = material.attachmentPhaseAdvances()
+            root.viewTreeObserver.addOnDrawListener(listener)
+        }
         try {
             assertTrue("live clock did not advance shader frames", advanced.await(8, TimeUnit.SECONDS))
         } finally {

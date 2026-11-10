@@ -10,6 +10,7 @@ import android.view.View
 import com.fluvi.app.R
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
 import com.fluvi.app.lockscreen.KeyguardCardPresentationMode
+import com.fluvi.app.lockscreen.KeyguardMainWorkEvidence
 import java.util.IdentityHashMap
 
 /** Identifies the exact bootstrap material which is permitted to enter LIVE
@@ -29,10 +30,21 @@ internal class KeyguardCardMaterialController(
     private val backgroundVeil: View,
     private val artifacts: KeyguardShaderArtifactStore = KeyguardShaderArtifactStore(orb.context),
     private val gpuPreparer: KeyguardGpuMaterialPreparer = AndroidKeyguardGpuMaterialPreparer(),
+    private val drawEvidenceEnabled: () -> Boolean = { false },
+    private val mainWorkEvidence: KeyguardMainWorkEvidence? = null,
+    private val drawEvidenceOwner: () -> Any? = { null },
 ) {
     enum class ColdPresentationState { BOOTSTRAP, BOOTSTRAP_SUBMITTED, LIVE }
 
-    private val clock = KeyguardMaterialClock { nanos ->
+    private val clock = KeyguardMaterialClock(
+        evidenceEnabled = drawEvidenceEnabled,
+        onCallbackObserved = { frame, entry, exit ->
+            if (attached) {
+                orb.recordClockCallback(frame, entry, exit)
+                if (background.visibility == View.VISIBLE) background.recordClockCallback(frame, entry, exit)
+            }
+        },
+    ) { nanos ->
         orb.frame(nanos)
         background.frame(nanos)
     }
@@ -109,6 +121,12 @@ internal class KeyguardCardMaterialController(
     )
 
     init {
+        orb.drawEvidenceEnabled = drawEvidenceEnabled
+        background.drawEvidenceEnabled = drawEvidenceEnabled
+        orb.drawEvidenceOwner = drawEvidenceOwner
+        background.drawEvidenceOwner = drawEvidenceOwner
+        orb.mainWorkEvidence = mainWorkEvidence
+        background.mainWorkEvidence = mainWorkEvidence
         orb.shape = KeyguardHeaderMaterialView.Shape.ORB
         background.shape = KeyguardHeaderMaterialView.Shape.CARD_BACKGROUND
         // addView() returning is not proof that a hardware Canvas exists.
@@ -221,12 +239,12 @@ internal class KeyguardCardMaterialController(
             else KeyguardBootstrapFrameToken(bootstrapGeneration, visualKey)
         }
 
-    fun onAttached() {
+    fun onAttached(attachment: Long = 0L) {
         if (!attached) {
             // add/remove can finish before View.onAttachedToWindow dispatch.
             // Such an undrawn attachment must not inherit the prior cadence.
-            orb.beginAttachmentDrawEvidence()
-            background.beginAttachmentDrawEvidence()
+            orb.beginAttachmentDrawEvidence(attachment)
+            background.beginAttachmentDrawEvidence(attachment)
             attachmentCallbacksStart = clock.callbackCount
             attachmentStartsStart = clock.startCount
             attachmentStopsStart = clock.stopCount
@@ -250,6 +268,8 @@ internal class KeyguardCardMaterialController(
         orb.pause()
         background.pause()
         clock.stop()
+        orb.endAttachmentDrawEvidence()
+        background.endAttachmentDrawEvidence()
     }
 
     fun stop(reason: String) = onDetached(reason)
@@ -266,6 +286,8 @@ internal class KeyguardCardMaterialController(
         liveState = coldPresentationState.name,
         orb = orb.attachmentDrawCadence(),
         background = background.attachmentDrawCadence(),
+        orbGaps = orb.attachmentDrawGaps(),
+        backgroundGaps = background.attachmentDrawGaps(),
     )
 
     fun dispose() {
@@ -571,6 +593,7 @@ internal data class KeyguardAttachmentRenderSummary(
     val clockCallbacks: Int, val shaderCalls: Int, val phaseAdvances: Int,
     val animationStarts: Int, val animationStops: Int, val clockRunning: Boolean,
     val liveState: String, val orb: KeyguardDrawCadence.Snapshot, val background: KeyguardDrawCadence.Snapshot,
+    val orbGaps: KeyguardDrawGapEvidence.Snapshot, val backgroundGaps: KeyguardDrawGapEvidence.Snapshot,
 )
 
 internal data class KeyguardMaterialDiagnostics(

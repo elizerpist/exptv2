@@ -495,7 +495,12 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 emit("ATTACHMENT_RENDER_SUMMARY", request + 1, at + 97,
                     mapOf("clockCallbacks" to 12, "shaderFrames" to if (episode == 0) 11 else 0,
                         "shaderCalls" to if (episode == 0) 13 else 0, "phaseAdvances" to 10,
-                        "drawGapCount" to 10, "drawGapMaxMs" to 22, "clockRunning" to false), hide)
+                        "drawGapCount" to 10, "drawGapMaxMs" to 22, "clockRunning" to false,
+                        "drawEvidenceMode" to "LIGHT", "drawEvidenceOmitted" to 7,
+                        "drawObservedFrames" to 11, "drawObserverNs" to 1900,
+                        "drawUnpairedFrames" to 0, "drawCoalescedCallbacks" to 1,
+                        "orbDrawGaps" to (0..2).joinToString("\n") { gapFixture(it, 1_100) },
+                        "backgroundDrawGaps" to (0..2).joinToString("\n") { gapFixture(it + 3, 1_100) }), hide)
                 withdrawalRequests += request + 1
             }
             repeat(90) { index ->
@@ -514,6 +519,16 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("retainedAttemptIds=1,2,3,4"))
         assertTrue(report.contains("omittedCriticalRecordIds=none"))
         assertTrue(report.contains("incompleteExportAttemptIds=none"))
+        assertTrue(report.contains("drawGapEvidenceOmitted="))
+        assertFalse(report.contains("omittedDrawGapRecordIds=none"))
+        val selectedGaps = report.lineSequence().filter { it.startsWith(" DRAW_GAP ") }.toList()
+        assertEquals((1..4).take(selectedGaps.size), selectedGaps.take(4).map {
+            it.substringAfter("attempt=").substringBefore(' ').toInt()
+        })
+        assertTrue(selectedGaps.take(4).all { it.contains("surface=orb sample=0 ") })
+        assertTrue(report.lineSequence().filter { it.startsWith(" RENDER ") }.all {
+            !it.contains("orbDrawGaps=") && !it.contains("backgroundDrawGaps=")
+        })
         showRequests.forEach { request ->
             assertTrue("missing showing cause $request", report.lineSequence().any {
                 (it.startsWith(" SHOWING_INSPECTION ") || it.startsWith(" SHOW_CAUSE ")) && it.contains("req=$request ") && it.contains("finished=") && it.contains("freshness=FRAMEWORK_EVENT")
@@ -548,6 +563,76 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("causalSpineComplete=false"))
         assertTrue(report.contains("firstRootDrawObserved=true"))
     }
+
+    @Test fun optionalDrawGapRecordsKeepWholeLinesAndTheirAttachmentIdentity() {
+        KeyguardCardDiagnostics.startCapture(context, "draw-gap-identity", "profile", "LIGHT")
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 92L, 1L, "wake", 100L))
+        val shows = (1L..2L).map { attach ->
+            val show = KeyguardCardDiagnostics.newShowOperation(owner, attach, null)
+            KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "main", operation = show, observedUptimeMs = attach * 100)
+            KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "added", operation = show, observedUptimeMs = attach * 100 + 1)
+            val hide = KeyguardCardDiagnostics.newHideOperation(owner, attach, null, attach * 100 + 50)
+            KeyguardCardDiagnostics.captureEvent(context, "ATTACHMENT_RENDER_SUMMARY", "withdrawal", operation = hide,
+                fields = mapOf("drawEvidenceMode" to "LIGHT", "drawEvidenceOmitted" to 5,
+                    "drawObserverNs" to 100, "drawObservedFrames" to 12, "drawUnpairedFrames" to 1,
+                    "drawCoalescedCallbacks" to 2, "drawEvidenceBreaks" to 1, "drawEvidenceRejected" to 3,
+                    "orbDrawGaps" to "${gapFixture(1, 320)}\n${gapFixture(2, 340)}",
+                    "backgroundDrawGaps" to gapFixture(3, 360)))
+            show
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val gaps = report.lineSequence().filter { it.startsWith(" DRAW_GAP ") }.toList()
+        assertEquals(6, gaps.size)
+        assertEquals(shows.map { it.showOperationId }, gaps.take(2).map {
+            it.substringAfter("showOp=").substringBefore(' ').toLong()
+        })
+        assertTrue(gaps.take(2).all { it.contains("surface=orb sample=0 ") })
+        shows.forEach { show ->
+            val owned = gaps.filter { it.contains("showOp=${show.showOperationId} attach=${show.attachGeneration} ") }
+            assertEquals(3, owned.size)
+            assertTrue(owned.any { it.endsWith("end=3") })
+            assertTrue(owned.all { it.contains("attempt=1 ") })
+        }
+        assertTrue(report.contains("drawGapEvidenceExported=6"))
+        assertTrue(report.contains("omittedDrawGapRecordIds=none"))
+        assertTrue(report.contains("drawEvidenceOmitted=5"))
+        assertTrue(report.contains("drawEvidenceBreaks=1"))
+        assertTrue(report.contains("drawEvidenceRejected=3"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32 * 1024)
+        assertTrue(report.lineSequence().filter { it.startsWith(" RENDER ") }.none { it.contains("end=") })
+    }
+
+    @Test fun drawEvidenceOwnerChangesAcrossCapturesWithoutAnInterveningFrame() {
+        assertEquals(null, KeyguardCardDiagnostics.drawEvidenceOwner())
+        KeyguardCardDiagnostics.startCapture(context, "draw-owner", "profile", "LIGHT")
+        val first = checkNotNull(KeyguardCardDiagnostics.drawEvidenceOwner())
+        assertTrue(first === KeyguardCardDiagnostics.drawEvidenceOwner())
+        KeyguardCardDiagnostics.freezeCapture(context)
+        assertEquals(null, KeyguardCardDiagnostics.drawEvidenceOwner())
+        KeyguardCardDiagnostics.startCapture(context, "draw-owner", "profile", "LIGHT")
+        val second = checkNotNull(KeyguardCardDiagnostics.drawEvidenceOwner())
+        assertFalse(first === second)
+    }
+
+    @Test fun malformedOrExcessGapRecordsAreOmittedWholeAndCounted() {
+        KeyguardCardDiagnostics.startCapture(context, "gap-bounds", "debug", "LIGHT")
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 93L, 1L, "wake", 100L))
+        val show = KeyguardCardDiagnostics.newShowOperation(owner, 1L, null)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "main", operation = show)
+        KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "added", operation = show)
+        KeyguardCardDiagnostics.captureEvent(context, "ATTACHMENT_RENDER_SUMMARY", "withdrawal", operation = show,
+            fields = mapOf("orbDrawGaps" to (listOf(gapFixture(99, 1_400)) + (1..4).map { gapFixture(it, 300) }).joinToString("\n")))
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val gaps = report.lineSequence().filter { it.startsWith(" DRAW_GAP ") }.toList()
+        assertEquals(3, gaps.size)
+        assertTrue(gaps.all { it.endsWith("end=1") || it.endsWith("end=2") || it.endsWith("end=3") })
+        assertTrue(report.contains("drawGapCaptureOmitted=2"))
+        assertFalse(report.contains("gap=99"))
+        assertFalse(report.contains("end=4"))
+    }
+
+    private fun gapFixture(index: Int, length: Int): String =
+        "gap=$index dt=48 " + "x=1 ".repeat((length - 30) / 4) + "end=$index"
 
     private fun readerFields(main: Boolean = false): Map<String, Any?> = mapOf(
         "surfaceClassification" to if (main) "SHOW_FULL" else "HIDDEN_UNKNOWN",

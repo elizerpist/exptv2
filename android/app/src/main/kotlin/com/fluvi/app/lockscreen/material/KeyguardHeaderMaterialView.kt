@@ -10,6 +10,9 @@ import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
 import android.os.SystemClock
+import android.os.Debug
+import com.fluvi.app.lockscreen.KeyguardMainWorkEvidence
+import com.fluvi.app.lockscreen.keyguardThreadCpuDelta
 import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.View
@@ -18,9 +21,16 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
+/** Primitive SAM avoids boxing three timestamp Longs on every callback. */
+internal fun interface KeyguardFrameCallbackObservation {
+    fun observed(frameNs: Long, enteredNs: Long, exitedNs: Long)
+}
+
 /** The one card-owned, display-synchronised clock. It never performs IPC,
  * persistence, queries or WindowManager operations. */
 internal class KeyguardMaterialClock(
+    private val evidenceEnabled: () -> Boolean = { false },
+    private val onCallbackObserved: KeyguardFrameCallbackObservation = KeyguardFrameCallbackObservation { _, _, _ -> },
     private val onFrame: (Long) -> Unit,
 ) : Choreographer.FrameCallback {
     private var running = false
@@ -55,6 +65,8 @@ internal class KeyguardMaterialClock(
     }
 
     override fun doFrame(frameTimeNanos: Long) {
+        val observe = evidenceEnabled()
+        val enteredNs = if (observe) System.nanoTime() else 0L
         callbackPending = false
         if (!running) return
         if (lastFrameNanos != 0L) {
@@ -69,6 +81,7 @@ internal class KeyguardMaterialClock(
         callbackCount += 1
         onFrame(frameTimeNanos)
         schedule()
+        if (observe) onCallbackObserved.observed(frameTimeNanos, enteredNs, System.nanoTime())
     }
 
     fun framePercentile(percentile: Double): Long {
@@ -186,6 +199,16 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private var onDrawCount = 0
     private var shaderDrawCount = 0
     private val attachmentCadence = KeyguardDrawCadence()
+    private val drawGaps = KeyguardDrawGapEvidence()
+    private var evidenceAttachment = 0L
+    private var evidenceAttachmentActive = false
+    var drawEvidenceEnabled: () -> Boolean = { false }
+    var drawEvidenceOwner: () -> Any? = { null }
+    private var lastEvidenceToken: Any? = null
+    var mainWorkEvidence: KeyguardMainWorkEvidence? = null
+    private var measuringShader = false
+    private var configureNs = 0L
+    private var submitNs = 0L
     private var attachmentShaderCallsStart = 0
     private var attachmentPhaseAdvancesStart = 0
     private var fallbackDrawCount = 0
@@ -234,6 +257,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        endAttachmentDrawEvidence()
         // `isAttachedToWindow` flips during the framework call.  Publishing
         // before it would let the controller retain a frame callback for a
         // root which has already been removed from the accessibility window.
@@ -433,6 +457,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     fun pause() {
+        drawGaps.samplingOff() // Intentional stopped time is not a live traversal gap.
         if (pausedTime != null) return
         val now = animationTime.nowNanos()
         pausedTime = current?.timeAt(now)
@@ -458,10 +483,34 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     fun canAnimateMaterial(): Boolean = isRendererReady() && !bootstrapActive
 
     fun attachmentDrawCadence(): KeyguardDrawCadence.Snapshot = attachmentCadence.snapshot()
-    fun beginAttachmentDrawEvidence() {
+    fun attachmentDrawGaps(): KeyguardDrawGapEvidence.Snapshot = drawGaps.snapshot()
+    fun beginAttachmentDrawEvidence(attachment: Long = evidenceAttachment) {
+        evidenceAttachment = attachment
+        evidenceAttachmentActive = true
         attachmentCadence.reset()
+        drawGaps.begin(attachment)
+        lastEvidenceToken = null
         attachmentShaderCallsStart = shaderDrawCount
         attachmentPhaseAdvancesStart = phaseAdvanceCount
+    }
+    fun endAttachmentDrawEvidence() {
+        evidenceAttachmentActive = false
+        lastEvidenceToken = null
+        drawGaps.end()
+    }
+    fun recordClockCallback(frameNs: Long, enteredNs: Long, exitedNs: Long) {
+        if (!evidenceAttachmentActive) return
+        val probeStart = System.nanoTime()
+        prepareEvidenceSampling()
+        drawGaps.callback(evidenceAttachment, frameNs, enteredNs, exitedNs)
+        drawGaps.addObserverCost(System.nanoTime() - probeStart)
+    }
+    private fun prepareEvidenceSampling() {
+        val token = drawEvidenceOwner() ?: this // stable owner for controlled instrumentation
+        if (token !== lastEvidenceToken) {
+            drawGaps.begin(evidenceAttachment)
+            lastEvidenceToken = token
+        }
     }
     fun attachmentShaderCalls(): Int = shaderDrawCount - attachmentShaderCallsStart
     fun attachmentPhaseAdvances(): Int = phaseAdvanceCount - attachmentPhaseAdvancesStart
@@ -520,6 +569,11 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         }
         val old = previous
         val shaderCallsBeforeTraversal = shaderDrawCount
+        measuringShader = evidenceAttachmentActive && drawEvidenceEnabled()
+        if (measuringShader) prepareEvidenceSampling()
+        val traversalStartNs = if (measuringShader) System.nanoTime() else 0L
+        val cpuStartNs = if (measuringShader) Debug.threadCpuTimeNanos() else 0L
+        configureNs = 0; submitNs = 0
         val progress = if (old == null) 1f else ((frameNanos - transitionStartedNanos) / 180_000_000f).coerceIn(0f, 1f)
         if (old != null && progress < 1f) {
             drawShader(canvas, shaderPrevious ?: currentShader, old, 1f)
@@ -530,14 +584,27 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             drawShader(canvas, currentShader, scene, 1f)
         }
         if (shaderDrawCount > shaderCallsBeforeTraversal) {
+            val traversalEndNs = if (measuringShader) System.nanoTime() else 0L
+            val cpuNs = if (measuringShader) keyguardThreadCpuDelta(cpuStartNs, Debug.threadCpuTimeNanos()) else 0L
             // A transition can issue two shader calls in one traversal. Count
             // that traversal once, only after actual shader geometry was sent.
             attachmentCadence.drawn(SystemClock.uptimeMillis(), lastTime?.phase ?: Float.NaN)
+            if (measuringShader) {
+                val probeStart = System.nanoTime()
+                drawGaps.drawn(evidenceAttachment, traversalStartNs, traversalEndNs, cpuNs,
+                    configureNs, submitNs, mainWorkEvidence, attemptedProgramKey, width, height)
+                drawGaps.addObserverCost(System.nanoTime() - probeStart)
+            } else {
+                drawGaps.samplingOff()
+                lastEvidenceToken = null
+            }
         }
+        measuringShader = false
     }
 
     private fun drawShader(canvas: Canvas, shader: KeyguardHeaderShader, scene: KeyguardMaterialScene, alpha: Float) {
         val time = scene.timeAt(frameNanos)
+        val configureStart = if (measuringShader) System.nanoTime() else 0L
         try {
             shader.configure(scene.profile, width, height, time)
         } catch (error: Throwable) {
@@ -546,8 +613,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             drawFallback(canvas, scene)
             return
         }
+        if (measuringShader) configureNs += System.nanoTime() - configureStart
         paint.shader = shader.runtimeShader
         paint.alpha = (alpha * 255).toInt().coerceIn(0, 255)
+        val submitStart = if (measuringShader) System.nanoTime() else 0L
         when (shape) {
             Shape.ORB -> {
                 val radius = min(width, height) / 2f
@@ -555,6 +624,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             }
             Shape.CARD_BACKGROUND -> canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), dp(22f), dp(22f), paint)
         }
+        if (measuringShader) submitNs += System.nanoTime() - submitStart
         paint.shader = null
         paint.alpha = 255
         shaderDrawCount += 1
@@ -573,6 +643,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     private fun drawFallback(canvas: Canvas, scene: KeyguardMaterialScene?) {
+        drawGaps.samplingOff()
         fallbackDrawCount += 1
         val profile = scene?.profile
         val bitmap = fallbackBitmap
@@ -605,6 +676,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
      * Its gradient is rebuilt when semantic input or size changes, never from
      * the draw loop. */
     private fun drawBootstrap(canvas: Canvas, scene: KeyguardMaterialScene) {
+        drawGaps.samplingOff()
         bootstrapDrawCount += 1
         val activePaint = bootstrapPaint
         // `setScene` and `onSizeChanged` build the gradient.  A defensive
@@ -663,6 +735,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     private fun drawStaticHeaderGradient(canvas: Canvas, profile: KeyguardMaterialProfile) {
+        drawGaps.samplingOff()
         val count = min(profile.colors.size, profile.stops.size)
         if (count < 2) {
             paint.color = profile.colors.firstOrNull() ?: Color.rgb(101, 116, 137)

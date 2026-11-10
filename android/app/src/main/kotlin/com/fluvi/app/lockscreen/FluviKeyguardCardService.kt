@@ -42,6 +42,7 @@ import kotlinx.coroutines.withContext
  */
 class FluviKeyguardCardService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val mainWorkEvidence = KeyguardMainWorkEvidence()
     private val session = AtomicLong(0L)
     private val visibilityEpoch = AtomicLong(0L)
     /** Pointer interaction invalidates only inspections that began before the
@@ -149,6 +150,25 @@ class FluviKeyguardCardService : AccessibilityService() {
         while (value > observed && !counter.compareAndSet(observed, value)) observed = counter.get()
     }
 
+    /** Numeric, bounded attachment-gap evidence, never a visibility input.
+     * These nested scopes are retained separately and must not be summed.
+     * nanoTime matches the renderer/Choreographer observation clock; CPU is
+     * this thread's whole-scope CPU, not a claim about Binder or GPU work. */
+    private inline fun <T> withMainWorkEvidence(kind: Int, requestId: Long = 0L, operation: () -> T): T {
+        if (Looper.myLooper() != Looper.getMainLooper() || !KeyguardCardDiagnostics.wantsEvent("MAIN_WORK")) {
+            return operation()
+        }
+        val startedNs = System.nanoTime()
+        val startedCpuNs = android.os.Debug.threadCpuTimeNanos()
+        try {
+            return operation()
+        } finally {
+            val endedNs = System.nanoTime()
+            val cpuNs = keyguardThreadCpuDelta(startedCpuNs, android.os.Debug.threadCpuTimeNanos())
+            mainWorkEvidence.record(kind, requestId, startedNs, endedNs, cpuNs)
+        }
+    }
+
     /** An authority change may make an external surface request stale.  Keep
      * exactly one current reconciliation behind the active Binder call rather
      * than relabelling that old result as current.  Terminal exclusions call
@@ -188,21 +208,26 @@ class FluviKeyguardCardService : AccessibilityService() {
         deferredFields: (() -> Map<String, Any?>)? = null,
     ) {
         if (!KeyguardCardDiagnostics.wantsEvent(stage)) return
-        val capturedContext = operation?.context ?: diagnosticContext ?: request?.diagnosticContext ?: currentDiagnosticAttempt
-        KeyguardCardDiagnostics.captureEvent(
-            context = this,
-            stage = stage,
-            reason = reason,
-            serviceSession = request?.session ?: session.get(),
-            wakeEpoch = request?.wakeGeneration ?: wakeEpoch,
-            requestId = request?.id ?: requestId ?: operation?.causingInspectionRequestId,
-            attachGeneration = attachGeneration,
-            observedUptimeMs = observedUptimeMs,
-            diagnosticContext = capturedContext,
-            operation = operation,
-            fields = fields,
-            deferredFields = deferredFields,
-        )
+        withMainWorkEvidence(
+            KeyguardMainWorkEvidence.DIAGNOSTIC_PRODUCER,
+            request?.id ?: requestId ?: operation?.causingInspectionRequestId ?: 0L,
+        ) {
+            val capturedContext = operation?.context ?: diagnosticContext ?: request?.diagnosticContext ?: currentDiagnosticAttempt
+            KeyguardCardDiagnostics.captureEvent(
+                context = this,
+                stage = stage,
+                reason = reason,
+                serviceSession = request?.session ?: session.get(),
+                wakeEpoch = request?.wakeGeneration ?: wakeEpoch,
+                requestId = request?.id ?: requestId ?: operation?.causingInspectionRequestId,
+                attachGeneration = attachGeneration,
+                observedUptimeMs = observedUptimeMs,
+                diagnosticContext = capturedContext,
+                operation = operation,
+                fields = fields,
+                deferredFields = deferredFields,
+            )
+        }
     }
 
     private data class WakeTiming(
@@ -296,11 +321,13 @@ class FluviKeyguardCardService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         session.incrementAndGet()
+        mainWorkEvidence.resetSession(session.get(), android.os.Process.myTid().toLong())
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "SERVICE_CONNECTED")
         publishInspectionAuthority()
         FluviKeyguardCardServiceRegistry.connected(this)
         overlay = KeyguardCardWindow(
             serviceContext = this,
+            mainWorkEvidence = mainWorkEvidence,
             onOpen = ::openFocusedFluvi,
             onToggle = ::toggleView,
             onInteractionStarted = ::onOverlayInteractionStarted,
@@ -669,12 +696,14 @@ class FluviKeyguardCardService : AccessibilityService() {
         causingInspectionRequestId: Long? = null,
     ): Boolean {
         if (!::overlay.isInitialized) return false
-        val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
-        val shouldHide = KeyguardCardFastHideGate.shouldHide(
-            displayInteractive = powerManager.isInteractive,
-            displayOff = display?.state == Display.STATE_OFF,
-            keyguardLocked = keyguardManager.isKeyguardLocked,
-        )
+        val shouldHide = withMainWorkEvidence(KeyguardMainWorkEvidence.SYSTEM_GATE, causingInspectionRequestId ?: 0L) {
+            val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
+            KeyguardCardFastHideGate.shouldHide(
+                displayInteractive = powerManager.isInteractive,
+                displayOff = display?.state == Display.STATE_OFF,
+                keyguardLocked = keyguardManager.isKeyguardLocked,
+            )
+        }
         if (!shouldHide) return false
         hideImmediately(
             source,
@@ -1358,6 +1387,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         mainHandoffRequestedAt: Long,
         mainApplyEnteredAt: Long,
     ) {
+        withMainWorkEvidence(KeyguardMainWorkEvidence.INSPECTION_APPLY, request.id) {
         var decisionObservedAt: Long? = null
         try {
         wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.apply {
@@ -1504,6 +1534,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     "mainEntryToDecisionMs" to (decisionObservedAt?.let { it - mainApplyEnteredAt } ?: "NA"),
                 ),
             )
+        }
         }
     }
 
@@ -2035,6 +2066,16 @@ class FluviKeyguardCardService : AccessibilityService() {
                         "animationStops" to summary.animationStops,
                         "clockRunning" to summary.clockRunning,
                         "liveState" to summary.liveState,
+                        "drawEvidenceMode" to "cpuSubmissionNotPresentation",
+                        "drawEvidenceOmitted" to (summary.orbGaps.omittedGaps + summary.backgroundGaps.omittedGaps),
+                        "drawObserverNs" to (summary.orbGaps.observerNs + summary.backgroundGaps.observerNs),
+                        "drawObservedFrames" to summary.orbGaps.observedDraws,
+                        "drawUnpairedFrames" to summary.orbGaps.unpairedDraws,
+                        "drawCoalescedCallbacks" to summary.orbGaps.coalescedCallbacks,
+                        "drawEvidenceBreaks" to summary.orbGaps.samplingBreaks,
+                        "drawEvidenceRejected" to summary.orbGaps.rejected,
+                        "orbDrawGaps" to summary.orbGaps.compact(),
+                        "backgroundDrawGaps" to summary.backgroundGaps.compact(),
                     ) },
                 )
             }

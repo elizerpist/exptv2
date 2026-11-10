@@ -48,6 +48,8 @@ internal class KeyguardCardWindow(
     private val onLivePromotion: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFrameCommit: (KeyguardFirstDrawEvent) -> Unit = {},
     private val manager: WindowManager = serviceContext.getSystemService(WindowManager::class.java),
+    private val mainWorkEvidence: KeyguardMainWorkEvidence? = null,
+    private val drawEvidenceEnabled: () -> Boolean = { KeyguardCardDiagnostics.wantsEvent("DRAW_GAP") },
 ) {
     enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
 
@@ -192,7 +194,7 @@ internal class KeyguardCardWindow(
                     // only if material selection changed synchronously during
                     // addView; never wait for a later accessibility event.
                     observeBootstrapBeforeNextDraw()
-                    materialController?.onAttached()
+                    materialController?.onAttached(attachGeneration)
                     observeFirstRootDraw(current, attachGeneration)
                     reportWindowDiagnostic("POST_ADD_SETUP_COMPLETE", "success", attachGeneration)
                     if (settings.cardPosition == null) {
@@ -389,6 +391,9 @@ internal class KeyguardCardWindow(
             orb = created.findViewById(R.id.fluvi_financial_snapshot_orb),
             background = created.findViewById(R.id.fluvi_keyguard_material_background),
             backgroundVeil = created.findViewById(R.id.fluvi_keyguard_material_veil),
+            drawEvidenceEnabled = drawEvidenceEnabled,
+            mainWorkEvidence = mainWorkEvidence,
+            drawEvidenceOwner = KeyguardCardDiagnostics::drawEvidenceOwner,
         ).also { controller ->
             controller.onPreparationStage = { stage, fields ->
                 reportWindowDiagnostic(stage, fields["programKey"]?.toString() ?: "material", null)

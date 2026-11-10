@@ -588,7 +588,9 @@ internal object KeyguardCardDiagnostics {
             if (count > 1) append(" count=").append(count)
                 .append(" firstUp=").append(firstUptimeMs)
                 .append(" lastUp=").append(lastUptimeMs)
-            fields.forEach { (key, value) -> append(' ').append(key).append('=').append(value) }
+            // Detailed gap records have their own optional, whole-line budget
+            // below. Never duplicate multiline payloads into a raw event row.
+            fields.filterKeys { it !in DRAW_GAP_KEYS }.forEach { (key, value) -> append(' ').append(key).append('=').append(value) }
         }
     }
 
@@ -817,7 +819,33 @@ internal object KeyguardCardDiagnostics {
         "clockCallbacks", "shaderFrames", "shaderCalls", "phaseAdvances", "firstPhase", "lastPhase",
         "drawGapCount", "drawGapTotalMs", "drawGapMaxMs", "animationStarts", "animationStops",
         "clockRunning", "liveState", "backgroundFrames", "firstShaderTraversalAt", "lastShaderTraversalAt", "drawInvalidOrder",
+        "drawEvidenceMode", "drawEvidenceOmitted", "drawObserverNs", "drawObservedFrames",
+        "drawUnpairedFrames", "drawCoalescedCallbacks", "drawEvidenceBreaks", "drawEvidenceRejected", "drawGapCaptureOmitted",
+        "orbDrawGaps", "backgroundDrawGaps",
     )
+    private val DRAW_GAP_KEYS = setOf("orbDrawGaps", "backgroundDrawGaps")
+
+    /** Only the attachment summary admits these bounded technical records.
+     * They are already formatted on the diagnostic worker, not in onDraw.
+     * Preserve whole records: the generic 160-character value cap would cut
+     * the final ownership/timing fields in the middle of a record. */
+    private fun captureTechnicalFields(stage: String, fields: Map<String, Any?>): Map<String, String> {
+        val result = linkedMapOf<String, String>()
+        var gapRecordsOmitted = 0
+        fields.forEach { (key, value) ->
+            if (value == null) return@forEach
+            if (stage == "ATTACHMENT_RENDER_SUMMARY" && key in DRAW_GAP_KEYS) {
+                val retained = mutableListOf<String>()
+                value.toString().lineSequence().filter(String::isNotBlank).forEach { line ->
+                    if (retained.size < 3 && line.length <= 1_200) retained += line.replace('\r', ' ')
+                    else gapRecordsOmitted += 1
+                }
+                result[key] = retained.joinToString("\n")
+            } else result[key] = technicalValue(value)
+        }
+        if (stage == "ATTACHMENT_RENDER_SUMMARY") result["drawGapCaptureOmitted"] = gapRecordsOmitted.toString()
+        return result
+    }
 
     fun recordColdPreparation(serviceSession: Long, stage: String, observedUptimeMs: Long = SystemClock.uptimeMillis()) {
         reduction.offer {
@@ -1028,6 +1056,10 @@ internal object KeyguardCardDiagnostics {
 
     fun recordHiddenNoop(@Suppress("UNUSED_PARAMETER") context: Context) { ingress?.hiddenNoops?.incrementAndGet() }
 
+    /** Opaque capture identity only: no lock, snapshot or diagnostic work.
+     * Attachment-owned numeric probes use it to avoid crossing captures. */
+    fun drawEvidenceOwner(): Any? = ingress
+
     /** Check before constructing optional verbose fields. LIGHT keeps the
      * complete INSPECTION_FINISHED aggregate instead of three copies. */
     fun wantsEvent(stage: String): Boolean {
@@ -1065,7 +1097,7 @@ internal object KeyguardCardDiagnostics {
         val lockAcquiredAtNs = SystemClock.elapsedRealtimeNanos()
         val active = capture?.takeIf { it.id == token.id } ?: return@synchronized
         if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
-        val capturedFields = (deferredFields?.invoke() ?: fields).mapNotNull { (key, value) -> value?.let { key to technicalValue(it) } }.toMap()
+        val capturedFields = captureTechnicalFields(stage, deferredFields?.invoke() ?: fields)
             .let { base ->
                 if (stage == "ACCESSIBILITY_EVENT" && base["overlayState"] == "hidden") {
                     base["eventAgeMs"]?.toLongOrNull()?.let { age ->
@@ -1629,6 +1661,8 @@ internal object KeyguardCardDiagnostics {
             appendLine("physicalOverlayRemoval=UNOBSERVED")
             appendLine("frameCommitMeaning=callback_receipt_not_physical_presentation liveFrameCommit=UNOBSERVED")
             appendLine("drawObservationMeaning=NO_DRAW_OBSERVED_is_not_proof_of_no_rendering")
+            appendLine("drawGapClock=System.nanoTime frameNs=Choreographer cpuNs=threadCPU cbOut=ownedCallbackWorkEndBeforeProbe submit=CPUCanvasCall")
+            appendLine("workKinds=1:systemGate,2:inspectionApply,3:diagnosticProducer nestedWorkNotAdditive=true workCoverage=ownedScopesOnly drawObserverNs=bookkeepingOnly")
             appendLine("COLD_PREPARATION")
             val cold = active.coldPreparation
             if (cold == null) {
@@ -1676,7 +1710,7 @@ internal object KeyguardCardDiagnostics {
         val selected = linkedMapOf<String, String>()
         val omittedRecords = mutableListOf<String>()
         val incompleteAttempts = linkedSetOf<Long>()
-        var bytes = (header + footer + "ATTEMPT_SUMMARIES\nEPISODES\nCAUSAL_SPINES\nEVENTS\n").toByteArray(Charsets.UTF_8).size
+        var bytes = (header + footer + "ATTEMPT_SUMMARIES\nEPISODES\nDRAW_GAPS\nCAUSAL_SPINES\nEVENTS\n").toByteArray(Charsets.UTF_8).size
         val metadataReserve = 2_048
         val contentLimit = exportLimitBytes - metadataReserve - 64 // recovery/header byte-count replacements
         fun select(id: String, text: String, attemptId: Long? = null): Boolean {
@@ -1702,6 +1736,33 @@ internal object KeyguardCardDiagnostics {
                 episodeBlocks.getValue(attempt).getOrNull(index)?.let { (id, text) -> select(id, text, attempt.id) }
             }
         }
+        // Gap attribution is optional evidence, never a prerequisite for the
+        // retained show's/withdrawal's causal block or its completeness.
+        // Admit the worst orb gap from each episode before later samples.
+        // Balance episodes across attempts so a busy cold attempt cannot
+        // consume all optional evidence before the warm wakes are visited.
+        val gapBlocks = mutableListOf<List<Pair<String, String>>>()
+        repeat(attemptsForCausalEvidence.maxOfOrNull { it.shows.size } ?: 0) { episodeIndex ->
+            attemptsForCausalEvidence.forEach { attempt ->
+                val episode = attempt.shows.getOrNull(episodeIndex) ?: return@forEach
+                val episodeId = "a${attempt.id}:show${episode.operationId}"
+                val records = mutableListOf<Pair<String, String>>()
+                DRAW_GAP_KEYS.forEach { key ->
+                    val surface = if (key == "orbDrawGaps") "orb" else "background"
+                    episode.renderSummary[key]?.lineSequence()?.filter(String::isNotBlank)?.forEachIndexed { index, line ->
+                        val id = "$episodeId:drawGap:$surface:$index"
+                        if (episodeId !in selected) omittedRecords += id
+                        else records += id to " DRAW_GAP attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} surface=$surface sample=$index $line\n"
+                    }
+                }
+                gapBlocks += records
+            }
+        }
+        repeat(gapBlocks.maxOfOrNull { it.size } ?: 0) { sampleIndex ->
+            gapBlocks.forEach { records ->
+                records.getOrNull(sampleIndex)?.let { (id, text) -> select(id, text) }
+            }
+        }
         // Original milestone rows are optional because the complete episode
         // records above carry their timestamps and operation ownership.
         attemptsForCausalEvidence.forEach { attempt ->
@@ -1723,8 +1784,11 @@ internal object KeyguardCardDiagnostics {
             appendLine("omittedAttemptIds=${omittedAttempts.joinToString(",").ifBlank { "none" }}")
             appendLine("omittedSeqs=${compactSequenceRanges(omittedEvents.map { it.seq }.sorted(), 384)}")
             appendLine("omittedEvidenceRecords=${omittedRecords.size}")
-            val criticalOmissions = omittedRecords.filterNot { it.endsWith(":raw") || it.endsWith(":spineRows") }
-            appendLine("omittedCriticalRecordIds=${compactRecordIds(criticalOmissions, 768)}")
+            val criticalOmissions = omittedRecords.filterNot { it.endsWith(":raw") || it.endsWith(":spineRows") || ":drawGap:" in it }
+            val omittedGaps = omittedRecords.filter { ":drawGap:" in it }
+            appendLine("omittedCriticalRecordIds=${compactRecordIds(criticalOmissions, 384)}")
+            appendLine("drawGapEvidenceExported=${selected.keys.count { ":drawGap:" in it }} drawGapEvidenceOmitted=${omittedGaps.size}")
+            appendLine("omittedDrawGapRecordIds=${compactRecordIds(omittedGaps, 384)}")
             appendLine("incompleteExportAttemptIds=${incompleteAttempts.joinToString(",").ifBlank { "none" }}")
             appendLine("rawEventsTruncated=${omittedEvents.isNotEmpty()} rawOmissionDoesNotMeanNoDraw=true")
         }
@@ -1738,7 +1802,9 @@ internal object KeyguardCardDiagnostics {
                 append(if (attemptId in incompleteAttempts) text.replace("causalSpineComplete=true", "causalSpineComplete=false") else text)
             }
             appendLine("EPISODES")
-            selected.filterKeys { !it.endsWith(":summary") && !it.endsWith(":spineRows") && !it.endsWith(":raw") }.values.forEach(::append)
+            selected.filterKeys { !it.endsWith(":summary") && !it.endsWith(":spineRows") && !it.endsWith(":raw") && ":drawGap:" !in it }.values.forEach(::append)
+            appendLine("DRAW_GAPS")
+            selected.filterKeys { ":drawGap:" in it }.values.forEach(::append)
             appendLine("CAUSAL_SPINES")
             selected.filterKeys { it.endsWith(":spineRows") }.values.forEach(::append)
             appendLine("EVENTS")
@@ -1823,7 +1889,7 @@ internal object KeyguardCardDiagnostics {
                 }
                 append(" RENDER attach=${episode.attachGeneration ?: "NA"} showOp=${episode.operationId}")
                 if (episode.renderSummary.isEmpty()) append(" evidence=UNOBSERVED")
-                else episode.renderSummary.forEach { (key, value) -> append(" $key=$value") }
+                else episode.renderSummary.filterKeys { it !in DRAW_GAP_KEYS }.forEach { (key, value) -> append(" $key=$value") }
                 appendLine()
             }
         }.toMutableList()
