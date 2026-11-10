@@ -3872,3 +3872,146 @@ END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
 - Production real-window CARD/ORB integration now routes actual root/shader callbacks through that same publication owner, retains the same root, verifies both drawn attachments and a third removed before traversal. Hardware execution is **PENDING CI**, not a local PASS. Local Android Gradle validation started separately; no local connected device is available.
 - `git diff --check`, `git diff --cached --check`, `./scripts/verify-fluvi-boundaries.sh`: PASS. Visibility/classifier/acquisition/retry, financial content, shader/phase, geometry, interactions and Flutter behavior unchanged. This commit repairs diagnostic observability, not proven physical lag/flicker.
 - Physical validation: **PENDING — USER ONLY**. Unit 2 will retain per-operation causes and bound the complete UTF-8 report. No speculative runtime correction has been justified.
+
+## 2026-11-10 — Per-attachment observability and bounded evidence candidate: implementation report
+
+### Identity, preflight and scope
+
+Application candidate: `d731827576802f3c35105e26237a436cfea1ebf9`, branch `fix/orb-v4-latency-lockscreen`. It contains unit 1 `c67669c56539775d5f7cca0e0b8d347e4f914e70` and journal-only `36db746b`. Push of application commits and their ancestry to `origin/fix/orb-v4-latency-lockscreen` succeeded. Exact-source verification run: https://github.com/elizerpist/exptv2/actions/runs/42803602666 . This entry records implementation and available local verification; final CI, APK and graph results will be appended, not assumed.
+
+Initial worktree was `/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-pulse-header-wave-interactions`, branch `fix/orb-v4-latency-lockscreen`, HEAD `f8cd8adef26b3fd3c330529c1d05b9b73fc06ba7`, parent `92afad1cdea7d6b48d229585819c29b2d97dac91`. Fetched remote HEAD was `90832063e8dfb46dcc71a3402514c90266093f3f`. Compared the four intervening commits: only this journal changed. Fast-forward preserved application source and user files. No reset, rebase, old-main switch or milestone change. Executed status/branch/HEAD/parent/remote-ref checks, full recent log, unstaged/staged diff and whitespace checks. Untracked `test/features/automation/presentation/failures/` and `test/features/manual_transactions/failures/` remain untouched.
+
+Read the complete current rule assets before implementation:
+
+- `FLUVI_PROMPT_WRITER_RULES.md`: 26,475 bytes; SHA-256 `f5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297`.
+- `FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md`: 31,157 bytes; SHA-256 `dc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c`.
+- Both available in `/storage/emulated/0/Download/`; complete journal including normalized capture, complete `MILESTONE_COMMITS.md`, README and core architecture read. Dashboard milestone `6e962187e90e2a82431b1f91b224d2b52a6e0ba7` and documented exceptions remain unchanged.
+- No separate current keyguard forensics/checklist/plan/spec/worklog/completion-report file was found beyond the journal, commit bodies and tests. Do not imply such artifacts were available. `docs/home-orb-platform-capability.md` is historical launcher-widget evidence, not proof about this native overlay.
+
+The working plan was audit → behavior-preserving extraction and failing publication test → minimal observation repair → bounded causal/export work → exact-source native CI and human APK → final graph/report. Closely coupled service/window work stayed inline. Independent export ownership and graph/CI audit were delegated with separate file/worktree boundaries; their source changes and evidence were reviewed before integration.
+
+### Physical and Drive evidence audit
+
+Installed application was reported as f8, corroborated by capture header, **not** independently by installed APK bytes. Published baseline artifact `fluvi_HUMAN_DIAGNOSTIC_f8cd8ad.apk`: 120,084,074 bytes, published SHA-256 `ab4aaff1682d9a4b140d4b2ad669755a235414ef230bc9d60ae62bb5a00f91b8`. These distinctions remain intact.
+
+Current evidence: capture `ee321b9c-7afc-4058-ba7c-199903f53380`, FROZEN/LIGHT/profile, Nothing A142/API35, process `31574-9157d47f`, serviceSession=1, ORB/orbOnly/full, service connected, foreground/background requested=false. Full normalized pasted capture is retained above: 35,667 UTF-8 bytes, SHA-256 `7f2c5371aaf4ddc4fa0c6df3e7c4b2e1cf54c616f42627e6d4fd5b0ac6ea95ad`. This is the pasted transcript hash, not the original Android export binary.
+
+Drive document `1Yu8vZ-p9TF89yG_Dilz0GWnrEguzfNotmmaloLcLm3g`, “Névtelen dokumentum”, modified `2026-11-10T09:10:40.454Z`, was opened in full using the connected Drive tools. URL: https://docs.google.com/document/d/1Yu8vZ-p9TF89yG_Dilz0GWnrEguzfNotmmaloLcLm3g/edit . A newer-document search found no newer relevant independent report. Its contents are historical conversation, a truncated parent capture `29ec3556-9ac7-4221-9739-7cbe1b8906aa` from 92af and that parent's completion report. It is not a complete independent f8 capture; its timings were not merged with f8. This read's CRLF-normalized provider projection is 34,384 bytes, SHA-256 `dc9fded44ce8553ff38405447cd379b784bda2574c17ed222b515e2bcf334e51`, frozen locally at `/data/data/com.termux/files/home/fluvi-attachment-evidence-atT27m/drive-document.txt`. Provider projection formatting differs from the earlier reviewer's saved projection; it is not claimed byte-identical to either the source document or the Android report. No Drive document was edited.
+
+Retention audit: attempts 1,5,6,7 are deliberately first + last three; 101 spine rows have unique seq values. Raw EVENTS is empty. 1452 recorded − 945 evicted − 226 LIGHT omissions = 281 retained. Queue overflow and consumer failures are zero. `omittedAttemptIds` describes raw-event selection, not absence of summaries. Sequence/recording order is not observation-time order. Pending persistence is not evidence of a crash. No independent complete f8 report or physical display endpoints were available.
+
+### Commit/agent evidence and rejected hypotheses
+
+Actual relevant source diffs and production call chains, not just commit subjects, were reviewed:
+
+| Change | Intended contract and observed status |
+| --- | --- |
+| `47002e5` | Correct pre-attachment bootstrap observer registration and automatic live promotion. Later captures reach FIRST_LIVE_DRAW. Preserve; root draw alone is not proof of live animation. |
+| `6750d2b` | Interruptible-prefetch experiment. Later user sample regressed; flag configuration tests did not establish performance. Do not repeat it. |
+| `92afad1` | Restored batched acquisition and bounded diagnostic reduction worker. Later samples improved, but uncontrolled captures do not isolate every cause. Preserve. |
+| `f8cd8ad` | Freshness obligation owner across request replacement; earliest-draw/episode summaries. Six production/test Kotlin files changed. It did not repair downstream service publication. Preserve freshness debt tests and implementation. |
+
+The per-attachment suppression gate **predates f8**. GPU preparation had finished before the measured wake; its duration cannot be charged to that wake. A 43-node WALK_TRUNCATED result does not prove the node cap was reached: null child or exception can also truncate. No evidence supports changing geometry, z-order, renderer quality, callback priority, cache/prefetch strategy, visibility policy or legitimate UNKNOWN→SHOW recovery in this task. No alternative host, delay, cooldown, speculative SHOW or static substitute was introduced.
+
+Baseline CI was independently inspected at https://github.com/elizerpist/exptv2/actions/runs/42785262893 : core 150 tests PASS, app 104 PASS, Flutter suites 1031 + 3 + 4 PASS and analysis PASS, API35 instrumentation 31 PASS, Human APK PASS. Overall run FAIL in dashboard profiling. The baseline log contains an earlier `RangeError(year): 2026 outside 2027..2051` in `PreparedBudgetLimitSnapshot._yearOffset`, followed by missing `B_year_month_rail_populated` report-map failure. Parent run 42740430614 has a different missing A-summary result; these failures/explanations are not interchangeable. Candidate results must be compared before classifying the remaining CI failure; no dashboard fix was attempted.
+
+### Proven failing boundary and repair
+
+Chain: callbacks → queue/freshness/gate → reader/classifier → show decision → retained window → material controller/view/clock → attachment-owned draw callback → **service publication gate** → worker reducer/export.
+
+`recordFirstRootDraw` / `recordFirstShaderDraw` previously emitted FIRST events only when `WakeTiming`'s cycle-first field was null. Nonterminal withdrawal retained WakeTiming, so a second attachment could really draw while its downstream FIRST events were suppressed. Window observations and material first-shader flags were already attachment-owned. Old diagnostics tests injected FIRST events directly; real-window tests ended at test lambdas, bypassing the defective service boundary.
+
+Unit 1 extracted the existing condition into production `KeyguardDrawPublication`, used by the service, before changing behavior. Baseline RED: second genuinely owned attachment failed publication (**3 tests, 1 failure**). Corrected owner binds serviceSession/wake/attach, publishes ROOT and SHADER once per current attachment, rejects stale/duplicate/revoked callbacks, and retains independent earliest cycle fields. A second attachment removed before drawing produces no synthetic timestamps. Real-window CARD and ORB tests now route actual draw callbacks through this same production owner and original `KeyguardFirstDrawOwner.accepts` gate. They exercise real WindowManager/ViewRoot traversal and real frame commitment, not manual `onBootstrapFrameCommitted()` acknowledgement.
+
+### Unit 2 contracts and bounds
+
+Application commit: `d731827576802f3c35105e26237a436cfea1ebf9`.
+
+- `KeyguardCardSettings.kt`: retained show and actual withdrawal episodes own canonical inspection timelines, independent of the rolling 16-request ledger. Delayed FINISHED records fill the same operation's cause. Snapshot copies detach these mutable records before formatting. Request provenance includes original trigger/callback/event/queue/start/finish/apply, request/apply visibility epoch, pending request, classification/markers, freshness/acquisition outcome and bounded slow-call evidence.
+- `FluviKeyguardCardService.kt`: emits immutable callback/request timestamps and specific truncation evidence; preserves original finish time for aborted inspections. At actual withdrawal, after local hide/removal, captures a numeric attachment render summary and defers map conversion to the existing reduction worker. No diagnostic acknowledgement controls visibility or animation.
+- `KeyguardWindowSnapshotReader.kt`: records `NODE_LIMIT`, `NULL_CHILD`, `CHILD_ACQUISITION_EXCEPTION`, `NODE_ACCESS_EXCEPTION` at existing incomplete branches; no extra traversal, node text or content-description extraction. Acquisition/freshness/classification behavior unchanged.
+- `KeyguardDrawCadence.kt`, material view/controller and window accessor: bounded primitive counters for actual successful shader traversals, shader calls, phase advancement, first/last draw/phase, gap count/total/max and invalid ordering. Two shader calls during a transition count as one traversal. Clock callbacks remain a separate counter. Attachment reset excludes hidden idle time; no-draw episodes remain null/zero-count, not manufactured times. Snapshot only at withdrawal; no per-frame formatting, persistence, IPC, repository/query or scene preparation. Existing legacy field meanings remain unchanged.
+- `KeyguardExportBudget.kt` and formatter: one 32KiB UTF-8 limit includes header, cold record, summaries, episode causes, omission metadata and footer. Complete compact episode blocks precede optional spine/raw lines. First + last three attempts retained; omitted critical records and incomplete attempts explicitly listed. No cap increase. Up to eight show episodes and nine hide records per retained attempt (eight withdrawals plus detached cleanup), rolling ledger bounded, semantic spine pruned with evicted operation ownership. Persistence uses the same bounded report. Recovery of older oversized reports explicitly marks line truncation and false completeness; frozen operational data remains immutable. Durability watermark still reflects successful writes, not freeze or clipboard success.
+- Completeness checks now match each operation **and** attachment identity; a successful first episode cannot conceal a missing second add/remove boundary. `NO_DRAW_OBSERVED` explicitly does not prove no rendering. Native callback/Canvas observations are not Flutter FrameTiming or physical presentation.
+
+### Consumer, layer and lifecycle impact
+
+Shared-native consumer inventory was verified in source before material edits: production `KeyguardCardMaterialController` is owned by `KeyguardCardWindow`; material views are the existing orb/background XML nodes plus controller/window access. The one material clock remains controller-owned. Diagnostics flow through service/settings and the existing Dart lock-screen-card repository/page; no new consumer or duplicate history. Tests consume the same owners and actual window path. This is a native reference inventory, **not** a Kotlin SCIP query.
+
+Window still restores VISIBLE on presentation, makes root INVISIBLE before `removeViewImmediate`, and uses the existing attachment/generation gates. A detached root cannot intercept input; no flags, hit-test/touch routing, semantics, clips, z-order, dimensions, layoutParams, positions or material design changed. Retained root identity stays the same through test detach/reattach; publication ownership is revoked before withdrawal invalidation. Shader/controller lifecycle and monotonic phase logic are untouched. No new renderer, clock, service, listener, process, resource cache or wake lock was added. Existing bootstrap/live preparation remains separate from surface permission. Financial repositories, queries/indexes/scenes, Flutter Activity/engine, launcher widget, Avatar/Time/Summary and foreground/background behavior are protected and unchanged.
+
+### Local red/green and environment
+
+Host: Android/Termux ARM64, Ubuntu proot, Java21/Gradle8.14 distribution. No suitable local connected emulator/device for instrumentation. No local Flutter APK build attempted.
+
+Commands actually run:
+
+```text
+git diff --check
+git diff --cached --check
+./scripts/verify-fluvi-boundaries.sh
+proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-pulse-header-wave-interactions/android && ./gradlew :fluvi-core:testDebugUnitTest :app:testDebugUnitTest --no-daemon'
+proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-pulse-header-wave-interactions && /home/flutteruser/flutter/bin/flutter test test/core/debug/keyguard_timing_capture_console_test.dart test/core/diagnostics/keyguard_timing_capture_bridge_test.dart'
+```
+
+Whitespace/boundaries PASS. Flutter focused **5 PASS**. Gradle **BLOCKED before tests** at `:fluvi-core:processDebugUnitTestResources`: AAPT2 `aapt2-8.11.1-12782657-linux` daemon startup failed in ARM64/proot. This is NOT a test PASS. Exact-source CI uses the established supported x86_64 environment and API35 job.
+
+Pure production Kotlin compile/test command used the existing Gradle compiler/JUnit jars (no copied reducer):
+
+```sh
+compiler_lib=/root/.gradle/wrapper/dists/gradle-8.14-all/c2qonpi39x1mddn7hk5gh9iqj/gradle-8.14/lib
+java -cp "$compiler_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect \
+  -classpath "$compiler_lib/kotlin-stdlib-2.0.21.jar:$compiler_lib/junit-4.13.2.jar" \
+  -d /data/data/com.termux/files/home/fluvi-attachment-evidence-atT27m/combined-tests.jar \
+  android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardDrawPublication.kt \
+  android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardDrawPublicationTest.kt \
+  android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardExportBudget.kt \
+  android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardExportBudgetTest.kt \
+  android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawCadence.kt \
+  android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawCadenceTest.kt
+java -cp "/data/data/com.termux/files/home/fluvi-attachment-evidence-atT27m/combined-tests.jar:$compiler_lib/*" \
+  org.junit.runner.JUnitCore com.fluvi.app.lockscreen.KeyguardDrawPublicationTest \
+  com.fluvi.app.lockscreen.KeyguardExportBudgetTest com.fluvi.app.lockscreen.material.KeyguardDrawCadenceTest
+```
+
+Executed inside Ubuntu/proot from the app worktree. Publication RED 3/1 → GREEN 3/3. Budget extraction RED 2/1 (old header-raised effective cap) → GREEN 2/2. Cadence 2/2. Combined **7 PASS**. Publication test checks four actual emitted stage records across two owned attachments and zero additional records for a removed-before-draw third; cycle firsts unchanged. Hardware drawing is not claimed from these JVM tests.
+
+Added production-reducer LIGHT instrumentation pressure case: four attempts, five episodes including second no-draw attachment, >1,800 events, late FINISHED fields, explicit truncation cause and different shader-traversal/call counts; asserts entire UTF-8 size, all retained causes, immutable freeze, and per-operation completeness. Added actual real-window cadence assertions to existing CARD/ORB bootstrap/live/reattach tests. Native instrumentation execution and final byte count are **PENDING CI** at this entry.
+
+### Timing reconstruction and limits
+
+All following are f8 sample uptime intervals, not candidate measurements or population percentiles:
+
+| Attempt | Cycle→SHOW | SHOW→live draw | Cycle→live draw | Trigger→local hide |
+| --- | ---: | ---: | ---: | ---: |
+| 1 / first | 331 | 326 | 657 | 304 |
+| 5 / warm | 292 | 50 | 342 | 171 |
+| 6 / warm | 310 | 44 | 354 | 107 |
+| 7 / warm | 104 | 46 | 150 | 119 |
+
+Attempt1's decision→live interval includes decision→add begin16, actual add75, add return→bootstrap69, bootstrap→commit receipt143, commit→promotion0, promotion→live23 ms. Commit receipt is not GPU duration or physical presentation. Earlier GPU preparation took979ms and completed at420106224, before wake420125908; it is not part of this wake interval. Warm samples predominantly wait before SHOW, not inside the window operation. Local hiding follows its decision in0–1ms; source-event delivery, acquisition and main handoff remain distinct from that local operation.
+
+Attempt6: req204 → show19/attach7 → live420146403 → req217 WALK_TRUNCATED → hide20/local420146858/remove420146877 → req221/show21/attach8/add return420147010 → terminal hide22/remove420147886. The complete req221 cause and attach8 actual draw cadence are missing from baseline. Publication suppression means absence of FIRST evidence cannot establish absence of rendering. Neither physical flash nor inappropriate recovery is proved. Current candidate captures each retained episode and cause without blocking legitimate recovery or authorizing a stale/incomplete surface.
+
+Baseline producer maximum≈9.7ms and diagnostic-worker accumulated lock time≈2.079s are different quantities; the latter is not a main-thread stall. Candidate producer overhead/cadence/physical latency require a matching device capture. Flutter build/raster FrameTiming is N/A for this native pipeline. No numerical FPS/latency PASS or before/after speed claim is made.
+
+### Classification and stop condition
+
+**PROVEN:** downstream cycle-first gate suppresses later attachment events; baseline includes real remove/re-add operations; export previously exceeded nominal total budget; node-cap attribution is unsupported; local hide already precedes removal and follows decision promptly.
+
+**PROVEN BY LOCAL TEST:** publication ownership and earliest-cycle aggregation are independent; stale/duplicate/revoked publication rejected; total-budget admission cannot raise the limit; numeric draw gaps exclude detached idle time. Full Android reduction/window tests remain pending at this checkpoint.
+
+**UNPROVEN:** attach8 actual rendering, physical flash cause, continuous target-device cadence/phase correctness, inappropriate UNKNOWN withdrawal/recovery, a safe eligibility shortcut, parent performance regression/improvement, launcher-widget cause. No runtime/performance repair has crossed its own failing-contract gate, so none was invented.
+
+**MISSING:** original installed APK verification, independent complete f8 report, physical presentation/removal/SystemUI animation start, controlled identical-device comparison, full req221 historical chain, Kotlin graph coverage. The new candidate cannot reconstruct missing past events.
+
+| Area | Baseline→candidate | Evidence/status | Remaining |
+| --- | --- | --- | --- |
+| W-SHOW | f8→d7318275 | Four retained samples above; observation contract repaired, not latency verified | First/cold and warm physical delay open |
+| W-HIDE | f8→d7318275 | Four trigger→local samples; episode causes retained, hide policy unchanged | Physical disappearance and evidence-delivery delay open |
+| W-LOCK-ANIM | f8→d7318275 | Publication/cadence distinction added; real-window execution pending CI | Target-device stutter/flash remains unaccepted |
+| W-HOME-ANIM | unchanged | Out of scope; no current matching measurement | Separately open, NOT PASS |
+
+Initial graph assets were stale for f8 and Dart-only: tooling1782078/indexed0b82b8 and tooling0c8a188/indexedc3e62. Exact f8 graph was generated during audit (807 Dart documents,20,252symbols,136,383references,42,214edges; raw index hash `5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59`). Tool parser's default64MiB protobuf read limit rejected the valid67,515,079-byte index; separate tooling fix `e84430e4a3cd4723eb3d9d084fde675f713e34b6` has RED→16 PASS and analysis PASS. Relevant query/source verification: capture bridge8refs(3production/5test), snapshot12productionrefs, DebugConsole5refs(3production/2test). Native consumers above are explicitly source inventories. Final-source graph regeneration is in progress on separate tooling branch; no Kotlin SCIP coverage is claimed.
+
+No physical acceptance or new milestone. **PHYSICAL VALIDATION — PENDING, USER ONLY.** Final delivery must append exact CI results, APK/hash/embedded identity, final tooling provenance and Git refs before handoff.
