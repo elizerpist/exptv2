@@ -1,3 +1,10 @@
+Exact application source: c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514
+SCIP index SHA256: 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59
+Tool: scip-dart 1.6.2; language coverage: Dart only (807 documents)
+The following are actual query outputs; coordinates are zero-based.
+Runtime startup warnings omitted before each SYMBOL block; no query data omitted.
+
+$ dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol KeyguardTimingCaptureBridge
 SYMBOL
 scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#
 DEFINITION
@@ -23,10 +30,8 @@ test/core/debug/keyguard_timing_capture_console_test.dart:108:21 reference
 test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:36:19 reference
 test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:68:19 reference
 test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:78:19 reference
-   Woah! You appear to be trying to run flutter as root.
-   We strongly recommend running the flutter tool without superuser privileges.
-  /
-📎
+
+$ dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol KeyguardTimingCaptureSnapshot
 SYMBOL
 scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#
 DEFINITION
@@ -55,10 +60,8 @@ lib/core/diagnostics/keyguard_timing_capture_bridge.dart:68:41 reference
 lib/core/diagnostics/keyguard_timing_capture_bridge.dart:95:11 reference
 lib/core/diagnostics/keyguard_timing_capture_bridge.dart:112:12 reference
 TEST REFERENCES
-   Woah! You appear to be trying to run flutter as root.
-   We strongly recommend running the flutter tool without superuser privileges.
-  /
-📎
+
+$ dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol DebugConsoleDialog
 SYMBOL
 scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
 DEFINITION
@@ -79,3 +82,62 @@ lib/core/debug/debug_floating_button.dart:41:28 reference
 TEST REFERENCES
 test/core/debug/keyguard_timing_capture_console_test.dart:58:29 reference
 test/core/debug/keyguard_timing_capture_console_test.dart:115:18 reference
+
+$ dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol DashboardKeyguardMaterialBridge
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#
+DEFINITION
+lib/app/platform/dashboard_keyguard_material_bridge.dart:11
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#`<constructor>`().
+REFERENCES
+total=2 production=2 tests=0
+CONSUMER FILES
+lib/features/dashboard/presentation/core_dashboard.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/presentation/core_dashboard.dart:197:13 reference
+lib/features/dashboard/presentation/core_dashboard.dart:344:30 reference
+TEST REFERENCES
+
+$ dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol DashboardHeaderMaterialSnapshot
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_orb_material.dart`/DashboardHeaderMaterialSnapshot#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:17
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_orb_material.dart`/DashboardHeaderMaterialSnapshot#
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_orb_material.dart`/DashboardHeaderMaterialSnapshot#capture().
+REFERENCES
+total=24 production=12 tests=12
+CONSUMER FILES
+lib/app/platform/dashboard_keyguard_material_bridge.dart
+lib/app/platform/dashboard_orb_material_export_bridge.dart
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart
+PRODUCTION REFERENCES
+lib/app/platform/dashboard_keyguard_material_bridge.dart:91:23 reference
+lib/app/platform/dashboard_keyguard_material_bridge.dart:91:55 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:209:21 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:209:53 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:406:13 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:450:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:31:8 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:291:4 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:359:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:390:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:435:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:476:26 reference
+TEST REFERENCES
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:33:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:33:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:106:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:106:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:159:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:159:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:229:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:229:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:313:27 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:313:59 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:424:14 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:424:46 reference

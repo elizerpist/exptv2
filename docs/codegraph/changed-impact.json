@@ -1,20 +1,19 @@
 {
   "schema_version": 1,
-  "source_head": "d731827576802f3c35105e26237a436cfea1ebf9",
-  "base_head": "36db746b87828de704db12e8768e4b47660382a1",
+  "source_head": "c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514",
+  "base_head": "0ebe2fa78342557a15ff46821137833756eaf081",
   "changed_files": [
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardExportBudget.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardMainWorkEvidence.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawCadence.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawGapEvidence.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardExportBudgetTest.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawCadenceTest.kt"
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardMainWorkEvidenceTest.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawGapEvidenceTest.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",

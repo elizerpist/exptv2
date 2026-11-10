@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "task": "Keyguard per-attachment observation evidence: exact-source Dart graph",
-  "source_head": "d731827576802f3c35105e26237a436cfea1ebf9",
-  "source_parent": "36db746b87828de704db12e8768e4b47660382a1",
-  "source_ref": "d731827576802f3c35105e26237a436cfea1ebf9",
+  "task": "Keyguard within-attachment draw-gap evidence: exact-source Dart graph and native reference inventory",
+  "source_head": "c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514",
+  "source_parent": "0ebe2fa78342557a15ff46821137833756eaf081",
+  "source_ref": "c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514",
   "source_worktree": "/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source",
   "source_tracked_clean": true,
   "generator_commit": "e84430e4a3cd4723eb3d9d084fde675f713e34b6",
@@ -11,7 +11,7 @@
   "index_sha256": "5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
   "index_bytes": 67515079,
   "index_regenerated_from_source": true,
-  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad. SCIP was rerun after checking out d731; identical bytes do not assert native equivalence.",
+  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad and d731827. SCIP was rerun after checking out c4a4ba2; identical index bytes do not assert native equivalence.",
   "scip_dart_version": "1.6.2",
   "language_documents": {
     "Dart": 807
@@ -27,8 +27,9 @@
     "reference_edges": 42214,
     "verified_shards": 102,
     "failed_shard_hashes": 0,
-    "artifact_digest": "d5c593abe0a120a448e35ddf673bbab4ac32857bb146c1298ad4eb5119639ad0",
-    "artifact_digest_command": "cd docs/codegraph; rg --files | sort | xargs sha256sum | sha256sum"
+    "artifact_digest": "5508a185f016aacfea94504e3855be4da934d6a9200b4a49dc5064a22edd6d98",
+    "artifact_digest_command": "cd docs/codegraph; rg --files | sort | xargs sha256sum | sha256sum",
+    "manifest_sha256": "7bef520608d8cbbcc56381701e3937ad3fded77e8338d21b70622ff5c6887d63"
   },
   "query_output": "codegraph-keyguard-queries-2026-11-10.txt",
   "query_locations": "Raw query output retains zero-based SCIP coordinates; source verification uses one-based source lines.",
@@ -73,16 +74,120 @@
       "test_consumers": [
         "test/core/debug/keyguard_timing_capture_console_test.dart"
       ]
+    },
+    {
+      "symbol": "DashboardKeyguardMaterialBridge",
+      "definition_one_based": "lib/app/platform/dashboard_keyguard_material_bridge.dart:12",
+      "references": 2,
+      "production_references": 2,
+      "test_references": 0,
+      "production_consumers": [
+        "lib/features/dashboard/presentation/core_dashboard.dart:198",
+        "lib/features/dashboard/presentation/core_dashboard.dart:345"
+      ],
+      "limit": "No direct class-family test references in this query does not establish absence of broader test coverage."
+    },
+    {
+      "symbol": "DashboardHeaderMaterialSnapshot",
+      "definition_one_based": "lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:18",
+      "references": 24,
+      "production_references": 12,
+      "test_references": 12,
+      "production_consumers": [
+        "lib/app/platform/dashboard_keyguard_material_bridge.dart:92",
+        "lib/app/platform/dashboard_orb_material_export_bridge.dart:210",
+        "lib/app/platform/dashboard_orb_material_export_bridge.dart:407",
+        "lib/app/platform/dashboard_orb_material_export_bridge.dart:451",
+        "lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart"
+      ],
+      "test_consumers": [
+        "test/features/dashboard/presentation/dashboard_header_orb_material_test.dart"
+      ],
+      "impact": "Shared producer reaches native keyguard and launcher export. These Dart producers/consumers were not changed by c4a4ba2."
     }
   ],
   "manual_native_inventory": {
-    "basis": "rg references plus direct source reads in exact d731 checkout; NOT SCIP; navigation/ownership inventory only.",
+    "basis": "rg references plus direct source reads in exact c4a4ba2 checkout; NOT SCIP; navigation/ownership inventory only. Application test execution is reported by the application agent/CI, not inferred from these references.",
+    "KeyguardMainWorkEvidence": {
+      "definition": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardMainWorkEvidence.kt",
+      "production_consumers": [
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:45",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:157",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:324",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:699",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:1390",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt:51",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:34",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:208",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:595"
+      ],
+      "tests": [
+        "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardMainWorkEvidenceTest.kt",
+        "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawGapEvidenceTest.kt"
+      ],
+      "ownership": "Service/session and main-thread-owned numeric ring, 32 owned operation spans; records wall endpoints and thread CPU independently. Top three overlapping spans copied only for a retained gap. Nested spans must not be summed as exclusive time; overwritten/missing coverage explicit."
+    },
+    "KeyguardDrawGapEvidence": {
+      "definition": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawGapEvidence.kt",
+      "production_consumers": [
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:202",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:486",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:491",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:505",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:594",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:289",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:596",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:2077"
+      ],
+      "tests": [
+        "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawGapEvidenceTest.kt",
+        "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+        "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt:567",
+        "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt:605",
+        "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt:617"
+      ],
+      "ownership": "Main-thread per-attachment/capture evidence; three fixed worst-gap slots, actual successful draw traversal rather than clock callbacks. Capture-off/idle boundaries break sampling. Numeric frame path, deferred compact formatting. No second clock or renderer."
+    },
+    "clock_to_draw": {
+      "definition": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:25",
+      "symbols": [
+        "KeyguardFrameCallbackObservation",
+        "KeyguardMaterialClock"
+      ],
+      "production_consumers": [
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:39",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:43",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:44",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:501",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:588"
+      ],
+      "ownership": "The one production clock reports primitive frame/entry/exit values through the SAM to orb and eligible background. View records draw evidence only when shaderDrawCount advances after actual shader geometry submission. Callback and actual-draw intervals remain separate; timing is not physical display presentation."
+    },
+    "summary_export": {
+      "production_consumers": [
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt:100",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:279",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:2044",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:2047",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:2050",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:593",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:824",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:1423",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:1738",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:1755",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:1791"
+      ],
+      "tests": [
+        "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt"
+      ],
+      "ownership": "Window/controller immutable attachment summary is captured at hide, then service deferredFields compact the gap evidence on the diagnostic consumer. Settings bounds allowed records and selects optional whole DRAW_GAP lines round-robin after protected summaries/episodes, declaring omissions under the total byte budget."
+    },
     "KeyguardDrawPublication": {
       "definition": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardDrawPublication.kt",
       "production_consumers": [
-        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:220",
-        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:2125",
-        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:2142"
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:245",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:2166",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:2183"
       ],
       "tests": [
         "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardDrawPublicationTest.kt",
@@ -92,9 +197,9 @@
     "KeyguardDrawCadence": {
       "definition": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawCadence.kt",
       "production_consumers": [
-        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:188",
-        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:460",
-        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:573"
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:201",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt:485",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt:595"
       ],
       "tests": [
         "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardDrawCadenceTest.kt",
@@ -104,8 +209,8 @@
     "KeyguardExportBudget": {
       "definition": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardExportBudget.kt",
       "production_consumers": [
-        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:1587",
-        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:1684"
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:1619",
+        "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt:1718"
       ],
       "tests": [
         "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardExportBudgetTest.kt",
@@ -114,13 +219,14 @@
     }
   },
   "commands": [
-    "Ubuntu proot, PATH=/home/flutteruser/flutter/bin:$PATH; exact source: flutter pub get; git diff --exit-code -- pubspec.lock; dart pub global run scip_dart ./",
-    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head d731827576802f3c35105e26237a436cfea1ebf9 --source-ref d731827576802f3c35105e26237a436cfea1ebf9 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
-    "tools/codegraph: dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol <KeyguardTimingCaptureBridge|KeyguardTimingCaptureSnapshot|DebugConsoleDialog>",
+    "Ubuntu proot, PATH=/home/flutteruser/flutter/bin:$PATH; exact source: flutter pub get; git diff --exit-code; git diff --cached --exit-code; dart pub global run scip_dart ./",
+    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514 --source-ref c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
+    "tools/codegraph: dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol <KeyguardTimingCaptureBridge|KeyguardTimingCaptureSnapshot|DebugConsoleDialog|DashboardKeyguardMaterialBridge|DashboardHeaderMaterialSnapshot>",
     "tools/codegraph: dart test --reporter expanded => 16 PASS",
     "tools/codegraph: dart analyze => No issues found",
     "docs/codegraph: jq -r '.shards[] | \"\\(.sha256)  \\(.path)\"' symbols.index.json refs.index.json edges.index.json | sha256sum -c - => 102 verified",
-    "git diff --check => PASS"
+    "git diff --check => PASS",
+    "Exact source: git diff --name-status d731827576802f3c35105e26237a436cfea1ebf9 HEAD -- lib test => empty; rg source verification confirms query consumer lines."
   ],
   "tooling_repair": {
     "default_protobuf_limit": 67108864,
@@ -129,5 +235,6 @@
     "result": "Valid oversized index reproduced failure before fix; reader now bounds decode to actual bytes and retains malformed-message validation. No dependency version upgrade."
   },
   "physical_validation": "PENDING_USER",
-  "limits": "Graph verification is not Android rendering, physical cadence, latency, or visibility validation. No APK build is requested by this tooling-only commit."
+  "limits": "Graph verification is not Android rendering, physical cadence, latency, or visibility validation. No application code or journal was edited by the tooling refresh. No APK build is requested by this tooling-only commit. The generated index is Dart-only; native owner inventory is independently source-verified and explicitly outside SCIP coverage.",
+  "tooling_start_head": "e8b37d14acea862b2f756c99ea277e2d0651fa30"
 }
