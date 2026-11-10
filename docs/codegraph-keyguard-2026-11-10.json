@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "task": "Connected production accessibility-overlay fixture: exact-source Dart graph and native test/trace inventory",
-  "source_head": "37ce5429962eec28e0aacb99f3d3ed8c8bb12629",
-  "source_parent": "0926083b489d8bfab383af347d113fbe2a07a540",
-  "source_ref": "37ce5429962eec28e0aacb99f3d3ed8c8bb12629",
+  "source_head": "e3b7a53a729765bc682123f4c16ebcd3915c5a21",
+  "source_parent": "0347874ea91db90cd6c7173e758c4e8b9ce6b7a9",
+  "source_ref": "e3b7a53a729765bc682123f4c16ebcd3915c5a21",
   "source_worktree": "/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source",
   "source_tracked_clean": true,
   "generator_commit": "e84430e4a3cd4723eb3d9d084fde675f713e34b6",
@@ -11,7 +11,7 @@
   "index_sha256": "5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
   "index_bytes": 67515079,
   "index_regenerated_from_source": true,
-  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad through 4b4c3f3 and 37ce5429. SCIP was rerun after checking out 37ce5429; identical index bytes do not assert Android test/CI equivalence.",
+  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad through 4b4c3f3 and e3b7a53a. SCIP was rerun after checking out e3b7a53a; identical index bytes do not assert Android test/CI equivalence.",
   "scip_dart_version": "1.6.2",
   "language_documents": {
     "Dart": 807
@@ -27,9 +27,9 @@
     "reference_edges": 42214,
     "verified_shards": 102,
     "failed_shard_hashes": 0,
-    "artifact_digest": "3a9cac8556b3f043a845cd66001341f975d31529e35b0fbd8d0383cb4ee83874",
+    "artifact_digest": "b9be7d0a5ec052f53111e90205f05a8e0421bd523f3814fd454fdf3feb0080cd",
     "artifact_digest_command": "cd docs/codegraph; rg --files | sort | xargs sha256sum | sha256sum",
-    "manifest_sha256": "87ed33bee9f68ef8d5b95ca76c495a68599febeb405d0c195e098b79732c7c44"
+    "manifest_sha256": "d26f5834e87fc4bdaeaa8387f76d01e4efb6d1edc09659e7f8168a3bf8d58c2a"
   },
   "query_output": "codegraph-keyguard-queries-2026-11-10.txt",
   "query_locations": "Raw query output retains zero-based SCIP coordinates; source verification uses one-based source lines.",
@@ -103,11 +103,11 @@
       "test_consumers": [
         "test/features/dashboard/presentation/dashboard_header_orb_material_test.dart"
       ],
-      "impact": "Shared producer reaches native keyguard and launcher export. These Dart producers/consumers were not changed by the native evidence and fixture commits through 37ce5429."
+      "impact": "Shared producer reaches native keyguard and launcher export. These Dart producers/consumers were not changed by the native evidence and fixture commits through e3b7a53a."
     }
   ],
   "manual_native_inventory": {
-    "basis": "rg references plus complete fixture/script reads in exact 37ce5429 checkout; NOT SCIP. Android production and Dart source are byte-unchanged from 4b4c3f3. New instrumentation/CI relationships are manual source inventory; actual execution is separately reported.",
+    "basis": "rg references plus fixture/script reads and exact delta audit in e3b7a53a checkout; NOT SCIP. Android production and Dart source are byte-unchanged from 4b4c3f3. New instrumentation/CI relationships are manual source inventory; actual execution is separately reported.",
     "KeyguardMainWorkEvidence": {
       "definition": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardMainWorkEvidence.kt",
       "production_consumers": [
@@ -238,15 +238,18 @@
         "freeze": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:185",
         "restore": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:193",
         "actual_episodes": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:228",
-        "snapshot": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:268",
-        "overlay_metadata": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:286",
-        "screenshot": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:311",
-        "finite_await": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:367",
-        "exact_secure_setting_write_readback": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:397"
+        "current_window_before_counter_baseline": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:236",
+        "live_counter_current_window_guard": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:264",
+        "await_actual_overlay": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:277",
+        "snapshot": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:288",
+        "overlay_metadata": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:306",
+        "screenshot": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:331",
+        "finite_await": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:387",
+        "exact_secure_setting_write_readback": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:417"
       },
       "ownership": "Android binds FluviKeyguardCardService via temporary test-owned secure settings on disposable API35 emulator. setSecure uses Settings.Secure.putString/getString under short-lived instrumentation WRITE_SECURE_SETTINGS identity with readback; finally drops that identity. This avoids literal shell quotes from Runtime.exec(String). No production permission is added. The service's existing reader/classifier/window/controller/clock path owns authorization and rendering. No test WindowManager/type substitution, synthetic positive result, GPU-preparer replacement or manual commit acknowledgement.",
       "workload": "ORB/orbOnly, dualTide Portal selected through the existing decoder, production 64dp rendered at 168px at density 420. Synthetic palette/Portal controls explicitly not the unprovided phone profile. Cold, quiet-live, short tap, warm unlock, rapid wake/unlock and authorized reentry are inspected.",
-      "output_contract": "Actual live shader/phase counters plus hardware state and current program hash; exactly one TYPE_ACCESSIBILITY_OVERLAY at 168x168; absent overlay after terminal transitions; optional compositor crop motion when screenshot is available.",
+      "output_contract": "Each episode first observes exactly one current TYPE_ACCESSIBILITY_OVERLAY, then samples its counter baseline. Fresh LIVE shader/phase output must advance beyond that baseline while the same window ID owns both pre-sample and successful post-sample checks. Retained counters from a detached prior episode cannot satisfy this readiness predicate. Hardware state/current program hash and 168x168 bounds remain required; terminal transitions require absent overlay; optional compositor crop motion remains separate.",
       "limits": [
         "No test-run PASS inferred from source",
         "No physical Nothing-device timing acceptance",
@@ -268,9 +271,11 @@
         "instrumentation_timeout_seconds": 110,
         "trace_duration_ms": 120000,
         "trace_buffer_kib": 65536,
+        "recorder_exit_poll_iterations": 60,
+        "recorder_exit_poll_sleep_ms": 250,
         "artifact_retention_days": 14
       },
-      "status": "pipefail and explicit JUnit OK (1 test) verification preserve false-zero runner failures; prior suite status remains nonzero; artifacts upload with always(). Perfetto configuration uses stdin instead of an unreadable /data/local/tmp file. A recorder still running after the bounded 5s flush wait records INCOMPLETE and fails, rather than silently asserting a complete trace.",
+      "status": "pipefail and explicit JUnit OK (1 test) verification preserve false-zero runner failures; prior suite status remains nonzero; artifacts upload with always(). Perfetto configuration uses stdin. Recorder exit now requires a successful ps query whose table does not contain its PID; denied kill -0 can no longer masquerade as exit. Sixty iterations with 250ms sleeps bound polling, and unresolved exit records INCOMPLETE/fails. An empty pulled trace also fails.",
       "capture_scope": "Finite CI-only sched/thread/graphics/WindowManager/input/Binder/GC/FrameTimeline/log evidence around actual connected-service workload; no human-APK profiler or permission changes.",
       "known_evidence_limits": [
         "SQL prints coverage counts; zero app/scenario/FrameTimeline rows do not currently fail analysis, so coverage must be checked before attribution",
@@ -282,7 +287,7 @@
   },
   "commands": [
     "Ubuntu proot, PATH=/home/flutteruser/flutter/bin:$PATH; exact source: flutter pub get; git diff --exit-code; git diff --cached --exit-code; dart pub global run scip_dart ./",
-    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head 37ce5429962eec28e0aacb99f3d3ed8c8bb12629 --source-ref 37ce5429962eec28e0aacb99f3d3ed8c8bb12629 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
+    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head e3b7a53a729765bc682123f4c16ebcd3915c5a21 --source-ref e3b7a53a729765bc682123f4c16ebcd3915c5a21 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
     "tools/codegraph: dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol <KeyguardTimingCaptureBridge|KeyguardTimingCaptureSnapshot|DebugConsoleDialog|DashboardKeyguardMaterialBridge|DashboardHeaderMaterialSnapshot>",
     "tools/codegraph: dart test --reporter expanded => 16 PASS",
     "tools/codegraph: dart analyze => No issues found",
@@ -299,9 +304,9 @@
   },
   "physical_validation": "PENDING_USER",
   "limits": "Graph verification is not Android rendering, physical cadence, latency, or visibility validation. No application code or journal was edited by the tooling refresh. No APK build is requested by this tooling-only commit. The generated index is Dart-only; native owner inventory is independently source-verified and explicitly outside SCIP coverage.",
-  "tooling_start_head": "b743cc715b04acd63739bde39f4234636a329c89",
+  "tooling_start_head": "20da72f8b66d7834d92b057e4cbd510df9c2b1bb",
   "source_delta_audit": {
-    "comparison": "4b4c3f3fd4f8a143decd69e335d5f89ab21f0926..37ce5429962eec28e0aacb99f3d3ed8c8bb12629",
+    "comparison": "4b4c3f3fd4f8a143decd69e335d5f89ab21f0926..e3b7a53a729765bc682123f4c16ebcd3915c5a21",
     "production_unchanged_command": "git diff --name-status 4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 HEAD -- android/app/src/main lib test",
     "production_unchanged_result": "empty",
     "scope": [
@@ -309,7 +314,8 @@
       "New KeyguardServiceOverlayInstrumentationTest",
       "Bounded system-trace runner/config/SQL/analyzer and CI retention integration",
       "810085c1: Perfetto config via stdin; explicit incomplete recorder-flush failure",
-      "37ce5429: exact secure-setting provider write/readback with temporary instrumentation permission"
+      "37ce5429: exact secure-setting provider write/readback with temporary instrumentation permission",
+      "e3b7a53a: wait for current real overlay before counter baseline, same-window liveness checks, successful process-table query for recorder exit, nonempty trace assertion"
     ],
     "limit": "No production performance repair is contained in this delta. Existing 4b user-reported lag rejection remains applicable until a separate measured production correction."
   },
@@ -377,7 +383,7 @@
       "shards_verified": 102,
       "kotlin_coverage": false
     },
-    "next_generation": "Preserved historical 4b host-coverage audit. The 62193fc3 service-host fixture and its corrections through current 37ce5429 are separately inventoried; this does not retroactively expand the baseline tests."
+    "next_generation": "Preserved historical 4b host-coverage audit. The 62193fc3 service-host fixture and its corrections through current e3b7a53a are separately inventoried; this does not retroactively expand the baseline tests."
   },
   "baseline_android_ci_audit": {
     "run": 42825624196,
@@ -420,15 +426,58 @@
     "conclusion": "cancelled",
     "limit": "No native execution success is inferred from this cancelled intermediate run."
   },
-  "current_android_ci_observation": {
+  "failed_service_candidate_ci_observation": {
     "run": 42853507857,
     "source_head": "37ce5429962eec28e0aacb99f3d3ed8c8bb12629",
+    "observed_runtime_state": "completed",
+    "jobs": {
+      "core": "success",
+      "flutter": "success",
+      "runtime": "failure",
+      "runtime_job_id": 129964232928
+    },
+    "lower_level_suite": {
+      "tests": 37,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "duration_seconds": 75.874,
+      "xml_sha256": "101dec97191702fb945a5bd70908d54986c4b4a4512a8f1afea84e27fab5444f",
+      "failing_test": "productionAssetCompilesAndDrawsOnHardwareCanvas",
+      "failure": "production shader produced no motion across five samples"
+    },
+    "service_fixture": {
+      "result": "FAIL",
+      "failure": "Exactly one actual Fluvi accessibility overlay expected:<1> but was:<0>",
+      "observed_cold_output": "Fixture reports window 8, 168x168 TYPE_ACCESSIBILITY_OVERLAY, shader 6/phase 5 then shader 160/phase 159 after quiet interval, motion=true. Warm predicate later accepted retained shader 181/phase 180 before current overlay existed. No phone timing/FPS inference.",
+      "probe_tar_sha256": "6b91a260c66b21ffa815ab3218acdf6816d6dcef0b29f41164eb00c236244a58",
+      "source_boundary": "Prior retained material counters could satisfy warm readiness before any current overlay existed; e3b7a53a moves counter baseline after current-window observation. This is a fixture defect, not proof of the phone's latency cause."
+    },
+    "trace_output": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "incorrect_status": "STOPPED: recorder exited before trace pull",
+      "actual_log_evidence": "SELinux denied { signull } shell-to-perfetto process probes twice; denied kill -0 was interpreted as exit",
+      "usable_for_timing_attribution": false
+    },
+    "artifact_audit": {
+      "artifact_id": 13783101381,
+      "name": "keyguard-runtime-results-37ce5429962eec28e0aacb99f3d3ed8c8bb12629",
+      "download_directory": "/data/data/com.termux/files/home/fluvi-37-fixture-audit.0EMULe",
+      "method": "Independently downloaded exact run artifact; inspected retained XML, streamed fixture.txt from probe.tar, checked trace byte count/hash and logcat signull denials"
+    },
+    "journal_correction": "b161637c10cc31e436800246ef866ead787ca17a explicitly corrects the earlier 37/37 statement; actual XML and log failures remain authoritative",
+    "limit": "A cold service pixel-motion observation does not erase the separate lower-level PixelCopy failure. No successful full service workload or performance acceptance is inferred."
+  },
+  "current_android_ci_observation": {
+    "run": 42856983444,
+    "source_head": "e3b7a53a729765bc682123f4c16ebcd3915c5a21",
     "observed_state": "in_progress",
     "jobs": {
       "core": "success",
       "flutter": "success",
       "runtime": "in_progress",
-      "runtime_job_id": 129964232928
+      "runtime_job_id": 129976970810
     },
     "limit": "Snapshot during graph preparation, not the final CI outcome. Application owner reports final native/fixture results; no service-fixture PASS is claimed here."
   }
