@@ -22,6 +22,7 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.inspector.WindowInspector
 import android.view.accessibility.AccessibilityWindowInfo
+import android.view.accessibility.AccessibilityEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.R
@@ -55,6 +56,7 @@ class KeyguardServiceOverlayInstrumentationTest {
     private var captureId = "not-started"
     private val evidence = StringBuilder()
     private val knownOwnWindowIds = mutableSetOf<Int>()
+    private var occlusionProbe: OcclusionSuccessorProbe? = null
     private val keyguard get() = context.getSystemService(KeyguardManager::class.java)
     private val power get() = context.getSystemService(PowerManager::class.java)
     private val component get() = ComponentName(context, FluviKeyguardCardService::class.java).flattenToString()
@@ -123,7 +125,13 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("Android-bound production service", 10_000) { FluviKeyguardCardServiceRegistry.connected }
             }
 
-            val cold = episode("cold")
+            // One controlled NEGATIVE snapshot establishes the exact older
+            // OCCLUDED -> newer pending event -> Main apply ordering. Recovery
+            // still uses the real reader, classifier and fresh admission.
+            occlusionProbe = OcclusionSuccessorProbe(wasVisible = false).also { it.install() }
+            val cold = episode("cold", occlusionProbe)
+            occlusionProbe?.close()
+            occlusionProbe = null
             val firstImage = copyOrb(cold.window, "cold-orb-a.png")
             // A quiet, explicitly marked interval, not a FPS target. No
             // diagnostic polling, input, screenshots or window reads during
@@ -193,6 +201,8 @@ class KeyguardServiceOverlayInstrumentationTest {
             record("RESULT", "FAIL ${failure.javaClass.simpleName}:${failure.message}")
             throw failure
         } finally {
+            occlusionProbe?.close()
+            occlusionProbe = null
             var cleanupFailure: Throwable? = null
             // Freeze before restoring settings so the report retains only the
             // controlled workload. Never block the main thread on export.
@@ -247,6 +257,99 @@ class KeyguardServiceOverlayInstrumentationTest {
         val shader: Long, val phase: Long, val state: String, val hardware: Boolean,
         val effect: String?, val generatedAgslHash: String?,
     )
+
+    private inner class OcclusionSuccessorProbe(private val wasVisible: Boolean) : KeyguardInspectionProbeForTest {
+        private val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
+        private val selected = java.util.concurrent.atomic.AtomicReference<KeyguardCardInspectionRequest?>()
+        private val expected = java.util.concurrent.atomic.AtomicReference<KeyguardCardInspectionRequest?>()
+        private val failure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        private val applied = java.util.concurrent.CountDownLatch(1)
+        private val successorStarted = java.util.concurrent.CountDownLatch(1)
+        private var before: KeyguardInspectionStateForTest? = null
+        private var pendingEvent: KeyguardCardInspectionRequest? = null
+
+        fun install() { service.inspectionProbeForTest = this }
+        fun close() { if (service.inspectionProbeForTest === this) service.inspectionProbeForTest = null }
+
+        override fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> {
+            if (selected.get() != null) return actual
+            // Data-minimized acquisition fixture, explicitly NOT a real foreign
+            // window/performance sample. The production classifier decides it.
+            return actual + KeyguardWindowSnapshot(
+                packageName = "fixture.foreign.occluder", type = 1, layer = Int.MAX_VALUE,
+                displayId = 0, windowId = 990035,
+            )
+        }
+
+        override fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+            if (decision != KeyguardCardVisibility.HIDDEN_OCCLUDED ||
+                !service.inspectionStateForTest().authority.matches(request) ||
+                !selected.compareAndSet(null, request)) return
+            runCatching {
+                assertEquals("Controlled acquisition must reach the production occlusion classifier", KeyguardCardVisibility.HIDDEN_OCCLUDED, decision)
+                val state = service.inspectionStateForTest()
+                assertTrue("Older negative must still own its delivery", state.authority.matches(request))
+                assertEquals(wasVisible, state.attached)
+                assertTrue("A real eligible wake must already exist", state.wake != null)
+                before = state
+                val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOWS_CHANGED)
+                try {
+                    event.packageName = "com.android.systemui"
+                    event.eventTime = SystemClock.uptimeMillis() - 1L
+                    // Runs the actual event gate/scheduler while the cause is
+                    // still active. No positive classification is injected.
+                    service.onAccessibilityEvent(event)
+                } finally { event.recycle() }
+                pendingEvent = service.inspectionStateForTest().pending
+                assertTrue("Newer event must be pending before older exclusion applies", pendingEvent != null)
+            }.onFailure { failure.compareAndSet(null, it) }
+        }
+
+        override fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+            if (selected.get()?.id != request.id) return
+            runCatching {
+                failure.get()?.let { throw it }
+                val previous = checkNotNull(before)
+                val intent = checkNotNull(pendingEvent)
+                val current = service.inspectionStateForTest()
+                assertFalse("Occlusion must remain excluded", current.attached)
+                assertTrue("Recoverable occlusion erased the newer unserved inspection", current.pending != null)
+                assertEquals("Recoverable occlusion must not end the wake", previous.wake, current.wake)
+                val next = checkNotNull(current.pending)
+                assertTrue(current.authority.matches(next))
+                if (wasVisible) {
+                    assertFalse("Withdrawn generation must be revoked", current.authority.matches(request))
+                    assertTrue("Visible withdrawal requires a NEW acquisition request", next.id != intent.id)
+                } else {
+                    assertEquals(previous.authority, current.authority)
+                    assertEquals(intent.id, next.id)
+                }
+                assertEquals(intent.eventTimeUptimeMs, next.eventTimeUptimeMs)
+                assertEquals(intent.triggerReceivedUptimeMs, next.triggerReceivedUptimeMs)
+                assertEquals(intent.trigger, next.trigger)
+                assertEquals("Occlusion must not replenish fallback budget", previous.retryCount, current.retryCount)
+                expected.set(next)
+            }.onFailure { failure.compareAndSet(null, it) }
+            applied.countDown()
+        }
+
+        override fun started(request: KeyguardCardInspectionRequest) {
+            val next = expected.get() ?: return
+            // Later real events may coalesce, but never an older owner/result.
+            if (request.id >= next.id && request.session == next.session &&
+                request.wakeGeneration == next.wakeGeneration && request.visibilityEpoch == next.visibilityEpoch &&
+                request.interactionEpoch == next.interactionEpoch && request.attachGeneration == next.attachGeneration) {
+                successorStarted.countDown()
+            }
+        }
+
+        fun awaitSuccessor() {
+            assertTrue("Controlled OCCLUDED must reach actual service apply", applied.await(6, java.util.concurrent.TimeUnit.SECONDS))
+            failure.get()?.let { throw it }
+            assertTrue("Preserved successor must actually start without another test event", successorStarted.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            record("OCCLUSION_SUCCESSOR", "visible=$wasVisible cause=${selected.get()?.id} next=${expected.get()?.id} wake=${expected.get()?.wakeGeneration} exclusionRetained=true")
+        }
+    }
     /** The real service/TYPE_ACCESSIBILITY_OVERLAY must keep drawing BEFORE
      * release of the injected platform read. Independent release bounds RED
      * execution too: the old synchronous Main call cannot hang the runner.
@@ -376,7 +479,7 @@ class KeyguardServiceOverlayInstrumentationTest {
     private data class Overlay(val id: Int, val bounds: Rect)
     private data class Episode(val material: Material, val window: Overlay)
 
-    private fun episode(name: String): Episode = marked(name) {
+    private fun episode(name: String, probe: OcclusionSuccessorProbe? = null): Episode = marked(name) {
         // An unlocked KeyguardManager flag is not completion of the previous
         // remote animation. Runs42856983444 and42865721964 relocked while
         // SystemUI still finished that exit and subsequently returned to GONE.
@@ -388,6 +491,7 @@ class KeyguardServiceOverlayInstrumentationTest {
         marked("$name-synchronized-sleep") { screenOff(synchronizeInput = true) }
         shell("input keyevent KEYCODE_WAKEUP")
         await("$name keyguard eligible device gates", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
+        probe?.awaitSuccessor()
         // Material counters and last LIVE/hardware state survive detach.
         // A prior episode's snapshot can therefore be satisfied by draws
         // that happened before its removal. Observe THIS actual attachment

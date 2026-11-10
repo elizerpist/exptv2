@@ -42,6 +42,13 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val platformSystemStateReader by lazy { AndroidKeyguardSystemStateReader(this) }
     @Volatile internal var systemStateReaderOverride: KeyguardSystemStateReader? = null
+    /** Optional instrumentation seam. It orders a negative acquisition/result;
+     * it never skips the production classifier, authority gate or admission. */
+    @Volatile internal var inspectionProbeForTest: KeyguardInspectionProbeForTest? = null
+    internal fun inspectionStateForTest() = KeyguardInspectionStateForTest(
+        inspectionAuthority, synchronized(queueLock) { inspectionQueue.pendingRequest() },
+        wakeCycleOwner.current()?.id, ::overlay.isInitialized && overlay.isAttached, retryCount,
+    )
     private val systemReads = java.util.concurrent.atomic.AtomicLongArray(KeyguardSystemReadPurpose.entries.size)
     private val mainSystemReads = java.util.concurrent.atomic.AtomicLongArray(KeyguardSystemReadPurpose.entries.size)
     private fun readSystemState(purpose: KeyguardSystemReadPurpose): KeyguardSystemState {
@@ -912,6 +919,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             val concurrent = activeInspectionCount.incrementAndGet()
             recordMaximum(maximumConcurrentInspections, concurrent)
             val startedAt = SystemClock.uptimeMillis()
+            inspectionProbeForTest?.started(active)
             traceKeyguard(
                 "INSPECTION_STARTED",
                 active.trigger,
@@ -954,6 +962,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 val mainHandoffRequestedAt = SystemClock.uptimeMillis()
                 withContext(Dispatchers.Main.immediate) {
                     val mainApplyEnteredAt = SystemClock.uptimeMillis()
+                    inspectionProbeForTest?.beforeApply(active, result.decision)
                     applyInspection(
                         inspection = result,
                         request = active,
@@ -963,6 +972,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         mainHandoffRequestedAt = mainHandoffRequestedAt,
                         mainApplyEnteredAt = mainApplyEnteredAt,
                     )
+                    inspectionProbeForTest?.afterApply(active, result.decision)
                 }
                 // The visibility operation has completed, so release the
                 // serial reader slot. Capture reduction has its own bounded
@@ -1182,7 +1192,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             )
         }
         val classification = KeyguardSurfaceClassifier.classifyDetailed(
-            read.snapshots,
+            inspectionProbeForTest?.snapshots(request, read.snapshots) ?: read.snapshots,
             unavailableRoot = read.rootUnavailable,
             walkTruncated = read.walkTruncated,
         )

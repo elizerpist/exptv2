@@ -42,6 +42,24 @@ internal data class KeyguardInspectionAuthority(
             attachGeneration == request.attachGeneration
 }
 
+/** Inert unless the Android instrumentation fixture installs it. Acquisition
+ * and start observations are worker-owned; apply observations are Main-owned.
+ * No live Event, node or View is retained in this boundary. */
+internal interface KeyguardInspectionProbeForTest {
+    fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> = actual
+    fun started(request: KeyguardCardInspectionRequest) {}
+    fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
+    fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
+}
+
+internal data class KeyguardInspectionStateForTest(
+    val authority: KeyguardInspectionAuthority,
+    val pending: KeyguardCardInspectionRequest?,
+    val wake: Long?,
+    val attached: Boolean,
+    val retryCount: Int,
+)
+
 /** Known, positively identified accessibility-overlay ownership.  It is
  * deliberately narrower than a package match: an Activity or another service
  * overlay must still follow the safe discovery path. */
