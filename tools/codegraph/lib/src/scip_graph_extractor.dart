@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:protobuf/protobuf.dart';
+
 // scip_dart 1.6.2 exposes generated SCIP protobuf types under src only.
 // ignore: implementation_imports
 import 'package:scip_dart/src/gen/scip.pb.dart';
@@ -14,7 +16,12 @@ class ScipIndexReader {
       throw FileSystemException('SCIP index does not exist', indexFile.path);
     }
     try {
-      final index = Index.fromBuffer(indexFile.readAsBytesSync());
+      final bytes = indexFile.readAsBytesSync();
+      // The verified repository index can exceed protobuf's default 64 MiB
+      // limit. Bound decoding to the actual file, not an arbitrary message cap.
+      final reader = CodedBufferReader(bytes, sizeLimit: bytes.length);
+      final index = Index()..mergeFromCodedBufferReader(reader);
+      reader.checkLastTagWas(0);
       if (!index.hasMetadata() && index.documents.isEmpty) {
         throw const FormatException(
             'The file does not contain a SCIP Index message.');

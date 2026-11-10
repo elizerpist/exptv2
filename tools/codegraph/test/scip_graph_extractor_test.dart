@@ -123,6 +123,28 @@ void main() {
         throwsA(isA<FileSystemException>()),
       );
     });
+
+    test('reads a valid index larger than protobuf default 64 MiB limit',
+        () async {
+      final root =
+          await Directory.systemTemp.createTemp('fluvi-codegraph-large-index-');
+      addTearDown(() => root.delete(recursive: true));
+      final largeIndex = Index(
+        metadata: Metadata(projectRoot: 'file:///repo'),
+        documents: <Document>[
+          Document(
+              relativePath: 'lib/large.dart', text: 'x' * (64 * 1024 * 1024)),
+        ],
+      );
+      final indexFile = File('${root.path}/index.scip')
+        ..writeAsBytesSync(largeIndex.writeToBuffer());
+      expect(indexFile.lengthSync(), greaterThan(64 * 1024 * 1024));
+
+      final decoded = ScipIndexReader.read(indexFile);
+
+      expect(decoded.documents.single.relativePath, 'lib/large.dart');
+      expect(decoded.documents.single.text.length, 64 * 1024 * 1024);
+    });
   });
 }
 
