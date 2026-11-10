@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "source_head": "99b5822f46b6038c3fb39d3b30b878640e60fb10",
-  "source_parent": "b161637c10cc31e436800246ef866ead787ca17a",
-  "source_ref": "99b5822f46b6038c3fb39d3b30b878640e60fb10",
+  "source_head": "35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447",
+  "source_parent": "a38be4854abb02111f11b4f1d239acc81c100a95",
+  "source_ref": "35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447",
   "scip_dart_version": "1.6.2",
   "index_sha256": "5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
   "document_count": 807,
@@ -147,7 +147,7 @@
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 613
+      "byte_count": 501
     }
   ]
 }

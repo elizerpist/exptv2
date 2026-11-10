@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "task": "Connected production accessibility-overlay fixture: exact-source Dart graph and native test/trace inventory",
-  "source_head": "99b5822f46b6038c3fb39d3b30b878640e60fb10",
-  "source_parent": "b161637c10cc31e436800246ef866ead787ca17a",
-  "source_ref": "99b5822f46b6038c3fb39d3b30b878640e60fb10",
+  "source_head": "35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447",
+  "source_parent": "a38be4854abb02111f11b4f1d239acc81c100a95",
+  "source_ref": "35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447",
   "source_worktree": "/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source",
   "source_tracked_clean": true,
   "generator_commit": "e84430e4a3cd4723eb3d9d084fde675f713e34b6",
@@ -11,7 +11,7 @@
   "index_sha256": "5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
   "index_bytes": 67515079,
   "index_regenerated_from_source": true,
-  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad through 4b4c3f3 and 99b5822f. SCIP was rerun after checking out 99b5822f; identical index bytes do not assert Android test/CI equivalence.",
+  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad through 4b4c3f3 and 35ba4fc8. SCIP was rerun after checking out 35ba4fc8; identical index bytes do not assert Android test/CI equivalence.",
   "scip_dart_version": "1.6.2",
   "language_documents": {
     "Dart": 807
@@ -27,9 +27,9 @@
     "reference_edges": 42214,
     "verified_shards": 102,
     "failed_shard_hashes": 0,
-    "artifact_digest": "fe80e411cf3237d48292812a93a38b2f7217641d3dbe9e460ac4223d6a74da63",
+    "artifact_digest": "4a2ef2d8c9393b8c703a1718699bc068147238d63d45fe7f4ac7119f252b6ef3",
     "artifact_digest_command": "cd docs/codegraph; rg --files | sort | xargs sha256sum | sha256sum",
-    "manifest_sha256": "14cc136d8fe8291cda1e2241a772eb35c372bcba06471984bdac9d22eb31a1d5"
+    "manifest_sha256": "6bb3bc1bd9487bd5a89b4d415aba144e23659246e459f7b7b9875c17c74735c0"
   },
   "query_output": "codegraph-keyguard-queries-2026-11-10.txt",
   "query_locations": "Raw query output retains zero-based SCIP coordinates; source verification uses one-based source lines.",
@@ -284,13 +284,14 @@
         "Trace may still be pulled for evidence after an INCOMPLETE recorder status; nonzero test status means it must not be treated as a complete trace",
         "Downloaded launcher SHA is now correctly named processor-launcher.sha256; actual processor version recorded separately",
         "SQL/pbtxt executed successfully on API35 run42856983444; complete fixture still failed its third recovery precondition",
-        "99b5822f adds test-only event-idle separation before fresh reentry and exact pre-existing Launcher ANR cleanup on the disposable emulator; no runtime delay or compositor guarantee"
+        "99b5822f adds test-only event-idle separation before fresh reentry; no runtime delay or compositor guarantee",
+        "35ba4fc8 corrects only exact pre-existing Launcher ANR cleanup: android-targeted CLOSE_SYSTEM_DIALOGS and bounded focus-clearance polling. Force-stopping the Launcher did not dismiss its system_server-owned ANR window in run42861703743. No human APK permission/policy change."
       ]
     }
   },
   "commands": [
     "Ubuntu proot, PATH=/home/flutteruser/flutter/bin:$PATH; exact source: flutter pub get; git diff --exit-code; git diff --cached --exit-code; dart pub global run scip_dart ./",
-    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head 99b5822f46b6038c3fb39d3b30b878640e60fb10 --source-ref 99b5822f46b6038c3fb39d3b30b878640e60fb10 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
+    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head 35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447 --source-ref 35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
     "tools/codegraph: dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol <KeyguardTimingCaptureBridge|KeyguardTimingCaptureSnapshot|DebugConsoleDialog|DashboardKeyguardMaterialBridge|DashboardHeaderMaterialSnapshot>",
     "tools/codegraph: dart test --reporter expanded => 16 PASS",
     "tools/codegraph: dart analyze => No issues found",
@@ -307,9 +308,9 @@
   },
   "physical_validation": "PENDING_USER",
   "limits": "Graph verification is not Android rendering, physical cadence, latency, or visibility validation. No application code or journal was edited by the tooling refresh. No APK build is requested by this tooling-only commit. The generated index is Dart-only; native owner inventory is independently source-verified and explicitly outside SCIP coverage.",
-  "tooling_start_head": "f1124d98db33c0449c14da3a04db1fe1ba93da7e",
+  "tooling_start_head": "fefe81cd9ab21d1088758f0786ac6ebd39384e71",
   "source_delta_audit": {
-    "comparison": "4b4c3f3fd4f8a143decd69e335d5f89ab21f0926..99b5822f46b6038c3fb39d3b30b878640e60fb10",
+    "comparison": "4b4c3f3fd4f8a143decd69e335d5f89ab21f0926..35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447",
     "production_unchanged_command": "git diff --name-status 4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 HEAD -- android/app/src/main lib test",
     "production_unchanged_result": "empty",
     "scope": [
@@ -319,7 +320,8 @@
       "810085c1: Perfetto config via stdin; explicit incomplete recorder-flush failure",
       "37ce5429: exact secure-setting provider write/readback with temporary instrumentation permission",
       "e3b7a53a: wait for current real overlay before counter baseline, same-window liveness checks, successful process-table query for recorder exit, nonempty trace assertion",
-      "99b5822f: detached cold checkpoint, test-only event-idle recovery precondition, bounded exact Launcher ANR cleanup before disposable-emulator experiment"
+      "99b5822f: detached cold checkpoint, test-only event-idle recovery precondition, bounded exact Launcher ANR cleanup before disposable-emulator experiment",
+      "35ba4fc8: correct system-dialog owner via android-targeted broadcast; bounded focus-clearance check before launching disposable-emulator HOME"
     ],
     "limit": "No production performance repair is contained in this delta. Existing 4b user-reported lag rejection remains applicable until a separate measured production correction."
   },
@@ -387,7 +389,7 @@
       "shards_verified": 102,
       "kotlin_coverage": false
     },
-    "next_generation": "Preserved historical 4b host-coverage audit. The 62193fc3 service-host fixture and its corrections through current 99b5822f are separately inventoried; this does not retroactively expand the baseline tests."
+    "next_generation": "Preserved historical 4b host-coverage audit. The 62193fc3 service-host fixture and its corrections through current 35ba4fc8 are separately inventoried; this does not retroactively expand the baseline tests."
   },
   "baseline_android_ci_audit": {
     "run": 42825624196,
@@ -489,9 +491,16 @@
     "trace_bytes": 22811384,
     "limit": "Emulator main postAndWait/RenderThread AEMU blocking precedes callback delivery; not equivalent to the phone's after-callback waits. No phone performance cause or improvement established."
   },
-  "current_android_ci_observation": {
+  "environment_blocked_candidate_ci_observation": {
     "run": 42861703743,
     "source_head": "99b5822f46b6038c3fb39d3b30b878640e60fb10",
+    "native": "37 tests, zero failures/errors/skips, 231.989s",
+    "service_fixture": "NOT RUN: exact pre-existing Launcher ANR remained focused after force-stop; no trace started. Human job skipped.",
+    "evidence": "Artifact13786961800 retains identical ANR window6c5fff1 before/after, ownerUID1000/packageandroid/typeSYSTEM_ALERT; Launcher relaunch returned successfully but did not dismiss that system-owned dialog."
+  },
+  "current_android_ci_observation": {
+    "run": 42865721964,
+    "source_head": "35ba4fc8ff0c4ed4248067feee7d72b7d5cb6447",
     "observed_state": "in_progress",
     "limit": "Exact-source CI running during graph preparation. Final native/fixture/APK outcomes must be read from the shared application journal; graph correctness does not imply runtime PASS."
   }
