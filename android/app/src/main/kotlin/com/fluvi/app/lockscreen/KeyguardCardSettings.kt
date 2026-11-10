@@ -616,6 +616,7 @@ internal object KeyguardCardDiagnostics {
         var readerStrategy: String? = null,
         var prefetchFlags: String? = null,
         var cacheEnabled: String? = null,
+        var freshnessPolicy: String? = null,
         var cacheClearResult: String? = null,
         var activeCandidateWindowId: String? = null,
         var returnedRootWindowId: String? = null,
@@ -1194,6 +1195,7 @@ internal object KeyguardCardDiagnostics {
                     readerStrategy = fields["readerStrategy"]
                     prefetchFlags = fields["prefetchFlags"]
                     cacheEnabled = fields["cacheEnabled"]
+                    freshnessPolicy = fields["freshnessPolicy"]
                     cacheClearResult = fields["cacheClearResult"]
                     activeCandidateWindowId = fields["activeCandidateWindowId"]
                     returnedRootWindowId = fields["returnedRootWindowId"]
@@ -1606,7 +1608,7 @@ internal object KeyguardCardDiagnostics {
         appendLine(" queueMs=${delta(showingInspection?.startedAtUptimeMs, showingInspection?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showingInspection?.finishedAtUptimeMs, showingInspection?.startedAtUptimeMs)} windowsReadMs=${showingInspection?.windowsReadMs ?: "NA(missingEndpoint)"} treeScanMs=${showingInspection?.treeScanMs ?: "NA(missingEndpoint)"} inspectionFinishToHandoffMs=${delta(showingInspection?.mainHandoffRequestedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} handoffToMainEntryMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.mainHandoffRequestedAtUptimeMs)} mainEntryToDecisionMs=${delta(show?.decisionAtUptimeMs, showingInspection?.mainApplyStartedAtUptimeMs)} mainApplyQueueMs=${delta(showingInspection?.mainApplyStartedAtUptimeMs, showingInspection?.finishedAtUptimeMs)} decisionToAddBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
         appendLine(
             " windowReader=strategy:${showingInspection?.readerStrategy ?: "NA"},prefetch:${showingInspection?.prefetchFlags ?: "NA"}," +
-                "cacheEnabled:${showingInspection?.cacheEnabled ?: "NA"},cacheClear:${showingInspection?.cacheClearResult ?: "NA"}," +
+                "cacheEnabled:${showingInspection?.cacheEnabled ?: "NA"},freshness:${showingInspection?.freshnessPolicy ?: "NA"},cacheClear:${showingInspection?.cacheClearResult ?: "NA"}," +
                 "activeCandidate:${showingInspection?.activeCandidateWindowId ?: "NA"},returnedRoot:${showingInspection?.returnedRootWindowId ?: "NA"}," +
                 "activeAccepted:${showingInspection?.activeRootAccepted ?: "NA"},fallback:${showingInspection?.fallbackReason ?: "NA"}," +
                 "getWindows:${showingInspection?.getWindowsMs ?: "NA"},activeRootCalls:${showingInspection?.activeRootCallCount ?: "NA"}," +
@@ -1615,14 +1617,14 @@ internal object KeyguardCardDiagnostics {
                 "rootMax:${showingInspection?.rootAcquisitionMaxMs ?: "NA"},childTotal:${showingInspection?.childAcquisitionTotalMs ?: "NA"}," +
                 "childMax:${showingInspection?.childAcquisitionMaxMs ?: "NA"},local:${showingInspection?.localProcessingMs ?: "NA"}",
         )
-        appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} windowManagerAddViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToBootstrapDrawMs=${delta(show?.bootstrapDrawAtUptimeMs, show?.addReturnAtUptimeMs)} bootstrapDrawToCommitCallbackMs=${delta(show?.bootstrapCommitCallbackAtUptimeMs, show?.bootstrapDrawAtUptimeMs)} bootstrapCommitToLivePromotionMs=${delta(show?.livePromotedAtUptimeMs, show?.bootstrapCommitCallbackAtUptimeMs)} livePromotionToFirstLiveDrawMs=${delta(show?.firstLiveDrawAtUptimeMs, show?.livePromotedAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)} currentMaterialDrawToFrameCommitCallbackMs=${delta(show?.frameCommitCallbackAtUptimeMs, show?.firstCurrentMaterialDrawAtUptimeMs)}")
+        appendLine(" showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)} windowManagerAddViewCallMs=${delta(show?.addReturnAtUptimeMs, show?.addBeginAtUptimeMs)} addViewReturnToBootstrapDrawMs=${delta(show?.bootstrapDrawAtUptimeMs, show?.addReturnAtUptimeMs)} bootstrapDrawToCommitCallbackMs=${delta(show?.bootstrapCommitCallbackAtUptimeMs, show?.bootstrapDrawAtUptimeMs)} bootstrapCommitToLivePromotionMs=${delta(show?.livePromotedAtUptimeMs, show?.bootstrapCommitCallbackAtUptimeMs)} livePromotionToFirstLiveDrawMs=${delta(show?.firstLiveDrawAtUptimeMs, show?.livePromotedAtUptimeMs)} addViewReturnToFirstRootDrawMs=${delta(show?.firstRootDrawAtUptimeMs, show?.addReturnAtUptimeMs)} liveFrameCommitCallbackMs=NA(notObservedForLiveShader)")
         fun inspectionRole(label: String, timeline: InspectionTimeline?) {
             appendLine(
                 " $label req=${timeline?.requestId ?: "NA"} trigger=${timeline?.trigger ?: "NA"} eventTime=${timeline?.eventTimeUptimeMs ?: "NA"} " +
                     "queued=${timeline?.queuedAtUptimeMs ?: "NA"} started=${timeline?.startedAtUptimeMs ?: "NA"} finished=${timeline?.finishedAtUptimeMs ?: "NA"} diagnosticPrepared=${timeline?.diagnosticPreparationFinishedAtUptimeMs ?: "NA"} handoff=${timeline?.mainHandoffRequestedAtUptimeMs ?: "NA"} mainApply=${timeline?.mainApplyStartedAtUptimeMs ?: "NA"} " +
                     "authorityAtStart=${timeline?.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${timeline?.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${timeline?.visibilityEpochAtApply ?: "NA"} pendingAtApply=${timeline?.pendingRequestIdAtApply ?: "NA"} " +
                     "classification=${timeline?.surfaceClassification ?: "NA"} reason=${timeline?.surfaceReason ?: "NA"} markers=${timeline?.surfaceMarkers ?: "NA"} rootUnavailable=${timeline?.rootUnavailable ?: "NA"} walkTruncated=${timeline?.walkTruncated ?: "NA"} visited=${timeline?.visitedNodeCount ?: "NA"} " +
-                    "reader=${timeline?.readerStrategy ?: "NA"} fallback=${timeline?.fallbackReason ?: "NA"} activeRootMs=${timeline?.activeRootTotalMs ?: "NA"} perWindowRootMs=${timeline?.perWindowRootTotalMs ?: "NA"} childCalls=${timeline?.childAcquisitionCount ?: "NA"} childMs=${timeline?.childAcquisitionTotalMs ?: "NA"} localMs=${timeline?.localProcessingMs ?: "NA"} rejected=${timeline?.rejectionReason ?: "NA"} followup=${timeline?.followupAction ?: "NA"}",
+                    "reader=${timeline?.readerStrategy ?: "NA"} freshness=${timeline?.freshnessPolicy ?: "NA"} fallback=${timeline?.fallbackReason ?: "NA"} activeRootMs=${timeline?.activeRootTotalMs ?: "NA"} perWindowRootMs=${timeline?.perWindowRootTotalMs ?: "NA"} childCalls=${timeline?.childAcquisitionCount ?: "NA"} childMs=${timeline?.childAcquisitionTotalMs ?: "NA"} localMs=${timeline?.localProcessingMs ?: "NA"} rejected=${timeline?.rejectionReason ?: "NA"} followup=${timeline?.followupAction ?: "NA"}",
             )
         }
         inspectionRole("FIRST_INSPECTION", firstInspection)

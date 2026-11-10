@@ -422,6 +422,10 @@ internal class KeyguardCardWindow(
             controller.onLivePromoted = livePromoted@{ token ->
                 val capturedAttach = firstShaderDrawAttachGeneration
                 val currentRoot = root
+                // This is the functional state-transition boundary. Preserve
+                // it before posting diagnostics so a busy main queue cannot
+                // make LIVE look later than it actually became drawable.
+                val promotedAtUptimeMs = SystemClock.uptimeMillis()
                 // The controller transition is already complete at this
                 // point. Defer capture publication so it never extends the
                 // frame-commit-to-LIVE critical path.
@@ -429,7 +433,7 @@ internal class KeyguardCardWindow(
                     if (capturedAttach != null && currentRoot != null &&
                         lifecycle.isAttached() && root === currentRoot &&
                         attachGeneration == capturedAttach && acceptedBootstrapToken == token
-                    ) onLivePromotion(KeyguardFirstDrawEvent(capturedAttach, SystemClock.uptimeMillis()))
+                    ) onLivePromotion(KeyguardFirstDrawEvent(capturedAttach, promotedAtUptimeMs))
                 }
             }
             controller.onFirstOrbShaderDraw = shaderDraw@{ observedAtUptimeMs ->
@@ -751,7 +755,10 @@ internal class KeyguardCardWindow(
                             observedAtUptimeMs = event.observedAtUptimeMs,
                         )
                         onBootstrapCommit(diagnosticEvent)
-                        onFrameCommit(diagnosticEvent)
+                        // This callback commits the bootstrap frame. It is
+                        // not evidence that the later LIVE shader frame was
+                        // committed, so keep it out of the generic/live
+                        // FRAME_COMMIT milestone.
                     }
                 }
                 if (Looper.myLooper() == Looper.getMainLooper()) transition()

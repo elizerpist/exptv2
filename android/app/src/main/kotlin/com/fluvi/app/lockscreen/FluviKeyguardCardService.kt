@@ -150,7 +150,11 @@ class FluviKeyguardCardService : AccessibilityService() {
      * exactly one current reconciliation behind the active Binder call rather
      * than relabelling that old result as current.  Terminal exclusions call
      * clearPending instead and never reach this path. */
-    private fun preservePendingReconciliation(reason: String, requirePending: Boolean) {
+    private fun preservePendingReconciliation(
+        reason: String,
+        requirePending: Boolean,
+        freshness: KeyguardWindowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT,
+    ) {
         if (!FluviKeyguardCardServiceRegistry.connected || !::overlay.isInitialized) return
         val needsReconciliation = synchronized(queueLock) {
             if (requirePending) inspectionQueue.pendingRequest() != null
@@ -158,7 +162,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         if (!needsReconciliation || !isDisplayOnAndInteractive() || !keyguardManager.isKeyguardLocked) return
         freshReconciliationsScheduled.incrementAndGet()
-        scheduleEvaluation("authorityReconcile:$reason", triggerReceivedUptimeMs = SystemClock.uptimeMillis())
+        scheduleEvaluation(
+            "authorityReconcile:$reason",
+            triggerReceivedUptimeMs = SystemClock.uptimeMillis(),
+            freshness = freshness,
+        )
     }
 
     /** Capture instrumentation is intentionally observational: callers pass
@@ -224,6 +232,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val wakeGeneration: Long,
         val scheduledAtUptimeMs: Long,
         val dueAtUptimeMs: Long,
+        val windowFreshness: KeyguardWindowFreshness,
         val diagnosticContext: KeyguardDiagnosticContext?,
     )
 
@@ -266,8 +275,16 @@ class FluviKeyguardCardService : AccessibilityService() {
                 return
             }
             traceKeyguard("DISPLAY_EVENT", "changed", observedUptimeMs = receivedAt, fields = mapOf("displayId" to displayId))
-            beginOrJoinWakeCycle("display", receivedAt, schedule = false)
-            scheduleEvaluation("display", triggerReceivedUptimeMs = receivedAt)
+            val cycle = beginOrJoinWakeCycle("display", receivedAt, schedule = false)
+            scheduleEvaluation(
+                "display",
+                triggerReceivedUptimeMs = receivedAt,
+                freshness = if (cycle?.started == true) {
+                    KeyguardWindowFreshness.LIFECYCLE_BOUNDARY
+                } else {
+                    KeyguardWindowFreshness.FRAMEWORK_EVENT
+                },
+            )
         }
     }
 
@@ -400,8 +417,17 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // eager detach. A positively matched own event needs no work.
             }
             KeyguardEventAction.INSPECT -> {
-                beginOrJoinWakeCycle("accessibility", callbackReceivedAt, schedule = false)
-                scheduleEvaluation("window", meta.eventTimeUptimeMs, triggerReceivedUptimeMs = callbackReceivedAt)
+                val cycle = beginOrJoinWakeCycle("accessibility", callbackReceivedAt, schedule = false)
+                scheduleEvaluation(
+                    "window",
+                    meta.eventTimeUptimeMs,
+                    triggerReceivedUptimeMs = callbackReceivedAt,
+                    freshness = if (cycle?.started == true) {
+                        KeyguardWindowFreshness.LIFECYCLE_BOUNDARY
+                    } else {
+                        KeyguardWindowFreshness.FRAMEWORK_EVENT
+                    },
+                )
             }
         }
     }
@@ -540,17 +566,20 @@ class FluviKeyguardCardService : AccessibilityService() {
         source: String,
         receivedAtUptimeMs: Long = SystemClock.uptimeMillis(),
         schedule: Boolean = true,
-    ) {
+    ): KeyguardWakeCycleTransition? {
         val existing = wakeCycleOwner.current()
         if (existing != null) {
-            if (source == "wake") {
-                val joined = wakeCycleOwner.beginOrJoin(existing.id, source, receivedAtUptimeMs).cycle
+            val transition = if (source == "wake") {
+                val joined = wakeCycleOwner.beginOrJoin(existing.id, source, receivedAtUptimeMs)
                 traceKeyguard(
                     "SCREEN_ON_RECEIVED",
-                    "joined:${joined.firstSignal}",
+                    "joined:${joined.cycle.firstSignal}",
                     observedUptimeMs = receivedAtUptimeMs,
-                    fields = mapOf("wakeCycleId" to joined.id, "joinedExistingCycle" to true),
+                    fields = mapOf("wakeCycleId" to joined.cycle.id, "joinedExistingCycle" to true),
                 )
+                joined
+            } else {
+                KeyguardWakeCycleTransition(existing, started = false, screenOnJoined = false)
             }
             // The early inspection already owns the current authority. Do
             // not replace it merely because another signal names the same
@@ -558,10 +587,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             if (schedule && !hasCompatibleCycleInspection()) {
                 scheduleEvaluation(source, triggerReceivedUptimeMs = receivedAtUptimeMs)
             }
-            return
+            return transition
         }
-        if (source != "connected" && (!isDisplayOnAndInteractive() || !keyguardManager.isKeyguardLocked)) return
-        val cycle = wakeCycleOwner.beginOrJoin(wakeEpoch + 1L, source, receivedAtUptimeMs).cycle
+        if (source != "connected" && (!isDisplayOnAndInteractive() || !keyguardManager.isKeyguardLocked)) return null
+        val cycleTransition = wakeCycleOwner.beginOrJoin(wakeEpoch + 1L, source, receivedAtUptimeMs)
+        val cycle = cycleTransition.cycle
         wakeEpoch = cycle.id
         // A new wake is a new eligible cycle; a prior terminal exclusion must
         // not suppress its first authoritative inspection.
@@ -609,7 +639,14 @@ class FluviKeyguardCardService : AccessibilityService() {
             observedUptimeMs = receivedAtUptimeMs,
             fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true),
         )
-        if (schedule) scheduleEvaluation(source, triggerReceivedUptimeMs = receivedAtUptimeMs)
+        if (schedule) {
+            scheduleEvaluation(
+                source,
+                triggerReceivedUptimeMs = receivedAtUptimeMs,
+                freshness = KeyguardWindowFreshness.LIFECYCLE_BOUNDARY,
+            )
+        }
+        return cycleTransition
     }
 
     private fun hasCompatibleCycleInspection(): Boolean = synchronized(queueLock) {
@@ -643,7 +680,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         return true
     }
 
-    private fun scheduleWakeRetry(cause: KeyguardCardInspectionRequest) {
+    private fun scheduleWakeRetry(
+        cause: KeyguardCardInspectionRequest,
+        freshness: KeyguardWindowFreshness,
+    ) {
         if (retryCount >= RETRY_DELAYS_MS.size) return
         cancelWakeRetry("replaced")
         val delay = RETRY_DELAYS_MS[retryCount]
@@ -660,6 +700,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             wakeGeneration = cause.wakeGeneration,
             scheduledAtUptimeMs = scheduledAt,
             dueAtUptimeMs = scheduledAt + delay,
+            windowFreshness = freshness,
             diagnosticContext = cause.diagnosticContext,
         )
         retryToken = token
@@ -718,7 +759,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                 )
                 return@Runnable
             }
-            scheduleEvaluation("surfaceRetry", triggerReceivedUptimeMs = firedAt)
+            scheduleEvaluation(
+                "surfaceRetry",
+                triggerReceivedUptimeMs = firedAt,
+                freshness = token.windowFreshness,
+            )
         }.also { mainHandler.postDelayed(it, delay) }
     }
 
@@ -752,6 +797,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         trigger: String,
         eventTimeUptimeMs: Long? = null,
         triggerReceivedUptimeMs: Long? = null,
+        freshness: KeyguardWindowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT,
     ) {
         if (!FluviKeyguardCardServiceRegistry.connected) return
         if (trigger != "surfaceRetry") cancelWakeRetry("supersededBy:$trigger")
@@ -766,6 +812,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             attachGeneration = authority.attachGeneration,
             wakeGeneration = authority.wakeGeneration,
             queuedAtUptimeMs = now,
+            windowFreshness = freshness,
             eventTimeUptimeMs = eventTimeUptimeMs,
             diagnosticContext = currentDiagnosticAttempt,
             triggerReceivedUptimeMs = triggerReceivedUptimeMs,
@@ -795,6 +842,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "requestVisibilityEpoch" to request.visibilityEpoch,
                 "requestInteractionEpoch" to request.interactionEpoch,
                 "requestWakeGeneration" to request.wakeGeneration,
+                "windowFreshness" to request.windowFreshness.name,
             ),
         )
         if (queueOffer.first) inspectionScope.launch { processInspectionQueue(request) }
@@ -826,6 +874,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // already lost authority.  Releasing this slot here lets the
                 // one latest valid request begin immediately instead of
                 // waiting behind a guaranteed stale rejection.
+                val next = synchronized(queueLock) { inspectionQueue.complete(active) }
                 traceKeyguard(
                     "INSPECTION_REJECTED",
                     "abortedStale",
@@ -833,6 +882,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     observedUptimeMs = finishedAt,
                     fields = mapOf("rejectionReason" to "abortedStale"),
                 )
+                request = next
             } else {
                 // Full diagnostic reduction is deliberately outside this
                 // handoff.  Nothing may run between the requested timestamp
@@ -851,6 +901,12 @@ class FluviKeyguardCardService : AccessibilityService() {
                         mainApplyEnteredAt = mainApplyEnteredAt,
                     )
                 }
+                // The visibility operation has completed, so release the
+                // serial reader slot before detailed capture reduction. This
+                // does not launch a second walker: this coroutine still owns
+                // the one queue loop, but a newer event can now occupy the
+                // bounded pending slot while diagnostics are reduced.
+                val next = synchronized(queueLock) { inspectionQueue.complete(active) }
                 traceInspectionResult(active, result, startedAt, finishedAt)
                 traceKeyguard(
                     "INSPECTION_MAIN_APPLY_POSTED",
@@ -863,8 +919,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                         "mainHandoffRequestedAtUptimeMs" to mainHandoffRequestedAt,
                     ),
                 )
+                request = next
             }
-            request = synchronized(queueLock) { inspectionQueue.complete(active) }
         }
     }
 
@@ -894,6 +950,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             "readerStrategy" to result.windowTiming.readerStrategy,
             "prefetchFlags" to result.windowTiming.prefetchFlags,
             "cacheEnabled" to (result.windowTiming.cacheEnabled ?: "NA"),
+            "freshnessPolicy" to result.windowTiming.freshnessPolicy,
             "cacheClearResult" to result.windowTiming.cacheClearResult,
             "activeCandidateWindowId" to (result.windowTiming.activeCandidateWindowId ?: "NA"),
             "returnedRootWindowId" to (result.windowTiming.returnedRootWindowId ?: "NA"),
@@ -1094,6 +1151,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             request = KeyguardWindowSnapshotReader.Request(
                 knownOwn = knownOwnOverlayIdentity,
                 attachGeneration = request.attachGeneration,
+                freshness = request.windowFreshness,
             ),
             authorityIsCurrent = { authorityIsCurrent(request) },
         )
@@ -1443,6 +1501,17 @@ class FluviKeyguardCardService : AccessibilityService() {
         val retryAvailable = retryCount < RETRY_DELAYS_MS.size &&
             isDisplayOnAndInteractive() && keyguardManager.isKeyguardLocked
         val wasAttached = overlay.isAttached
+        // A missing/incomplete tree needs one deliberate freshness boundary
+        // before a timer retry. A normal event-driven NO_MAIN observation does
+        // not: the framework already invalidated the cache for that event.
+        // Withdrawing a currently visible presentation is contradictory
+        // evidence and therefore also receives a fresh successor.
+        val successorFreshness = when {
+            wasAttached -> KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION
+            inspection.rootUnavailable || inspection.walkTruncated ->
+                KeyguardWindowFreshness.MISSING_FRESHNESS_EVIDENCE
+            else -> KeyguardWindowFreshness.FRAMEWORK_EVENT
+        }
         val beforeVisibilityEpoch = visibilityEpoch.get()
         val transition = KeyguardAwaitingSurfacePolicy.onUnknown(
             current = surfacePresentationState,
@@ -1487,9 +1556,14 @@ class FluviKeyguardCardService : AccessibilityService() {
                         diagnosticContext = request.diagnosticContext,
                         fields = mapOf("causingRequestId" to request.id),
                     )
-                    preservePendingReconciliation("unknownVisible", requirePending = true)
+                    preservePendingReconciliation(
+                        "unknownVisible",
+                        requirePending = true,
+                        freshness = successorFreshness,
+                    )
                 }
-                KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK -> scheduleWakeRetry(request)
+                KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK ->
+                    scheduleWakeRetry(request, successorFreshness)
                 KeyguardUnknownSurfaceFollowup.WAIT_FOR_EVENT -> traceKeyguard(
                     "RETRY_BUDGET_EXHAUSTED_AWAITING",
                     "unknownVisible",
@@ -1509,7 +1583,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "unknownAlreadyHidden",
                 request,
             )
-            KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK -> scheduleWakeRetry(request)
+            KeyguardUnknownSurfaceFollowup.SCHEDULE_FALLBACK ->
+                scheduleWakeRetry(request, successorFreshness)
             KeyguardUnknownSurfaceFollowup.WAIT_FOR_EVENT -> traceKeyguard(
                 "RETRY_BUDGET_EXHAUSTED_AWAITING",
                 "unknownAlreadyHidden",

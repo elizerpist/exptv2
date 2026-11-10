@@ -11,6 +11,9 @@ internal data class KeyguardCardInspectionRequest(
     val attachGeneration: Long,
     val wakeGeneration: Long,
     val queuedAtUptimeMs: Long,
+    /** Freshness is captured with this request. It directs only reader cache
+     * invalidation; it never grants visibility from a previous surface. */
+    val windowFreshness: KeyguardWindowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT,
     val eventTimeUptimeMs: Long? = null,
     /** Captured before the worker is queued; a late callback must not be
      * relabelled with the wake/attempt that happens to be current later. */

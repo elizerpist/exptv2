@@ -59,6 +59,81 @@ class KeyguardWindowSnapshotReaderPolicyTest {
         )
     }
 
+    @Test fun ordinary_events_keep_framework_cache_and_lifecycle_evidence_can_clear_it() {
+        assertFalse(
+            KeyguardWindowSnapshotReaderPolicy.shouldClearCache(
+                KeyguardWindowFreshness.FRAMEWORK_EVENT,
+            ),
+        )
+        assertTrue(
+            KeyguardWindowSnapshotReaderPolicy.shouldClearCache(
+                KeyguardWindowFreshness.LIFECYCLE_BOUNDARY,
+            ),
+        )
+        assertTrue(
+            KeyguardWindowSnapshotReaderPolicy.shouldClearCache(
+                KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION,
+            ),
+        )
+        assertTrue(
+            KeyguardWindowSnapshotReaderPolicy.shouldClearCache(
+                KeyguardWindowFreshness.MISSING_FRESHNESS_EVIDENCE,
+            ),
+        )
+    }
+
+    @Test fun active_root_strategy_is_not_coupled_to_a_cache_clear_result() {
+        // A normal event does not clear the whole cache, but can still use
+        // the validated active-root path when Android reports the cache live.
+        assertTrue(
+            KeyguardWindowSnapshotReaderPolicy.canUseInterruptibleActiveRoot(
+                apiLevel = 35,
+                cacheEnabled = true,
+                hasUnambiguousCandidate = true,
+                freshnessBoundaryEstablished = true,
+            ),
+        )
+        assertFalse(
+            KeyguardWindowSnapshotReaderPolicy.canUseInterruptibleActiveRoot(
+                apiLevel = 35,
+                cacheEnabled = false,
+                hasUnambiguousCandidate = true,
+                freshnessBoundaryEstablished = true,
+            ),
+        )
+        assertFalse(
+            KeyguardWindowSnapshotReaderPolicy.canUseInterruptibleActiveRoot(
+                apiLevel = 32,
+                cacheEnabled = true,
+                hasUnambiguousCandidate = true,
+                freshnessBoundaryEstablished = true,
+            ),
+        )
+        // A deliberate clear that fails falls back to per-window acquisition;
+        // normal events do not require that explicit boundary in the first
+        // place.
+        assertFalse(
+            KeyguardWindowSnapshotReaderPolicy.canUseInterruptibleActiveRoot(
+                apiLevel = 35,
+                cacheEnabled = true,
+                hasUnambiguousCandidate = true,
+                freshnessBoundaryEstablished = false,
+            ),
+        )
+    }
+
+    @Test fun prefetch_strategy_keeps_descendant_batches_interruptible() {
+        val flags = KeyguardWindowSnapshotReaderPolicy.interruptiblePrefetchFlags(apiLevel = 35)
+        assertTrue(
+            (flags and android.view.accessibility.AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_HYBRID) != 0,
+        )
+        assertEquals(
+            0,
+            flags and android.view.accessibility.AccessibilityNodeInfo.FLAG_PREFETCH_UNINTERRUPTIBLE,
+        )
+        assertEquals(0, KeyguardWindowSnapshotReaderPolicy.interruptiblePrefetchFlags(apiLevel = 32))
+    }
+
     private fun window(
         id: Int,
         active: Boolean,

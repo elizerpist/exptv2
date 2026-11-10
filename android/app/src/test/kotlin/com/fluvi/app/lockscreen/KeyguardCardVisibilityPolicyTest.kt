@@ -159,6 +159,38 @@ class KeyguardCardVisibilityPolicyTest {
         )
     }
 
+    @Test fun `partial systemui read cannot turn an early main marker into show authority`() {
+        val main = listOf(system("com.android.systemui:id/keyguard_carrier_text"))
+        assertEquals(
+            KeyguardSurface.UNKNOWN,
+            KeyguardSurfaceClassifier.classifyDetailed(main, unavailableRoot = true).surface,
+        )
+        assertEquals(
+            KeyguardSurfaceReason.ROOT_UNAVAILABLE,
+            KeyguardSurfaceClassifier.classifyDetailed(main, unavailableRoot = true).reason,
+        )
+        assertEquals(
+            KeyguardSurface.UNKNOWN,
+            KeyguardSurfaceClassifier.classifyDetailed(main, walkTruncated = true).surface,
+        )
+        assertEquals(
+            KeyguardSurfaceReason.WALK_TRUNCATED,
+            KeyguardSurfaceClassifier.classifyDetailed(main, walkTruncated = true).reason,
+        )
+        // A directly observed credential is still a safe exclusion even if
+        // another branch of the tree could not be completed.
+        assertEquals(
+            KeyguardSurface.CREDENTIAL,
+            KeyguardSurfaceClassifier.classifyDetailed(
+                listOf(system(
+                    "com.android.systemui:id/keyguard_carrier_text",
+                    "com.android.systemui:id/keyguard_security_container",
+                )),
+                walkTruncated = true,
+            ).surface,
+        )
+    }
+
     private fun system(vararg ids: String) = KeyguardWindowSnapshot(
         packageName = "com.android.systemui",
         type = 1,

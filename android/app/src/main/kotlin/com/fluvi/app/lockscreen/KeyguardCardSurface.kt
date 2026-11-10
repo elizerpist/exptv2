@@ -121,10 +121,24 @@ internal object KeyguardSurfaceClassifier {
                 window.layer >= (system.maxOfOrNull { it.layer } ?: Int.MAX_VALUE)
         }
         if (foreignAboveSystem) return KeyguardSurfaceClassification(KeyguardSurface.OCCLUDED, KeyguardSurfaceReason.FOREIGN_ABOVE, markers)
+        // A known exclusion above remains useful even if another window was
+        // incomplete, but a positive main-keyguard marker cannot authorise an
+        // overlay from a partial snapshot: a credential/shade/occluder may
+        // have been beyond the acquired prefix.
+        if (unavailableRoot) return KeyguardSurfaceClassification(
+            KeyguardSurface.UNKNOWN,
+            KeyguardSurfaceReason.ROOT_UNAVAILABLE,
+            markers,
+        )
+        if (walkTruncated) return KeyguardSurfaceClassification(
+            KeyguardSurface.UNKNOWN,
+            KeyguardSurfaceReason.WALK_TRUNCATED,
+            markers,
+        )
         if (ids.any { it in mainIds }) return KeyguardSurfaceClassification(KeyguardSurface.MAIN_KEYGUARD, KeyguardSurfaceReason.MAIN_CONFIRMED, markers)
         return KeyguardSurfaceClassification(
             KeyguardSurface.UNKNOWN,
-            if (walkTruncated) KeyguardSurfaceReason.WALK_TRUNCATED else KeyguardSurfaceReason.NO_MAIN_MARKER,
+            KeyguardSurfaceReason.NO_MAIN_MARKER,
             markers,
         )
     }
