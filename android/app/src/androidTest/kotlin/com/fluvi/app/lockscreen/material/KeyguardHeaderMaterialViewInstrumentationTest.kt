@@ -9,6 +9,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -37,6 +38,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -306,6 +308,14 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
         lateinit var view: KeyguardHeaderMaterialView
         var controller: KeyguardCardMaterialController? = null
+        var firstBitmap: Bitmap? = null
+        var latestBitmap: Bitmap? = null
+        val samples = StringBuilder()
+        fun diagnosticsOnMain(): KeyguardHeaderMaterialViewDiagnostics {
+            lateinit var value: KeyguardHeaderMaterialViewDiagnostics
+            instrumentation.runOnMainSync { value = view.diagnostics() }
+            return value
+        }
         val activity = instrumentation.startActivitySync(
             // startActivitySync launches in the target application. This
             // debug-only host is consequently declared in src/debug rather
@@ -348,24 +358,48 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             assertTrue("production View never reached a hardware Canvas", waitForRenderer(instrumentation, view))
             instrumentation.waitForIdleSync()
             val first = copyWindow(instrumentation, activity)
+            firstBitmap = first
+            val initial = diagnosticsOnMain()
+            samples.appendLine("sample=0 observedAt=${SystemClock.uptimeMillis()}" +
+                " shaderCalls=${initial.shaderDrawCount} phaseAdvances=${initial.phaseAdvanceCount}")
             // PixelCopy can return the same already-composited buffer once
             // even while the retained renderer has advanced. Sample a short
             // run rather than turning one stale copy into a shader failure.
-            val observedMotion = (1..5).any {
+            val observedMotion = (1..5).any { index ->
                 Thread.sleep(220)
-                first.sameAs(copyWindow(instrumentation, activity)).not()
+                val next = copyWindow(instrumentation, activity)
+                latestBitmap?.recycle()
+                latestBitmap = next
+                val changed = !first.sameAs(next)
+                val sample = diagnosticsOnMain()
+                samples.appendLine("sample=$index observedAt=${SystemClock.uptimeMillis()} changed=$changed" +
+                    " shaderCalls=${sample.shaderDrawCount} phaseAdvances=${sample.phaseAdvanceCount}")
+                changed
             }
-            val diagnostics = view.diagnostics()
+            val diagnostics = diagnosticsOnMain()
             android.util.Log.i("FluviDrawProbe", "pixelMotion=$observedMotion" +
                 " shaderCalls=${diagnostics.shaderDrawCount} phaseAdvances=${diagnostics.phaseAdvanceCount}" +
                 " hardware=${diagnostics.lastCanvasHardwareAccelerated}")
+            if (!observedMotion) {
+                // Preserve actual failing output, not just callback counters.
+                // Only synthetic emulator content; bounded to two bitmaps.
+                val directory = File(context.filesDir, "keyguard-material-smoke").apply { mkdirs() }
+                File(directory, "samples.txt").writeText(samples.toString())
+                listOf("first.png" to first, "latest.png" to latestBitmap).forEach { (name, bitmap) ->
+                    if (bitmap != null) File(directory, name).outputStream().use {
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                }
+            }
             assertTrue(diagnostics.lastCanvasHardwareAccelerated == true)
             assertTrue("production shader did not draw", diagnostics.shaderDrawCount > 0)
             assertTrue("retained controller did not advance phase", diagnostics.phaseAdvanceCount > 0)
             assertTrue("production shader produced no motion across five samples", observedMotion)
         } finally {
+            latestBitmap?.recycle()
+            firstBitmap?.recycle()
             instrumentation.runOnMainSync {
-                controller?.onDetached("test")
+                controller?.dispose()
                 activity.finish()
             }
         }

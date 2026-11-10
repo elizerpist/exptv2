@@ -420,7 +420,41 @@ class KeyguardServiceOverlayInstrumentationTest {
             SystemClock.sleep(pollMs)
         }
         record("TIMEOUT", "$label reason=${KeyguardCardDiagnostics.lastReason(context)}")
+        recordFailureWindows(label)
         throw AssertionError("$label timed out; no classifier or callback bypass is permitted")
+    }
+
+    /** Test failure evidence only, after the measured scenario has failed.
+     * This is NOT the rejecting inspection's snapshot. No text, descriptions,
+     * titles or node subtrees are read, and no window is whitelisted. */
+    private fun recordFailureWindows(label: String) {
+        val lines = StringBuilder("FAILURE_SNAPSHOT label=$label capture=$captureId" +
+            " observedAt=${SystemClock.uptimeMillis()} notInspectionSnapshot=true\n")
+        runCatching {
+            val windows = automation.windows
+            try {
+                lines.appendLine("windowCount=${windows.size} omittedWindows=${(windows.size - 16).coerceAtLeast(0)}")
+                windows.take(16).forEachIndexed { index, window ->
+                    val bounds = Rect().also(window::getBoundsInScreen)
+                    lines.append("window=$index id=${window.id} type=${window.type} layer=${window.layer}" +
+                        " display=${window.displayId} active=${window.isActive} focused=${window.isFocused}" +
+                        " bounds=$bounds")
+                    if (index < 8) {
+                        val started = SystemClock.uptimeMillis()
+                        runCatching {
+                            val root = window.root
+                            try {
+                                lines.append(" rootWindow=${root?.windowId} package=${root?.packageName}" +
+                                    " visible=${root?.isVisibleToUser} rootCallMs=${SystemClock.uptimeMillis() - started}")
+                            } finally { root?.recycle() }
+                        }.onFailure { lines.append(" rootError=${it.javaClass.simpleName}") }
+                    } else lines.append(" root=NOT_READ_BOUNDED")
+                    lines.appendLine()
+                }
+            } finally { windows.forEach { it.recycle() } }
+        }.onFailure { lines.appendLine("snapshotError=${it.javaClass.simpleName}") }
+        runCatching { File(output, "failure-windows.txt").writeText(lines.toString()) }
+            .onFailure { record("FAILURE_EVIDENCE_UNAVAILABLE", it.javaClass.simpleName) }
     }
 
     private inline fun <T> marked(label: String, action: () -> T): T {

@@ -202,6 +202,8 @@ jobs:
             build/app/reports/androidTests/connected/**
             build/app/outputs/androidTest-results/connected/**
             android/keyguard-draw-probe.log
+            android/keyguard-material-smoke.tar
+            android/keyguard-material-smoke-pull.log
             android/keyguard-service-evidence/**
           retention-days: 14
 
