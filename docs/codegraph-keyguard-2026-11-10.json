@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "task": "Keyguard within-attachment draw-gap evidence: exact-source Dart graph and native reference inventory",
-  "source_head": "011f277192061477c48cdbfbd0298009195913f3",
-  "source_parent": "b1fce2af817dab5f1e08260eeff406bb000dfc8b",
-  "source_ref": "011f277192061477c48cdbfbd0298009195913f3",
+  "source_head": "4b4c3f3fd4f8a143decd69e335d5f89ab21f0926",
+  "source_parent": "68db22e240b45875f4414540603865bf0cbc5d94",
+  "source_ref": "4b4c3f3fd4f8a143decd69e335d5f89ab21f0926",
   "source_worktree": "/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source",
   "source_tracked_clean": true,
   "generator_commit": "e84430e4a3cd4723eb3d9d084fde675f713e34b6",
@@ -11,7 +11,7 @@
   "index_sha256": "5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
   "index_bytes": 67515079,
   "index_regenerated_from_source": true,
-  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad, d731827 and c4a4ba2. SCIP was rerun after checking out 011f2771; identical index bytes do not assert native equivalence.",
+  "equal_baseline_index_explanation": "Dart lib/test sources are unchanged from f8cd8ad, d731827, c4a4ba2 and 011f2771. SCIP was rerun after checking out 4b4c3f3; identical index bytes do not assert native equivalence.",
   "scip_dart_version": "1.6.2",
   "language_documents": {
     "Dart": 807
@@ -27,9 +27,9 @@
     "reference_edges": 42214,
     "verified_shards": 102,
     "failed_shard_hashes": 0,
-    "artifact_digest": "8bc76725e3b1b69a0386f37f0e3efe9a36bd5bdc94ffaab0564e0eb2ef029a60",
+    "artifact_digest": "2cfa1a9f64d08f48b80fe093d70b839697f4c94d1abdebb262cdadc5399aacf4",
     "artifact_digest_command": "cd docs/codegraph; rg --files | sort | xargs sha256sum | sha256sum",
-    "manifest_sha256": "2327265f837068439175a1d98078bdb510308dd4055b47bc9ae250bf5b8445cf"
+    "manifest_sha256": "18837e37df07715dd637a1cc6222a54872f1c237b03dec90078599dfbccdfa2e"
   },
   "query_output": "codegraph-keyguard-queries-2026-11-10.txt",
   "query_locations": "Raw query output retains zero-based SCIP coordinates; source verification uses one-based source lines.",
@@ -103,11 +103,11 @@
       "test_consumers": [
         "test/features/dashboard/presentation/dashboard_header_orb_material_test.dart"
       ],
-      "impact": "Shared producer reaches native keyguard and launcher export. These Dart producers/consumers were not changed by c4a4ba2 or 011f2771."
+      "impact": "Shared producer reaches native keyguard and launcher export. These Dart producers/consumers were not changed by c4a4ba2, 011f2771 or 4b4c3f3."
     }
   ],
   "manual_native_inventory": {
-    "basis": "rg references plus direct source reads in exact 011f2771 checkout; NOT SCIP. Native production is byte-unchanged from c4a4ba2, so verified production line references retain their meaning. Instrumentation delta audited separately. Application test execution is reported by the application agent/CI, not inferred from these references.",
+    "basis": "rg references plus direct source reads in exact 4b4c3f3 checkout; NOT SCIP. Native production is byte-unchanged from c4a4ba2, so verified production line references retain their meaning. Instrumentation/CI deltas audited separately; no execution is inferred from graph references.",
     "KeyguardMainWorkEvidence": {
       "definition": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardMainWorkEvidence.kt",
       "production_consumers": [
@@ -220,7 +220,7 @@
   },
   "commands": [
     "Ubuntu proot, PATH=/home/flutteruser/flutter/bin:$PATH; exact source: flutter pub get; git diff --exit-code; git diff --cached --exit-code; dart pub global run scip_dart ./",
-    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head 011f277192061477c48cdbfbd0298009195913f3 --source-ref 011f277192061477c48cdbfbd0298009195913f3 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
+    "tools/codegraph: dart run bin/fluvi_codegraph.dart generate --index /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source/index.scip --graph ../../docs/codegraph --source-head 4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 --source-ref 4b4c3f3fd4f8a143decd69e335d5f89ab21f0926 --expected-index-sha256 5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
     "tools/codegraph: dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol <KeyguardTimingCaptureBridge|KeyguardTimingCaptureSnapshot|DebugConsoleDialog|DashboardKeyguardMaterialBridge|DashboardHeaderMaterialSnapshot>",
     "tools/codegraph: dart test --reporter expanded => 16 PASS",
     "tools/codegraph: dart analyze => No issues found",
@@ -237,19 +237,37 @@
   },
   "physical_validation": "PENDING_USER",
   "limits": "Graph verification is not Android rendering, physical cadence, latency, or visibility validation. No application code or journal was edited by the tooling refresh. No APK build is requested by this tooling-only commit. The generated index is Dart-only; native owner inventory is independently source-verified and explicitly outside SCIP coverage.",
-  "tooling_start_head": "8fe2286b9db0334c3a8e848d3ef7028f498c4338",
+  "tooling_start_head": "1a28cdeb3ff6e9130847b52965888d4de56f9fde",
   "source_delta_audit": {
-    "comparison": "c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514..011f277192061477c48cdbfbd0298009195913f3",
+    "comparison": "c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514..4b4c3f3fd4f8a143decd69e335d5f89ab21f0926",
     "production_unchanged_command": "git diff --name-status c4a4ba2f61d911100b8a3f75a0a7c5b492d1e514 HEAD -- android/app/src/main lib test",
     "production_unchanged_result": "empty",
     "scope": [
-      "journal-only intermediate commit",
-      "API35 real-window instrumentation finite workload deadline and observed-count logging",
-      "CI runtime runner script and failure/success artifact retention"
+      "journal-only intermediate commits",
+      "API35 real-window finite workload deadline and observed-count logging from 011f2771",
+      "CI runtime runner and artifact retention from 011f2771",
+      "4b4c3f3 corrects retained report paths to build/app and logs motion counters after sampling; production and PixelCopy assertions unchanged"
     ],
-    "instrumentation_source": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt:665",
+    "instrumentation_source": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt:668",
     "deadline_semantics": "Fixed 121 phase-advance workload now uses a finite 60s liveness deadline rather than 8s. Actual output and ownership checks remain. This is not a production speed improvement or a physical FPS acceptance threshold.",
-    "ci_runner": "scripts/test-keyguard-runtime.sh preserves connectedDebugAndroidTest exit status and captures FluviDrawProbe logs; .github/workflows/fluvi-core.yml retains actual runtime results with if: always().",
-    "limit": "Tooling source audit does not assert the new Android CI result; application agent reports execution separately."
+    "ci_runner": "scripts/test-keyguard-runtime.sh preserves connectedDebugAndroidTest exit status and captures FluviDrawProbe logs; .github/workflows/fluvi-core.yml retains actual build/app runtime reports with if: always().",
+    "limit": "The 011f2771 single PixelCopy failure and final passing repeat do not establish a target-phone cause or performance change. Runtime execution evidence below is separate from graph verification."
+  },
+  "android_ci_audit": {
+    "run": 42825624196,
+    "source_head": "4b4c3f3fd4f8a143decd69e335d5f89ab21f0926",
+    "job_id": 129865524457,
+    "job_name": "test-keyguard-material-runtime",
+    "job_status": "completed",
+    "job_conclusion": "success",
+    "actual_log_evidence": [
+      "Starting 37 tests on emulator-5554 - 15",
+      "BUILD SUCCESSFUL in 5m 12s"
+    ],
+    "read_commands": [
+      "gh api repos/elizerpist/exptv2/actions/runs/42825624196/jobs",
+      "gh api repos/elizerpist/exptv2/actions/jobs/129865524457/logs"
+    ],
+    "limits": "Read-only verification of final API35 job status/log. No claim of physical Nothing-device performance. Overall workflow/Human APK were still in progress at this observation; the application agent reports their final outcomes."
   }
 }
