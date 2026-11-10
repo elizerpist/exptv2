@@ -261,17 +261,23 @@ class KeyguardServiceOverlayInstrumentationTest {
         val workerRead = java.util.concurrent.atomic.AtomicBoolean(false)
         val unavailableInspection = java.util.concurrent.atomic.AtomicBoolean(false)
         val denyAdmission = java.util.concurrent.atomic.AtomicBoolean(false)
+        val withholdNewChecks = java.util.concurrent.atomic.AtomicBoolean(false)
         val admissionRead = java.util.concurrent.CountDownLatch(1)
         service.systemStateReaderOverride = KeyguardSystemStateReader { purpose ->
+            // Capture the old positive before blocking. Later *new* checks
+            // are separately controlled so a legitimate new wake cannot be
+            // mistaken for publication of this revoked answer.
+            val withhold = purpose == KeyguardSystemReadPurpose.RECURRING && withholdNewChecks.get()
+            val acquired = real.read(purpose)
             if (purpose == KeyguardSystemReadPurpose.RECURRING) {
                 workerRead.set(android.os.Looper.myLooper() != android.os.Looper.getMainLooper())
                 entered.countDown()
                 check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
             }
-            if (purpose == KeyguardSystemReadPurpose.INSPECTION && unavailableInspection.get()) {
+            if (withhold || (purpose == KeyguardSystemReadPurpose.INSPECTION && unavailableInspection.get())) {
                 KeyguardSystemState(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(), available = false)
             } else {
-                val state = real.read(purpose)
+                val state = acquired
                 if (purpose == KeyguardSystemReadPurpose.ADMISSION && denyAdmission.get()) {
                     assertEquals("Admission remains on the View owner", android.os.Looper.getMainLooper(), android.os.Looper.myLooper())
                     admissionRead.countDown()
@@ -312,8 +318,22 @@ class KeyguardServiceOverlayInstrumentationTest {
                 assertEquals("No recurring system read belongs to Main", 0L, state["systemRecurringMainReads"])
                 assertEquals(1L, release.count)
             }
-            instrumentation.runOnMainSync { service.onInterrupt() }
-            assertTrue("Terminal hide must remove the actual root before reader release", overlaysWithdrawn())
+            withholdNewChecks.set(true)
+            instrumentation.runOnMainSync {
+                service.onInterrupt()
+                assertEquals("Terminal hide must detach the owner before returning", false,
+                    service.materialDiagnostics()["overlayAttached"])
+                assertEquals("Actual local WindowManager root must be removed before reader release", 0,
+                    WindowInspector.getGlobalWindowViews().count {
+                        (it.layoutParams as? WindowManager.LayoutParams)?.type ==
+                            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+                    })
+                assertEquals(1L, release.count)
+            }
+            // UiAutomation's remote accessibility-window list can still
+            // contain the removed window after removeViewImmediate returned.
+            // Require convergence too, without confusing it with local hide.
+            await("Terminal remote window metadata removed before reader release", 2_000) { overlaysWithdrawn() }
             assertEquals("Terminal hide never joins the reader", 1L, release.count)
             instrumentation.runOnMainSync { service.onSettingsChangedFromApplication(discreet) }
             instrumentation.runOnMainSync {
@@ -336,6 +356,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             // New event and genuine tree classification may propose SHOW;
             // fresh admission must still veto it after worker-positive delay.
             denyAdmission.set(true)
+            withholdNewChecks.set(false)
             instrumentation.runOnMainSync {
                 val event = android.view.accessibility.AccessibilityEvent.obtain(
                     android.view.accessibility.AccessibilityEvent.TYPE_WINDOWS_CHANGED)
