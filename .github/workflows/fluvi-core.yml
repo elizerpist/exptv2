@@ -187,9 +187,18 @@ jobs:
             -partition-size 4096
           pre-emulator-launch-script: >-
             cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
-          script: >-
-            cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon
-            -Pandroid.testInstrumentationRunnerArguments.class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest,com.fluvi.app.lockscreen.KeyguardFirstDrawObservationInstrumentationTest,com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
+          script: bash scripts/test-keyguard-runtime.sh
+
+      - name: Retain native runtime and observer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyguard-runtime-results-${{ github.sha }}
+          path: |
+            android/app/build/reports/androidTests/connected/**
+            android/app/build/outputs/androidTest-results/connected/**
+            android/keyguard-draw-probe.log
+          retention-days: 14
 
   test-native-nightly:
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)

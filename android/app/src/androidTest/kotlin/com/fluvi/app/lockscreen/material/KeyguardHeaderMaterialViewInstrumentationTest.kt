@@ -657,7 +657,18 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             root.viewTreeObserver.addOnDrawListener(listener)
         }
         try {
-            assertTrue("live clock did not advance shader frames", advanced.await(8, TimeUnit.SECONDS))
+            // This is a fixed-output correctness workload, not a minimum-FPS
+            // assertion. The former 8s deadline belonged to a >2-frame test;
+            // requiring >120 frames under it accidentally imposed a speed
+            // target on the CI software-GPU emulator. Keep every output check
+            // and a finite liveness deadline, without changing production.
+            val completed = advanced.await(60, TimeUnit.SECONDS)
+            var observed = 0
+            instrumentation.runOnMainSync {
+                observed = material.attachmentPhaseAdvances() - phaseBefore
+            }
+            android.util.Log.i("FluviDrawProbe", "phaseWorkload required=121 observed=$observed completed=$completed")
+            assertTrue("live clock workload incomplete: required=121 observed=$observed", completed)
         } finally {
             instrumentation.runOnMainSync {
                 if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnDrawListener(listener)
