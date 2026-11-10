@@ -18,12 +18,26 @@ adb install -r build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell am force-stop com.fluvi.app
 # The disposable emulator in run42856983444 already had a Launcher ANR
 # dialog before this service experiment. Preserve that precondition, then
-# close/relaunch only that identified emulator launcher (never app data).
+# close only that identified pre-existing system dialog (never app data).
 # This is experiment setup, not a Fluvi visibility/performance workaround.
 adb shell dumpsys window > "$evidence_dir/window-before-service.txt"
 if grep -Eq 'mCurrentFocus=.*Application Not Responding: com.android.launcher3' \
     "$evidence_dir/window-before-service.txt"; then
-  adb shell am force-stop com.android.launcher3 > "$evidence_dir/launcher-reset.txt"
+  # The ANR window is owned by system_server/package android, not the
+  # launcher. Force-stopping the launcher left that exact window focused in
+  # run42861703743. Android15 BaseErrorDialog receives CLOSE_SYSTEM_DIALOGS;
+  # AppNotRespondingDialog.closeDialog closes/kills its recorded ANR owner.
+  # Target only android, before enabling Fluvi/starting this experiment.
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS -p android \
+    > "$evidence_dir/launcher-reset.txt"
+  for ((i=0; i<20; i++)); do
+    adb shell dumpsys window > "$evidence_dir/window-after-launcher-reset.txt"
+    if ! grep -Eq 'mCurrentFocus=.*Application Not Responding: com.android.launcher3' \
+        "$evidence_dir/window-after-launcher-reset.txt"; then
+      break
+    fi
+    sleep 0.25
+  done
   timeout 20s adb shell am start -W -a android.intent.action.MAIN \
     -c android.intent.category.HOME >> "$evidence_dir/launcher-reset.txt"
   adb shell dumpsys window > "$evidence_dir/window-after-launcher-reset.txt"
