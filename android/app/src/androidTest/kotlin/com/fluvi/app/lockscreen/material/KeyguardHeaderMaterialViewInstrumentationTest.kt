@@ -356,6 +356,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 first.sameAs(copyWindow(instrumentation, activity)).not()
             }
             val diagnostics = view.diagnostics()
+            android.util.Log.i("FluviDrawProbe", "pixelMotion=$observedMotion" +
+                " shaderCalls=${diagnostics.shaderDrawCount} phaseAdvances=${diagnostics.phaseAdvanceCount}" +
+                " hardware=${diagnostics.lastCanvasHardwareAccelerated}")
             assertTrue(diagnostics.lastCanvasHardwareAccelerated == true)
             assertTrue("production shader did not draw", diagnostics.shaderDrawCount > 0)
             assertTrue("retained controller did not advance phase", diagnostics.phaseAdvanceCount > 0)

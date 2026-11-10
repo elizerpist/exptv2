@@ -195,8 +195,8 @@ jobs:
         with:
           name: keyguard-runtime-results-${{ github.sha }}
           path: |
-            android/app/build/reports/androidTests/connected/**
-            android/app/build/outputs/androidTest-results/connected/**
+            build/app/reports/androidTests/connected/**
+            build/app/outputs/androidTest-results/connected/**
             android/keyguard-draw-probe.log
           retention-days: 14
 
