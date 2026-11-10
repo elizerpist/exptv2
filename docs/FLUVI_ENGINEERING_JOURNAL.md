@@ -3861,3 +3861,14 @@ END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
 ```
 
 </details>
+
+## 2026-11-10 — Attachment observation repair, unit 1
+
+- Application commit: `c67669c56539775d5f7cca0e0b8d347e4f914e70`; local only at this checkpoint, final candidate push/build follows unit 2.
+- Initial application worktree: `fix/orb-v4-latency-lockscreen` at `f8cd8adef26b3fd3c330529c1d05b9b73fc06ba7`, parent `92afad1cdea7d6b48d229585819c29b2d97dac91`. Fetched and fast-forwarded only four journal commits to `90832063e8dfb46dcc71a3402514c90266093f3f`. No intervening application delta. Untracked `test/features/automation/presentation/failures/` and `test/features/manual_transactions/failures/` preserved.
+- Read both complete Download rule assets (hashes match the preceding reviewer audit), the complete current journal including normalized capture, all milestone entries, README and core architecture. No separate current keyguard plan/spec/worklog/forensics artifact found; current journal, source and tests are the available evidence.
+- Proven boundary: service `recordFirstRootDraw` / `recordFirstShaderDraw` used cycle-first fields to suppress per-attachment publication. It predates f8. Extracted that condition without changing its behavior into the exact `KeyguardDrawPublication` used by the service, then reproduced failure on the second attachment. Old synthetic reducer tests supplied FIRST events directly; window tests stopped at test lambdas and bypassed this gate.
+- RED: Ubuntu/proot Gradle-distribution `org.jetbrains.kotlin.cli.jvm.K2JVMCompiler` compiled production `KeyguardDrawPublication.kt` and `KeyguardDrawPublicationTest.kt`; `org.junit.runner.JUnitCore com.fluvi.app.lockscreen.KeyguardDrawPublicationTest`: **3 run, 1 failure**, second attachment publication. GREEN after separating attachment-stage flags from cycle-first timestamps: **3 PASS**. Covers no-draw removal, cancellation, duplicate and stale session/wake/attachment identity. No copied test reducer.
+- Production real-window CARD/ORB integration now routes actual root/shader callbacks through that same publication owner, retains the same root, verifies both drawn attachments and a third removed before traversal. Hardware execution is **PENDING CI**, not a local PASS. Local Android Gradle validation started separately; no local connected device is available.
+- `git diff --check`, `git diff --cached --check`, `./scripts/verify-fluvi-boundaries.sh`: PASS. Visibility/classifier/acquisition/retry, financial content, shader/phase, geometry, interactions and Flutter behavior unchanged. This commit repairs diagnostic observability, not proven physical lag/flicker.
+- Physical validation: **PENDING — USER ONLY**. Unit 2 will retain per-operation causes and bound the complete UTF-8 report. No speculative runtime correction has been justified.
