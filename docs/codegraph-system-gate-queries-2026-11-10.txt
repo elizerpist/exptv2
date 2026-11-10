@@ -1,0 +1,128 @@
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#
+DEFINITION
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:16
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#`<constructor>`().
+REFERENCES
+total=8 production=3 tests=5
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_floating_button.dart
+test/core/debug/keyguard_timing_capture_console_test.dart
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:1421:38 reference
+lib/core/debug/debug_console.dart:25:8 reference
+lib/core/debug/debug_floating_button.dart:23:8 reference
+TEST REFERENCES
+test/core/debug/keyguard_timing_capture_console_test.dart:52:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:108:21 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:36:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:68:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:78:19 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#
+DEFINITION
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:75
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#`<constructor>`().
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#fromMap().
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#unavailable().
+REFERENCES
+total=12 production=12 tests=0
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:55:2 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:39:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:50:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:53:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:56:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:59:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:63:30 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:63:60 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:68:11 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:68:41 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:95:11 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:112:12 reference
+TEST REFERENCES
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+DEFINITION
+lib/core/debug/debug_console.dart:13
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().
+REFERENCES
+total=5 production=3 tests=2
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_floating_button.dart
+test/core/debug/keyguard_timing_capture_console_test.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:28:8 reference
+lib/core/debug/debug_console.dart:37:45 reference
+lib/core/debug/debug_floating_button.dart:41:28 reference
+TEST REFERENCES
+test/core/debug/keyguard_timing_capture_console_test.dart:58:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:115:18 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#
+DEFINITION
+lib/app/platform/dashboard_keyguard_material_bridge.dart:11
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#`<constructor>`().
+REFERENCES
+total=2 production=2 tests=0
+CONSUMER FILES
+lib/features/dashboard/presentation/core_dashboard.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/presentation/core_dashboard.dart:197:13 reference
+lib/features/dashboard/presentation/core_dashboard.dart:344:30 reference
+TEST REFERENCES
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_orb_material.dart`/DashboardHeaderMaterialSnapshot#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:17
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_orb_material.dart`/DashboardHeaderMaterialSnapshot#
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_orb_material.dart`/DashboardHeaderMaterialSnapshot#capture().
+REFERENCES
+total=24 production=12 tests=12
+CONSUMER FILES
+lib/app/platform/dashboard_keyguard_material_bridge.dart
+lib/app/platform/dashboard_orb_material_export_bridge.dart
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart
+PRODUCTION REFERENCES
+lib/app/platform/dashboard_keyguard_material_bridge.dart:91:23 reference
+lib/app/platform/dashboard_keyguard_material_bridge.dart:91:55 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:209:21 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:209:53 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:406:13 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:450:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:31:8 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:291:4 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:359:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:390:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:435:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:476:26 reference
+TEST REFERENCES
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:33:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:33:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:106:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:106:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:159:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:159:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:229:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:229:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:313:27 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:313:59 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:424:14 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:424:46 reference

@@ -1,0 +1,74 @@
+{
+  "task": "Production keyguard system-gate ownership refactor",
+  "source_head": "6ffeb23decd18708b5e7f44b857d961fa6bd4423",
+  "source_parent": "c959943d71ec4e2ef468dd83497558cefdbcc7cd",
+  "production_repair_commit": "31a012ac990154b932bf1cdf010526a9888f857d",
+  "source_worktree": "/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-keyguard-graph-source",
+  "source_tracked_clean": true,
+  "generator_commit": "e84430e4a3cd4723eb3d9d084fde675f713e34b6",
+  "scip_dart_version": "1.6.2",
+  "index_regenerated_from_source": true,
+  "index_bytes": 67515079,
+  "index_sha256": "5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59",
+  "equal_index_explanation": "Dart sources are unchanged. scip_dart was actually rerun at the clean final application source; native code changes do not create Kotlin coverage.",
+  "language_documents": {"Dart": 807},
+  "kotlin_coverage": false,
+  "coverage_limit": "SCIP is a Dart reference graph, not a runtime graph. Empty changed-impact symbols do not mean zero native impact. Native inventory below is source-verified, not a SCIP query.",
+  "queries": [
+    {"symbol": "KeyguardTimingCaptureBridge", "references": 8, "production": 3, "tests": 5,
+     "consumers": ["lib/app/shell/fluvi_app_shell.dart", "lib/core/debug/debug_console.dart", "lib/core/debug/debug_floating_button.dart", "test/core/debug/keyguard_timing_capture_console_test.dart", "test/core/diagnostics/keyguard_timing_capture_bridge_test.dart"]},
+    {"symbol": "KeyguardTimingCaptureSnapshot", "references": 12, "production": 12, "tests": 0,
+     "consumers": ["lib/core/diagnostics/keyguard_timing_capture_bridge.dart", "lib/core/debug/debug_console.dart"]},
+    {"symbol": "DebugConsoleDialog", "references": 5, "production": 3, "tests": 2,
+     "consumers": ["lib/core/debug/debug_console.dart", "lib/core/debug/debug_floating_button.dart", "test/core/debug/keyguard_timing_capture_console_test.dart"]},
+    {"symbol": "DashboardKeyguardMaterialBridge", "references": 2, "production": 2, "tests": 0,
+     "consumers": ["lib/features/dashboard/presentation/core_dashboard.dart"]},
+    {"symbol": "DashboardHeaderMaterialSnapshot", "references": 24, "production": 12, "tests": 12,
+     "consumers": ["lib/app/platform/dashboard_keyguard_material_bridge.dart", "lib/app/platform/dashboard_orb_material_export_bridge.dart", "lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart", "test/features/dashboard/presentation/dashboard_header_orb_material_test.dart"]}
+  ],
+  "query_output": "codegraph-system-gate-queries-2026-11-10.txt",
+  "query_coordinates": "Raw SCIP output is zero-based; source inspection is one-based.",
+  "native_source_inventory": {
+    "root": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/",
+    "KeyguardSystemStateReader": {
+      "definition": "KeyguardSystemState.kt",
+      "implementation": "AndroidKeyguardSystemStateReader.kt",
+      "production_consumer": "FluviKeyguardCardService.readSystemState",
+      "purposes": ["RECURRING on independent worker", "INSPECTION on tree worker", "ADMISSION on Main for attach/disclosure increase", "PUBLICATION on Main for authorized new financial payload"],
+      "tests": ["KeyguardSystemStateSamplerTest", "KeyguardServiceOverlayInstrumentationTest"]
+    },
+    "KeyguardSystemStateSampler": {
+      "definition": "KeyguardSystemState.kt",
+      "production_owner": "FluviKeyguardCardService.systemSampler",
+      "ingress": ["beginOrJoinWakeCycle", "onAccessibilityEvent", "displayListener", "scheduleWakeRetry", "applyInspection stale rejection", "processInspectionQueue aborted result", "publishInspectionAuthority"],
+      "delivery": "applySystemState; current authority and revocation checked before delivery",
+      "bounds": "one active plus one latest pending; no View/Event/Node retained; no Main wait; terminal clear revokes in-flight publication without claiming IPC cancellation",
+      "tests": ["KeyguardSystemStateSamplerTest", "KeyguardServiceOverlayInstrumentationTest"]
+    },
+    "KeyguardSystemAdmission": {
+      "definition": "KeyguardSystemState.kt",
+      "production_consumer": "FluviKeyguardCardService.applyInspection",
+      "contract": "worker-positive cannot grant a new attach or increased disclosure; one fresh Main snapshot is retained",
+      "tests": ["KeyguardSystemStateSamplerTest", "KeyguardServiceOverlayInstrumentationTest fresh admission veto"]
+    },
+    "KeyguardCardSignals": {
+      "definition": "KeyguardCardSurface.kt",
+      "production_consumers": ["FluviKeyguardCardService.quickSignals", "signalsFromSystemState", "applyInspection", "KeyguardCardVisibilityPolicy"],
+      "contract": "failed acquisition and transitional display state are UNKNOWN, never positive permission or fabricated OFF",
+      "tests": ["KeyguardCardVisibilityPolicyTest", "KeyguardSystemStateSamplerTest"]
+    },
+    "KeyguardCardInspectionQueue.hasCurrentWork": {
+      "production_consumer": "FluviKeyguardCardService.hasCompatibleCycleInspection",
+      "contract": "completed UNKNOWN cause cannot suppress fallback as if it were future work",
+      "tests": ["KeyguardCardInspectionQueueTest", "KeyguardInspectionFreshnessTest"]
+    },
+    "retained_owners": {
+      "chain": "service -> KeyguardCardWindow -> KeyguardCardMaterialController -> one KeyguardMaterialClock -> KeyguardHeaderMaterialView",
+      "unchanged": ["TYPE_ACCESSIBILITY_OVERLAY", "geometry and clipping", "input/tap/drag", "shader ABI/palette/phase", "bootstrap/live ownership", "draw publication", "freshness/tree classification", "dashboard", "launcher widget"],
+      "runtime_tests": ["KeyguardHeaderMaterialViewInstrumentationTest", "KeyguardFirstDrawObservationInstrumentationTest", "KeyguardCardDiagnosticsInstrumentationTest", "KeyguardServiceOverlayInstrumentationTest"]
+    }
+  },
+  "source_checks": "rg references and direct definition/caller/test reads at exact final source; no Kotlin reference-graph claim",
+  "physical_validation": "PENDING_USER",
+  "ci_results_location": "Application branch docs/FLUVI_ENGINEERING_JOURNAL.md; graph generation alone is not runtime or physical verification"
+}

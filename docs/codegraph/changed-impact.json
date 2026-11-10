@@ -1,9 +1,10 @@
 {
   "schema_version": 1,
-  "source_head": "1f0a199096a50a86c335918408c30db3ff375e9c",
-  "base_head": "151659ff6a7846b6ea00c9230c8ccc0b54ae83b1",
+  "source_head": "6ffeb23decd18708b5e7f44b857d961fa6bd4423",
+  "base_head": "c959943d71ec4e2ef468dd83497558cefdbcc7cd",
   "changed_files": [
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt"
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
