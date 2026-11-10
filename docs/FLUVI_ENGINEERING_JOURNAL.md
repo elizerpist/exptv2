@@ -5961,3 +5961,330 @@ When an exact-source Human build eventually passes its required delivery gate, t
 **PHYSICAL VALIDATION — PENDING, USER ONLY. No claim of physical resolution.**
 
 **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-11-10 — reviewer: late 1f physical captures, implemented gate repair and lost occlusion successor
+
+### Identity, duplicate audit and scope
+
+- New feedback is two unique chat-pasted exports: LIGHT `cb55b3aa-d008-4d73-9c0c-c6e40c986531` (23:37:51.557+0100, 20544ms) and FULL `81330385-b9cd-4e96-8847-a5258b0a2fc0` (23:38:23.449+0100, 22004ms). Repeated FULL and Markdown-escaped/concatenated copies have identical capture/build/process identity; they are NOT additional trials.
+- Both physically tested **1f0a199096a50a86c335918408c30db3ff375e9c**, profile, Nothing A142/API35, process `12698-aa658ff4`, service session1, ORB/orbOnly/full, foreground/background requests false. The 21:13/21:14 captures in process23238 are separate historical observations.
+- Reviewed current branch `fix/orb-v4-latency-lockscreen` at documentation HEAD **ac0758f1d3ae107212b9eedb9fb6ecb96108851b**. Latest application/test source is **21ebac3529ad59a00ce336c5f0e93bb21883ccd1**, parent934cf6a46e1665f982fba4a277f4c5b3475603a2. Production repair is31a012ac with6ffeb23d follow-up. The new phone exports do NOT execute that repair and cannot prove its success, regression or lack of progress.
+- Re-read both supplied rule assets (base SHA256 f5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297; widget addendum dc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c), complete new agent journal/completion entries since reviewer a99eafd7, commit bodies and actual diffs. Reviewed changed production definitions/functions and tests against their callers, the complete updated real-service fixture, milestone document, current workflow, actual CI logs and runtime artifacts. No application code changed by this reviewer.
+- Fresh read-only Drive metadata searches for Fluvi and keyguard after2026-11-10T09:10:41Z returned no results. These chat exports are the fresh physical evidence; no unseen Drive content is claimed. Full original on-device export bytes/system trace/video remain unavailable.
+- Frozen selected-field transcription below is4266 UTF-8 bytes, SHA256 **f49a93eb34d88318746b4e2a00546b2cead2706bcbfe32c92e1cbb6c7b8e7886**. This hashes the reviewer JSON extract, NOT the original complete exports.
+
+### Physical evidence: delayed first draws and recurrent gaps remain in the installed old build
+
+All columns are milliseconds; NA is an unobserved/missing endpoint, never zero. The handoff column belongs to the SHOWING inspection, which can differ from FIRST_INSPECTION.
+
+| Capture/attempt | Cycle callback to first live draw | SCREEN_ON to live | Showing handoff to Main | Hide callback to local hide | Hide callback to remove return | Maximum recorded draw gap |
+|---|---:|---:|---:|---:|---:|---:|
+| LIGHT1 |624|NA|1|68|114|78|
+| LIGHT2 |257|257|0|26|35|93|
+| LIGHT3 |265|230|6|16|26|91|
+| LIGHT4 |316|272|1|52|113|85|
+| FULL1 |182|NA|89|16|28|86|
+| FULL5 |NA|NA|NA|NA|NA|NA|
+| FULL6 |186|186|16|3|26|17|
+| FULL7 |118|86|1|26|35|78|
+
+- FULL5 has zero attaches and first UNKNOWN followed by unlocked cleanup. It is not a zero-latency success or proof that a required show was lost. FULL6 had a1658ms sampled render interval with maximum16.454154ms gap; that good episode is from the SAME old build, not a before/after improvement.
+- LIGHT first acquisition totals175/125/126/145ms, active-root portions158/110/112/136ms. Each first inspection was UNKNOWN, followed by a later showing request. Cold LIGHT1 decomposes as337ms callback-to-decision +9ms to add +112ms addView +84ms return-to-root +82ms root-to-live =624ms. GPU preparation completed15490ms before this first callback; preparation completion is not physical/live readiness. FULL's COLD_PREPARATION repeats this same process history.
+- The six slow maximum-gap samples are77.790231,92.850154,90.566692,84.558769,85.823077 and78.027616ms. Their current draws consume only0.145–0.245ms thread CPU; callback-end-to-draw-start spans40.335–54.199ms. This localizes unobserved waiting/work outside those short draw bodies; it does NOT measure GPU execution, prove a shader bottleneck absent, or establish one cause for all six gaps. Empty `work=` covers only retained owned scopes.
+- New LIGHT1/req18 evidence: gap53.661846ms overlaps Main apply44.139308ms wall/3.908691ms CPU, including diagnostic-producer37.460231ms wall/0.281462ms CPU and system-gate1.818769ms wall/0.319539ms CPU. Nested work is NOT additive. Exported producer max37.318692ms is a different inner measurement, not an identical scope. Actual source confirms captureLock reduction executes inside the diagnostic consumer; the producer enqueues under the short mailbox lock. No evidence here attributes the37ms to that mutex, formatting, GC, CPU scheduling or a specific call. Do not revert the already-worker-owned reducer or claim worker captureLock aggregate1.116/1.462seconds blocked Main.
+- LIGHT recorded701, evicted312, diagnostically dropped114, retained275; FULL1370/1103/0/267. Raw exports truncate. LIGHT exports9 gap records and omits3; FULL exports9 and omits0. Summary/spine critical omissions are none. Physical overlay presentation/removal and system visual starts remain UNOBSERVED. Draw callback evidence is CPU submission, not physical FPS.
+- No controlled OFF/LIGHT/FULL comparison or corrected-build phone measurement exists. Original W-LOCK-ANIM/W-SHOW/W-HIDE remain physically OPEN.
+
+### Commit-by-commit review since a99eafd7
+
+| Commit | Actual change | Reviewer outcome |
+|---|---|---|
+|829a5447f99569da3f71e77e8a1421482a580e81|Reader seam, bounded sampler primitive, blocked-reader real-overlay assertion; old synchronous scheduling retained|Reproducer setup, not performance repair|
+|c74ac8159dc0396f7c580357ccb49930d7331daa|Journal baseline audit|Documentation only|
+|31a012ac990154b932bf1cdf010526a9888f857d|Recurring state reads on separate bounded lane; Main keeps window/authority; fresh admission/publication guards retained; UNKNOWN withdrawal before eligibility|Concrete runtime repair; keep it|
+|c959943d71ec4e2ef468dd83497558cefdbcc7cd|Journal integration/validation evidence|Documentation only|
+|6ffeb23decd18708b5e7f44b857d961fa6bd4423|Preserves event origin; test baseline sampled after reader entry|Causal precision; keep it|
+|934cf6a46e1665f982fba4a277f4c5b3475603a2|Journal evidence/provenance|Documentation only|
+|21ebac3529ad59a00ce336c5f0e93bb21883ccd1|Immediate local root withdrawal asserted separately from remote metadata convergence; separates revoked old read from fresh requests|Test correction; production identical to6ff|
+|284b26399331b14fc7077a54d6cfcdfdf7f10c64|Journal RED and candidate withdrawal evidence|Documentation only|
+|ac0758f1d3ae107212b9eedb9fb6ecb96108851b|Complete final failure/delivery report|Correctly reports BLOCKED; no new Human APK|
+
+### Independently checked CI and real output
+
+- Parent00f2855e/run42901690787 native job130132439513 log confirms expected RED: `Main callback must return before reader release expected:<1> but was:<0>`.
+- Exact21 run42905947628 attempts1/2/3 all fail their overall native job. Attempt1/3 cold attach fails; attempt2 reaches the new assertions and later fails rapid re-entry, with a separate lower panel PixelCopy-motion failure. These are retained failures, not green runs.
+- Downloaded exact artifact13806897699 (attempt2), ZIP SHA256 e416a5e89b1f9a68acf89e3402ec96e46caa0fc7f37306b489a6fc786257c742. Its fixture independently confirms after-entry shader/phase99/98→105/104 cold and130/129→136/135 warm, before reader release; immediate hide/privacy, recurringMainReads=0, late-positive rejection, fresh admission veto and visible UNKNOWN withdrawal pass. The logged aggregate delta8 includes earlier frames; correct after-entry delta is6. This demonstrates the ownership fix's causal contract, not target-device smoothness.
+- Downloaded exact artifact13809025345 (attempt3), ZIP SHA25646d8bdd21596d8442e8066745d1941193bd9d4f88ffb32560f36bf9e676e9df4. Actual capture SHA2566d59889ba2a07518f7812d5caf375b14b1cfd9659d87c8f9e4b5df79670248bb, capture15a8a593-0c5c-43e1-96cc-bb8587f5c075, process2720. All37 lower tests pass, actual service cold attachment times out at186313.
+- Current workflow Human build depends on core, Flutter and native runtime. Native final job130164611185 fails; Human job130169452084 is SKIPPED. No Human APK/artifact/embedded identity for21 exists in this run. Dashboard profiler is also failed; its failure is not itself in the Human job dependency list. Do not bypass the native dependency or substitute an older APK.
+- Core/Flutter jobs are success; application report records core150/app132 and Flutter1031+3+4, with20 analysis infos. This review checked job statuses/log boundaries, not reran those suites locally. Reviewer executed only extraction/hash/source-evidence/graph consistency checks; no Android device or application tests were run by the reviewer.
+
+### Newly resolved source diagnosis: recoverable occlusion destroys unserved work
+
+PROVEN runtime order in attempt3's retained raw events:
+
+1. req35 starts171217 under visibility5/interaction5/wake10; inspection completes171290, classifies HIDDEN_OCCLUDED:FOREIGN_ABOVE, complete walk, main markers2.
+2. seq96: newer req36 `INSPECTION_COALESCED`, eventTime171287, callback/queued171291, under the SAME visibility5/interaction5/wake10.
+3. seq98: req35 calls terminal HIDE_DECIDED at171291 with `terminalWake=true`, even though already detached. Applied summary now visibility6 and pending=NA.
+4. No req36 INSPECTION_STARTED follows before cold timeout186313.
+
+Exact current source mechanism: `FluviKeyguardCardService.applyInspection` special-cases only HIDDEN_UNKNOWN. HIDDEN_OCCLUDED enters the general `hideImmediately(...)` branch with default `terminalWake=true`. That method clears the system sampler, ends `wakeCycleOwner`, increments wakeEpoch, cancels retry and calls `inspectionQueue.clearPending()`. `processInspectionQueue` completes active35 only AFTER apply returns; its queue.complete35 therefore has no successor. No automatic fresh reconciliation survives. This path is also present in1f source. It is an actual lost-reconciliation defect, not a hypothesis that the surface classifier should accept a foreign window.
+
+NOT PROVEN: which package owned window5, whether req36 specifically represented its removal, or whether req36 would have returned MAIN. Later failure-window metadata showing only SystemUI is not the rejecting inspection snapshot. Correctness requires honoring a pending observation while retaining exclusion, regardless of whether that observation eventually shows MAIN. The current evidence supports repairing that liveness boundary, NOT whitelisting/ignoring windows or claiming it explains every phone draw gap.
+
+### Concrete next implementation contract — preserve exclusion, preserve recovery
+
+- Retain the implemented31a/6ff system-gate ownership repair and strengthened21 service test. Do not send the agent through that refactor again.
+- Change the service lifecycle treatment of **HIDDEN_OCCLUDED** into a recoverable surface exclusion inside the existing wake. Keep its actual exclusion reason/classification. Do not globally flip `hideImmediately` defaults, weaken the classifier, change credential/shade rules, or treat uncertainty as positive permission.
+- When already hidden, remain hidden without ending wake or gratuitously changing authority. Preserve an existing compatible latest pending inspection and its unfulfilled freshness/causal metadata; completing the current cause must run that successor. A completed active cause does not count as future work.
+- When visible, immediately revoke presentation/publication and withdraw through the existing nonterminal local hide; keep the wake open. An old pending answer may not be relabelled after visibility/interaction authority changes: retain the pending EVENT as intent and queue exactly one NEW inspection under current authority, carrying its original event/callback timestamp and required freshness. Preserve source cause versus new enqueue time separately. Current `preservePendingReconciliation` overwrites cause with a new 'now'; do not use that helper blindly for event-origin preservation.
+- If no compatible pending intent exists, use the existing bounded fallback budget/system sampler, with one retry token, no parallel reader and no budget reset on repeated occlusion. Fresh negative/uncertain results keep the overlay absent. After budget exhaustion remain hidden and event-recoverable; no indefinite polling or guessed debounce.
+- A genuinely terminal off/unlock/interrupt/disable/disconnect still ends the wake, clears both pending lanes and revokes all in-flight publication immediately. Fresh admission for any new attach/disclosure and current privacy guards remain mandatory. A slow old negative must not remove a replacement attachment; an old positive must never resurrect after terminal hide.
+- Reuse the existing awaiting/withdrawal state owner and queue, with an explicit recoverable-surface entry point if needed. Avoid a duplicate scheduler or catch-all policy expansion. Hidden repeated exclusion must not cause attach/detach churn.
+- Add a deterministic RED against exact21 using the production queue/service transition: hold old OCCLUDED result, queue a newer event before Main applies it, release the old result, verify no presentation while excluded AND successor actually starts/gets fresh classification without another external event. Exercise detached and visible cases, event bursts/latest-pending bounds, retry exhaustion followed by a real event, and terminal interruption between stages. Candidate must reach actual current-attachment shader/phase output only after fresh MAIN plus admission. Keep real-window cold/warm/rapid tests intact.
+- Finish the current repair's delivery: focused correctness, protected native suite including pixel motion, CI Human build, verified final-source profile APK identity/hash/direct download, matching final-source graph. No fourth unchanged retry, timeout inflation, fake SHOW, gate bypass, static/low-quality animation substitute, new diagnostic-only APK or unrelated dashboard rewrite. A remaining failed correctness gate remains FAILED with exact evidence; it is not silently excused.
+- Physical validation remains PENDING — USER ONLY after a deliverable candidate. Do not request another1f capture as the next step.
+
+### Graph/impact and protected boundaries
+
+Matching tooling `c04bbfae6cd7e9777eee9271d41ab05ab609cc8e` manifest source21ebac35 verified; raw index hash5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59,807 Dart documents, Kotlin absent. Current shard indexes and tree blob IDs verified. Cached symbols000/refs002/refs008 bytes match current blob IDs AND current index SHA256s. Actual reviewer JSONL queries (exact class/family prefix distinguished) give Bridge2/20 refs (family12 production8test), Snapshot8/48 (44/4), Console2/26 (24/2). These differ from the agent tool's aggregated query counts because the query selectors differ; neither is a Kotlin callgraph. Consumer source was checked in unchanged Dart bridge/console/shell/button and relevant tests. Native impact is source-audited: service apply → existing awaiting state/queue → local hide/authority/freshness → worker completion/reconciliation → fresh admission → retained window/controller/single material clock. Tests are the queue/freshness/sampler policies and real-service instrumentation; classifier and visibility controls protect exclusion.
+
+Keep milestone dfa90b6741108f824244dbc11a3d73a6c5174472 and all listed earlier physical dashboard contracts. Launcher, dashboard/Dart, material shader/palette/geometry/z-order/input, financial repositories and API classifier/cache policy are outside this fix. W-HOME-ANIM remains OPEN/out of scope.
+
+### Frozen selected feedback extract
+
+```json
+{
+  "description": "Reviewer-transcribed selected evidence from two unique chat-pasted captures; not original full export bytes. Repeated/Markdown-escaped copies deduplicated by captureId, build and process.",
+  "source": "1f0a199096a50a86c335918408c30db3ff375e9c",
+  "processInstance": "12698-aa658ff4",
+  "captures": [
+    {
+      "mode": "LIGHT",
+      "captureId": "cb55b3aa-d008-4d73-9c0c-c6e40c986531",
+      "startedAt": "2026-11-10T23:37:51.557+0100",
+      "durationElapsedMs": 20544,
+      "eventsRecorded": 701,
+      "eventsRetained": 275,
+      "eventsEvicted": 312,
+      "diagnosticDroppedRecords": 114,
+      "drawGapExported": 9,
+      "drawGapOmitted": 3
+    },
+    {
+      "mode": "FULL",
+      "captureId": "81330385-b9cd-4e96-8847-a5258b0a2fc0",
+      "startedAt": "2026-11-10T23:38:23.449+0100",
+      "durationElapsedMs": 22004,
+      "eventsRecorded": 1370,
+      "eventsRetained": 267,
+      "eventsEvicted": 1103,
+      "diagnosticDroppedRecords": 0,
+      "drawGapExported": 9,
+      "drawGapOmitted": 0
+    }
+  ],
+  "rowColumns": [
+    "mode",
+    "attemptId",
+    "cycleToFirstLiveDrawMs",
+    "screenOnToFirstLiveDrawMs",
+    "showingHandoffToMainMs",
+    "callbackToLocalHideMs",
+    "callbackToRemoveReturnMs",
+    "drawGapMaxMs"
+  ],
+  "rows": [
+    [
+      "LIGHT",
+      1,
+      624,
+      null,
+      1,
+      68,
+      114,
+      78
+    ],
+    [
+      "LIGHT",
+      2,
+      257,
+      257,
+      0,
+      26,
+      35,
+      93
+    ],
+    [
+      "LIGHT",
+      3,
+      265,
+      230,
+      6,
+      16,
+      26,
+      91
+    ],
+    [
+      "LIGHT",
+      4,
+      316,
+      272,
+      1,
+      52,
+      113,
+      85
+    ],
+    [
+      "FULL",
+      1,
+      182,
+      null,
+      89,
+      16,
+      28,
+      86
+    ],
+    [
+      "FULL",
+      5,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      "FULL",
+      6,
+      186,
+      186,
+      16,
+      3,
+      26,
+      17
+    ],
+    [
+      "FULL",
+      7,
+      118,
+      86,
+      1,
+      26,
+      35,
+      78
+    ]
+  ],
+  "gapColumns": [
+    "mode",
+    "attemptId",
+    "prevEndNs",
+    "cbInNs",
+    "cbOutNs",
+    "startNs",
+    "endNs",
+    "cpuNs"
+  ],
+  "gaps": [
+    [
+      "LIGHT",
+      1,
+      468311559623682,
+      468311582576682,
+      468311582961605,
+      468311637160297,
+      468311637413913,
+      220308
+    ],
+    [
+      "LIGHT",
+      2,
+      468316018599682,
+      468316060879067,
+      468316061114528,
+      468316111293298,
+      468316111449836,
+      151692
+    ],
+    [
+      "LIGHT",
+      3,
+      468319467637298,
+      468319510108682,
+      468319510522836,
+      468319558056298,
+      468319558203990,
+      144538
+    ],
+    [
+      "LIGHT",
+      4,
+      468323201875452,
+      468323239700067,
+      468323239941221,
+      468323286176990,
+      468323286434221,
+      244846
+    ],
+    [
+      "FULL",
+      1,
+      468342215423761,
+      468342257401607,
+      468342257620299,
+      468342301089530,
+      468342301246838,
+      153461
+    ],
+    [
+      "FULL",
+      6,
+      468355116751454,
+      468355132759146,
+      468355132996608,
+      468355133122454,
+      468355133205608,
+      79616
+    ],
+    [
+      "FULL",
+      7,
+      468357965172069,
+      468358001046454,
+      468358002687685,
+      468358043022531,
+      468358043199685,
+      172000
+    ]
+  ],
+  "lightApply18": {
+    "drawGapNs": 53661846,
+    "applyWallNs": 44139308,
+    "applyCpuNs": 3908691,
+    "nestedDiagnosticWallNs": 37460231,
+    "nestedDiagnosticCpuNs": 281462,
+    "nestedSystemGateWallNs": 1818769,
+    "nestedSystemGateCpuNs": 319539,
+    "workOmitted": 2,
+    "workEvicted": 86,
+    "nestedNotAdditive": true
+  },
+  "lightCold": {
+    "wake": 468308930,
+    "decision": 468309267,
+    "addBegin": 468309276,
+    "addReturn": 468309388,
+    "firstRoot": 468309472,
+    "firstLive": 468309554,
+    "gpuPreparationCompleted": 468293440
+  },
+  "notes": [
+    "FULL attempt5 has no attachment; missing endpoints are not zero or proven missed required show.",
+    "Physical presentation/removal and system wake/unlock visual starts UNOBSERVED.",
+    "Same-process COLD_PREPARATION is historical in FULL.",
+    "Empty work only means no retained matching owned scopes."
+  ]
+}
+```
+
+Reviewer delivery: journal-only [skip ci] commit; its resulting SHA, exact changed-path check and zero workflow count must be verified after publication. This record is not a new application build or physical acceptance.
