@@ -16,6 +16,23 @@ adb shell wm density 420
 adb install -r build/app/outputs/apk/debug/app-debug.apk
 adb install -r build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell am force-stop com.fluvi.app
+# The disposable emulator in run42856983444 already had a Launcher ANR
+# dialog before this service experiment. Preserve that precondition, then
+# close/relaunch only that identified emulator launcher (never app data).
+# This is experiment setup, not a Fluvi visibility/performance workaround.
+adb shell dumpsys window > "$evidence_dir/window-before-service.txt"
+if grep -Eq 'mCurrentFocus=.*Application Not Responding: com.android.launcher3' \
+    "$evidence_dir/window-before-service.txt"; then
+  adb shell am force-stop com.android.launcher3 > "$evidence_dir/launcher-reset.txt"
+  timeout 20s adb shell am start -W -a android.intent.action.MAIN \
+    -c android.intent.category.HOME >> "$evidence_dir/launcher-reset.txt"
+  adb shell dumpsys window > "$evidence_dir/window-after-launcher-reset.txt"
+  if grep -Eq 'mCurrentFocus=.*Application Not Responding: com.android.launcher3' \
+      "$evidence_dir/window-after-launcher-reset.txt"; then
+    printf 'Launcher ANR still owns focus; service experiment precondition failed\n' >&2
+    exit 1
+  fi
+fi
 # API35 CI reported Permission denied opening the pushed /data/local/tmp
 # config. The documented stdin route avoids that file-access boundary
 # without changing device permissions.

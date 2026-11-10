@@ -155,6 +155,16 @@ class KeyguardServiceOverlayInstrumentationTest {
             awaitLive("after-tap", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
             assertEquals("Short orb tap must retain its attachment", cold.window.id, requireOverlay().id)
             unlockAndAssertWithdrawn("cold-unlock")
+            // Retention intentionally keeps first + latest three attempts;
+            // setup/terminal signals can otherwise evict this actual cold
+            // episode before the final export. Save one bounded existing
+            // snapshot while detached, off main, outside timing scenarios.
+            marked("cold-report-checkpoint") {
+                instrumentation.runOnMainSync { }
+                File(output, "cold-capture.txt").writeText(
+                    KeyguardCardDiagnostics.captureSnapshot(context)["report"].toString(),
+                )
+            }
 
             val warm = episode("warm")
             unlockAndAssertWithdrawn("warm-unlock")
@@ -168,6 +178,20 @@ class KeyguardServiceOverlayInstrumentationTest {
                 shell("wm dismiss-keyguard")
                 await("rapid unlock", 3_000) { !keyguard.isKeyguardLocked }
                 await("rapid terminal withdrawal", 5_000) { ownOverlays().isEmpty() }
+            }
+            // wm dismiss-keyguard returns without a completion callback. In
+            // run42856983444 a subsequent independent wake overlapped that
+            // asynchronous exit; SystemUI then returned to GONE. That is not
+            // permission for Fluvi to show. Separate scenarios using the
+            // public test-only event-idle barrier, not a shipped delay or a
+            // compositor-completion claim. The rapid exclusion above is
+            // still exercised without this barrier.
+            marked("fixture-platform-settle") {
+                val remaining = deadline - SystemClock.uptimeMillis()
+                assertTrue("Fixture budget exhausted before platform settling", remaining >= 500L)
+                automation.waitForIdle(500L, minOf(5_000L, remaining))
+                assertFalse("Independent reentry must start unlocked", keyguard.isKeyguardLocked)
+                assertTrue("Settled terminal state must not retain an overlay", ownOverlays().isEmpty())
             }
             val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual live phases", reentry.material.phase > warm.material.phase)
