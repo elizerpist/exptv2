@@ -3471,3 +3471,393 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **Validation:** UTF-8 and file structure checked; all 19 addendum sections and four symptom identifiers present; fixed-SHA absence, required journal/skip/physical-validation wording checked; saved file identity retained. No application tests/builds were run for this rules-only artifact.
 - **Evidence boundary:** no fresh device result, full capture, new source diagnosis or physical acceptance is introduced. Existing performance and animation symptoms remain open pending their own evidence cycle.
 - **Repository mutation:** append this delivery record only to the existing journal with `[skip ci]`; the separately delivered asset and original uploaded rules are not added/rewritten in the application repository.
+
+## 2026-11-10 — Keyguard capture ee321b9c: user-reported lag/flicker; per-attachment draw evidence is censored
+
+### Request, identity and review boundary
+
+- **Physical user feedback (verbatim):** "laggol a widget, és olyan is van, hogy villan." The earlier W-SHOW/W-HIDE/W-LOCK-ANIM/W-HOME-ANIM scope remains open. This capture concerns the native lockscreen overlay; it does not measure the launcher widget. No physical acceptance is supplied.
+- **Application under test:** f8cd8adef26b3fd3c330529c1d05b9b73fc06ba7, parent 92afad1cdea7d6b48d229585819c29b2d97dac91, branch fix/orb-v4-latency-lockscreen. Remote HEAD before this append: b1678360da21a061bc9e52c3e56413f8169185e2. Exact comparison shows three journal-only child commits, +43/-0 lines in this file, no intervening application changes. Do not use the journal commit as the installed application's SHA.
+- **Preflight:** GitHub exact-SHA source snapshots, commit bodies/diffs, branch refs, recursive tree, relevant milestones/journal, workflow, release and job logs were reviewed. There is no reviewer application checkout/worktree; local snapshots are read-only audit inputs. Main at 381f2306856fcf6903b53e41b3b0c897aa497e1b is 1,036 commits behind this application source. Do not switch/rebase to main as a repair.
+- **Rules read in full:** uploaded FLUVI_PROMPT_WRITER_RULES(1).md (SHA-256 f5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297) and FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md (SHA-256 dc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c). Dashboard protections remain; dashboard-only event/paint prescriptions are mapped to the actual native owners where applicable.
+- **Review limitation:** no application tests were executed by the prompt writer. Existing test source and exact-source CI evidence were inspected. This is a source-proven diagnostic defect and a constrained next-work handoff, not a claim that the user's animation defect has been reproduced or repaired.
+
+### Frozen user evidence and retention audit
+
+- Capture ee321b9c-7afc-4058-ba7c-199903f53380; FROZEN / LIGHT / profile; Nothing A142 / API 35; pid 31574; processInstance 31574-9157d47f; serviceSession 1; startedAt 2026-11-10T10:14:48.520+0100; durationElapsedMs 29652. Service connected; keyguard requested; foreground/background requested false; ORB / orbOnly / privacy full.
+- The complete user-pasted text between the capture markers is reproduced below, normalized to UTF-8/LF with a final newline. Local audit name: capture_ee321b9c_transcript.txt; 35,667 bytes; SHA-256 7f2c5371aaf4ddc4fa0c6df3e7c4b2e1cf54c616f42627e6d4fd5b0ac6ea95ad. This hashes the pasted transcript, NOT the original device-export binary. The source's exportBytes=35850 remains unchanged.
+- Summaries and causal spines cover attempts 1, 5, 6, 7. Source intentionally exports first attempt plus last three; absent 2–4 do not by themselves prove lost ownership. There are 101 spine event rows, 101 unique seq values (6–1447), no duplicated spine sequence IDs. Overlap between summaries/spines is another representation of the same events, not extra attempts. Raw EVENTS is empty. Full raw continuity and total wake success rate cannot be reconstructed.
+- eventsRecorded=1452, evicted=945, diagnosticDroppedRecords=226, retained=281; 1452 - 945 - 226 = 281. LIGHT deliberately omits redundant raw records; diagnosticQueueOverflow=0 and consumerFailures=0. Do not label all 226 as queue-overflow loss. omittedAttemptIds=6,7 applies to omitted raw event groups, even though their summaries/spines are retained.
+- Export formatting builds summary/spine headers without a total-size cap; eventBudget uses coerceAtLeast(alreadyWrittenBytes). Thus the current nominal 32 KiB export can exceed its target and contain no raw events. This capture reports 35,850 bytes. Additional diagnostics must not simply enlarge this payload or unbound its headers.
+- lastPersistedSeq=0, queuedForPersistenceSeq=1452, unflushedTailMayBeMissing=true, recoveredFromDisk=false. Record pending durability; no crash, recovery, or demonstrated data loss is established.
+- Event seq order is not necessarily timestamp order because diagnostic publication is deferred. Use captured timestamps and ownership, not seq subtraction, for latency. For req237 the request's queuedAt=420148493 and spine row time=420148494 refer to different observation points. pendingAtApply=270 versus earlier awaiting pending269 likewise does not alone prove corruption.
+- systemWakeVisualStart, systemUnlockAnimationStart, physicalOverlayPresentation and physicalOverlayRemoval are UNOBSERVED. Renderer draw/commit, add/remove return and local visibility changes are not physical screen/compositor observations.
+
+### Measured timing, with non-overlapping intervals
+
+| Attempt | Wake callback → show decision | Show decision → first live draw | Wake callback → first live draw | Actual withdrawal trigger → local hide |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 331 ms | 326 ms | 657 ms | 304 ms |
+| 5 | 292 ms | 50 ms | 342 ms | 171 ms |
+| 6 | 310 ms | 44 ms | 354 ms | 107 ms |
+| 7 | 104 ms | 46 ms | 150 ms | 119 ms |
+
+- These are individual observed samples, not a population p95 or physical wake/unlock latency. SCREEN_ON → first live values are 610/304/333/93 ms. First root draws differ from live draws, especially on the first attach.
+- First presentation's 326 ms after the decision decomposes into decision→add 16, addView 75, return→bootstrap draw 69, bootstrap draw→commit callback 143, commit→promotion 0, promotion→live draw 23 ms. Do not add overlapping summary intervals. Warm attachments spend 292/310/104 ms before the decision versus 50/44/46 ms after it.
+- Attempts 1/5/6 first inspect UNKNOWN before a later eligible result. Their initial active-root acquisitions cost 145/151/202 ms (whole inspections 180/163/213 ms). The successfully showing inspections are req4/172/204/237, total 54/80/79/97 ms, queued for 105/8/32/2 ms. The trace localizes large acquisition/eligibility waits; it does not prove a safe way to skip acquisition.
+- Actual hide decisions apply local INVISIBLE in 0/1/1/0 ms. Trigger→remove return is 339/181/126/128 ms, while removeView itself is 34/10/19/9 ms. Main/inspection time before the hide decision dominates several samples. Do not confuse later terminal cleanup of an already detached overlay with its actual withdrawal.
+- GPU preparation finished at uptime 420106224, well before first wake at 420125908. Its 979 ms preparation interval is not part of this wake's measured delay.
+- Diagnostic captureLockHeldNs=2079194697 is cumulative dedicated-consumer work, not a single 2.079-second main-thread block. Producer max=9705154 ns and aggregate counters require comparative measurement before attributing animation jank to diagnostics.
+
+### Attempt 6 and the newly established observation defect
+
+- Observed order: req204 → showOp19/attach7 → first live draw at 420146403 → req217 classifies HIDDEN_UNKNOWN/WALK_TRUNCATED → hideOp20 local hide at 420146858 and removal at 420146877 → req221 → showOp21/attach8, add returns 420147010 → terminal hideOp22 removes it at 420147886.
+- This proves an actual hide/re-add operation sequence, not the precise visual flicker seen by the user. Retries scheduled/fired are both zero for this attempt. A generic retry-loop explanation is unsupported.
+- The second episode reports NO_DRAW_OBSERVED for root/shader/live. **It is unsafe to interpret this as "the second attachment never drew".**
+- **PROVEN FROM SOURCE:** FluviKeyguardCardService.recordFirstRootDraw (f8 line 2082) and recordFirstShaderDraw (line 2100) validate attachment ownership, but emit all per-attachment FIRST_* diagnostic events only inside wakeTiming.firstRootDrawAt/firstShaderDrawAt == null. A nonterminal hide preserves the same WakeTiming. Consequently, a later accepted attachment in that wake can invoke genuine draw callbacks which the service does not publish. The cycle's first draw was already set by attach7.
+- KeyguardCardWindow creates new attachment-owned observations; KeyguardHeaderMaterialView resets firstShaderDrawForAttach on onAttachedToWindow. The service is the downstream publication gate that conflates cycle-first aggregation with per-attachment first observations. The relevant gate was already present in the parent; do not call this a newly introduced f8 regression.
+- **Required repair boundary:** preserve cycle-first/earliest summary values, while independently recording each current attachment's first root/current-material/live observation once. Preserve session/wake/attach/show-operation identity and rejection of delayed old callbacks. Do not reset the cycle's first timestamps on reattach.
+- **Existing false-green gap:** cycleFirstLiveSurvivesLaterAttachmentRemovedWithoutDrawing injects synthetic diagnostic events directly; it does not exercise the service callback gate. KeyguardFirstDrawOwnerTest checks identity only. Production-window instrumentation exercises real retained roots, material controller, bootstrap commit, live shader and reattach, but callbacks terminate in test lambdas, bypassing service publication. It uses an activity-backed application-panel window, not Nothing's keyguard policy.
+- A new baseline-red test must drive two genuinely drawn attachments through the production service publication path (or a narrow extracted owner actually used by it), keeping one wake. Add true-no-draw second-attach, duplicate and stale callback controls. A synthetic reducer-only test cannot close this gap.
+- WALK_TRUNCATED has multiple source reasons: 96-node per-window cap, null advertised child, or a caught acquisition exception. Attempt6 visits 43 nodes total; the cap is not established as the cause. Retain bounded reason/provenance without logging private accessibility text.
+- Full request221 acquisition/application evidence and episode-owned actual draw cadence are missing from the exported handoff. The first showing inspection is not a substitute for the second show's cause.
+
+### Current source facts, scope and impact inventory
+
+This is a direct exact-source inventory, NOT a matching SCIP graph result:
+
+| Owner | Relevant production relationship | Evidence/test boundary |
+| --- | --- | --- |
+| FluviKeyguardCardService | Receives display/accessibility, drives queue and gate, applies window presentation, owns WakeTiming/firstDrawOwner | Per-attach publication gate is source-proven; needs service-path red test |
+| KeyguardCardInspectionQueue / InspectionFreshness / InspectionGate | One active plus latest pending; authority/revision freshness; current exclusion checks | Read policies and new freshness tests; preserve stale rejection and pending liveness |
+| KeyguardWindowSnapshotReader → surface classifier | Batched active-root/per-window acquisition → root completeness/markers → SHOW or UNKNOWN | Incomplete evidence must not become permission to show |
+| KeyguardCardWindow | Retained root, attachment lifecycle, local INVISIBLE before removal, owner-bound callbacks | showOrUpdate already restores VISIBLE; missing-visibility-reset hypothesis rejected |
+| KeyguardFirstDrawObservation / KeyguardFirstDrawOwner | Root/commit observations and session/wake/attach ownership | Existing observation/identity tests do not prove service publication |
+| KeyguardCardMaterialController → KeyguardHeaderMaterialView / material clock | Native RuntimeShader/AGSL, bootstrap/live transition, Choreographer scheduling | Existing callback count, actual shader draw, phase and interval counters can supply bounded episode snapshots |
+| KeyguardCardDiagnostics / KeyguardCardSettings / diagnostic queue | Worker reduction → attempt/episode summaries → bounded export/persistence | Synthetic event export tests bypass physical draw and service suppression |
+
+- Source and test review included complete service, diagnostics/settings, reader, queue/gate/freshness/surface/observation/controller and the relevant complete diagnostics/observation/material instrumentation tests. Broader renderer/test families and launcher/Flutter consumers are not represented as a complete transitive audit; the coding agent must complete consumer inspection before touching those boundaries.
+- The service already checks definitive exclusion at callback entry and application time. Do not propose adding an "absent immediate-hide path" without showing a currently uncovered signal. Root INVISIBLE restoration exists in showOrUpdate. GPU warm-up and initial bootstrap promotion also exist.
+- The native material diagnostic legacy drawCount aliases clock callbacks; use actualShaderDrawCount for rendered shader observations and report what each metric means. Choreographer callbacks or a single FIRST_LIVE_DRAW do not prove smooth animation.
+- Preserve the established dashboard/Avatar/data/limit floor at milestone 6e962187e90e2a82431b1f91b224d2b52a6e0ba7, including its documented open exceptions. No accepted keyguard performance milestone was found. No dashboard/controller/financial store/query/index/scene, home-widget renderer or visual-design changes are authorized by this diagnosis.
+- Layers/identity must remain one service, one retained root per intended owner, one material controller/clock and at most the valid attachment. Preserve privacy, credential/shade/occlusion exclusions, touch/drag bounds, z-order and current layout; investigate duplicate attachment/clock only if new evidence establishes it.
+- Dashboard ballistic/carousel tests and Flutter FrameTiming are not native lockscreen causality evidence; mark those diagnostic fields N/A for this narrow native change while still running the repository's protected regression checks.
+
+### Commit, prior report, Drive and CI audit
+
+- f8 actual six-file diff: new KeyguardInspectionFreshness and seven tests; service/reader exchange freshness acquisition tickets and acknowledgements; settings summary chooses earliest observed draws and keeps separate episodes; diagnostics instrumentation adds a two-attachment injected-event export test. This improves freshness ownership and summary selection, but does not fix the service-level per-attachment publication gate above.
+- Historical commit bodies reviewed: 47002e551854153ae55dcf2cef9557330685a4e2 arms bootstrap observation before attach and promotes live before diagnostics; 6750d2ba530c6b2e955852f9caaca4d125d7e4e0 experiments with interruptible prefetch; 92afad1cdea7d6b48d229585819c29b2d97dac91 restores batched acquisition and moves diagnostic reduction to a bounded worker. Historical full diffs/device evidence were not all audited end to end here. Do not flip prefetch/cache settings back and forth or redo existing bootstrap/worker/freshness work without a new failing boundary.
+- Current connected Drive search found "Névtelen dokumentum", id 1Yu8vZ-p9TF89yG_Dilz0GWnrEguzfNotmmaloLcLm3g, modified 2026-11-10T09:10:40.454Z. Its complete document text was read/frozen (33,961 bytes; SHA-256 7793a2c14eed8aba27c5e5dc7a26359b7c66b27f36928d992d6148f3213d7558). It contains prior conversation, a literally truncated capture29ec3556 from 92afad1, and that parent's completion report. It is historical evidence, not a fresh f8 capture or an independent complete f8 report. Do not merge its measurements with ee321b9c.
+- Older Drive Fluvi_1x1_elo_orb_implementacios_prompt, id 1nHxfHLOyeBIxmzm5u4KvTUxk6NRsyWNz2qyRHQG5p-M, is a November1 historical specification. It was located/frozen but not fully audited for this task; it is not current performance evidence. No matching independent full f8 completion report or additional current capture was found.
+- **Exact f8 CI:** https://github.com/elizerpist/exptv2/actions/runs/42785262893 is overall FAILURE. test-core and test-flutter PASS; test-keyguard-material-runtime PASS, 31 instrumentation tests on API35; build-human-diagnostic-apk PASS. run-dashboard-profile FAILS with "Bad state: Dashboard profile B_year_month_rail_populated must be a report map." This review does not prove its cause or that it is inherited. The parent's report mentioned a different profile failure, so do not reuse its explanation.
+- CI native commands include ./gradlew :fluvi-core:testDebugUnitTest --no-daemon and ./gradlew :app:testDebugUnitTest --no-daemon. CI logs were inspected for job outcomes/relevant failures; not every raw job line was individually audited.
+- **Published build:** https://github.com/elizerpist/exptv2/releases/tag/fluvi-human-diagnostic-f8cd8ad; asset fluvi_HUMAN_DIAGNOSTIC_f8cd8ad.apk, 120,084,074 bytes, published SHA-256 ab4aaff1682d9a4b140d4b2ad669755a235414ef230bc9d60ae62bb5a00f91b8. Build job uses full f8 FLUVI_BUILD_COMMIT. Capture's embedded header agrees; the installed APK bytes/hash were not independently inspected.
+
+### Graph provenance
+
+- docs/codegraph/manifest.json is absent from the tested application tree.
+- tooling/scip-codegraph-v1 HEAD 1782078bd90c8457d3ee5a727f5f02f431d0104f indexes source 0b82b8c78b438b91e49e93eb3f397c4c78caf61a, feature/balance-wave-defaults, SCIP Dart1.6.2, 593 documents; raw index SHA-256 a0fbda7edb932351cff871ae5d84871466ac9083bd4c580fdd47c38a26c9209f.
+- tooling/3d-linechart-final-graph HEAD 0c8a188b2bf0ee28e82daff76beaadde27798cd4 indexes source c3e62bb0835456601d7c6036715b31bb5cec4fd2, SCIP Dart1.6.2, 613 documents; raw index SHA-256 f2b53838b101b4ca481885057885f2c7e3defc758ecf55c1075ca950abb8394d.
+- **GRAPH STALE FOR TESTED HEAD.** Neither index proves Kotlin consumer coverage. No exact-f8 graph queries are claimed. Before any shared change, regenerate the available graph from the exact source, verify supported language/symbol neighborhoods, and complement unsupported native coverage with source-verified production/test references. Final graph generation belongs in a separate tooling commit and must identify its indexed application SHA. If unavailable, report the exact stale/coverage limitation; do not invent graph verification.
+
+### Classification and next coding-agent contract
+
+- **PROVEN:** user reports lag/intermittent flashing; the measured callback/inspection/draw/hide intervals above; same-wake hide/re-add operations; source gate suppresses later-attachment FIRST_* events; exporter can exceed its intended size; current tests bypass the suppressed boundary.
+- **UNPROVEN:** physical flicker's exact cause; whether attach8 actually drew or stalled; actual animation frame pacing and phase correctness in this capture; whether UNKNOWN withdrawal/recovery was unnecessary or correct during a changing system surface; safe eligibility-speedup mechanism; regression versus parent; any launcher-widget diagnosis.
+- **MISSING:** complete req221 cause/authority/freshness chain, per-episode actual-draw cadence and visibility, precise truncation cause, physical screen timings, installed binary hash, matching graph/native coverage, independent full f8 completion report, controlled same-device before/after measurement.
+- Next work is a narrowly scoped **diagnostic correctness repair plus causal isolation**, followed by a runtime/performance repair only if a production-path red reproducer identifies a safe failing boundary. First reproduce and fix per-attachment publication without changing cycle-first selection. Then preserve a compact cause chain for every retained show/withdrawal, exact truncation reason and bounded episode-owned existing animation metrics; fix the export budget using production-representative tests.
+- Explicitly distinguish truly no draw, suppressed/unobserved draw and an episode omitted for bounded retention. Keep totals/omissions honest. Do not claim causalSpineComplete means every request/episode is fully observed. No full private accessibility-tree dumps.
+- Required controls: two drawn attachments/same wake; genuine no-draw second attach; stale callback after detach/new wake; duplicate callback; current and stale freshness acknowledgements; legitimate UNKNOWN→SHOW recovery; definitive exclusion while acquisition is pending; existing ORB/CARD production-window transitions; bounded heavy-event export with all mandatory metadata included. Run relevant regression tests, not copied model-only happy paths.
+- For animation use existing callback/actual-draw/phase/start-stop metrics as bounded per-episode deltas, adding a bounded actual-draw-gap metric only if needed. No per-frame formatted logging, IPC, repository/query work or forced synchronization. Preserve cadence and visual quality.
+- Forbidden apparent fixes: fixed cooldown/debounce, hiding the widget indefinitely after UNKNOWN, suppressing legitimate reattach, showing on stale/incomplete surface evidence, keeping it after unlock, lowering animation quality/FPS, changing to a static substitute, adding another renderer/clock, increasing the export cap to hide broken selection, or broad dashboard/home-widget rewrites.
+- Completion report must include exact baseline/final identity, rules/journal/milestones read, Drive/commit/graph audits, first failing owner and red/green evidence, exact commands/results, actual-draw versus callback metrics, diagnostic cost, build/hash/embedded identity, all commit/push refs, graph regeneration/coverage, final worktree status and separate W-SHOW/W-HIDE/W-LOCK-ANIM/W-HOME-ANIM outcomes. Record NOT RUN/MISSING honestly. Append factual progress after each application commit. Only the prompt writer is restricted to this journal; the coding agent may change the tightly scoped implementation/tests.
+- Deliver one exact-source Human Diagnostic candidate for the user's next test; do not demand another phone capture before completing feasible source/test work. If physical causality remains unresolved, label it a diagnostic candidate, give short in-app capture steps, and do not call the user's symptom fixed.
+- **Physical validation:** PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+### Prompt-writer repository mutation
+
+Append only this report and its normalized capture to docs/FLUVI_ENGINEERING_JOURNAL.md, preserving all earlier bytes. Commit with [skip ci]. The current workflow has push/pull_request/schedule/manual entry points; no workflow dispatch is requested. Verify the resulting one-file append and associated workflow runs. No app, tests, assets, milestone, graph or workflow files are changed by this review.
+
+<details>
+<summary>Complete normalized user-pasted capture ee321b9c (frozen diagnostic evidence)</summary>
+
+```text
+FLUVI_KEYGUARD_TIMING_CAPTURE_V1
+build=f8cd8adef26b3fd3c330529c1d05b9b73fc06ba7
+buildMode=profile
+captureId=ee321b9c-7afc-4058-ba7c-199903f53380
+captureState=FROZEN
+captureMode=LIGHT
+processInstance=31574-9157d47f
+pid=31574
+androidApi=35
+manufacturer=Nothing
+model=A142
+startedAt=2026-11-10T10:14:48.520+0100
+durationElapsedMs=29652
+serviceConnected=true
+keyguardRequested=true
+foregroundRequested=false
+backgroundRequested=false
+presentationMode=ORB
+animationMode=orbOnly
+privacyMode=full
+notificationTimeoutMs=0
+CLOCKS
+uptimeMs=monotonic_excludes_deep_sleep
+elapsedMs=monotonic_includes_deep_sleep
+systemWakeVisualStart=UNOBSERVED
+systemUnlockAnimationStart=UNOBSERVED
+physicalOverlayPresentation=UNOBSERVED
+physicalOverlayRemoval=UNOBSERVED
+COLD_PREPARATION
+serviceSession=1 processInstance=31574-9157d47f observedBeforeCapture=true
+SERVICE_CONNECTED=420105147
+SETTINGS_LOAD_START=420105150
+SETTINGS_LOAD_END=420105150
+PROFILE_LOAD_START=420105150
+PROFILE_LOAD_END=420105151
+ROOT_PREPARE_START=420105159
+ROOT_PREPARE_END=420105186
+MATERIAL_PREPARE_REQUESTED=420105186
+MATERIAL_ARTIFACT_READY=420105228
+MATERIAL_PROGRAM_PREPARED=420105245
+MATERIAL_PROGRAM_PROMOTED=420126253
+MATERIAL_GPU_PREPARATION_STARTED=420105245
+MATERIAL_GPU_PREPARATION_COMPLETED=420106224
+MATERIAL_GPU_PREPARATION_FAILED=UNOBSERVED
+FIRST_ATTACH=420126330
+FIRST_ROOT_DRAW=420126397
+BOOTSTRAP_DRAW=420126399
+BOOTSTRAP_COMMIT_CALLBACK_RECEIVED=420126542
+MATERIAL_LIVE_PROMOTED=420126542
+FIRST_SHADER_DRAW=420126565
+FIRST_CURRENT_MATERIAL_DRAW=420126565
+FIRST_LIVE_DRAW=420126565
+FRAME_COMMIT_CALLBACK_RECEIVED=UNOBSERVED
+RETENTION
+eventsRecorded=1452
+eventsRetained=281
+eventsEvicted=945
+eventsCoalesced=0
+exportTruncated=true
+omittedEventLines=281
+omittedAttemptIds=6,7
+omittedSeqs=1128-1130,1132-1137,1139-1145,1147-1151,1153-1168,1171-1177,1179,1181-1183,1185-1186,1189-1190,1192-1203,1209-1214,1216-1220,1222-1228,1230-1234,1236-1242,1244-1248,1250-1255,1257-1263,1265-1269,1271-1276,1278-1284,1286-1290,1292-1297,1299-1305,1307-1311,1313-1318,1320-1325,1327-1332,1334-1339,1341-1346,1348-1353,1355-1360,1362-1367,1369-1374,1376-1381,1383-1443,1445-1450,1452
+exportBytes=35850
+recoveredFromDisk=false
+hiddenNoopCount=146
+queuedForPersistenceSeq=1452
+lastPersistedSeq=0
+unflushedTailMayBeMissing=true
+DIAGNOSTIC_COST
+diagnosticReductionThread=dedicatedWorker
+captureLockMeasurementOwner=diagnosticConsumer
+captureLockWaitNs=6598878
+captureLockHeldNs=2079194697
+diagnosticProducerTotalNs=157321610
+diagnosticProducerMaxNs=9705154
+legacyDiagnosticProducerTotalNs=22103855
+legacyWriteCount=20
+checkpointCount=2
+diagnosticDroppedRecords=226
+diagnosticQueueOverflow=0
+diagnosticConsumerFailures=0
+ATTEMPT_SUMMARIES
+attemptId=1 wakeSource=display wakeCycleStartedAt=420125908 screenOnReceivedAt=420125955 presentationMode=ORB session=1 wake=3
+firstInspectionRequestId=3 showingInspectionRequestId=4 requestsReceived=39 requestsReplaced=23 inspectionsStarted=15 inspectionsApplied=14 inspectionsRejected=1 staleInspectionCount=1
+retries=scheduled:2,fired:0,cancelled:2,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+awaiting=unknownWhileHidden:4,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:3,pendingRejectedAfterUnknown:1,visibleWithdrawalCount:1,retrySuppressedForPendingWork:2,retryBudgetExhaustedWhileAwaiting:0
+showOperationId=2 showDecisionAt=420126239 addBeginAt=420126255 addReturnAt=420126330 bootstrapDrawAt=420126399 bootstrapCommitCallbackAt=420126542 livePromotedAt=420126542 firstRootDrawAt=420126397 firstShaderDrawAt=420126565 firstCurrentMaterialDrawAt=420126565 firstLiveDrawAt=420126565 frameCommitCallbackAt=NO_FRAME_COMMIT_OBSERVED
+summaryShowSelection=earliestLiveElseRootElseAttach cycleFirstRootShowOp=2 cycleFirstShaderShowOp=2 cycleFirstLiveShowOp=2
+cycleToFirstRootDrawMs=489 cycleToFirstShaderDrawMs=657 cycleToFirstLiveDrawMs=657 screenOnToFirstRootDrawMs=442 screenOnToFirstShaderDrawMs=610 screenOnToFirstLiveDrawMs=610 wakeCallbackToFirstRootDrawMs=489 wakeCallbackToFirstShaderDrawMs=657
+wakeToFirstInspectionStartMs=3 wakeToFirstEligibleInspectionStartMs=3 wakeToShowingInspectionStartMs=223 latestPendingQueueMs=105
+queueMs=105 inspectionTotalMs=54 windowsReadMs=2 treeScanMs=43 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=30 mainEntryToDecisionMs=24 mainApplyQueueMs=30 decisionToAddBeginMs=16
+windowReader=strategy:ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW,prefetch:36,cacheEnabled:true,freshness:MISSING_FRESHNESS_EVIDENCE,cacheClear:cleared:MISSING_FRESHNESS_EVIDENCE,activeCandidate:1907,returnedRoot:1907,activeAccepted:true,fallback:NA,getWindows:2,activeRootCalls:1,activeRootTotal:42,perWindowRootCalls:0,perWindowRootTotal:0,rootTotal:0,rootMax:0,childTotal:0,childMax:0,local:1
+showDecisionToAddViewBeginMs=16 windowManagerAddViewCallMs=75 addViewReturnToBootstrapDrawMs=69 bootstrapDrawToCommitCallbackMs=143 bootstrapCommitToLivePromotionMs=0 livePromotionToFirstLiveDrawMs=23 addViewReturnToFirstRootDrawMs=67 liveFrameCommitCallbackMs=NA(notObservedForLiveShader)
+FIRST_INSPECTION req=3 trigger=display eventTime=NA queued=420125911 started=420125911 finished=420126091 diagnosticPrepared=420126091 handoff=420126091 mainApply=420126110 authorityAtStart=true visibilityEpochAtRequest=1 visibilityEpochAtApply=1 pendingAtApply=4 classification=HIDDEN_UNKNOWN reason=ROOT_UNAVAILABLE markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=true walkTruncated=false visited=23 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY fallback=NA activeRootMs=145 perWindowRootMs=0 childCalls=22 childMs=0 localMs=13 rejected=NA followup=CONTINUE_PENDING
+SHOWING_INSPECTION req=4 trigger=display eventTime=NA queued=420126026 started=420126131 finished=420126185 diagnosticPrepared=420126185 handoff=420126185 mainApply=420126215 authorityAtStart=true visibilityEpochAtRequest=1 visibilityEpochAtApply=1 pendingAtApply=NA classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false visited=39 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=MISSING_FRESHNESS_EVIDENCE fallback=NA activeRootMs=42 perWindowRootMs=0 childCalls=38 childMs=0 localMs=1 rejected=NA followup=NA
+ACTUAL_WITHDRAWAL_INSPECTION req=29 trigger=window eventTime=420127395 queued=420127530 started=420127542 finished=420127749 diagnosticPrepared=420127749 handoff=420127749 mainApply=420127831 authorityAtStart=true visibilityEpochAtRequest=1 visibilityEpochAtApply=2 pendingAtApply=32 classification=HIDDEN_UNKNOWN reason=ROOT_UNAVAILABLE markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=true walkTruncated=false visited=40 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT fallback=NA activeRootMs=90 perWindowRootMs=88 childCalls=39 childMs=1 localMs=12 rejected=NA followup=CONTINUE_PENDING
+actualWithdrawalHideOp=3 actualHideAttachedBefore=true actualHideTriggerAt=420127529 actualHideDecisionAt=420127833 actualLocalHideAppliedAt=420127833 actualRemoveViewBeginAt=420127834 actualRemoveViewReturnAt=420127868
+triggerToLocalHideMs=304 triggerToRemoveReturnMs=339 hideDecisionToLocalHideMs=0 removeViewCallMs=34
+hideSignalToDecisionMs=304 hideSignalToRemoveReturnMs=339
+terminalCleanupHideOp=4 terminalCleanupAttachedBefore=false terminalCleanupDecisionAt=420128070
+causalSpineComplete=true causalSpineEvents=26 causalSpineIndependentOfRawRing=true
+firstRootDrawObserved=true firstRootDrawStatus=OBSERVED firstShaderDrawObserved=true firstShaderDrawStatus=OBSERVED
+attemptId=5 wakeSource=display wakeCycleStartedAt=420140101 screenOnReceivedAt=420140139 presentationMode=ORB session=1 wake=11
+firstInspectionRequestId=169 showingInspectionRequestId=172 requestsReceived=32 requestsReplaced=18 inspectionsStarted=14 inspectionsApplied=14 inspectionsRejected=0 staleInspectionCount=0
+retries=scheduled:3,fired:1,cancelled:2,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+awaiting=unknownWhileHidden:6,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:4,pendingRejectedAfterUnknown:1,visibleWithdrawalCount:1,retrySuppressedForPendingWork:3,retryBudgetExhaustedWhileAwaiting:0
+showOperationId=16 showDecisionAt=420140393 addBeginAt=420140394 addReturnAt=420140409 bootstrapDrawAt=NO_BOOTSTRAP_DRAW_OBSERVED bootstrapCommitCallbackAt=NO_BOOTSTRAP_COMMIT_OBSERVED livePromotedAt=NO_LIVE_PROMOTION_OBSERVED firstRootDrawAt=420140442 firstShaderDrawAt=420140443 firstCurrentMaterialDrawAt=420140443 firstLiveDrawAt=420140443 frameCommitCallbackAt=NO_FRAME_COMMIT_OBSERVED
+summaryShowSelection=earliestLiveElseRootElseAttach cycleFirstRootShowOp=16 cycleFirstShaderShowOp=16 cycleFirstLiveShowOp=16
+cycleToFirstRootDrawMs=341 cycleToFirstShaderDrawMs=342 cycleToFirstLiveDrawMs=342 screenOnToFirstRootDrawMs=303 screenOnToFirstShaderDrawMs=304 screenOnToFirstLiveDrawMs=304 wakeCallbackToFirstRootDrawMs=341 wakeCallbackToFirstShaderDrawMs=342
+wakeToFirstInspectionStartMs=7 wakeToFirstEligibleInspectionStartMs=7 wakeToShowingInspectionStartMs=210 latestPendingQueueMs=8
+queueMs=8 inspectionTotalMs=80 windowsReadMs=1 treeScanMs=74 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=0 mainEntryToDecisionMs=2 mainApplyQueueMs=0 decisionToAddBeginMs=1
+windowReader=strategy:ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW,prefetch:36,cacheEnabled:true,freshness:FRAMEWORK_EVENT,cacheClear:notRequiredFrameworkManaged,activeCandidate:1907,returnedRoot:1907,activeAccepted:true,fallback:NA,getWindows:1,activeRootCalls:1,activeRootTotal:71,perWindowRootCalls:0,perWindowRootTotal:0,rootTotal:0,rootMax:0,childTotal:0,childMax:0,local:3
+showDecisionToAddViewBeginMs=1 windowManagerAddViewCallMs=15 addViewReturnToBootstrapDrawMs=NA(missingEndpoint) bootstrapDrawToCommitCallbackMs=NA(missingEndpoint) bootstrapCommitToLivePromotionMs=NA(missingEndpoint) livePromotionToFirstLiveDrawMs=NA(missingEndpoint) addViewReturnToFirstRootDrawMs=33 liveFrameCommitCallbackMs=NA(notObservedForLiveShader)
+FIRST_INSPECTION req=169 trigger=display eventTime=NA queued=420140107 started=420140108 finished=420140271 diagnosticPrepared=420140271 handoff=420140271 mainApply=420140308 authorityAtStart=true visibilityEpochAtRequest=10 visibilityEpochAtApply=10 pendingAtApply=172 classification=HIDDEN_UNKNOWN reason=NO_MAIN_MARKER markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false visited=15 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY fallback=NA activeRootMs=151 perWindowRootMs=0 childCalls=14 childMs=0 localMs=5 rejected=NA followup=CONTINUE_PENDING
+SHOWING_INSPECTION req=172 trigger=window eventTime=420140241 queued=420140303 started=420140311 finished=420140391 diagnosticPrepared=420140391 handoff=420140391 mainApply=420140391 authorityAtStart=true visibilityEpochAtRequest=10 visibilityEpochAtApply=10 pendingAtApply=176 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false visited=40 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT fallback=NA activeRootMs=71 perWindowRootMs=0 childCalls=39 childMs=0 localMs=3 rejected=NA followup=NA
+ACTUAL_WITHDRAWAL_INSPECTION req=190 trigger=window eventTime=420141090 queued=420141101 started=420141117 finished=420141211 diagnosticPrepared=420141211 handoff=420141211 mainApply=420141270 authorityAtStart=true visibilityEpochAtRequest=10 visibilityEpochAtApply=11 pendingAtApply=193 classification=HIDDEN_UNKNOWN reason=ROOT_UNAVAILABLE markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=true walkTruncated=false visited=41 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT fallback=NA activeRootMs=84 perWindowRootMs=1 childCalls=40 childMs=2 localMs=2 rejected=NA followup=CONTINUE_PENDING
+actualWithdrawalHideOp=17 actualHideAttachedBefore=true actualHideTriggerAt=420141101 actualHideDecisionAt=420141271 actualLocalHideAppliedAt=420141272 actualRemoveViewBeginAt=420141272 actualRemoveViewReturnAt=420141282
+triggerToLocalHideMs=171 triggerToRemoveReturnMs=181 hideDecisionToLocalHideMs=1 removeViewCallMs=10
+hideSignalToDecisionMs=170 hideSignalToRemoveReturnMs=181
+terminalCleanupHideOp=18 terminalCleanupAttachedBefore=false terminalCleanupDecisionAt=420141478
+causalSpineComplete=true causalSpineEvents=23 causalSpineIndependentOfRawRing=true
+firstRootDrawObserved=true firstRootDrawStatus=OBSERVED firstShaderDrawObserved=true firstShaderDrawStatus=OBSERVED
+attemptId=6 wakeSource=display wakeCycleStartedAt=420146049 screenOnReceivedAt=420146070 presentationMode=ORB session=1 wake=13
+firstInspectionRequestId=201 showingInspectionRequestId=204 requestsReceived=36 requestsReplaced=14 inspectionsStarted=22 inspectionsApplied=21 inspectionsRejected=1 staleInspectionCount=1
+retries=scheduled:0,fired:0,cancelled:0,pending:0 attachCount=2 detachCount=2 finalState=DETACHED
+awaiting=unknownWhileHidden:2,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:3,pendingRejectedAfterUnknown:1,visibleWithdrawalCount:1,retrySuppressedForPendingWork:2,retryBudgetExhaustedWhileAwaiting:0
+showOperationId=19 showDecisionAt=420146359 addBeginAt=420146360 addReturnAt=420146378 bootstrapDrawAt=NO_BOOTSTRAP_DRAW_OBSERVED bootstrapCommitCallbackAt=NO_BOOTSTRAP_COMMIT_OBSERVED livePromotedAt=NO_LIVE_PROMOTION_OBSERVED firstRootDrawAt=420146402 firstShaderDrawAt=420146403 firstCurrentMaterialDrawAt=420146403 firstLiveDrawAt=420146403 frameCommitCallbackAt=NO_FRAME_COMMIT_OBSERVED
+summaryShowSelection=earliestLiveElseRootElseAttach cycleFirstRootShowOp=19 cycleFirstShaderShowOp=19 cycleFirstLiveShowOp=19
+cycleToFirstRootDrawMs=353 cycleToFirstShaderDrawMs=354 cycleToFirstLiveDrawMs=354 screenOnToFirstRootDrawMs=332 screenOnToFirstShaderDrawMs=333 screenOnToFirstLiveDrawMs=333 wakeCallbackToFirstRootDrawMs=353 wakeCallbackToFirstShaderDrawMs=354
+wakeToFirstInspectionStartMs=11 wakeToFirstEligibleInspectionStartMs=11 wakeToShowingInspectionStartMs=228 latestPendingQueueMs=32
+queueMs=32 inspectionTotalMs=79 windowsReadMs=1 treeScanMs=76 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=1 mainEntryToDecisionMs=2 mainApplyQueueMs=1 decisionToAddBeginMs=1
+windowReader=strategy:ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW,prefetch:36,cacheEnabled:true,freshness:FRAMEWORK_EVENT,cacheClear:notRequiredFrameworkManaged,activeCandidate:1907,returnedRoot:1907,activeAccepted:true,fallback:NA,getWindows:1,activeRootCalls:1,activeRootTotal:75,perWindowRootCalls:0,perWindowRootTotal:0,rootTotal:0,rootMax:0,childTotal:0,childMax:0,local:1
+showDecisionToAddViewBeginMs=1 windowManagerAddViewCallMs=18 addViewReturnToBootstrapDrawMs=NA(missingEndpoint) bootstrapDrawToCommitCallbackMs=NA(missingEndpoint) bootstrapCommitToLivePromotionMs=NA(missingEndpoint) livePromotionToFirstLiveDrawMs=NA(missingEndpoint) addViewReturnToFirstRootDrawMs=24 liveFrameCommitCallbackMs=NA(notObservedForLiveShader)
+FIRST_INSPECTION req=201 trigger=display eventTime=NA queued=420146057 started=420146060 finished=420146273 diagnosticPrepared=420146273 handoff=420146273 mainApply=420146274 authorityAtStart=true visibilityEpochAtRequest=12 visibilityEpochAtApply=12 pendingAtApply=204 classification=HIDDEN_UNKNOWN reason=NO_MAIN_MARKER markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false visited=15 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY fallback=NA activeRootMs=202 perWindowRootMs=0 childCalls=14 childMs=0 localMs=1 rejected=NA followup=CONTINUE_PENDING
+SHOWING_INSPECTION req=204 trigger=window eventTime=420146218 queued=420146245 started=420146277 finished=420146356 diagnosticPrepared=420146356 handoff=420146356 mainApply=420146357 authorityAtStart=true visibilityEpochAtRequest=12 visibilityEpochAtApply=12 pendingAtApply=208 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false visited=40 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT fallback=NA activeRootMs=75 perWindowRootMs=0 childCalls=39 childMs=0 localMs=1 rejected=NA followup=NA
+ACTUAL_WITHDRAWAL_INSPECTION req=217 trigger=window eventTime=420146736 queued=420146757 started=420146802 finished=420146847 diagnosticPrepared=420146847 handoff=420146847 mainApply=420146853 authorityAtStart=true visibilityEpochAtRequest=12 visibilityEpochAtApply=13 pendingAtApply=220 classification=HIDDEN_UNKNOWN reason=WALK_TRUNCATED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=true visited=43 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT fallback=NA activeRootMs=23 perWindowRootMs=9 childCalls=42 childMs=4 localMs=4 rejected=NA followup=CONTINUE_PENDING
+actualWithdrawalHideOp=20 actualHideAttachedBefore=true actualHideTriggerAt=420146751 actualHideDecisionAt=420146857 actualLocalHideAppliedAt=420146858 actualRemoveViewBeginAt=420146858 actualRemoveViewReturnAt=420146877
+triggerToLocalHideMs=107 triggerToRemoveReturnMs=126 hideDecisionToLocalHideMs=1 removeViewCallMs=19
+hideSignalToDecisionMs=106 hideSignalToRemoveReturnMs=126
+terminalCleanupHideOp=22 terminalCleanupAttachedBefore=true terminalCleanupDecisionAt=420147867
+EPISODE showOp=19 attach=7 req=204 decision=420146359 add=420146360/420146378 root=420146402 shader=420146403 live=420146403 withdrawal=20 localHide=420146858 removeReturn=420146877
+EPISODE showOp=21 attach=8 req=221 decision=420146991 add=420146993/420147010 root=NO_DRAW_OBSERVED shader=NO_DRAW_OBSERVED live=NO_DRAW_OBSERVED withdrawal=22 localHide=420147870 removeReturn=420147886
+causalSpineComplete=true causalSpineEvents=29 causalSpineIndependentOfRawRing=true
+firstRootDrawObserved=true firstRootDrawStatus=OBSERVED firstShaderDrawObserved=true firstShaderDrawStatus=OBSERVED
+attemptId=7 wakeSource=accessibility wakeCycleStartedAt=420148491 screenOnReceivedAt=420148548 presentationMode=ORB session=1 wake=15
+firstInspectionRequestId=237 showingInspectionRequestId=237 requestsReceived=44 requestsReplaced=10 inspectionsStarted=34 inspectionsApplied=33 inspectionsRejected=0 staleInspectionCount=0
+retries=scheduled:2,fired:1,cancelled:1,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+awaiting=unknownWhileHidden:4,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:3,pendingRejectedAfterUnknown:1,visibleWithdrawalCount:1,retrySuppressedForPendingWork:2,retryBudgetExhaustedWhileAwaiting:0
+showOperationId=23 showDecisionAt=420148595 addBeginAt=420148597 addReturnAt=420148614 bootstrapDrawAt=NO_BOOTSTRAP_DRAW_OBSERVED bootstrapCommitCallbackAt=NO_BOOTSTRAP_COMMIT_OBSERVED livePromotedAt=NO_LIVE_PROMOTION_OBSERVED firstRootDrawAt=420148641 firstShaderDrawAt=420148641 firstCurrentMaterialDrawAt=420148641 firstLiveDrawAt=420148641 frameCommitCallbackAt=NO_FRAME_COMMIT_OBSERVED
+summaryShowSelection=earliestLiveElseRootElseAttach cycleFirstRootShowOp=23 cycleFirstShaderShowOp=23 cycleFirstLiveShowOp=23
+cycleToFirstRootDrawMs=150 cycleToFirstShaderDrawMs=150 cycleToFirstLiveDrawMs=150 screenOnToFirstRootDrawMs=93 screenOnToFirstShaderDrawMs=93 screenOnToFirstLiveDrawMs=93 wakeCallbackToFirstRootDrawMs=150 wakeCallbackToFirstShaderDrawMs=150
+wakeToFirstInspectionStartMs=4 wakeToFirstEligibleInspectionStartMs=4 wakeToShowingInspectionStartMs=4 latestPendingQueueMs=2
+queueMs=2 inspectionTotalMs=97 windowsReadMs=8 treeScanMs=79 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=0 mainEntryToDecisionMs=3 mainApplyQueueMs=0 decisionToAddBeginMs=2
+windowReader=strategy:ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW,prefetch:36,cacheEnabled:true,freshness:LIFECYCLE_BOUNDARY,cacheClear:cleared:LIFECYCLE_BOUNDARY,activeCandidate:1907,returnedRoot:1907,activeAccepted:true,fallback:NA,getWindows:8,activeRootCalls:1,activeRootTotal:54,perWindowRootCalls:1,perWindowRootTotal:11,rootTotal:11,rootMax:11,childTotal:10,childMax:10,local:4
+showDecisionToAddViewBeginMs=2 windowManagerAddViewCallMs=17 addViewReturnToBootstrapDrawMs=NA(missingEndpoint) bootstrapDrawToCommitCallbackMs=NA(missingEndpoint) bootstrapCommitToLivePromotionMs=NA(missingEndpoint) livePromotionToFirstLiveDrawMs=NA(missingEndpoint) addViewReturnToFirstRootDrawMs=27 liveFrameCommitCallbackMs=NA(notObservedForLiveShader)
+FIRST_INSPECTION req=237 trigger=window eventTime=420148482 queued=420148493 started=420148495 finished=420148592 diagnosticPrepared=420148592 handoff=420148592 mainApply=420148592 authorityAtStart=true visibilityEpochAtRequest=14 visibilityEpochAtApply=14 pendingAtApply=240 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false visited=42 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY fallback=NA activeRootMs=54 perWindowRootMs=11 childCalls=40 childMs=10 localMs=4 rejected=NA followup=NA
+SHOWING_INSPECTION req=237 trigger=window eventTime=420148482 queued=420148493 started=420148495 finished=420148592 diagnosticPrepared=420148592 handoff=420148592 mainApply=420148592 authorityAtStart=true visibilityEpochAtRequest=14 visibilityEpochAtApply=14 pendingAtApply=240 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false visited=42 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY fallback=NA activeRootMs=54 perWindowRootMs=11 childCalls=40 childMs=10 localMs=4 rejected=NA followup=NA
+ACTUAL_WITHDRAWAL_INSPECTION req=268 trigger=window eventTime=420151064 queued=420151103 started=420151104 finished=420151162 diagnosticPrepared=420151162 handoff=420151162 mainApply=420151219 authorityAtStart=true visibilityEpochAtRequest=14 visibilityEpochAtApply=15 pendingAtApply=270 classification=HIDDEN_UNKNOWN reason=ROOT_UNAVAILABLE markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=true walkTruncated=false visited=41 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT fallback=NA activeRootMs=44 perWindowRootMs=2 childCalls=40 childMs=1 localMs=4 rejected=NA followup=CONTINUE_PENDING
+actualWithdrawalHideOp=24 actualHideAttachedBefore=true actualHideTriggerAt=420151103 actualHideDecisionAt=420151222 actualLocalHideAppliedAt=420151222 actualRemoveViewBeginAt=420151222 actualRemoveViewReturnAt=420151231
+triggerToLocalHideMs=119 triggerToRemoveReturnMs=128 hideDecisionToLocalHideMs=0 removeViewCallMs=9
+hideSignalToDecisionMs=119 hideSignalToRemoveReturnMs=128
+terminalCleanupHideOp=25 terminalCleanupAttachedBefore=false terminalCleanupDecisionAt=420151418
+causalSpineComplete=true causalSpineEvents=23 causalSpineIndependentOfRawRing=true
+firstRootDrawObserved=true firstRootDrawStatus=OBSERVED firstShaderDrawObserved=true firstShaderDrawStatus=OBSERVED
+CAUSAL_SPINES
+attemptId=1 causalSpineComplete=true causalEvents=26
+seq=6 up=420125908 stage=WAKE_ATTEMPT reason=begin
+seq=7 up=420125908 stage=WAKE_CYCLE_STARTED reason=display
+seq=8 up=420125911 req=3 stage=INSPECTION_QUEUED reason=display
+seq=9 up=420125911 req=3 stage=INSPECTION_STARTED reason=display queueMs=0
+seq=10 up=420125955 stage=SCREEN_ON_RECEIVED reason=joined:display
+seq=13 up=420126130 req=3 stage=AWAITING_MAIN_SURFACE reason=ROOT_UNAVAILABLE followupAction=CONTINUE_PENDING pendingRequestId=4 visibilityEpochBefore=1 visibilityEpochAfter=1
+seq=16 up=420126110 req=3 stage=INSPECTION_MAIN_APPLY_STARTED reason=display diagnosticPreparationFinishedAtUptimeMs=420126091 mainHandoffRequestedAtUptimeMs=420126091 mainApplyEnteredAtUptimeMs=420126110 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=19 mainEntryToDecisionMs=19
+seq=17 up=420126091 req=3 stage=INSPECTION_FINISHED reason=ROOT_UNAVAILABLE inspectionTotalMs=180 windowsReadMs=11 treeScanMs=158 visitedNodeCount=23 rootUnavailable=true walkTruncated=false surfaceClassification=HIDDEN_UNKNOWN surfaceMarkers=main:2,credential:0,shade:0,occlusion:0 abortedStale=false
+seq=18 up=420126091 req=3 stage=INSPECTION_MAIN_APPLY_POSTED reason=display diagnosticPreparationFinishedAtUptimeMs=420126091 mainHandoffRequestedAtUptimeMs=420126091
+seq=20 up=420126239 req=4 attach=1 showOp=2 stage=SHOW_FOR_ATTACH reason=loading:display presentationMode=ORB rootWasPrepared=true profileWasDecoded=true
+seq=39 up=420126255 req=4 attach=1 showOp=2 stage=ADD_VIEW_BEGIN reason=windowManager
+seq=42 up=420126330 req=4 attach=1 showOp=2 stage=ADD_VIEW_RETURN reason=success
+seq=44 up=420126397 req=4 attach=1 showOp=2 stage=FIRST_ROOT_DRAW reason=observed
+seq=45 up=420126399 req=4 attach=1 showOp=2 stage=BOOTSTRAP_DRAW reason=paletteFallbackNotPhysicalPresentation
+seq=64 up=420126542 req=4 attach=1 showOp=2 stage=MATERIAL_LIVE_PROMOTED reason=sameRetainedAttachment
+seq=65 up=420126542 req=4 attach=1 showOp=2 stage=BOOTSTRAP_COMMIT_CALLBACK_RECEIVED reason=rendererCommittedNotPhysicalPresentation
+seq=66 up=420126565 req=4 attach=1 showOp=2 stage=FIRST_SHADER_DRAW reason=observed
+seq=67 up=420126565 req=4 attach=1 showOp=2 stage=FIRST_CURRENT_MATERIAL_DRAW reason=observed
+seq=68 up=420126565 req=4 attach=1 showOp=2 stage=FIRST_LIVE_DRAW reason=observed
+seq=123 up=420127833 req=29 attach=1 hideOp=3 stage=HIDE_DECIDED reason=HIDDEN_UNKNOWN:ROOT_UNAVAILABLE triggerReceivedUptimeMs=420127529 terminalWake=false visibilityEpochBefore=1
+seq=125 up=420127868 req=29 attach=1 hideOp=3 stage=HIDE_COMPLETED reason=HIDDEN_UNKNOWN:ROOT_UNAVAILABLE attachedAfter=false
+seq=135 up=420127833 req=29 attach=1 hideOp=3 stage=LOCAL_HIDE_APPLIED reason=invisible
+seq=136 up=420127834 req=29 attach=1 hideOp=3 stage=REMOVE_VIEW_BEGIN reason=windowManager
+seq=137 up=420127868 req=29 attach=1 hideOp=3 stage=REMOVE_VIEW_RETURN reason=success
+seq=169 up=420128070 attach=1 hideOp=4 stage=HIDE_DECIDED reason=accessibility triggerReceivedUptimeMs=420128068 terminalWake=true visibilityEpochBefore=2
+seq=171 up=420128070 attach=1 hideOp=4 stage=HIDE_COMPLETED reason=accessibility attachedAfter=false
+showingInspection req=4 queued=420126026 started=420126131 finished=420126185 mainApply=420126215 authorityAtStart=true
+attemptId=5 causalSpineComplete=true causalEvents=23
+seq=797 up=420140101 stage=WAKE_ATTEMPT reason=begin
+seq=798 up=420140101 stage=WAKE_CYCLE_STARTED reason=display
+seq=799 up=420140107 req=169 stage=INSPECTION_QUEUED reason=display
+seq=800 up=420140108 req=169 stage=INSPECTION_STARTED reason=display queueMs=1
+seq=801 up=420140139 stage=SCREEN_ON_RECEIVED reason=joined:display
+seq=806 up=420140309 req=169 stage=AWAITING_MAIN_SURFACE reason=NO_MAIN_MARKER followupAction=CONTINUE_PENDING pendingRequestId=172 visibilityEpochBefore=10 visibilityEpochAfter=10
+seq=809 up=420140308 req=169 stage=INSPECTION_MAIN_APPLY_STARTED reason=display diagnosticPreparationFinishedAtUptimeMs=420140271 mainHandoffRequestedAtUptimeMs=420140271 mainApplyEnteredAtUptimeMs=420140308 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=37 mainEntryToDecisionMs=1
+seq=810 up=420140271 req=169 stage=INSPECTION_FINISHED reason=NO_MAIN_MARKER inspectionTotalMs=163 windowsReadMs=2 treeScanMs=156 visitedNodeCount=15 rootUnavailable=false walkTruncated=false surfaceClassification=HIDDEN_UNKNOWN surfaceMarkers=main:0,credential:0,shade:0,occlusion:0 abortedStale=false
+seq=811 up=420140271 req=169 stage=INSPECTION_MAIN_APPLY_POSTED reason=display diagnosticPreparationFinishedAtUptimeMs=420140271 mainHandoffRequestedAtUptimeMs=420140271
+seq=816 up=420140393 req=172 attach=6 showOp=16 stage=SHOW_FOR_ATTACH reason=loading:window presentationMode=ORB rootWasPrepared=true profileWasDecoded=true
+seq=827 up=420140394 req=172 attach=6 showOp=16 stage=ADD_VIEW_BEGIN reason=windowManager
+seq=830 up=420140409 req=172 attach=6 showOp=16 stage=ADD_VIEW_RETURN reason=success
+seq=832 up=420140442 req=172 attach=6 showOp=16 stage=FIRST_ROOT_DRAW reason=observed
+seq=833 up=420140443 req=172 attach=6 showOp=16 stage=FIRST_SHADER_DRAW reason=observed
+seq=834 up=420140443 req=172 attach=6 showOp=16 stage=FIRST_CURRENT_MATERIAL_DRAW reason=observed
+seq=835 up=420140443 req=172 attach=6 showOp=16 stage=FIRST_LIVE_DRAW reason=observed
+seq=891 up=420141271 req=190 attach=6 hideOp=17 stage=HIDE_DECIDED reason=HIDDEN_UNKNOWN:ROOT_UNAVAILABLE triggerReceivedUptimeMs=420141101 terminalWake=false visibilityEpochBefore=10
+seq=893 up=420141282 req=190 attach=6 hideOp=17 stage=HIDE_COMPLETED reason=HIDDEN_UNKNOWN:ROOT_UNAVAILABLE attachedAfter=false
+seq=901 up=420141272 req=190 attach=6 hideOp=17 stage=LOCAL_HIDE_APPLIED reason=invisible
+seq=902 up=420141272 req=190 attach=6 hideOp=17 stage=REMOVE_VIEW_BEGIN reason=windowManager
+seq=903 up=420141282 req=190 attach=6 hideOp=17 stage=REMOVE_VIEW_RETURN reason=success
+seq=949 up=420141478 attach=6 hideOp=18 stage=HIDE_DECIDED reason=retryGate triggerReceivedUptimeMs=420141477 terminalWake=true visibilityEpochBefore=11
+seq=951 up=420141480 attach=6 hideOp=18 stage=HIDE_COMPLETED reason=retryGate attachedAfter=false
+showingInspection req=172 queued=420140303 started=420140311 finished=420140391 mainApply=420140391 authorityAtStart=true
+attemptId=6 causalSpineComplete=true causalEvents=29
+seq=957 up=420146049 stage=WAKE_ATTEMPT reason=begin
+seq=958 up=420146049 stage=WAKE_CYCLE_STARTED reason=display
+seq=959 up=420146057 req=201 stage=INSPECTION_QUEUED reason=display
+seq=960 up=420146060 req=201 stage=INSPECTION_STARTED reason=display queueMs=3
+seq=961 up=420146070 stage=SCREEN_ON_RECEIVED reason=joined:display
+seq=966 up=420146276 req=201 stage=AWAITING_MAIN_SURFACE reason=NO_MAIN_MARKER followupAction=CONTINUE_PENDING pendingRequestId=204 visibilityEpochBefore=12 visibilityEpochAfter=12
+seq=969 up=420146274 req=201 stage=INSPECTION_MAIN_APPLY_STARTED reason=display diagnosticPreparationFinishedAtUptimeMs=420146273 mainHandoffRequestedAtUptimeMs=420146273 mainApplyEnteredAtUptimeMs=420146274 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=1 mainEntryToDecisionMs=1
+seq=970 up=420146273 req=201 stage=INSPECTION_FINISHED reason=NO_MAIN_MARKER inspectionTotalMs=213 windowsReadMs=1 treeScanMs=203 visitedNodeCount=15 rootUnavailable=false walkTruncated=false surfaceClassification=HIDDEN_UNKNOWN surfaceMarkers=main:0,credential:0,shade:0,occlusion:0 abortedStale=false
+seq=971 up=420146273 req=201 stage=INSPECTION_MAIN_APPLY_POSTED reason=display diagnosticPreparationFinishedAtUptimeMs=420146273 mainHandoffRequestedAtUptimeMs=420146273
+seq=976 up=420146359 req=204 attach=7 showOp=19 stage=SHOW_FOR_ATTACH reason=loading:window presentationMode=ORB rootWasPrepared=true profileWasDecoded=true
+seq=988 up=420146360 req=204 attach=7 showOp=19 stage=ADD_VIEW_BEGIN reason=windowManager
+seq=989 up=420146378 req=204 attach=7 showOp=19 stage=ADD_VIEW_RETURN reason=success
+seq=991 up=420146402 req=204 attach=7 showOp=19 stage=FIRST_ROOT_DRAW reason=observed
+seq=992 up=420146403 req=204 attach=7 showOp=19 stage=FIRST_SHADER_DRAW reason=observed
+seq=993 up=420146403 req=204 attach=7 showOp=19 stage=FIRST_CURRENT_MATERIAL_DRAW reason=observed
+seq=994 up=420146403 req=204 attach=7 showOp=19 stage=FIRST_LIVE_DRAW reason=observed
+seq=1041 up=420146857 req=217 attach=7 hideOp=20 stage=HIDE_DECIDED reason=HIDDEN_UNKNOWN:WALK_TRUNCATED triggerReceivedUptimeMs=420146751 terminalWake=false visibilityEpochBefore=12
+seq=1043 up=420146877 req=217 attach=7 hideOp=20 stage=HIDE_COMPLETED reason=HIDDEN_UNKNOWN:WALK_TRUNCATED attachedAfter=false
+seq=1051 up=420146858 req=217 attach=7 hideOp=20 stage=LOCAL_HIDE_APPLIED reason=invisible
+seq=1052 up=420146858 req=217 attach=7 hideOp=20 stage=REMOVE_VIEW_BEGIN reason=windowManager
+seq=1053 up=420146877 req=217 attach=7 hideOp=20 stage=REMOVE_VIEW_RETURN reason=success
+seq=1063 up=420146991 req=221 attach=8 showOp=21 stage=SHOW_FOR_ATTACH reason=loading:window presentationMode=ORB rootWasPrepared=true profileWasDecoded=true
+seq=1072 up=420146993 req=221 attach=8 showOp=21 stage=ADD_VIEW_BEGIN reason=windowManager
+seq=1076 up=420147010 req=221 attach=8 showOp=21 stage=ADD_VIEW_RETURN reason=success
+seq=1159 up=420147867 req=236 attach=8 hideOp=22 stage=HIDE_DECIDED reason=inspection:window triggerReceivedUptimeMs=420147842 terminalWake=true visibilityEpochBefore=13
+seq=1161 up=420147886 req=236 attach=8 hideOp=22 stage=HIDE_COMPLETED reason=inspection:window attachedAfter=false
+seq=1166 up=420147870 req=236 attach=8 hideOp=22 stage=LOCAL_HIDE_APPLIED reason=invisible
+seq=1167 up=420147870 req=236 attach=8 hideOp=22 stage=REMOVE_VIEW_BEGIN reason=windowManager
+seq=1168 up=420147886 req=236 attach=8 hideOp=22 stage=REMOVE_VIEW_RETURN reason=success
+showingInspection req=204 queued=420146245 started=420146277 finished=420146356 mainApply=420146357 authorityAtStart=true
+attemptId=7 causalSpineComplete=true causalEvents=23
+seq=1170 up=420148491 stage=WAKE_ATTEMPT reason=begin
+seq=1171 up=420148491 stage=WAKE_CYCLE_STARTED reason=accessibility
+seq=1172 up=420148494 req=237 stage=INSPECTION_QUEUED reason=window
+seq=1173 up=420148495 req=237 stage=INSPECTION_STARTED reason=window queueMs=2
+seq=1175 up=420148548 stage=SCREEN_ON_RECEIVED reason=joined:accessibility
+seq=1177 up=420148595 req=237 attach=9 showOp=23 stage=SHOW_FOR_ATTACH reason=loading:window presentationMode=ORB rootWasPrepared=true profileWasDecoded=true
+seq=1182 up=420148592 req=237 stage=INSPECTION_MAIN_APPLY_STARTED reason=window diagnosticPreparationFinishedAtUptimeMs=420148592 mainHandoffRequestedAtUptimeMs=420148592 mainApplyEnteredAtUptimeMs=420148592 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=0 mainEntryToDecisionMs=1
+seq=1183 up=420148592 req=237 stage=INSPECTION_FINISHED reason=MAIN_CONFIRMED inspectionTotalMs=97 windowsReadMs=8 treeScanMs=79 visitedNodeCount=42 rootUnavailable=false walkTruncated=false surfaceClassification=SHOW_FULL surfaceMarkers=main:2,credential:0,shade:0,occlusion:0 abortedStale=false
+seq=1185 up=420148592 req=237 stage=INSPECTION_MAIN_APPLY_POSTED reason=window diagnosticPreparationFinishedAtUptimeMs=420148592 mainHandoffRequestedAtUptimeMs=420148592
+seq=1189 up=420148597 req=237 attach=9 showOp=23 stage=ADD_VIEW_BEGIN reason=windowManager
+seq=1190 up=420148614 req=237 attach=9 showOp=23 stage=ADD_VIEW_RETURN reason=success
+seq=1192 up=420148641 req=237 attach=9 showOp=23 stage=FIRST_ROOT_DRAW reason=observed
+seq=1193 up=420148641 req=237 attach=9 showOp=23 stage=FIRST_SHADER_DRAW reason=observed
+seq=1194 up=420148641 req=237 attach=9 showOp=23 stage=FIRST_CURRENT_MATERIAL_DRAW reason=observed
+seq=1195 up=420148641 req=237 attach=9 showOp=23 stage=FIRST_LIVE_DRAW reason=observed
+seq=1390 up=420151221 req=268 stage=AWAITING_MAIN_SURFACE reason=ROOT_UNAVAILABLE followupAction=CONTINUE_PENDING pendingRequestId=269 visibilityEpochBefore=14 visibilityEpochAfter=14
+seq=1391 up=420151222 req=268 attach=9 hideOp=24 stage=HIDE_DECIDED reason=HIDDEN_UNKNOWN:ROOT_UNAVAILABLE triggerReceivedUptimeMs=420151103 terminalWake=false visibilityEpochBefore=14
+seq=1393 up=420151231 req=268 attach=9 hideOp=24 stage=HIDE_COMPLETED reason=HIDDEN_UNKNOWN:ROOT_UNAVAILABLE attachedAfter=false
+seq=1401 up=420151222 req=268 attach=9 hideOp=24 stage=LOCAL_HIDE_APPLIED reason=invisible
+seq=1402 up=420151222 req=268 attach=9 hideOp=24 stage=REMOVE_VIEW_BEGIN reason=windowManager
+seq=1403 up=420151231 req=268 attach=9 hideOp=24 stage=REMOVE_VIEW_RETURN reason=success
+seq=1445 up=420151418 req=280 attach=9 hideOp=25 stage=HIDE_DECIDED reason=currentGate triggerReceivedUptimeMs=420151370 terminalWake=true visibilityEpochBefore=15
+seq=1447 up=420151418 req=280 attach=9 hideOp=25 stage=HIDE_COMPLETED reason=currentGate attachedAfter=false
+showingInspection req=237 queued=420148493 started=420148495 finished=420148592 mainApply=420148592 authorityAtStart=true
+EVENTS
+END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
+```
+
+</details>
