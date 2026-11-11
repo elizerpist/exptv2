@@ -903,9 +903,8 @@ internal class KeyguardOrbBufferRenderer(
                 // HardwareBufferRenderer's request owns the output colour
                 // space independently of the Window/View renderer.  Bind the
                 // same sRGB target used by Android's HardwareBufferRenderer
-                // CTS coverage before each synchronized RenderNode draw; an
-                // unspecified target left the retained RuntimeShader output
-                // frozen across otherwise distinct phase records on API 35.
+                // CTS coverage before each synchronized RenderNode draw so
+                // rendering and HardwareBuffer readback use one target.
                 slot.renderer.obtainRenderRequest()
                     .setColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
                     .draw(executor, Consumer { result ->

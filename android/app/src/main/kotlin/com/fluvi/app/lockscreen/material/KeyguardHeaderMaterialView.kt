@@ -918,6 +918,10 @@ internal class KeyguardHeaderShader(
         uniform2("uRasterSize", width.toFloat(), height.toFloat())
         runtimeShader.setFloatUniform("uOpacity", profile.opacity)
         runtimeShader.setFloatUniform("uPaletteSplit", profile.paletteSplitPercent / 100f)
+        // The profile decoder has already bound this stable ID to effectId.
+        // Without it AGSL's default zero selects staticEffect, even while the
+        // dynamic phase uniforms advance correctly.
+        runtimeShader.setFloatUniform("uEffect", profile.effectShaderId.toFloat())
         runtimeShader.setFloatUniform("uPulse", 0f)
         runtimeShader.setFloatUniform("uRenderQuality", 1f)
         val fallback = profile.colors.last()
