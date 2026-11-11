@@ -18,6 +18,7 @@ import android.view.Choreographer
 import android.view.SurfaceControl
 import android.view.View
 import androidx.annotation.RequiresApi
+import java.time.Duration
 import java.util.concurrent.Executor
 import java.util.function.Consumer
 import kotlin.math.min
@@ -151,6 +152,10 @@ internal class KeyguardOrbBufferRenderer(
         private var attachment: KeyguardOrbBufferAttachment? = null
         private var layer: SurfaceControl? = null
         private var layerLease: KeyguardOrbBufferLease? = null
+        /** A hidden child is not released until the worker has observed every
+         * exact old use become fence-safe. Transaction commit is explicitly
+         * not that signal. */
+        private val retiringLayers = mutableMapOf<KeyguardOrbBufferLease, SurfaceControl>()
         private var firstPublishedLease: KeyguardOrbBufferLease? = null
         /** A detached prewarm has real GPU output but no legal parent layer
          * yet. Retain at most one such frame; it is never a visibility grant. */
@@ -163,6 +168,7 @@ internal class KeyguardOrbBufferRenderer(
         private val worker = Worker(
             onFrameReady = ::onFrameReady,
             onFailure = ::onWorkerFailure,
+            onLeaseDrained = ::onLeaseDrained,
             barrier = barrier,
         )
 
@@ -216,9 +222,6 @@ internal class KeyguardOrbBufferRenderer(
             removeAttachmentListeners(oldAttachment)
             attachment = null
             hideLayer()
-            layer?.release()
-            layer = null
-            layerLease = null
             firstPublishedLease = null
             deferredReady?.let(worker::dropReady)
             deferredReady = null
@@ -239,7 +242,7 @@ internal class KeyguardOrbBufferRenderer(
                 attached = attachment != null,
                 layerVisible = layer != null && firstPublishedLease == layerLease,
                 framesProduced = workerSnapshot.produced,
-                framesPublished = framesPublished,
+                framesPublished = workerSnapshot.published,
                 framesDropped = workerSnapshot.dropped,
                 failures = failures + workerSnapshot.failures,
                 inFlight = workerSnapshot.inFlight,
@@ -337,7 +340,7 @@ internal class KeyguardOrbBufferRenderer(
                     .setPosition(existing, location[0].toFloat(), location[1].toFloat())
                     .apply()
             }
-            worker.setAttachment(spec.lease)
+            worker.setAttachment(spec.lease, requireNotNull(layer))
             deferredReady?.let { frame ->
                 if (frame.lease == spec.lease) {
                     deferredReady = null
@@ -355,8 +358,16 @@ internal class KeyguardOrbBufferRenderer(
 
         private fun hideLayer() {
             val child = layer ?: return
+            val lease = layerLease
+            if (lease != null) {
+                // This volatile revocation happens before the Main transaction
+                // so a worker that has just completed a buffer cannot obtain
+                // fresh show/reparent authority from an old lease.
+                worker.revokePublication(lease)
+                retiringLayers[lease] = child
+            }
             runCatching {
-                val release = SurfaceControl.Transaction()
+                SurfaceControl.Transaction()
                     // SurfaceControl's null-buffer form releases the last
                     // displayed buffer and invokes its release callback.  A
                     // visibility transaction alone may leave that
@@ -366,24 +377,26 @@ internal class KeyguardOrbBufferRenderer(
                     // to retire the worker-owned HardwareBuffer safely.
                     .setBuffer(child, null as HardwareBuffer?)
                     .setVisibility(child, false)
-                release.addTransactionCommittedListener(
-                    Executor { command -> mainHandler.post(command) },
-                    SurfaceControl.TransactionCommittedListener {
-                        // This late cleanup has no authority to show or
-                        // reparent a current layer. It only drops the already
-                        // hidden, exact old child after SurfaceFlinger has
-                        // accepted the null-buffer release.
-                        runCatching {
-                            SurfaceControl.Transaction().reparent(child, null).apply()
-                        }
-                        runCatching { child.release() }
-                    },
-                )
-                release.apply()
+                    .apply()
             }
+            // A transaction-committed callback would only establish that this
+            // transaction is ready to present. It is not permission to close
+            // a HardwareBuffer or this child. onLeaseDrained performs the
+            // eventual reparent/release after actual producer/release fences.
             firstPublishedLease = null
             layer = null
             layerLease = null
+        }
+
+        private fun onLeaseDrained(lease: KeyguardOrbBufferLease) {
+            mainHandler.post {
+                // A current layer can never be removed by an old callback:
+                // layers are indexed by the exact immutable lease.
+                retiringLayers.remove(lease)?.let { child ->
+                    runCatching { SurfaceControl.Transaction().reparent(child, null).apply() }
+                    runCatching { child.release() }
+                }
+            }
         }
 
         private fun onFrameReady(frame: ReadyFrame) {
@@ -427,7 +440,6 @@ internal class KeyguardOrbBufferRenderer(
                         // later unsynchronised parent-buffer submission.
                         // Continuous buffer updates below remain independent
                         // of ViewRoot traversal and Main invalidation.
-                        onFirstPublished(frame.lease, android.os.SystemClock.uptimeMillis())
                         val merged = active.root.rootSurfaceControl
                             ?.applyTransactionOnDraw(transaction) == true
                         if (merged) {
@@ -441,13 +453,18 @@ internal class KeyguardOrbBufferRenderer(
                     // The transaction copied the acquisition fence. Close the
                     // application handle only after submission, never before.
                     frame.fence?.close()
-                    worker.markCompositorOwned(frame.slotId)
-                    framesPublished += 1
+                    worker.markFirstPublished(frame)
                     if (firstCurrentPublication) {
                         firstPublishedLease = frame.lease
+                        framesPublished += 1
+                        // This reports queue/submission ownership only. It is
+                        // not a physical presentation or release-fence event.
+                        onFirstPublished(frame.lease, android.os.SystemClock.uptimeMillis())
                     }
             }.onFailure { error ->
-                frame.fence?.close()
+                // A failed first transaction did not submit this producer
+                // fence. dropReady keeps it owned until its render work is
+                // actually safe, rather than closing/reusing early.
                 worker.dropReady(frame)
                 failures += 1
                 onFailure(frame.lease, error)
@@ -468,6 +485,7 @@ internal class KeyguardOrbBufferRenderer(
     private class Worker(
         private val onFrameReady: (ReadyFrame) -> Unit,
         private val onFailure: (KeyguardOrbBufferLease, Throwable) -> Unit,
+        private val onLeaseDrained: (KeyguardOrbBufferLease) -> Unit,
         private val barrier: KeyguardOrbRenderBarrier,
     ) : Choreographer.FrameCallback {
         /**
@@ -478,22 +496,49 @@ internal class KeyguardOrbBufferRenderer(
          * hand-off resolves; otherwise a late release/drop callback can target
          * a dead worker and close a buffer the compositor still references.
          */
-        private enum class SlotState { FREE, RENDERING, READY_FOR_MAIN, COMPOSITOR_OWNED, RETIRED }
+        private enum class SlotState {
+            FREE,
+            RENDERING,
+            WAIT_RENDER_FENCE,
+            READY_FOR_MAIN,
+            PUBLISHED,
+            WAIT_RELEASE_FENCE,
+        }
         private data class Slot(
             val id: Long,
             val buffer: HardwareBuffer,
             val renderer: HardwareBufferRenderer,
             val node: RenderNode,
             var state: SlotState = SlotState.FREE,
+            /** Retirement revokes a lease; it is not an ownership state. */
+            var retired: Boolean = false,
+            var useGeneration: Long = 0L,
+            var lease: KeyguardOrbBufferLease? = null,
+        )
+
+        private data class PublicationTarget(
+            val lease: KeyguardOrbBufferLease,
+            val child: SurfaceControl,
+            @Volatile var active: Boolean = true,
         )
 
         private val thread = HandlerThread("fluvi-keyguard-orb-render").apply { start() }
         private val handler = Handler(thread.looper)
+        /** The renderer-control handler must remain able to retire/reconfigure
+         * while a release fence is outstanding. At most three fence records
+         * exist because the pool is globally fixed at three slots. */
+        private val fenceThread = HandlerThread("fluvi-keyguard-orb-fence").apply { start() }
+        private val fenceHandler = Handler(fenceThread.looper)
         private val executor = Executor { command -> handler.post(command) }
         private var choreographer: Choreographer? = null
         private var callbackPosted = false
         private var desired: KeyguardOrbBufferRenderSpec? = null
         private var attachedLease: KeyguardOrbBufferLease? = null
+        @Volatile private var publicationTarget: PublicationTarget? = null
+        private var firstLeaseSubmitted: KeyguardOrbBufferLease? = null
+        private var firstLeaseAwaitingMain: KeyguardOrbBufferLease? = null
+        private val retiringLeases = mutableSetOf<KeyguardOrbBufferLease>()
+        private val earlyReleaseFences = mutableMapOf<Pair<Long, Long>, SyncFence?>()
         private var shader: KeyguardHeaderShader? = null
         private var shaderProgramKey: String? = null
         private var previousShader: KeyguardHeaderShader? = null
@@ -505,6 +550,7 @@ internal class KeyguardOrbBufferRenderer(
         private var running = false
         private var disposed = false
         @Volatile private var produced = 0
+        @Volatile private var published = 0
         @Volatile private var dropped = 0
         @Volatile private var failures = 0
         @Volatile private var snapshotInFlight = 0
@@ -515,6 +561,7 @@ internal class KeyguardOrbBufferRenderer(
 
         data class Snapshot(
             val produced: Int,
+            val published: Int,
             val dropped: Int,
             val failures: Int,
             val inFlight: Int,
@@ -542,7 +589,11 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
-        fun setAttachment(lease: KeyguardOrbBufferLease) {
+        fun setAttachment(lease: KeyguardOrbBufferLease, child: SurfaceControl) {
+            // Main grants this exact existing child once. Subsequent worker
+            // transactions may only replace its buffer; they never change
+            // visibility or parenting.
+            publicationTarget = PublicationTarget(lease, child)
             handler.post {
                 if (disposed || desired?.lease != lease) return@post
                 if (attachedLease != lease) {
@@ -555,11 +606,28 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
+        fun revokePublication(lease: KeyguardOrbBufferLease) {
+            // Make the revocation visible to a renderer callback before its
+            // queued control-lane bookkeeping runs.
+            publicationTarget?.takeIf { it.lease == lease }?.active = false
+            handler.post {
+                retiringLeases += lease
+                if (attachedLease == lease) attachedLease = null
+                slots.filter { it.lease == lease && it.state != SlotState.FREE }.forEach {
+                    it.retired = true
+                }
+                maybeNotifyLeaseDrained(lease)
+                publishSlotSnapshot()
+            }
+        }
+
         fun retire(reason: String) {
             handler.post {
                 running = false
                 attachedLease = null
                 desired = null
+                publicationTarget?.active = false
+                publicationTarget = null
                 if (callbackPosted) choreographer?.removeFrameCallback(this)
                 callbackPosted = false
                 // A RenderRequest or the compositor may still own some
@@ -572,12 +640,12 @@ internal class KeyguardOrbBufferRenderer(
                 // become current.  Closing it here strands the replacement
                 // behind a stale release even though the three-slot bound has
                 // usable capacity.
-                val awaitingRelease = slots.filter {
-                    it.state == SlotState.RENDERING ||
-                        it.state == SlotState.READY_FOR_MAIN ||
-                        it.state == SlotState.COMPOSITOR_OWNED
-                }.toMutableList()
-                awaitingRelease.forEach { it.state = SlotState.RETIRED }
+                firstLeaseAwaitingMain = null
+                slots.filter { it.state != SlotState.FREE }.forEach { slot ->
+                    slot.retired = true
+                    slot.lease?.let(retiringLeases::add)
+                }
+                retiringLeases.toList().forEach(::maybeNotifyLeaseDrained)
                 publishSlotSnapshot()
             }
         }
@@ -586,16 +654,18 @@ internal class KeyguardOrbBufferRenderer(
             handler.post {
                 disposed = true
                 running = false
+                publicationTarget?.active = false
+                publicationTarget = null
                 if (callbackPosted) choreographer?.removeFrameCallback(this)
                 callbackPosted = false
-                val awaitingRelease = slots.filter {
-                    it.state == SlotState.RENDERING ||
-                        it.state == SlotState.READY_FOR_MAIN ||
-                        it.state == SlotState.COMPOSITOR_OWNED
-                }.toMutableList()
-                slots.filter { it !in awaitingRelease }.forEach(::closeSlot)
-                awaitingRelease.forEach { it.state = SlotState.RETIRED }
-                slots = awaitingRelease
+                slots.filter { it.state == SlotState.FREE }.toList().forEach { slot ->
+                    closeSlot(slot)
+                    slots.remove(slot)
+                }
+                slots.filter { it.state != SlotState.FREE }.forEach { slot ->
+                    slot.retired = true
+                    slot.lease?.let(retiringLeases::add)
+                }
                 shader = null
                 previousShader = null
                 paint = null
@@ -604,63 +674,69 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
-        fun markCompositorOwned(slotId: Long) {
+        fun markFirstPublished(frame: ReadyFrame) {
             handler.post {
-                slots.firstOrNull { it.id == slotId }?.takeIf {
-                    it.state == SlotState.READY_FOR_MAIN
-                }?.state = SlotState.COMPOSITOR_OWNED
+                val slot = slots.firstOrNull { it.id == frame.slotId }
+                if (slot == null || slot.useGeneration != frame.useGeneration ||
+                    slot.state != SlotState.READY_FOR_MAIN || slot.lease != frame.lease
+                ) return@post
+                slot.state = SlotState.PUBLISHED
+                firstLeaseAwaitingMain = null
+                firstLeaseSubmitted = frame.lease
+                published += 1
+                earlyReleaseFences.remove(frame.slotId to frame.useGeneration)?.let { fence ->
+                    release(frame.slotId, frame.useGeneration, fence)
+                }
                 publishSlotSnapshot()
+                if (running) requestFrame()
             }
         }
 
         fun release(slotId: Long, releaseFence: SyncFence?) {
             handler.post {
-                try {
-                    // SurfaceControl documents that the release fence must
-                    // signal before the HardwareBuffer is reused. Waiting
-                    // here may delay only the dedicated producer, never the
-                    // accessibility-service Main/control owner.
-                    if (releaseFence?.isValid == true) releaseFence.awaitForever()
-                } finally {
+                val slot = slots.firstOrNull { it.id == slotId } ?: run {
                     releaseFence?.close()
-                    val slot = slots.firstOrNull { it.id == slotId }
-                    if (slot != null) {
-                        if (slot.state == SlotState.RETIRED) {
-                            closeSlot(slot)
-                            slots.remove(slot)
-                            // A replacement attachment can be waiting for a
-                            // retired old-lease buffer to be released before
-                            // it is legal to allocate its fixed pool.
-                            if (running) requestFrame()
-                        } else {
-                            slot.state = SlotState.FREE
-                            if (running) requestFrame()
-                        }
-                    }
-                    publishSlotSnapshot()
-                    finishDisposeIfReleased()
+                    return@post
                 }
+                release(slotId, slot.useGeneration, releaseFence)
             }
+        }
+
+        private fun release(slotId: Long, useGeneration: Long, releaseFence: SyncFence?) {
+            if (Looper.myLooper() != thread.looper) {
+                handler.post { release(slotId, useGeneration, releaseFence) }
+                return
+            }
+            val slot = slots.firstOrNull { it.id == slotId }
+            if (slot != null && slot.useGeneration == useGeneration &&
+                slot.state == SlotState.READY_FOR_MAIN
+            ) {
+                // SurfaceFlinger may release a transaction before the Main
+                // acknowledgement runnable reaches the renderer handler.
+                // Retain this exact fence rather than treating READY as FREE.
+                earlyReleaseFences[slotId to useGeneration]?.close()
+                earlyReleaseFences[slotId to useGeneration] = releaseFence
+                return
+            }
+            if (slot == null || slot.useGeneration != useGeneration || slot.state != SlotState.PUBLISHED) {
+                releaseFence?.close()
+                return
+            }
+            slot.state = SlotState.WAIT_RELEASE_FENCE
+            awaitFence(slotId, useGeneration, SlotState.WAIT_RELEASE_FENCE, releaseFence)
+            publishSlotSnapshot()
         }
 
         fun dropReady(frame: ReadyFrame) {
             handler.post {
-                frame.fence?.close()
                 val slot = slots.firstOrNull { it.id == frame.slotId }
-                when (slot?.state) {
-                    SlotState.READY_FOR_MAIN -> {
-                        slot.state = SlotState.FREE
-                        if (running) requestFrame()
-                    }
-                    SlotState.RETIRED -> {
-                        closeSlot(slot)
-                        slots.remove(slot)
-                    }
-                    else -> Unit
-                }
+                if (slot != null && slot.useGeneration == frame.useGeneration &&
+                    slot.state == SlotState.READY_FOR_MAIN
+                ) discardRenderResult(slot, frame.fence)
+                else frame.fence?.close()
+                if (firstLeaseAwaitingMain == frame.lease) firstLeaseAwaitingMain = null
                 dropped += 1
                 publishSlotSnapshot()
-                finishDisposeIfReleased()
             }
         }
 
@@ -669,7 +745,7 @@ internal class KeyguardOrbBufferRenderer(
             // rendering; worker-published volatile scalars deliberately avoid
             // exposing the mutable slot list across thread ownership.
             return Snapshot(
-                produced, dropped, failures, snapshotInFlight, snapshotReady,
+                produced, published, dropped, failures, snapshotInFlight, snapshotReady,
                 snapshotCompositorOwned, completionGapMaxMs,
             )
         }
@@ -712,30 +788,29 @@ internal class KeyguardOrbBufferRenderer(
                 previousShaderProgramKey = oldArtifact.programKey
             }
             if (paint == null) paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            val matchingSize = slots.isNotEmpty() && slots.all {
-                it.buffer.width == spec.lease.width && it.buffer.height == spec.lease.height
+            // A different size cannot recycle a target while any producer or
+            // compositor owner remains. Wait rather than allocating another
+            // generation outside the global three-slot limit.
+            if (slots.any { it.state != SlotState.FREE &&
+                    (it.buffer.width != spec.lease.width || it.buffer.height != spec.lease.height) }) {
+                return false
             }
-            if (matchingSize && slots.any { it.state != SlotState.RETIRED }) {
-                // A retained old-lease slot is never a render target again,
-                // but a same-sized FREE slot remains safe recovery capacity
-                // for the latest attachment. Do not allocate a second pool
-                // merely because the old compositor has not yet returned its
-                // release callback.
-                return true
-            }
-            // A previous layer can retain a compositor-owned buffer after its
-            // Main-side lease was revoked. Never resize/reuse that buffer for
-            // a new scene; wait for the release callback instead of growing a
-            // pool or publishing an incorrectly sized image.
-            if (slots.any { it.state == SlotState.COMPOSITOR_OWNED || it.state == SlotState.RETIRED }) return false
-            slots.forEach(::closeSlot)
-            slots.clear()
+            slots.filter { it.state == SlotState.FREE &&
+                (it.buffer.width != spec.lease.width || it.buffer.height != spec.lease.height) }
+                .toList().forEach { slot ->
+                    closeSlot(slot)
+                    slots.remove(slot)
+                }
             val usage = HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or
                 HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_COMPOSER_OVERLAY
             check(HardwareBuffer.isSupported(spec.lease.width, spec.lease.height, HardwareBuffer.RGBA_8888, 1, usage)) {
                 "hardware-buffer-unsupported"
             }
-            repeat(3) { index ->
+            // Refill a safely depleted same-size pool. "One slot exists" is
+            // not a healthy triple-buffer pool: that last slot may be the
+            // compositor's current content and cannot produce its successor.
+            while (slots.size < 3) {
+                val index = slots.size
                 val buffer = HardwareBuffer.create(spec.lease.width, spec.lease.height, HardwareBuffer.RGBA_8888, 1, usage)
                 slots += Slot(++nextSlotId, buffer, HardwareBufferRenderer(buffer), RenderNode("fluvi-keyguard-orb-buffer-$index").apply {
                     setPosition(0, 0, spec.lease.width, spec.lease.height)
@@ -753,7 +828,9 @@ internal class KeyguardOrbBufferRenderer(
             val spec = desired ?: return
             if (!ensureResources(spec)) return
             if (slots.any {
-                    it.state == SlotState.READY_FOR_MAIN || it.state == SlotState.RENDERING
+                    it.state == SlotState.READY_FOR_MAIN ||
+                        it.state == SlotState.RENDERING ||
+                        it.state == SlotState.WAIT_RENDER_FENCE
                 }) return
             val index = slots.indexOfFirst { it.state == SlotState.FREE }
             if (index < 0) {
@@ -764,6 +841,10 @@ internal class KeyguardOrbBufferRenderer(
             val currentShader = shader ?: return
             val currentPaint = paint ?: return
             slot.state = SlotState.RENDERING
+            slot.retired = false
+            slot.lease = spec.lease
+            slot.useGeneration += 1L
+            val useGeneration = slot.useGeneration
             publishSlotSnapshot()
             try {
                 barrier.beforeRender(spec.lease)
@@ -787,23 +868,19 @@ internal class KeyguardOrbBufferRenderer(
                 }
                 slot.renderer.setContentRoot(slot.node)
                 slot.renderer.obtainRenderRequest().draw(executor, Consumer { result ->
-                    if (disposed || desired?.lease != spec.lease || result.status != HardwareBufferRenderer.RenderResult.SUCCESS) {
-                        result.fence?.close()
-                        if (slot.state == SlotState.RETIRED) {
-                            closeSlot(slot)
-                            slots.remove(slot)
-                            finishDisposeIfReleased()
-                        } else {
-                            slot.state = SlotState.FREE
-                        }
+                    if (disposed || desired?.lease != spec.lease || slot.useGeneration != useGeneration ||
+                        result.status != HardwareBufferRenderer.RenderResult.SUCCESS || slot.retired
+                    ) {
+                        discardRenderResult(slot, result.fence)
                         dropped += 1
                         publishSlotSnapshot()
                         if (running) requestFrame()
                         return@Consumer
                     }
-                    // Ownership moves to the Main publication hand-off before
-                    // the callback is posted. Retirement will retain this
-                    // slot until that hand-off explicitly drops or submits it.
+                    // The first buffer has one Main-owned binding so that the
+                    // layer can become visible and the View bootstrap can be
+                    // retired. Every later current buffer is published by the
+                    // renderer as a buffer-only transaction.
                     slot.state = SlotState.READY_FOR_MAIN
                     produced += 1
                     val completedAt = android.os.SystemClock.uptimeMillis()
@@ -815,10 +892,21 @@ internal class KeyguardOrbBufferRenderer(
                     }
                     previousCompletionAtUptimeMs = completedAt
                     publishSlotSnapshot()
-                    onFrameReady(ReadyFrame(spec.lease, slot.id, slot.buffer, result.fence))
+                    val ready = ReadyFrame(
+                        spec.lease, slot.id, useGeneration, slot.buffer, result.fence,
+                    )
+                    if (firstLeaseSubmitted == spec.lease) {
+                        publishSteady(slot, ready)
+                    } else if (firstLeaseAwaitingMain != spec.lease) {
+                        firstLeaseAwaitingMain = spec.lease
+                        onFrameReady(ready)
+                    } else {
+                        discardRenderResult(slot, result.fence)
+                        dropped += 1
+                    }
                 })
             } catch (error: Throwable) {
-                slot.state = SlotState.FREE
+                discardRenderResult(slot, null)
                 failures += 1
                 publishSlotSnapshot()
                 onFailure(spec.lease, error)
@@ -828,7 +916,105 @@ internal class KeyguardOrbBufferRenderer(
         private fun closeSlot(slot: Slot) {
             runCatching { slot.renderer.close() }
             runCatching { slot.buffer.close() }
-            slot.state = SlotState.RETIRED
+            slot.state = SlotState.FREE
+            slot.lease = null
+        }
+
+        /** Steady state has no Main callback. This operation has no authority
+         * to show, hide or reparent: it updates only a still-authorized child
+         * that Main made visible during first publication. */
+        private fun publishSteady(slot: Slot, frame: ReadyFrame) {
+            val target = publicationTarget
+            if (target == null || !target.active || target.lease != frame.lease ||
+                slot.useGeneration != frame.useGeneration || slot.retired
+            ) {
+                discardRenderResult(slot, frame.fence)
+                dropped += 1
+                return
+            }
+            runCatching {
+                SurfaceControl.Transaction()
+                    .setBuffer(
+                        target.child,
+                        frame.buffer,
+                        frame.fence,
+                        Consumer { releaseFence -> release(frame.slotId, frame.useGeneration, releaseFence) },
+                    )
+                    .apply()
+                // SurfaceControl has copied the producer fence into the
+                // transaction. Slot reuse still waits for its later release
+                // callback/fence, never for transaction commitment.
+                frame.fence?.close()
+                slot.state = SlotState.PUBLISHED
+                published += 1
+            }.onFailure { error ->
+                discardRenderResult(slot, frame.fence)
+                failures += 1
+                onFailure(frame.lease, error)
+            }
+            publishSlotSnapshot()
+        }
+
+        /** A stale/failed producer completion still owns its render fence.
+         * It cannot become FREE simply because its visual lease was revoked. */
+        private fun discardRenderResult(slot: Slot, fence: SyncFence?) {
+            slot.state = SlotState.WAIT_RENDER_FENCE
+            awaitFence(slot.id, slot.useGeneration, SlotState.WAIT_RENDER_FENCE, fence)
+        }
+
+        private fun awaitFence(
+            slotId: Long,
+            useGeneration: Long,
+            expected: SlotState,
+            fence: SyncFence?,
+        ) {
+            if (fence?.isValid != true) {
+                fence?.close()
+                finishFence(slotId, useGeneration, expected)
+                return
+            }
+            val poll = object : Runnable {
+                override fun run() {
+                    val signaled = runCatching { fence.await(Duration.ofMillis(16)) }.getOrDefault(false)
+                    if (signaled) {
+                        fence.close()
+                        handler.post { finishFence(slotId, useGeneration, expected) }
+                    } else {
+                        // A timeout is a diagnostic/failure observation, never
+                        // permission to reuse or close the buffer. The only
+                        // repeating work is this fixed bounded fence record.
+                        fenceHandler.postDelayed(this, 16L)
+                    }
+                }
+            }
+            fenceHandler.post(poll)
+        }
+
+        private fun finishFence(slotId: Long, useGeneration: Long, expected: SlotState) {
+            val slot = slots.firstOrNull { it.id == slotId } ?: return
+            if (slot.useGeneration != useGeneration || slot.state != expected) return
+            val completedLease = slot.lease
+            if (disposed) {
+                closeSlot(slot)
+                slots.remove(slot)
+            } else {
+                slot.state = SlotState.FREE
+                slot.retired = false
+                slot.lease = null
+            }
+            completedLease?.let(::maybeNotifyLeaseDrained)
+            retiringLeases.toList().forEach(::maybeNotifyLeaseDrained)
+            publishSlotSnapshot()
+            finishDisposeIfReleased()
+            if (running && !disposed) requestFrame()
+        }
+
+        private fun maybeNotifyLeaseDrained(lease: KeyguardOrbBufferLease) {
+            if (!retiringLeases.contains(lease)) return
+            if (slots.none { it.lease == lease && it.state != SlotState.FREE }) {
+                retiringLeases.remove(lease)
+                onLeaseDrained(lease)
+            }
         }
 
         private fun drawScene(
@@ -855,15 +1041,22 @@ internal class KeyguardOrbBufferRenderer(
          * not close a live HardwareBuffer from Main or quit before that
          * owner-side cleanup can run. */
         private fun finishDisposeIfReleased() {
-            if (disposed && slots.isEmpty()) thread.quitSafely()
+            if (disposed && slots.isEmpty()) {
+                fenceThread.quitSafely()
+                thread.quitSafely()
+            }
         }
 
         /** Called only on the renderer handler. Main samples these volatile
          * scalars without joining the renderer or inspecting mutable slots. */
         private fun publishSlotSnapshot() {
-            snapshotInFlight = slots.count { it.state == SlotState.RENDERING }
+            snapshotInFlight = slots.count {
+                it.state == SlotState.RENDERING || it.state == SlotState.WAIT_RENDER_FENCE
+            }
             snapshotReady = slots.count { it.state == SlotState.READY_FOR_MAIN }
-            snapshotCompositorOwned = slots.count { it.state == SlotState.COMPOSITOR_OWNED }
+            snapshotCompositorOwned = slots.count {
+                it.state == SlotState.PUBLISHED || it.state == SlotState.WAIT_RELEASE_FENCE
+            }
         }
     }
 
@@ -873,6 +1066,9 @@ internal class KeyguardOrbBufferRenderer(
         /** Stable across retirement filtering; never use a mutable-list index
          * in a cross-thread release callback. */
         val slotId: Long,
+        /** Every async producer/release callback is additionally bound to a
+         * particular use of this stable allocation. */
+        val useGeneration: Long,
         val buffer: HardwareBuffer,
         val fence: SyncFence?,
     )

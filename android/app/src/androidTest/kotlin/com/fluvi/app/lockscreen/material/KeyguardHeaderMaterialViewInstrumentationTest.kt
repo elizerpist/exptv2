@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -585,6 +586,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         ) as KeyguardMaterialTestActivity
         lateinit var window: KeyguardCardWindow
         var createdWindow: KeyguardCardWindow? = null
+        lateinit var manager: TestPanelWindowManager
         var first: Bitmap? = null
         var later: Bitmap? = null
         try {
@@ -594,7 +596,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     onOpen = {}, onToggle = {}, onInteractionStarted = {},
                     onPositionCommitted = { _, _, _, _ -> },
                     onInteractionDiagnostic = { _, _ -> },
-                    manager = TestPanelWindowManager(activity),
+                    manager = TestPanelWindowManager(activity).also { manager = it },
                 )
                 createdWindow = window
                 val settings = KeyguardCardSettings(
@@ -609,12 +611,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
             }
             assertTrue("isolated ORB never completed a buffer", waitForIsolatedOutput(instrumentation, window))
-            first = copyWindow(instrumentation, activity)
+            // The ORB is in a separate TYPE_APPLICATION_PANEL, not in the
+            // Activity Window. Capture the compositor's actual panel bounds;
+            // PixelCopy(activity.window) cannot validate that child surface.
+            first = copyPanelOrb(instrumentation, manager)
             val changed = (1..4).any {
                 Thread.sleep(180)
                 later?.recycle()
-                later = copyWindow(instrumentation, activity)
-                !requireNotNull(first).sameAs(requireNotNull(later))
+                later = copyPanelOrb(instrumentation, manager)
+                hasMaterialMotion(requireNotNull(first), requireNotNull(later))
             }
             assertTrue("isolated ORB produced no changing compositor pixels", changed)
             instrumentation.runOnMainSync {
@@ -916,6 +921,17 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             removes += 1
             currentRoot = null
         }
+
+        /** This panel is a separate Window from the Activity. Its screen
+         * bounds are therefore the only valid screenshot target for its child
+         * SurfaceControl; Activity PixelCopy intentionally cannot be used. */
+        fun currentOrbBounds(): Rect {
+            val orb = requireNotNull(currentRoot)
+                .findViewById<View>(R.id.fluvi_financial_snapshot_orb)
+            val location = IntArray(2)
+            orb.getLocationOnScreen(location)
+            return Rect(location[0], location[1], location[0] + orb.width, location[1] + orb.height)
+        }
     }
 
     @Test fun productionOffscreenPreparationAcquiresGpuOutput() {
@@ -1014,6 +1030,46 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         assertTrue("PixelCopy did not finish", copied.await(8, TimeUnit.SECONDS))
         assertEquals(PixelCopy.SUCCESS, result)
         return bitmap
+    }
+
+    private fun copyPanelOrb(instrumentation: Instrumentation, manager: TestPanelWindowManager): Bitmap {
+        lateinit var bounds: Rect
+        instrumentation.runOnMainSync { bounds = manager.currentOrbBounds() }
+        val screen = requireNotNull(instrumentation.uiAutomation.takeScreenshot()) {
+            "UiAutomation did not return a compositor screenshot"
+        }
+        try {
+            assertTrue("panel orb bounds outside screenshot: $bounds",
+                bounds.intersect(0, 0, screen.width, screen.height))
+            assertTrue("unexpected standalone orb bounds: $bounds", bounds.width() > 0 && bounds.height() > 0)
+            return Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
+        } finally {
+            screen.recycle()
+        }
+    }
+
+    /** Reject the <=4/255 noise which made the previous any-pixel predicate
+     * a false positive. The quiet phase is separated by 180ms, so canonical
+     * animated material must change a substantive interior population. */
+    private fun hasMaterialMotion(first: Bitmap, second: Bitmap): Boolean {
+        require(first.width == second.width && first.height == second.height)
+        var substantive = 0
+        var totalDelta = 0L
+        for (y in 0 until first.height) for (x in 0 until first.width) {
+            val dx = x + .5f - first.width / 2f
+            val dy = y + .5f - first.height / 2f
+            if (dx * dx + dy * dy >= first.width * first.width * .1764f) continue
+            val a = first.getPixel(x, y)
+            val b = second.getPixel(x, y)
+            val delta = maxOf(
+                kotlin.math.abs((a ushr 16 and 0xff) - (b ushr 16 and 0xff)),
+                kotlin.math.abs((a ushr 8 and 0xff) - (b ushr 8 and 0xff)),
+                kotlin.math.abs((a and 0xff) - (b and 0xff)),
+            )
+            if (delta >= 7) substantive += 1
+            totalDelta += delta
+        }
+        return substantive >= 64 && totalDelta >= 2_048L
     }
 
     private fun waitForRenderer(

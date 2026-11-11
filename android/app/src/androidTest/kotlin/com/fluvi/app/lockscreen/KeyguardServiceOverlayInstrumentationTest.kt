@@ -724,13 +724,27 @@ class KeyguardServiceOverlayInstrumentationTest {
         } finally { screen.recycle() }
     }
 
-    /** Ignore the transparent corners: changing wallpaper/SystemUI pixels
-     * outside the orb are not evidence that the material animated. */
+    /** Ignore transparent corners: wallpaper/SystemUI pixels outside the orb
+     * are not evidence. A single changed sample can also be screenshot noise;
+     * the preceding
+     * candidate passed with no channel delta above 4/255, so require a
+     * substantive interior change over this intentionally long quiet sample. */
     private fun hasOrbMotion(first: Bitmap, second: Bitmap): Boolean {
+        var substantive = 0
+        var totalDelta = 0L
         for (y in 0 until first.height) for (x in 0 until first.width) {
-            if (insideOrb(x, y, first.width) && first.getPixel(x, y) != second.getPixel(x, y)) return true
+            if (!insideOrb(x, y, first.width)) continue
+            val a = first.getPixel(x, y)
+            val b = second.getPixel(x, y)
+            val delta = maxOf(
+                kotlin.math.abs((a ushr 16 and 0xff) - (b ushr 16 and 0xff)),
+                kotlin.math.abs((a ushr 8 and 0xff) - (b ushr 8 and 0xff)),
+                kotlin.math.abs((a and 0xff) - (b and 0xff)),
+            )
+            if (delta >= 7) substantive += 1
+            totalDelta += delta
         }
-        return false
+        return substantive >= 64 && totalDelta >= 2_048L
     }
 
     private fun hasColoredMaterial(bitmap: Bitmap): Boolean {
