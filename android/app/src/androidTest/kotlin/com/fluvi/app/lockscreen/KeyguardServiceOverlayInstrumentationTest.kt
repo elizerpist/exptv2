@@ -456,20 +456,17 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
         }
 
-        private data class Request(
+        data class Request(
             val producer: KeyguardProducerSampleRequestBook.Request<Sample>,
             private val submission: SubmissionRequest,
+            private val clearPending: () -> Unit,
         ) {
             val requestId: Long get() = producer.requestId
 
             fun awaitSubmission(timeoutMs: Long): KeyguardOrbBufferProducerFrame =
                 submission.await(timeoutMs)
 
-            fun clearPendingSubmission(
-                pendingPublication: java.util.concurrent.atomic.AtomicReference<SubmissionRequest?>,
-            ) {
-                pendingPublication.compareAndSet(submission, null)
-            }
+            fun clearPendingSubmission() = clearPending()
         }
 
         override fun onProduced(
@@ -541,7 +538,9 @@ class KeyguardServiceOverlayInstrumentationTest {
             check(pendingPublication.compareAndSet(null, submission)) {
                 "a publication acknowledgement is already pending"
             }
-            return Request(producer, submission)
+            return Request(producer, submission) {
+                pendingPublication.compareAndSet(submission, null)
+            }
         }
 
         fun await(request: Request): Sample = requests.await(request.producer)
@@ -550,7 +549,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             try {
                 request.awaitSubmission(8_000L)
             } finally {
-                request.clearPendingSubmission(pendingPublication)
+                request.clearPendingSubmission()
             }
 
         fun compare(first: Sample, second: Sample): Result {
