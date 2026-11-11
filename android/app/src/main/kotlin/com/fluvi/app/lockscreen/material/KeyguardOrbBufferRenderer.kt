@@ -884,6 +884,29 @@ internal class KeyguardOrbBufferRenderer(
             val useGeneration = slot.useGeneration
             publishSlotSnapshot()
             try {
+                val old = spec.previousScene
+                val progress = if (old == null || spec.transitionStartedNanos <= 0L) 1f else {
+                    ((frameTimeNanos - spec.transitionStartedNanos) / 180_000_000f).coerceIn(0f, 1f)
+                }
+                // HardwareBufferRenderer records uniform state at the start
+                // of its RenderNode display list on API 35. Bind the phase
+                // before beginRecording(), rather than during Canvas draws,
+                // so each fresh root receives this frame's material state.
+                currentShader.configure(
+                    spec.scene.profile,
+                    spec.lease.width,
+                    spec.lease.height,
+                    spec.scene.timeAt(frameTimeNanos),
+                )
+                val previousShader = slot.previousShader ?: currentShader
+                if (old != null && progress < 1f) {
+                    previousShader.configure(
+                        old.profile,
+                        spec.lease.width,
+                        spec.lease.height,
+                        old.timeAt(frameTimeNanos),
+                    )
+                }
                 barrier.beforeRender(spec.lease)
                 // HardwareBufferRenderer retains its content root. On API 35,
                 // re-recording the same root can retain the first
@@ -899,16 +922,10 @@ internal class KeyguardOrbBufferRenderer(
                     // HardwareBufferRenderer keeps prior contents. A clear is
                     // required for transparent antialiased circle edges.
                     canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-                    val old = spec.previousScene
-                    val progress = if (old == null || spec.transitionStartedNanos <= 0L) 1f else {
-                        ((frameTimeNanos - spec.transitionStartedNanos) / 180_000_000f).coerceIn(0f, 1f)
-                    }
                     if (old != null && progress < 1f) {
-                        drawScene(canvas, slot.previousShader ?: currentShader, old, slot.previousPaint,
-                            frameTimeNanos, 1f, spec.lease)
+                        drawScene(canvas, previousShader, slot.previousPaint, 1f, spec.lease)
                     }
-                    drawScene(canvas, currentShader, spec.scene, slot.currentPaint,
-                        frameTimeNanos, progress, spec.lease)
+                    drawScene(canvas, currentShader, slot.currentPaint, progress, spec.lease)
                 } finally {
                     slot.node.endRecording()
                 }
@@ -1124,13 +1141,10 @@ internal class KeyguardOrbBufferRenderer(
         private fun drawScene(
             canvas: android.graphics.Canvas,
             source: KeyguardHeaderShader,
-            scene: KeyguardMaterialScene,
             targetPaint: Paint,
-            frameTimeNanos: Long,
             alpha: Float,
             lease: KeyguardOrbBufferLease,
         ) {
-            source.configure(scene.profile, lease.width, lease.height, scene.timeAt(frameTimeNanos))
             targetPaint.shader = source.runtimeShader
             targetPaint.alpha = (alpha * 255f).toInt().coerceIn(0, 255)
             canvas.drawCircle(lease.width / 2f, lease.height / 2f,
