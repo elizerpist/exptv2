@@ -7422,3 +7422,23 @@ fun main() {
 - Protected physical dashboard anchor remains `6e962187e90e2a82431b1f91b224d2b52a6e0ba7`, with its documented open defects; no new lockscreen milestone is registered.
 - The next copy-ready prompt is a 21-section English implementation/delivery task: fix the reproduced probe defect, calibrate actual native gates, validate retained ownership/lifecycle, preserve and report performance observability, and finish the existing Human APK publication. No new renderer architecture or per-frame RuntimeShader construction is prescribed. No claim of guaranteed phone latency improvement.
 - W-SHOW OPEN, W-HIDE OPEN, W-LOCK-ANIM OPEN; W-HOME-ANIM protected/not changed. Reviewer changes this journal only, append-only, [skip ci], no workflow dispatch. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+## 2026-11-11 — request-identity producer acknowledgement and calibrated native controls
+
+### Application commits
+
+- `2024a36f5f131cdb8137b60d2b493ea151001618` — `fix(keyguard): identify producer probe requests at submission`.
+  - Why: `ProducerPixelProbe` used a boxed `Float` as an `AtomicReference.compareAndSet` identity. The reviewed API35 run stopped on its first A-phase acknowledgement, before any producer/compositor comparison.
+  - Changed: test-only `KeyguardProducerSampleRequestBook` owns immutable request id, expected lease, phase, result and failure; a producer completion now CASes the exact request object. `KeyguardOrbBufferProducerFrame` carries a test request id captured from the exact controlled material-time sample at renderer submission. No production time source emits a request id. The service fixture and the direct Canvas/isolated-HardwareBuffer tests use A=1.196795, C=1.5234617, B=3.75, return-A controls and persist their samples before assertions. The diagnostic flood coverage now separates reducer coalescing from bounded raw-export omission and has a bounded-pressure case.
+  - New acknowledgement tests cover wrong phase, wrong lease, duplicate delivery, supersession, A1 -> B -> A2 with equal A numeric values, delayed old completion and old failure isolation through the same request book used by the probe.
+  - Preserved: shader equations, visual settings, privacy/eligibility, overlay ownership, the three-slot cap, existing exact publication-grant and nullable-release-receipt work. No renderer replacement or per-frame `RuntimeShader` construction was added.
+- `7740ccd28e6c107ff3e5e1e142d732a6df78c208` — `test(keyguard): qualify calibrated canvas preparation result`.
+  - Corrects the nested enum reference found in a static caller audit before treating a CI result as valid.
+
+### Validation state at this entry
+
+- PASS: `git diff --check`; `bash scripts/verify-fluvi-boundaries.sh`.
+- NOT PASS/FAIL: local proot `:app:compileDebugAndroidTestKotlin` did not return a trustworthy task completion; it is not evidence for Android compilation or instrumentation.
+- QUEUED: GitHub workflow `43097093615`, exact source `7740ccd28e6c107ff3e5e1e142d732a6df78c208`, created 2026-11-11T20:36:51Z. At this append it has no assigned jobs or result. Its eventual native result, core/Flutter prerequisite results and any Human APK are recorded separately; no APK exists at this point.
+- Rejected hypothesis retained: the fixed Float-CAS acknowledgement is a test-harness defect. It does not prove a frozen HardwareBuffer renderer, a RuntimeShader lifecycle defect, or a Nothing A142 performance improvement.
+- W-SHOW OPEN; W-HIDE OPEN; W-LOCK-ANIM implementation pending API35 verification; W-HOME-ANIM protected/no change. PHYSICAL VALIDATION — PENDING, USER ONLY.
