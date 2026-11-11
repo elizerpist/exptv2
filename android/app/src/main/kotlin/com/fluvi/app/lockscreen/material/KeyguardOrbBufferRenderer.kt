@@ -421,7 +421,15 @@ internal class KeyguardOrbBufferRenderer(
         private val onFailure: (KeyguardOrbBufferLease, Throwable) -> Unit,
         private val barrier: KeyguardOrbRenderBarrier,
     ) : Choreographer.FrameCallback {
-        private enum class SlotState { FREE, RENDERING, READY, COMPOSITOR_OWNED, RETIRED }
+        /**
+         * `READY_FOR_MAIN` is deliberately distinct from compositor ownership.
+         * The renderer thread has completed the buffer, but the posted Main
+         * publication has not yet either submitted it to SurfaceControl or
+         * rejected it.  Retirement must retain that slot until the Main
+         * hand-off resolves; otherwise a late release/drop callback can target
+         * a dead worker and close a buffer the compositor still references.
+         */
+        private enum class SlotState { FREE, RENDERING, READY_FOR_MAIN, COMPOSITOR_OWNED, RETIRED }
         private data class Slot(
             val buffer: HardwareBuffer,
             val renderer: HardwareBufferRenderer,
@@ -476,7 +484,8 @@ internal class KeyguardOrbBufferRenderer(
                 desired = value
                 if (!ensureResources(value)) return@post
                 publishSlotSnapshot()
-                // Detached preparation renders one real frame into a READY
+                // Detached preparation renders one real frame into a
+                // READY_FOR_MAIN
                 // slot. It does not start a continuous animation loop.
                 requestFrame()
             }
@@ -508,7 +517,9 @@ internal class KeyguardOrbBufferRenderer(
                 // returns.  In particular, do not keep closed slots in the
                 // next pool or reuse an in-flight HardwareBuffer.
                 val awaitingRelease = slots.filter {
-                    it.state == SlotState.RENDERING || it.state == SlotState.COMPOSITOR_OWNED
+                    it.state == SlotState.RENDERING ||
+                        it.state == SlotState.READY_FOR_MAIN ||
+                        it.state == SlotState.COMPOSITOR_OWNED
                 }.toMutableList()
                 slots.filter { it !in awaitingRelease }.forEach(::closeSlot)
                 awaitingRelease.forEach { it.state = SlotState.RETIRED }
@@ -524,7 +535,9 @@ internal class KeyguardOrbBufferRenderer(
                 if (callbackPosted) choreographer?.removeFrameCallback(this)
                 callbackPosted = false
                 val awaitingRelease = slots.filter {
-                    it.state == SlotState.RENDERING || it.state == SlotState.COMPOSITOR_OWNED
+                    it.state == SlotState.RENDERING ||
+                        it.state == SlotState.READY_FOR_MAIN ||
+                        it.state == SlotState.COMPOSITOR_OWNED
                 }.toMutableList()
                 slots.filter { it !in awaitingRelease }.forEach(::closeSlot)
                 awaitingRelease.forEach { it.state = SlotState.RETIRED }
@@ -539,7 +552,9 @@ internal class KeyguardOrbBufferRenderer(
 
         fun markCompositorOwned(index: Int) {
             handler.post {
-                slots.getOrNull(index)?.takeIf { it.state == SlotState.READY }?.state = SlotState.COMPOSITOR_OWNED
+                slots.getOrNull(index)?.takeIf {
+                    it.state == SlotState.READY_FOR_MAIN
+                }?.state = SlotState.COMPOSITOR_OWNED
                 publishSlotSnapshot()
             }
         }
@@ -573,10 +588,21 @@ internal class KeyguardOrbBufferRenderer(
         fun dropReady(frame: ReadyFrame) {
             handler.post {
                 frame.fence?.close()
-                slots.getOrNull(frame.slot)?.takeIf { it.state == SlotState.READY }?.state = SlotState.FREE
+                val slot = slots.getOrNull(frame.slot)
+                when (slot?.state) {
+                    SlotState.READY_FOR_MAIN -> {
+                        slot.state = SlotState.FREE
+                        if (running) requestFrame()
+                    }
+                    SlotState.RETIRED -> {
+                        closeSlot(slot)
+                        slots.remove(slot)
+                    }
+                    else -> Unit
+                }
                 dropped += 1
-                if (running) requestFrame()
                 publishSlotSnapshot()
+                finishDisposeIfReleased()
             }
         }
 
@@ -662,7 +688,9 @@ internal class KeyguardOrbBufferRenderer(
         private fun render(frameTimeNanos: Long) {
             val spec = desired ?: return
             if (!ensureResources(spec)) return
-            if (slots.any { it.state == SlotState.READY || it.state == SlotState.RENDERING }) return
+            if (slots.any {
+                    it.state == SlotState.READY_FOR_MAIN || it.state == SlotState.RENDERING
+                }) return
             val index = slots.indexOfFirst { it.state == SlotState.FREE }
             if (index < 0) {
                 dropped += 1
@@ -709,7 +737,10 @@ internal class KeyguardOrbBufferRenderer(
                         if (running) requestFrame()
                         return@Consumer
                     }
-                    slot.state = SlotState.READY
+                    // Ownership moves to the Main publication hand-off before
+                    // the callback is posted. Retirement will retain this
+                    // slot until that hand-off explicitly drops or submits it.
+                    slot.state = SlotState.READY_FOR_MAIN
                     produced += 1
                     val completedAt = android.os.SystemClock.uptimeMillis()
                     if (previousCompletionAtUptimeMs > 0L) {
@@ -767,7 +798,7 @@ internal class KeyguardOrbBufferRenderer(
          * scalars without joining the renderer or inspecting mutable slots. */
         private fun publishSlotSnapshot() {
             snapshotInFlight = slots.count { it.state == SlotState.RENDERING }
-            snapshotReady = slots.count { it.state == SlotState.READY }
+            snapshotReady = slots.count { it.state == SlotState.READY_FOR_MAIN }
             snapshotCompositorOwned = slots.count { it.state == SlotState.COMPOSITOR_OWNED }
         }
     }
