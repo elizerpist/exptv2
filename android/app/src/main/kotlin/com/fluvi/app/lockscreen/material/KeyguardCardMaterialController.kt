@@ -88,6 +88,9 @@ internal class KeyguardCardMaterialController(
      */
     private var isolatedOrbRequested = false
     private var isolatedOrbFailed = false
+    /** A failed visual key stays on the established View route until the
+     * semantic material actually changes; this avoids endless GPU retries. */
+    private var isolatedOrbFailedVisualKey: String? = null
     private var isolatedOrbLeaseGeneration = 0L
     private var activeAttachment = 0L
     private var attachedRoot: View? = null
@@ -253,6 +256,10 @@ internal class KeyguardCardMaterialController(
         selectedBackgroundVisible = presentationMode == KeyguardCardPresentationMode.CARD &&
             animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND && scene != null
         isolatedOrbRequested = canUseIsolatedOrb(scene, animationMode, presentationMode, canAnimate)
+        if (isolatedOrbRequested && isolatedOrbFailedVisualKey != sceneVisualKey) {
+            isolatedOrbFailed = false
+            isolatedOrbFailedVisualKey = null
+        }
         if (isolatedOrbRequested && latestOrbScene?.full == true && scene?.full == false &&
             isolatedOrbRendererDelegate.isInitialized()
         ) {
@@ -264,6 +271,7 @@ internal class KeyguardCardMaterialController(
         }
         if (!isolatedOrbRequested) {
             isolatedOrbFailed = false
+            isolatedOrbFailedVisualKey = null
             activeOrbLease = null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
                 isolatedOrbRendererDelegate.isInitialized()
@@ -848,6 +856,15 @@ internal class KeyguardCardMaterialController(
     private fun onIsolatedOrbFailure(lease: KeyguardOrbBufferLease, error: Throwable) {
         if (activeOrbLease != lease) return
         isolatedOrbFailed = true
+        isolatedOrbFailedVisualKey = lease.visualKey
+        // A permanent bootstrap would turn a transient platform/output error
+        // into a static ORB. Fall back to the established, already-prepared
+        // View renderer immediately; a different material key may try the
+        // bounded isolated route again, but this exact key will not spin.
+        isolatedOrbRequested = false
+        coldPresentationState = ColdPresentationState.LIVE
+        bootstrapVisualKey = null
+        bootstrapCommitReceived = false
         isolatedOrbRenderer.retire("producer-failure")
         orb.visibility = View.VISIBLE
         orb.setBootstrapActive(false)

@@ -6919,3 +6919,7 @@ Platform HardwareBufferRenderer is API34, exposes obtainRenderRequest().draw(exe
 
 - CI, human APK, source identity/hash/download verification and final-source tooling graph regeneration are pending this application commit. The Dart SCIP graph at tooling `7de0baa6a5abc1e1ec41e3fd47acda3254bc055c` remains baseline-only and does not cover Kotlin; final delivery will retain an explicit native reference inventory.
 - No physical timing or smoothness result is asserted. `W-SHOW`, `W-HIDE` and `W-LOCK-ANIM` retain their existing correctness contracts; `W-HOME-ANIM` is untouched/out of scope. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+### Follow-up: producer-failure fallback before delivery
+
+- Post-commit lifecycle review found that a failed isolated producer still left `isolatedOrbRequested` true and could retain the legacy controller in `BOOTSTRAP`, which risks a non-animating compatibility fallback. The source is corrected before final delivery: a failed visual key selects the already-prepared legacy View route in `LIVE`, clears the bootstrap token, and suppresses repeated attempts for that exact visual key. A materially different visual key may make one bounded fresh isolated attempt. This is a correctness/liveness correction, not a device-performance claim; CI is rerun from its follow-up application SHA.
