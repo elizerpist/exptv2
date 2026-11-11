@@ -918,11 +918,10 @@ internal class KeyguardHeaderShader(
         uniform2("uRasterSize", width.toFloat(), height.toFloat())
         runtimeShader.setFloatUniform("uOpacity", profile.opacity)
         runtimeShader.setFloatUniform("uPaletteSplit", profile.paletteSplitPercent / 100f)
-        // The generated classic artifact keeps this as a narrow runtime guard
-        // around its one retained member body. This avoids API-35's static
-        // global-const fallback without carrying every classic branch past
-        // RuntimeShader's program-size budget.
-        runtimeShader.setFloatUniform("uEffect", profile.effectShaderId.toFloat())
+        // The generated artifact embeds the effect ID in executable source.
+        // On API 35, a retained RuntimeShader uniform guard over a pruned
+        // classic branch can freeze the phase path; the source literal lets
+        // SkSL eliminate inactive members without freezing the selected one.
         runtimeShader.setFloatUniform("uPulse", 0f)
         runtimeShader.setFloatUniform("uRenderQuality", 1f)
         val fallback = profile.colors.last()
