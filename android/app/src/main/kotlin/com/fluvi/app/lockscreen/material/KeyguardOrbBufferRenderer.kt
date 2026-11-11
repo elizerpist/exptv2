@@ -20,6 +20,7 @@ import android.view.SurfaceControl
 import android.view.View
 import androidx.annotation.RequiresApi
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.Executor
 import java.util.function.Consumer
 import kotlin.math.min
@@ -119,11 +120,55 @@ internal object NoopKeyguardOrbBufferFrameObserver : KeyguardOrbBufferFrameObser
     ) = Unit
 }
 
+/**
+ * The isolated producer owns its frame clock.  Instrumentation may inject a
+ * deterministic material-time source, but the dependency is captured when a
+ * window/controller is constructed; production continues to use the scene's
+ * monotonic clock and no per-frame Flutter transport is introduced.
+ */
+internal fun interface KeyguardOrbMaterialTimeSource {
+    fun timeAt(scene: KeyguardMaterialScene, frameTimeNanos: Long): KeyguardMaterialTime
+}
+
+internal object SystemKeyguardOrbMaterialTimeSource : KeyguardOrbMaterialTimeSource {
+    override fun timeAt(scene: KeyguardMaterialScene, frameTimeNanos: Long): KeyguardMaterialTime =
+        scene.timeAt(frameTimeNanos)
+}
+
+/** Exact-object grants are safe to revoke after a newer attachment installs
+ * its own grant. Equality is intentionally not used for retirement. */
+internal class KeyguardOrbPublicationGrantStore<T : Any> {
+    private val value = AtomicReference<T?>(null)
+
+    fun install(next: T): T? = value.getAndSet(next)
+    fun current(): T? = value.get()
+    fun revokeExact(expected: T): Boolean = value.compareAndSet(expected, null)
+    fun revokeCurrent(): T? = value.getAndSet(null)
+}
+
+/** Presence is distinct from the nullable platform fence carried by a
+ * release receipt. A receipt is consumed exactly once by its slot/use key. */
+internal data class KeyguardOrbReleaseReceipt<T>(val value: T?)
+
+internal class KeyguardOrbEarlyReleaseReceiptStore<T> {
+    private val values = mutableMapOf<Pair<Long, Long>, KeyguardOrbReleaseReceipt<T>>()
+
+    fun record(key: Pair<Long, Long>, value: T?): Boolean {
+        if (values.containsKey(key)) return false
+        values[key] = KeyguardOrbReleaseReceipt(value)
+        return true
+    }
+
+    fun take(key: Pair<Long, Long>): KeyguardOrbReleaseReceipt<T>? = values.remove(key)
+    fun discard(key: Pair<Long, Long>): KeyguardOrbReleaseReceipt<T>? = values.remove(key)
+}
+
 /** The service is constructed by Android, so instrumentation installs this
  * seam before binding it.  Controllers snapshot the observer at construction;
  * changing it cannot affect an existing renderer. */
 internal object KeyguardOrbBufferRendererTestHooks {
     @Volatile var frameObserver: KeyguardOrbBufferFrameObserver = NoopKeyguardOrbBufferFrameObserver
+    @Volatile var materialTimeSource: KeyguardOrbMaterialTimeSource = SystemKeyguardOrbMaterialTimeSource
 }
 
 /**
@@ -144,6 +189,7 @@ internal class KeyguardOrbBufferRenderer(
     private val onSizeChanged: () -> Unit,
     private val barrier: KeyguardOrbRenderBarrier = NoopKeyguardOrbRenderBarrier,
     private val frameObserver: KeyguardOrbBufferFrameObserver = NoopKeyguardOrbBufferFrameObserver,
+    private val materialTimeSource: KeyguardOrbMaterialTimeSource = SystemKeyguardOrbMaterialTimeSource,
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
 ) {
     private var api34: Api34? = null
@@ -215,6 +261,7 @@ internal class KeyguardOrbBufferRenderer(
             onLeaseDrained = ::onLeaseDrained,
             barrier = barrier,
             frameObserver = frameObserver,
+            materialTimeSource = materialTimeSource,
         )
 
         fun configure(spec: KeyguardOrbBufferRenderSpec) {
@@ -535,6 +582,7 @@ internal class KeyguardOrbBufferRenderer(
         private val onLeaseDrained: (KeyguardOrbBufferLease) -> Unit,
         private val barrier: KeyguardOrbRenderBarrier,
         private val frameObserver: KeyguardOrbBufferFrameObserver,
+        private val materialTimeSource: KeyguardOrbMaterialTimeSource,
     ) : Choreographer.FrameCallback {
         /**
          * `READY_FOR_MAIN` is deliberately distinct from compositor ownership.
@@ -595,11 +643,16 @@ internal class KeyguardOrbBufferRenderer(
         private var callbackPosted = false
         private var desired: KeyguardOrbBufferRenderSpec? = null
         private var attachedLease: KeyguardOrbBufferLease? = null
-        @Volatile private var publicationTarget: PublicationTarget? = null
+        /**
+         * Main installs an immutable grant before posting worker bookkeeping.
+         * A retirement captures/revokes only the grant it observed; a queued
+         * A-retirement must never clear a subsequently installed B grant.
+         */
+        private val publicationTarget = KeyguardOrbPublicationGrantStore<PublicationTarget>()
         private var firstLeaseSubmitted: KeyguardOrbBufferLease? = null
         private var firstLeaseAwaitingMain: KeyguardOrbBufferLease? = null
         private val retiringLeases = mutableSetOf<KeyguardOrbBufferLease>()
-        private val earlyReleaseFences = mutableMapOf<Pair<Long, Long>, SyncFence?>()
+        private val earlyReleaseReceipts = KeyguardOrbEarlyReleaseReceiptStore<SyncFence>()
         private var slots: MutableList<Slot> = mutableListOf()
         private var nextSlotId = 0L
         private var running = false
@@ -648,7 +701,8 @@ internal class KeyguardOrbBufferRenderer(
             // Main grants this exact existing child once. Subsequent worker
             // transactions may only replace its buffer; they never change
             // visibility or parenting.
-            publicationTarget = PublicationTarget(lease, child)
+            val target = PublicationTarget(lease, child)
+            publicationTarget.install(target)?.takeIf { it.lease != lease }?.active = false
             handler.post {
                 if (disposed || desired?.lease != lease) return@post
                 if (attachedLease != lease) {
@@ -664,7 +718,11 @@ internal class KeyguardOrbBufferRenderer(
         fun revokePublication(lease: KeyguardOrbBufferLease) {
             // Make the revocation visible to a renderer callback before its
             // queued control-lane bookkeeping runs.
-            publicationTarget?.takeIf { it.lease == lease }?.active = false
+            val target = publicationTarget.current()
+            if (target?.lease == lease) {
+                target.active = false
+                publicationTarget.revokeExact(target)
+            }
             handler.post {
                 retiringLeases += lease
                 if (attachedLease == lease) attachedLease = null
@@ -677,12 +735,14 @@ internal class KeyguardOrbBufferRenderer(
         }
 
         fun retire(reason: String) {
+            // Capture and revoke the exact Main-authorized target now. The
+            // queued worker runnable only retires worker bookkeeping; it must
+            // not inspect or clear a target installed by a newer attachment.
+            publicationTarget.revokeCurrent()?.active = false
             handler.post {
                 running = false
                 attachedLease = null
                 desired = null
-                publicationTarget?.active = false
-                publicationTarget = null
                 if (callbackPosted) choreographer?.removeFrameCallback(this)
                 callbackPosted = false
                 // A RenderRequest or the compositor may still own some
@@ -706,11 +766,10 @@ internal class KeyguardOrbBufferRenderer(
         }
 
         fun dispose() {
+            publicationTarget.revokeCurrent()?.active = false
             handler.post {
                 disposed = true
                 running = false
-                publicationTarget?.active = false
-                publicationTarget = null
                 if (callbackPosted) choreographer?.removeFrameCallback(this)
                 callbackPosted = false
                 slots.filter { it.state == SlotState.FREE }.toList().forEach { slot ->
@@ -736,8 +795,8 @@ internal class KeyguardOrbBufferRenderer(
                 firstLeaseAwaitingMain = null
                 firstLeaseSubmitted = frame.lease
                 published += 1
-                earlyReleaseFences.remove(frame.slotId to frame.useGeneration)?.let { fence ->
-                    consumeRelease(frame.slotId, frame.useGeneration, fence)
+                earlyReleaseReceipts.take(frame.slotId to frame.useGeneration)?.let { receipt ->
+                    consumeRelease(frame.slotId, frame.useGeneration, receipt.value)
                 }
                 publishSlotSnapshot()
                 if (running) requestFrame()
@@ -766,8 +825,12 @@ internal class KeyguardOrbBufferRenderer(
                 // SurfaceFlinger may release a transaction before the Main
                 // acknowledgement runnable reaches the renderer handler.
                 // Retain this exact fence rather than treating READY as FREE.
-                earlyReleaseFences[slotId to useGeneration]?.close()
-                earlyReleaseFences[slotId to useGeneration] = releaseFence
+                val key = slotId to useGeneration
+                if (!earlyReleaseReceipts.record(key, releaseFence)) {
+                    // Duplicate callbacks cannot replace the first exact
+                    // receipt or consume a later use generation.
+                    releaseFence?.close()
+                }
                 return
             }
             if (slot == null || slot.useGeneration != useGeneration || slot.state != SlotState.PUBLISHED) {
@@ -892,11 +955,12 @@ internal class KeyguardOrbBufferRenderer(
                 // of its RenderNode display list on API 35. Bind the phase
                 // before beginRecording(), rather than during Canvas draws,
                 // so each fresh root receives this frame's material state.
+                val materialTime = materialTimeSource.timeAt(spec.scene, frameTimeNanos)
                 currentShader.configure(
                     spec.scene.profile,
                     spec.lease.width,
                     spec.lease.height,
-                    spec.scene.timeAt(frameTimeNanos),
+                    materialTime,
                 )
                 val previousShader = slot.previousShader ?: currentShader
                 if (old != null && progress < 1f) {
@@ -904,7 +968,7 @@ internal class KeyguardOrbBufferRenderer(
                         old.profile,
                         spec.lease.width,
                         spec.lease.height,
-                        old.timeAt(frameTimeNanos),
+                        materialTimeSource.timeAt(old, frameTimeNanos),
                     )
                 }
                 barrier.beforeRender(spec.lease)
@@ -962,7 +1026,6 @@ internal class KeyguardOrbBufferRenderer(
                     }
                     previousCompletionAtUptimeMs = completedAt
                     publishSlotSnapshot()
-                    val materialTime = spec.scene.timeAt(frameTimeNanos)
                     // This hook is intentionally test-only and executes on
                     // the renderer handler after a SUCCESS result.  It lets
                     // instrumentation read the producer buffer after the
@@ -1046,7 +1109,7 @@ internal class KeyguardOrbBufferRenderer(
          * to show, hide or reparent: it updates only a still-authorized child
          * that Main made visible during first publication. */
         private fun publishSteady(slot: Slot, frame: ReadyFrame) {
-            val target = publicationTarget
+            val target = publicationTarget.current()
             if (target == null || !target.active || target.lease != frame.lease ||
                 slot.useGeneration != frame.useGeneration || slot.retired
             ) {
@@ -1079,6 +1142,9 @@ internal class KeyguardOrbBufferRenderer(
         /** A stale/failed producer completion still owns its render fence.
          * It cannot become FREE simply because its visual lease was revoked. */
         private fun discardRenderResult(slot: Slot, fence: SyncFence?) {
+            // A READY frame can be revoked before Main acknowledges it. Its
+            // receipt is no longer eligible for a future use of this slot.
+            earlyReleaseReceipts.discard(slot.id to slot.useGeneration)?.value?.close()
             slot.state = SlotState.WAIT_RENDER_FENCE
             awaitFence(slot.id, slot.useGeneration, SlotState.WAIT_RENDER_FENCE, fence)
         }

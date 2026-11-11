@@ -88,6 +88,31 @@ class KeyguardMaterialProfileTest {
         assertEquals(1f, after.elapsedSeconds - before.elapsedSeconds, .0001f)
     }
 
+    @Test fun `old publication retirement cannot revoke a newer exact grant`() {
+        val grants = KeyguardOrbPublicationGrantStore<Any>()
+        val oldGrant = Any()
+        val newGrant = Any()
+        grants.install(oldGrant)
+        grants.install(newGrant)
+
+        assertFalse("queued retirement of A must not clear B", grants.revokeExact(oldGrant))
+        assertTrue("B grant must survive A retirement", grants.current() === newGrant)
+        assertTrue(grants.revokeExact(newGrant))
+        assertEquals(null, grants.current())
+    }
+
+    @Test fun `early null fence receipt remains present until exact use consumes it`() {
+        val receipts = KeyguardOrbEarlyReleaseReceiptStore<Any>()
+        val exactUse = 7L to 11L
+        assertTrue(receipts.record(exactUse, null))
+        assertFalse("duplicate callback cannot replace the first receipt", receipts.record(exactUse, Any()))
+
+        val receipt = requireNotNull(receipts.take(exactUse))
+        assertEquals(null, receipt.value)
+        assertEquals(null, receipts.take(exactUse))
+        assertEquals(null, receipts.take(7L to 12L))
+    }
+
     @Test fun `new bridge session accepts revision one but old session cannot overwrite it`() {
         assertTrue(
             KeyguardMaterialPublicationOrder.accepts(

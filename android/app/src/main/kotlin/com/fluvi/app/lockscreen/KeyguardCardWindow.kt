@@ -24,6 +24,7 @@ import com.fluvi.app.lockscreen.material.KeyguardOrbRenderBarrier
 import com.fluvi.app.lockscreen.material.NoopKeyguardOrbRenderBarrier
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferFrameObserver
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferRendererTestHooks
+import com.fluvi.app.lockscreen.material.KeyguardOrbMaterialTimeSource
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
 
 /** Main-thread owner of one, and only one, accessibility overlay root. Drag
@@ -61,6 +62,9 @@ internal class KeyguardCardWindow(
      * created; production resolves to the no-op observer. */
     private val isolatedOrbFrameObserver: KeyguardOrbBufferFrameObserver =
         KeyguardOrbBufferRendererTestHooks.frameObserver,
+    /** Captured with the observer for deterministic renderer-only tests. */
+    private val isolatedOrbMaterialTimeSource: KeyguardOrbMaterialTimeSource =
+        KeyguardOrbBufferRendererTestHooks.materialTimeSource,
 ) {
     enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
 
@@ -414,6 +418,7 @@ internal class KeyguardCardWindow(
             drawEvidenceOwner = KeyguardCardDiagnostics::drawEvidenceOwner,
             isolatedOrbRenderBarrier = isolatedOrbRenderBarrier,
             isolatedOrbFrameObserver = isolatedOrbFrameObserver,
+            isolatedOrbMaterialTimeSource = isolatedOrbMaterialTimeSource,
         ).also { controller ->
             controller.onPreparationStage = { stage, fields ->
                 reportWindowDiagnostic(stage, fields["programKey"]?.toString() ?: "material", null)

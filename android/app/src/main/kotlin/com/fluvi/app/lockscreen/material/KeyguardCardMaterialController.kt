@@ -40,6 +40,9 @@ internal class KeyguardCardMaterialController(
      * runtime hook changes cannot affect an established attachment. */
     private val isolatedOrbFrameObserver: KeyguardOrbBufferFrameObserver =
         KeyguardOrbBufferRendererTestHooks.frameObserver,
+    /** Captured at controller construction; never a cross-thread user input. */
+    private val isolatedOrbMaterialTimeSource: KeyguardOrbMaterialTimeSource =
+        KeyguardOrbBufferRendererTestHooks.materialTimeSource,
 ) {
     enum class ColdPresentationState { BOOTSTRAP, BOOTSTRAP_SUBMITTED, LIVE }
 
@@ -112,6 +115,7 @@ internal class KeyguardCardMaterialController(
             onSizeChanged = ::onIsolatedOrbSizeChanged,
             barrier = isolatedOrbRenderBarrier,
             frameObserver = isolatedOrbFrameObserver,
+            materialTimeSource = isolatedOrbMaterialTimeSource,
         )
     }
     private val isolatedOrbRenderer: KeyguardOrbBufferRenderer

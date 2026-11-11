@@ -33,7 +33,10 @@ import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferFrameObserver
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferProducerFrame
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferRendererTestHooks
+import com.fluvi.app.lockscreen.material.KeyguardOrbMaterialTimeSource
+import com.fluvi.app.lockscreen.material.KeyguardMaterialTime
 import com.fluvi.app.lockscreen.material.NoopKeyguardOrbBufferFrameObserver
+import com.fluvi.app.lockscreen.material.SystemKeyguardOrbMaterialTimeSource
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -42,7 +45,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.time.Duration
-import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
 /**
@@ -96,7 +98,11 @@ class KeyguardServiceOverlayInstrumentationTest {
         // buffers off Main, then lets the existing compositor assertion tell
         // us whether the producer or the layer/transaction boundary froze.
         val producerProbe = ProducerPixelProbe()
+        val controlledTime = java.util.concurrent.atomic.AtomicReference(materialTime(PHASE_A))
         KeyguardOrbBufferRendererTestHooks.frameObserver = producerProbe
+        KeyguardOrbBufferRendererTestHooks.materialTimeSource = KeyguardOrbMaterialTimeSource { _, _ ->
+            controlledTime.get()
+        }
         try {
             assertFalse("Secure credentials require a different, explicit fixture", keyguard.isDeviceSecure)
             assertTrue("Cannot safely restore unknown lockscreen setting: $savedLockDisabled",
@@ -150,7 +156,14 @@ class KeyguardServiceOverlayInstrumentationTest {
             val cold = episode("cold", occlusionProbe)
             occlusionProbe?.close()
             occlusionProbe = null
+            val producerA = producerProbe.awaitPhase(PHASE_A)
+            producerProbe.persist(output, "producer-a", producerA)
             val firstImage = copyOrb(cold.window, "cold-orb-a.png")
+            controlledTime.set(materialTime(PHASE_C))
+            val producerC = producerProbe.awaitPhase(PHASE_C)
+            producerProbe.persist(output, "producer-c", producerC)
+            val plateau = producerProbe.compare(producerA, producerC)
+            assertFalse("A/C plateau must not satisfy meaningful motion: $plateau", plateau.meaningful())
             // A quiet, explicitly marked interval, not a FPS target. No
             // diagnostic polling, input, screenshots or window reads during
             // this interval; system trace owns its frame/thread attribution.
@@ -166,7 +179,10 @@ class KeyguardServiceOverlayInstrumentationTest {
                     steady.actualProgressCount() > cold.material.actualProgressCount())
             assertEquals("API-35 standalone ORB must use the isolated production renderer",
                 "HardwareBufferRenderer/SurfaceControl", steady.activeRenderer)
-            val producer = producerProbe.awaitDistinctCurrentAttachment()
+            controlledTime.set(materialTime(PHASE_B))
+            val producerB = producerProbe.awaitPhase(PHASE_B)
+            producerProbe.persist(output, "producer-b", producerB)
+            val producer = producerProbe.compare(producerA, producerB)
             record(
                 "PRODUCER_READBACK",
                 "lease=${producer.leaseAttachment}/${producer.leaseGeneration}" +
@@ -202,6 +218,11 @@ class KeyguardServiceOverlayInstrumentationTest {
                 firstImage?.recycle()
                 secondImage?.recycle()
             }
+            controlledTime.set(materialTime(PHASE_A))
+            val producerReturn = producerProbe.awaitPhase(PHASE_A)
+            producerProbe.persist(output, "producer-return-a", producerReturn)
+            val returnDelta = producerProbe.compare(producerA, producerReturn)
+            assertFalse("A-B-A must return to A within the plateau tolerance: $returnDelta", returnDelta.meaningful())
             // A real touch is delivered to the production accessibility root.
             marked("orb-short-tap") { tap(cold.window.bounds) }
             awaitLive("after-tap", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
@@ -245,6 +266,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             throw failure
         } finally {
             KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
+            KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
             occlusionProbe?.close()
             occlusionProbe = null
             var cleanupFailure: Throwable? = null
@@ -320,11 +342,11 @@ class KeyguardServiceOverlayInstrumentationTest {
      * Boundary evidence only: the renderer calls this on its HandlerThread
      * after HardwareBufferRenderer reports SUCCESS.  The supplied fence is
      * awaited but never closed here because the real SurfaceControl
-     * transaction remains its owner.  Keeping just two phase-separated
-     * software copies avoids any test-only per-frame readback behaviour.
+     * transaction remains its owner. It copies only an explicitly requested
+     * phase, so readback is bounded and absent from performance runs.
      */
     private class ProducerPixelProbe : KeyguardOrbBufferFrameObserver {
-        private data class Sample(
+        data class Sample(
             val frame: KeyguardOrbBufferProducerFrame,
             val pixels: IntArray,
         )
@@ -342,7 +364,9 @@ class KeyguardServiceOverlayInstrumentationTest {
             val changedPixels: Int,
             val firstSignature: PixelSignature,
             val secondSignature: PixelSignature,
-        )
+        ) {
+            fun meaningful(): Boolean = changedPixels >= 64 && pixelDelta >= 2_048L
+        }
 
         /** Compact content evidence that distinguishes a frozen material from
          * a transparent/no-op RenderNode result without retaining pixels. */
@@ -352,7 +376,8 @@ class KeyguardServiceOverlayInstrumentationTest {
             val nonBlack: Int,
         )
 
-        private val samples = CopyOnWriteArrayList<Sample>()
+        private val requestedPhase = java.util.concurrent.atomic.AtomicReference<Float?>(null)
+        private val captured = java.util.concurrent.atomic.AtomicReference<Sample?>(null)
         @Volatile private var failure: Throwable? = null
 
         override fun onProduced(
@@ -360,10 +385,9 @@ class KeyguardServiceOverlayInstrumentationTest {
             buffer: HardwareBuffer,
             completionFence: SyncFence?,
         ) {
-            if (frame.lease.attachment == 0L || samples.size >= 2 || failure != null) return
-            val first = samples.firstOrNull()
-            if (first != null &&
-                frame.frameTimeNanos - first.frame.frameTimeNanos < TimeUnit.MILLISECONDS.toNanos(750)
+            val phase = requestedPhase.get() ?: return
+            if (frame.lease.attachment == 0L || failure != null ||
+                kotlin.math.abs(frame.materialTime.phase - phase) > .0001f
             ) return
             try {
                 // The public renderer contract requires waiting before the
@@ -386,7 +410,8 @@ class KeyguardServiceOverlayInstrumentationTest {
                 try {
                     val pixels = IntArray(software.width * software.height)
                     software.getPixels(pixels, 0, software.width, 0, 0, software.width, software.height)
-                    samples += Sample(frame, pixels)
+                    val sample = Sample(frame, pixels)
+                    if (requestedPhase.compareAndSet(phase, null)) captured.set(sample)
                 } finally {
                     software.recycle()
                 }
@@ -395,19 +420,20 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
         }
 
-        fun awaitDistinctCurrentAttachment(): Result {
+        fun awaitPhase(phase: Float): Sample {
+            captured.set(null)
+            requestedPhase.set(phase)
             val deadline = SystemClock.uptimeMillis() + 8_000L
-            while (SystemClock.uptimeMillis() < deadline && samples.size < 2 && failure == null) {
+            while (SystemClock.uptimeMillis() < deadline && captured.get() == null && failure == null) {
                 SystemClock.sleep(20)
             }
             failure?.let { throw AssertionError("producer readback failed", it) }
-            assertEquals("Expected two phase-separated current producer samples", 2, samples.size)
-            val first = samples[0]
-            val second = samples[1]
+            return requireNotNull(captured.get()) { "producer did not reach requested phase=$phase" }
+        }
+
+        fun compare(first: Sample, second: Sample): Result {
             assertEquals("Producer samples must belong to the same current lease",
                 first.frame.lease, second.frame.lease)
-            assertTrue("Probe must wait for a distinct canonical phase",
-                kotlin.math.abs(second.frame.materialTime.phase - first.frame.materialTime.phase) > .01f)
             var changed = 0
             var delta = 0L
             first.pixels.indices.forEach { index ->
@@ -435,6 +461,27 @@ class KeyguardServiceOverlayInstrumentationTest {
                 firstSignature = signature(first.pixels),
                 secondSignature = signature(second.pixels),
             )
+        }
+
+        fun persist(directory: File, label: String, sample: Sample) {
+            val bitmap = Bitmap.createBitmap(
+                sample.pixels,
+                sample.frame.lease.width,
+                sample.frame.lease.height,
+                Bitmap.Config.ARGB_8888,
+            )
+            try {
+                File(directory, "$label.png").outputStream().use {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+                File(directory, "$label.txt").writeText(
+                    "lease=${sample.frame.lease.attachment}/${sample.frame.lease.generation} " +
+                        "slot=${sample.frame.slotId} use=${sample.frame.useGeneration} " +
+                        "phase=${sample.frame.materialTime.phase}\n",
+                )
+            } finally {
+                bitmap.recycle()
+            }
         }
 
         private fun signature(pixels: IntArray): PixelSignature {
@@ -1066,8 +1113,18 @@ class KeyguardServiceOverlayInstrumentationTest {
         "rotationEnabled" to false, "rotationSpeed" to 0.0, "settings" to List(12) { .2 },
     )
 
+    private fun materialTime(phase: Float) = KeyguardMaterialTime(
+        elapsedSeconds = phase,
+        phase = phase,
+        backgroundPhase = phase,
+        interiorPhase = phase,
+    )
+
     companion object {
         private const val TAG = "FluviServiceProbe"
+        private const val PHASE_A = 1.196795f
+        private const val PHASE_C = 1.5234617f
+        private const val PHASE_B = 3.75f
         private const val EXPECTED_PORTAL_HASH = "004559458d996ae0f4c8778ed4ad0055bbe87624e43297783c8ab19f94dcab21"
     }
 }
