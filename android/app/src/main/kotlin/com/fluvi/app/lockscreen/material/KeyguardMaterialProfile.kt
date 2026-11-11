@@ -39,20 +39,10 @@ internal data class KeyguardMaterialProfile(
     val animated: Boolean
         get() = effectId != "staticEffect" && phaseSpeed > 0f || background.hasMotion || interior.hasMotion
 
-    /** Whether the published scene carries either Portal channel. */
+    /** Portal composition has its own bounded runtime program. Keeping the
+     * no-Portal selected effect program separate avoids compiling Portal's
+     * inactive unrolled loops into every normal lock-screen scene. */
     val usesPortal: Boolean get() = background.enabled || interior.enabled
-
-    /**
-     * Whether the selected AGSL program must retain Portal math. Effect zero
-     * is the canonical no-material sentinel: the AGSL `portalSample` returns
-     * zero for it, so an enabled channel with that value has no pixels, phase, or
-     * palette contribution. Select the compact no-Portal program in that
-     * case instead of retaining inactive Portal branches in the isolated
-     * producer.
-     */
-    val requiresPortalProgram: Boolean
-        get() = (background.enabled && background.effectIndex > 0) ||
-            (interior.enabled && interior.effectIndex > 0)
 
     /** The visual identity excludes the handoff clock so an identical scene
      * from a restarted Flutter publisher never restarts the native clock. */

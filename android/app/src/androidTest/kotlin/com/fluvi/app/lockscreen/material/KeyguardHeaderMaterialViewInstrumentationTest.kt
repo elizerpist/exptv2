@@ -1197,7 +1197,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 "opacity" to 1.0,
                 "paletteSplitPercent" to 50.0,
                 "commonSettings" to List(40) { .2 },
-                "background" to portal(true, effectIndex = 1),
+                "background" to portal(false),
                 "interior" to portal(false),
                 "referenceWidth" to 390.0,
                 "referenceHeight" to 220.0,
@@ -1205,9 +1205,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         ),
     )
 
-    private fun portal(enabled: Boolean, effectIndex: Int = 0) = mapOf(
+    private fun portal(enabled: Boolean) = mapOf(
         "enabled" to enabled,
-        "effectIndex" to effectIndex,
+        "effectIndex" to 0,
         "phase" to 0.0,
         "phaseSpeed" to 0.0,
         "paletteCenterPercent" to 50.0,

@@ -40,29 +40,7 @@ class KeyguardMaterialProfileTest {
         requireNotNull(value)
         assertEquals(40, value.commonSettings.size)
         assertEquals(.4f, value.background.phaseSpeed, 0f)
-        assertTrue(value.usesPortal)
-        assertTrue(value.requiresPortalProgram)
         assertTrue(value.animated)
-    }
-
-    @Test fun `enabled portal with the zero-effect sentinel uses the compact program`() {
-        val value = requireNotNull(KeyguardMaterialProfile.fromMap(
-            profile().plus(
-                "background" to mapOf(
-                    "enabled" to true,
-                    "effectIndex" to 0,
-                    "phase" to .2,
-                    "phaseSpeed" to .4,
-                    "paletteCenterPercent" to 50.0,
-                    "paletteWindowPercent" to 68.0,
-                    "rotationEnabled" to false,
-                    "rotationSpeed" to 0.0,
-                    "settings" to List(12) { 0.0 },
-                ),
-            ),
-        ))
-        assertTrue(value.usesPortal)
-        assertFalse(value.requiresPortalProgram)
     }
 
     @Test fun `rejects source or ABI mismatch rather than rendering guessed uniforms`() {

@@ -631,18 +631,14 @@ internal class KeyguardCardMaterialController(
         profile: KeyguardMaterialProfile,
         installViewProgram: Boolean,
     ) {
-        val requestedKey = "${profile.visualKey}|${profile.effectId}|${profile.requiresPortalProgram}|${view.shape}"
+        val requestedKey = "${profile.visualKey}|${profile.effectId}|${profile.usesPortal}|${view.shape}"
         requestedProgramKeys[view] = requestedKey
         preparationRequests += 1
         onPreparationStage?.invoke(
             "MATERIAL_PREPARE_REQUESTED",
-            mapOf(
-                "effectId" to profile.effectId,
-                "usesPortal" to profile.usesPortal,
-                "requiresPortalProgram" to profile.requiresPortalProgram,
-            ),
+            mapOf("effectId" to profile.effectId, "usesPortal" to profile.usesPortal),
         )
-        artifacts.prepare(profile.effectId, profile.requiresPortalProgram) { result ->
+        artifacts.prepare(profile.effectId, profile.usesPortal) { result ->
             result.onSuccess { artifact ->
                 preparationCompletions += 1
                 onPreparationStage?.invoke("MATERIAL_ARTIFACT_READY", mapOf("programKey" to artifact.programKey))
@@ -798,8 +794,7 @@ internal class KeyguardCardMaterialController(
         ) return
         val scene = latestOrbScene ?: return
         val artifact = latestOrbArtifact?.takeIf {
-            it.effectId == scene.profile.effectId &&
-                it.usesPortal == scene.profile.requiresPortalProgram
+            it.effectId == scene.profile.effectId && it.usesPortal == scene.profile.usesPortal
         } ?: return
         val root = rootOverride ?: attachedRoot
         val (width, height) = warmupDimensions(orb)
