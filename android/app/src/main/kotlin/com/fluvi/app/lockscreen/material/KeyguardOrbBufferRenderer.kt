@@ -450,9 +450,11 @@ internal class KeyguardOrbBufferRenderer(
                     } else {
                         transaction.apply()
                     }
-                    // The transaction copied the acquisition fence. Close the
-                    // application handle only after submission, never before.
-                    frame.fence?.close()
+                    // A successful setBuffer transaction takes ownership of
+                    // its acquire fence. Closing it here can invalidate the
+                    // compositor's wait before the buffer is displayed. The
+                    // error/drop path remains responsible for a fence that
+                    // was never submitted.
                     worker.markFirstPublished(frame)
                     if (firstCurrentPublication) {
                         firstPublishedLease = frame.lease
@@ -941,10 +943,9 @@ internal class KeyguardOrbBufferRenderer(
                         Consumer { releaseFence -> consumeRelease(frame.slotId, frame.useGeneration, releaseFence) },
                     )
                     .apply()
-                // SurfaceControl has copied the producer fence into the
-                // transaction. Slot reuse still waits for its later release
-                // callback/fence, never for transaction commitment.
-                frame.fence?.close()
+                // SurfaceControl owns the submitted acquire fence. Slot
+                // reuse still waits for its later release callback/fence,
+                // never for transaction commitment.
                 slot.state = SlotState.PUBLISHED
                 published += 1
             }.onFailure { error ->
