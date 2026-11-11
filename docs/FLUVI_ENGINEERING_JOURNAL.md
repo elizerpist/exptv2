@@ -6463,3 +6463,340 @@ Independent panel-motion instability and dashboard profiling remain open; no tar
 After installing this exact APK, retain the same ORB/orbOnly/privacy settings. Use existing onscreen LIGHT capture for the first post-install/service wake, several warm lock/wake/unlock cycles, one longer visible animation interval and one quick repeat transition. Freeze/copy and note any perceived lag/flash. No ADB/root/computer/additional app is required. This is one corrected-source physical comparison, not another request to test production-identical1f0a199.
 
 **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-11-11 — reviewer: dc591498 physical feedback, lag persists; correctness GREEN is not pacing acceptance
+
+- **User feedback:** "Nem látok fejlődést, remélem előző promptod alapján diagnózis alapú fejlesztést kértél. Hiba loopban vagyunk? Mit mondanak a logok?" The user's physical result is **LAG PERSISTS / NOT ACCEPTED**, not a successful performance milestone.
+- **Exact identity:** phone build `dc591498316ac647ca2873c7a0f7e72d12fd85ff`, profile, Nothing A142/API35, ORB/orbOnly/full privacy, foreground/background requested=false. One unique LIGHT capture `edd89809-1994-49af-b87d-5fe208c5ac2b`, process `9859-e58aec13`, PID9859/serviceSession1, started2026-11-11T01:48:58.519+0100, duration27578ms. This IS the corrected source, unlike the preceding1f0a199 captures; do not ask the user to install this same source again as though it were untested.
+- **Repository identity:** audited branch `fix/orb-v4-latency-lockscreen` at documentation HEAD `83b47b827fd5af64f42a2dda4e1283f966c6c1a8`. Runtime correction `7099f6c0ac91aa7067025099014f210947144836`; physical build `dc591498` adds only test evidence retrieval to that runtime. Subsequent a89ac15b/83b47b82 are journal-only, not new app builds. Previous reviewer record0662ec1e remains intact.
+- **Rule/source audit:** reread both complete project rule assets, hashes f5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297 and dc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c; read the complete new journal additions/consolidated report and current MILESTONE_COMMITS.md. Audited all commit bodies since0662 and actual changed-file patches, current service/queue/settings changes and affected tests/runners, plus the current material clock/controller/view, window hide and system-reader/sampler ownership. Protected dfa90b67/6e962187 milestones and their exclusions remain unchanged. No implementation or out-of-scope app modification by this reviewer.
+
+### What the preceding prompt actually repaired
+
+1. eb26d4d8 was the production-parent regression, not a performance fix. Independently downloaded artifact13813821633/run42920244421: the actual service fails "Recoverable occlusion erased the newer unserved inspection" at OcclusionSuccessorProbe.afterApply, after a newer event was queued before an older negative applied.1 test/1 failure,3.022seconds. This is an exact reproduced ownership defect.
+2.7099f6c0 routes only UNKNOWN/OCCLUDED through the existing recoverable waiting owner. Detached exclusion preserves compatible unserved work; visible withdrawal invalidates the old result and reacquires the event with new authority while retaining its original event/callback origin. Fresh positive classification/admission, terminal cancellation, privacy and finite retry budget remain. The earlier31a012ac/6ffeb23d/21ebac35 off-Main recurring system-reader correction is included and was not rewritten.
+3.dc591498 only keeps failing PixelCopy evidence available until retrieval and restores the clean installation boundary afterward. It does not alter the shipped shader, render clock, ViewRoot scheduling or motion assertion.
+4. Therefore the previous prompt WAS diagnosis-based, but its newly repaired defect was recoverable-work loss. Neither that repair nor an automated liveness pass establishes a fix for the remaining physical frame gaps. The current phone's retained withdrawals are UNKNOWN (NO_MAIN_MARKER, ROOT_UNAVAILABLE, WALK_TRUNCATED), not direct evidence of the repaired OCCLUDED ordering.
+
+### Independent current CI/artifact verification
+
+- Run[42929281876](https://github.com/elizerpist/exptv2/actions/runs/42929281876), attempt1: core, Flutter, native runtime and Human build jobs SUCCESS. Overall workflow FAILURE remains because separate dashboard profile job130226698744 failed; do not call the whole workflow GREEN or silently classify that failure as inherited. Nightly lanes were skipped.
+- Downloaded native artifact[13817300781](https://github.com/elizerpist/exptv2/actions/runs/42929281876/artifacts/13817300781): actual XML38 tests/0 failures/0 errors/0 skipped,288.181seconds; separate service instrumentation OK(1 test),42.462seconds.
+- Read actual fixture97557446: hidden cause5→next19; visible cause34→new request36, samewake4; replacementwindow8→9 gains7 new shader draws/phase advances. Blocked recurring reader permits9 new draws, hide/privacy before release, recurringMainReads=0; UNKNOWN-withdrawal control permits10 draws, late-positive rejection and fresh-admission veto pass. Final fixture literally records OUTPUT_LIVENESS_PASS performanceAndNothingDevice=UNVERIFIED.
+- These are correctness/liveness controls with synthetic parameters on an API35 swangle emulator. They are not a matched phone pacing benchmark. The retained emulator trace analysis also shows long draw-VRI/postAndWait/RenderThread/dequeueBuffer intervals. That is emulator-specific evidence of rendering waits, NOT proof of the phone's specific blocking call. The independent earlier panel PixelCopy instability remains unexplained despite this slow passing run.
+- Independently checked Human job130233181499 log: FLUVI_BUILD_COMMIT=full dc591498 SHA, normal profile APK. Release tagfluvi-human-diagnostic-dc59149 targets that full SHA; assetfluvi_HUMAN_DIAGNOSTIC_dc59149.apk is120133226bytes, GitHub digestsha256:41750b1237dfe112c07232dfa278a928f8efcfa59da1aaab3030c91139a73622. This turn checked release metadata/build log and the phone's embedded report SHA, not a fresh120MB APK binary download; preceding agent's independent binary/download evidence remains separately attributed.
+
+### Current graph and impact audit
+
+- Final tooling7de0baa6a5abc1e1ec41e3fd47acda3254bc055c contains generationf7e7496f plus factual CI metadata only; compared their actual diff. Manifest source_head=dc591498, source_parent=92c7089f, raw index5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59,807 Dart documents. Kotlin coverage is absent, explicitly.
+- Reran targeted JSONL graph queries using three locally cached shards whose Git blob hashes were checked against this exact graph tree: symbols000 bbff0586f32fecfc3be07ee1fd43905f956a3c50; refs002673d040263ee4022a245cec4e7334c301a21dacf; refs0084aa9496fcda2a283767b568b894f849af2ce5a34. Class/constructor/factory reference totals: Bridge8(3 production/5 test), Snapshot12 production, Console5(3/2). Fresh exact-source consumer blobs were fetched and verified in shell, debug console/button, bridge and both focused tests. This was an actual shard query, not a claim to have rerun scip_dart or all graph-tool tests in the reviewer environment.
+- Native source map: accessibility/display callbacks → independently bounded system sampler or existing authorized inspection lane → inspectSurface → withContext(Dispatchers.Main.immediate) → applyInspection → recoverable owner or show → KeyguardCardWindow. Main owns visibility/authority/View operations; two retained material views share one KeyguardMaterialClock. Clock doFrame invokes orb.frame/background.frame and schedules the next callback; frame() sets frameNanos and invalidates eligible visible material. Window hide applies INVISIBLE before removeViewImmediate. These ownership facts locate boundaries; they do not identify all wall-time stalls.
+
+### Physical timing — four retained attempts, not nine complete measurements
+
+| Attempt | Wake-cycle callback→first live draw | SCREEN_ON→live | Largest observed draw gap | Hide trigger callback→local hide | Hide trigger callback→remove return |
+| --- | ---: | ---: | ---: | ---: | ---: |
+|1, first service attachment|569ms|31ms, LATE endpoint|179ms|123ms|167ms|
+|7, warm|139ms|101ms|101ms|12ms|21ms|
+|8, warm|208ms|208ms|86ms|196ms|217ms|
+|9, warm|314ms|265ms|87ms|79ms|116ms|
+
+- These are owned timing endpoints/CPU submission observations, not physical panel presentation/removal. Attempts2–6 are absent from the retained summaries; no nine-cycle mean/p95 or "all cycles smooth" claim.
+- Previous1f0a199 LIGHT warm max gaps were93/91/85ms; current warm retained gaps101/86/87ms remain in the same problematic range. Previous LIGHT callback→live warm257/265/316ms and current139/208/314ms show variable observations, not a controlled improvement. Old/local hide26/16/52ms versus current12/196/79ms likewise cannot establish a general regression rate from this small unmatched sample; current large delays are independently real. Cold624→569ms alone does not prove a stable gain. User reports no improvement.
+
+### Proven delay decomposition
+
+- **Cold show:** callback476176243→decision476176363=120ms; decision→add begin2ms; addView47ms; add return476176412→first root476176715=303ms; root→first live476176812=97ms. Total569ms. Bootstrap draw476176716→commit476176805=89ms; commit→live7ms. GPU preparation completed476157754,18489ms BEFORE this wake callback. Preparation completion is not proof of live presentation or absence of later GPU/platform work.
+- SCREEN_ON arrived476176781,66ms AFTER first root. Export correctly marks root endpoint INVALID_EVENT_ORDER. Its31ms SCREEN_ON→shader must not be promoted into a31ms wake/show success; the earlier wake-cycle callback→live is569ms.
+- **Warm show8:** callback476195245→queued476195308=63ms BEFORE the recorded zero queueMs. The async system-check/dispatch ingress is on that source path, but this excerpt does not split that63ms into platform acquisition versus scheduling. Do not erase it by quoting queueMs=0.
+- **Warm show9:** first request232 takes137ms and returns ROOT_UNAVAILABLE, then waits27ms for Main. Showing request238 takes77ms after its own8ms queue. Its handoff0ms is only the winning request, not the whole314ms cycle.
+- **Hide1:** callback→inspection start6ms + inspection17ms + handoff99ms + main entry→local hide1ms =123ms. Actual inspection root3ms. removeViewImmediate adds44ms. The event itself predates callback by188ms; event→local hide311ms is a source-event interval, NOT measured SystemUI unlock animation onset.
+- **Hide8:**1ms to start +118ms inspection(ROOT_UNAVAILABLE, activeRoot43ms/per-window roots65ms) +77ms handoff =196ms to local hide; removal adds21ms. This case is partly acquisition and partly delayed Main delivery, not merely expensive removeView.
+- **Hide9:**2ms to start +58ms inspection(WALK_TRUNCATED/NULL_CHILD, child calls39ms) +18ms handoff +1ms local hide =79ms; removal adds37ms.
+- Once the decision is reached, local hide is0–1ms in all four retained cases. Rewriting just the local hide setter would target the wrong dominant boundary.
+
+| Draw sample | Previous draw end→callback entry | Owned callback wall time | Callback end→draw start | Draw CPU | End-to-end recorded gap |
+| --- | ---: | ---: | ---: | ---: | ---: |
+|a7/show18/sample0|51.264ms|0.260ms|49.430ms|0.162ms|101.120ms|
+|a8/show21/sample0|36.482ms|0.281ms|48.897ms|0.163ms|85.827ms|
+|a9/show24/sample0|31.710ms|0.390ms|54.201ms|0.173ms|86.479ms|
+|a1/show2/sample0|146.278ms|0.377ms|32.107ms|0.195ms|178.963ms|
+|a1/show2/sample1|52.520ms|0.266ms|67.566ms|0.293ms|120.653ms|
+|a1/show2/sample2|57.798ms|55.285ms|0.501ms|0.314ms|113.906ms|
+
+- Critical result: warm49–54ms post-callback/pre-draw delays survive in the corrected build. This is not the previous proven recurring system-getter block inside an owned gate scope. Empty work= only means no retained matching owned scopes; workCoverage=ownedScopesOnly does NOT cover all framework/ViewRoot/RenderThread scheduling or thread descheduling.
+- Cold sample2 separately has55.285ms OWNED callback wall time before the observation hook; samplea8:1 has12.149ms. Neither field is callback CPU time. The short sampled draw cpuNs cannot explain, or rule out causes of, those earlier stalls. No specific IPC, lock, GPU, OEM defect, Choreographer defect or garbage collection pause is proven by this export.
+- animationStarts/stops2/2 on cold attach1 does not establish concurrent duplicate clocks: source has one controller-owned clock and start/stop are guarded. Warm episodes1/1. Do not prescribe a new clock solely from this counter.
+- Producer total131.512ms/max17.242ms remains relevant overhead, but the sampled worst warm gaps contain no matching owned producer scope. Consumer lock-held2414.981ms is an aggregate on a dedicated diagnostic consumer, NOT a2.415s Main-thread block. No false summation of nested apply/system/producer scopes.
+
+### Evidence limits and anti-loop decision
+
+- Full pasted capture was reviewed; only a clearly labelled selected-field transcription is frozen below. Original exported-file bytes are unavailable; do not describe its hash as the original phone export.
+- Retention:1338 recorded,275 retained,844 evicted,219 diagnostic dropped,274 raw event lines omitted;9 gap records exported/3 omitted; exportTruncated=true,31243bytes. Critical omitted IDs=none/incomplete retained attempts=none do not recover unretained cycles. Physical overlay presentation/removal and system wake/unlock visual starts remain UNOBSERVED; live frame commit UNOBSERVED. Persistence lastSeq0 does not invalidate this live frozen export, but disk recovery may lack tail.
+- **PROVEN:** the delivered build includes real diagnosed correctness repairs; the exact lost-successor regression went RED→GREEN; current physical feedback rejects lag resolution; the above show/hide/draw boundary delays remain.
+- **UNPROVEN:** that those corrected defects were the dominant cause of the user's animation lag; controlled overall speedup/regression; exact blocking call/thread state behind the phone's49–54ms post-callback delay,55ms callback interval,303ms initial traversal wait or99/77ms Main handoff; any GPU/OEM/diagnostic-lock attribution.
+- **MISSING:** contemporaneous phone scheduler/native traversal/RenderThread/Binder attribution for those exact intervals, actual presentation endpoints and controlled baseline/candidate pacing. The available CI trace is useful but cannot substitute for that phone evidence. No new original Drive export was supplied or searched in this status-only turn; no additional evidence source is claimed reviewed.
+- **Loop verdict:** real correctness progress exists, but repeated builds without demonstrated improvement of the reported symptom are a performance-debugging loop risk. Another identical sampler move, occlusion fix, cache/prefetch toggle, retry increase, bootstrap removal or broad renderer refactor would be unjustified. Do not ship a20th/21st "lag fixed" claim from a liveness-only green result.
+- **Next permitted scope:** attribute the already-localized Main callback/traversal/handoff intervals and surface-acquisition delay to actual owners before choosing a new production repair; use existing native trace artifacts where applicable and keep phone/emulator evidence separate. A new experiment must distinguish a named remaining cause, not simply collect the same aggregate report again. Any later coding prompt must read both rule assets and this journal, preserve the actual off-Main/occlusion fixes and all visibility/privacy/terminal/stale/fidelity contracts, and require a symptom-correlated baseline/final result. No source-level phone lag fix is asserted or issued from this evidence alone. This turn answers the user's audit/diagnosis question and records the negative physical result.
+- Reviewer validation: PASS direct current-source/diff/report review, exact parent RED artifact read, current native XML/actual-service artifact read, CI/release identity checks, targeted matching graph queries and selected-field arithmetic. NOT RUN local Android/Flutter builds, original-device tracing or physical retest; no phone is attached to this reviewer environment.
+- **Acceptance:** W-SHOW OPEN; W-HIDE OPEN; W-LOCK-ANIM OPEN/user lag persists; W-HOME-ANIM untested/out of scope. No new milestone. **PHYSICAL VALIDATION — PENDING, USER ONLY** refers to future acceptance; the present user test has already returned a negative result.
+
+### Frozen selected-field extract
+
+Filename label: reviewer-edd89809-selected-fields.json;4549 UTF-8 bytes;SHA256 `2f4776720e4fbafc50a4c0737a3ccfd6bf36aa3ba6bd2b07ab1e16b14a856129`. This hashes exactly the following JSON plus its final newline; it is not the original full capture.
+
+```json
+{
+  "schema": "reviewer-selected-fields-v1",
+  "source": "Manual transcription of selected fields from the user's pasted edd89809 capture; not original full export bytes",
+  "build": "dc591498316ac647ca2873c7a0f7e72d12fd85ff",
+  "captureId": "edd89809-1994-49af-b87d-5fe208c5ac2b",
+  "processInstance": "9859-e58aec13",
+  "pid": 9859,
+  "captureMode": "LIGHT",
+  "startedAt": "2026-11-11T01:48:58.519+0100",
+  "durationElapsedMs": 27578,
+  "retainedAttemptIds": [
+    1,
+    7,
+    8,
+    9
+  ],
+  "eventsRecorded": 1338,
+  "eventsRetained": 275,
+  "eventsEvicted": 844,
+  "diagnosticDroppedRecords": 219,
+  "exportTruncated": true,
+  "exportBytes": 31243,
+  "omittedEventLines": 274,
+  "omittedDrawGaps": 3,
+  "columns": [
+    "attemptId",
+    "cycleToLiveMs",
+    "screenOnToLiveMs",
+    "triggerToLocalHideMs",
+    "triggerToRemoveReturnMs",
+    "maxDrawGapMs"
+  ],
+  "rows": [
+    [
+      1,
+      569,
+      31,
+      123,
+      167,
+      179
+    ],
+    [
+      7,
+      139,
+      101,
+      12,
+      21,
+      101
+    ],
+    [
+      8,
+      208,
+      208,
+      196,
+      217,
+      86
+    ],
+    [
+      9,
+      314,
+      265,
+      79,
+      116,
+      87
+    ]
+  ],
+  "cold": {
+    "wake": 476176243,
+    "screenOn": 476176781,
+    "decision": 476176363,
+    "addBegin": 476176365,
+    "addReturn": 476176412,
+    "root": 476176715,
+    "bootstrapDraw": 476176716,
+    "bootstrapCommit": 476176805,
+    "live": 476176812,
+    "gpuPreparationCompleted": 476157754
+  },
+  "hideColumns": [
+    "attempt",
+    "eventTime",
+    "callback",
+    "started",
+    "finished",
+    "mainApply",
+    "localHide",
+    "removeReturn"
+  ],
+  "hides": [
+    [
+      1,
+      476177891,
+      476178079,
+      476178085,
+      476178102,
+      476178201,
+      476178202,
+      476178246
+    ],
+    [
+      7,
+      476193102,
+      476193189,
+      476193190,
+      476193198,
+      476193201,
+      476193201,
+      476193210
+    ],
+    [
+      8,
+      476196152,
+      476196162,
+      476196163,
+      476196281,
+      476196358,
+      476196358,
+      476196379
+    ],
+    [
+      9,
+      476198979,
+      476199058,
+      476199060,
+      476199118,
+      476199136,
+      476199137,
+      476199174
+    ]
+  ],
+  "gapColumns": [
+    "attempt",
+    "sample",
+    "prevEndNs",
+    "cbInNs",
+    "cbOutNs",
+    "startNs",
+    "endNs",
+    "cpuNs"
+  ],
+  "gaps": [
+    [
+      1,
+      0,
+      476177986795612,
+      476178133073689,
+      476178133450612,
+      476178165557766,
+      476178165758305,
+      195000
+    ],
+    [
+      7,
+      0,
+      476193071525690,
+      476193122789998,
+      476193123050382,
+      476193172479921,
+      476193172645459,
+      161770
+    ],
+    [
+      8,
+      0,
+      476196261650921,
+      476196298132536,
+      476196298413152,
+      476196347309690,
+      476196347477460,
+      163307
+    ],
+    [
+      9,
+      0,
+      476198954520152,
+      476198986230306,
+      476198986619921,
+      476199040821152,
+      476199040999229,
+      173153
+    ],
+    [
+      1,
+      1,
+      476177866142612,
+      476177918662612,
+      476177918928458,
+      476177986494612,
+      476177986795612,
+      292615
+    ],
+    [
+      7,
+      1,
+      476193172645459,
+      476193192340152,
+      476193192573767,
+      476193192745075,
+      476193192887306,
+      139154
+    ],
+    [
+      8,
+      1,
+      476195988103613,
+      476195996198075,
+      476196008346613,
+      476196016417460,
+      476196016576844,
+      156000
+    ],
+    [
+      9,
+      1,
+      476198871456460,
+      476198891978614,
+      476198893380537,
+      476198894308152,
+      476198894583844,
+      272847
+    ],
+    [
+      1,
+      2,
+      476176976591305,
+      476177034388843,
+      476177089674305,
+      476177090174920,
+      476177090497074,
+      313539
+    ]
+  ],
+  "preInspection8": {
+    "callback": 476195245,
+    "queued": 476195308,
+    "started": 476195308
+  },
+  "diagnostic": {
+    "producerTotalNs": 131511976,
+    "producerMaxNs": 17242384,
+    "consumerLockHeldNs": 2414980940,
+    "consumerLockWaitNs": 5223293
+  },
+  "notes": [
+    "Screen-on arrives AFTER first root in attempt1; 31ms is not comparable wake onset latency.",
+    "Clock/panel physical endpoints UNOBSERVED. CPU submission gaps are not presented-frame timing.",
+    "Empty work covers only retained owned scopes, not all Main work.",
+    "Attempts2-6 are not in these retained summaries; no nine-cycle percentile.",
+    "No retained actual withdrawal is OCCLUDED: UNKNOWN NO_MAIN_MARKER, ROOT_UNAVAILABLE or WALK_TRUNCATED."
+  ]
+}
+```
+
+Reviewer delivery: append-only journal, [skip ci], no workflow dispatch. Resulting commit, one-file diff and workflow count are verified after publication; no application build or repair is created by this journal update.
