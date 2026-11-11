@@ -26,7 +26,7 @@ val keyguardHeaderSourceHash = "6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b
 // but retains uEffect as its runtime guard. API-35's global-const/literal
 // selector can resolve the classic path to a static fallback; retaining every
 // runtime-selected member instead exceeds RuntimeShader's program-size budget.
-val keyguardHeaderAdapterVersion = "6"
+val keyguardHeaderAdapterVersion = "8"
 val keyguardHeaderEffects = listOf(
     "staticEffect" to 0,
     "dualTide" to 1,
@@ -148,6 +148,16 @@ val generateKeyguardHeaderMaterial by tasks.registering {
         }
         val classicPrologue = classicBody.substring(classicPrologueStart, classicMemberStart)
         val classicTail = classicBody.substring(classicTailStart)
+        // The balance members only share these values with the classic
+        // members. Keeping the rest of classicPrologue would retain two FBM
+        // fields that the balance path never reads, risking RuntimeShader's
+        // API-35 program-size ceiling.
+        val balanceSharedPrologue = """
+  float strength = mainValue(0);
+  float baseCoordinate = canonicalGradientCoordinate(uv);
+  float fieldScale = max(.01, mainValue(5));
+  float2 p = float2(.5) + (uv - float2(.5)) * fieldScale;
+""".trimIndent()
         fun specializedClassicField(shaderId: Int): String {
             val lowerBound = shaderId - .5
             val upperBound = shaderId + .5
@@ -193,7 +203,7 @@ $memberBody$classicTail
             }
             return """
 $classicSignature {
-$balancePrologue  if (uEffect < $lowerBound || uEffect >= $upperBound) {
+$balanceSharedPrologue$balancePrologue  if (uEffect < $lowerBound || uEffect >= $upperBound) {
     return sampleCanonicalPalette(baseCoordinate);
   }
 $memberBody$balanceTail

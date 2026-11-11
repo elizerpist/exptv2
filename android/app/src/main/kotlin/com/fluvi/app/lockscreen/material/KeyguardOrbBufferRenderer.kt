@@ -556,7 +556,7 @@ internal class KeyguardOrbBufferRenderer(
             val id: Long,
             val buffer: HardwareBuffer,
             val renderer: HardwareBufferRenderer,
-            val node: RenderNode,
+            var node: RenderNode,
             /**
              * A RuntimeShader is mutable.  A HardwareBufferRenderer callback
              * only means its RenderNode was submitted; its fence still owns
@@ -885,6 +885,15 @@ internal class KeyguardOrbBufferRenderer(
             publishSlotSnapshot()
             try {
                 barrier.beforeRender(spec.lease)
+                // HardwareBufferRenderer retains its content root. On API 35,
+                // re-recording the same root can retain the first
+                // RuntimeShader uniform snapshot even though its display list
+                // has been ended again. A slot is FREE only after its prior
+                // release fence, so replacing its root here is safe and makes
+                // the current RuntimeShader state part of this render request.
+                slot.node = RenderNode("fluvi-keyguard-orb-buffer-${slot.id}-$useGeneration").apply {
+                    setPosition(0, 0, spec.lease.width, spec.lease.height)
+                }
                 val canvas = slot.node.beginRecording(spec.lease.width, spec.lease.height)
                 try {
                     // HardwareBufferRenderer keeps prior contents. A clear is
