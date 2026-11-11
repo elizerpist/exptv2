@@ -126,6 +126,8 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
             val profile = requireNotNull(FluviKeyguardMaterialStore.read(context))
             assertTrue(profile.usesPortal)
+            assertFalse("effect-index zero has no Portal material contribution",
+                profile.requiresPortalProgram)
             assertEquals("dualTide", profile.effectId)
             val started = KeyguardCardDiagnostics.startCapture(context,
                 InstrumentationRegistry.getArguments().getString("sourceSha") ?: "instrumentation-source-unprovided",

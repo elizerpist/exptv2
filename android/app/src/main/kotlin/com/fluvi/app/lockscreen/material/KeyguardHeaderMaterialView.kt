@@ -350,7 +350,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         // This is strictly a retained View concern, never a WindowManager
         // operation, so rapid profile changes cannot recreate the overlay.
         val programChanged = currentScene?.profile?.effectId != next.profile.effectId ||
-            currentScene?.profile?.usesPortal != next.profile.usesPortal
+            currentScene?.profile?.requiresPortalProgram != next.profile.requiresPortalProgram
         if (programChanged) {
             // A null -> first scene used to clear the program which had just
             // been prepared by the detached retained root. Promote the exact
@@ -430,7 +430,9 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     private fun promotePreparedProgram(profile: KeyguardMaterialProfile): Boolean {
         val prepared = preparedProgram ?: return false
-        if (prepared.effectId != profile.effectId || prepared.usesPortal != profile.usesPortal) return false
+        if (prepared.effectId != profile.effectId ||
+            prepared.usesPortal != profile.requiresPortalProgram
+        ) return false
         preparedProgram = null
         shaderCurrent = prepared.shader
         attemptedProgramKey = prepared.programKey
@@ -443,7 +445,8 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     private fun matches(profile: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact): Boolean =
-        profile.effectId == artifact.effectId && profile.usesPortal == artifact.usesPortal
+        profile.effectId == artifact.effectId &&
+            profile.requiresPortalProgram == artifact.usesPortal
 
     fun frame(frameTimeNanos: Long) {
         frameNanos = frameTimeNanos
@@ -918,10 +921,8 @@ internal class KeyguardHeaderShader(
         uniform2("uRasterSize", width.toFloat(), height.toFloat())
         runtimeShader.setFloatUniform("uOpacity", profile.opacity)
         runtimeShader.setFloatUniform("uPaletteSplit", profile.paletteSplitPercent / 100f)
-        // The profile decoder has already bound this stable ID to effectId.
-        // Without it AGSL's default zero selects staticEffect, even while the
-        // dynamic phase uniforms advance correctly.
-        runtimeShader.setFloatUniform("uEffect", profile.effectShaderId.toFloat())
+        // The packaged AGSL is specialized per effect; `uEffect` is a
+        // compile-time constant, deliberately not a RuntimeShader uniform.
         runtimeShader.setFloatUniform("uPulse", 0f)
         runtimeShader.setFloatUniform("uRenderQuality", 1f)
         val fallback = profile.colors.last()
