@@ -174,6 +174,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                     " uses=${producer.firstUse}/${producer.secondUse}" +
                     " phases=${producer.firstPhase}/${producer.secondPhase}" +
                     " delta=${producer.pixelDelta} changed=${producer.changedPixels}" +
+                    " signatures=${producer.firstSignature}/${producer.secondSignature}" +
                     " testOnlyOffMain=true",
             )
             // Preserve the measured source-boundary evidence even when the
@@ -339,6 +340,16 @@ class KeyguardServiceOverlayInstrumentationTest {
             val secondPhase: Float,
             val pixelDelta: Long,
             val changedPixels: Int,
+            val firstSignature: PixelSignature,
+            val secondSignature: PixelSignature,
+        )
+
+        /** Compact content evidence that distinguishes a frozen material from
+         * a transparent/no-op RenderNode result without retaining pixels. */
+        data class PixelSignature(
+            val hash: Int,
+            val nonTransparent: Int,
+            val nonBlack: Int,
         )
 
         private val samples = CopyOnWriteArrayList<Sample>()
@@ -421,7 +432,19 @@ class KeyguardServiceOverlayInstrumentationTest {
                 secondPhase = second.frame.materialTime.phase,
                 pixelDelta = delta,
                 changedPixels = changed,
+                firstSignature = signature(first.pixels),
+                secondSignature = signature(second.pixels),
             )
+        }
+
+        private fun signature(pixels: IntArray): PixelSignature {
+            var nonTransparent = 0
+            var nonBlack = 0
+            pixels.forEach { pixel ->
+                if ((pixel ushr 24) != 0) nonTransparent += 1
+                if ((pixel and 0x00ffffff) != 0) nonBlack += 1
+            }
+            return PixelSignature(pixels.contentHashCode(), nonTransparent, nonBlack)
         }
     }
 
