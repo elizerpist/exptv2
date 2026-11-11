@@ -88,6 +88,18 @@ class KeyguardMaterialProfileTest {
         assertEquals(1f, after.elapsedSeconds - before.elapsedSeconds, .0001f)
     }
 
+    @Test fun `isolated renderer time seam preserves the injected calibrated phase`() {
+        val scene = KeyguardMaterialScene(
+            requireNotNull(KeyguardMaterialProfile.fromMap(profile(speed = .25))),
+            full = true,
+            appliedAtNanos = 0L,
+        )
+        val injected = KeyguardMaterialTime(3.75f, 3.75f, 3.75f, 3.75f)
+        val source = KeyguardOrbMaterialTimeSource { _, _ -> injected }
+
+        assertEquals(injected, source.timeAt(scene, 9_999_999_999L))
+    }
+
     @Test fun `old publication retirement cannot revoke a newer exact grant`() {
         val grants = KeyguardOrbPublicationGrantStore<Any>()
         val oldGrant = Any()
