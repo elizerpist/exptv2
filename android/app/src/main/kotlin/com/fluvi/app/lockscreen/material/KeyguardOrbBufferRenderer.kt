@@ -334,6 +334,13 @@ internal class KeyguardOrbBufferRenderer(
                 if (frame.lease == spec.lease) {
                     deferredReady = null
                     publishReady(frame)
+                } else {
+                    // A detached prewarm can finish between configure() and
+                    // attach(). It is not a candidate for this attachment.
+                    // Leaving that READY slot behind would prevent the sole
+                    // producer from making a current frame indefinitely.
+                    deferredReady = null
+                    worker.dropReady(frame)
                 }
             }
         }
@@ -375,27 +382,42 @@ internal class KeyguardOrbBufferRenderer(
                 return
             }
             runCatching {
-                    SurfaceControl.Transaction()
-                        .setBuffer(child, frame.buffer, frame.fence) { releaseFence ->
-                            // The compositor callback can arrive on an
-                            // arbitrary thread.  Fence waiting and slot reuse
-                            // remain renderer-thread-owned; Main never waits
-                            // for a released buffer.
-                            worker.release(frame.slot, releaseFence)
-                        }
+                    val release = Consumer<SyncFence> { releaseFence ->
+                        // The compositor callback can arrive on an arbitrary
+                        // thread. Fence waiting and slot reuse remain
+                        // renderer-thread-owned; Main never waits for a
+                        // released buffer.
+                        worker.release(frame.slotId, releaseFence)
+                    }
+                    val transaction = SurfaceControl.Transaction()
+                        .setBuffer(child, frame.buffer, frame.fence, release)
                         .setVisibility(child, true)
-                        .apply()
+                    val firstCurrentPublication = firstPublishedLease != frame.lease
+                    if (firstCurrentPublication) {
+                        // The first live buffer replaces the View bootstrap.
+                        // Merge exactly this one transaction with an explicit
+                        // root traversal so the old View content cannot win a
+                        // later unsynchronised parent-buffer submission.
+                        // Continuous buffer updates below remain independent
+                        // of ViewRoot traversal and Main invalidation.
+                        onFirstPublished(frame.lease, android.os.SystemClock.uptimeMillis())
+                        val merged = active.root.rootSurfaceControl
+                            ?.applyTransactionOnDraw(transaction) == true
+                        if (merged) {
+                            active.root.invalidate()
+                        } else {
+                            transaction.apply()
+                        }
+                    } else {
+                        transaction.apply()
+                    }
                     // The transaction copied the acquisition fence. Close the
                     // application handle only after submission, never before.
                     frame.fence?.close()
-                    worker.markCompositorOwned(frame.slot)
+                    worker.markCompositorOwned(frame.slotId)
                     framesPublished += 1
-                    if (firstPublishedLease != frame.lease) {
+                    if (firstCurrentPublication) {
                         firstPublishedLease = frame.lease
-                    // Transaction submission is observed here, after Main has
-                    // applied the matching layer update. It is not claimed to
-                    // be physical panel presentation.
-                    onFirstPublished(frame.lease, android.os.SystemClock.uptimeMillis())
                     }
             }.onFailure { error ->
                 frame.fence?.close()
@@ -431,6 +453,7 @@ internal class KeyguardOrbBufferRenderer(
          */
         private enum class SlotState { FREE, RENDERING, READY_FOR_MAIN, COMPOSITOR_OWNED, RETIRED }
         private data class Slot(
+            val id: Long,
             val buffer: HardwareBuffer,
             val renderer: HardwareBufferRenderer,
             val node: RenderNode,
@@ -451,6 +474,7 @@ internal class KeyguardOrbBufferRenderer(
         /** Renderer-thread confined; never allocate a Paint for each frame. */
         private var paint: Paint? = null
         private var slots: MutableList<Slot> = mutableListOf()
+        private var nextSlotId = 0L
         private var running = false
         private var disposed = false
         @Volatile private var produced = 0
@@ -550,16 +574,16 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
-        fun markCompositorOwned(index: Int) {
+        fun markCompositorOwned(slotId: Long) {
             handler.post {
-                slots.getOrNull(index)?.takeIf {
+                slots.firstOrNull { it.id == slotId }?.takeIf {
                     it.state == SlotState.READY_FOR_MAIN
                 }?.state = SlotState.COMPOSITOR_OWNED
                 publishSlotSnapshot()
             }
         }
 
-        fun release(index: Int, releaseFence: SyncFence?) {
+        fun release(slotId: Long, releaseFence: SyncFence?) {
             handler.post {
                 try {
                     // SurfaceControl documents that the release fence must
@@ -569,11 +593,15 @@ internal class KeyguardOrbBufferRenderer(
                     if (releaseFence?.isValid == true) releaseFence.awaitForever()
                 } finally {
                     releaseFence?.close()
-                    val slot = slots.getOrNull(index)
+                    val slot = slots.firstOrNull { it.id == slotId }
                     if (slot != null) {
                         if (slot.state == SlotState.RETIRED) {
                             closeSlot(slot)
                             slots.remove(slot)
+                            // A replacement attachment can be waiting for a
+                            // retired old-lease buffer to be released before
+                            // it is legal to allocate its fixed pool.
+                            if (running) requestFrame()
                         } else {
                             slot.state = SlotState.FREE
                             if (running) requestFrame()
@@ -588,7 +616,7 @@ internal class KeyguardOrbBufferRenderer(
         fun dropReady(frame: ReadyFrame) {
             handler.post {
                 frame.fence?.close()
-                val slot = slots.getOrNull(frame.slot)
+                val slot = slots.firstOrNull { it.id == frame.slotId }
                 when (slot?.state) {
                     SlotState.READY_FOR_MAIN -> {
                         slot.state = SlotState.FREE
@@ -673,7 +701,7 @@ internal class KeyguardOrbBufferRenderer(
             }
             repeat(3) { index ->
                 val buffer = HardwareBuffer.create(spec.lease.width, spec.lease.height, HardwareBuffer.RGBA_8888, 1, usage)
-                slots += Slot(buffer, HardwareBufferRenderer(buffer), RenderNode("fluvi-keyguard-orb-buffer-$index").apply {
+                slots += Slot(++nextSlotId, buffer, HardwareBufferRenderer(buffer), RenderNode("fluvi-keyguard-orb-buffer-$index").apply {
                     setPosition(0, 0, spec.lease.width, spec.lease.height)
                 })
             }
@@ -751,7 +779,7 @@ internal class KeyguardOrbBufferRenderer(
                     }
                     previousCompletionAtUptimeMs = completedAt
                     publishSlotSnapshot()
-                    onFrameReady(ReadyFrame(spec.lease, index, slot.buffer, result.fence))
+                    onFrameReady(ReadyFrame(spec.lease, slot.id, slot.buffer, result.fence))
                 })
             } catch (error: Throwable) {
                 slot.state = SlotState.FREE
@@ -806,7 +834,9 @@ internal class KeyguardOrbBufferRenderer(
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private data class ReadyFrame(
         val lease: KeyguardOrbBufferLease,
-        val slot: Int,
+        /** Stable across retirement filtering; never use a mutable-list index
+         * in a cross-thread release callback. */
+        val slotId: Long,
         val buffer: HardwareBuffer,
         val fence: SyncFence?,
     )
