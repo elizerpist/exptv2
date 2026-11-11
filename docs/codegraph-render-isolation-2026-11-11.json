@@ -1,14 +1,14 @@
 {
   "task": "R-NATIVE-RENDER-ISOLATION-01 final-source graph provenance and native ownership inventory",
-  "source_head": "f197d03799c44e749c8569e89c0b563785c99afc",
-  "source_parent": "5a06084d101a97867e0f0560edaef6af758f7fbe",
+  "source_head": "027f55938a65b3df4f864da1e5253b8593298e4a",
+  "source_parent": "f197d03799c44e749c8569e89c0b563785c99afc",
   "source_ref": "fix/orb-v4-latency-lockscreen",
-  "source_worktree": "/data/data/com.termux/files/usr/tmp/fluvi-render-isolation-graph.zSFt2O/source",
+  "source_worktree": "/data/data/com.termux/files/usr/tmp/fluvi-render-isolation-graph.HehCqF/source",
   "source_tracked_clean": true,
   "generated_untracked_file": "index.scip",
   "generator": "tools/codegraph at tooling/keyguard-episode-observability-graph before this provenance commit; scip_dart 1.6.2",
   "index_regenerated_from_exact_source": true,
-  "index_sha256": "8921a6ce5aa4f00814707c2fdec48697a65cbc20f39ae6ebbd6bfa42a72722b5",
+  "index_sha256": "74c7f9cf89b03b584128329878fea9d67f36b34b6332714c4ec714e265572b21",
   "language_documents": { "Dart": 807 },
   "kotlin_coverage": false,
   "equal_dart_coverage_limit": "The final application changes are Kotlin and journal files. The regenerated Dart index documents only Dart; neither unchanged Dart bytes nor an empty Dart changed-symbol list establishes zero native impact.",
@@ -55,8 +55,8 @@
     "window_to_controller": "KeyguardCardWindow supplies its exact retained attached root and attach generation to KeyguardCardMaterialController after WindowManager addView. It still owns one TYPE_ACCESSIBILITY_OVERLAY root, geometry, interaction and removal.",
     "controller_selection": "KeyguardCardMaterialController selects KeyguardOrbBufferRenderer only for API34+ animated ORB/orbOnly. CARD, API33-and-below, animation OFF and static routes retain their existing View renderer/bootstrap behavior. The isolated route stops the Main material clock.",
     "renderer_ownership": "KeyguardOrbBufferRenderer Main side creates/reparents/hides a non-input child SurfaceControl under the retained root, validates exact attachment/material/privacy lease identity, and never waits for worker completion. Its HandlerThread owns HardwareBufferRenderer, RuntimeShader, Paint, RenderNode, Choreographer and fences.",
-    "live_boundary": "onIsolatedOrbFirstPublished accepts only current attached lease output; it makes the isolated route LIVE and suppresses the duplicate legacy View producer. Old lease, detached or privacy-invalid results return before publication.",
-    "backpressure_and_teardown": "Worker states FREE, RENDERING, READY_FOR_MAIN, COMPOSITOR_OWNED and RETIRED bound the pool to three HardwareBuffers and one render. READY_FOR_MAIN survives retirement until the Main hand-off drops or submits it; compositor release stays worker-owned.",
+    "live_boundary": "onIsolatedOrbFirstPublished accepts only current attached lease output; it makes the isolated route LIVE and suppresses the duplicate legacy View producer. For the first matching buffer only, the child SurfaceControl transaction is merged with the root's next traversal through AttachedSurfaceControl.applyTransactionOnDraw, so the bootstrap suppression and first buffer hand-off share one root submission. Old lease, detached or privacy-invalid results return before publication.",
+    "backpressure_and_teardown": "Worker states FREE, RENDERING, READY_FOR_MAIN, COMPOSITOR_OWNED and RETIRED bound the pool to three HardwareBuffers and one render. READY_FOR_MAIN survives retirement until the Main hand-off drops or submits it; compositor release stays worker-owned. Stable slot IDs prevent a delayed release from addressing a replacement slot, and obsolete deferred frames are dropped before they can occupy a new lease.",
     "production_tests": [
       "KeyguardServiceOverlayInstrumentationTest.connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles",
       "KeyguardHeaderMaterialViewInstrumentationTest.isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame",
@@ -68,7 +68,7 @@
   },
   "commands": [
     "exact source: flutter pub get; dart pub global run scip_dart ./",
-    "tooling: dart run bin/fluvi_codegraph.dart generate --index <exact-source>/index.scip --graph <exact-source>/docs/codegraph --source-root <exact-source> --source-head f197d03799c44e749c8569e89c0b563785c99afc --source-ref fix/orb-v4-latency-lockscreen --expected-index-sha256 8921a6ce5aa4f00814707c2fdec48697a65cbc20f39ae6ebbd6bfa42a72722b5",
+    "tooling: dart run bin/fluvi_codegraph.dart generate --index <exact-source>/index.scip --graph <exact-source>/docs/codegraph --source-root <exact-source> --source-head 027f55938a65b3df4f864da1e5253b8593298e4a --source-ref fix/orb-v4-latency-lockscreen --expected-index-sha256 74c7f9cf89b03b584128329878fea9d67f36b34b6332714c4ec714e265572b21",
     "tooling: dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol <KeyguardTimingCaptureBridge|KeyguardTimingCaptureSnapshot|DebugConsoleDialog>"
   ],
   "physical_validation": "PENDING_USER"
