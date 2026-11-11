@@ -98,11 +98,9 @@ class KeyguardServiceOverlayInstrumentationTest {
         // buffers off Main, then lets the existing compositor assertion tell
         // us whether the producer or the layer/transaction boundary froze.
         val producerProbe = ProducerPixelProbe()
-        val controlledTime = java.util.concurrent.atomic.AtomicReference(materialTime(PHASE_A))
+        val controlledTime = ControlledMaterialTimeSource(materialTime(PHASE_A))
         KeyguardOrbBufferRendererTestHooks.frameObserver = producerProbe
-        KeyguardOrbBufferRendererTestHooks.materialTimeSource = KeyguardOrbMaterialTimeSource { _, _ ->
-            controlledTime.get()
-        }
+        KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
         try {
             assertFalse("Secure credentials require a different, explicit fixture", keyguard.isDeviceSecure)
             assertTrue("Cannot safely restore unknown lockscreen setting: $savedLockDisabled",
@@ -156,14 +154,19 @@ class KeyguardServiceOverlayInstrumentationTest {
             val cold = episode("cold", occlusionProbe)
             occlusionProbe?.close()
             occlusionProbe = null
-            val producerA = producerProbe.awaitPhase(PHASE_A)
+            val currentLease = producerProbe.awaitCurrentLease()
+            val requestA = producerProbe.arm(currentLease, PHASE_A)
+            controlledTime.submit(requestA.requestId, materialTime(PHASE_A))
+            val producerA = producerProbe.await(requestA)
             producerProbe.persist(output, "producer-a", producerA)
+            val liveA = awaitLive("phase-a-current-lease", cold.material, minimumAdvances = 1, expectedWindowId = cold.window.id)
             val firstImage = copyOrb(cold.window, "cold-orb-a.png")
-            controlledTime.set(materialTime(PHASE_C))
-            val producerC = producerProbe.awaitPhase(PHASE_C)
+            val requestC = producerProbe.arm(currentLease, PHASE_C)
+            controlledTime.submit(requestC.requestId, materialTime(PHASE_C))
+            val producerC = producerProbe.await(requestC)
             producerProbe.persist(output, "producer-c", producerC)
-            val plateau = producerProbe.compare(producerA, producerC)
-            assertFalse("A/C plateau must not satisfy meaningful motion: $plateau", plateau.meaningful())
+            val liveC = awaitLive("phase-c-current-lease", liveA, minimumAdvances = 1, expectedWindowId = cold.window.id)
+            val imageC = copyOrb(cold.window, "cold-orb-c.png")
             // A quiet, explicitly marked interval, not a FPS target. No
             // diagnostic polling, input, screenshots or window reads during
             // this interval; system trace owns its frame/thread attribution.
@@ -179,50 +182,60 @@ class KeyguardServiceOverlayInstrumentationTest {
                     steady.actualProgressCount() > cold.material.actualProgressCount())
             assertEquals("API-35 standalone ORB must use the isolated production renderer",
                 "HardwareBufferRenderer/SurfaceControl", steady.activeRenderer)
-            controlledTime.set(materialTime(PHASE_B))
-            val producerB = producerProbe.awaitPhase(PHASE_B)
+            val requestB = producerProbe.arm(currentLease, PHASE_B)
+            controlledTime.submit(requestB.requestId, materialTime(PHASE_B))
+            val producerB = producerProbe.await(requestB)
             producerProbe.persist(output, "producer-b", producerB)
+            val liveB = awaitLive("phase-b-current-lease", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
+            val secondImage = copyOrb(requireOverlay(), "cold-orb-b.png")
+            val requestReturnA = producerProbe.arm(currentLease, PHASE_A)
+            controlledTime.submit(requestReturnA.requestId, materialTime(PHASE_A))
+            val producerReturn = producerProbe.await(requestReturnA)
+            producerProbe.persist(output, "producer-return-a", producerReturn)
+            val liveReturnA = awaitLive("phase-return-a-current-lease", liveB, minimumAdvances = 1, expectedWindowId = cold.window.id)
+            val imageReturnA = copyOrb(requireOverlay(), "cold-orb-return-a.png")
+
+            // All producer buffers and actual composed crops are persisted
+            // before an oracle assertion can stop this lifecycle scenario.
+            val plateau = producerProbe.compare(producerA, producerC)
             val producer = producerProbe.compare(producerA, producerB)
+            val returnDelta = producerProbe.compare(producerA, producerReturn)
             record(
                 "PRODUCER_READBACK",
-                "lease=${producer.leaseAttachment}/${producer.leaseGeneration}" +
-                    " slots=${producer.firstSlot}/${producer.secondSlot}" +
-                    " uses=${producer.firstUse}/${producer.secondUse}" +
-                    " phases=${producer.firstPhase}/${producer.secondPhase}" +
-                    " delta=${producer.pixelDelta} changed=${producer.changedPixels}" +
-                    " signatures=${producer.firstSignature}/${producer.secondSignature}" +
-                    " testOnlyOffMain=true",
+                "aToC=$plateau aToB=$producer returnToA=$returnDelta " +
+                    "requestIds=${producerA.frame.testRequestId}/${producerC.frame.testRequestId}/" +
+                    "${producerB.frame.testRequestId}/${producerReturn.frame.testRequestId} testOnlyOffMain=true",
             )
-            // Preserve the measured source-boundary evidence even when the
-            // assertion fails.  A static producer points at recording or
-            // material submission, whereas a changing producer with a static
-            // crop points at the compositor hand-off.
-            assertTrue(
-                "Producer shader buffer did not change across canonical phases " +
-                    "(changed=${producer.changedPixels}, delta=${producer.pixelDelta})",
-                producer.changedPixels >= 64 && producer.pixelDelta >= 2_048L,
-            )
-            val secondImage = copyOrb(requireOverlay(), "cold-orb-b.png")
             try {
-                val motion = if (firstImage != null && secondImage != null) {
-                    assertTrue("First compositor crop contains no nonempty material", hasColoredMaterial(firstImage))
-                    assertTrue("Second compositor crop contains no nonempty material", hasColoredMaterial(secondImage))
-                    hasOrbMotion(firstImage, secondImage).also {
-                        assertTrue("Actual composited orb pixels did not change across the quiet live interval", it)
-                    }
-                } else null
-                record("PIXEL_SAMPLE", "motion=${motion ?: "UNOBSERVED"}" +
-                    " progressBefore=${cold.material.actualProgressCount()} progressAfter=${steady.actualProgressCount()}" +
+                assertTrue("A/C producer plateau exceeded equality tolerance: $plateau", plateau.nearlyEqual())
+                assertTrue(
+                    "Producer shader buffer did not change across canonical phases " +
+                        "(changed=${producer.changedPixels}, delta=${producer.pixelDelta})",
+                    producer.meaningful(),
+                )
+                assertTrue("A-B-A producer return exceeded equality tolerance: $returnDelta", returnDelta.nearlyEqual())
+                val compositorA = requireNotNull(firstImage) { "A compositor crop was unobserved" }
+                val compositorC = requireNotNull(imageC) { "C compositor crop was unobserved" }
+                val compositorB = requireNotNull(secondImage) { "B compositor crop was unobserved" }
+                val compositorReturnA = requireNotNull(imageReturnA) { "return-A compositor crop was unobserved" }
+                assertTrue("A compositor crop contains no nonempty material", hasColoredMaterial(compositorA))
+                assertTrue("B compositor crop contains no nonempty material", hasColoredMaterial(compositorB))
+                val compositorPlateau = compareOrbPixels(compositorA, compositorC)
+                val compositorMotion = compareOrbPixels(compositorA, compositorB)
+                val compositorReturn = compareOrbPixels(compositorA, compositorReturnA)
+                assertTrue("A/C compositor plateau exceeded equality tolerance: $compositorPlateau", compositorPlateau.nearlyEqual())
+                assertTrue("Actual composited orb did not change A to B: $compositorMotion", compositorMotion.meaningful())
+                assertTrue("A-B-A compositor return exceeded equality tolerance: $compositorReturn", compositorReturn.nearlyEqual())
+                record("PIXEL_SAMPLE", "aToC=$compositorPlateau aToB=$compositorMotion returnToA=$compositorReturn" +
+                    " progressA=${liveA.actualProgressCount()} progressC=${liveC.actualProgressCount()}" +
+                    " progressB=${liveB.actualProgressCount()} progressReturn=${liveReturnA.actualProgressCount()}" +
                     " note=display-crops-not-a-physical-phone-FPS-proof")
             } finally {
                 firstImage?.recycle()
+                imageC?.recycle()
                 secondImage?.recycle()
+                imageReturnA?.recycle()
             }
-            controlledTime.set(materialTime(PHASE_A))
-            val producerReturn = producerProbe.awaitPhase(PHASE_A)
-            producerProbe.persist(output, "producer-return-a", producerReturn)
-            val returnDelta = producerProbe.compare(producerA, producerReturn)
-            assertFalse("A-B-A must return to A within the plateau tolerance: $returnDelta", returnDelta.meaningful())
             // A real touch is delivered to the production accessibility root.
             marked("orb-short-tap") { tap(cold.window.bounds) }
             awaitLive("after-tap", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
@@ -345,6 +358,32 @@ class KeyguardServiceOverlayInstrumentationTest {
      * transaction remains its owner. It copies only an explicitly requested
      * phase, so readback is bounded and absent from performance runs.
      */
+    /**
+     * The renderer worker reads one immutable test sample per submission. The
+     * ThreadLocal retains that exact sample only long enough for the renderer
+     * to attach its request id to the resulting producer frame; the whole
+     * source is test-only and the global hook is restored in finally.
+     */
+    private class ControlledMaterialTimeSource(initial: KeyguardMaterialTime) : KeyguardOrbMaterialTimeSource {
+        private data class Sample(val requestId: Long?, val materialTime: KeyguardMaterialTime)
+
+        private val selected = java.util.concurrent.atomic.AtomicReference(Sample(null, initial))
+        private val submittedOnRenderer = ThreadLocal<Sample?>()
+
+        fun submit(requestId: Long, materialTime: KeyguardMaterialTime) {
+            selected.set(Sample(requestId, materialTime))
+        }
+
+        override fun timeAt(scene: com.fluvi.app.lockscreen.material.KeyguardMaterialScene, frameTimeNanos: Long): KeyguardMaterialTime {
+            val sample = selected.get()
+            submittedOnRenderer.set(sample)
+            return sample.materialTime
+        }
+
+        override fun testRequestIdFor(materialTime: KeyguardMaterialTime): Long? =
+            submittedOnRenderer.get()?.takeIf { it.materialTime === materialTime }?.requestId
+    }
+
     private class ProducerPixelProbe : KeyguardOrbBufferFrameObserver {
         data class Sample(
             val frame: KeyguardOrbBufferProducerFrame,
@@ -362,10 +401,12 @@ class KeyguardServiceOverlayInstrumentationTest {
             val secondPhase: Float,
             val pixelDelta: Long,
             val changedPixels: Int,
+            val maximumDelta: Int,
             val firstSignature: PixelSignature,
             val secondSignature: PixelSignature,
         ) {
             fun meaningful(): Boolean = changedPixels >= 64 && pixelDelta >= 2_048L
+            fun nearlyEqual(): Boolean = maximumDelta <= 2 && pixelDelta <= 2_048L
         }
 
         /** Compact content evidence that distinguishes a frozen material from
@@ -376,19 +417,20 @@ class KeyguardServiceOverlayInstrumentationTest {
             val nonBlack: Int,
         )
 
-        private val requestedPhase = java.util.concurrent.atomic.AtomicReference<Float?>(null)
-        private val captured = java.util.concurrent.atomic.AtomicReference<Sample?>(null)
-        @Volatile private var failure: Throwable? = null
+        private val requests = KeyguardProducerSampleRequestBook<Sample>()
+        private val latestFrame = java.util.concurrent.atomic.AtomicReference<KeyguardOrbBufferProducerFrame?>(null)
 
         override fun onProduced(
             frame: KeyguardOrbBufferProducerFrame,
             buffer: HardwareBuffer,
             completionFence: SyncFence?,
         ) {
-            val phase = requestedPhase.get() ?: return
-            if (frame.lease.attachment == 0L || failure != null ||
-                kotlin.math.abs(frame.materialTime.phase - phase) > .0001f
-            ) return
+            latestFrame.set(frame)
+            // Retain the exact request object through the readback. Its
+            // request id was captured at submission with this material time;
+            // a later A/B/A request cannot be inferred from a phase value.
+            val request = requests.current() ?: return
+            if (!requests.matches(request, frame)) return
             try {
                 // The public renderer contract requires waiting before the
                 // buffer is consumed.  This runs off Main and does not take
@@ -411,31 +453,40 @@ class KeyguardServiceOverlayInstrumentationTest {
                     val pixels = IntArray(software.width * software.height)
                     software.getPixels(pixels, 0, software.width, 0, 0, software.width, software.height)
                     val sample = Sample(frame, pixels)
-                    if (requestedPhase.compareAndSet(phase, null)) captured.set(sample)
+                    requests.completeIfCurrent(request, frame, sample)
                 } finally {
                     software.recycle()
                 }
             } catch (error: Throwable) {
-                failure = error
+                // A stale readback may finish after the caller has replaced
+                // its request. It must not report failure into the successor.
+                requests.failIfCurrent(request, error)
             }
         }
 
-        fun awaitPhase(phase: Float): Sample {
-            captured.set(null)
-            requestedPhase.set(phase)
+        fun awaitCurrentLease(): com.fluvi.app.lockscreen.material.KeyguardOrbBufferLease {
             val deadline = SystemClock.uptimeMillis() + 8_000L
-            while (SystemClock.uptimeMillis() < deadline && captured.get() == null && failure == null) {
+            var latest = latestFrame.get()
+            while ((latest == null || latest.lease.attachment == 0L) && SystemClock.uptimeMillis() < deadline) {
                 SystemClock.sleep(20)
+                latest = latestFrame.get()
             }
-            failure?.let { throw AssertionError("producer readback failed", it) }
-            return requireNotNull(captured.get()) { "producer did not reach requested phase=$phase" }
+            return requireNotNull(latest?.lease) { "producer never observed a current lease" }
         }
+
+        fun arm(
+            lease: com.fluvi.app.lockscreen.material.KeyguardOrbBufferLease,
+            phase: Float,
+        ): KeyguardProducerSampleRequestBook.Request<Sample> = requests.arm(lease, phase)
+
+        fun await(request: KeyguardProducerSampleRequestBook.Request<Sample>): Sample = requests.await(request)
 
         fun compare(first: Sample, second: Sample): Result {
             assertEquals("Producer samples must belong to the same current lease",
                 first.frame.lease, second.frame.lease)
             var changed = 0
             var delta = 0L
+            var maximum = 0
             first.pixels.indices.forEach { index ->
                 val a = first.pixels[index]
                 val b = second.pixels[index]
@@ -446,6 +497,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                 )
                 if (current >= 7) changed += 1
                 delta += current
+                maximum = maxOf(maximum, current)
             }
             return Result(
                 leaseAttachment = first.frame.lease.attachment,
@@ -458,6 +510,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                 secondPhase = second.frame.materialTime.phase,
                 pixelDelta = delta,
                 changedPixels = changed,
+                maximumDelta = maximum,
                 firstSignature = signature(first.pixels),
                 secondSignature = signature(second.pixels),
             )
@@ -477,7 +530,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                 File(directory, "$label.txt").writeText(
                     "lease=${sample.frame.lease.attachment}/${sample.frame.lease.generation} " +
                         "slot=${sample.frame.slotId} use=${sample.frame.useGeneration} " +
-                        "phase=${sample.frame.materialTime.phase}\n",
+                        "requestId=${sample.frame.testRequestId} phase=${sample.frame.materialTime.phase}\n",
                 )
             } finally {
                 bitmap.recycle()
@@ -940,14 +993,23 @@ class KeyguardServiceOverlayInstrumentationTest {
         } finally { screen.recycle() }
     }
 
+    private data class OrbPixelComparison(
+        val changedPixels: Int,
+        val totalDelta: Long,
+        val maximumDelta: Int,
+    ) {
+        fun meaningful(): Boolean = changedPixels >= 64 && totalDelta >= 2_048L
+        fun nearlyEqual(): Boolean = maximumDelta <= 2 && totalDelta <= 2_048L
+    }
+
     /** Ignore transparent corners: wallpaper/SystemUI pixels outside the orb
-     * are not evidence. A single changed sample can also be screenshot noise;
-     * the preceding
-     * candidate passed with no channel delta above 4/255, so require a
-     * substantive interior change over this intentionally long quiet sample. */
-    private fun hasOrbMotion(first: Bitmap, second: Bitmap): Boolean {
+     * are not evidence. The positive and equality controls use this same
+     * interior mask and retain the established substantive threshold. */
+    private fun compareOrbPixels(first: Bitmap, second: Bitmap): OrbPixelComparison {
+        require(first.width == second.width && first.height == second.height)
         var substantive = 0
         var totalDelta = 0L
+        var maximum = 0
         for (y in 0 until first.height) for (x in 0 until first.width) {
             if (!insideOrb(x, y, first.width)) continue
             val a = first.getPixel(x, y)
@@ -959,8 +1021,9 @@ class KeyguardServiceOverlayInstrumentationTest {
             )
             if (delta >= 7) substantive += 1
             totalDelta += delta
+            maximum = maxOf(maximum, delta)
         }
-        return substantive >= 64 && totalDelta >= 2_048L
+        return OrbPixelComparison(substantive, totalDelta, maximum)
     }
 
     private fun hasColoredMaterial(bitmap: Bitmap): Boolean {

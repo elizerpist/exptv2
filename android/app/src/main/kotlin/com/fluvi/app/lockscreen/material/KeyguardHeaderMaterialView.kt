@@ -106,6 +106,20 @@ internal fun interface KeyguardAnimationTimeSource {
 
 internal val SystemKeyguardAnimationTimeSource = KeyguardAnimationTimeSource(System::nanoTime)
 
+/**
+ * The retained Canvas renderer normally derives its material time from its
+ * immutable scene. Instrumentation can supply a constructor-captured source
+ * for matched phase controls; production keeps the scene monotonic clock.
+ */
+internal fun interface KeyguardMaterialTimeSource {
+    fun timeAt(scene: KeyguardMaterialScene, frameTimeNanos: Long): KeyguardMaterialTime
+}
+
+internal object SystemKeyguardMaterialTimeSource : KeyguardMaterialTimeSource {
+    override fun timeAt(scene: KeyguardMaterialScene, frameTimeNanos: Long): KeyguardMaterialTime =
+        scene.timeAt(frameTimeNanos)
+}
+
 /** Immutable clock anchor held by a view during a semantic scene. */
 internal data class KeyguardMaterialScene(
     val profile: KeyguardMaterialProfile,
@@ -162,6 +176,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     private val animationTime: KeyguardAnimationTimeSource = SystemKeyguardAnimationTimeSource,
+    private val materialTimeSource: KeyguardMaterialTimeSource = SystemKeyguardMaterialTimeSource,
 ) : View(context, attrs) {
     enum class Shape { ORB, CARD_BACKGROUND }
 
@@ -603,7 +618,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     private fun drawShader(canvas: Canvas, shader: KeyguardHeaderShader, scene: KeyguardMaterialScene, alpha: Float) {
-        val time = scene.timeAt(frameNanos)
+        val time = materialTimeSource.timeAt(scene, frameNanos)
         val configureStart = if (measuringShader) System.nanoTime() else 0L
         try {
             shader.configure(scene.profile, width, height, time)

@@ -224,9 +224,66 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("attemptId=1"))
         assertTrue(report.contains("attemptId=2"))
         assertTrue(report.contains("attemptId=3"))
-        assertTrue(report.contains("count=500"))
         assertTrue(report.contains("hiddenNoopCount=500"))
-        assertTrue((frozen["eventsCoalesced"] as Int) >= 499)
+        // The reducer, not an optional bounded raw-export block, owns the
+        // coalescing contract. Exactly 499 joins prove that the 500 accepted
+        // hidden observations formed one retained aggregate. The export may
+        // legitimately omit that raw row after protected episode evidence.
+        assertEquals(499, frozen["eventsCoalesced"] as Int)
+        assertTrue(report.contains("diagnosticQueueOverflow=0"))
+        assertTrue(report.contains("diagnosticConsumerFailures=0"))
+        if (report.contains("count=500")) {
+            assertTrue(report.contains("rawEventsTruncated=false"))
+        } else {
+            assertTrue(report.contains("rawEventsTruncated=true"))
+            assertTrue(report.contains("omittedEventLines="))
+        }
+    }
+
+    @Test fun boundedRawExportPressurePreservesAttemptsAndReportsItsOmissions() {
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug", "FULL")
+        val attempts = (1L..3L).map { wake ->
+            checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9L, wake, "wake", wake * 100L))
+        }
+        attempts.forEachIndexed { index, attempt ->
+            val request = index + 1L
+            val show = KeyguardCardDiagnostics.newShowOperation(attempt, request, request)
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "wake", requestId = request,
+                observedUptimeMs = 100L + index, diagnosticContext = attempt)
+            KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", requestId = request,
+                observedUptimeMs = 110L + index, diagnosticContext = attempt, operation = show)
+            KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_BEGIN", "window", requestId = request,
+                observedUptimeMs = 120L + index, diagnosticContext = attempt, operation = show)
+            KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "success", requestId = request,
+                observedUptimeMs = 130L + index, diagnosticContext = attempt, operation = show)
+        }
+        // Deliberately defeat hidden-event coalescing. This exercises the
+        // fixed raw ring and report budget without changing either capacity.
+        repeat(700) { index ->
+            KeyguardCardDiagnostics.captureEvent(
+                context, "ACCESSIBILITY_EVENT", "surface", observedUptimeMs = 2_000L + index,
+                diagnosticContext = attempts[index % attempts.size],
+                fields = mapOf(
+                    "eventType" to 2048,
+                    "windowChanges" to 0,
+                    "windowId" to (1_000 + index),
+                    "displayId" to 0,
+                    "classification" to "unclassified",
+                    "overlayState" to "hidden",
+                ),
+            )
+        }
+
+        val frozen = KeyguardCardDiagnostics.freezeCapture(context)
+        val report = frozen["report"] as String
+        assertEquals(3, frozen["attemptCount"])
+        assertTrue((frozen["eventsEvicted"] as Int) > 0)
+        assertTrue(report.contains("attemptId=1"))
+        assertTrue(report.contains("attemptId=2"))
+        assertTrue(report.contains("attemptId=3"))
+        assertTrue(report.contains("rawEventsTruncated=true"))
+        assertTrue(report.contains("omittedEventLines="))
+        assertTrue(report.contains("omittedEvidenceRecords="))
     }
 
     @Test fun actualWithdrawalKeepsItsTimingWhenLaterCleanupIsDetached() {

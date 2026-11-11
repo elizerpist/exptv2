@@ -8,8 +8,6 @@ import android.graphics.Canvas
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
@@ -17,7 +15,6 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.view.PixelCopy
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
@@ -50,8 +47,8 @@ import org.junit.runner.RunWith
 /**
  * This is deliberately a production-asset smoke, not a toy AGSL string.  It
  * proves RuntimeShader construction and one actual hardware Canvas draw on
- * an API-33+ device/emulator; PixelCopy observes the window rather than a
- * software Bitmap Canvas substitute.
+ * an API-33+ device/emulator; compositor screenshots observe the window
+ * rather than a software Bitmap Canvas substitute.
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
@@ -295,7 +292,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
-    @Test fun productionAssetCompilesAndDrawsOnHardwareCanvas() {
+    @Test fun productionAssetCompilesAndDrawsCalibratedHardwareCanvas() {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -307,16 +304,14 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             KeyguardHeaderShader(context, effectId, false)
         }
 
+        val profile = calibratedOrbProfile()
+        val controlledTime = AtomicReference(calibratedMaterialTime(PHASE_A))
         lateinit var view: KeyguardHeaderMaterialView
-        var controller: KeyguardCardMaterialController? = null
-        var firstBitmap: Bitmap? = null
-        var latestBitmap: Bitmap? = null
-        val samples = StringBuilder()
-        fun diagnosticsOnMain(): KeyguardHeaderMaterialViewDiagnostics {
-            lateinit var value: KeyguardHeaderMaterialViewDiagnostics
-            instrumentation.runOnMainSync { value = view.diagnostics() }
-            return value
-        }
+        var imageA: Bitmap? = null
+        var imageFrozenA: Bitmap? = null
+        var imageC: Bitmap? = null
+        var imageB: Bitmap? = null
+        var imageReturnA: Bitmap? = null
         val activity = instrumentation.startActivitySync(
             // startActivitySync launches in the target application. This
             // debug-only host is consequently declared in src/debug rather
@@ -325,82 +320,63 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         ) as KeyguardMaterialTestActivity
         try {
+            val artifact = AndroidKeyguardShaderArtifactReader.load(context, profile.effectId, profile.usesPortal)
             instrumentation.runOnMainSync {
                 activity.window.setFormat(PixelFormat.TRANSLUCENT)
                 val root = FrameLayout(activity)
-                val background = KeyguardHeaderMaterialView(activity).apply {
-                    layoutParams = FrameLayout.LayoutParams(240, 180)
+                view = KeyguardHeaderMaterialView(
+                    activity,
+                    materialTimeSource = KeyguardMaterialTimeSource { _, _ -> controlledTime.get() },
+                ).apply {
+                    layoutParams = FrameLayout.LayoutParams(168, 168)
+                    setScene(KeyguardMaterialScene(profile, full = true, appliedAtNanos = 0L), enabled = true)
+                    setBootstrapActive(false)
+                    assertEquals(ProgramPreparationResult.COMPILED, installPreparedShader(artifact))
                 }
-                val veil = android.view.View(activity).apply {
-                    layoutParams = FrameLayout.LayoutParams(240, 180)
-                }
-                view = KeyguardHeaderMaterialView(activity).apply {
-                    layoutParams = FrameLayout.LayoutParams(160, 160)
-                }
-                root.addView(background)
-                root.addView(veil)
                 root.addView(view)
-                controller = KeyguardCardMaterialController(
-                    view,
-                    background,
-                    veil,
-                    gpuPreparer = ImmediateGpuPreparer(),
-                )
-                controller!!.update(
-                    profile = profile(),
-                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
-                    isFull = true,
-                    staticOrb = null,
-                )
                 activity.setContentView(root)
-                controller!!.onAttached()
-                controller!!.onBootstrapFrameCommitted(requireNotNull(controller!!.currentBootstrapToken()))
+                view.frame(1L)
             }
-            assertTrue("production View never reached a hardware Canvas", waitForRenderer(instrumentation, view))
-            instrumentation.waitForIdleSync()
-            val first = copyWindow(instrumentation, activity)
-            firstBitmap = first
-            val initial = diagnosticsOnMain()
-            samples.appendLine("sample=0 observedAt=${SystemClock.uptimeMillis()}" +
-                " shaderCalls=${initial.shaderDrawCount} phaseAdvances=${initial.phaseAdvanceCount}")
-            // PixelCopy can return the same already-composited buffer once
-            // even while the retained renderer has advanced. Sample a short
-            // run rather than turning one stale copy into a shader failure.
-            val observedMotion = (1..5).any { index ->
-                Thread.sleep(220)
-                val next = copyWindow(instrumentation, activity)
-                latestBitmap?.recycle()
-                latestBitmap = next
-                val changed = !first.sameAs(next)
-                val sample = diagnosticsOnMain()
-                samples.appendLine("sample=$index observedAt=${SystemClock.uptimeMillis()} changed=$changed" +
-                    " shaderCalls=${sample.shaderDrawCount} phaseAdvances=${sample.phaseAdvanceCount}")
-                changed
-            }
-            val diagnostics = diagnosticsOnMain()
-            android.util.Log.i("FluviDrawProbe", "pixelMotion=$observedMotion" +
-                " shaderCalls=${diagnostics.shaderDrawCount} phaseAdvances=${diagnostics.phaseAdvanceCount}" +
-                " hardware=${diagnostics.lastCanvasHardwareAccelerated}")
-            if (!observedMotion) {
-                // Preserve actual failing output, not just callback counters.
-                // Only synthetic emulator content; bounded to two bitmaps.
-                val directory = File(context.filesDir, "keyguard-material-smoke").apply { mkdirs() }
-                File(directory, "samples.txt").writeText(samples.toString())
-                listOf("first.png" to first, "latest.png" to latestBitmap).forEach { (name, bitmap) ->
-                    if (bitmap != null) File(directory, name).outputStream().use {
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
-                    }
+            assertTrue("production View never reached a hardware Canvas", waitForPreparedShader(instrumentation, view))
+            fun capture(phase: Float, label: String): Bitmap {
+                var before = 0
+                instrumentation.runOnMainSync {
+                    before = view.diagnostics().shaderDrawCount
+                    controlledTime.set(calibratedMaterialTime(phase))
+                    view.frame(System.nanoTime())
                 }
+                assertTrue("hardware Canvas did not draw controlled $label", waitForShaderDraw(instrumentation, view, before))
+                return copyMaterialView(instrumentation, view).also { persistPanelEvidence(activity, label, it) }
             }
+
+            imageA = capture(PHASE_A, "canvas-a")
+            imageFrozenA = capture(PHASE_A, "canvas-a-frozen")
+            imageC = capture(PHASE_C, "canvas-c")
+            imageB = capture(PHASE_B, "canvas-b")
+            imageReturnA = capture(PHASE_A, "canvas-return-a")
+
+            // Every image is retained before assertion. The frozen and A/C
+            // controls must not satisfy the meaningful-motion predicate.
+            val frozen = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageFrozenA))
+            val plateau = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageC))
+            val positive = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageB))
+            val returned = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageReturnA))
+            lateinit var diagnostics: KeyguardHeaderMaterialViewDiagnostics
+            instrumentation.runOnMainSync { diagnostics = view.diagnostics() }
             assertTrue(diagnostics.lastCanvasHardwareAccelerated == true)
             assertTrue("production shader did not draw", diagnostics.shaderDrawCount > 0)
-            assertTrue("retained controller did not advance phase", diagnostics.phaseAdvanceCount > 0)
-            assertTrue("production shader produced no motion across five samples", observedMotion)
+            assertTrue("controlled hardware Canvas did not advance phase", diagnostics.phaseAdvanceCount > 0)
+            assertTrue("frozen phase unexpectedly met motion threshold: $frozen", frozen.nearlyEqual() && !frozen.meaningful())
+            assertTrue("A/C must remain within equality tolerance: $plateau", plateau.nearlyEqual())
+            assertTrue("A/B must meet meaningful-motion threshold: $positive", positive.meaningful())
+            assertTrue("A-B-A must return within equality tolerance: $returned", returned.nearlyEqual())
         } finally {
-            latestBitmap?.recycle()
-            firstBitmap?.recycle()
+            imageA?.recycle()
+            imageFrozenA?.recycle()
+            imageC?.recycle()
+            imageB?.recycle()
+            imageReturnA?.recycle()
             instrumentation.runOnMainSync {
-                controller?.dispose()
                 activity.finish()
             }
         }
@@ -577,7 +553,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
-    @Test fun isolatedOrbPublishesChangingCompositorPixels() {
+    @Test fun isolatedOrbPublishesCalibratedCompositorPixels() {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(
@@ -587,8 +563,14 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         lateinit var window: KeyguardCardWindow
         var createdWindow: KeyguardCardWindow? = null
         lateinit var manager: TestPanelWindowManager
-        var first: Bitmap? = null
-        var later: Bitmap? = null
+        var imageA: Bitmap? = null
+        var imageC: Bitmap? = null
+        var imageB: Bitmap? = null
+        var imageReturnA: Bitmap? = null
+        val controlledTime = AtomicReference(calibratedMaterialTime(PHASE_A))
+        KeyguardOrbBufferRendererTestHooks.materialTimeSource = KeyguardOrbMaterialTimeSource { _, _ ->
+            controlledTime.get()
+        }
         try {
             instrumentation.runOnMainSync {
                 window = KeyguardCardWindow(
@@ -606,7 +588,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     animationMode = KeyguardCardAnimationMode.ORB_ONLY,
                     orbPosition = KeyguardCardOrbPosition(.5f, .5f),
                 )
-                window.prepareRetainedView(settings, profile())
+                window.prepareRetainedView(settings, calibratedOrbProfile())
                 assertEquals(KeyguardCardWindow.Result.ATTACHED,
                     window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
             }
@@ -614,14 +596,36 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             // The ORB is in a separate TYPE_APPLICATION_PANEL, not in the
             // Activity Window. Capture the compositor's actual panel bounds;
             // PixelCopy(activity.window) cannot validate that child surface.
-            first = copyPanelOrb(instrumentation, manager)
-            val changed = (1..4).any {
-                Thread.sleep(180)
-                later?.recycle()
-                later = copyPanelOrb(instrumentation, manager)
-                hasMaterialMotion(requireNotNull(first), requireNotNull(later))
-            }
-            assertTrue("isolated ORB produced no changing compositor pixels", changed)
+            imageA = copyPanelOrb(instrumentation, manager)
+            persistPanelEvidence(activity, "isolated-orb-a", requireNotNull(imageA))
+            val publishedA = isolatedPublished(instrumentation, window)
+
+            controlledTime.set(calibratedMaterialTime(PHASE_C))
+            assertTrue("isolated ORB did not publish controlled C", waitForIsolatedOutput(instrumentation, window, publishedA))
+            imageC = copyPanelOrb(instrumentation, manager)
+            persistPanelEvidence(activity, "isolated-orb-c", requireNotNull(imageC))
+            val publishedC = isolatedPublished(instrumentation, window)
+
+            controlledTime.set(calibratedMaterialTime(PHASE_B))
+            assertTrue("isolated ORB did not publish controlled B", waitForIsolatedOutput(instrumentation, window, publishedC))
+            imageB = copyPanelOrb(instrumentation, manager)
+            persistPanelEvidence(activity, "isolated-orb-b", requireNotNull(imageB))
+            val publishedB = isolatedPublished(instrumentation, window)
+
+            controlledTime.set(calibratedMaterialTime(PHASE_A))
+            assertTrue("isolated ORB did not return to controlled A", waitForIsolatedOutput(instrumentation, window, publishedB))
+            imageReturnA = copyPanelOrb(instrumentation, manager)
+            persistPanelEvidence(activity, "isolated-orb-return-a", requireNotNull(imageReturnA))
+
+            // Persist every crop before asserting, so an oracle failure keeps
+            // paired evidence. A/C deliberately samples the known plateau;
+            // A/B is the positive control and the final A is reversibility.
+            val plateau = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageC))
+            val positive = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageB))
+            val returned = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageReturnA))
+            assertTrue("A/C must remain within compositor equality tolerance: $plateau", plateau.nearlyEqual())
+            assertTrue("A/B must reach the calibrated meaningful-motion threshold: $positive", positive.meaningful())
+            assertTrue("A-B-A must return within compositor equality tolerance: $returned", returned.nearlyEqual())
             instrumentation.runOnMainSync {
                 val d = requireNotNull(window.materialDiagnostics())
                 assertEquals("HardwareBufferRenderer/SurfaceControl", d.activeRenderer)
@@ -631,8 +635,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertTrue("triple pool exceeded compositor ownership bound", d.isolatedFramesCompositorOwned <= 3)
             }
         } finally {
-            first?.recycle()
-            later?.recycle()
+            KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
+            imageA?.recycle()
+            imageC?.recycle()
+            imageB?.recycle()
+            imageReturnA?.recycle()
             instrumentation.runOnMainSync {
                 createdWindow?.dispose()
                 activity.finish()
@@ -1015,21 +1022,25 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
-    private fun copyWindow(instrumentation: Instrumentation, activity: KeyguardMaterialTestActivity): Bitmap {
-        val copied = CountDownLatch(1)
-        var result = PixelCopy.ERROR_UNKNOWN
-        lateinit var bitmap: Bitmap
+    private fun copyMaterialView(instrumentation: Instrumentation, view: View): Bitmap {
+        lateinit var bounds: Rect
         instrumentation.runOnMainSync {
-            val root = activity.window.decorView
-            bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-            PixelCopy.request(activity.window, bitmap, { value ->
-                result = value
-                copied.countDown()
-            }, Handler(Looper.getMainLooper()))
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            bounds = Rect(location[0], location[1], location[0] + view.width, location[1] + view.height)
         }
-        assertTrue("PixelCopy did not finish", copied.await(8, TimeUnit.SECONDS))
-        assertEquals(PixelCopy.SUCCESS, result)
-        return bitmap
+        val screen = requireNotNull(instrumentation.uiAutomation.takeScreenshot()) {
+            "UiAutomation did not return a Hardware Canvas screenshot"
+        }
+        try {
+            assertTrue("material view bounds outside screenshot: $bounds",
+                bounds.intersect(0, 0, screen.width, screen.height))
+            assertEquals(168, bounds.width())
+            assertEquals(168, bounds.height())
+            return Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
+        } finally {
+            screen.recycle()
+        }
     }
 
     private fun copyPanelOrb(instrumentation: Instrumentation, manager: TestPanelWindowManager): Bitmap {
@@ -1048,13 +1059,25 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
-    /** Reject the <=4/255 noise which made the previous any-pixel predicate
-     * a false positive. The quiet phase is separated by 180ms, so canonical
-     * animated material must change a substantive interior population. */
-    private fun hasMaterialMotion(first: Bitmap, second: Bitmap): Boolean {
+    private data class MaterialPixelComparison(
+        val changedPixels: Int,
+        val totalDelta: Long,
+        val maximumDelta: Int,
+    ) {
+        fun meaningful(): Boolean = changedPixels >= 64 && totalDelta >= 2_048L
+
+        /** Screenshots have at most small compositor conversion noise. This
+         * rejects a widespread phase change while allowing <=2/255 residuals. */
+        fun nearlyEqual(): Boolean = maximumDelta <= 2 && totalDelta <= 2_048L
+    }
+
+    /** Uses the same interior and meaningful-motion threshold for A/C/B/A
+     * compositor controls. It intentionally ignores transparent corners. */
+    private fun compareMaterialPixels(first: Bitmap, second: Bitmap): MaterialPixelComparison {
         require(first.width == second.width && first.height == second.height)
         var substantive = 0
         var totalDelta = 0L
+        var maximum = 0
         for (y in 0 until first.height) for (x in 0 until first.width) {
             val dx = x + .5f - first.width / 2f
             val dy = y + .5f - first.height / 2f
@@ -1068,19 +1091,38 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             )
             if (delta >= 7) substantive += 1
             totalDelta += delta
+            maximum = maxOf(maximum, delta)
         }
-        return substantive >= 64 && totalDelta >= 2_048L
+        return MaterialPixelComparison(substantive, totalDelta, maximum)
     }
 
-    private fun waitForRenderer(
+    private fun isolatedPublished(instrumentation: Instrumentation, window: KeyguardCardWindow): Int {
+        var published = 0
+        instrumentation.runOnMainSync { published = window.materialDiagnostics()?.isolatedFramesPublished ?: 0 }
+        return published
+    }
+
+    private fun persistPanelEvidence(activity: KeyguardMaterialTestActivity, label: String, bitmap: Bitmap) {
+        val directory = File(activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
+        File(directory, "$label.png").outputStream().use {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+    }
+
+    private fun waitForShaderDraw(
         instrumentation: Instrumentation,
         view: KeyguardHeaderMaterialView,
+        previousCalls: Int,
     ): Boolean {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
         while (System.nanoTime() < deadline) {
-            var ready = false
-            instrumentation.runOnMainSync { ready = view.diagnostics().lastCanvasHardwareAccelerated == true }
-            if (ready) return true
+            var drawn = false
+            instrumentation.runOnMainSync {
+                val diagnostics = view.diagnostics()
+                drawn = diagnostics.lastCanvasHardwareAccelerated == true &&
+                    diagnostics.shaderDrawCount > previousCalls
+            }
+            if (drawn) return true
             Thread.sleep(32)
         }
         return false
@@ -1205,6 +1247,54 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         ),
     )
 
+    /** Same synthetic Portal profile and dimensions as the service A/C/B/A
+     * fixture. Only its test clock is controlled; shader math is untouched. */
+    private fun calibratedOrbProfile() = requireNotNull(
+        KeyguardMaterialProfile.fromMap(
+            mapOf(
+                "schemaVersion" to 1,
+                "shaderAbiVersion" to 6,
+                "sourceShaderHash" to KeyguardMaterialProfile.SOURCE_SHADER_HASH,
+                "publisherSession" to "instrumentation-calibrated",
+                "publisherRevision" to 1L,
+                "sceneIdentity" to "fixture|balance|month",
+                "effectId" to "dualTide",
+                "effectShaderId" to 1,
+                "phase" to .25,
+                "elapsedSeconds" to 1.0,
+                "phaseSpeed" to .4,
+                "colors" to listOf(0xff104f7c.toInt(), 0xff62c7dc.toInt(), 0xff8366dc.toInt()),
+                "stops" to listOf(0.0, .5, 1.0),
+                "opacity" to 1.0,
+                "paletteSplitPercent" to 50.0,
+                "commonSettings" to List(40) { .2 },
+                "background" to calibratedPortal(true),
+                "interior" to calibratedPortal(false),
+                "referenceWidth" to 390.0,
+                "referenceHeight" to 220.0,
+            ),
+        ),
+    )
+
+    private fun calibratedPortal(enabled: Boolean) = mapOf(
+        "enabled" to enabled,
+        "effectIndex" to 0,
+        "phase" to 0.0,
+        "phaseSpeed" to .2,
+        "paletteCenterPercent" to 50.0,
+        "paletteWindowPercent" to 68.0,
+        "rotationEnabled" to false,
+        "rotationSpeed" to 0.0,
+        "settings" to List(12) { .2 },
+    )
+
+    private fun calibratedMaterialTime(phase: Float) = KeyguardMaterialTime(
+        elapsedSeconds = phase,
+        phase = phase,
+        backgroundPhase = phase,
+        interiorPhase = phase,
+    )
+
     private fun portal(enabled: Boolean) = mapOf(
         "enabled" to enabled,
         "effectIndex" to 0,
@@ -1311,5 +1401,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             assertTrue("$label event overlaps secondary", event.top >= secondary.bottom)
         }
         assertTrue("$label orb and toggle overlap", orb.bottom <= toggle.top || toggle.bottom <= orb.top)
+    }
+
+    private companion object {
+        const val PHASE_A = 1.196795f
+        const val PHASE_C = 1.5234617f
+        const val PHASE_B = 3.75f
     }
 }

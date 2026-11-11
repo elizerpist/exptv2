@@ -102,6 +102,12 @@ internal data class KeyguardOrbBufferProducerFrame(
     val useGeneration: Long,
     val frameTimeNanos: Long,
     val materialTime: KeyguardMaterialTime,
+    /**
+     * Test-only identity captured with the immutable material-time sample
+     * used for this submission. Production time sources return null, so this
+     * is neither a user setting nor a per-frame bridge payload.
+     */
+    val testRequestId: Long? = null,
 )
 
 internal fun interface KeyguardOrbBufferFrameObserver {
@@ -128,6 +134,12 @@ internal object NoopKeyguardOrbBufferFrameObserver : KeyguardOrbBufferFrameObser
  */
 internal fun interface KeyguardOrbMaterialTimeSource {
     fun timeAt(scene: KeyguardMaterialScene, frameTimeNanos: Long): KeyguardMaterialTime
+
+    /**
+     * Associates an already captured test time with its submission request.
+     * The default keeps the production renderer free of test metadata.
+     */
+    fun testRequestIdFor(materialTime: KeyguardMaterialTime): Long? = null
 }
 
 internal object SystemKeyguardOrbMaterialTimeSource : KeyguardOrbMaterialTimeSource {
@@ -956,6 +968,10 @@ internal class KeyguardOrbBufferRenderer(
                 // before beginRecording(), rather than during Canvas draws,
                 // so each fresh root receives this frame's material state.
                 val materialTime = materialTimeSource.timeAt(spec.scene, frameTimeNanos)
+                // Read this immediately from the same immutable time sample;
+                // a later renderer completion must never guess the newest
+                // instrumentation request id.
+                val testRequestId = materialTimeSource.testRequestIdFor(materialTime)
                 currentShader.configure(
                     spec.scene.profile,
                     spec.lease.width,
@@ -1040,6 +1056,7 @@ internal class KeyguardOrbBufferRenderer(
                                     useGeneration = useGeneration,
                                     frameTimeNanos = frameTimeNanos,
                                     materialTime = materialTime,
+                                    testRequestId = testRequestId,
                                 ),
                                 slot.buffer,
                                 result.fence,
