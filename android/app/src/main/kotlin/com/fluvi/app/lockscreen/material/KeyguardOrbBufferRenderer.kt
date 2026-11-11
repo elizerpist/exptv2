@@ -356,20 +356,32 @@ internal class KeyguardOrbBufferRenderer(
         private fun hideLayer() {
             val child = layer ?: return
             runCatching {
-                SurfaceControl.Transaction()
+                val release = SurfaceControl.Transaction()
                     // SurfaceControl's null-buffer form releases the last
                     // displayed buffer and invokes its release callback.  A
-                    // visibility/reparent transaction alone may leave that
-                    // compositor-owned slot stranded after the layer handle
-                    // is released, preventing a later attachment from
-                    // constructing its bounded replacement pool.
+                    // visibility transaction alone may leave that
+                    // compositor-owned slot stranded. Commit this release
+                    // before unparenting the layer: destroying the child in
+                    // the same transaction can discard the callback needed
+                    // to retire the worker-owned HardwareBuffer safely.
                     .setBuffer(child, null as HardwareBuffer?)
                     .setVisibility(child, false)
-                    .reparent(child, null)
-                    .apply()
+                release.addTransactionCommittedListener(
+                    Executor { command -> mainHandler.post(command) },
+                    SurfaceControl.TransactionCommittedListener {
+                        // This late cleanup has no authority to show or
+                        // reparent a current layer. It only drops the already
+                        // hidden, exact old child after SurfaceFlinger has
+                        // accepted the null-buffer release.
+                        runCatching {
+                            SurfaceControl.Transaction().reparent(child, null).apply()
+                        }
+                        runCatching { child.release() }
+                    },
+                )
+                release.apply()
             }
             firstPublishedLease = null
-            layer?.release()
             layer = null
             layerLease = null
         }
@@ -550,19 +562,22 @@ internal class KeyguardOrbBufferRenderer(
                 desired = null
                 if (callbackPosted) choreographer?.removeFrameCallback(this)
                 callbackPosted = false
-                // Only an already-free/ready target can be closed now.  A
-                // RenderRequest or the compositor may still own the others;
-                // retain just those two states until their callback/fence
-                // returns.  In particular, do not keep closed slots in the
-                // next pool or reuse an in-flight HardwareBuffer.
+                // A RenderRequest or the compositor may still own some
+                // targets; retain those until their callback/fence returns.
+                // Keep already-free targets alive, too: they are the fixed
+                // pool's only safe recovery capacity when a new authorized
+                // attachment arrives before an old compositor release.  A
+                // free HardwareBuffer has no lease-specific contents or
+                // ownership and can be rendered only after the new lease has
+                // become current.  Closing it here strands the replacement
+                // behind a stale release even though the three-slot bound has
+                // usable capacity.
                 val awaitingRelease = slots.filter {
                     it.state == SlotState.RENDERING ||
                         it.state == SlotState.READY_FOR_MAIN ||
                         it.state == SlotState.COMPOSITOR_OWNED
                 }.toMutableList()
-                slots.filter { it !in awaitingRelease }.forEach(::closeSlot)
                 awaitingRelease.forEach { it.state = SlotState.RETIRED }
-                slots = awaitingRelease
                 publishSlotSnapshot()
             }
         }
@@ -697,11 +712,17 @@ internal class KeyguardOrbBufferRenderer(
                 previousShaderProgramKey = oldArtifact.programKey
             }
             if (paint == null) paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            if (slots.isNotEmpty() && slots.all {
-                    it.buffer.width == spec.lease.width && it.buffer.height == spec.lease.height &&
-                        it.state != SlotState.RETIRED
-                }
-            ) return true
+            val matchingSize = slots.isNotEmpty() && slots.all {
+                it.buffer.width == spec.lease.width && it.buffer.height == spec.lease.height
+            }
+            if (matchingSize && slots.any { it.state != SlotState.RETIRED }) {
+                // A retained old-lease slot is never a render target again,
+                // but a same-sized FREE slot remains safe recovery capacity
+                // for the latest attachment. Do not allocate a second pool
+                // merely because the old compositor has not yet returned its
+                // release callback.
+                return true
+            }
             // A previous layer can retain a compositor-owned buffer after its
             // Main-side lease was revoked. Never resize/reuse that buffer for
             // a new scene; wait for the release callback instead of growing a
