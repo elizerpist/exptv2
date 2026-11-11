@@ -2,6 +2,7 @@ package com.fluvi.app.lockscreen.material
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.graphics.ColorSpace
 import android.graphics.HardwareBufferRenderer
 import android.graphics.Paint
 import android.graphics.PixelFormat
@@ -914,7 +915,15 @@ internal class KeyguardOrbBufferRenderer(
                     slot.node.endRecording()
                 }
                 slot.renderer.setContentRoot(slot.node)
-                slot.renderer.obtainRenderRequest().draw(executor, Consumer { result ->
+                // HardwareBufferRenderer's request owns the output colour
+                // space independently of the Window/View renderer.  Bind the
+                // same sRGB target used by Android's HardwareBufferRenderer
+                // CTS coverage before each synchronized RenderNode draw; an
+                // unspecified target left the retained RuntimeShader output
+                // frozen across otherwise distinct phase records on API 35.
+                slot.renderer.obtainRenderRequest()
+                    .setColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
+                    .draw(executor, Consumer { result ->
                     if (disposed || desired?.lease != spec.lease || slot.useGeneration != useGeneration ||
                         result.status != HardwareBufferRenderer.RenderResult.SUCCESS || slot.retired
                     ) {
@@ -972,7 +981,7 @@ internal class KeyguardOrbBufferRenderer(
                         discardRenderResult(slot, result.fence)
                         dropped += 1
                     }
-                })
+                    })
             } catch (error: Throwable) {
                 discardRenderResult(slot, null)
                 failures += 1
