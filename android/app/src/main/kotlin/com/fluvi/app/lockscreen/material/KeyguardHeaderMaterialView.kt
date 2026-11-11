@@ -350,7 +350,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         // This is strictly a retained View concern, never a WindowManager
         // operation, so rapid profile changes cannot recreate the overlay.
         val programChanged = currentScene?.profile?.effectId != next.profile.effectId ||
-            currentScene?.profile?.requiresPortalProgram != next.profile.requiresPortalProgram
+            currentScene?.profile?.usesPortal != next.profile.usesPortal
         if (programChanged) {
             // A null -> first scene used to clear the program which had just
             // been prepared by the detached retained root. Promote the exact
@@ -430,9 +430,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     private fun promotePreparedProgram(profile: KeyguardMaterialProfile): Boolean {
         val prepared = preparedProgram ?: return false
-        if (prepared.effectId != profile.effectId ||
-            prepared.usesPortal != profile.requiresPortalProgram
-        ) return false
+        if (prepared.effectId != profile.effectId || prepared.usesPortal != profile.usesPortal) return false
         preparedProgram = null
         shaderCurrent = prepared.shader
         attemptedProgramKey = prepared.programKey
@@ -445,8 +443,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     private fun matches(profile: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact): Boolean =
-        profile.effectId == artifact.effectId &&
-            profile.requiresPortalProgram == artifact.usesPortal
+        profile.effectId == artifact.effectId && profile.usesPortal == artifact.usesPortal
 
     fun frame(frameTimeNanos: Long) {
         frameNanos = frameTimeNanos
@@ -969,7 +966,13 @@ internal class KeyguardHeaderShader(
     }
 
     private fun writePortal(prefix: String, portal: KeyguardMaterialPortal) {
-        runtimeShader.setFloatUniform("${prefix}Enabled", if (portal.enabled) 1f else 0f)
+        // `effectIndex == 0` is the canonical no-material sentinel:
+        // portalSample returns zero for it. Keep the selected Portal source
+        // program (and its diagnostics) intact, but bind the channel as
+        // inactive so a no-op portal cannot route the dynamic base field
+        // through the corresponding runtime branch.
+        val active = portal.enabled && portal.effectIndex > 0
+        runtimeShader.setFloatUniform("${prefix}Enabled", if (active) 1f else 0f)
         runtimeShader.setFloatUniform("${prefix}Effect", portal.effectIndex.toFloat())
         // phase itself is dynamic; initialize before the first draw.
         runtimeShader.setFloatUniform("${prefix}Phase", portal.phase)
