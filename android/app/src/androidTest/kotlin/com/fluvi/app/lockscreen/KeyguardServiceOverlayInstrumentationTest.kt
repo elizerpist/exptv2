@@ -456,11 +456,20 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
         }
 
-        data class Request(
+        private data class Request(
             val producer: KeyguardProducerSampleRequestBook.Request<Sample>,
             private val submission: SubmissionRequest,
         ) {
             val requestId: Long get() = producer.requestId
+
+            fun awaitSubmission(timeoutMs: Long): KeyguardOrbBufferProducerFrame =
+                submission.await(timeoutMs)
+
+            fun clearPendingSubmission(
+                pendingPublication: java.util.concurrent.atomic.AtomicReference<SubmissionRequest?>,
+            ) {
+                pendingPublication.compareAndSet(submission, null)
+            }
         }
 
         override fun onProduced(
@@ -539,9 +548,9 @@ class KeyguardServiceOverlayInstrumentationTest {
 
         fun awaitSubmitted(request: Request): KeyguardOrbBufferProducerFrame =
             try {
-                request.submission.await(8_000L)
+                request.awaitSubmission(8_000L)
             } finally {
-                pendingPublication.compareAndSet(request.submission, null)
+                request.clearPendingSubmission(pendingPublication)
             }
 
         fun compare(first: Sample, second: Sample): Result {
