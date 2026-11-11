@@ -918,8 +918,11 @@ internal class KeyguardHeaderShader(
         uniform2("uRasterSize", width.toFloat(), height.toFloat())
         runtimeShader.setFloatUniform("uOpacity", profile.opacity)
         runtimeShader.setFloatUniform("uPaletteSplit", profile.paletteSplitPercent / 100f)
-        // The packaged AGSL is specialized per effect; `uEffect` is a
-        // compile-time constant, deliberately not a RuntimeShader uniform.
+        // The compact artifact selects the effect family, while uEffect
+        // selects the configured member inside that family. Keep this as a
+        // runtime uniform: API-35 AGSL otherwise takes the static fallback
+        // branch even though the phase uniform advances.
+        runtimeShader.setFloatUniform("uEffect", profile.effectShaderId.toFloat())
         runtimeShader.setFloatUniform("uPulse", 0f)
         runtimeShader.setFloatUniform("uRenderQuality", 1f)
         val fallback = profile.colors.last()

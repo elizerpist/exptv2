@@ -21,10 +21,11 @@ val keyguardHeaderSourceHash = "6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b
 // RuntimeShader rejects the all-effects Flutter program as too large on API
 // 35. The Header's effect is semantic configuration, not per-pixel input, so
 // produce one mechanically-specialized AGSL program for each canonical
-// shaderId. With uEffect made a compile-time constant SkSL can remove the
-// sixteen unrelated effect branches while retaining the selected effect,
-// Portal layers and canonical palette mathematics.
-val keyguardHeaderAdapterVersion = "3"
+// shaderId. The compact entry point keeps only that effect family, while
+// uEffect remains a runtime uniform for the selected member of the family.
+// API-35's RuntimeShader must receive that value explicitly; specializing it
+// as a const can leave the classic path at its static fallback branch.
+val keyguardHeaderAdapterVersion = "4"
 val keyguardHeaderEffects = listOf(
     "staticEffect" to 0,
     "dualTide" to 1,
@@ -178,12 +179,8 @@ half4 main(float2 _fluviFragCoord) {
 """.trim()
             val agslPrefix = sharedAgsl.substringBefore(mainSignature)
                 .replace(canonicalCommonField, specializedCommon)
-                .replace(
-                    "uniform float uEffect;",
-                    "const float uEffect = ${shaderId}.0;",
-                )
-            check(!agslPrefix.contains("uniform float uEffect;")) {
-                "AGSL specialization retained uEffect for $effectId"
+            check(agslPrefix.contains("uniform float uEffect;")) {
+                "AGSL specialization lost the effect selector for $effectId"
             }
             listOf("plain" to noPortalMain, "portal" to zeroInteractionMain).forEach { (variant, main) ->
                 val agsl = "$agslPrefix\n$main\n"
