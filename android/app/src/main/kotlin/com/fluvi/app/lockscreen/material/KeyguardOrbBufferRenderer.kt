@@ -560,15 +560,16 @@ internal class KeyguardOrbBufferRenderer(
             /**
              * A RuntimeShader is mutable.  A HardwareBufferRenderer callback
              * only means its RenderNode was submitted; its fence still owns
-             * GPU work.  Therefore one shader/paint pair belongs to one
-             * physical buffer slot and is not reconfigured until that slot
-             * has returned to FREE after its release fence.
+             * GPU work. Therefore shaders and paints belong to one physical
+             * buffer slot and are not reconfigured until that slot has
+             * returned to FREE after its release fence.
              */
             var shader: KeyguardHeaderShader? = null,
             var shaderProgramKey: String? = null,
             var previousShader: KeyguardHeaderShader? = null,
             var previousShaderProgramKey: String? = null,
-            val paint: Paint = Paint(Paint.ANTI_ALIAS_FLAG),
+            val currentPaint: Paint = Paint(Paint.ANTI_ALIAS_FLAG),
+            val previousPaint: Paint = Paint(Paint.ANTI_ALIAS_FLAG),
             var state: SlotState = SlotState.FREE,
             /** Retirement revokes a lease; it is not an ownership state. */
             var retired: Boolean = false,
@@ -860,10 +861,13 @@ internal class KeyguardOrbBufferRenderer(
         private fun render(frameTimeNanos: Long) {
             val spec = desired ?: return
             if (!ensureResources(spec)) return
+            // A stale RenderRequest owns only its own slot while its render
+            // fence drains. Do not make an otherwise FREE slot unavailable
+            // during lease revocation/re-attachment; READY and RENDERING still
+            // cap the active hand-off to one current frame.
             if (slots.any {
                     it.state == SlotState.READY_FOR_MAIN ||
-                        it.state == SlotState.RENDERING ||
-                        it.state == SlotState.WAIT_RENDER_FENCE
+                        it.state == SlotState.RENDERING
                 }) return
             val index = slots.indexOfFirst { it.state == SlotState.FREE }
             if (index < 0) {
@@ -891,10 +895,10 @@ internal class KeyguardOrbBufferRenderer(
                         ((frameTimeNanos - spec.transitionStartedNanos) / 180_000_000f).coerceIn(0f, 1f)
                     }
                     if (old != null && progress < 1f) {
-                        drawScene(canvas, slot.previousShader ?: currentShader, old, slot.paint,
+                        drawScene(canvas, slot.previousShader ?: currentShader, old, slot.previousPaint,
                             frameTimeNanos, 1f, spec.lease)
                     }
-                    drawScene(canvas, currentShader, spec.scene, slot.paint,
+                    drawScene(canvas, currentShader, spec.scene, slot.currentPaint,
                         frameTimeNanos, progress, spec.lease)
                 } finally {
                     slot.node.endRecording()
@@ -981,6 +985,10 @@ internal class KeyguardOrbBufferRenderer(
             slot.shaderProgramKey = null
             slot.previousShader = null
             slot.previousShaderProgramKey = null
+            slot.currentPaint.shader = null
+            slot.currentPaint.alpha = 255
+            slot.previousPaint.shader = null
+            slot.previousPaint.alpha = 255
             slot.state = SlotState.FREE
             slot.lease = null
         }
@@ -998,16 +1006,10 @@ internal class KeyguardOrbBufferRenderer(
                 slot.shader = KeyguardHeaderShader(spec.artifact)
                 slot.shaderProgramKey = spec.artifact.programKey
             }
-            val oldArtifact = spec.previousArtifact
+            val oldArtifact = spec.previousArtifact ?: spec.artifact
             if (spec.previousScene == null) {
                 slot.previousShader = null
                 slot.previousShaderProgramKey = null
-            } else if (oldArtifact == null || oldArtifact.programKey == spec.artifact.programKey) {
-                // Both transition scenes have the same source, but this
-                // slot owns the instance and configures the two recordings
-                // serially before one RenderRequest is submitted.
-                slot.previousShader = slot.shader
-                slot.previousShaderProgramKey = spec.artifact.programKey
             } else if (slot.previousShaderProgramKey != oldArtifact.programKey) {
                 slot.previousShader = KeyguardHeaderShader(oldArtifact)
                 slot.previousShaderProgramKey = oldArtifact.programKey
@@ -1124,8 +1126,9 @@ internal class KeyguardOrbBufferRenderer(
             targetPaint.alpha = (alpha * 255f).toInt().coerceIn(0, 255)
             canvas.drawCircle(lease.width / 2f, lease.height / 2f,
                 min(lease.width, lease.height) / 2f, targetPaint)
-            targetPaint.shader = null
-            targetPaint.alpha = 255
+            // RecordingCanvas can retain draw objects until endRecording().
+            // This slot remains fenced until its output is released, so do
+            // not mutate either the paint or RuntimeShader after this draw.
         }
 
         /** The service can dispose on Main while a RenderRequest or
