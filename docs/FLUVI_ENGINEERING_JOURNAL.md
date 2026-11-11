@@ -7315,3 +7315,94 @@ if __name__=='__main__':
 - PASS: `git diff --check`; Ubuntu/proot `bash scripts/test-keyguard-system-gate-jvm.sh /root/.gradle/wrapper/dists/gradle-8.14-all/c2qonpi39x1mddn7hk5gh9iqj/gradle-8.14/lib` — 37 tests. NOT RUN: API35 instrumentation, real service fixture, full relevant Android/Flutter suite, dashboard profile, APK and physical device measurement. A bounded local Gradle unit invocation did not yield a task completion on this Android/proot host and is not recorded as green.
 - Rejected hypothesis retained: equal A/C pixels do not establish a frozen `RuntimeShader`, a selector defect or a need for per-frame shader construction. No claim is made that the Nothing lag is repaired. The service fixture's controlled hardware Canvas/HardwareBuffer/compositor results, stale blocked B recovery, release-fence platform cases, thirty lifecycle cycles, retained-RenderNode proof and performance comparison remain required.
 - Status: W-SHOW unchanged/open; W-HIDE unchanged/open; W-LOCK-ANIM implemented oracle/ownership candidate, automatically unverified; W-HOME-ANIM protected/no change. Artifact delivery: none. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+## 2026-11-11 — reviewer follow-up: native gate finished; calibrated producer probe has a reproducible boxed-Float CAS defect
+
+### Scope and per-commit audit
+
+- Review baseline: reviewer-only journal commit `8571539ef82229cefca2d6e8c96c28c51c674c12`. Reviewed branch `fix/orb-v4-latency-lockscreen` at `22a8bff34efb7b67e7aa864e29ec83588ef7df5d`; HEAD was rechecked before this append.
+- `a35c159c649df432feb3e09c80802e05862f43ef`: read all five file diffs. Adds renderer-only captured material-time injection, changes the service producer probe to A/C/B/A, replaces mutable publication target with exact-object grant storage, preserves nullable early-release receipt presence, and adds grant/receipt unit cases. The narrow ownership/receipt corrections are real source progress; runtime lifecycle correctness remains unverified. The new probe introduces the blocking defect below.
+- `0c74b1a5e88465e316bf7b684fa78cb93af80bf7`: journal-only append, +9/-0. Its NOT RUN / pending native statements reflected the then-known state; this entry records the later run result without rewriting history.
+- `22a8bff34efb7b67e7aa864e29ec83588ef7df5d`: +12/-0 in KeyguardMaterialProfileTest. Checks the injected time-source lambda's return value. This does not exercise ProducerPixelProbe's acknowledgement, real worker retirement interleaving or compositor output.
+- Mandatory rule/addendum asset snapshots remain unchanged: prompt writer SHA256 `f5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297`; widget addendum `dc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c`. This is a bounded evidence/status review of the previously issued implementation contract, not a replacement broad refactor prompt. No application source or workflow is changed by the reviewer.
+
+### Exact CI result replaces RUNNING
+
+Run https://github.com/elizerpist/exptv2/actions/runs/43085716727, attempt 1, source `22a8bff34efb7b67e7aa864e29ec83588ef7df5d`, completed FAILURE.
+
+- PASS: test-core (130749435481), test-flutter (130749435647), dashboard-paths (130749436881).
+- FAIL: test-keyguard-material-runtime (130752732282). Android compilation succeeded. Lower instrumentation ran 40 tests: 37 passed and 3 failed.
+- Lower failure 1: KeyguardCardDiagnosticsInstrumentationTest.hiddenAccessibilityFloodCoalescesWithoutEvictingThreeAttempts, line 227, expected exported report to contain `count=500`. Independent diagnostic/export assertion; do not classify as a renderer failure or silently remove it.
+- Lower failure 2: KeyguardHeaderMaterialViewInstrumentationTest.isolatedOrbPublishesChangingCompositorPixels, line 624, no changing compositor pixels.
+- Lower failure 3: KeyguardHeaderMaterialViewInstrumentationTest.productionAssetCompilesAndDrawsOnHardwareCanvas, line 398, no motion across five samples.
+- These two lower motion tests were not modified by a35c159c; the previous review's saturated/uncalibrated oracle problem still applies. This run does not establish a calibrated hardware-Canvas-vs-HardwareBuffer result.
+- Actual service test fails at its FIRST `producerProbe.awaitPhase(PHASE_A)`, line 159: `IllegalArgumentException: producer did not reach requested phase=1.196795`, originating at awaitPhase line 431. No A/C/B/A producer comparison, compositor comparison, warm/blocked recovery or later lifecycle result was reached.
+- Native artifact 13888131225, `keyguard-runtime-results-22a8bff34efb7b67e7aa864e29ec83588ef7df5d`, downloaded and inspected, including XML, fixture.txt, capture.txt and logcat. Artifact digest reported by GitHub: `0c84231db531d7e328026e4c0e45221f4f87add7c797812d650b83bab8c4d74b`.
+- Service capture `aea4bc51-aea7-4058-a22f-485dc54f8083`, pid 2721, API35, 168x168. fixture.txt reports isolatedPublished 2 -> 3 -> 8, state LIVE, before the timeout. These counters show reported pipeline activity, not proof of changed or physically presented pixels. probe.tar contains capture.txt and fixture.txt only; no producer-a/c/b image was persisted because the first await failed.
+- FAIL: run-dashboard-profile (130752732240): `Dashboard did not reach interaction readiness before timeout`, _pumpUntilDashboardReady line 2759 / _runScenario line 293; downstream report parsing also complains that A_summary_sum_year_month must be a report map. Current failure is a readiness timeout; do not copy the previous run's RangeError diagnosis or claim a baseline regression without comparison.
+- SKIPPED: build-human-diagnostic-apk (130758005863). No Human APK to deliver. User report that native was RUNNING is superseded by this completed result, not evidence that the agent knowingly misreported it.
+
+### New concrete diagnosis: numeric equality is incorrectly used as CAS identity
+
+File at the reviewed SHA: `android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt`, ProducerPixelProbe lines 379–431.
+
+```kotlin
+private val requestedPhase = AtomicReference<Float?>(null)
+// awaitPhase:
+requestedPhase.set(phase)
+// onProduced:
+val phase = requestedPhase.get() ?: return
+// ... matching phase, fence wait, successful pixel copy ...
+if (requestedPhase.compareAndSet(phase, null)) captured.set(sample)
+```
+
+- AtomicReference.compareAndSet compares object reference identity, not floating-point numeric equality. The non-null local Float is unboxed and boxed again at the CAS boundary; its expected reference is not the object stored by set(phase). Thus a correct phase and successful readback can be discarded, captured remains null, and awaitPhase emits a misleading 'producer did not reach requested phase' timeout.
+- This is a source-level sufficient failure mechanism, reproduced independently. The current CI does not log every readback/CAS outcome, so the reviewer does not claim all intermediate Android callbacks have been traced.
+- Strong corroboration from the actual CI compile log at 2026-11-11T19:28:38.6891933Z: `KeyguardServiceOverlayInstrumentationTest.kt:414:25 This call may have inconsistent results because 'AtomicReference' uses identity equality and 'Float?' does not have a consistent identity.`
+- Reviewer ran the minimal equivalent Kotlin/JVM sequence below, first with Kotlin 2.2.0 and then **the project's exact Kotlin 2.2.20** (as declared in android/settings.gradle.kts), JRE 21.0.13. Both returned: `Float phase CAS success=0/100; request-token CAS success=100/100`. Kotlin 2.2.20 also emitted the same identity warning. This is an executed JVM reproducer, not Android instrumentation or a phone performance result.
+- Official reference: https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/util/concurrent/atomic/AtomicReference.html#compareAndSet(V,V)
+
+```kotlin
+import java.util.concurrent.atomic.AtomicReference
+
+fun main() {
+    val requestedPhase = AtomicReference<Float?>(null)
+    var legacySuccess = 0
+    repeat(100) {
+        requestedPhase.set(1.196795f)
+        val phase = requestedPhase.get() ?: error("missing")
+        check(kotlin.math.abs(1.196795f - phase) <= .0001f)
+        if (requestedPhase.compareAndSet(phase, null)) legacySuccess++
+    }
+    data class Request(val id: Long, val phase: Float)
+    val requested = AtomicReference<Request?>(null)
+    var tokenSuccess = 0
+    repeat(100) {
+        requested.set(Request(it.toLong(), 1.196795f))
+        val request = requested.get() ?: error("missing")
+        if (requested.compareAndSet(request, null)) tokenSuccess++
+    }
+    println("Float phase CAS success=$legacySuccess/100; request-token CAS success=$tokenSuccess/100")
+    check(legacySuccess == 0)
+    check(tokenSuccess == 100)
+}
+```
+
+### Bounded correction required before another backend hypothesis
+
+1. Replace AtomicReference<Float?> with an immutable **request identity object**, carrying monotonically increasing request id, expected phase, expected current lease and per-request completion/result. Retain the exact request object read by onProduced for CAS. Phase tolerance is for numerical frame matching only. Do not replace this with getAndSet(null), a boxed Double, a blind set(null) or a larger timeout: those either retain the identity bug or let a late A clear B.
+2. Results/errors must belong to that request, not a single shared captured/failure slot. Test success with correct phase, mismatched phase, old lease, superseded request, duplicate delivery and A1 -> B -> A2 at the same numeric A phase. A late A1 callback must neither satisfy A2 nor cancel B. Arm a request before advancing controlled time; use current lease/frame/use identity as well as phase. The regression must exercise the actual probe acknowledgement path (or its extracted shared implementation), not merely a lambda returning a constant.
+3. Rerun this focused acknowledgement regression first, then the calibrated service gate. Keep A/C expected equality, A/B meaningful difference and A-return checks. Gather both producer and compositor evidence before assertions terminate a scenario. Producer readback occurs before publication; completion of awaitPhase alone is not proof that the compositor crop has switched to B. Wait for exact current-lease publication/observed crop under a bounded condition, recording identities; a transaction callback is not physical presentation.
+4. Repair both remaining lower motion oracles with the same profile/program/size and calibrated phases. Keep meaningful-motion thresholds and negative controls. The current A/C assertion merely rejects 'meaningful motion'; also define a tight explicit equality/error bound so widespread small divergence does not pass as parity.
+5. Keep deterministic phase calibration separate from actual animation/performance. Current fixture holds C during its ten-second steady interval, so counters during that interval cannot establish advancing material time. Return to the production monotonic clock for genuine animation/performance and disable readback; retain OFF/LIGHT/FULL separation.
+6. Preserve the exact-grant and nullable-receipt source repairs. Still require real worker retire-A / install-B / unblock-A integration and null-fence receipt ordering evidence; the new container unit tests do not complete that contract.
+7. Resolve the independent diagnostic export assertion and dashboard readiness failure with their own evidence. Do not weaken unrelated gates or emit a Human APK while required gates are red.
+8. The prior full implementation contract remains in force: matched backend evidence, slot reuse, bounded recovery, lifecycle cases, physical validation user-only. A new RuntimeShader per frame, renderer replacement or shader simplification is not justified by this first-A timeout. Do not spend another broad build cycle interpreting a broken test acknowledgement as frozen GPU output.
+
+### Review outcome / user-visible progress
+
+- Proven progress this turn: an exact new fixture defect, actual CI compiler warning, and executed failing/passing JVM reproducer were identified. This is a test-harness correction target; it is not a measured improvement in lockscreen lag.
+- Source improvements in a35c159c are acknowledged, but native gates, lifecycle validation and user-visible performance remain OPEN.
+- W-SHOW OPEN; W-HIDE OPEN; W-LOCK-ANIM OPEN; W-HOME-ANIM protected/no application change in this reviewer action.
+- Reviewer ran no Android emulator or physical-phone test, changed no application code, and issued no APK.
+- Reviewer write is append-only to this journal, with [skip ci]. Coding agent must read this entry plus the mandatory prompt-writing/widget assets before continuing and append exact per-commit test outcomes. PHYSICAL VALIDATION: PENDING — USER ONLY.
