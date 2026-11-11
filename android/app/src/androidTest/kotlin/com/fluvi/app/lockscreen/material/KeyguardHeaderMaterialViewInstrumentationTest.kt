@@ -331,7 +331,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     layoutParams = FrameLayout.LayoutParams(168, 168)
                     setScene(KeyguardMaterialScene(profile, full = true, appliedAtNanos = 0L), enabled = true)
                     setBootstrapActive(false)
-                    assertEquals(ProgramPreparationResult.COMPILED, installPreparedShader(artifact))
+                    assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED, installPreparedShader(artifact))
                 }
                 root.addView(view)
                 activity.setContentView(root)
