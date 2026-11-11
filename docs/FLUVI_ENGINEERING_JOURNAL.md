@@ -6923,3 +6923,11 @@ Platform HardwareBufferRenderer is API34, exposes obtainRenderRequest().draw(exe
 ### Follow-up: producer-failure fallback before delivery
 
 - Post-commit lifecycle review found that a failed isolated producer still left `isolatedOrbRequested` true and could retain the legacy controller in `BOOTSTRAP`, which risks a non-animating compatibility fallback. The source is corrected before final delivery: a failed visual key selects the already-prepared legacy View route in `LIVE`, clears the bootstrap token, and suppresses repeated attempts for that exact visual key. A materially different visual key may make one bounded fresh isolated attempt. This is a correctness/liveness correction, not a device-performance claim; CI is rerun from its follow-up application SHA.
+
+### Follow-up: exact-source API-35 RED and isolated LIVE ownership repair
+
+- Exact-source CI run `42949468752` exposed a genuine production-fixture RED on `2e9ed4bbc2e219e83d36aeff1586dfca0366ee84`: `connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles` timed out waiting for current `LIVE` output. The Human APK job was correctly skipped.
+- Retained job artifact `13825420828` shows the buffer producer was not idle: the current attachment published 132 buffers. Yet the service diagnostic remained `BOOTSTRAP`; this is an ownership/state defect, not evidence that the test should accept a bootstrap as live output.
+- Cause: the API-34 isolated path deliberately bypasses the legacy View bootstrap commit, but its first matching `SurfaceControl.setBuffer` publication did not itself clear the legacy bootstrap state. A real completed, Main-authorized buffer transaction is the corresponding live boundary for this backend.
+- Candidate correction: only after the existing exact attached/current-lease checks succeed, `onIsolatedOrbFirstPublished` now sets `LIVE`, clears the legacy bootstrap token/commit bit, then hides the bootstrap View and reports the first current output. No timer, synthetic callback or weakened test is introduced. A stale/detached/old lease returns before this transition.
+- This closes the API-35 RED at the actual producer-to-controller boundary. It is still not a Nothing pacing result; the revised source must pass the native job, Human APK lane, exact-source graph regeneration and device validation before handoff.

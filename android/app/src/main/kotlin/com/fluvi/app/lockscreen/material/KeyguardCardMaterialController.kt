@@ -827,6 +827,14 @@ internal class KeyguardCardMaterialController(
         if (!attached || isolatedOrbFailed || activeOrbLease != lease ||
             activeAttachment != lease.attachment || attachedRoot?.isAttachedToWindow != true
         ) return
+        // Unlike the legacy View route, this producer has no View bootstrap
+        // commit to wait for.  This exact completed buffer transaction is its
+        // first authorized live output.  A later scene update can legitimately
+        // establish a new bootstrap, but the old View token must not strand an
+        // already-publishing current layer in BOOTSTRAP.
+        coldPresentationState = ColdPresentationState.LIVE
+        bootstrapVisualKey = null
+        bootstrapCommitReceived = false
         // The buffer layer exactly occupies the ORB child. Leaving the View
         // visible would create two animated producers underneath one root.
         // The placeholder remains only until a real completed buffer is
