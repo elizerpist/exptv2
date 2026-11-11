@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../android"
 test_result=0
 ./gradlew :app:connectedDebugAndroidTest --no-daemon \
   -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest,com.fluvi.app.lockscreen.KeyguardFirstDrawObservationInstrumentationTest,com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest,com.fluvi.app.lockscreen.KeyguardFirstDrawObservationInstrumentationTest,com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest,com.fluvi.app.lockscreen.KeyguardProducerSampleRequestBookInstrumentationTest \
   || test_result=$?
 adb logcat -d -s FluviDrawProbe:I '*:S' > keyguard-draw-probe.log || true
 # AGP otherwise uninstalls the target before this pull (run42926044104

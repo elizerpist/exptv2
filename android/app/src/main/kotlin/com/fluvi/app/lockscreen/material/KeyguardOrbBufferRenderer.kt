@@ -127,6 +127,19 @@ internal object NoopKeyguardOrbBufferFrameObserver : KeyguardOrbBufferFrameObser
 }
 
 /**
+ * Test-only acknowledgement that Main submitted this exact producer frame to
+ * the current SurfaceControl layer. It is deliberately a submission boundary,
+ * not a claim that SurfaceFlinger has presented the pixels physically.
+ */
+internal fun interface KeyguardOrbBufferPublicationObserver {
+    fun onSubmitted(frame: KeyguardOrbBufferProducerFrame)
+}
+
+internal object NoopKeyguardOrbBufferPublicationObserver : KeyguardOrbBufferPublicationObserver {
+    override fun onSubmitted(frame: KeyguardOrbBufferProducerFrame) = Unit
+}
+
+/**
  * The isolated producer owns its frame clock.  Instrumentation may inject a
  * deterministic material-time source, but the dependency is captured when a
  * window/controller is constructed; production continues to use the scene's
@@ -180,6 +193,8 @@ internal class KeyguardOrbEarlyReleaseReceiptStore<T> {
  * changing it cannot affect an existing renderer. */
 internal object KeyguardOrbBufferRendererTestHooks {
     @Volatile var frameObserver: KeyguardOrbBufferFrameObserver = NoopKeyguardOrbBufferFrameObserver
+    @Volatile var publicationObserver: KeyguardOrbBufferPublicationObserver =
+        NoopKeyguardOrbBufferPublicationObserver
     @Volatile var materialTimeSource: KeyguardOrbMaterialTimeSource = SystemKeyguardOrbMaterialTimeSource
 }
 
@@ -201,6 +216,8 @@ internal class KeyguardOrbBufferRenderer(
     private val onSizeChanged: () -> Unit,
     private val barrier: KeyguardOrbRenderBarrier = NoopKeyguardOrbRenderBarrier,
     private val frameObserver: KeyguardOrbBufferFrameObserver = NoopKeyguardOrbBufferFrameObserver,
+    private val publicationObserver: KeyguardOrbBufferPublicationObserver =
+        NoopKeyguardOrbBufferPublicationObserver,
     private val materialTimeSource: KeyguardOrbMaterialTimeSource = SystemKeyguardOrbMaterialTimeSource,
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
 ) {
@@ -273,6 +290,7 @@ internal class KeyguardOrbBufferRenderer(
             onLeaseDrained = ::onLeaseDrained,
             barrier = barrier,
             frameObserver = frameObserver,
+            publicationObserver = publicationObserver,
             materialTimeSource = materialTimeSource,
         )
 
@@ -560,6 +578,9 @@ internal class KeyguardOrbBufferRenderer(
                     // error/drop path remains responsible for a fence that
                     // was never submitted.
                     worker.markFirstPublished(frame)
+                    if (publicationObserver !== NoopKeyguardOrbBufferPublicationObserver) {
+                        runCatching { publicationObserver.onSubmitted(frame.producerFrame) }
+                    }
                     if (firstCurrentPublication) {
                         firstPublishedLease = frame.lease
                         framesPublished += 1
@@ -594,6 +615,7 @@ internal class KeyguardOrbBufferRenderer(
         private val onLeaseDrained: (KeyguardOrbBufferLease) -> Unit,
         private val barrier: KeyguardOrbRenderBarrier,
         private val frameObserver: KeyguardOrbBufferFrameObserver,
+        private val publicationObserver: KeyguardOrbBufferPublicationObserver,
         private val materialTimeSource: KeyguardOrbMaterialTimeSource,
     ) : Choreographer.FrameCallback {
         /**
@@ -1043,29 +1065,24 @@ internal class KeyguardOrbBufferRenderer(
                     previousCompletionAtUptimeMs = completedAt
                     publishSlotSnapshot()
                     // This hook is intentionally test-only and executes on
-                    // the renderer handler after a SUCCESS result.  It lets
+                    // the renderer handler after a SUCCESS result. It lets
                     // instrumentation read the producer buffer after the
                     // completion fence without putting readback or waits on
                     // the production/Main frame path.
+                    val producerFrame = KeyguardOrbBufferProducerFrame(
+                        lease = spec.lease,
+                        slotId = slot.id,
+                        useGeneration = useGeneration,
+                        frameTimeNanos = frameTimeNanos,
+                        materialTime = materialTime,
+                        testRequestId = testRequestId,
+                    )
                     if (frameObserver !== NoopKeyguardOrbBufferFrameObserver) {
                         runCatching {
-                            frameObserver.onProduced(
-                                KeyguardOrbBufferProducerFrame(
-                                    lease = spec.lease,
-                                    slotId = slot.id,
-                                    useGeneration = useGeneration,
-                                    frameTimeNanos = frameTimeNanos,
-                                    materialTime = materialTime,
-                                    testRequestId = testRequestId,
-                                ),
-                                slot.buffer,
-                                result.fence,
-                            )
+                            frameObserver.onProduced(producerFrame, slot.buffer, result.fence)
                         }
                     }
-                    val ready = ReadyFrame(
-                        spec.lease, slot.id, useGeneration, slot.buffer, result.fence,
-                    )
+                    val ready = ReadyFrame(producerFrame, slot.buffer, result.fence)
                     if (firstLeaseSubmitted == spec.lease) {
                         publishSteady(slot, ready)
                     } else if (firstLeaseAwaitingMain != spec.lease) {
@@ -1143,6 +1160,9 @@ internal class KeyguardOrbBufferRenderer(
                         Consumer { releaseFence -> consumeRelease(frame.slotId, frame.useGeneration, releaseFence) },
                     )
                     .apply()
+                if (publicationObserver !== NoopKeyguardOrbBufferPublicationObserver) {
+                    runCatching { publicationObserver.onSubmitted(frame.producerFrame) }
+                }
                 // SurfaceControl owns the submitted acquire fence. Slot
                 // reuse still waits for its later release callback/fence,
                 // never for transaction commitment.
@@ -1264,13 +1284,14 @@ internal class KeyguardOrbBufferRenderer(
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private data class ReadyFrame(
-        val lease: KeyguardOrbBufferLease,
+        val producerFrame: KeyguardOrbBufferProducerFrame,
+        val lease: KeyguardOrbBufferLease = producerFrame.lease,
         /** Stable across retirement filtering; never use a mutable-list index
          * in a cross-thread release callback. */
-        val slotId: Long,
+        val slotId: Long = producerFrame.slotId,
         /** Every async producer/release callback is additionally bound to a
          * particular use of this stable allocation. */
-        val useGeneration: Long,
+        val useGeneration: Long = producerFrame.useGeneration,
         val buffer: HardwareBuffer,
         val fence: SyncFence?,
     )

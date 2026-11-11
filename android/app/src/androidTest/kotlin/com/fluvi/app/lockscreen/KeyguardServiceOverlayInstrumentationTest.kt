@@ -31,11 +31,13 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.R
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferFrameObserver
+import com.fluvi.app.lockscreen.material.KeyguardOrbBufferPublicationObserver
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferProducerFrame
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferRendererTestHooks
 import com.fluvi.app.lockscreen.material.KeyguardOrbMaterialTimeSource
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTime
 import com.fluvi.app.lockscreen.material.NoopKeyguardOrbBufferFrameObserver
+import com.fluvi.app.lockscreen.material.NoopKeyguardOrbBufferPublicationObserver
 import com.fluvi.app.lockscreen.material.SystemKeyguardOrbMaterialTimeSource
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import org.junit.Assert.assertEquals
@@ -100,6 +102,7 @@ class KeyguardServiceOverlayInstrumentationTest {
         val producerProbe = ProducerPixelProbe()
         val controlledTime = ControlledMaterialTimeSource(materialTime(PHASE_A))
         KeyguardOrbBufferRendererTestHooks.frameObserver = producerProbe
+        KeyguardOrbBufferRendererTestHooks.publicationObserver = producerProbe
         KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
         try {
             assertFalse("Secure credentials require a different, explicit fixture", keyguard.isDeviceSecure)
@@ -159,12 +162,14 @@ class KeyguardServiceOverlayInstrumentationTest {
             controlledTime.submit(requestA.requestId, materialTime(PHASE_A))
             val producerA = producerProbe.await(requestA)
             producerProbe.persist(output, "producer-a", producerA)
+            producerProbe.awaitSubmitted(requestA)
             val liveA = awaitLive("phase-a-current-lease", cold.material, minimumAdvances = 1, expectedWindowId = cold.window.id)
             val firstImage = copyOrb(cold.window, "cold-orb-a.png")
             val requestC = producerProbe.arm(currentLease, PHASE_C)
             controlledTime.submit(requestC.requestId, materialTime(PHASE_C))
             val producerC = producerProbe.await(requestC)
             producerProbe.persist(output, "producer-c", producerC)
+            producerProbe.awaitSubmitted(requestC)
             val liveC = awaitLive("phase-c-current-lease", liveA, minimumAdvances = 1, expectedWindowId = cold.window.id)
             val imageC = copyOrb(cold.window, "cold-orb-c.png")
             // A quiet, explicitly marked interval, not a FPS target. No
@@ -186,12 +191,14 @@ class KeyguardServiceOverlayInstrumentationTest {
             controlledTime.submit(requestB.requestId, materialTime(PHASE_B))
             val producerB = producerProbe.await(requestB)
             producerProbe.persist(output, "producer-b", producerB)
+            producerProbe.awaitSubmitted(requestB)
             val liveB = awaitLive("phase-b-current-lease", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
             val secondImage = copyOrb(requireOverlay(), "cold-orb-b.png")
             val requestReturnA = producerProbe.arm(currentLease, PHASE_A)
             controlledTime.submit(requestReturnA.requestId, materialTime(PHASE_A))
             val producerReturn = producerProbe.await(requestReturnA)
             producerProbe.persist(output, "producer-return-a", producerReturn)
+            producerProbe.awaitSubmitted(requestReturnA)
             val liveReturnA = awaitLive("phase-return-a-current-lease", liveB, minimumAdvances = 1, expectedWindowId = cold.window.id)
             val imageReturnA = copyOrb(requireOverlay(), "cold-orb-return-a.png")
 
@@ -279,6 +286,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             throw failure
         } finally {
             KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver
             KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
             occlusionProbe?.close()
             occlusionProbe = null
@@ -384,7 +392,9 @@ class KeyguardServiceOverlayInstrumentationTest {
             submittedOnRenderer.get()?.takeIf { it.materialTime === materialTime }?.requestId
     }
 
-    private class ProducerPixelProbe : KeyguardOrbBufferFrameObserver {
+    private class ProducerPixelProbe :
+        KeyguardOrbBufferFrameObserver,
+        KeyguardOrbBufferPublicationObserver {
         data class Sample(
             val frame: KeyguardOrbBufferProducerFrame,
             val pixels: IntArray,
@@ -418,7 +428,40 @@ class KeyguardServiceOverlayInstrumentationTest {
         )
 
         private val requests = KeyguardProducerSampleRequestBook<Sample>()
+        private val pendingPublication = java.util.concurrent.atomic.AtomicReference<SubmissionRequest?>(null)
         private val latestFrame = java.util.concurrent.atomic.AtomicReference<KeyguardOrbBufferProducerFrame?>(null)
+
+        private class SubmissionRequest(
+            private val producer: KeyguardProducerSampleRequestBook.Request<Sample>,
+        ) {
+            private val completed = java.util.concurrent.CountDownLatch(1)
+            private val submitted = java.util.concurrent.atomic.AtomicReference<KeyguardOrbBufferProducerFrame?>(null)
+
+            fun matches(frame: KeyguardOrbBufferProducerFrame): Boolean =
+                producer.expectedLease == frame.lease &&
+                    producer.requestId == frame.testRequestId &&
+                    kotlin.math.abs(producer.expectedPhase - frame.materialTime.phase) <= .0001f
+
+            fun complete(frame: KeyguardOrbBufferProducerFrame) {
+                submitted.set(frame)
+                completed.countDown()
+            }
+
+            fun await(timeoutMs: Long): KeyguardOrbBufferProducerFrame {
+                check(completed.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+                    "requested frame was not submitted request=${producer.requestId} " +
+                        "phase=${producer.expectedPhase}"
+                }
+                return requireNotNull(submitted.get()) { "submission completed without a frame" }
+            }
+        }
+
+        data class Request(
+            val producer: KeyguardProducerSampleRequestBook.Request<Sample>,
+            private val submission: SubmissionRequest,
+        ) {
+            val requestId: Long get() = producer.requestId
+        }
 
         override fun onProduced(
             frame: KeyguardOrbBufferProducerFrame,
@@ -464,6 +507,12 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
         }
 
+        override fun onSubmitted(frame: KeyguardOrbBufferProducerFrame) {
+            val request = pendingPublication.get() ?: return
+            if (!request.matches(frame) || !pendingPublication.compareAndSet(request, null)) return
+            request.complete(frame)
+        }
+
         fun awaitCurrentLease(): com.fluvi.app.lockscreen.material.KeyguardOrbBufferLease {
             val deadline = SystemClock.uptimeMillis() + 8_000L
             var latest = latestFrame.get()
@@ -477,9 +526,23 @@ class KeyguardServiceOverlayInstrumentationTest {
         fun arm(
             lease: com.fluvi.app.lockscreen.material.KeyguardOrbBufferLease,
             phase: Float,
-        ): KeyguardProducerSampleRequestBook.Request<Sample> = requests.arm(lease, phase)
+        ): Request {
+            val producer = requests.arm(lease, phase)
+            val submission = SubmissionRequest(producer)
+            check(pendingPublication.compareAndSet(null, submission)) {
+                "a publication acknowledgement is already pending"
+            }
+            return Request(producer, submission)
+        }
 
-        fun await(request: KeyguardProducerSampleRequestBook.Request<Sample>): Sample = requests.await(request)
+        fun await(request: Request): Sample = requests.await(request.producer)
+
+        fun awaitSubmitted(request: Request): KeyguardOrbBufferProducerFrame =
+            try {
+                request.submission.await(8_000L)
+            } finally {
+                pendingPublication.compareAndSet(request.submission, null)
+            }
 
         fun compare(first: Sample, second: Sample): Result {
             assertEquals("Producer samples must belong to the same current lease",

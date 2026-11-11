@@ -567,10 +567,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         var imageC: Bitmap? = null
         var imageB: Bitmap? = null
         var imageReturnA: Bitmap? = null
-        val controlledTime = AtomicReference(calibratedMaterialTime(PHASE_A))
-        KeyguardOrbBufferRendererTestHooks.materialTimeSource = KeyguardOrbMaterialTimeSource { _, _ ->
-            controlledTime.get()
-        }
+        val controlledTime = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
+        val submissions = SubmittedFrameTracker()
+        submissions.expect(1L, PHASE_A)
+        controlledTime.submit(1L, calibratedMaterialTime(PHASE_A))
+        KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
+        KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions
         try {
             instrumentation.runOnMainSync {
                 window = KeyguardCardWindow(
@@ -593,6 +595,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
             }
             assertTrue("isolated ORB never completed a buffer", waitForIsolatedOutput(instrumentation, window))
+            submissions.await(1L)
             // The ORB is in a separate TYPE_APPLICATION_PANEL, not in the
             // Activity Window. Capture the compositor's actual panel bounds;
             // PixelCopy(activity.window) cannot validate that child surface.
@@ -600,19 +603,25 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             persistPanelEvidence(activity, "isolated-orb-a", requireNotNull(imageA))
             val publishedA = isolatedPublished(instrumentation, window)
 
-            controlledTime.set(calibratedMaterialTime(PHASE_C))
+            submissions.expect(2L, PHASE_C)
+            controlledTime.submit(2L, calibratedMaterialTime(PHASE_C))
+            submissions.await(2L)
             assertTrue("isolated ORB did not publish controlled C", waitForIsolatedOutput(instrumentation, window, publishedA))
             imageC = copyPanelOrb(instrumentation, manager)
             persistPanelEvidence(activity, "isolated-orb-c", requireNotNull(imageC))
             val publishedC = isolatedPublished(instrumentation, window)
 
-            controlledTime.set(calibratedMaterialTime(PHASE_B))
+            submissions.expect(3L, PHASE_B)
+            controlledTime.submit(3L, calibratedMaterialTime(PHASE_B))
+            submissions.await(3L)
             assertTrue("isolated ORB did not publish controlled B", waitForIsolatedOutput(instrumentation, window, publishedC))
             imageB = copyPanelOrb(instrumentation, manager)
             persistPanelEvidence(activity, "isolated-orb-b", requireNotNull(imageB))
             val publishedB = isolatedPublished(instrumentation, window)
 
-            controlledTime.set(calibratedMaterialTime(PHASE_A))
+            submissions.expect(4L, PHASE_A)
+            controlledTime.submit(4L, calibratedMaterialTime(PHASE_A))
+            submissions.await(4L)
             assertTrue("isolated ORB did not return to controlled A", waitForIsolatedOutput(instrumentation, window, publishedB))
             imageReturnA = copyPanelOrb(instrumentation, manager)
             persistPanelEvidence(activity, "isolated-orb-return-a", requireNotNull(imageReturnA))
@@ -636,10 +645,105 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             }
         } finally {
             KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver
             imageA?.recycle()
             imageC?.recycle()
             imageB?.recycle()
             imageReturnA?.recycle()
+            instrumentation.runOnMainSync {
+                createdWindow?.dispose()
+                activity.finish()
+            }
+        }
+    }
+
+    /**
+     * Reproduces the attribution hole in the real window/worker path: an old
+     * A frame can advance the aggregate publication counter after B is armed.
+     * The new exact submission observer must leave B unsatisfied until its own
+     * request-tagged frame passes the Main SurfaceControl submission boundary.
+     */
+    @Test fun isolatedOrbDoesNotAttributeDelayedOldPublicationToNewRequest() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        data class Gate(val entered: CountDownLatch = CountDownLatch(1), val release: CountDownLatch = CountDownLatch(1))
+        val nextGate = AtomicReference<Gate?>(null)
+        val barrier = KeyguardOrbRenderBarrier {
+            nextGate.getAndSet(null)?.let { gate ->
+                gate.entered.countDown()
+                gate.release.await(8, TimeUnit.SECONDS)
+            }
+        }
+        val controlledTime = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
+        val submissions = SubmittedFrameTracker()
+        submissions.expect(1L, PHASE_A)
+        controlledTime.submit(1L, calibratedMaterialTime(PHASE_A))
+        KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
+        KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions
+        lateinit var window: KeyguardCardWindow
+        var createdWindow: KeyguardCardWindow? = null
+        var oldGate: Gate? = null
+        var newGate: Gate? = null
+        try {
+            instrumentation.runOnMainSync {
+                window = KeyguardCardWindow(
+                    serviceContext = activity,
+                    onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> },
+                    manager = TestPanelWindowManager(activity),
+                    isolatedOrbRenderBarrier = barrier,
+                )
+                createdWindow = window
+                val settings = KeyguardCardSettings(
+                    requested = true,
+                    showFinancialDetails = true,
+                    presentationMode = KeyguardCardPresentationMode.ORB,
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    orbPosition = KeyguardCardOrbPosition(.5f, .5f),
+                )
+                window.prepareRetainedView(settings, calibratedOrbProfile())
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+            }
+            assertTrue("initial controlled A was not submitted", waitForIsolatedOutput(instrumentation, window))
+            submissions.await(1L)
+            val initialPublished = isolatedPublished(instrumentation, window)
+
+            oldGate = Gate()
+            nextGate.set(oldGate)
+            submissions.expect(2L, PHASE_A)
+            controlledTime.submit(2L, calibratedMaterialTime(PHASE_A))
+            assertTrue("old A never reached the renderer barrier", oldGate!!.entered.await(8, TimeUnit.SECONDS))
+
+            submissions.expect(3L, PHASE_B)
+            controlledTime.submit(3L, calibratedMaterialTime(PHASE_B))
+            newGate = Gate()
+            nextGate.set(newGate)
+            oldGate!!.release.countDown()
+
+            submissions.await(2L)
+            assertTrue(
+                "delayed old A did not advance the aggregate publication counter",
+                waitForIsolatedOutput(instrumentation, window, initialPublished),
+            )
+            assertFalse("old A publication must not satisfy armed B", submissions.hasSubmitted(3L))
+            assertTrue("armed B never reached its held renderer boundary", newGate!!.entered.await(8, TimeUnit.SECONDS))
+            assertFalse("held B must remain unsubmitted", submissions.hasSubmitted(3L))
+
+            val afterOldA = isolatedPublished(instrumentation, window)
+            newGate!!.release.countDown()
+            submissions.await(3L)
+            assertTrue("exact B submission did not advance output", waitForIsolatedOutput(instrumentation, window, afterOldA))
+        } finally {
+            oldGate?.release?.countDown()
+            newGate?.release?.countDown()
+            KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver
             instrumentation.runOnMainSync {
                 createdWindow?.dispose()
                 activity.finish()
@@ -892,6 +996,57 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             Thread.sleep(24)
         }
         return false
+    }
+
+    /** Captures the request id from the same immutable test-time sample that
+     * the renderer uses to record a frame. Production keeps its monotonic
+     * source and returns no test id. */
+    private class ControlledOrbTimeSource(initial: KeyguardMaterialTime) : KeyguardOrbMaterialTimeSource {
+        private data class Sample(val requestId: Long?, val time: KeyguardMaterialTime)
+
+        private val selected = AtomicReference(Sample(null, initial))
+        private val sampled = ThreadLocal<Sample?>()
+
+        fun submit(requestId: Long, time: KeyguardMaterialTime) {
+            selected.set(Sample(requestId, time))
+        }
+
+        override fun timeAt(scene: KeyguardMaterialScene, frameTimeNanos: Long): KeyguardMaterialTime {
+            val sample = selected.get()
+            sampled.set(sample)
+            return sample.time
+        }
+
+        override fun testRequestIdFor(materialTime: KeyguardMaterialTime): Long? =
+            sampled.get()?.takeIf { it.time === materialTime }?.requestId
+    }
+
+    /** Waits for Main to submit the exact frame identity. It intentionally
+     * does not reinterpret submission as physical presentation. */
+    private class SubmittedFrameTracker : KeyguardOrbBufferPublicationObserver {
+        private val expectedPhases = java.util.concurrent.ConcurrentHashMap<Long, Float>()
+        private val latches = java.util.concurrent.ConcurrentHashMap<Long, CountDownLatch>()
+        private val submitted = java.util.concurrent.ConcurrentHashMap<Long, KeyguardOrbBufferProducerFrame>()
+
+        fun expect(requestId: Long, phase: Float) {
+            check(expectedPhases.putIfAbsent(requestId, phase) == null) { "duplicate request=$requestId" }
+            check(latches.putIfAbsent(requestId, CountDownLatch(1)) == null) { "duplicate latch=$requestId" }
+        }
+
+        override fun onSubmitted(frame: KeyguardOrbBufferProducerFrame) {
+            val requestId = frame.testRequestId ?: return
+            val expectedPhase = expectedPhases[requestId] ?: return
+            if (kotlin.math.abs(expectedPhase - frame.materialTime.phase) > .0001f) return
+            if (submitted.putIfAbsent(requestId, frame) == null) latches[requestId]?.countDown()
+        }
+
+        fun await(requestId: Long): KeyguardOrbBufferProducerFrame {
+            val latch = requireNotNull(latches[requestId]) { "unarmed request=$requestId" }
+            check(latch.await(8, TimeUnit.SECONDS)) { "requested frame was not submitted request=$requestId" }
+            return requireNotNull(submitted[requestId]) { "submission signal without frame request=$requestId" }
+        }
+
+        fun hasSubmitted(requestId: Long): Boolean = submitted.containsKey(requestId)
     }
 
     /** Adapts only the privileged overlay token to the test Activity's panel

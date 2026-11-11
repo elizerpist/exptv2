@@ -23,6 +23,7 @@ import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.lockscreen.material.KeyguardOrbRenderBarrier
 import com.fluvi.app.lockscreen.material.NoopKeyguardOrbRenderBarrier
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferFrameObserver
+import com.fluvi.app.lockscreen.material.KeyguardOrbBufferPublicationObserver
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferRendererTestHooks
 import com.fluvi.app.lockscreen.material.KeyguardOrbMaterialTimeSource
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
@@ -62,6 +63,9 @@ internal class KeyguardCardWindow(
      * created; production resolves to the no-op observer. */
     private val isolatedOrbFrameObserver: KeyguardOrbBufferFrameObserver =
         KeyguardOrbBufferRendererTestHooks.frameObserver,
+    /** Captured with the producer observer; it observes submission only. */
+    private val isolatedOrbPublicationObserver: KeyguardOrbBufferPublicationObserver =
+        KeyguardOrbBufferRendererTestHooks.publicationObserver,
     /** Captured with the observer for deterministic renderer-only tests. */
     private val isolatedOrbMaterialTimeSource: KeyguardOrbMaterialTimeSource =
         KeyguardOrbBufferRendererTestHooks.materialTimeSource,
@@ -418,6 +422,7 @@ internal class KeyguardCardWindow(
             drawEvidenceOwner = KeyguardCardDiagnostics::drawEvidenceOwner,
             isolatedOrbRenderBarrier = isolatedOrbRenderBarrier,
             isolatedOrbFrameObserver = isolatedOrbFrameObserver,
+            isolatedOrbPublicationObserver = isolatedOrbPublicationObserver,
             isolatedOrbMaterialTimeSource = isolatedOrbMaterialTimeSource,
         ).also { controller ->
             controller.onPreparationStage = { stage, fields ->
