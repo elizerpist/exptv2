@@ -6945,3 +6945,114 @@ Platform HardwareBufferRenderer is API34, exposes obtainRenderRequest().draw(exe
 - Source review identified two bounded hand-off defects. First, a `ReadyFrame` stored a mutable `slots` list index across retirement filtering; an old release could resolve a different slot or none after the list changed. Second, a detached prewarm that was no longer lease-compatible could remain ready and block all current frames. Both are fixed with a monotonic slot identity and explicit stale deferred-frame drop.
 - The first current buffer hand-off now invokes `AttachedSurfaceControl.applyTransactionOnDraw` and explicitly invalidates the existing root. That one synchronised traversal changes the retained View from bootstrap to invisible at the same boundary as the child buffer transaction, so a later parent-buffer submission cannot leave the palette bootstrap above the live child layer. Subsequent buffer transactions still use direct `SurfaceControl` submission and do not schedule a View traversal. If root transaction merging is unavailable, the existing direct transaction route remains an explicit compatibility fallback.
 - This correction has not yet passed API-35 compilation/instrumentation. `./scripts/verify-fluvi-boundaries.sh` and `git diff --check` pass. Local proot `:app:compileDebugKotlin` again did not start Gradle tasks within the bounded daemon-start window and was stopped; it is **NOT RUN**, not a compiler pass. The next exact-source CI run must establish Android API compatibility, stale-release recovery and changing composited output before an APK can be produced.
+
+
+## 2026-11-11 — Prompt-writer review: interrupted isolated-ORB candidate, 994c92a / 81c8d4b NOT ACCEPTED
+
+### Scope, identity and review boundary
+
+- User reports that the coding session stopped after 3h 37m with both native API-35 candidates RED and no Human APK. This entry records an independent source/CI/artifact review, not a new application implementation.
+- Repository: elizerpist/exptv2; application branch: fix/orb-v4-latency-lockscreen.
+- Reviewed application HEAD: 81c8d4bc8a285fa5d07f926caa4d5ab20dda3b45; parent: 994c92ab1e26f0b0de14bd5576ce6c3b0c74785f. The remote HEAD was re-read immediately before this append.
+- Earlier prompt-writer handoff: 441aaa53322ab6113b1fd9789d08ca764a9edda4. Renderer isolation was a candidate architectural intervention. Its present implementation has not passed correctness and is not an accepted improvement in phone performance.
+- Read the complete accessible project rule assets: project_sources/01-FLUVI_PROMPT_WRITER_RULES-1-.md and project_sources/02-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md; reviewed the shared journal, relevant MILESTONE_COMMITS.md entries, current implementation/test owners, commit bodies, actual diffs, workflow and exact-source runtime artifacts.
+- No new physical APK feedback exists for this chain. The last supplied phone capture remains edd89809-1994-49af-b87d-5fe208c5ac2b, build dc591498316ac647ca2873c7a0f7e72d12fd85ff, Nothing A142 / API35 / profile / ORB / orbOnly / privacy full / foreground and background requests false.
+- Retained phone attempts 1,7,8,9: wake-callback-to-live CPU draw 569/139/208/314 ms; trigger-to-local-hide 123/12/196/79 ms; trigger-to-remove-return 167/21/217/116 ms; maximum observed draw gaps 179/101/86/87 ms. These are different endpoints from physical display presentation/removal. Omitted attempts are not zero-lag samples. No new phone-performance pass is claimed.
+
+### Commit and CI chain reviewed
+
+| Application commit | Actual change | Exact-source run | Result |
+| --- | --- | --- | --- |
+| 0133181b8cc5ed74eb069ea0a45e338487007792 | Introduced API34+ HardwareBufferRenderer/SurfaceControl ORB backend and tests | 42949064031 | FAIL |
+| 2e9ed4bbc2e219e83d36aeff1586dfca0366ee84 | Failure fallback selects legacy LIVE and pins failed visual key | 42949468752 | FAIL |
+| 5a06084d101a97867e0f0560edaef6af758f7fbe | First isolated publication updates controller LIVE/bootstrap state | 42952084113 | FAIL |
+| f197d03799c44e749c8569e89c0b563785c99afc | Added READY_FOR_MAIN handoff ownership | 42952809091 | FAIL |
+| 027f55938a65b3df4f864da1e5253b8593298e4a | Stable slot IDs, stale prewarm drop, first transaction merged on draw | 42955934211 | FAIL |
+| 994c92ab1e26f0b0de14bd5576ce6c3b0c74785f | Raised child layer order and added null-buffer release before withdrawal | 42959438251 | FAIL |
+| 81c8d4bc8a285fa5d07f926caa4d5ab20dda3b45 | Preserved FREE slots on retirement, deferred unparent until transaction committed | 42961714144 | FAIL |
+
+- Latest run: https://github.com/elizerpist/exptv2/actions/runs/42961714144 . test-core and test-flutter succeeded; test-keyguard-material-runtime failed; run-dashboard-profile also failed. The dashboard failure must be attributed from its own evidence before calling it inherited. build-human-diagnostic-apk was SKIPPED, correctly preventing an invalid handoff.
+- Both final candidates' lower native suites ran 40 tests with two failures: isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame (reattachment did not receive new output after stale release) and isolatedOrbPublishesChangingCompositorPixels (no changing pixels).
+- 994c92a actual-service fixture reached a warm-output timeout: its publication counter remained 171 for the warm attachment.
+- 81c8d4b actual-service fixture failed earlier at cold/quiet pixel motion. Do not describe this as a measured warm failure of that service run; its separate lower-level blocked-reattach test did fail.
+
+### Frozen runtime evidence and independent pixel audit
+
+- 994c92a native artifact ID 13829800841, downloaded ZIP SHA-256: 0e3608df15f9fc8e36ccbcbc79ab3e9d8eb0d08ebbce7d487abc1bbdd004fb74.
+- 81c8d4b native artifact ID 13830490925, downloaded ZIP SHA-256: 9a5487f72892b29d08708bdbb58b43422408b1651e9d4e92e192c1469b52d036.
+- Inspected artifact test XML, instrumentation logs, fixture/capture files, real-service compositor PNGs and supplied trace analysis. Local pixel/hash analysis is a reviewer audit, not a local rerun of Android instrumentation.
+- 81c8d4b real-service capture 6fd0a24c-71f2-40ee-8b30-716d6c52a617: current cold window 8, isolated submissions 5 -> 89 over the quiet interval, LIVE reported. Both 168x168 compositor crops have SHA-256 f3eedd4ec627a5867396bad2323c7780ee9d371254337565730bed7dd699fb5e; decoded pixel difference is exactly zero. Submission growth is not changing compositor output.
+- 994c92a capture d3f01cc9-d7a6-43b3-8bb6-3f3338f82d90: cold submissions 3 -> 150; later occlusion/read-block stages advanced; warm window 11 remained at cumulative count 171. Cold crop A hash is the same f3eedd4...; crop B hash is 3862ca99db9107ab760076d6b4f76eb6081b0603208dc9dea93d3a299cd7b8cb.
+- Important correction to the earlier “cold compositor motion worked” interpretation: in the saved parent crops, 12,122/28,224 pixels differ in at least one RGBA channel, but the maximum absolute channel delta is only 4/255 and no pixel exceeds a 6/255 channel delta. The existing any-different-pixel predicate can pass this. This proves some pixel difference, NOT correspondence to the intended animated shader. Its cause (animation versus noise/quantization/composition effects) is not established. A frozen-phase negative control and controlled-phase positive reference are required.
+- Both artifacts' keyguard-material-smoke.tar files contain an error message rather than a valid archive (missing files/keyguard-material-smoke directory). The failing new lower-level tests did not preserve their own screenshots there. Treat that evidence as MISSING; the real-service probe PNGs are present and were audited.
+- Runtime log warnings include unclosed HardwareBuffer resources and callback posting after handler teardown. They corroborate a lifetime concern, but are not independently matched to a particular slot/use in these traces.
+
+### Source-proven defects and reachable failure paths at 81c8d4b
+
+1. Incorrect lower-level screenshot target:
+   - The compositor test creates a separate TYPE_APPLICATION_PANEL through TestPanelWindowManager, but copyWindow calls PixelCopy.request(activity.window, ...).
+   - PixelCopy of the Activity window targets that window's Surface, not a whole-display composite including a separately added panel. This assertion is not a valid oracle for the child attached to the panel.
+   - The real-service fixture uses a compositor screenshot and therefore independently demonstrates a real visible-output failure. Fixing the false target must not be used to dismiss that failure.
+
+2. Fixed-pool recovery can shrink to a self-stalling single slot:
+   - KeyguardOrbBufferRenderer.Worker.retire changes owned slots to RETIRED but keeps FREE slots.
+   - release, dropReady and stale render completion remove retired slots.
+   - ensureResources returns true for a matching-size pool containing ANY non-retired slot; it never replenishes a partially depleted pool in that branch.
+   - Reachable schedule: A compositor-owned, B rendering, C free -> retirement -> A/B safely finish and are removed -> only C remains -> C is published and becomes compositor-owned -> no free target exists for the replacement transaction that would release C. The existing guard keeps returning true without restoring capacity.
+   - This is a source-demonstrable liveness defect. A deterministic production-state-machine test must reproduce it; the exact slot schedule causing the retained CI failures has not been proven.
+
+3. Retirement destroys the ownership information required by disposal:
+   - Controller disposal calls stop/onDetached/retire and renderer.dispose; renderer.dispose retires again.
+   - Worker.retire collapses RENDERING, READY_FOR_MAIN and COMPOSITOR_OWNED into RETIRED.
+   - Worker.dispose's awaitingRelease filter includes only the three pre-retirement states and excludes RETIRED. It can consequently close buffers still owned by GPU/handoff/compositor and end the callback owner early.
+   - Retirement must be orthogonal to owner/fence state; repeated retire/dispose must be idempotent. An enum rename or another special-case filter is not a complete state-machine repair.
+
+4. Fence and resize safety are incomplete:
+   - Stale/error render completion and dropReady close the render-result fence and can free/remove a buffer without establishing that GPU use has finished.
+   - ensureResources' resize protection covers COMPOSITOR_OWNED/RETIRED but does not independently protect RENDERING/READY_FOR_MAIN before closing the pool.
+   - release waits indefinitely for a release fence on the sole worker Handler, blocking its own configure/retire/recovery processing.
+   - A transaction-committed callback is not a buffer-release callback. The Android API requires waiting on a valid release fence before reuse. Never treat a timeout or discarded callback as permission to reuse or close an owned buffer.
+
+5. The isolation and LIVE boundary remain incomplete:
+   - Every onFrameReady posts to Main, and publishReady performs setBuffer and setVisibility(true) there. Steady-state publication remains dependent on the service Main queue.
+   - The first-publication callback changes controller state/hides bootstrap BEFORE applyTransactionOnDraw/direct apply returns; queued-on-draw is not physical presentation. Controller onAttached also uses LIVE before current output exists.
+   - Separate desired eligibility, current-lease GPU readiness, transaction queue/submission/commit and physical visibility evidence. Do not fabricate a legacy CPU shader draw or physical timestamp from a backend-control callback.
+   - Passing a valid presentation fence to SurfaceControl is a supported Android operation; it is NOT by itself an API misuse. The unresolved design issue is coupling visibility/control to unready rendering and failing to preserve lifetime on dropped/retired frames.
+
+### Evidence limits and causal gate for continuation
+
+- Proven: both candidates failed native runtime correctness; latest real-service pixels are static despite growing submission counts; the lower screenshot oracle is wrong; the pool/lifetime/Main-publication contracts above have source defects.
+- Not proven: which precise render-input/GPU-output/composition boundary causes the current static real-service image; that every phone lag gap has this cause; that HardwareBufferRenderer or SurfaceControl is intrinsically unsuitable; that a different graphics API would solve the problem.
+- The existing graph/journal claim that the backend is fully isolated or its pool remains safely fixed is superseded by this review. It must not be cited as validation.
+- Before another composition fix, use the production producer with known canonical phase A/B: wait for GPU readiness off Main, read back output, and correlate exact lease/slot/use/frame with the compositor crop. Include frozen-phase negative control. Animated GPU buffers plus static display localize a composition/layer handoff defect; static GPU buffers localize recording/material/phase inputs. Do not change z-order/null-buffer/on-draw ordering again without this boundary evidence.
+- Deterministic retirement, resize and dispose REDs can be implemented immediately from the named source paths. These do not require a further physical build.
+
+### Required bounded repair
+
+- Refactor only the isolated backend's ownership/lifetime/publication state machine and its directly affected controller/test/diagnostic adapters. Use one globally bounded three-slot capacity including retired resources, stable slot identity plus monotonically unique use/lease identity, and separate retirement/disposal intent from outstanding ownership.
+- Reclaim or replenish safely released capacity within the global bound; do not create three slots per attachment. One actual in-flight render and latest-only desired work. Never reassign a still-owned old buffer.
+- Keep fence completion off both Main and the single control Handler, with bounded pending work/owners. A stale completion may free only its exact safely released use; it cannot mark a reused slot free.
+- Give Main exclusive initial binding, visibility/privacy revocation, parenting and withdrawal authority. Steady-state buffer-only transactions must not require a per-frame Main task or carry show/reparent authority. A revoked child can never become visible again through a late producer callback.
+- Establish an accurate first-output/bootstrap handoff; preserve existing animated compatibility fallback and report backend failure. Avoid bootstraps accepted as live, infinite failed submissions, or resource growth hidden by fallback.
+- Correct screenshots to the actual production overlay/panel bounds; preserve failing images and identity/hash data on every failure. Require current-lease output, not cumulative global counters.
+- Preserve the current AGSL/material/palette/phase/speed/resolution and input/clip/privacy rules. No FPS reduction, static image substitution, broader eligibility, longer hide delays, new graphics stack, or dashboard/home-widget rewrite.
+- Validate cold/warm/occlusion/privacy/size/material changes, blocked old-frame withdrawal and recovery, repeated retire/dispose, and at least 30 rapid lifecycle cycles with the same global resource cap. Require fresh changing compositor output after recovery; no Human APK while any required native gate is red.
+
+### Graph and impact audit
+
+- Tooling branch tooling/keyguard-episode-observability-graph, HEAD dd025c3cda3a4df3208a38c926e4792443c8d8a1, indexes 027f55938a65b3df4f864da1e5253b8593298e4a. It is stale for the two later Kotlin commits.
+- Raw SCIP index SHA-256 74c7f9cf89b03b584128329878fea9d67f36b34b6332714c4ec714e265572b21; 807 Dart documents. It does not index Kotlin.
+- Re-executed graph queries using graph shards verified against current remote Git blobs: KeyguardTimingCaptureBridge 8 references (3 production/5 test), KeyguardTimingCaptureSnapshot 12 production references, DebugConsoleDialog 5 references (3 production/2 test). The six related consumer files were source-verified unchanged.
+- Native impact is direct-source verified: service -> window -> material controller -> isolated renderer; panel and actual-service tests cover different parents. No Kotlin conclusion is attributed to Dart SCIP.
+- Regenerate final-source graph/provenance and native reference inventory in the tooling workflow after implementation. Correct the inventory's stronger ownership assertions; retain stale status until regenerated.
+
+### Reviewer outcome and delivery discipline
+
+- PASS: source/commit/workflow review, frozen artifact hash/XML/log inspection, independent saved-PNG comparison, graph provenance and selected-consumer verification.
+- FAIL (CI evidence): API35 native correctness for both candidates; latest dashboard profile job also failed.
+- NOT RUN by this reviewer: Android instrumentation, production implementation, physical-device comparison. No passing results are inferred from model inspection.
+- No Human APK is available from this candidate. No physical retest is requested for it.
+- Next coding prompt must start with the named REDs and narrow GPU-output/compositor split, then implement the bounded contract repair and run the complete relevant gates. Do not stop at another status-only diagnosis when safe repair/validation can continue, and do not accumulate unvalidated speculative patches.
+- Coding agent must read both complete rule assets, this journal entry and relevant milestones before work; append exact per-commit outcomes, retain all failing evidence, produce the full completion report, and distinguish implemented / automatically verified / artifact delivered / physically accepted.
+- This reviewer changes only this journal. Commit message uses [skip ci]; no workflow dispatch is authorized or issued. The resulting sole-file append and associated workflow-run count are verified after the write.
+- PHYSICAL VALIDATION — PENDING, USER ONLY.
