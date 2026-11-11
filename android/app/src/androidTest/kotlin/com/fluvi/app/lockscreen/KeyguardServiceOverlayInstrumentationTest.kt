@@ -1068,6 +1068,6 @@ class KeyguardServiceOverlayInstrumentationTest {
 
     companion object {
         private const val TAG = "FluviServiceProbe"
-        private const val EXPECTED_PORTAL_HASH = "004559458d996ae0f4c8778ed4ad0055bbe87624e43297783c8ab19f94dcab21"
+        private const val EXPECTED_PORTAL_HASH = "2c067b8ad0baf31fb66669cbe16cd33f1a3e524aaa12ab4e43bfa2c70293d656"
     }
 }

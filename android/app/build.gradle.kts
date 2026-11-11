@@ -21,12 +21,12 @@ val keyguardHeaderSourceHash = "6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b
 // RuntimeShader rejects the all-effects Flutter program as too large on API
 // 35. The Header's effect is semantic configuration, not per-pixel input, so
 // produce one mechanically-specialized AGSL program for each canonical
-// shaderId. The compact entry point keeps only that effect family and injects
-// its member ID as a numeric literal.  API-35's RuntimeShader treated the
-// previous global-const selector as the static classic fallback, while a
-// runtime uniform kept every member branch alive and exceeded its program-size
-// budget. A literal lets SkSL remove the other branches before compilation.
-val keyguardHeaderAdapterVersion = "5"
+// shaderId. The compact entry point keeps only that effect family. For the
+// classic family it additionally emits just the selected member's field body,
+// but retains uEffect as its runtime guard. API-35's global-const/literal
+// selector can resolve the classic path to a static fallback; retaining every
+// runtime-selected member instead exceeds RuntimeShader's program-size budget.
+val keyguardHeaderAdapterVersion = "6"
 val keyguardHeaderEffects = listOf(
     "staticEffect" to 0,
     "dualTide" to 1,
@@ -110,6 +110,95 @@ val generateKeyguardHeaderMaterial by tasks.registering {
         check(sharedAgsl.contains(mainSignature)) {
             "AGSL adapter cannot locate the canonical entry point"
         }
+        fun closingBrace(sourceText: String, openingBrace: Int): Int {
+            var depth = 0
+            for (index in openingBrace..sourceText.lastIndex) {
+                when (sourceText[index]) {
+                    '{' -> depth += 1
+                    '}' -> {
+                        depth -= 1
+                        if (depth == 0) return index
+                    }
+                }
+            }
+            error("AGSL adapter found an unterminated block")
+        }
+        fun blockBody(sourceText: String, marker: String, startIndex: Int = 0): String {
+            val markerIndex = sourceText.indexOf(marker, startIndex)
+            check(markerIndex >= 0) { "AGSL adapter cannot locate $marker" }
+            val openingBrace = sourceText.indexOf('{', markerIndex)
+            check(openingBrace >= 0) { "AGSL adapter cannot locate block for $marker" }
+            return sourceText.substring(openingBrace + 1, closingBrace(sourceText, openingBrace))
+        }
+        fun replaceFunction(sourceText: String, signature: String, replacement: String): String {
+            val functionStart = sourceText.indexOf(signature)
+            check(functionStart >= 0) { "AGSL adapter cannot locate $signature" }
+            val openingBrace = sourceText.indexOf('{', functionStart)
+            check(openingBrace >= 0) { "AGSL adapter cannot locate body for $signature" }
+            val functionEnd = closingBrace(sourceText, openingBrace)
+            return sourceText.substring(0, functionStart) + replacement + sourceText.substring(functionEnd + 1)
+        }
+        val classicSignature = "float3 classicReferenceField(float2 uv, float rippleLight)"
+        val classicBody = blockBody(sharedAgsl, classicSignature)
+        val classicPrologueStart = classicBody.indexOf("  float strength = mainValue(0);")
+        val classicMemberStart = classicBody.indexOf("  if (uEffect < 1.5) {")
+        val classicTailStart = classicBody.indexOf("  float mixture = smooth01")
+        check(classicPrologueStart >= 0 && classicMemberStart > classicPrologueStart && classicTailStart > classicMemberStart) {
+            "AGSL adapter cannot locate the classic member structure"
+        }
+        val classicPrologue = classicBody.substring(classicPrologueStart, classicMemberStart)
+        val classicTail = classicBody.substring(classicTailStart)
+        fun specializedClassicField(shaderId: Int): String {
+            val lowerBound = shaderId - .5
+            val upperBound = shaderId + .5
+            if (shaderId in 1..4) {
+                val memberMarker = when (shaderId) {
+                    1 -> "  if (uEffect < 1.5) {"
+                    2 -> "  } else if (uEffect < 2.5) {"
+                    3 -> "  } else if (uEffect < 3.5) {"
+                    else -> "  } else if (uEffect < 4.5) {"
+                }
+                val memberBody = blockBody(classicBody, memberMarker)
+                return """
+$classicSignature {
+$classicPrologue  if (uEffect < $lowerBound || uEffect >= $upperBound) {
+    return sampleCanonicalPalette(baseCoordinate);
+  }
+$memberBody$classicTail
+}""".trim()
+            }
+            val balanceMarker = "  } else {\n    float base = .08 + fluviSaturate(uPaletteSplit) * .84;"
+            val balanceBody = blockBody(classicBody, balanceMarker)
+            val balanceMemberStart = balanceBody.indexOf("    if (uEffect < 5.5) {")
+            val balanceTailStart = balanceBody.indexOf("    if (strength <= 0.0)")
+            check(balanceMemberStart >= 0 && balanceTailStart > balanceMemberStart) {
+                "AGSL adapter cannot locate the balance member structure"
+            }
+            val balancePrologue = balanceBody.substring(0, balanceMemberStart)
+            val balanceTail = balanceBody.substring(balanceTailStart)
+            val memberBody = when (shaderId) {
+                5 -> blockBody(balanceBody, "    if (uEffect < 5.5) {")
+                6 -> blockBody(balanceBody, "    } else if (uEffect < 6.5) {")
+                7 -> {
+                    val counterMarker = "    } else if (uEffect < 6.5) {"
+                    val counterStart = balanceBody.indexOf(counterMarker)
+                    check(counterStart >= 0) { "AGSL adapter cannot locate the balance counterflow branch" }
+                    val counterOpeningBrace = balanceBody.indexOf('{', counterStart)
+                    val counterEnd = closingBrace(balanceBody, counterOpeningBrace)
+                    val chargesOpeningBrace = balanceBody.indexOf('{', counterEnd + 1)
+                    check(chargesOpeningBrace >= 0) { "AGSL adapter cannot locate the balance charges branch" }
+                    balanceBody.substring(chargesOpeningBrace + 1, closingBrace(balanceBody, chargesOpeningBrace))
+                }
+                else -> error("Classic specialization requires IDs 1 through 7")
+            }
+            return """
+$classicSignature {
+$balancePrologue  if (uEffect < $lowerBound || uEffect >= $upperBound) {
+    return sampleCanonicalPalette(baseCoordinate);
+  }
+$memberBody$balanceTail
+}""".trim()
+        }
         val destination = keyguardHeaderGeneratedAssets.get().asFile
         destination.mkdirs()
         keyguardHeaderEffects.forEach { (effectId, shaderId) ->
@@ -178,17 +267,13 @@ half4 main(float2 _fluviFragCoord) {
   return half4(composed * _fluviAlpha, _fluviAlpha);
 }
 """.trim()
-            val agslPrefix = sharedAgsl.substringBefore(mainSignature)
+            var agslPrefix = sharedAgsl.substringBefore(mainSignature)
                 .replace(canonicalCommonField, specializedCommon)
-                // Do not use a global `const float uEffect`: API-35 can
-                // select the classic static fallback through that route. A
-                // literal in the program body still enables compile-time
-                // branch elimination, unlike the runtime uniform that made
-                // this compact program too large for RuntimeShader.
-                .replace("uniform float uEffect;\n", "")
-                .replace(Regex("\\buEffect\\b"), "${shaderId}.0")
-            check(!agslPrefix.contains("uEffect")) {
-                "AGSL specialization retained the effect selector for $effectId"
+            if (shaderId in 1..7) {
+                agslPrefix = replaceFunction(agslPrefix, classicSignature, specializedClassicField(shaderId))
+            }
+            check(agslPrefix.contains("uniform float uEffect;")) {
+                "AGSL specialization lost the runtime effect selector for $effectId"
             }
             listOf("plain" to noPortalMain, "portal" to zeroInteractionMain).forEach { (variant, main) ->
                 val agsl = "$agslPrefix\n$main\n"
