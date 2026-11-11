@@ -427,7 +427,7 @@ internal class KeyguardOrbBufferRenderer(
                         // thread. Fence waiting and slot reuse remain
                         // renderer-thread-owned; Main never waits for a
                         // released buffer.
-                        worker.release(frame.slotId, releaseFence)
+                        worker.release(frame.slotId, frame.useGeneration, releaseFence)
                     }
                     val transaction = SurfaceControl.Transaction()
                         .setBuffer(child, frame.buffer, frame.fence, release)
@@ -685,26 +685,26 @@ internal class KeyguardOrbBufferRenderer(
                 firstLeaseSubmitted = frame.lease
                 published += 1
                 earlyReleaseFences.remove(frame.slotId to frame.useGeneration)?.let { fence ->
-                    release(frame.slotId, frame.useGeneration, fence)
+                    consumeRelease(frame.slotId, frame.useGeneration, fence)
                 }
                 publishSlotSnapshot()
                 if (running) requestFrame()
             }
         }
 
-        fun release(slotId: Long, releaseFence: SyncFence?) {
+        fun release(slotId: Long, useGeneration: Long, releaseFence: SyncFence?) {
             handler.post {
                 val slot = slots.firstOrNull { it.id == slotId } ?: run {
                     releaseFence?.close()
                     return@post
                 }
-                release(slotId, slot.useGeneration, releaseFence)
+                consumeRelease(slotId, useGeneration, releaseFence)
             }
         }
 
-        private fun release(slotId: Long, useGeneration: Long, releaseFence: SyncFence?) {
+        private fun consumeRelease(slotId: Long, useGeneration: Long, releaseFence: SyncFence?) {
             if (Looper.myLooper() != thread.looper) {
-                handler.post { release(slotId, useGeneration, releaseFence) }
+                handler.post { consumeRelease(slotId, useGeneration, releaseFence) }
                 return
             }
             val slot = slots.firstOrNull { it.id == slotId }
@@ -938,7 +938,7 @@ internal class KeyguardOrbBufferRenderer(
                         target.child,
                         frame.buffer,
                         frame.fence,
-                        Consumer { releaseFence -> release(frame.slotId, frame.useGeneration, releaseFence) },
+                        Consumer { releaseFence -> consumeRelease(frame.slotId, frame.useGeneration, releaseFence) },
                     )
                     .apply()
                 // SurfaceControl has copied the producer fence into the
