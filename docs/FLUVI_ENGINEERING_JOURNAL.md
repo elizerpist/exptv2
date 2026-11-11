@@ -7125,3 +7125,184 @@ Platform HardwareBufferRenderer is API34, exposes obtainRenderRequest().draw(exe
 - API-35 run `43018504191` for `fcb7bdb9905d56c7854dc41651af57d2363a3b0c` rejected the compact-program selection before producer readback: the real service correctly reported the compact hash `0eca677…`, but the required known-phone Portal source has hash `24f2d163…`. Replacing it with `plain` therefore changes the program under test and is not an acceptable repair.
 - The same run also showed that changing the broad lower-fixture profile to an active Portal workload introduced a separate lifecycle regression (`isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame`: new attachment did not obtain current output after stale release). That test-only profile change is removed rather than being used to mask or redefine the established bounded-withdrawal oracle.
 - The next candidate retains the original Portal artifact selection and its known hash. It preserves the proven removal of the invalid `uEffect` write, and narrows the no-op handling to the uniform binding: when an enabled channel has effect index zero, it still loads the Portal source but binds `u*Enabled=0`. This is pixel-equivalent to `portalSample(..., 0, ...) == 0`, avoids entering that runtime Portal branch, and does not alter active Portal channels, artifact identity, visibility, or ownership.
+
+
+## 2026-11-11 — REVIEWER: 22-commit loop audit; saturated motion fixture and stale retirement target
+
+### Authority, read set and scope
+
+- User reports about ten hours of unsuccessful attempts and requests a diagnosis plus one concrete repair prompt. Latest reported/pinned application HEAD: `0c583d7a78c683c4b1b87d83ecd7ecb69c09ceaf`; parent `46c0312c7a7da95e094637d44dbc2784610dd5ba`; branch `fix/orb-v4-latency-lockscreen`, repository `elizerpist/exptv2`.
+- Audit boundary: previous reviewer journal commit `53a04298b7bdb7f1c413a49ef8e2f37ffdb105d0` exclusive through `0c583d7a` inclusive: 22 commits, actual patches and commit bodies inspected. Remote HEAD reconfirmed unchanged before this append.
+- Both mandatory assets fully read this review: `01-FLUVI_PROMPT_WRITER_RULES-1-.md` SHA256 `f5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297`; `02-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md` SHA256 `dc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c`.
+- Current journal and relevant milestone/source/test/build/script/graph records inspected. Last physical build remains `dc591498316ac647ca2873c7a0f7e72d12fd85ff`, Nothing A142/API35/profile, capture `edd89809-1994-49af-b87d-5fe208c5ac2b`, ORB/orbOnly/full privacy, FG/BG off. Original user-visible lag is unresolved. No newer Human APK or target-device acceptance exists in the audited evidence.
+- Protected accepted performance anchor: `6e962187e90e2a82431b1f91b224d2b52a6e0ba7` (parent `33ee878b070345c336bb73df2b087d9a63c87c5a`); earlier milestones remain regression guards. No dashboard/Avatar/Time/home-widget behavior change is authorized by this review.
+- This reviewer modifies only this journal, append-only, with [skip ci]. No production implementation, workflow dispatch or APK delivery by reviewer.
+
+### Complete commit ledger
+
+| # | Commit | Change and audit outcome |
+|---|---|---|
+| 1 | [691e79c8](https://github.com/elizerpist/exptv2/commit/691e79c87190017098aa4e2d98bae22a5bd90aa9) | Ownership/fence lanes, bounded pool recovery and corrected panel crop; candidate, no validated service motion. |
+| 2 | [10e45d67](https://github.com/elizerpist/exptv2/commit/10e45d67d99bc8eb09dc0205a021562ed435db25) | Journal-only follow-up for 691e79c8. |
+| 3 | [eda4f934](https://github.com/elizerpist/exptv2/commit/eda4f93453602ee86cc857fce46ec382ce456fde) | Bind release callback to immutable slot use generation. |
+| 4 | [e4023750](https://github.com/elizerpist/exptv2/commit/e402375084779b57d7e131e9145b6bc0d20de5d0) | Journal-only follow-up for eda4f934. |
+| 5 | [84c30caf](https://github.com/elizerpist/exptv2/commit/84c30caf762ac20db0f86e440caf77750481381b) | Acquire-fence handling change; later static samples did not establish that this was the motion cause. |
+| 6 | [c022a534](https://github.com/elizerpist/exptv2/commit/c022a5341f31ddf2329d16b6762383ef65a712ff) | Journal-only follow-up for 84c30caf. |
+| 7 | [649b6532](https://github.com/elizerpist/exptv2/commit/649b653267dc30e98cf3e10cbf91558fade2088c) | Introduce two-sample producer readback; incorrect assumption that any separated phases must yield meaningful motion. |
+| 8 | [fd051015](https://github.com/elizerpist/exptv2/commit/fd0510158db9c152f820f190ad05cd273cc6dc29) | Retain producer metrics before assertion. |
+| 9 | [ab00e345](https://github.com/elizerpist/exptv2/commit/ab00e345ff0fcf1a4da90d49b77d1ce7219f2000) | Add producer nonempty/hash signatures. |
+| 10 | [f9f316ee](https://github.com/elizerpist/exptv2/commit/f9f316ee942813555952ebdbbe5b573740cbf05c) | Explicit sRGB request; service samples changed=0, delta=87, not proof of uniform freeze. |
+| 11 | [a3192478](https://github.com/elizerpist/exptv2/commit/a31924783e12d8ba718d40c1b7c70719e763991b) | Create slot-local shader/Paint ownership; this proposal is already implemented, not a new next step. |
+| 12 | [976f4424](https://github.com/elizerpist/exptv2/commit/976f4424304d1cb3a8a1ae661409a4bc10218ef5) | Write uEffect as uniform; generated shader used a constant, causing COMPILE_OR_UNIFORM_FAILED. |
+| 13 | [fcb7bdb9](https://github.com/elizerpist/exptv2/commit/fcb7bdb9905d56c7854dc41651af57d2363a3b0c) | Remove invalid uniform, substitute plain program for zero-Portal; rejected by required program identity. |
+| 14 | [3e9f1bb4](https://github.com/elizerpist/exptv2/commit/3e9f1bb4aaf02bb5640d6a044b10b26fad920e92) | Disable only zero-effect Portal uniform; following run cancelled. |
+| 15 | [dbddb44c](https://github.com/elizerpist/exptv2/commit/dbddb44c40ab92aebb87b2740c7ae43ce96b5dc4) | Retain Portal program, restore lower fixture; both attempts still red. |
+| 16 | [9c8dfc80](https://github.com/elizerpist/exptv2/commit/9c8dfc80a2bab0e4a92deed07d4a9524aa5db033) | Allow safe FREE capacity while old render fences wait; separate current/previous slot shaders. |
+| 17 | [b38d3d2e](https://github.com/elizerpist/exptv2/commit/b38d3d2ea8af00c63d3b5a2dd2a26a9790926e35) | Change specialized selector from constant to uniform; no valid causal proof for change. |
+| 18 | [b838e735](https://github.com/elizerpist/exptv2/commit/b838e735baf6007169dc1665562c24e9abf72dd1) | Change selector to literal (adapter v5); producer changed=0, delta=17. |
+| 19 | [6c2d5c03](https://github.com/elizerpist/exptv2/commit/6c2d5c03e7d5abbcccefd9aee7ea2e09b25ce606) | Prune classic field and restore uniform (v6); introduced unknown baseCoordinate AGSL compile error. |
+| 20 | [8cfc6cb9](https://github.com/elizerpist/exptv2/commit/8cfc6cb91957841d29e4ccfa67f685b6645312ac) | Repair pruning prologue (v8); allocate RenderNode every frame; unsupported cache-cause comment. |
+| 21 | [46c0312c](https://github.com/elizerpist/exptv2/commit/46c0312c7a7da95e094637d44dbc2784610dd5ba) | Undo pruning, return to literal (v9), current Portal hash 00455945...; no clean native pass. |
+| 22 | [0c583d7a](https://github.com/elizerpist/exptv2/commit/0c583d7a78c683c4b1b87d83ecd7ecb69c09ceaf) | Bind phase before recording; latest native result still red, service comparison uses saturated phases. |
+
+### CI evidence and limits
+
+- 19 workflow run IDs / 20 attempts in this interval; 18 failed native job attempts and two cancelled native attempts. Workflow cancellation does not erase a completed native failure. No Human APK delivery.
+- Native result chronology (run IDs): 42989373258 panel motion failure; 42992712490 blocked reattach/direct Canvas/panel failures; 43000062337 panel/producer threshold; 43004082973 blocked reattach and producer changed=0 delta=116; 43004338445 panel and producer 0/0; 43007664033 lower 40 PASS but service producer 0/87; 43010903512 lower 40 PASS but service producer 0/0; 43014053786 invalid uEffect and service cold timeout; 43018504191 blocked reattach and wrong program hash; 43022502368 cancelled; 43022550764 attempt 1 blocked/panel and producer 43/1059, attempt 2 blocked and producer 0/0; 43046536105 panel/direct Canvas and producer 0/0; 43051715982 native failure; 43056152740 panel and producer 0/17; 43060634763 AGSL unknown baseCoordinate/direct Canvas/panel and producer 0/0; 43065874335 blocked/direct Canvas and producer 0/0; 43070147419 panel and producer 27/885; 43073036584 panel and producer 0/0. Run 42989128002 native cancelled without useful execution.
+- Latest run: https://github.com/elizerpist/exptv2/actions/runs/43073036584 ; native job `130709324396`. Lower XML: 40 tests, 39 pass, one failure `isolatedOrbPublishesChangingCompositorPixels`. Actual-service fixture separately fails producer threshold.
+- Downloaded native artifact ID `13882786653`, ZIP 4,328,213 bytes, SHA256 `4b9d7a1dc255b57e931b46c3cc2a33cba8daa6d74d1c501a7384639b265cb734`. Inspect `android/keyguard-service-evidence/probe.tar`, extracted `files/keyguard-service-probe/{fixture.txt,capture.txt,cold-orb-a.png}`. The material-smoke tar has a bad checksum and is not accepted as readable evidence.
+- Service capture `514c4686-56b1-4eb9-b3e2-2a3233dbeac9`: real accessibility overlay window 28, bounds (456,1905)-(624,2073), 168x168. Portal program `004559458d996ae0f4c8778ed4ad0055bbe87624e43297783c8ab19f94dcab21`, adapter 9. Publications 6 -> 80 during the marked interval are submissions, NOT measured physical frames/FPS.
+- Producer readback: lease attachment/generation 1/2, slots 1/3, uses 1/1; phases 1.196795 / 1.5234617; changed=0, delta=0; both signatures hash 965536018, nontransparent/nonblack=22416. These are different slots on their first use; this pair does not demonstrate reused-shader freezing.
+- Only cold-orb-a.png exists: source asserts producer motion BEFORE collecting cold-orb-b.png and before warm lifecycle scenarios. Therefore the latest failure also suppresses downstream evidence.
+- Latest dashboard profile job `130709324551` separately fails: RangeError(year), 2026 outside 2027..2051, followed by missing/non-map `B_year_month_rail_populated` report. Do not call the whole workflow green or this failure harmless/inherited without a same-baseline reproduction. Its repair scope must remain separate from renderer changes.
+
+### Correction of previous causal claims — critical
+
+Earlier journal claims that phase-separated static buffers establish a frozen RuntimeShader, missing uEffect, a broken global constant/literal selector, or a RenderNode uniform-cache defect are NOT supported by this test. The exact producer comparison has an invalid motion precondition.
+
+1. Both native fixtures synthesize `commonSettings = List(40) { .2 }`. The actual-service fixture enables Portal but uses effectIndex=0; canonical portalSample contributes zero. It does not create an additional moving signal.
+2. Unchanged canonical `shaders/dashboard_header_field.frag`, classicReferenceField: `p=.5+(uv-.5)*fieldScale`; `ratio=bias+sin(uPhase*ratioSpeed*2*pi)*ratioSwing`; `mixture=smooth01(.5-softness,.5+softness,field)`; `seam=4*mixture*(1-mixture)`. With this fixture, softness=.2 so saturation threshold is .7.
+3. Reviewer float32 evaluation of the full dualTide equations, 168x168 pixel centers, interior radius 80 (20,108 pixels):
+
+| Phase | Field minimum | Field maximum | Mixture | Light |
+|---|---:|---:|---:|---:|
+| 1.196795 | .85514605 | .92435527 | 1 throughout | 0 |
+| 1.5234617 | .84972912 | .91000068 | 1 throughout | 0 |
+| .97574466 | .83684564 | .91803598 | 1 throughout | 0 |
+| 1.8890779 | .80148125 | .86163497 | 1 throughout | 0 |
+| 3.75 (positive-control candidate) | .44070584 | .53932601 | .2841614..645572 | nonzero |
+
+4. Thus the latest two phases legitimately yield the same image. The earlier ab00e345 pair also legitimately yields the same image. For .25 -> .35 the calculated maximum channel difference is only 1/255, changed>=7 is zero. The direct Canvas test accepts `!first.sameAs(next)` on the Activity image, whereas the producer/service test requires >=64 pixels at >=7/255 plus delta>=2048. They also use different Portal flags and phase windows. This is not a matched positive control.
+5. Crucial independent artifact check: the calculated phase-1.196795 plateau image matches actual saved cold-orb-a.png at all 20,108 interior pixels within 1/255 maximum-channel error (mean .0041774418, max 1, changed>=7 zero). This is numerical/source evidence corroborated by the real CI screenshot, not a new Android instrumentation run.
+6. Candidate positive control A=1.196795, B=3.75 yields calculated 20,108 changed pixels at >=7/255, total maximum-channel delta 962,928, max 61. Hardware confirmation on both backends is still required. Use deterministic A-B-A and reuse each slot, not arbitrary elapsed-time separation.
+7. This finding diagnoses a false-failing motion gate and a major cause of the speculative development loop. It does NOT prove the whole renderer correct, explain every historical failure, or resolve the user's original phone lag. Compile errors and lifecycle failures remain independent defects.
+
+### Additional source-local lifecycle defects to reproduce and repair
+
+- `KeyguardOrbBufferRenderer.Worker.setAttachment` synchronously writes the volatile `publicationTarget` on Main, then posts worker bookkeeping. `Worker.retire` posts a runnable which later revokes and clears whichever mutable target exists at execution time.
+- Concrete ordering: block worker; retire A; configure/attach B on Main (B target is installed immediately); unblock worker; old retire runnable clears B; B's queued attachment runnable sets running/attachedLease but does not reinstall its target. This is a stale-control clobber opportunity directly visible in current source. A deterministic blocked-worker regression is required before attributing any particular recorded runtime failure to it.
+- Repair with exact immutable grant identity: capture/revoke A synchronously, and queued cleanup can clear only A (e.g. AtomicReference compareAndSet(A,null)); it must never revoke B. Preserve FIFO worker ownership for desired/attached bookkeeping, immediate Main visibility revocation, exact lease/use checks, and prohibit worker show/reparent authority.
+- Second narrow source case: earlyReleaseFences is a Map<Pair<slot,use>,SyncFence?>; markFirstPublished uses `remove(key)?.let`. A present receipt whose fence is null is therefore lost. Preserve receipt presence separately from nullable fence (receipt object or containsKey+remove), then feed it to existing exact-use release processing. Test early release before Main acknowledgement, duplicate/stale releases and no-fence receipt. Do not claim a native null-fence occurrence from these logs.
+- Preserve one global three-slot pool, retirement distinct from ownership, bounded fence lane, no reuse/close before safe release, and old-layer cleanup. A new lease can progress only when safe capacity exists; do not promise progress while all three slots are deliberately unavailable.
+
+### Concrete next implementation contract
+
+- FIRST repair the test oracle with a shared same-profile/same-program/same-size/same-phase A-B-A sequence for hardware Canvas, HardwareBuffer producer readback, separate panel crop and actual accessibility-overlay crop. Preserve the current meaningful-motion threshold; retain saturated A/C as an expected-equality regression; frozen-phase and no-publication negative controls must fail the relevant motion/presentation tests.
+- Obtain both producer and compositor evidence before asserting; isolate lifecycle cases so one cold assertion does not prevent warm/blocked coverage. Record attachment/generation/slot/use/phase/hash for each image.
+- Retain the exact current v9 program for the first controlled comparison. Do not switch to plain, alter colors/settings/user animation speed, weaken thresholds, or declare static/placeholder pixels live. Compare historical v3 and current v9 at matched phases before any generator simplification; a hash change alone is not visual parity.
+- Implement exact-target retirement and the explicit early-release receipt after their targeted REDs. Require B-owned changing compositor pixels after blocked A completion; global publication counts are insufficient.
+- Remove unsupported Android caching assertions. Do not add per-frame RuntimeShader compilation. After phase/parity/slot-reuse tests pass, replace per-frame RenderNode allocation with one retained RenderNode per safely reusable slot and re-record only when FREE; preserve per-slot current/previous shader separation. If retained recording has a real matched-phase failure, keep the safe working path and report that specific result instead of inventing another mechanism.
+- Complete cold/warm, genuine keyguard, occlusion, privacy, active/zero Portal, resize/material replacement, stale callback, bounded recovery/dispose and >=30 lifecycle cycles. Finish exact-source native/Flutter/core/performance/build gates before Human APK; do not bypass failures.
+- Performance validation must disable test readback, separate diagnostic OFF/LIGHT/FULL cost, measure the same current-lease output and wake/hide boundaries, and retain trace attribution. APK hash/source/branch identity and user-only physical validation remain mandatory. This prompt is a corrective continuation, not a claim of a guaranteed full lag fix.
+
+### Drive evidence and graph provenance
+
+- Fresh Drive searches for Fluvi/keyguard locate one relevant historical transcript: `1Yu8vZ-p9TF89yG_Dilz0GWnrEguzfNotmmaloLcLm3g`, title Névtelen dokumentum, modified 2026-11-10T09:10:40.454Z; fully read. Frozen normalized UTF-8 local snapshot 34,384 bytes, SHA256 `dc9fded44ce8553ff38405447cd379b784bda2574c17ed222b515e2bcf334e51`. Historical build 92afad1, capture 29ec3556-9ac7-4221-9739-7cbe1b8906aa, process 13054-d6c0d6cb; starts 2026-11-10T09:09:09.955+0100, duration 23107ms. 1035 recorded/302 retained/563 evicted/170 dropped; text cuts off inside an inspection line. No raw event sequence lines or LIVE_TAIL block survive, so first/last retained raw sequence and dedup consistency cannot be reconstructed. No current-run Google log found. Do not merge this historical snapshot with current CI or phone sessions.
+- Tooling branch HEAD `dd025c3cda3a4df3208a38c926e4792443c8d8a1`; manifest source_head `027f55938a65b3df4f864da1e5253b8593298e4a`, index SHA256 `74c7f9cf89b03b584128329878fea9d67f36b34b6332714c4ec714e265572b21`, 807 Dart documents, no Kotlin coverage. STALE for 0c583d7a.
+- Historical graph queries/reference inventory read: TimingCaptureBridge 8 refs (3 production/5 test), TimingCaptureSnapshot 12 production, DebugConsoleDialog 5 (3 production/2 test). Current source verifies native service -> window -> material controller -> isolated worker and shader binder; Flutter bridge publishes semantic profiles, not per-frame animation. Native conclusions come from direct source, not Dart SCIP.
+- Final coding delivery must regenerate final-source graph/provenance and explicit native definition/caller/consumer/test inventory separately, and report coverage limits honestly.
+
+### Reviewer numerical reproducer (not GPU runtime validation)
+
+The following scratch-only Python/NumPy evaluation was executed by the reviewer. SHA256 of the original script: `6c15a8bc3974ec8689b15ce0f326621cd54a21bfe08bf1e57f07f6037c2da4a4`. It must not replace Android correctness tests or be copied into production rendering.
+
+```python
+import numpy as np
+
+# Reviewer-only numeric evaluation of the unchanged dualTide equations.
+# This is not Android/GPU runtime evidence and is not production shader code.
+F=np.float32
+def fract(v): return v-np.floor(v)
+def hash_(v,seed):
+    c=np.floor(v)
+    a=fract(c[...,[0,1,0]]*F(.1031)+F(seed)*F(.0173))
+    d=np.sum(a*(a[...,[1,2,0]]+F(33.33)),axis=-1)
+    a=a+d[...,None]
+    return fract((a[...,0]+a[...,1])*a[...,2])
+def noise(v,seed):
+    c=np.floor(v); fr=fract(v); e=fr*fr*(F(3)-F(2)*fr)
+    a=hash_(c,seed); b=hash_(c+np.array([1,0],dtype=F),seed)
+    top=a+(b-a)*e[...,0]
+    a=hash_(c+np.array([0,1],dtype=F),seed); b=hash_(c+F(1),seed)
+    bot=a+(b-a)*e[...,0]
+    return top+(bot-top)*e[...,1]
+def fbm(v,seed):
+    total=np.zeros(v.shape[:-1],dtype=F); amp=F(.58); norm=F(0); freq=F(1)
+    for i in range(3):
+        total += noise(v*freq,F(seed)+F(i)*F(17.3))*amp
+        norm+=amp; freq*=F(1.93); amp*=F(.46)
+    return total/norm
+def evaluate(phase,settings=None):
+    m=np.full(40,.2,dtype=F) if settings is None else np.array(settings,dtype=F)
+    y,x=np.mgrid[0:168,0:168].astype(F)
+    uv=np.stack([(x+F(.5))/F(168),(y+F(.5))/F(168)],axis=-1)
+    p=F(.5)+(uv-F(.5))*max(F(.01),m[5]); phase=F(phase); pi=F(np.pi)
+    ratio=m[2]+np.sin(phase*m[4]*pi*F(2))*m[3]; mt=phase*m[7]
+    broad=(fbm(p*np.array([1.17,1.09],dtype=F)+np.array([mt*F(.07),-mt*F(.05)],dtype=F),31.7)-F(.5))*m[6]
+    fine=(fbm(p*np.array([2.8,2.5],dtype=F)+np.array([-mt*F(.09),mt*F(.08)],dtype=F),67.3)-F(.5))*m[9]
+    field=p[...,0]+ratio+broad*F(.20)+fine*F(.12)
+    ap=phase*F(.52); bp=phase*F(.47)+m[23]*pi/F(180)
+    ax=F(.5)-m[18]*F(.5)+np.sin(ap*F(.83))*m[15]+(F(.5)+F(.5)*np.sin(ap*F(.31)))*m[17]
+    bx=F(.5)+m[18]*F(.5)-np.sin(bp*F(.79))*m[15]-(F(.5)+F(.5)*np.sin(bp*F(.29)))*m[17]
+    ay=F(.5)+np.sin(ap*F(.61))*m[16]; by=F(.5)-np.sin(bp*F(.57))*m[16]
+    def mass(cx,cy,rx,ry):
+        d=(p-np.array([cx,cy],dtype=F))/np.maximum(np.array([rx,ry],dtype=F),F(.0001))
+        return np.exp(-np.sum(d*d,axis=-1))
+    am=mass(ax,ay,m[19],m[19]/max(F(.01),m[21])); bm=mass(bx,by,m[20],m[20]/max(F(.01),m[22]))
+    warp=(fbm(p*m[26]+np.array([phase*m[27]*F(.11),-phase*m[27]*F(.09)],dtype=F),103.2)-F(.5))*m[25]
+    field+=warp+(bm-am)*m[24]*F(.46)
+    local=(am+bm-F(.7))*m[12]*F(.12)
+    soft=max(F(.001),m[8]); t=np.clip((field-(F(.5)-soft))/max(F(.000001),F(2)*soft),0,1)
+    mixture=t*t*(F(3)-F(2)*t); seam=F(4)*mixture*(F(1)-mixture)
+    pulse=np.sin(phase*m[11]*pi*F(2))*m[10]
+    light=np.clip((pulse+(broad+fine)*m[12]+local)*seam,-.25,.25)
+    size=np.array([390,220],dtype=F); direction=np.array([.9271838546,.3746065934],dtype=F)
+    length=np.sum(abs(direction)*size); start=size*F(.5)-direction*length*F(.5)
+    base=np.clip(np.sum((uv*size-start)*direction,axis=-1)/length,0,1)
+    coordinate=np.clip(base+(mixture-p[...,0])*np.clip(m[0],0,1)*F(4)*base*(F(1)-base),0,1)
+    cols=np.array([[16,79,124],[98,199,220],[131,102,220]],dtype=F)/F(255)
+    amt=np.where(coordinate<=F(.5),coordinate*F(2),(coordinate-F(.5))*F(2))
+    rgb=np.where((coordinate<=F(.5))[...,None],cols[0]+(cols[1]-cols[0])*amt[...,None],cols[1]+(cols[2]-cols[1])*amt[...,None])
+    rgb=np.clip(rgb*(F(1)+light[...,None]),0,1)
+    mask=(x-F(83.5))**2+(y-F(83.5))**2<F(80)**2
+    stats=dict(phase=float(phase),ratio=float(ratio),field_min=float(field[mask].min()),field_max=float(field[mask].max()),mixture_min=float(mixture[mask].min()),mixture_max=float(mixture[mask].max()),max_abs_light=float(abs(light[mask]).max()))
+    return np.rint(rgb*F(255)).astype(int),mask,stats
+
+if __name__=='__main__':
+    phases=[1.196795,1.5234617,.97574466,1.8890779,.25,.35,3.75]
+    images=[]
+    for ph in phases:
+        im,mask,stats=evaluate(ph);images.append(im);print(stats)
+    for a,b in [(0,1),(2,3),(4,5),(4,6),(0,6)]:
+        delta=abs(images[a]-images[b]).max(axis=-1)[mask]
+        print('PAIR',phases[a],phases[b],dict(changed_ge7=int((delta>=7).sum()),sum_delta=int(delta.sum()),max_delta=int(delta.max())))
+```
+
+### Review outcome
+
+- PASS: 22-commit/source audit, CI job/XML/artifact inspection, full relevant historical Drive transcript read, canonical-equation reproducer and saved-screenshot comparison.
+- FAIL: latest native runtime gate and dashboard profile gate. No deliverable Human APK in the audited run.
+- NOT RUN by reviewer: Android instrumentation, app implementation, device test. Lifecycle race attribution to a particular run and positive-control GPU behavior remain unverified.
+- Previous unconditional frozen-RuntimeShader diagnosis is superseded by this append. Read this correction before the older hypotheses.
+- Required coding-agent report must distinguish test-oracle repair, production lifecycle repair, measured performance and user physical acceptance. Read both rule assets and this shared journal before implementation and update per-commit evidence after every outcome. No more identical failing builds without a changed falsifiable hypothesis and focused test.
+- PHYSICAL VALIDATION: PENDING — USER ONLY.
