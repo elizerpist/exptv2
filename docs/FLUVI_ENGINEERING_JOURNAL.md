@@ -6334,3 +6334,132 @@ The post-test bounded ADB change retained the complete trace (140669 sched rows,
 New test-runner commit **dc591498316ac647ca2873c7a0f7e72d12fd85ff** fixes a PROVEN failure-evidence lifetime bug only: the smoke tar was39bytes containing `run-as: unknown package: com.fluvi.app`; AGP had uninstalled the target before the image pull. The supported AGP `android.injected.androidTest.leaveApksInstalledAfterRun=true` option keeps it only until the existing bounded two-image evidence pull; both exact packages are then uninstalled before the independently reinstalled service fixture, preserving its clean boundary. No test assertion/deadline or shipped application code changed. [AGP option source](https://android.googlesource.com/platform/tools/base/+/77b69cf85219f333699ba865d83ad999cbd8e077/build-system/gradle-core/src/main/java/com/android/build/gradle/options/BooleanOption.kt) and [AndroidX use to retain screenshots](https://android.googlesource.com/platform/frameworks/support/+/eb74b1a4b3527414639994574a201f125aff90f5) independently establish that lifecycle. PASS shell syntax, boundary gate, exact staged diff/whitespace. Push and remote SHA verified. This is an evidence-changing experiment, not an unchanged rerun or claimed motion fix.
 
 Final graph generation was executed for7099 (scip_dart1.6.2,807 Dart documents, same raw hash); actual impact queries and16 graph-tool tests passed. Its uncommitted tooling output will be regenerated for the FINAL application/test source rather than relabelled. Native impact is inventoried separately. Physical validation remains PENDING — USER ONLY.
+
+## 2026-11-11 — recoverable occlusion: consolidated implementation and verification report
+
+### Identity, preflight and evidence audit
+
+Application branch remains `fix/orb-v4-latency-lockscreen`; worktree `/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-pulse-header-wave-interactions`. Initial documentation HEAD was ac0758f1d3ae107212b9eedb9fb6ecb96108851b; origin advanced only by reviewer journal0662ec1e452a0d566ecb12fbea2e908196e54dc9, which was reviewed and fast-forwarded. Tested phone runtime remains1f0a199, not the subsequent documentation HEAD. Baseline application/test source21ebac35 is an ancestor of the candidate. No reset/rebase, new milestone or unrelated deletion. Existing untracked `test/features/automation/presentation/failures/` and `test/features/manual_transactions/failures/` are preserved.
+
+The complete accessible rule assets and their matching SHA256s, complete milestone review, continued complete journal/prior-report audit, current Drive metadata search and native impact audit are recorded in the preflight entry above. Numbered project attachment aliases were absent; the actual read copies were the hash-matching unnumbered Download files. No inaccessible attachment is claimed read. Protected milestones dfa90b6741108f824244dbc11a3d73a6c5174472 and6e962187e90e2a82431b1f91b224d2b52a6e0ba7 and recorded exclusions remain unchanged. No new plan/specification supersedes those contracts; the focused implementation sequence is recorded in this journal, with native ownership details in the separate tooling inventory.
+
+Two unique phone captures are cb55b3aa-d008-4d73-9c0c-c6e40c986531 and81330385-b9cd-4e96-8847-a5258b0a2fc0, both OLD1f0a199/process12698-aa658ff4. Repeated/escaped copies are not independent measurements. The4266-byte/hash f49a93eb34d88318746b4e2a00546b2cead2706bcbfe32c92e1cbb6c7b8e7886 identifies the selected-field transcription only. Both exports are truncated; missing endpoints are not zero. Repeated cold preparation in FULL is historical same-process data. Fresh connected Drive searches found no newer matching evidence; historical document1Yu8vZ-p9TF89yG_Dilz0GWnrEguzfNotmmaloLcLm3g is not merged into these sessions.
+
+Actual prior diffs and reports from829a5447 through31a012ac/6ffeb23d/21ebac35/ac0758f1 were checked, not merely subjects. Prior run42905947628 outcomes remain separate: attempt1/artifact13806586280 cold attachment failure; attempt2/artifact13806897699 blocked-reader progress PASS then re-entry failure and independent panel-motion failure; attempt3/artifact13809025345 lower37 PASS then cold attachment failure. None is replaced by a later result. The dashboard A-readiness/missing A_summary_sum_year_month failure was initially UNCLASSIFIED and remains causally unclassified despite a matching new baseline signature.
+
+### Confirmed cause, precise RED and correction
+
+The failing owner was `FluviKeyguardCardService.applyInspection`: OCCLUDED used generic `hideImmediately` with its terminal default. That ended wake ownership and cleared pending inspection before `inspectionQueue.complete(active)` could advance. The reviewer req35/req36 sequence proves deletion of unserved intent, not misclassification or that req36 would necessarily return MAIN.
+
+The baseline eb26d4d8 preserves21's lifecycle behavior and adds only an inert optional production-boundary seam plus actual-service regression. Run42920244421 failed at the exact intended assertion, “Recoverable occlusion erased the newer unserved inspection,” AFTER establishing current negative ownership and a pending newer event. The failure crossed actual classifier → Main apply → actual queue state, not a copied Boolean policy or setup timeout. Old tests did not cover a newer event arriving immediately before delivery of an older recoverable occlusion.
+
+```text
+old: current OCCLUDED → terminal hide → end wake / erase pending → no successor
+new, hidden: current OCCLUDED → remain excluded → complete cause → pending starts
+new, visible: revoke + local hide → copy pending intent to NEW authority/request
+              → new acquisition → fresh MAIN + admission → one retained root
+terminal: off/unlock/disable/interrupt/disconnect → invalidate + cancel recovery
+```
+
+Runtime commit7099f6c0 changes only service routing/intent ownership and the narrow awaiting diagnostic identity. `applyInspection` routes UNKNOWN/OCCLUDED through `handleRecoverableSurface`; `scheduleEvaluation` accepts an immutable reconciliation intent; `KeyguardCardInspectionRequest.reacquireAfterWithdrawal` assigns a new ID/enqueue/visibility/interaction/attach owner while preserving original event/callback/trigger/capture and outstanding freshness. It rejects another service/wake. Visible withdrawal never reuses the old acquired answer. Already-hidden exclusion does not hide again, end the wake or churn epochs. The active cause is never counted as future pending work. Finite16/32/64ms fallback and its budget are unchanged; repeated exclusion does not replenish them. Exhaustion waits for an event. Actual successful show retains the existing budget reset.
+
+Terminal default/cancellation and fresh admission remain intact. No cached positive grants a new attachment or greater disclosure. Current privacy redaction and financial-publication guards remain. Credential/shade policy, foreign-window acceptance, cache/prefetch and incomplete-snapshot rejection were NOT altered. Diagnostics retain the OCCLUDED classification and do not inflate UNKNOWN counters.
+
+### Ownership, bounds and protected systems
+
+Main remains sole presentation/window/visibility/interaction/retry owner. The existing recurring system sampler stays off Main, independently bounded to one active plus one latest pending; the tree reader keeps the same bound. No thread joins, parallel tree reader, new polling, renderer/clock, permission or process was introduced. One retained root/controller/clock remains. Session/wake/visibility/interaction/attach identities guard delayed results. First-draw publication is invalidated before real removal; old negatives cannot withdraw a newer root and old positives cannot reattach after terminal exclusion.
+
+`TYPE_ACCESSIBILITY_OVERLAY`, window flags/z-order, fixed CARD/ORB dimensions, clipping/antialiasing, touch/long-press/drag ownership, positions, material program/palette/phase/resolution and launcher widgets are unchanged. Exact protected-source check PASS: `git diff --exit-code 21ebac3529ad59a00ce336c5f0e93bb21883ccd1 dc591498316ac647ca2873c7a0f7e72d12fd85ff -- lib android/fluvi-core android/app/src/main/kotlin/com/fluvi/app/lockscreen/material android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardSystemState.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/AndroidKeyguardSystemStateReader.kt android/app/src/main/kotlin/com/fluvi/app/widget MILESTONE_COMMITS.md`. Dashboard/Avatar/Time/Summary, repositories/queries/indexes and Flutter lifecycle were not modified.
+
+### Executed verification and retained failures
+
+| Command/environment | Baseline eb26 | Runtime7099 |
+| --- | --- | --- |
+| Ubuntu proot `bash scripts/test-keyguard-system-gate-jvm.sh /root/.gradle/wrapper/dists/gradle-8.14-all/c2qonpi39x1mddn7hk5gh9iqj/gradle-8.14/lib` | PASS33 | PASS37 |
+| CI `./gradlew :fluvi-core:testDebugUnitTest --no-daemon` | PASS150 | PASS150 |
+| CI `./gradlew :app:testDebugUnitTest --no-daemon` | PASS132 | PASS136 |
+| CI `flutter analyze --no-fatal-infos`; `./scripts/test-fluvi-fast.sh` | PASS,20 infos;1031+3+4 | PASS,same counts |
+| CI `scripts/test-keyguard-runtime.sh` lower material/first-draw/diagnostics group | PASS37/37 | FAIL1/38: unchanged panel PixelCopy motion |
+| CI `scripts/test-keyguard-service-trace.sh` actual bound service | intended RED1/1 | PASS1/1 |
+| Dashboard profile | FAIL A-readiness/missing A_summary | same failure signature, cause unclassified |
+| Human dependency chain | blocked by intentional RED | blocked by panel motion failure |
+
+PASS boundary script, shell syntax, full staged review and whitespace checks. CI compiled both debug app and affected Android test source with `:app:assembleDebug :app:assembleDebugAndroidTest` before API35 execution. Local Android build/runtime is NOT RUN in this turn: the previously established Termux/ARM64-proot AAPT2 limitation is not a PASS, and all APK builds belong to CI. No Nothing instrumentation or physical acceptance is claimed. Exhaustive nightly-only suites were NOT RUN by this push; the required curated/protected jobs are listed explicitly.
+
+Baseline evidence artifact13813821633 retains the intended RED even though later post-test ADB process-table collection hung until the30m job cancellation. The smallest runner correction bounds that and subsequent evidence reads; missing recorder completion remains failure. Candidate7099 retained the full trace/probe. Its lower PixelCopy failure remains a genuine failed gate, not replaced by phase counters. Commitdc591498 fixes only the PROVEN evidence-lifetime bug (AGP uninstalled the app before PNG retrieval), without changing test assertions/deadlines or production shader behavior. Exact-source run42929281876 is the follow-up with retained-image capability, not an unchanged rerun loop. Its final outcome and delivery are recorded below.
+
+### Automated runtime observations, not device performance acceptance
+
+7099 actual-service capture24880b43-6390-4eef-855e-5097a25469ff: hidden cause10 continued successor23 in wake4; visible cause38 generated successor40 in the SAME wake, then fresh recovery window8→9 produced6 new shader draws and6 phase advances measured AFTER the replacement attachment. The blocked-reader test produced8 additional actual draws/phase advances while the reader remained held; local hide and privacy tightening occurred before release; recurringMainReads=0; late-positive rejection and fresh-admission veto passed. UNKNOWN withdrawal also preceded retry-eligibility release. Cold/warm/rapid episodes each verified one real accessibility-overlay root;10s steady sampling changed actual compositor-cropped pixels. Test controls are synthetic; only program variant/168×168/orbOnly match known phone fields.
+
+| 7099 controlled emulator episode | Cycle→live | Showing inspection | Handoff→Main | Trigger→local hide | Decision→local hide |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| initial controlled occlusion/recovery cycle2 | 5071ms | 22ms | 3ms | 292ms | 1ms |
+| later privacy/terminal control cycle6 | 545ms | 364ms | 0ms | 358ms | 0ms |
+| rapid-transition re-entry cycle8 | 2748ms | 21ms | 1ms | 799ms | 0ms |
+
+These are deliberately disturbed correctness experiments on API35 x86_64/swangle, not a matched physical latency benchmark. They are NOT improvement claims and do not satisfy the user's original smoothness complaint. Cycle2 initial reader includes the controlled negative and later real acquisitions; do not report its22ms winning inspection as the whole eligibility cost. Retained first attachment has108 actual traversals/max361ms gap; replacement24/max288ms. Observer bookkeeping was1042551ns/108 draws and987498ns/24 draws respectively. LIGHT aggregate producer47.956496ms/max9.676634ms and consumer lock-held635.079511ms are separate aggregate measurements, not one Main stall. Export sizes30899/29848 UTF-8 bytes remain under32768. OFF/LIGHT/FULL matched overhead comparison is NOT AVAILABLE for this correction; no capture-mode speed claim.
+
+Trace SHA2563b86d39c61958d69dc76a1635e092e7452c571bcd28941e44d18016dea38ff28 is in artifact13814678479; recorder exit was verified before pull. Scheduling/thread-state/RenderThread/frame-timeline coverage and36 setup notices are retained. Emulator frame timelines do not establish Nothing physical presentation. Flutter build/raster FrameTiming is N/A to this native pipeline.
+
+### Exact-source graph and impact evidence
+
+Tooling commit **f7e7496fa50b0e469618b0977627aa6c046a7879**, branch `tooling/keyguard-episode-observability-graph`, is pushed and remote verified. Source **dc591498316ac647ca2873c7a0f7e72d12fd85ff** was checked out tracked-clean in the separate source worktree; `flutter pub get`, clean diff checks and `dart pub global run scip_dart ./` actually reran. Generator e84430e4a3cd4723eb3d9d084fde675f713e34b6/scip_dart1.6.2 produced67515079-byte raw index SHA2565c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59. Equal bytes follow unchanged Dart, not zero native impact. Manifest hash dad0422a13fe01502b0a58ff56f840467e7088935c21305d092ad36fbce90656.
+
+Actual CLI queries at that source: Bridge8 references(3 production/5 test); Snapshot12 production; Console5(3/2). Verified consumers: app shell, console, floating debug button, bridge and console tests.807 Dart documents only; Kotlin coverage is explicitly absent. Native definition/caller/queue/freshness/admission/window/test inventory is in `docs/codegraph-occlusion-2026-11-11.json`; query transcript `docs/codegraph-occlusion-queries-2026-11-11.txt` hash0ba6f6a50a5f2005a50b21d5a5c2d207195d466714600377439114584b722c5b. All102 shard hashes verified; `dart test --reporter expanded` PASS16; `dart analyze` no issues. Raw index is not committed; tooling-only push uses[skip ci], no APK workflow.
+
+### Proven, unproven, missing and symptom status
+
+PROVEN: terminal occlusion erased newer intent; exact production-parent regression failed; corrected actual-service path keeps exclusion while starting the successor; visible recovery uses a new acquisition/admission and new actual output. Existing off-Main repair remains effective in its blocked-reader control. No assertion was removed to obtain those results.
+
+UNPROVEN: target-device latency or smoothness improvement, causes of all78–93ms phone gaps, specific lock ownership of the37ms producer span, misclassification of the original foreign window, or whether original req36 would have returned MAIN. The panel's all0.2 synthetic parameter bank has fieldScale0.2 below the source control's0.5 minimum and can mathematically saturate the plain effect; this is a candidate explanation of its intermittent pixel equality, NOT established GPU failure attribution or a changed shipped profile. No renderer change was made on that hypothesis.
+
+MISSING: corrected-source phone capture/acceptance, physical overlay presentation/removal/SystemUI onset, matched steady-state phone pacing comparison and exact cause of the independent panel-motion failure.
+
+| Symptom | Engineering evidence | Physical status |
+| --- | --- | --- |
+| W-SHOW | lost-successor repair; actual fresh same-wake re-entry/output verified | OPEN / pending user |
+| W-HIDE | immediate local withdrawal, terminal/stale/privacy controls preserved | OPEN / pending user |
+| W-LOCK-ANIM | recurring off-Main repair retained; blocked-reader actual output verified, no new pacing claim | OPEN / pending user |
+| W-HOME-ANIM | untouched and out of scope; no current measurement | OPEN / NOT VERIFIED |
+
+The following checkpoints retain the actual verification sequence and final artifact delivery. No request to retest the old1f0a199 release. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+### Exact-source runtime gate completion (dc591498)
+
+Run [42929281876](https://github.com/elizerpist/exptv2/actions/runs/42929281876), attempt1: required core/Flutter/native dependency jobs PASS. Core/app XML independently counted150/136 with0 errors/failures; native artifact [13817300781](https://github.com/elizerpist/exptv2/actions/runs/42929281876/artifacts/13817300781) contains38 tests/0 failures/0 errors/0 skipped and the separately launched actual-service **OK(1 test)** in42.462seconds. The new occlusion diagnostic identity test passes. The lower group took288.181seconds; its unchanged panel PixelCopy test alone took139.143seconds and eventually reported motion=true/1212 draws/1211 phase advances. That slow pass does NOT explain or resolve the earlier failure, and is not a pacing result. No deadline, assertion, profile or renderer was changed. With the corrected evidence lifetime, the package is accessible at pull; no failure-PNG directory exists on this passing run, as expected.
+
+Actual-service capture97557446-e2f4-4b7d-af47-5aa94e8b313e: hidden cause5→successor19/wake4; visible cause34→new request36/same wake4. Real window8→9 recovery produces **7 new shader draws/7 phase advances** AFTER the new attachment. Blocked recurring reader permits **9 new draws/phase advances**, with privacy/local hide before release, recurringMainReads=0, late-positive rejection and fresh admission veto. UNKNOWN withdrawal before blocked retry read also passes (10 additional draws).10-second compositor-crop comparison reports actual changed pixels. These are meaningful actual-service GREEN assertions, not an assumption that the original CI req36 would have classified MAIN.
+
+Final-source exports are30932/26139 UTF-8 bytes. Trace SHA256 `02964938ebb9a89f19b4f1f2ab90a0c99456716540c7b95664f80ab1c69fe8d6`; recorder STOPPED verified before pull;140820 scheduling rows,304527 thread-state rows,291552 slices,798 frame-timeline rows,36 setup notices. Disturbed emulator cycles2/4/9 have cycle→live4490/74/2110ms; winning inspections16/12/181ms; handoff0/1/0ms; trigger→local hide116/530/544ms; decision→local hide1/1/0ms. They are explicitly not a controlled Nothing comparison or a claim that the original latency is fixed.
+
+At the runtime-gate completion checkpoint, Human APK job130233181499 started automatically through the unchanged dependency chain while dashboard profiling was still running. Final artifact/download/hash and final overall workflow status follow; no uncompleted build was labelled PASS.
+
+Dashboard final dc591 job130226698744 FAILED at00:37:56UTC: `RangeError(year): not in2027..2051:2026`, a QueryAmountRangeValues “Expected:not / Actual:instance” assertion, then missing `B_year_month_rail_populated` report. Artifact13815839564 retains the output. This differs from the immediate eb26/7099 A-readiness/missing A_summary failure; those earlier failures are not silently substituted. Older journal entries contain similar year/B signatures, but this run is not blanket-labelled inherited or caused by keyguard. Its causal classification remains open; protected dashboard source is unchanged and no out-of-scope repair was attempted. Overall workflow cannot be GREEN even when the independent Human dependency chain/build succeeds.
+
+### Final APK delivery, commits and Git state
+
+**Production repair completed; required automated correctness/delivery gates completed; physical acceptance pending.** Final run42929281876 is COMPLETED / overall FAILURE solely in the separately reported dashboard profiling job. Core, Flutter, native runtime and Human APK jobs are SUCCESS. No dependency bypass or manual release of an untested source.
+
+- SOURCE_COMMIT: **dc591498316ac647ca2873c7a0f7e72d12fd85ff**.
+- SOURCE_BRANCH: `fix/orb-v4-latency-lockscreen`.
+- Production lifecycle repair commit: **7099f6c0ac91aa7067025099014f210947144836**; subsequent dc591 is test-evidence retrieval only, preserving that runtime.
+- BASELINE21ebac35 and physically tested1f0a199 ancestry: verified.
+- BUILD: `FLUVI_BUILD_COMMIT=dc591498316ac647ca2873c7a0f7e72d12fd85ff ./scripts/build-human-diagnostic-apk.sh` in existing workflow; normal `flutter build apk --profile`, default `lib/main.dart`, no integration-test target.
+- WORKFLOW/JOB: [42929281876](https://github.com/elizerpist/exptv2/actions/runs/42929281876) / Human job130233181499, SUCCESS. Log confirms exact environment SHA and profile APK construction.
+- APK: **fluvi_HUMAN_DIAGNOSTIC_dc59149.apk**, **120133226 bytes**.
+- Independently computed local SHA256: **41750b1237dfe112c07232dfa278a928f8efcfa59da1aaab3030c91139a73622**, matching uploaded asset digest.
+- [Direct APK download](https://github.com/elizerpist/exptv2/releases/download/fluvi-human-diagnostic-dc59149/fluvi_HUMAN_DIAGNOSTIC_dc59149.apk); release tag`fluvi-human-diagnostic-dc59149` targets exact full source SHA, asset733535846.
+- Completed local download: `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_dc59149.apk`. Verified file size/hash after download, not only release metadata.
+- Embedded arm64 `libapp.so` contains exact full SHA, `build=dc591498...` and `HUMAN_DIAGNOSTIC`. Binary manifest strings identify `com.fluvi.app.MainActivity` with MAIN/LAUNCHER; no debug material test Activity or instrumentation entry. The existing copied-report bridge consumes that same compile-time SHA. No claim that the new APK was physically installed/tested by the agent.
+- Final graph tooling HEAD: **7de0baa6a5abc1e1ec41e3fd47acda3254bc055c** (generation f7e7496f plus factual final-CI metadata follow-up), pushed/remote verified; exact source and raw-index/manifest/query hashes above are unchanged. [Native inventory and graph provenance](https://github.com/elizerpist/exptv2/blob/7de0baa6a5abc1e1ec41e3fd47acda3254bc055c/docs/codegraph-occlusion-2026-11-11.json).
+
+Commit/push sequence: eb26d4d862d1d4b1d1f3b6f1e15caed39c5cbf75 (production-boundary RED);9399c8489e16416044247e63845f4056dece26a7 (preflight journal);7099f6c0ac91aa7067025099014f210947144836 (runtime correction);92c7089fb901e5e7cb2590c2149c75d55bb3dc31 (RED/implementation journal);dc591498316ac647ca2873c7a0f7e72d12fd85ff (retained failure-image lifetime);a89ac15babf478e6e22d85f065f8d6c4c0f5bc2a (runtime GREEN / independent blocker journal); then this documentation-only completion commit. Every listed push was verified against remote. Tooling commits f7e7496fa50b0e469618b0977627aa6c046a7879 and7de0baa6a5abc1e1ec41e3fd47acda3254bc055c are on the separate tooling branch. Documentation/tooling use[skip ci]; no new APK dispatch is required for this final report.
+
+Final application tracked source is clean apart from this report before its commit; final journal HEAD is the documentation-only Git commit containing this entry (reported by the final handoff link), NOT a different built application. Branch remains the original feature branch; origin is verified after publication. Only the two initial untracked unrelated failure directories remain. Graph worktree is clean; graph-source worktree is detached at dc591 with only its generated untracked `index.scip`. No user data or source history was removed.
+
+Independent panel-motion instability and dashboard profiling remain open; no target-device speed/FPS/physical synchronization promise. A larger renderer/diagnostic rewrite, permissive classification, fixed delay, retry-budget increase or reduced fidelity was rejected as unnecessary to the proven lost-work correction. The original lag/flicker issue is NOT declared resolved.
+
+After installing this exact APK, retain the same ORB/orbOnly/privacy settings. Use existing onscreen LIGHT capture for the first post-install/service wake, several warm lock/wake/unlock cycles, one longer visible animation interval and one quick repeat transition. Freeze/copy and note any perceived lag/flash. No ADB/root/computer/additional app is required. This is one corrected-source physical comparison, not another request to test production-identical1f0a199.
+
+**PHYSICAL VALIDATION — PENDING, USER ONLY.**
