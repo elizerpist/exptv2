@@ -1082,7 +1082,11 @@ internal class KeyguardOrbBufferRenderer(
                             frameObserver.onProduced(producerFrame, slot.buffer, result.fence)
                         }
                     }
-                    val ready = ReadyFrame(producerFrame, slot.buffer, result.fence)
+                    val ready = ReadyFrame(
+                        producerFrame = producerFrame,
+                        buffer = slot.buffer,
+                        fence = result.fence,
+                    )
                     if (firstLeaseSubmitted == spec.lease) {
                         publishSteady(slot, ready)
                     } else if (firstLeaseAwaitingMain != spec.lease) {
