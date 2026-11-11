@@ -84,6 +84,48 @@ internal object NoopKeyguardOrbRenderBarrier : KeyguardOrbRenderBarrier {
 }
 
 /**
+ * Test-only observation of an already-completed producer request.  It is
+ * deliberately invoked on the renderer owner, never on Main, and production
+ * installs the no-op implementation.  The observer must not retain or close
+ * the supplied HardwareBuffer or SyncFence: the renderer and SurfaceControl
+ * remain their owners.
+ *
+ * This is narrower than a presentation callback.  It answers whether the
+ * exact buffer about to be submitted contains distinct canonical phases; it
+ * makes no claim that SurfaceFlinger has composed those pixels.
+ */
+internal data class KeyguardOrbBufferProducerFrame(
+    val lease: KeyguardOrbBufferLease,
+    val slotId: Long,
+    val useGeneration: Long,
+    val frameTimeNanos: Long,
+    val materialTime: KeyguardMaterialTime,
+)
+
+internal fun interface KeyguardOrbBufferFrameObserver {
+    fun onProduced(
+        frame: KeyguardOrbBufferProducerFrame,
+        buffer: HardwareBuffer,
+        completionFence: SyncFence?,
+    )
+}
+
+internal object NoopKeyguardOrbBufferFrameObserver : KeyguardOrbBufferFrameObserver {
+    override fun onProduced(
+        frame: KeyguardOrbBufferProducerFrame,
+        buffer: HardwareBuffer,
+        completionFence: SyncFence?,
+    ) = Unit
+}
+
+/** The service is constructed by Android, so instrumentation installs this
+ * seam before binding it.  Controllers snapshot the observer at construction;
+ * changing it cannot affect an existing renderer. */
+internal object KeyguardOrbBufferRendererTestHooks {
+    @Volatile var frameObserver: KeyguardOrbBufferFrameObserver = NoopKeyguardOrbBufferFrameObserver
+}
+
+/**
  * API-34 isolated standalone-orb producer.  The public wrapper has no
  * platform side effects below API 34.  Main owns all SurfaceControl lifecycle
  * operations; the HandlerThread owns the actual HardwareBufferRenderer work.
@@ -100,6 +142,7 @@ internal class KeyguardOrbBufferRenderer(
      * never stretches a completed buffer. */
     private val onSizeChanged: () -> Unit,
     private val barrier: KeyguardOrbRenderBarrier = NoopKeyguardOrbRenderBarrier,
+    private val frameObserver: KeyguardOrbBufferFrameObserver = NoopKeyguardOrbBufferFrameObserver,
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
 ) {
     private var api34: Api34? = null
@@ -170,6 +213,7 @@ internal class KeyguardOrbBufferRenderer(
             onFailure = ::onWorkerFailure,
             onLeaseDrained = ::onLeaseDrained,
             barrier = barrier,
+            frameObserver = frameObserver,
         )
 
         fun configure(spec: KeyguardOrbBufferRenderSpec) {
@@ -489,6 +533,7 @@ internal class KeyguardOrbBufferRenderer(
         private val onFailure: (KeyguardOrbBufferLease, Throwable) -> Unit,
         private val onLeaseDrained: (KeyguardOrbBufferLease) -> Unit,
         private val barrier: KeyguardOrbRenderBarrier,
+        private val frameObserver: KeyguardOrbBufferFrameObserver,
     ) : Choreographer.FrameCallback {
         /**
          * `READY_FOR_MAIN` is deliberately distinct from compositor ownership.
@@ -894,6 +939,27 @@ internal class KeyguardOrbBufferRenderer(
                     }
                     previousCompletionAtUptimeMs = completedAt
                     publishSlotSnapshot()
+                    val materialTime = spec.scene.timeAt(frameTimeNanos)
+                    // This hook is intentionally test-only and executes on
+                    // the renderer handler after a SUCCESS result.  It lets
+                    // instrumentation read the producer buffer after the
+                    // completion fence without putting readback or waits on
+                    // the production/Main frame path.
+                    if (frameObserver !== NoopKeyguardOrbBufferFrameObserver) {
+                        runCatching {
+                            frameObserver.onProduced(
+                                KeyguardOrbBufferProducerFrame(
+                                    lease = spec.lease,
+                                    slotId = slot.id,
+                                    useGeneration = useGeneration,
+                                    frameTimeNanos = frameTimeNanos,
+                                    materialTime = materialTime,
+                                ),
+                                slot.buffer,
+                                result.fence,
+                            )
+                        }
+                    }
                     val ready = ReadyFrame(
                         spec.lease, slot.id, useGeneration, slot.buffer, result.fence,
                     )

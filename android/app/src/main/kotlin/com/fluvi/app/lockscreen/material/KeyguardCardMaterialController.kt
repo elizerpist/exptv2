@@ -36,6 +36,10 @@ internal class KeyguardCardMaterialController(
     /** Test seam for the real isolated producer boundary. Production keeps
      * this as a no-op; it never participates in visibility policy. */
     private val isolatedOrbRenderBarrier: KeyguardOrbRenderBarrier = NoopKeyguardOrbRenderBarrier,
+    /** Test-only producer readback seam. The controller captures it once;
+     * runtime hook changes cannot affect an established attachment. */
+    private val isolatedOrbFrameObserver: KeyguardOrbBufferFrameObserver =
+        KeyguardOrbBufferRendererTestHooks.frameObserver,
 ) {
     enum class ColdPresentationState { BOOTSTRAP, BOOTSTRAP_SUBMITTED, LIVE }
 
@@ -107,6 +111,7 @@ internal class KeyguardCardMaterialController(
             onFailure = ::onIsolatedOrbFailure,
             onSizeChanged = ::onIsolatedOrbSizeChanged,
             barrier = isolatedOrbRenderBarrier,
+            frameObserver = isolatedOrbFrameObserver,
         )
     }
     private val isolatedOrbRenderer: KeyguardOrbBufferRenderer

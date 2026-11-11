@@ -8,7 +8,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
+import android.graphics.ColorSpace
 import android.graphics.Rect
+import android.hardware.HardwareBuffer
+import android.hardware.SyncFence
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
@@ -27,6 +30,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.R
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
+import com.fluvi.app.lockscreen.material.KeyguardOrbBufferFrameObserver
+import com.fluvi.app.lockscreen.material.KeyguardOrbBufferProducerFrame
+import com.fluvi.app.lockscreen.material.KeyguardOrbBufferRendererTestHooks
+import com.fluvi.app.lockscreen.material.NoopKeyguardOrbBufferFrameObserver
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,6 +41,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.time.Duration
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 
 /**
  * Disposable API-35 emulator fixture, NOT a replacement host or a phone
@@ -81,6 +91,12 @@ class KeyguardServiceOverlayInstrumentationTest {
         val savedMaterial = snapshotPreferences("fluvi_keyguard_header_material")
         var captureStarted = false
         var testFailure: Throwable? = null
+        // The real service is constructed below by Android.  This bounded
+        // probe reads exactly two completed current-attachment producer
+        // buffers off Main, then lets the existing compositor assertion tell
+        // us whether the producer or the layer/transaction boundary froze.
+        val producerProbe = ProducerPixelProbe()
+        KeyguardOrbBufferRendererTestHooks.frameObserver = producerProbe
         try {
             assertFalse("Secure credentials require a different, explicit fixture", keyguard.isDeviceSecure)
             assertTrue("Cannot safely restore unknown lockscreen setting: $savedLockDisabled",
@@ -150,6 +166,16 @@ class KeyguardServiceOverlayInstrumentationTest {
                     steady.actualProgressCount() > cold.material.actualProgressCount())
             assertEquals("API-35 standalone ORB must use the isolated production renderer",
                 "HardwareBufferRenderer/SurfaceControl", steady.activeRenderer)
+            val producer = producerProbe.awaitDistinctCurrentAttachment()
+            record(
+                "PRODUCER_READBACK",
+                "lease=${producer.leaseAttachment}/${producer.leaseGeneration}" +
+                    " slots=${producer.firstSlot}/${producer.secondSlot}" +
+                    " uses=${producer.firstUse}/${producer.secondUse}" +
+                    " phases=${producer.firstPhase}/${producer.secondPhase}" +
+                    " delta=${producer.pixelDelta} changed=${producer.changedPixels}" +
+                    " testOnlyOffMain=true",
+            )
             val secondImage = copyOrb(requireOverlay(), "cold-orb-b.png")
             try {
                 val motion = if (firstImage != null && secondImage != null) {
@@ -208,6 +234,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             record("RESULT", "FAIL ${failure.javaClass.simpleName}:${failure.message}")
             throw failure
         } finally {
+            KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
             occlusionProbe?.close()
             occlusionProbe = null
             var cleanupFailure: Throwable? = null
@@ -277,6 +304,117 @@ class KeyguardServiceOverlayInstrumentationTest {
          * output assertion.  The legacy route retains its established proof. */
         fun actualOutputCount(): Long = if (isolatedPublished > 0L) isolatedPublished else shader
         fun actualProgressCount(): Long = if (isolatedPublished > 0L) isolatedPublished else phase
+    }
+
+    /**
+     * Boundary evidence only: the renderer calls this on its HandlerThread
+     * after HardwareBufferRenderer reports SUCCESS.  The supplied fence is
+     * awaited but never closed here because the real SurfaceControl
+     * transaction remains its owner.  Keeping just two phase-separated
+     * software copies avoids any test-only per-frame readback behaviour.
+     */
+    private class ProducerPixelProbe : KeyguardOrbBufferFrameObserver {
+        private data class Sample(
+            val frame: KeyguardOrbBufferProducerFrame,
+            val pixels: IntArray,
+        )
+
+        data class Result(
+            val leaseAttachment: Long,
+            val leaseGeneration: Long,
+            val firstSlot: Long,
+            val secondSlot: Long,
+            val firstUse: Long,
+            val secondUse: Long,
+            val firstPhase: Float,
+            val secondPhase: Float,
+            val pixelDelta: Long,
+            val changedPixels: Int,
+        )
+
+        private val samples = CopyOnWriteArrayList<Sample>()
+        @Volatile private var failure: Throwable? = null
+
+        override fun onProduced(
+            frame: KeyguardOrbBufferProducerFrame,
+            buffer: HardwareBuffer,
+            completionFence: SyncFence?,
+        ) {
+            if (frame.lease.attachment == 0L || samples.size >= 2 || failure != null) return
+            val first = samples.firstOrNull()
+            if (first != null &&
+                frame.frameTimeNanos - first.frame.frameTimeNanos < TimeUnit.MILLISECONDS.toNanos(750)
+            ) return
+            try {
+                // The public renderer contract requires waiting before the
+                // buffer is consumed.  This runs off Main and does not take
+                // ownership of (or close) the fence handed to SurfaceControl.
+                check(completionFence?.await(Duration.ofSeconds(2)) != false) {
+                    "producer completion fence did not signal"
+                }
+                val hardware = checkNotNull(Bitmap.wrapHardwareBuffer(
+                    buffer,
+                    ColorSpace.get(ColorSpace.Named.SRGB),
+                )) { "HardwareBuffer readback returned null" }
+                val software = try {
+                    checkNotNull(hardware.copy(Bitmap.Config.ARGB_8888, false)) {
+                        "HardwareBuffer software copy returned null"
+                    }
+                } finally {
+                    hardware.recycle()
+                }
+                try {
+                    val pixels = IntArray(software.width * software.height)
+                    software.getPixels(pixels, 0, software.width, 0, 0, software.width, software.height)
+                    samples += Sample(frame, pixels)
+                } finally {
+                    software.recycle()
+                }
+            } catch (error: Throwable) {
+                failure = error
+            }
+        }
+
+        fun awaitDistinctCurrentAttachment(): Result {
+            val deadline = SystemClock.uptimeMillis() + 8_000L
+            while (SystemClock.uptimeMillis() < deadline && samples.size < 2 && failure == null) {
+                SystemClock.sleep(20)
+            }
+            failure?.let { throw AssertionError("producer readback failed", it) }
+            assertEquals("Expected two phase-separated current producer samples", 2, samples.size)
+            val first = samples[0]
+            val second = samples[1]
+            assertEquals("Producer samples must belong to the same current lease",
+                first.frame.lease, second.frame.lease)
+            assertTrue("Probe must wait for a distinct canonical phase",
+                kotlin.math.abs(second.frame.materialTime.phase - first.frame.materialTime.phase) > .01f)
+            var changed = 0
+            var delta = 0L
+            first.pixels.indices.forEach { index ->
+                val a = first.pixels[index]
+                val b = second.pixels[index]
+                val current = maxOf(
+                    kotlin.math.abs((a ushr 16 and 0xff) - (b ushr 16 and 0xff)),
+                    kotlin.math.abs((a ushr 8 and 0xff) - (b ushr 8 and 0xff)),
+                    kotlin.math.abs((a and 0xff) - (b and 0xff)),
+                )
+                if (current >= 7) changed += 1
+                delta += current
+            }
+            assertTrue("Producer shader buffer did not change across canonical phases", changed >= 64 && delta >= 2_048L)
+            return Result(
+                leaseAttachment = first.frame.lease.attachment,
+                leaseGeneration = first.frame.lease.generation,
+                firstSlot = first.frame.slotId,
+                secondSlot = second.frame.slotId,
+                firstUse = first.frame.useGeneration,
+                secondUse = second.frame.useGeneration,
+                firstPhase = first.frame.materialTime.phase,
+                secondPhase = second.frame.materialTime.phase,
+                pixelDelta = delta,
+                changedPixels = changed,
+            )
+        }
     }
 
     private inner class OcclusionSuccessorProbe(private val wasVisible: Boolean) : KeyguardInspectionProbeForTest {
