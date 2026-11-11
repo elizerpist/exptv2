@@ -1,0 +1,75 @@
+{
+  "task": "R-NATIVE-RENDER-ISOLATION-01 final-source graph provenance and native ownership inventory",
+  "source_head": "f197d03799c44e749c8569e89c0b563785c99afc",
+  "source_parent": "5a06084d101a97867e0f0560edaef6af758f7fbe",
+  "source_ref": "fix/orb-v4-latency-lockscreen",
+  "source_worktree": "/data/data/com.termux/files/usr/tmp/fluvi-render-isolation-graph.zSFt2O/source",
+  "source_tracked_clean": true,
+  "generated_untracked_file": "index.scip",
+  "generator": "tools/codegraph at tooling/keyguard-episode-observability-graph before this provenance commit; scip_dart 1.6.2",
+  "index_regenerated_from_exact_source": true,
+  "index_sha256": "8921a6ce5aa4f00814707c2fdec48697a65cbc20f39ae6ebbd6bfa42a72722b5",
+  "language_documents": { "Dart": 807 },
+  "kotlin_coverage": false,
+  "equal_dart_coverage_limit": "The final application changes are Kotlin and journal files. The regenerated Dart index documents only Dart; neither unchanged Dart bytes nor an empty Dart changed-symbol list establishes zero native impact.",
+  "query_output": "codegraph-render-isolation-queries-2026-11-11.txt",
+  "queries": [
+    {
+      "symbol": "KeyguardTimingCaptureBridge",
+      "references": 8,
+      "production": 3,
+      "tests": 5,
+      "consumer_files": [
+        "lib/app/shell/fluvi_app_shell.dart",
+        "lib/core/debug/debug_console.dart",
+        "lib/core/debug/debug_floating_button.dart",
+        "test/core/debug/keyguard_timing_capture_console_test.dart",
+        "test/core/diagnostics/keyguard_timing_capture_bridge_test.dart"
+      ]
+    },
+    {
+      "symbol": "KeyguardTimingCaptureSnapshot",
+      "references": 12,
+      "production": 12,
+      "tests": 0,
+      "consumer_files": [
+        "lib/core/debug/debug_console.dart",
+        "lib/core/diagnostics/keyguard_timing_capture_bridge.dart"
+      ]
+    },
+    {
+      "symbol": "DebugConsoleDialog",
+      "references": 5,
+      "production": 3,
+      "tests": 2,
+      "consumer_files": [
+        "lib/core/debug/debug_console.dart",
+        "lib/core/debug/debug_floating_button.dart",
+        "test/core/debug/keyguard_timing_capture_console_test.dart"
+      ]
+    }
+  ],
+  "native_inventory": {
+    "coverage": "Explicit final-source rg/source audit, not SCIP coverage.",
+    "service_to_window": "FluviKeyguardCardService is the Main authority for inspection application and calls the one retained KeyguardCardWindow. It retains visibility, privacy, fresh-admission and stale-result authority.",
+    "window_to_controller": "KeyguardCardWindow supplies its exact retained attached root and attach generation to KeyguardCardMaterialController after WindowManager addView. It still owns one TYPE_ACCESSIBILITY_OVERLAY root, geometry, interaction and removal.",
+    "controller_selection": "KeyguardCardMaterialController selects KeyguardOrbBufferRenderer only for API34+ animated ORB/orbOnly. CARD, API33-and-below, animation OFF and static routes retain their existing View renderer/bootstrap behavior. The isolated route stops the Main material clock.",
+    "renderer_ownership": "KeyguardOrbBufferRenderer Main side creates/reparents/hides a non-input child SurfaceControl under the retained root, validates exact attachment/material/privacy lease identity, and never waits for worker completion. Its HandlerThread owns HardwareBufferRenderer, RuntimeShader, Paint, RenderNode, Choreographer and fences.",
+    "live_boundary": "onIsolatedOrbFirstPublished accepts only current attached lease output; it makes the isolated route LIVE and suppresses the duplicate legacy View producer. Old lease, detached or privacy-invalid results return before publication.",
+    "backpressure_and_teardown": "Worker states FREE, RENDERING, READY_FOR_MAIN, COMPOSITOR_OWNED and RETIRED bound the pool to three HardwareBuffers and one render. READY_FOR_MAIN survives retirement until the Main hand-off drops or submits it; compositor release stays worker-owned.",
+    "production_tests": [
+      "KeyguardServiceOverlayInstrumentationTest.connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles",
+      "KeyguardHeaderMaterialViewInstrumentationTest.isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame",
+      "KeyguardHeaderMaterialViewInstrumentationTest.isolatedOrbPublishesChangingCompositorPixels",
+      "KeyguardFirstDrawObservationInstrumentationTest",
+      "KeyguardCardDiagnosticsInstrumentationTest"
+    ],
+    "test_boundary": "The actual-service fixture uses a real accessibility overlay but runs on an API35 emulator. Its Activity/panel controls cover lower-level window cases only; neither proves Nothing-device pacing nor physical panel presentation."
+  },
+  "commands": [
+    "exact source: flutter pub get; dart pub global run scip_dart ./",
+    "tooling: dart run bin/fluvi_codegraph.dart generate --index <exact-source>/index.scip --graph <exact-source>/docs/codegraph --source-root <exact-source> --source-head f197d03799c44e749c8569e89c0b563785c99afc --source-ref fix/orb-v4-latency-lockscreen --expected-index-sha256 8921a6ce5aa4f00814707c2fdec48697a65cbc20f39ae6ebbd6bfa42a72722b5",
+    "tooling: dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol <KeyguardTimingCaptureBridge|KeyguardTimingCaptureSnapshot|DebugConsoleDialog>"
+  ],
+  "physical_validation": "PENDING_USER"
+}

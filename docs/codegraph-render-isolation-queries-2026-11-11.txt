@@ -1,0 +1,24 @@
+Exact source: f197d03799c44e749c8569e89c0b563785c99afc
+Source parent: 5a06084d101a97867e0f0560edaef6af758f7fbe
+Source ref: fix/orb-v4-latency-lockscreen
+Generator: scip_dart 1.6.2
+Raw SCIP SHA-256: 8921a6ce5aa4f00814707c2fdec48697a65cbc20f39ae6ebbd6bfa42a72722b5
+Coverage: 807 Dart documents only. Kotlin is not in this SCIP index.
+
+Actual query execution:
+dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol KeyguardTimingCaptureBridge
+definition lib/core/diagnostics/keyguard_timing_capture_bridge.dart:16
+references total=8 production=3 tests=5
+consumers lib/app/shell/fluvi_app_shell.dart; lib/core/debug/debug_console.dart; lib/core/debug/debug_floating_button.dart; test/core/debug/keyguard_timing_capture_console_test.dart; test/core/diagnostics/keyguard_timing_capture_bridge_test.dart
+
+dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol KeyguardTimingCaptureSnapshot
+definition lib/core/diagnostics/keyguard_timing_capture_bridge.dart:75
+references total=12 production=12 tests=0
+consumers lib/core/debug/debug_console.dart; lib/core/diagnostics/keyguard_timing_capture_bridge.dart
+
+dart run bin/fluvi_codegraph.dart query --graph ../../docs/codegraph --symbol DebugConsoleDialog
+definition lib/core/debug/debug_console.dart:13
+references total=5 production=3 tests=2
+consumers lib/core/debug/debug_console.dart; lib/core/debug/debug_floating_button.dart; test/core/debug/keyguard_timing_capture_console_test.dart
+
+Source verification: the render-isolation implementation is native Kotlin. Its caller/test inventory is recorded separately in codegraph-render-isolation-2026-11-11.json; these Dart queries do not assert Kotlin coverage.
