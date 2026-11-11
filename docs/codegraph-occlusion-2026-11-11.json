@@ -145,7 +145,7 @@
     "graph_tests": "16 PASS",
     "graph_analysis": "No issues",
     "shard_hashes": "102 verified",
-    "android_results": "7099 run42926044104: real-service1 PASS; lower group37/38 (PixelCopy failure); core150/app136 PASS. Exact-source dc591 run42929281876 pending. See shared journal for all failures; graph is not runtime or physical evidence."
+    "android_results": "7099 run42926044104: real-service1 PASS; lower group37/38 (PixelCopy failure). Final-source dc591 run42929281876: core150/app136, Flutter1031+3+4, lower native38 and real-service1 PASS; Human job130233181499 PASS. Overall workflow FAIL due separate dashboard year/query/B-report failure. Earlier intermittent PixelCopy failure remains unexplained despite this slow pass. See shared journal; graph is not runtime or physical evidence."
   },
   "commands": [
     "Ubuntu proot exact-source worktree: flutter pub get; git diff --exit-code; git diff --cached --exit-code; dart pub global run scip_dart ./",
