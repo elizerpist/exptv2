@@ -316,7 +316,15 @@ internal class KeyguardOrbBufferRenderer(
                     }
                 reparent
                     .setPosition(child, location[0].toFloat(), location[1].toFloat())
-                    .setLayer(child, 1)
+                    // `rootSurfaceControl` also owns the ViewRoot's BLAST
+                    // buffer.  The isolated ORB is a sibling of that buffer,
+                    // not a child of the placeholder View, so a small sibling
+                    // Z value can leave a successfully published buffer below
+                    // a later ViewRoot submission.  Keep this non-input child
+                    // at the top of *this root only*; reparenting constrains it
+                    // to the existing accessibility-overlay root and cannot
+                    // raise it above another application or SystemUI surface.
+                    .setLayer(child, Int.MAX_VALUE)
                     .setVisibility(child, false)
                     .apply()
                 layer = child
@@ -349,6 +357,13 @@ internal class KeyguardOrbBufferRenderer(
             val child = layer ?: return
             runCatching {
                 SurfaceControl.Transaction()
+                    // SurfaceControl's null-buffer form releases the last
+                    // displayed buffer and invokes its release callback.  A
+                    // visibility/reparent transaction alone may leave that
+                    // compositor-owned slot stranded after the layer handle
+                    // is released, preventing a later attachment from
+                    // constructing its bounded replacement pool.
+                    .setBuffer(child, null as HardwareBuffer?)
                     .setVisibility(child, false)
                     .reparent(child, null)
                     .apply()
