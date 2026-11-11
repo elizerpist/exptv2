@@ -176,6 +176,15 @@ class KeyguardServiceOverlayInstrumentationTest {
                     " delta=${producer.pixelDelta} changed=${producer.changedPixels}" +
                     " testOnlyOffMain=true",
             )
+            // Preserve the measured source-boundary evidence even when the
+            // assertion fails.  A static producer points at recording or
+            // material submission, whereas a changing producer with a static
+            // crop points at the compositor hand-off.
+            assertTrue(
+                "Producer shader buffer did not change across canonical phases " +
+                    "(changed=${producer.changedPixels}, delta=${producer.pixelDelta})",
+                producer.changedPixels >= 64 && producer.pixelDelta >= 2_048L,
+            )
             val secondImage = copyOrb(requireOverlay(), "cold-orb-b.png")
             try {
                 val motion = if (firstImage != null && secondImage != null) {
@@ -401,7 +410,6 @@ class KeyguardServiceOverlayInstrumentationTest {
                 if (current >= 7) changed += 1
                 delta += current
             }
-            assertTrue("Producer shader buffer did not change across canonical phases", changed >= 64 && delta >= 2_048L)
             return Result(
                 leaseAttachment = first.frame.lease.attachment,
                 leaseGeneration = first.frame.lease.generation,
