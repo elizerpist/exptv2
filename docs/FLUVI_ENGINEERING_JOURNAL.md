@@ -6800,3 +6800,90 @@ Filename label: reviewer-edd89809-selected-fields.json;4549 UTF-8 bytes;SHA256 `
 ```
 
 Reviewer delivery: append-only journal, [skip ci], no workflow dispatch. Resulting commit, one-file diff and workflow count are verified after publication; no application build or repair is created by this journal update.
+
+
+## 2026-11-11 — R-NATIVE-RENDER-ISOLATION-01: concrete performance repair contract after dc591498 rejection
+
+- Reviewer role: diagnose and issue the coding prompt; no application source implementation. User explicitly requests a detailed technical repair and observable performance progress. Physical result remains **LAG PERSISTS / NOT ACCEPTED**.
+- Reviewed branch HEAD: c57d4459e3bb683a3a5a9ba7119337dc1453225c, parent83b47b827fd5af64f42a2dda4e1283f966c6c1a8. Application/phone baseline remains dc591498316ac647ca2873c7a0f7e72d12fd85ff, parent92c7089fb901e5e7cb2590c2149c75d55bb3dc31. No intervening app change was found. This entry is a journal-only [skip ci] change.
+- Both complete project rule assets reread for this prompt: base1135lines SHA256f5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297; widget addendum374lines SHA256dc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c.
+- Existing source/commit/report/CI/graph/phone audit in the preceding c57d4459 entry remains authoritative. Fresh Drive metadata search for Fluvi/keyguard modified after2026-11-10T09:10:41Z returned no newer document. Historical Drive evidence is not substituted for the phone capture.
+- Phone evidence is one unique LIGHT capture edd89809-1994-49af-b87d-5fe208c5ac2b, process9859-e58aec13/API35/ORB/orbOnly/full. Selected-field transcription4549bytes SHA2562f4776720e4fbafc50a4c0737a3ccfd6bf36aa3ba6bd2b07ab1e16b14a856129 remains explicitly a transcription, not the full original export. Full pasted evidence, its omissions and previous comparisons were reviewed; repeated earlier1f exports are not independent current-build tests.
+- Phone retained warm callback-to-live139/208/314ms; actual withdrawal callback-to-local12/196/79ms; max gaps101/86/87ms. Cold first live569ms includes add-return-to-root303ms and root-to-live97ms. The31ms SCREEN_ON metric has a late callback and cannot certify fast wake.
+- Phone a7/a8/a9 maximum gaps have callback-exit-to-CPU-draw49.429539/48.896538/54.201231ms. Their current draw CPU0.161770/0.163307/0.173153ms does not rule out graphics/scheduling waits outside the draw scope. work=empty covers only owned scopes. Hide1 Main handoff99ms; hide8 acquisition118ms plus handoff77ms. Decision-to-local remains0–1ms.
+- Previous off-Main recurring-system-read and recoverable-OCCLUDED fixes are real and must remain. The last dc591498 change was failure-artifact preservation, not a frame-pacing implementation. Existing successful output tests are liveness/correctness, not a Nothing pacing pass.
+
+### Independently re-executed native trace queries, with exact limits
+
+Artifact13817300781/run42929281876 actual-service trace:
+android/keyguard-service-evidence/fluvi-keyguard-service.perfetto-trace
+SHA25602964938ebb9a89f19b4f1f2ab90a0c99456716540c7b95664f80ab1c69fe8d6.
+API35 x86_64/swangle, app PID2784/Main TID2784, RenderThread TID2843. This is NOT the Nothing profile process.
+
+Reviewer executed Perfetto trace_processor_shell v59.1 queries locally against the downloaded artifact. The retained final capture97557446-e2f4-4b7d-af47-5aa94e8b313e DRAW_GAP attempt9/show18/attach6/sample1 has previousEndNs456619835921 and currentStartNs456919769701, end456919833235, gap299.997314ms.
+
+Within that interval:
+- Main slice267257: draw-VRI[FluviKeyguardCard]/postAndWait, trace ts456619854709, duration285304778ns (285.304778ms).
+- Clock conversion verified: to_monotonic(456619854709)=456619854819. Cross-clock comparison uses the conversion, not a guessed fixed sleep offset.
+- Exact thread-state overlap of this slice: Sleeping280.218143ms, Runnable5.070912ms, Running0.015723ms.
+- Preceding Main Record View#draw slice267256 lasts0.083974ms.
+- RenderThread preceding DrawFrames83120 starts456614808943 and lasts285.191120ms; includes flush commands143.460698ms, emulator command transport and dequeueBuffer. Next DrawFrames83159 starts456900050358; Main unblocks around456905159487.
+- These nested intervals are not additive. The attribution is Main waiting for the graphics pipeline in THIS emulator workload, not expensive CPU execution of the orb's Canvas call.
+- Other Main postAndWait examples568.923436ms and339.448930ms were also observed.
+- This is a confirmation of the rendering-wait pattern already documented earlier in the journal, NOT a newly discovered explanation for the phone's after-callback intervals. The phone's largest after-callback gaps remain unmatched by this trace; the emulator example mostly delays delivery of the NEXT callback.
+
+Reproduction SQL (Perfetto tables; exact trace identity above):
+SELECT s.id,s.ts,to_monotonic(s.ts) AS mono_ns,s.dur,s.depth,s.name
+FROM slice s JOIN thread_track t ON s.track_id=t.id JOIN thread th USING(utid)
+WHERE th.tid=2784 AND s.ts BETWEEN 456610000000 AND 456930000000 ORDER BY s.ts;
+
+WITH w AS (SELECT ts,dur FROM slice WHERE id=267257)
+SELECT state,SUM(MIN(t.ts+t.dur,w.ts+w.dur)-MAX(t.ts,w.ts))/1e6 AS ms
+FROM thread_state t JOIN thread USING(utid),w
+WHERE tid=2784 AND t.dur>0 AND t.ts<w.ts+w.dur AND t.ts+t.dur>w.ts
+GROUP BY state;
+
+### Source diagnosis and selected implementation contract
+
+PROVEN structural coupling:
+KeyguardCardMaterialController owns a Main Choreographer clock; its callback calls orb.frame/background.frame; frame invalidates the View; KeyguardHeaderMaterialView.onDraw records the shader into the same WindowManager ViewRoot rendering path. FluviKeyguardCardService application of negative/positive answers and KeyguardCardWindow visibility/window operations also require Main. A graphics wait in that ViewRoot therefore delays both frame production and service presentation control. Current trace executes this coupling; cheap draw CPU does not remove it.
+
+UNPROVEN: that this one mechanism explains every Nothing stall, the303ms first traversal, the55ms callback-body outlier, all remote accessibility acquisition latency or delayed system event delivery. No claim that Android public APIs guarantee a particular phone frame rate. No phone performance improvement is asserted before implementation and physical validation.
+
+The selected next task is a bounded implementation of render/control isolation for API34+ animated standalone ORB. It is an architectural repair of the demonstrated coupling and a falsifiable candidate for the phone symptom, not an open-ended diagnostics-only task or a promised complete cure. Its correctness and performance contracts must be RED/GREEN tested on the actual overlay before release.
+
+Concrete design:
+1. Keep the existing service, fresh admission, privacy, one WindowManager root, gestures and pending-work/epoch policies. CARD, <=API33, static/OFF, launcher widgets and dashboard keep their established routes.
+2. For API34+ animated ORB, replace the active per-frame View invalidation path with one dedicated HandlerThread/Choreographer producer rendering the canonical AGSL through RenderNode + platform HardwareBufferRenderer into a fixed three-slot HardwareBuffer pool. No second concurrent animation clock/backend.
+3. The worker owns mutable RuntimeShader/Paint/RenderNode and all render invocation/fence work. Main never waits for render completion, fences, worker joins or resource destruction. All HardwareBufferRenderer instances still share Android's RenderThread; this is control-path isolation, not a private GPU or guaranteed faster shader.
+4. Publish GPU-ready buffers to a non-input child SurfaceControl parented to the EXISTING Fluvi overlay root using its AttachedSurfaceControl. Do not parent to SystemUI or replace the visibility authority/window type. BuildReparentTransaction has a nullable result; unavailable attachment stays hidden and event-recoverable.
+5. Main alone creates/reparents/shows/hides child layers and authorizes an exact session/wake/visibility/attach/content/privacy lease. The worker may only update buffers on its leased layer; it never shows/reparents a layer. Each withdrawal/privacy invalidation retires that layer; never recycle its identity into a new authority epoch. A raced old setBuffer cannot make a hidden/unparented old layer visible.
+6. Perform immediate child hide/reparent-null from Main before root removal/slow cleanup. Cancel current lease before async work. Do not queue hide behind rendering. Defer GPU object cleanup safely. Bound retired resources and replacements globally; do not allocate new pools/layers indefinitely during rapid wake/mode changes.
+7. Use exact measured orb dimensions, RGBA8888 premultiplied transparency, existing circle/AA, canonical profile/phase/180ms semantic transition. Full-to-neutral changes revoke old presentation before new publication and never crossfade financial colours.
+8. Do not send unsignaled producer fences into a compositor queue ahead of hide: readiness/fence checks are worker-side; release fences also govern safe reuse. Three slots with explicit FREE/RENDERING/READY/COMPOSITOR_OWNED/RETIRED states; one in-flight render and latest-only desired state, no catch-up queue. Clear transparent pixels every frame. Size and usage support checked without lowering visual fidelity.
+9. Prepare this SAME bounded rendering backend offscreen while detached; preparation grants no visibility. A ready, current, authorized buffer need not wait for an unrelated bootstrap View commit. If not ready, preserve safe fallback and later automatic promotion; late results cannot revive retired authority. Preserve legacy bootstrap tests for the legacy backend.
+10. Add backend-specific CPU-record/GPU-ready/buffer-submission evidence. Do not rename old CPU-draw counters as physical presentation, compare old/new incompatible timings, or turn UNOBSERVED into0.
+
+Relevant official API contracts reviewed2026-11-11:
+https://developer.android.com/reference/android/graphics/HardwareBufferRenderer
+https://developer.android.com/reference/android/graphics/HardwareBufferRenderer.RenderRequest
+https://developer.android.com/reference/android/graphics/HardwareBufferRenderer.RenderResult
+https://developer.android.com/reference/android/view/SurfaceControl.Transaction
+https://developer.android.com/reference/android/view/AttachedSurfaceControl
+https://developer.android.com/reference/android/view/Choreographer
+
+Platform HardwareBufferRenderer is API34, exposes obtainRenderRequest().draw(executor, callback), shares RenderThread, preserves existing buffer contents unless cleared, and does not close the caller's HardwareBuffer. SurfaceControl setBuffer requires COMPOSER_OVERLAY and GPU_SAMPLED_IMAGE usage; render targets also require GPU_COLOR_OUTPUT. Its release callback/fence controls reuse. These documented contracts justify the API design; they do not establish a phone root cause.
+
+### Anti-loop acceptance and explicit remaining work
+
+- Start with a narrow production-path submission seam and a barrier-controlled RED against the current parent: once a real orb has drawn, hold the rendering boundary, deliver a real negative/privacy event, and require withdrawal before releasing the barrier. Parent must fail for shared execution ownership, not missing API/test symbols. This controlled stall proves isolation only; label it separately from a real-driver reproduction.
+- Implement the backend and require the same contract GREEN with actual compositor disappearance while the renderer remains held. Keep the instrumented observer off Main. Always release barriers in finally.
+- Require actual changed nonempty compositor pixels, not Window PixelCopy assumed to contain independent child layers; use the existing actual-service screenshot/crop route and identify the correct surface/attach.
+- Verify no duplicate layer/clock, stale completion, privacy race, in-flight draw after retirement, rapid reattach/rotation/drag, bounded buffers/fences/FDs and no background loop; legacy modes must remain correct.
+- Controlled baseline/final trace must show disappearance of recurring ORB-driven Main invalidation/traversal/submission work and preserve/increase actual output cadence without static fallback/FPS/fidelity reduction. A new backend with flat pixels is a failure.
+- Device gates are distinct: matched profile builds on Nothing, same settings/refresh/thermal conditions, cold + repeated wake/unlock + quiet animation + OFF/LIGHT diagnostics controls. Report distributions and >2-frame/>50ms gaps, not a cherry-picked average. Proposed goals are new acceptance targets, not measured outcomes: >=50% reduction in transition-associated >50ms output gaps and p95 accepted-negative-to-hide-submission, no new stale exposure and no slower warm show. If unavailable, leave hardware performance pending.
+- Remote accessibility calls118ms, pre-enqueue63ms, late callback188ms and unobserved system visual endpoints remain explicit residuals; renderer isolation cannot be advertised as their proven cure.
+- Do not repeat already-completed recurring-getter/occlusion work, rewrite classifier/cache/prefetch, lower FPS/quality, increase retries, move timestamps, or ship another unchanged diagnostics APK as a lag fix.
+- Existing CI42929281876: native/core/flutter/Human jobs passed, dashboard profile failed; overall failure and lower-level historical PixelCopy instability remain visible. The candidate must run the full relevant native/actual-service/regression chain and deliver an exact-source Human profile APK, digest and final-source codegraph, with a complete report.
+- Graph provenance remains tooling7de0baa6a5abc1e1ec41e3fd47acda3254bc055c, indexed source dc591498, raw hash5c53493171ed284280426f2d9c5a649a8e2ed26301dfb9ecf89aac21d997fe59. Dart graph does NOT cover Kotlin; direct native source/reference inventory is mandatory. Preserve milestone dfa90b6741108f824244dbc11a3d73a6c5174472 and6e962187e90e2a82431b1f91b224d2b52a6e0ba7.
+- New implementation/tests/APK: NOT RUN/NOT CREATED by reviewer. Only diagnosis, source/API/trace audit and journal append completed. Coding agent must execute the concrete implementation, not return another proposal. No physical success milestone is granted.
