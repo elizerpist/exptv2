@@ -21,11 +21,12 @@ val keyguardHeaderSourceHash = "6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b
 // RuntimeShader rejects the all-effects Flutter program as too large on API
 // 35. The Header's effect is semantic configuration, not per-pixel input, so
 // produce one mechanically-specialized AGSL program for each canonical
-// shaderId. The compact entry point keeps only that effect family, while
-// uEffect remains a runtime uniform for the selected member of the family.
-// API-35's RuntimeShader must receive that value explicitly; specializing it
-// as a const can leave the classic path at its static fallback branch.
-val keyguardHeaderAdapterVersion = "4"
+// shaderId. The compact entry point keeps only that effect family and injects
+// its member ID as a numeric literal.  API-35's RuntimeShader treated the
+// previous global-const selector as the static classic fallback, while a
+// runtime uniform kept every member branch alive and exceeded its program-size
+// budget. A literal lets SkSL remove the other branches before compilation.
+val keyguardHeaderAdapterVersion = "5"
 val keyguardHeaderEffects = listOf(
     "staticEffect" to 0,
     "dualTide" to 1,
@@ -179,8 +180,15 @@ half4 main(float2 _fluviFragCoord) {
 """.trim()
             val agslPrefix = sharedAgsl.substringBefore(mainSignature)
                 .replace(canonicalCommonField, specializedCommon)
-            check(agslPrefix.contains("uniform float uEffect;")) {
-                "AGSL specialization lost the effect selector for $effectId"
+                // Do not use a global `const float uEffect`: API-35 can
+                // select the classic static fallback through that route. A
+                // literal in the program body still enables compile-time
+                // branch elimination, unlike the runtime uniform that made
+                // this compact program too large for RuntimeShader.
+                .replace("uniform float uEffect;\n", "")
+                .replace(Regex("\\buEffect\\b"), "${shaderId}.0")
+            check(!agslPrefix.contains("uEffect")) {
+                "AGSL specialization retained the effect selector for $effectId"
             }
             listOf("plain" to noPortalMain, "portal" to zeroInteractionMain).forEach { (variant, main) ->
                 val agsl = "$agslPrefix\n$main\n"

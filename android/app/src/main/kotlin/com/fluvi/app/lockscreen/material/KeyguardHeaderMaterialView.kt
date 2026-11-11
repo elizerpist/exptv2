@@ -918,11 +918,10 @@ internal class KeyguardHeaderShader(
         uniform2("uRasterSize", width.toFloat(), height.toFloat())
         runtimeShader.setFloatUniform("uOpacity", profile.opacity)
         runtimeShader.setFloatUniform("uPaletteSplit", profile.paletteSplitPercent / 100f)
-        // The compact artifact selects the effect family, while uEffect
-        // selects the configured member inside that family. Keep this as a
-        // runtime uniform: API-35 AGSL otherwise takes the static fallback
-        // branch even though the phase uniform advances.
-        runtimeShader.setFloatUniform("uEffect", profile.effectShaderId.toFloat())
+        // The generated artifact already embeds the exact effect ID as a
+        // numeric literal. This retains only its field branch without the
+        // API-35 global-const fallback or a runtime selector that makes the
+        // RuntimeShader program exceed its size budget.
         runtimeShader.setFloatUniform("uPulse", 0f)
         runtimeShader.setFloatUniform("uRenderQuality", 1f)
         val fallback = profile.colors.last()
