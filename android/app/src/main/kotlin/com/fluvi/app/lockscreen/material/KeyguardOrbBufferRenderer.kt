@@ -557,6 +557,18 @@ internal class KeyguardOrbBufferRenderer(
             val buffer: HardwareBuffer,
             val renderer: HardwareBufferRenderer,
             val node: RenderNode,
+            /**
+             * A RuntimeShader is mutable.  A HardwareBufferRenderer callback
+             * only means its RenderNode was submitted; its fence still owns
+             * GPU work.  Therefore one shader/paint pair belongs to one
+             * physical buffer slot and is not reconfigured until that slot
+             * has returned to FREE after its release fence.
+             */
+            var shader: KeyguardHeaderShader? = null,
+            var shaderProgramKey: String? = null,
+            var previousShader: KeyguardHeaderShader? = null,
+            var previousShaderProgramKey: String? = null,
+            val paint: Paint = Paint(Paint.ANTI_ALIAS_FLAG),
             var state: SlotState = SlotState.FREE,
             /** Retirement revokes a lease; it is not an ownership state. */
             var retired: Boolean = false,
@@ -587,12 +599,6 @@ internal class KeyguardOrbBufferRenderer(
         private var firstLeaseAwaitingMain: KeyguardOrbBufferLease? = null
         private val retiringLeases = mutableSetOf<KeyguardOrbBufferLease>()
         private val earlyReleaseFences = mutableMapOf<Pair<Long, Long>, SyncFence?>()
-        private var shader: KeyguardHeaderShader? = null
-        private var shaderProgramKey: String? = null
-        private var previousShader: KeyguardHeaderShader? = null
-        private var previousShaderProgramKey: String? = null
-        /** Renderer-thread confined; never allocate a Paint for each frame. */
-        private var paint: Paint? = null
         private var slots: MutableList<Slot> = mutableListOf()
         private var nextSlotId = 0L
         private var running = false
@@ -714,9 +720,6 @@ internal class KeyguardOrbBufferRenderer(
                     slot.retired = true
                     slot.lease?.let(retiringLeases::add)
                 }
-                shader = null
-                previousShader = null
-                paint = null
                 publishSlotSnapshot()
                 finishDisposeIfReleased()
             }
@@ -818,24 +821,6 @@ internal class KeyguardOrbBufferRenderer(
 
         private fun ensureResources(spec: KeyguardOrbBufferRenderSpec): Boolean {
             return try {
-            if (shaderProgramKey != spec.artifact.programKey) {
-                shader = KeyguardHeaderShader(spec.artifact)
-                shaderProgramKey = spec.artifact.programKey
-            }
-            val oldArtifact = spec.previousArtifact
-            if (spec.previousScene == null) {
-                previousShader = null
-                previousShaderProgramKey = null
-            } else if (oldArtifact == null || oldArtifact.programKey == spec.artifact.programKey) {
-                // Same generated source: one confined RuntimeShader can
-                // configure and draw both scenes serially in this frame.
-                previousShader = shader
-                previousShaderProgramKey = spec.artifact.programKey
-            } else if (previousShaderProgramKey != oldArtifact.programKey) {
-                previousShader = KeyguardHeaderShader(oldArtifact)
-                previousShaderProgramKey = oldArtifact.programKey
-            }
-            if (paint == null) paint = Paint(Paint.ANTI_ALIAS_FLAG)
             // A different size cannot recycle a target while any producer or
             // compositor owner remains. Wait rather than allocating another
             // generation outside the global three-slot limit.
@@ -886,8 +871,8 @@ internal class KeyguardOrbBufferRenderer(
                 return
             }
             val slot = slots[index]
-            val currentShader = shader ?: return
-            val currentPaint = paint ?: return
+            prepareSlotShaders(slot, spec)
+            val currentShader = slot.shader ?: return
             slot.state = SlotState.RENDERING
             slot.retired = false
             slot.lease = spec.lease
@@ -906,10 +891,10 @@ internal class KeyguardOrbBufferRenderer(
                         ((frameTimeNanos - spec.transitionStartedNanos) / 180_000_000f).coerceIn(0f, 1f)
                     }
                     if (old != null && progress < 1f) {
-                        drawScene(canvas, previousShader ?: currentShader, old, currentPaint,
+                        drawScene(canvas, slot.previousShader ?: currentShader, old, slot.paint,
                             frameTimeNanos, 1f, spec.lease)
                     }
-                    drawScene(canvas, currentShader, spec.scene, currentPaint,
+                    drawScene(canvas, currentShader, spec.scene, slot.paint,
                         frameTimeNanos, progress, spec.lease)
                 } finally {
                     slot.node.endRecording()
@@ -993,8 +978,41 @@ internal class KeyguardOrbBufferRenderer(
         private fun closeSlot(slot: Slot) {
             runCatching { slot.renderer.close() }
             runCatching { slot.buffer.close() }
+            slot.shader = null
+            slot.shaderProgramKey = null
+            slot.previousShader = null
+            slot.previousShaderProgramKey = null
             slot.state = SlotState.FREE
             slot.lease = null
+        }
+
+        /**
+         * Configure the RuntimeShader ownership for a FREE slot.  Renderer
+         * submission is asynchronous, so sharing a mutable RuntimeShader
+         * between triple-buffer slots lets a later uniform update race a
+         * previous slot's in-flight RenderNode.  Keeping the artifact shared
+         * but the shader instance slot-local preserves compilation input and
+         * makes every submitted display list immutable until its fence ends.
+         */
+        private fun prepareSlotShaders(slot: Slot, spec: KeyguardOrbBufferRenderSpec) {
+            if (slot.shaderProgramKey != spec.artifact.programKey) {
+                slot.shader = KeyguardHeaderShader(spec.artifact)
+                slot.shaderProgramKey = spec.artifact.programKey
+            }
+            val oldArtifact = spec.previousArtifact
+            if (spec.previousScene == null) {
+                slot.previousShader = null
+                slot.previousShaderProgramKey = null
+            } else if (oldArtifact == null || oldArtifact.programKey == spec.artifact.programKey) {
+                // Both transition scenes have the same source, but this
+                // slot owns the instance and configures the two recordings
+                // serially before one RenderRequest is submitted.
+                slot.previousShader = slot.shader
+                slot.previousShaderProgramKey = spec.artifact.programKey
+            } else if (slot.previousShaderProgramKey != oldArtifact.programKey) {
+                slot.previousShader = KeyguardHeaderShader(oldArtifact)
+                slot.previousShaderProgramKey = oldArtifact.programKey
+            }
         }
 
         /** Steady state has no Main callback. This operation has no authority
