@@ -2112,6 +2112,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                     operation = hideOperation,
                     deferredFields = { mapOf(
                         "clockCallbacks" to summary.clockCallbacks,
+                        "isolatedFramesProduced" to summary.isolatedFramesProduced,
+                        "isolatedFramesPublished" to summary.isolatedFramesPublished,
+                        "isolatedFramesDropped" to summary.isolatedFramesDropped,
+                        "isolatedCompletionGapMaxMs" to summary.isolatedCompletionGapMaxMs,
                         "shaderFrames" to summary.orb.frames,
                         "shaderCalls" to summary.shaderCalls,
                         "phaseAdvances" to summary.phaseAdvances,
@@ -2389,6 +2393,16 @@ class FluviKeyguardCardService : AccessibilityService() {
             "animationStopCount" to (values?.animationStopCount ?: 0),
             "drawCount" to (values?.frameCallbackCount ?: 0),
             "frameCallbackCount" to (values?.frameCallbackCount ?: 0),
+            // The standalone API-34 ORB uses its renderer-thread
+            // Choreographer, so its actual completed/published buffer counts
+            // must not be represented as ViewRoot callbacks.
+            "isolatedOrbFramesProduced" to (values?.isolatedFramesProduced ?: 0),
+            "isolatedOrbFramesPublished" to (values?.isolatedFramesPublished ?: 0),
+            "isolatedOrbFramesDropped" to (values?.isolatedFramesDropped ?: 0),
+            "isolatedOrbFramesInFlight" to (values?.isolatedFramesInFlight ?: 0),
+            "isolatedOrbFramesReady" to (values?.isolatedFramesReady ?: 0),
+            "isolatedOrbFramesCompositorOwned" to (values?.isolatedFramesCompositorOwned ?: 0),
+            "isolatedOrbCompletionGapMaxMs" to (values?.isolatedCompletionGapMaxMs ?: 0L),
             "frameIntervalP50" to (values?.frameIntervalP50 ?: 0),
             "frameIntervalP95" to (values?.frameIntervalP95 ?: 0),
             "largeFrameGapCount" to (values?.largeFrameGapCount ?: 0),

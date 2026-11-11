@@ -486,6 +486,155 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         exerciseProductionWindow(KeyguardCardPresentationMode.ORB, evidence = false)
     }
 
+    /**
+     * Execution-isolation regression: this holds the real API-34 buffer
+     * producer only after it has published output.  Window withdrawal is the
+     * production Main-owned operation and must complete without waiting for
+     * the renderer thread. This is deliberately not a synthetic claim about
+     * a device GPU driver's latency.
+     */
+    @Test fun isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val enteredBlockedFrame = CountDownLatch(1)
+        val releaseBlockedFrame = CountDownLatch(1)
+        val blockNextRender = java.util.concurrent.atomic.AtomicBoolean(false)
+        val barrier = KeyguardOrbRenderBarrier {
+            // Detached preparation is allowed to render before attachment.
+            // Arm only after the test has observed a real current-layer
+            // output, so the held work is unquestionably a live producer
+            // frame rather than a prewarm completion.
+            if (blockNextRender.get()) {
+                enteredBlockedFrame.countDown()
+                // Bounded release keeps a broken implementation from hanging
+                // an emulator job while still exposing a wait-on-renderer bug.
+                releaseBlockedFrame.await(8, TimeUnit.SECONDS)
+            }
+        }
+        lateinit var window: KeyguardCardWindow
+        var createdWindow: KeyguardCardWindow? = null
+        lateinit var settings: KeyguardCardSettings
+        var publishedBeforeHide = 0
+        try {
+            instrumentation.runOnMainSync {
+                window = KeyguardCardWindow(
+                    serviceContext = activity,
+                    onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> },
+                    manager = TestPanelWindowManager(activity),
+                    isolatedOrbRenderBarrier = barrier,
+                )
+                createdWindow = window
+                settings = KeyguardCardSettings(
+                    requested = true,
+                    showFinancialDetails = true,
+                    presentationMode = KeyguardCardPresentationMode.ORB,
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    orbPosition = KeyguardCardOrbPosition(.5f, .5f),
+                )
+                window.prepareRetainedView(settings, profile())
+                assertEquals(
+                    KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings),
+                )
+            }
+            assertTrue("isolated ORB never published actual output", waitForIsolatedOutput(instrumentation, window))
+            instrumentation.runOnMainSync {
+                publishedBeforeHide = requireNotNull(window.materialDiagnostics()).isolatedFramesPublished
+            }
+            blockNextRender.set(true)
+            assertTrue("second renderer frame never reached the real barrier",
+                enteredBlockedFrame.await(8, TimeUnit.SECONDS))
+            // This is the same Main-owned withdrawal path used after a
+            // current negative eligibility decision. It must not join the
+            // worker's in-flight HardwareBufferRenderer request.
+            instrumentation.runOnMainSync {
+                assertTrue("withdrawal waited for renderer", window.hide())
+                assertFalse(window.isAttached)
+                // Reattach before releasing the old worker completion. The
+                // old lease is no longer allowed to publish into this root.
+                assertEquals(
+                    KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings),
+                )
+                assertTrue(window.isAttached)
+            }
+            releaseBlockedFrame.countDown()
+            assertTrue("new attachment did not obtain its own current output after stale release",
+                waitForIsolatedOutput(instrumentation, window, publishedBeforeHide))
+        } finally {
+            releaseBlockedFrame.countDown()
+            instrumentation.runOnMainSync {
+                createdWindow?.dispose()
+                activity.finish()
+            }
+        }
+    }
+
+    @Test fun isolatedOrbPublishesChangingCompositorPixels() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        lateinit var window: KeyguardCardWindow
+        var createdWindow: KeyguardCardWindow? = null
+        var first: Bitmap? = null
+        var later: Bitmap? = null
+        try {
+            instrumentation.runOnMainSync {
+                window = KeyguardCardWindow(
+                    serviceContext = activity,
+                    onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> },
+                    manager = TestPanelWindowManager(activity),
+                )
+                createdWindow = window
+                val settings = KeyguardCardSettings(
+                    requested = true,
+                    showFinancialDetails = true,
+                    presentationMode = KeyguardCardPresentationMode.ORB,
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    orbPosition = KeyguardCardOrbPosition(.5f, .5f),
+                )
+                window.prepareRetainedView(settings, profile())
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+            }
+            assertTrue("isolated ORB never completed a buffer", waitForIsolatedOutput(instrumentation, window))
+            first = copyWindow(instrumentation, activity)
+            val changed = (1..4).any {
+                Thread.sleep(180)
+                later?.recycle()
+                later = copyWindow(instrumentation, activity)
+                !requireNotNull(first).sameAs(requireNotNull(later))
+            }
+            assertTrue("isolated ORB produced no changing compositor pixels", changed)
+            instrumentation.runOnMainSync {
+                val d = requireNotNull(window.materialDiagnostics())
+                assertEquals("HardwareBufferRenderer/SurfaceControl", d.activeRenderer)
+                assertTrue(d.isolatedFramesPublished > 1)
+                assertEquals(0, d.frameCallbackCount)
+                assertTrue("only one buffer render may be in flight", d.isolatedFramesInFlight <= 1)
+                assertTrue("triple pool exceeded compositor ownership bound", d.isolatedFramesCompositorOwned <= 3)
+            }
+        } finally {
+            first?.recycle()
+            later?.recycle()
+            instrumentation.runOnMainSync {
+                createdWindow?.dispose()
+                activity.finish()
+            }
+        }
+    }
+
     private fun exerciseProductionWindow(mode: KeyguardCardPresentationMode, evidence: Boolean = true) {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -711,6 +860,26 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnDrawListener(listener)
             }
         }
+    }
+
+    private fun waitForIsolatedOutput(
+        instrumentation: Instrumentation,
+        window: KeyguardCardWindow,
+        minimumPublishedExclusive: Int = 0,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(12)
+        while (System.nanoTime() < deadline) {
+            var published = 0
+            var active: String? = null
+            instrumentation.runOnMainSync {
+                val diagnostics = window.materialDiagnostics()
+                published = diagnostics?.isolatedFramesPublished ?: 0
+                active = diagnostics?.activeRenderer
+            }
+            if (active == "HardwareBufferRenderer/SurfaceControl" && published > minimumPublishedExclusive) return true
+            Thread.sleep(24)
+        }
+        return false
     }
 
     /** Adapts only the privileged overlay token to the test Activity's panel

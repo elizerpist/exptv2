@@ -816,7 +816,9 @@ internal object KeyguardCardDiagnostics {
         "pendingRequestId", "pendingRequestIdAtApply", "visibilityEpochBefore", "visibilityEpochAfter",
     )
     private val RENDER_SUMMARY_KEYS = setOf(
-        "clockCallbacks", "shaderFrames", "shaderCalls", "phaseAdvances", "firstPhase", "lastPhase",
+        "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
+        "isolatedCompletionGapMaxMs",
+        "shaderFrames", "shaderCalls", "phaseAdvances", "firstPhase", "lastPhase",
         "drawGapCount", "drawGapTotalMs", "drawGapMaxMs", "animationStarts", "animationStops",
         "clockRunning", "liveState", "backgroundFrames", "firstShaderTraversalAt", "lastShaderTraversalAt", "drawInvalidOrder",
         "drawEvidenceMode", "drawEvidenceOmitted", "drawObserverNs", "drawObservedFrames",

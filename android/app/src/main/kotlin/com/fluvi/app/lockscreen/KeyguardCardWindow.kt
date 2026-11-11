@@ -20,6 +20,8 @@ import com.fluvi.app.lockscreen.material.KeyguardBootstrapFrameToken
 import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
 import com.fluvi.app.lockscreen.material.KeyguardMaterialDiagnostics
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
+import com.fluvi.app.lockscreen.material.KeyguardOrbRenderBarrier
+import com.fluvi.app.lockscreen.material.NoopKeyguardOrbRenderBarrier
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
 
 /** Main-thread owner of one, and only one, accessibility overlay root. Drag
@@ -50,6 +52,9 @@ internal class KeyguardCardWindow(
     private val manager: WindowManager = serviceContext.getSystemService(WindowManager::class.java),
     private val mainWorkEvidence: KeyguardMainWorkEvidence? = null,
     private val drawEvidenceEnabled: () -> Boolean = { KeyguardCardDiagnostics.wantsEvent("DRAW_GAP") },
+    /** Injectable only for the execution-isolation instrumentation boundary.
+     * Production never blocks the dedicated renderer intentionally. */
+    private val isolatedOrbRenderBarrier: KeyguardOrbRenderBarrier = NoopKeyguardOrbRenderBarrier,
 ) {
     enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
 
@@ -172,7 +177,9 @@ internal class KeyguardCardWindow(
             // Arm before addView. On overlay hosts where attach finishes after
             // addView returns, the observation retains this request through
             // the attach callback and installs pre-draw on the real observer.
-            val bootstrapToken = materialController?.currentBootstrapToken()
+            val bootstrapToken = materialController
+                ?.takeIf { it.requiresBootstrapForNextAttach() }
+                ?.currentBootstrapToken()
             if (bootstrapToken != null) {
                 ensureFrameCommitObservation(current, nextAttach, bootstrapToken).startBeforeNextDraw()
             }
@@ -194,7 +201,12 @@ internal class KeyguardCardWindow(
                     // only if material selection changed synchronously during
                     // addView; never wait for a later accessibility event.
                     observeBootstrapBeforeNextDraw()
-                    materialController?.onAttached(attachGeneration)
+                    // Main keeps WindowManager/layer ownership.  The
+                    // controller receives the actual retained root so the
+                    // API-34 standalone ORB producer can parent one
+                    // non-input child SurfaceControl below this overlay
+                    // instead of opening a second window.
+                    materialController?.onAttached(attachGeneration, current)
                     observeFirstRootDraw(current, attachGeneration)
                     reportWindowDiagnostic("POST_ADD_SETUP_COMPLETE", "success", attachGeneration)
                     if (settings.cardPosition == null) {
@@ -394,6 +406,7 @@ internal class KeyguardCardWindow(
             drawEvidenceEnabled = drawEvidenceEnabled,
             mainWorkEvidence = mainWorkEvidence,
             drawEvidenceOwner = KeyguardCardDiagnostics::drawEvidenceOwner,
+            isolatedOrbRenderBarrier = isolatedOrbRenderBarrier,
         ).also { controller ->
             controller.onPreparationStage = { stage, fields ->
                 reportWindowDiagnostic(stage, fields["programKey"]?.toString() ?: "material", null)
@@ -800,7 +813,10 @@ internal class KeyguardCardWindow(
         val current = root ?: return
         val capturedAttach = firstShaderDrawAttachGeneration ?: return
         if (!lifecycle.isAttached() || attachGeneration != capturedAttach) return
-        val bootstrapToken = materialController?.currentBootstrapToken() ?: return
+        val bootstrapToken = materialController
+            ?.takeIf { it.requiresBootstrapForNextAttach() }
+            ?.currentBootstrapToken()
+            ?: return
         ensureFrameCommitObservation(current, capturedAttach, bootstrapToken).startBeforeNextDraw()
     }
 

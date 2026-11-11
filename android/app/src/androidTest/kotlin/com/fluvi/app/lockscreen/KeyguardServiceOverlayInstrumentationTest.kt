@@ -145,8 +145,11 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
             val steady = snapshot("after-steady-live")
             assertEquals("LIVE must survive the quiet interval", "LIVE", steady.state)
-            assertTrue("Quiet interval must produce additional actual shader output",
-                steady.shader > cold.material.shader && steady.phase > cold.material.phase)
+            assertTrue("Quiet interval must produce additional current-renderer output",
+                steady.actualOutputCount() > cold.material.actualOutputCount() &&
+                    steady.actualProgressCount() > cold.material.actualProgressCount())
+            assertEquals("API-35 standalone ORB must use the isolated production renderer",
+                "HardwareBufferRenderer/SurfaceControl", steady.activeRenderer)
             val secondImage = copyOrb(requireOverlay(), "cold-orb-b.png")
             try {
                 val motion = if (firstImage != null && secondImage != null) {
@@ -157,7 +160,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                     }
                 } else null
                 record("PIXEL_SAMPLE", "motion=${motion ?: "UNOBSERVED"}" +
-                    " phasesBefore=${cold.material.phase} phasesAfter=${steady.phase}" +
+                    " progressBefore=${cold.material.actualProgressCount()} progressAfter=${steady.actualProgressCount()}" +
                     " note=display-crops-not-a-physical-phone-FPS-proof")
             } finally {
                 firstImage?.recycle()
@@ -196,7 +199,8 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("rapid terminal withdrawal", 5_000) { overlaysWithdrawn() }
             }
             val reentry = episode("reattach-after-rapid")
-            assertTrue("Warm reentry must advance actual live phases", reentry.material.phase > warm.material.phase)
+            assertTrue("Warm reentry must advance actual current-renderer output",
+                reentry.material.actualOutputCount() > warm.material.actualOutputCount())
             unlockAndAssertWithdrawn("final-unlock")
             record("RESULT", "OUTPUT_LIVENESS_PASS performanceAndNothingDevice=UNVERIFIED")
         } catch (failure: Throwable) {
@@ -257,9 +261,23 @@ class KeyguardServiceOverlayInstrumentationTest {
     }
 
     private data class Material(
-        val shader: Long, val phase: Long, val state: String, val hardware: Boolean,
-        val effect: String?, val generatedAgslHash: String?,
-    )
+        /** Legacy View-owned actual shader draw count. */
+        val shader: Long,
+        /** Legacy View-owned phase advance count. */
+        val phase: Long,
+        /** Exact child-layer buffer submissions for the API-34 isolated path. */
+        val isolatedPublished: Long,
+        val state: String,
+        val hardware: Boolean,
+        val activeRenderer: String?,
+        val effect: String?,
+        val generatedAgslHash: String?,
+    ) {
+        /** The isolated path must not borrow old View counters to pass its
+         * output assertion.  The legacy route retains its established proof. */
+        fun actualOutputCount(): Long = if (isolatedPublished > 0L) isolatedPublished else shader
+        fun actualProgressCount(): Long = if (isolatedPublished > 0L) isolatedPublished else phase
+    }
 
     private inner class OcclusionSuccessorProbe(private val wasVisible: Boolean) : KeyguardInspectionProbeForTest {
         private val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
@@ -409,7 +427,8 @@ class KeyguardServiceOverlayInstrumentationTest {
             val blockedBaseline = snapshot("reader-entered-before-draw")
             val after = awaitLive("blocked-reader-live", blockedBaseline, 2, episode.window.id)
             assertEquals("Actual shader output/phase must advance while read remains blocked", 1L, release.count)
-            assertTrue(after.shader > blockedBaseline.shader && after.phase > blockedBaseline.phase)
+            assertTrue(after.actualOutputCount() > blockedBaseline.actualOutputCount() &&
+                after.actualProgressCount() > blockedBaseline.actualProgressCount())
             if (unknownWithdrawal) {
                 unavailableInspection.set(true)
                 instrumentation.runOnMainSync {
@@ -420,7 +439,8 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("UNKNOWN withdraws before retry eligibility acquisition", 2_000) { overlaysWithdrawn() }
                 assertEquals("UNKNOWN withdrawal must not join recurring eligibility work", 1L, release.count)
                 instrumentation.runOnMainSync { service.onInterrupt() }
-                record("SYSTEM_GATE_REGRESSION", "unknownWithdrawalBeforeRelease=true shaderDelta=${after.shader-before.shader}")
+                record("SYSTEM_GATE_REGRESSION", "unknownWithdrawalBeforeRelease=true outputDelta=" +
+                    "${after.actualOutputCount() - before.actualOutputCount()}")
                 return
             }
             val discreet = FluviKeyguardCardSettings.read(context).copy(showFinancialDetails = false)
@@ -454,8 +474,10 @@ class KeyguardServiceOverlayInstrumentationTest {
                 assertEquals("Tightening privacy must not attach a detached root", false,
                     service.materialDiagnostics()["overlayAttached"])
             }
-            record("SYSTEM_GATE_REGRESSION", "workerRead=true shaderDelta=${after.shader-before.shader}" +
-                " phaseDelta=${after.phase-before.phase} hideBeforeRelease=true privacyBeforeRelease=true recurringMainReads=0")
+            record("SYSTEM_GATE_REGRESSION", "workerRead=true outputDelta=" +
+                "${after.actualOutputCount() - before.actualOutputCount()} progressDelta=" +
+                "${after.actualProgressCount() - before.actualProgressCount()} " +
+                "hideBeforeRelease=true privacyBeforeRelease=true recurringMainReads=0")
             var rejectedBefore = 0L
             instrumentation.runOnMainSync {
                 rejectedBefore = service.materialDiagnostics()["systemSamplerStaleRejected"] as Long
@@ -525,7 +547,8 @@ class KeyguardServiceOverlayInstrumentationTest {
                     })
             }
             record("OCCLUSION_RECOVERY", "oldWindow=${previous.window.id} newWindow=${window.id}" +
-                " freshShaderDelta=${live.shader-baseline.shader} freshPhaseDelta=${live.phase-baseline.phase}")
+                " freshOutputDelta=${live.actualOutputCount() - baseline.actualOutputCount()}" +
+                " freshProgressDelta=${live.actualProgressCount() - baseline.actualProgressCount()}")
             Episode(live, window)
         } finally {
             probe.close()
@@ -559,8 +582,13 @@ class KeyguardServiceOverlayInstrumentationTest {
         assertEquals("Actually drawn effect identity", "dualTide", material.effect)
         assertEquals("Actually retained Portal program must match the known phone program",
             EXPECTED_PORTAL_HASH, material.generatedAgslHash)
+        assertEquals("API-35 real accessibility overlay must select the isolated ORB backend",
+            "HardwareBufferRenderer/SurfaceControl", material.activeRenderer)
+        assertTrue("Actual accessibility-overlay attachment published no current buffer output",
+            material.isolatedPublished > 0L)
         record("EPISODE", "name=$name windowId=${window.id} type=TYPE_ACCESSIBILITY_OVERLAY bounds=${window.bounds}" +
-            " shader=${material.shader} phase=${material.phase} state=${material.state} hardware=${material.hardware}" +
+            " shader=${material.shader} phase=${material.phase} isolatedPublished=${material.isolatedPublished}" +
+            " state=${material.state} hardware=${material.hardware} renderer=${material.activeRenderer}" +
             " effect=${material.effect} generatedAgslHash=${material.generatedAgslHash}")
         Episode(material, window)
     }
@@ -609,8 +637,9 @@ class KeyguardServiceOverlayInstrumentationTest {
         await("$label actual live shader/phase output", 18_000, pollMs = 500) {
             assertEquals("LIVE output must belong to the current attachment", expectedWindowId, requireOverlay().id)
             latest = snapshot(label)
-            val advanced = latest.state == "LIVE" && latest.hardware && latest.shader > baseline.shader &&
-                latest.phase >= baseline.phase + minimumAdvances
+            val advanced = latest.state == "LIVE" && latest.hardware &&
+                latest.actualOutputCount() > baseline.actualOutputCount() &&
+                latest.actualProgressCount() >= baseline.actualProgressCount() + minimumAdvances
             if (advanced) assertEquals("Attachment must still own the sampled LIVE output", expectedWindowId, requireOverlay().id)
             advanced
         }
@@ -636,13 +665,21 @@ class KeyguardServiceOverlayInstrumentationTest {
             Trace.beginSection("KGProbe.snapshot")
             try {
                 val values = FluviKeyguardCardServiceRegistry.materialDiagnostics()
-                material = Material((values["shaderDrawCount"] as? Number)?.toLong() ?: 0L,
-                    (values["phaseAdvanceCount"] as? Number)?.toLong() ?: 0L,
-                    values["coldPresentationState"].toString(), values["hardwareAccelerated"] == true,
-                    values["effectId"] as? String, values["generatedAgslHash"] as? String)
+                material = Material(
+                    shader = (values["shaderDrawCount"] as? Number)?.toLong() ?: 0L,
+                    phase = (values["phaseAdvanceCount"] as? Number)?.toLong() ?: 0L,
+                    isolatedPublished = (values["isolatedOrbFramesPublished"] as? Number)?.toLong() ?: 0L,
+                    state = values["coldPresentationState"].toString(),
+                    hardware = values["hardwareAccelerated"] == true,
+                    activeRenderer = values["activeRenderer"] as? String,
+                    effect = values["effectId"] as? String,
+                    generatedAgslHash = values["generatedAgslHash"] as? String,
+                )
             } finally { Trace.endSection() }
         }
-        record("BOUNDARY", "name=$label shader=${material.shader} phase=${material.phase} state=${material.state}")
+        record("BOUNDARY", "name=$label shader=${material.shader} phase=${material.phase}" +
+            " isolatedPublished=${material.isolatedPublished} renderer=${material.activeRenderer}" +
+            " state=${material.state}")
         return material
     }
 
