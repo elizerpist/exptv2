@@ -8548,4 +8548,57 @@ The implemented prewarm candidate does not establish a completed hide-latency re
 - bb1e529 is documentation. Its commit message mentions18950ba5, whereas its current journal body and actual preceding commit identify550c085d; use the verified actual commit chain for provenance.
 - No new phone capture or physical acceptance accompanies this role clarification. Earlier W-SHOW/W-HIDE/W-LOCK-ANIM acceptance limits remain.
 - This reviewer update changes only the journal, preserves the latest concurrent contents and uses[skip ci]. Workflow definition remains unchanged. No application implementation, workflow dispatch, cancellation or direct message to the coding agent is performed.
-- PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+## 2026-11-12 — eliminate duplicate disposable GPU warmup from detached isolated ORB preparation
+
+Application commit: `3b4dbba870cda66cbba830b1bcd1ca4183636d91` (parent
+`42d1a02a1e07cdce031e8448ab4ee845def7d7c2`, a documentation-only commit;
+the preceding application commit is `550c085d22e4152d36e9f99408c8b679ea43da7d`).
+
+Why:
+
+The actual persistent isolated ORB backend was prepared before show, but the
+controller still unconditionally invoked the separate disposable
+HardwareRenderer/ImageReader GPU warmup for that same ORB program.
+
+Evidence:
+
+`KeyguardCardMaterialController.prepare` originally called
+`prepareSelectedPrograms` before selecting the detached isolated backend;
+each successful ORB artifact callback unconditionally called
+`prepareGpuProgram`. The added retained-window regression requires that after
+`MATERIAL_ISOLATED_BACKEND_PREPARED`, `gpuPreparationRequests == 0`; on the
+pre-change call path it would be incremented before persistent readiness.
+
+Changed:
+
+The detached persistent backend is selected before artifact delivery. Its ORB
+callback skips only the legacy warmup and reports the bounded skipped stage;
+CARD and legacy View routes retain their preparer. A genuine isolated-producer
+failure clears that selection and starts the established bounded View warmup
+before its fallback draw. No visibility, lease, slot cap, shader mathematics,
+privacy, or input contract changed.
+
+Validation:
+
+`git diff --check` PASS; `bash scripts/verify-fluvi-boundaries.sh` PASS.
+The new API35 retained-window regression and complete runtime gate are
+PENDING. Local Android execution is unavailable in Termux ARM/proot because
+of the established AAPT2 limitation.
+
+CI state:
+
+The preceding exact-source native job `131291974231` in run `43248694676`
+has remained in its API35 smoke step since 2026-11-12T15:37:47Z with no
+completed-step log. The independent dashboard job is similarly running in
+its emulator step. This is neither a passing validation nor evidence that
+the current application commit is at fault; no duplicate retry was launched.
+
+Known limitations:
+
+The baseline RED follows the proven pre-change call path but could not run on
+the local Android-incompatible host. This removes avoidable preparation work;
+it does not quantify Nothing-device latency, establish physical display
+timing, or attribute the 89 ms Main-handoff interval.
+
+Physical validation: PENDING — USER ONLY
