@@ -8692,3 +8692,84 @@ The user explicitly requested replacement prompt rules because the project instr
 - The current rules' role clarification is necessary but not sufficient: precise contracts must be checked before publication, and short diagnostic validation must actually be available. A longer checklist alone will not repair this loop.
 - This audit does not tell the coding agent to invent a new diagnosis or start a broad refactor. No new coding prompt, workflow edit/dispatch/cancellation or application/test modification is performed here.
 - PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+
+## 2026-11-12 — Native validation result for isolated ORB warmup candidate: service fixture stops at terminal keyguard-state recheck
+
+Application source under test: `3b4dbba870cda66cbba830b1bcd1ca4183636d91`
+(`fix(keyguard): avoid duplicate legacy GPU warmup for isolated ORB`). The
+branch documentation head at execution was `3eade5f203b169dba639e33a84f5886782538b38`;
+later reviewer-only documentation commits are not application source.
+
+Why:
+
+Record the first unexpected required-native-gate failure after the concrete
+actual-isolated-backend preparation repair, without inventing a subsequent
+fixture or production repair.
+
+Evidence:
+
+- GitHub Actions run `43252599652`, native job `131310082795`, attempted the
+  exact application source. `test-core` and `test-flutter` passed.
+- The selected lower API35 instrumentation suite passed all 47 tests:
+  `tests="47" failures="0" errors="0"`. This includes
+  `retainedPreparationWarmsActualIsolatedBackendBeforeFirstShow` (3.411 s),
+  the calibrated Canvas/compositor tests, and all three
+  `KeyguardProducerSampleRequestBookInstrumentationTest` methods.
+- The independent real-service fixture then failed at
+  `KeyguardServiceOverlayInstrumentationTest.kt:313` with
+  `AssertionError: Independent reentry must start unlocked`; it did not reach
+  `episode("reattach-after-rapid")`, so it is not evidence of a current ORB
+  producer, compositor, or phone-latency failure.
+- The exact code first awaits an observed `!keyguard.isKeyguardLocked` plus
+  locally-withdrawn root at lines 309--312, then performs a new independent
+  `keyguard.isKeyguardLocked` read at line 313. The source-level condition
+  makes the latter read a different, raceable observation.
+- Retained fixture capture
+  `370dfab4-8d0b-466f-bd89-e67c7d8c2f30` records `warm-unlock` as
+  `keyguardLocked=false` at uptime 264954, a rapid wake/unlock from 264955 to
+  265102, and `fixture-platform-settle` from 265103 to 265151 before the
+  assertion. It contains `FIXTURE_TERMINAL_DISMISS` but no
+  `FIXTURE_TERMINAL_WITHDRAWAL`, followed by the stated failure. Its
+  `fixture.txt` SHA-256 is
+  `d0626245590316bed6dd10f8064a4b3786e70fd81ccdfc91d7ad7058f8d184cd`.
+- Raw service evidence was retained and archive-integrity checked:
+  `probe.tar` SHA-256
+  `10ed9160b5efb90b1b49b7ef95b09bb841be54b7eb423e26fb3b2ee8b70ed18c`,
+  Perfetto trace SHA-256
+  `a7f7a4245c9d3bb504b4d4bcac00dc764ceffe53a8730c3ed9211518fdb4283d`,
+  and lower-material artifact tar SHA-256
+  `a5f9f3662e6b303e3700fe0dd04a0bc5a653ffdcd1a62c7364512fb44f9a4d41`.
+
+Validation:
+
+`git diff --check` and `bash scripts/verify-fluvi-boundaries.sh` passed before
+the application push. The required native job failed as above, so
+`build-human-diagnostic-apk` was skipped and no candidate APK exists.
+
+Execution correction:
+
+The first invocation of run `43252599652` was cancelled after a timezone
+misread: it had run for about five minutes, not more than an hour. One and
+only one rerun was requested for the unchanged `3b4dbba8` source. This entry
+uses that rerun's completed job evidence. No rerun-until-green acceptance was
+performed.
+
+Changed:
+
+No application, test, workflow, or renderer code was changed after this
+failure. This is an evidence-only journal entry.
+
+Known limitations / reviewer decision required:
+
+The failure exposes a fixture state-observation contract, not a licensed
+renderer repair. The reviewer must specify whether the independent-reentry
+precondition is (a) the accepted observed terminal sample, (b) a documented
+persistence interval, or (c) another public SystemUI/keyguard boundary, and
+must prescribe its exact source/test change and negative control. Until then,
+do not weaken the assertion, add a delay, change service visibility policy, or
+run another full delivery workflow merely to sample the race again. W-SHOW's
+actual-backend preparation regression is automatically verified only by the
+passing lower API35 test; W-HIDE's phone Main-handoff cause remains unproven.
+
+Physical validation: PENDING — USER ONLY
