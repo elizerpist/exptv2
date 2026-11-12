@@ -285,6 +285,19 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("rapid unlock", 3_000) { !keyguard.isKeyguardLocked }
                 await("rapid terminal withdrawal", 5_000) { overlaysWithdrawn() }
             }
+            // wm dismiss-keyguard returns before SystemUI finishes its
+            // asynchronous exit. The real rapid exclusion above deliberately
+            // remains unsynchronised; before the next independent wake, wait
+            // for the public accessibility-event idle boundary and prove the
+            // terminal state is still unlocked and locally withdrawn. This
+            // is fixture ordering, not a shipped delay or presentation claim.
+            marked("fixture-platform-settle") {
+                val remaining = deadline - SystemClock.uptimeMillis()
+                assertTrue("Fixture budget exhausted before platform settling", remaining >= 500L)
+                automation.waitForIdle(500L, minOf(5_000L, remaining))
+                assertFalse("Independent reentry must start unlocked", keyguard.isKeyguardLocked)
+                assertTrue("Settled terminal state must not retain an overlay", overlaysWithdrawn())
+            }
             val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual current-renderer output",
                 reentry.material.actualOutputCount() > warm.material.actualOutputCount())
