@@ -326,9 +326,9 @@ internal class KeyguardOrbBufferRenderer(
                 (attachment?.root !== root || attachment?.attachment != attachGeneration)
             ) {
                 retire("attachment-replaced")
-                // retire clears the worker's desired lease so a late old
-                // result cannot publish. Restore only this current immutable
-                // spec before installing the replacement attachment.
+                // Re-post the current immutable spec after retiring the old
+                // attachment. The worker's lease-scoped retirement rejects
+                // old output without clearing a newer desired spec.
                 desired = spec
                 worker.configure(spec)
             }
@@ -340,6 +340,11 @@ internal class KeyguardOrbBufferRenderer(
         }
 
         fun retire(reason: String) {
+            // Capture the exact lease while Main still owns the old
+            // attachment/layer. hideLayer() revokes that lease immediately,
+            // and a replacement may install its own publication target before
+            // this worker command is eventually drained.
+            val retiredLease = layerLease ?: desired?.lease
             val oldAttachment = attachment
             removeAttachmentListeners(oldAttachment)
             attachment = null
@@ -347,7 +352,7 @@ internal class KeyguardOrbBufferRenderer(
             firstPublishedLease = null
             deferredReady?.let(worker::dropReady)
             deferredReady = null
-            worker.retire(reason)
+            worker.retire(retiredLease, reason)
         }
 
         fun dispose() {
@@ -768,17 +773,29 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
-        fun retire(reason: String) {
-            // Capture and revoke the exact Main-authorized target now. The
-            // queued worker runnable only retires worker bookkeeping; it must
-            // not inspect or clear a target installed by a newer attachment.
-            publicationTarget.revokeCurrent()?.active = false
+        fun retire(retiredLease: KeyguardOrbBufferLease?, reason: String) {
+            // Capture/revoke only the Main-owned lease that requested
+            // retirement. A replacement attachment installs its publication
+            // target synchronously on Main, while this command waits behind a
+            // blocked worker render. Revoking "current" here would therefore
+            // revoke B while draining A's queued retirement.
+            publicationTarget.current()?.takeIf { it.lease == retiredLease }?.let { target ->
+                target.active = false
+                publicationTarget.revokeExact(target)
+            }
             handler.post {
-                running = false
-                attachedLease = null
-                desired = null
-                if (callbackPosted) choreographer?.removeFrameCallback(this)
-                callbackPosted = false
+                if (attachedLease == retiredLease) attachedLease = null
+                if (desired?.lease == retiredLease) desired = null
+                if (firstLeaseSubmitted == retiredLease) firstLeaseSubmitted = null
+                if (firstLeaseAwaitingMain == retiredLease) firstLeaseAwaitingMain = null
+                // Stop the render loop only if this retirement actually left
+                // no desired work. A queued A-retirement must leave B's
+                // configured/attached loop intact.
+                if (desired == null) {
+                    running = false
+                    if (callbackPosted) choreographer?.removeFrameCallback(this)
+                    callbackPosted = false
+                }
                 // A RenderRequest or the compositor may still own some
                 // targets; retain those until their callback/fence returns.
                 // Keep already-free targets alive, too: they are the fixed
@@ -789,12 +806,15 @@ internal class KeyguardOrbBufferRenderer(
                 // become current.  Closing it here strands the replacement
                 // behind a stale release even though the three-slot bound has
                 // usable capacity.
-                firstLeaseAwaitingMain = null
-                slots.filter { it.state != SlotState.FREE }.forEach { slot ->
+                slots.filter {
+                    it.lease == retiredLease && it.state != SlotState.FREE
+                }.forEach { slot ->
                     slot.retired = true
-                    slot.lease?.let(retiringLeases::add)
                 }
-                retiringLeases.toList().forEach(::maybeNotifyLeaseDrained)
+                retiredLease?.let { lease ->
+                    retiringLeases += lease
+                    maybeNotifyLeaseDrained(lease)
+                }
                 publishSlotSnapshot()
             }
         }
