@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "source_head": "865d84dcab2d0aa59f159e5e3ed5d321385b5d5c",
-  "source_parent": "b1aea959e2b6011a86dd12cc4ff2c85d370e4558",
+  "source_head": "04e229c64e560bef9d49972c3413d1115fc36c41",
+  "source_parent": "865d84dcab2d0aa59f159e5e3ed5d321385b5d5c",
   "source_ref": "fix/orb-v4-latency-lockscreen",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "0d856f42558b9aba5fa07c70e07961560430547195b61b5bc9089bf2d91c456e",
+  "index_sha256": "e740710b7c92a0aebf98d6ceec7dedac92771585313886c00fbfb9a7dc86ee5e",
   "document_count": 807,
   "occurrence_count": 568695,
   "defined_symbol_count": 76136,
@@ -147,7 +147,7 @@
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 608
+      "byte_count": 733
     }
   ]
 }

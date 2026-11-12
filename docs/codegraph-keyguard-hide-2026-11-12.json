@@ -1,17 +1,17 @@
 {
   "task": "FLUVI W-HIDE withdrawal-boundary provenance",
-  "repository_source_head": "865d84dcab2d0aa59f159e5e3ed5d321385b5d5c",
-  "repository_source_parent": "b1aea959e2b6011a86dd12cc4ff2c85d370e4558",
+  "repository_source_head": "04e229c64e560bef9d49972c3413d1115fc36c41",
+  "repository_source_parent": "865d84dcab2d0aa59f159e5e3ed5d321385b5d5c",
   "branch": "fix/orb-v4-latency-lockscreen",
   "source_delta": [
-    "isolated-layer A/C/B/A compositor test primes the retained bootstrap and samples its reference A only after Main suppresses that bootstrap",
-    "API35 service fixture issues its existing public terminal dismissal after the non-terminal accessibility-idle boundary, within the pre-existing five-second budget",
-    "engineering journal records both test-fixture ordering corrections and their retained CI evidence"
+    "isolated-layer A/C/B/A compositor tests wait for an attached 168x168 non-origin orb crop before sampling Canvas and HardwareBuffer compositor controls",
+    "API35 service fixture waits for UiAutomation idle after its existing public terminal dismissal before beginning the next synthetic cycle, within the pre-existing five-second terminal budget",
+    "engineering journal records the fixture corrections and retained current-source CI evidence"
   ],
   "source_delta_note": "This source delta contains Android instrumentation and documentation only. It does not change the production W-HIDE signal, visibility, renderer, shader, resource, or dashboard path.",
   "index": {
     "generator": "scip_dart 1.6.2 via tools/codegraph",
-    "sha256": "0d856f42558b9aba5fa07c70e07961560430547195b61b5bc9089bf2d91c456e",
+    "sha256": "e740710b7c92a0aebf98d6ceec7dedac92771585313886c00fbfb9a7dc86ee5e",
     "language_documents": { "Dart": 807 },
     "kotlin_coverage": false,
     "clean_source_note": "The index source worktree excludes the ignored historical build/ci-dashboard-profile-b6267f8 output, so its Dart document count is one lower than the prior e790 graph."
@@ -35,11 +35,11 @@
       "KeyguardCardDiagnosticsInstrumentationTest actual-withdrawal diagnostic reduction",
       "KeyguardServiceOverlayInstrumentationTest connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles"
     ],
-    "current_test_delta": "The lower compositor control waits for the retained bootstrap handoff before sampling reference A; the service fixture reissues its existing public terminal dismissal after accessibility-idle before awaiting the terminal state. Neither introduces production behavior."
+    "current_test_delta": "The lower compositor controls wait for the actual attached orb screen bounds before cropping; the service fixture waits for idle after its existing terminal dismissal before beginning a new synthetic cycle. Neither introduces production behavior."
   },
   "verification": {
-    "workflow": "https://github.com/elizerpist/exptv2/actions/runs/43188818984",
-    "status_at_generation": "in_progress",
+    "workflow": "https://github.com/elizerpist/exptv2/actions/runs/43197084553",
+    "status_at_generation": "test-core, test-flutter, test-keyguard-material-runtime and build-human-diagnostic-apk succeeded; independent run-dashboard-profile failed",
     "physical_validation": "PENDING_USER"
   },
   "limits": "The graph is Dart reference navigation only. It neither covers Kotlin nor proves SystemUI ordering, SurfaceControl presentation, physical withdrawal, device pacing, or physical acceptance."

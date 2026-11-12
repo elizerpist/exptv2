@@ -1,6 +1,6 @@
-Exact source: 865d84dcab2d0aa59f159e5e3ed5d321385b5d5c
+Exact source: 04e229c64e560bef9d49972c3413d1115fc36c41
 Generator: tools/codegraph / scip_dart 1.6.2
-Raw SCIP SHA-256: 0d856f42558b9aba5fa07c70e07961560430547195b61b5bc9089bf2d91c456e
+Raw SCIP SHA-256: e740710b7c92a0aebf98d6ceec7dedac92771585313886c00fbfb9a7dc86ee5e
 Coverage: 807 Dart documents only. Kotlin is not covered by this SCIP index.
 
 KeyguardTimingCaptureBridge
