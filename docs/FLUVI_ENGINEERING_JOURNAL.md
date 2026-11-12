@@ -12704,3 +12704,25 @@ The next candidate requires a new immutable tag and one diagnostic run; the
 failed tag remains preserved and will not be retried.
 
 Physical validation: PENDING — USER ONLY.
+
+## R-APK-DELIVERY-CONTINUATION-05 — diagnostic shell-wiring correction
+
+Diagnostic source `777ad19627e9e4a67bb0a61d3088d55baaae987d`, immutable tag
+`fluvi-lower-environment-777ad19627e9`, ran as
+[43317849772](https://github.com/elizerpist/exptv2/actions/runs/43317849772),
+native job `131530443890`.
+
+Both terminal and sleep controls completed `OK (7 tests)`. The first helper
+phase then stopped at `scripts/test-keyguard-native-diagnostic.sh:96` with
+`stage: unbound variable`, before lower47 or either service repetition. The
+APK-baseline paths used a `set -u` unsafe combined local declaration. No
+runtime admission, compositor or production failure was observed in this run.
+Artifact evidence was downloaded under `fluvi-diag-43317849772.0x9zDQ`.
+
+Application/test correction `1fae161e057476c7fc176a386ce19179e6dc1597`
+binds `stage` before deriving checksum paths. `git diff --check`, shell syntax
+and inert lower-environment controls pass. The failed tag remains immutable;
+the next diagnostic will use a new exact-source tag. No production behavior
+changed.
+
+Physical validation: PENDING — USER ONLY.
