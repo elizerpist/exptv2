@@ -199,16 +199,11 @@ jobs:
             -partition-size 4096
           pre-emulator-launch-script: >-
             cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
-          script: |
-            set -euo pipefail
-            test_result=0
-            if [[ "$FLUVI_KEYGUARD_EXECUTION_MODE" == "diagnostic" ]]; then
-              bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?
-            else
-              bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?
-              bash scripts/test-keyguard-runtime.sh || test_result=$?
-            fi
-            exit "$test_result"
+          # android-emulator-runner executes each physical input line through
+          # /usr/bin/sh. Keep this as one POSIX command so its conditional and
+          # aggregate status are owned by one shell invocation.
+          script: >-
+            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
 
       - name: Analyze bounded production overlay trace
         if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && hashFiles('android/keyguard-service-evidence/fluvi-keyguard-service.perfetto-trace') != '' }}

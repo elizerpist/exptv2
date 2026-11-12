@@ -11255,3 +11255,12 @@ FLUVI_RULE_ASSET_END FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md
 - The diagnostic job labels and artifact names include diagnostic mode, full source SHA, run ID and attempt; normal artifact names/paths remain available, with a separate helper-evidence artifact.
 - The unrelated dashboard `RangeError(year)` remains a separate visible failure family. No graph regeneration is claimed because no Kotlin-capable graph tool/index was available.
 - No production performance change, phone-lag conclusion, green native gate, or Human APK is claimed. `PHYSICAL VALIDATION — PENDING, USER ONLY`.
+
+
+## 2026-11-12 — Diagnostic wiring correction after run 43277493392
+
+- Candidate `e1994c64d02b87a208e83b9a67be477f87c429fa` was correctly dispatched from tag `fluvi-native-observation-e1994c64d02b`; the actual job graph proved diagnostic routing: core, Flutter, dashboard, optional lanes and Human APK were skipped, while `Keyguard material runtime (DIAGNOSTIC)` started on the exact tag source.
+- The job failed before `scripts/test-keyguard-native-diagnostic.sh` ran. `reactivecircus/android-emulator-runner` executes each physical `script:` line with `/usr/bin/sh`; the multi-line `if` was split at its first line and failed with `Syntax error: end of file unexpected (expecting "fi")`. The emulator/prelaunch assembly completed; no helper control, service repetition, fixture, renderer, or application assertion executed. The diagnostic artifact-upload step completed but its API artifact listing contains no retained data because the script never created its evidence directory.
+- This is a mechanical workflow-shell wiring defect within the reviewer-approved tooling unit, not a new runtime diagnosis. Replaced the multi-line action script with one POSIX-shell command using `[` rather than Bash-only `[[`, preserving the exact diagnostic/normal branches and aggregate exit behavior.
+- PASS after correction: `git diff --check`; `bash -n scripts/test-keyguard-native-diagnostic.sh`; `bash scripts/verify-fluvi-boundaries.sh`. NOT RUN: actionlint (not installed), API35 helper/repetition execution on the corrected source, normal delivery gates and Human APK.
+- The failed source/tag and run remain retained evidence. A changed workflow input requires a newly identified tag and rebuilt matching APKs; do not treat run `43277493392` as one of the two planned service repetitions. `PHYSICAL VALIDATION — PENDING, USER ONLY`.
