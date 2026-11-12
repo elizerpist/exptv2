@@ -961,8 +961,7 @@ class KeyguardServiceOverlayInstrumentationTest {
         // physical-presentation measurement. The rapid scenario intentionally
         // retains unsynchronized shell input and immediate exclusion assertions.
         marked("$name-synchronized-sleep") { screenOff(synchronizeInput = true) }
-        shell("input keyevent KEYCODE_WAKEUP")
-        await("$name keyguard eligible device gates", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
+        wakeForIndependentEpisode(name)
         probe?.awaitSuccessor()
         // Material counters and last LIVE/hardware state survive detach.
         // A prior episode's snapshot can therefore be satisfied by draws
@@ -1035,6 +1034,41 @@ class KeyguardServiceOverlayInstrumentationTest {
         }
         await("screen off", 3_000) { !power.isInteractive }
         await("screen-off withdrawal", 4_000) { overlaysWithdrawn() }
+    }
+
+    /**
+     * Establishes the public input/idle boundary for an independent episode.
+     *
+     * A synchronized SLEEP alone does not order the following shell WAKEUP
+     * against the tail of SystemUI's preceding dismissal.  Run 43220246563
+     * reached the KeyguardManager predicate, then received a late terminal
+     * accessibility state which correctly revoked the new episode before it
+     * attached.  This is fixture setup only: the rapid wake/unlock regression
+     * above deliberately retains its unsynchronised production-event path.
+     */
+    private fun wakeForIndependentEpisode(name: String) = marked("$name-synchronized-wake") {
+        assertTrue("Fixture budget exhausted before independent wake", SystemClock.uptimeMillis() < deadline)
+        val downAt = SystemClock.uptimeMillis()
+        for (action in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+            val event = KeyEvent(downAt, SystemClock.uptimeMillis(), action, KeyEvent.KEYCODE_WAKEUP,
+                0, 0, -1, 0, 0, InputDevice.SOURCE_KEYBOARD)
+            assertTrue("Synchronized wake input was rejected", automation.injectInputEvent(event, true))
+        }
+        await("$name keyguard eligible device gates", 5_000) {
+            power.isInteractive && keyguard.isKeyguardLocked
+        }
+        val settleDeadline = minOf(deadline, SystemClock.uptimeMillis() + 5_000L)
+        val remaining = settleDeadline - SystemClock.uptimeMillis()
+        assertTrue("Fixture budget exhausted before independent wake idle", remaining >= 500L)
+        // This is an event-idle boundary, not a sleep. It makes late SystemUI
+        // terminal events visible before the new real-service episode begins.
+        automation.waitForIdle(500L, remaining)
+        val postIdleRemaining = settleDeadline - SystemClock.uptimeMillis()
+        assertTrue("Fixture budget exhausted after independent wake idle", postIdleRemaining > 0L)
+        await("$name keyguard eligibility after public input idle", postIdleRemaining) {
+            power.isInteractive && keyguard.isKeyguardLocked
+        }
+        record("FIXTURE_INDEPENDENT_WAKE_IDLE", "name=$name afterPublicInputIdle=true")
     }
 
     private fun unlockAndAssertWithdrawn(label: String) = marked(label) {
