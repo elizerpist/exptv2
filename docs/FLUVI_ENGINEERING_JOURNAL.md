@@ -8516,3 +8516,36 @@ W-SHOW repair under validation. The 89 ms phone Main-handoff interval and
 physical presentation/removal timing remain unproven.
 
 Physical validation: PENDING — USER ONLY
+
+## 2026-11-12 — USER DIRECTIVE: reviewer owns diagnosis and solution; coding agent executes the specified work
+
+### Binding division of responsibility
+
+The user explicitly clarifies that the prompt-writing/reviewer assistant is responsible for understanding the full relevant context, diagnosing the failure, inspecting the code and choosing the concrete solution. The coding agent must not be assigned an open-ended diagnosis or asked to choose among speculative causes. The shared repository journal exists so the reviewer and coding agent can exchange exact evidence and implementation reports.
+
+The original project instruction already assigns "diagnózis felállítása, majd ... precíz prompt írása" to the reviewer. This clarification strengthens the operational boundary; it does not excuse the earlier handoff as an unclear user instruction.
+
+- REVIEWER owns source/commit/history/log audit, causal reasoning, candidate-cause elimination, explicit uncertainty, solution selection and the technical repair contract.
+- REVIEWER must specify the affected files/functions, current mechanism causing or plausibly causing the delay, distinguishing evidence, intended behavior change, ownership/ordering invariants and tests that could falsify the proposed repair.
+- CODING AGENT implements that specified repair, runs the prescribed measurements/tests/build steps, preserves raw artifacts, and reports exact changes and outcomes to this journal.
+- A measurement may be delegated as a precisely specified execution task. Interpretation of its causal significance and selection of a new repair remain the reviewer's responsibility.
+- If available evidence cannot identify the cause, REVIEWER states the precise missing evidence and designs the smallest discriminating capture/reproducer. Do not disguise an unresolved diagnosis as "investigate and fix" in the coding prompt.
+- If a result contradicts the repair hypothesis or exposes a different failure, the coding agent records exact source/test identity, failing boundary and artifacts for reviewer analysis. It must not start a new speculative redesign, change assertions merely to obtain green, or cycle through unexplained fixture tweaks. Independently authorized work may continue; the affected unproven repair waits for a reviewer decision.
+- No guarantee of a physical root cause may be invented from static code alone. Observed boundaries, source-proven defects, hypotheses and unknown runtime attribution remain distinct.
+- Every future coding prompt must explicitly require reading both current prompt-rule assets and this journal, including this responsibility clarification.
+- The reviewer must check the agent's reports against actual diffs and evidence. A successful implementation report, source-level readiness marker or passing correctness test cannot substitute for the reviewer diagnosing the original physical complaint.
+
+### Correction of the previous handoff
+
+The reviewer had inspected relevant native paths and identified a concrete mismatch between disposable GPU warmup and preparation of the actual isolated ORB backend. For W-HIDE, it had localized 83ms inspection plus89ms Main-handoff delay but had NOT identified the actual Main blocker or completed a concrete W-HIDE repair design. The preceding prompt incorrectly passed part of that remaining diagnosis to the coding agent. This was incomplete execution of the assigned reviewer role, not a requirement for the user to rewrite the project instruction.
+
+The implemented prewarm candidate does not establish a completed hide-latency repair. The reviewer remains responsible for closing the diagnostic gap or specifying the exact evidence needed to close it.
+
+### Current repository checkpoint, not new physical evidence
+
+- Read branch fix/orb-v4-latency-lockscreen HEAD bb1e529655ed8cdd6ab0739bd3dbb570afd6ad34 and the actual diff since reviewer71add61a0f62e5c9d173068f4735bef12ba1494c.
+- New test commit550c085d22e4152d36e9f99408c8b679ea43da7d adds a bounded public KeyguardManager.isKeyguardLocked wait after synchronized screen-off, before independent wake. The deliberately unsynchronized scenario is unchanged. No production application source changed in this delta.
+- bb1e529 is documentation. Its commit message mentions18950ba5, whereas its current journal body and actual preceding commit identify550c085d; use the verified actual commit chain for provenance.
+- No new phone capture or physical acceptance accompanies this role clarification. Earlier W-SHOW/W-HIDE/W-LOCK-ANIM acceptance limits remain.
+- This reviewer update changes only the journal, preserves the latest concurrent contents and uses[skip ci]. Workflow definition remains unchanged. No application implementation, workflow dispatch, cancellation or direct message to the coding agent is performed.
+- PHYSICAL VALIDATION — PENDING, USER ONLY.
