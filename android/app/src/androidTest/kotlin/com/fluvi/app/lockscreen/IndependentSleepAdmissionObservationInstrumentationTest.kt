@@ -37,9 +37,17 @@ class IndependentSleepAdmissionObservationInstrumentationTest {
         assertTrue(sample(mutableListOf(false, Display.STATE_OFF, true, true, Display.STATE_OFF, false), mutableListOf(2, 3)).accepted)
     }
     @Test fun failedAcquisitionCannotBecomeAdmission() {
-        assertThrows(IllegalStateException::class.java) {
-            IndependentSleepAdmissionCollector({ 0 }, { throw IllegalStateException("read") }, { Display.STATE_UNKNOWN }, { true }).collect(1, 1, 6_000)
+        val expected = IllegalStateException("read")
+        val collector = IndependentSleepAdmissionCollector(
+            { 0L }, { throw expected }, { Display.STATE_UNKNOWN }, { true },
+        )
+        var failure: Throwable? = null
+        try {
+            collector.collect(1L, 1L, 6_000L)
+        } catch (error: Throwable) {
+            failure = error
         }
+        assertSame("read failure must propagate", expected, failure)
     }
     @Test fun acceptedRecordIsImmutableAndEpisodeSpecific() {
         val accepted = sample(mutableListOf(false, Display.STATE_OFF, true, true, Display.STATE_OFF, false), mutableListOf(0, 1))
