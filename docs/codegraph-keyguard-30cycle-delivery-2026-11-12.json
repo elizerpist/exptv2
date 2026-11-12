@@ -1,0 +1,51 @@
+{
+  "task": "FLUVI keyguard 30-cycle delivery provenance",
+  "repository_source_head": "e7905b637d09a40818c7b1883259a35df5e24e1e",
+  "repository_source_parent": "c1bd42cb5de242396cb40ac667e2808fa4ae6b0f",
+  "production_renderer_source_head": "52bcda05cc1539d8f22d3b8584769fabc36c8a47",
+  "branch": "fix/orb-v4-latency-lockscreen",
+  "source_delta_from_production_renderer": [
+    "Android service instrumentation lifecycle coverage",
+    "service trace duration and host watchdog configuration",
+    "engineering journal"
+  ],
+  "source_delta_note": "There is no Dart or production renderer source change between 52bcda05 and e7905b6. The Human APK was built from e7905b6 so its test/trace provenance remains exact.",
+  "index": {
+    "generator": "scip_dart 1.6.2 via tools/codegraph",
+    "sha256": "3c943a80b1c60d807be7830007539ae954d8aa09d6095561b717c544e880e8a4",
+    "language_documents": { "Dart": 808 },
+    "kotlin_coverage": false
+  },
+  "dart_queries": {
+    "KeyguardTimingCaptureBridge": { "references": 8, "production": 3, "tests": 5 },
+    "KeyguardTimingCaptureSnapshot": { "references": 12, "production": 12, "tests": 0 },
+    "DebugConsoleDialog": { "references": 5, "production": 3, "tests": 2 }
+  },
+  "native_inventory": {
+    "coverage": "Explicit current-source inventory; this is not SCIP coverage.",
+    "chain": [
+      "FluviKeyguardCardService inspection and visibility authority",
+      "KeyguardCardWindow retained TYPE_ACCESSIBILITY_OVERLAY root",
+      "KeyguardCardMaterialController attachment and lease generation",
+      "KeyguardOrbBufferRenderer Api34 Main layer binding",
+      "Worker HandlerThread HardwareBufferRenderer, slots, fences and producer completion",
+      "Main SurfaceControl publication and service compositor observation"
+    ],
+    "current_tests": [
+      "KeyguardHeaderMaterialViewInstrumentationTest",
+      "KeyguardProducerSampleRequestBookInstrumentationTest",
+      "KeyguardCardDiagnosticsInstrumentationTest",
+      "KeyguardServiceOverlayInstrumentationTest.connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles"
+    ],
+    "final_test_delta": "The service test adds thirty current-attachment show/live/withdraw cycles with the existing three-slot cap; it does not change production renderer ownership, shader or clock behavior."
+  },
+  "verification": {
+    "workflow": "https://github.com/elizerpist/exptv2/actions/runs/43150968747",
+    "required_gates": [ "test-core PASS", "test-flutter PASS", "test-keyguard-material-runtime PASS" ],
+    "native_capture": "32d17f80-e0bf-4b7d-9c1a-c318510fd6d8",
+    "rapid_lifecycle": { "cycles": 30, "first_output": 123, "final_output": 385, "global_slot_cap": 3 },
+    "human_apk_source": "e7905b637d09a40818c7b1883259a35df5e24e1e",
+    "physical_validation": "PENDING_USER"
+  },
+  "limits": "The graph is static Dart reference navigation only. It does not cover Kotlin and does not prove runtime ordering, compositor presentation, device pacing or physical acceptance. The retained API35 artifact covers the stated automated native observations only."
+}
