@@ -8909,3 +8909,2297 @@ Only this journal is appended. The uploaded rule assets, application, tests and 
 ### Limits
 
 The rule assets are delivered; the proposed short native diagnostic pipeline is still not implemented. No application, test or workflow source change, new APK, native pass or physical acceptance is claimed. Physical validation: PENDING — USER ONLY.
+
+
+## 2026-11-12 — R-NATIVE-TERMINAL-OBSERVATION-01: reviewer diagnosis and bounded continuation after native failure
+
+### Request and source identity
+
+- User requests resuming development under the revised rules after the latest native gate failed and the coding agent returned the decision. Reviewer owns the diagnosis and next contract; no open-ended troubleshooting is delegated.
+- Rechecked branch fix/orb-v4-latency-lockscreen at ef53c2f0b32cbb5e9d348c48179882bb872c803c. There are no new application commits after 3b4dbba870cda66cbba830b1bcd1ca4183636d91. That candidate's parent is documentation commit 42d1a02a1e07cdce031e8448ab4ee845def7d7c2; prior fixture commit is 550c085d22e4152d36e9f99408c8b679ea43da7d.
+- Re-read complete current rule assets base2.1/widget1.2 and MILESTONE_COMMITS.md; inspected the current full real-service instrumentation fixture, workflow and runtime/trace scripts, relevant production system-state/hide boundaries, complete current candidate/fixture diffs, recent relevant journal records and preserved runtime artifacts. The full journal file was retrieved and its entry index inspected; this entry does not claim a fresh line-by-line review of every historical dashboard entry. No matching Kotlin-capable codegraph was present in the current recursive tree; dependencies below are source-verified.
+- The last phone source identified by the relevant journal evidence is 04e229c64e560bef9d49972c3413d1115fc36c41. Earlier e7905b6 feedback is historical, not a test of the current candidate. No new physical capture or acceptance is supplied here.
+
+### Independently verified outcome and frozen evidence
+
+- Run43252599652 attempt2, exact source3b4dbba, native job131310082795: Android assembly succeeds; lower API35 XML has tests47/failures0/errors0/skipped0. The detached-backend preparation regression and calibrated lower Canvas/compositor controls pass. Actual service fixture fails at KeyguardServiceOverlayInstrumentationTest.kt:313: Independent reentry must start unlocked.
+- Core and Flutter pass. Reattach-after-rapid and the subsequent30-cycle section were not reached by this service execution. Human job131316878854 is skipped because the native prerequisite failed. There is no new candidate Human APK. This is an executed fixture failure, not the historical zero-job scheduler outage.
+- Artifact13960449237, keyguard-runtime-results-3b4dbba870cda66cbba830b1bcd1ca4183636d91, downloaded archive SHA256 d088125cd021e92e40f8adc1b28d82fbd8b334ffee217194213a7e37eac6e16b.
+- Capture370dfab4-8d0b-466f-bd89-e67c7d8c2f30; fixture.txt SHA256 d0626245590316bed6dd10f8064a4b3786e70fd81ccdfc91d7ad7058f8d184cd. Raw inputs: android/keyguard-service-evidence/logcat.txt, instrumentation.txt, probe.tar, fluvi-keyguard-service.perfetto-trace and lower-suite XML. All are retained in the original run artifact.
+- Fixture chronology, uptime ms: warm-unlock264954; rapid-wake-unlock264955–265102; fixture-platform-settle265103–265151. The accepted-predicate value itself was not exported, but control flow proves the wait returned before the independent false assertion failed.
+- Logcat monotonic265.149s: KeyguardViewMediator forces showing while mHiding=true and keyguardGoingAway=false, explaining the observed relock. At265.202s, transition#53 arrives while#52 is still animating; WindowManagerShell cancels the previous exit. This is actual SystemUI transition evidence, not an inference from the assertion name alone.
+- Before failure, the real service reached cold/warm actual output, producer/compositor A/C/B/A controls, visible-occlusion recovery and blocked-reader checks. Producer and crop A/C were equal; A/B materially differed; return-A matched. These observations do not prove physical phone smoothness or the unreached final lifecycle checks.
+
+### All-failure ledger
+
+| Boundary | Actual result | Meaning / next action |
+| --- | --- | --- |
+| Android assembly | PASS | No compiler repair is indicated by this failure. |
+| Core / Flutter | PASS | Preserve normal required execution on final source. |
+| Lower API35 suite | PASS47/47 | Includes actual prewarm and calibrated controls; not a service/phone acceptance substitute. |
+| Terminal service-fixture recheck | FAIL | Reviewer selects immutable accepted-observation contract below. |
+| Independent reentry /30 cycles | NOT REACHED | Must remain strict and run after fixture correction. |
+| Dashboard profile | FAIL | RangeError(year):2026 outside2027..2051, separate from native blockage. |
+| Human APK | SKIPPED | Required native gate failed. |
+| Physical acceptance | PENDING — USER ONLY | No new physical test. |
+
+The dashboard signature was independently checked against 04e229c run43197084553/job131113712869: the same RangeError and PreparedBudgetLimitSnapshot._yearOffset / DashboardBudgetPresentationController._effectiveLimitForPreparedCell frames occur there. Native and Human passed in that older run. The actual04e229c..3b4dbba comparison contains no Dart changes. The signature predates this candidate; its root cause is not diagnosed here. Do not hide it or describe the entire workflow as green.
+
+### PROVEN / UNPROVEN / MISSING
+
+PROVEN: the terminal wait accepts a keyguard/local-withdrawal observation, then line313 queries mutable platform state again. The saved TerminalReentryWithdrawal contains no keyguard value from the accepted observation. Real SystemUI state changes at this boundary. This proves the current observation-contract defect, not a new renderer defect.
+
+UNPROVEN: that a sampled unlocked value establishes animation completion or persistent unlock; that all earlier reentry/live-output/crop failures have this cause; that this correction alone will make the complete fixture reliable; that Nothing W-HIDE lag has this mechanism.
+
+MISSING: revised-contract runtime results, independent reentry/30-cycle success on the final candidate, current native graph, final required gates and Human APK, attribution of the phone Main-handoff delay, user physical acceptance.
+
+### Reviewer decision and preventive boundaries
+
+Choose the previously requested option(a): terminal setup consumes an accepted observed sample. Do not claim option(b) a persistence duration or option(c) a verified SystemUI-completion barrier. AOSP/SDK review supports keeping these concepts distinct; synchronized input and an unlocked getter do not establish a universal future-state guarantee. No new platform-reset policy is authorized.
+
+The complete repair unit is: test-only immutable observation with IDs/timestamps; keyguard reads before and after one Main-owned service/root observation; acceptance only when both are unlocked and actual local ownership is absent within the original deadline; assertion/export from that returned sample; deterministic transition/ownership/deadline/read-failure controls. Detected in-sample relock rejects that attempt. Do not merely remove the failing assertion. A later relock is a new state, not a mutation of the accepted historical observation.
+
+Keep the new independent cycle's existing synchronized sleep, locked-state admission, wake eligibility, actual window identity and fresh output baseline. Keep strict remote+local withdrawal checks, all30cycles, privacy/stale-result controls and the global3-slot cap. Do not reuse the saved terminal observation as show authority. This is the safeguard against turning the observation correction into a false service pass.
+
+The existing independent-wake waitForIdle remains a separate known risk. No new idle wait, sleep, timeout increase, dismissal retry, screenshot relaxation, renderer or production-source change is authorized. If the unchanged successor fails, return the exact new boundary to the reviewer; do not try another full run to obtain a lucky outcome.
+
+Provide a manual native_diagnostic mode in the already registered fluvi-core.yml, explicitly isolated from Human delivery and normal prerequisites. Reuse the pinned compatible x86_64/KVM/API35 route, assemble once, execute the seven small observation controls and exactly two complete service repetitions using the same identified binaries. Preserve both outcomes and all artifacts; any failure fails the diagnostic run. This route is not yet implemented and must not be claimed available today.
+
+Normal mode must preserve all existing mandatory gates and Human dependencies, add the new observation controls, and retain dashboard profiling. Diagnostic mode cannot authorize a Human APK. Full CI follows only after the specified diagnostic entry table passes. Exact implementation, risk matrix, commands, return conditions and delivery requirements are in the21-section handoff below.
+
+### Reviewer actions and status
+
+Only this journal is appended in GitHub. Application, tests, workflows and tags are not modified by the reviewer; no workflow was dispatched, cancelled or rerun. This entry carries[skip ci]; verify exact append, journal-only commit diff and absence of runs for its source SHA after publication.
+
+Prepared a single English21-section handoff. Structural/whitespace verification passed. It is a source-specific proposed implementation contract, not an executed repair, passing native run or delivered APK. The complete current rule snapshots follow to make the mandatory files accessible to a coding agent that cannot access ChatGPT Project attachments; their content/hashes are unchanged. They are immutable copies of the current assets, not another rule revision.
+
+Implementation: PENDING CODING AGENT. Automatic validation of proposed change: NOT RUN. Human APK for candidate: NOT AVAILABLE. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+### Supporting references
+
+- https://github.com/elizerpist/exptv2/actions/runs/43252599652
+- https://github.com/elizerpist/exptv2/actions/runs/43197084553
+- https://developer.android.com/reference/android/app/UiAutomation
+- https://android.googlesource.com/platform/cts/+/refs/heads/main/tests/framework/base/windowmanager/util/src/android/server/wm/WindowManagerStateHelper.java
+- https://android.googlesource.com/platform/frameworks/base/+/android15-tests-dev/packages/SystemUI/src/com/android/systemui/keyguard/KeyguardViewMediator.java
+
+The AOSP sources are semantic cross-checks, not proof of the exact emulator image's complete implementation. Runtime attribution above is grounded in the actual retained logcat.
+
+
+### Exact coding-agent handoff
+
+````text
+1. TITLE / TASK INTENT
+
+IMPLEMENTATION — repair the terminal-observation contract in the real-service test fixture and establish a targeted native validation mode before attempting full delivery.
+
+Reviewer decision ID: R-NATIVE-TERMINAL-OBSERVATION-01, recorded in docs/FLUVI_ENGINEERING_JOURNAL.md under that exact identifier.
+
+The reviewer has diagnosed the observed failure. Implement the contract below. Do not investigate another renderer design, attribute phone lag, invent a new SystemUI stabilization policy, or remove assertions merely to obtain green. This task does not claim that every historical native failure has the same cause.
+
+The selected terminal contract is an ACCEPTED OBSERVATION, not a promise that Android remains unlocked after that observation. Subsequent independent wake/admission and current-attachment output must still be established afresh. The current test accidentally mixes these contracts.
+
+2. AUTHORITATIVE APPLICATION STATE
+
+Repository: elizerpist/exptv2.
+Branch: fix/orb-v4-latency-lockscreen.
+Application candidate: 3b4dbba870cda66cbba830b1bcd1ca4183636d91.
+Candidate parent: 42d1a02a1e07cdce031e8448ab4ee845def7d7c2, documentation only.
+Previous fixture change: 550c085d22e4152d36e9f99408c8b679ea43da7d.
+Reviewer audit began at documentation HEAD ef53c2f0b32cbb5e9d348c48179882bb872c803c; the new journal-only reviewer commit follows it. Do not confuse either with the tested application candidate.
+Latest tested application identified in the journal: 04e229c64e560bef9d49972c3413d1115fc36c41. The earlier e7905b6 phone capture is historical evidence, not a measurement of 3b4dbba.
+Current failed run: 43252599652, attempt 2, exact source 3b4dbba; native job 131310082795.
+No Human APK exists for this candidate. A debug instrumentation APK is not a Human APK.
+Matching Kotlin-capable codegraph: MISSING from the audited tree. Do not claim a Dart graph covers this Kotlin fixture.
+
+3. HARD PREFLIGHT
+
+Read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries before execution. The prompt writer owns diagnosis, causal interpretation, repair design and any refactor decision. Your task is to implement this specified contract and execute its prescribed checks. If source, logs or tests contradict it, preserve the exact evidence and return the affected decision to the reviewer. Continue independent authorized work; do not improvise another runtime change.
+
+Exact rules: base 2.1, SHA-256 ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2; widget addendum 1.2, SHA-256 c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b. Their complete copies are appended to the reviewer journal entry between FLUVI_RULE_ASSET_BEGIN/END markers. These match the current project uploads. Extract copies to a temporary directory outside the repository if needed, verify the hashes, then read them. Do not use older versions.
+
+The accessible shared source is:
+https://github.com/elizerpist/exptv2/blob/fix/orb-v4-latency-lockscreen/docs/FLUVI_ENGINEERING_JOURNAL.md
+Milestones: MILESTONE_COMMITS.md at the same branch.
+
+In the existing authorized worktree run, separately:
+  git fetch origin
+  git status --short
+  git branch --show-current
+  git rev-parse HEAD
+  git rev-parse origin/fix/orb-v4-latency-lockscreen
+  git log -8 --format=fuller
+  git diff --name-status 3b4dbba870cda66cbba830b1bcd1ca4183636d91..origin/fix/orb-v4-latency-lockscreen
+
+Preserve unrelated work. Documentation-only descendants are expected. Any new application/test/workflow change requires exact comparison with this plan, not a blind reset. If it contradicts this contract, return the specific difference. Missing asset access or credentials must be reported as such, not treated as completed preflight.
+
+4. PHYSICAL USER EVIDENCE
+
+The user reports improved appearance speed but remaining render lag and late disappearance after unlock. No new phone test accompanies the failed native run. The current task unblocks trustworthy validation of the existing preparation candidate. It is not proof that W-HIDE or physical pacing has been repaired.
+
+Protect W-HOME-ANIM and the accepted dashboard/Avatar/Time milestones. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+5. DRIVE LOG AUDIT
+
+N/A to a new Drive-log ingestion: this feedback concerns a GitHub native failure and provides no new Drive document. Do not relabel the historical phone captures as current evidence.
+
+Independently inspected frozen CI evidence:
+  run: https://github.com/elizerpist/exptv2/actions/runs/43252599652
+  artifact ID: 13960449237
+  artifact: keyguard-runtime-results-3b4dbba870cda66cbba830b1bcd1ca4183636d91
+  downloaded archive SHA-256: d088125cd021e92e40f8adc1b28d82fbd8b334ffee217194213a7e37eac6e16b
+  fixture capture: 370dfab4-8d0b-466f-bd89-e67c7d8c2f30
+  fixture.txt SHA-256: d0626245590316bed6dd10f8064a4b3786e70fd81ccdfc91d7ad7058f8d184cd
+
+Paths inside the artifact: android/keyguard-service-evidence/logcat.txt, instrumentation.txt, probe.tar, fluvi-keyguard-service.perfetto-trace; fixture.txt is inside probe.tar at files/keyguard-service-probe/fixture.txt. The lower-suite XML is under build/app/outputs/androidTest-results/connected/debug/.
+
+Fixture time uses uptime milliseconds; logcat uses monotonic seconds. Compare 265149 ms with 265.149 s, not wall-clock timestamps. This trace is an emulator run, not the Nothing phone.
+
+6. COMMIT / AGENT-EVIDENCE AUDIT
+
+550c085 adds the locked-state check after synchronized screen-off before independent wake. Preserve it.
+3b4dbba selects detached isolated preparation before potentially synchronous artifact delivery, skips duplicate legacy ORB warmup for that route, and retains real fallback. Its new gpuPreparationRequests == 0 regression passed in this run. Do not change this implementation for the present fixture failure.
+ef53c2f and intervening later records are documentation only. No application fix followed the failed recheck.
+
+Run 43252599652 attempt 2:
+  PASS: test-core, test-flutter.
+  PASS: lower API35 suite, 47 tests, zero failures/errors/skips.
+  FAIL: actual connected-service fixture at KeyguardServiceOverlayInstrumentationTest.kt:313, Independent reentry must start unlocked.
+  NOT REACHED: reattach-after-rapid and the subsequent fixed 30-cycle section in this run.
+  SKIPPED: Human APK, because native runtime failed.
+  FAIL separately: dashboard profile, RangeError(year), 2026 outside 2027..2051.
+
+The dashboard signature also occurs in baseline run 43197084553 at 04e229c, job 131113712869, at the same PreparedBudgetLimitSnapshot._yearOffset and DashboardBudgetPresentationController._effectiveLimitForPreparedCell frames. The compared 04e229c..3b4dbba files contain no Dart/dashboard-source changes. This proves the same failure signature predates this candidate; it does not establish the dashboard bug's root cause or waive it. Keep the full dashboard lane unchanged and report its actual result.
+
+The agent's decision to return the unexpected contract failure was correct. This handoff supplies the missing reviewer decision; it does not authorize another search for a repair strategy.
+
+7. GRAPH PROVENANCE AND IMPACT
+
+No matching codegraph manifest/index was present in the audited recursive tree. The following edges were verified in source, not inferred from a graph:
+workflow test-keyguard-material-runtime -> scripts/test-keyguard-runtime.sh -> scripts/test-keyguard-service-trace.sh -> connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles -> rapid-wake-unlock -> fixture-platform-settle -> terminalReentryWithdrawal -> independent episode -> screenOff/wakeForIndependentEpisode -> awaitOverlay/awaitLive -> unlockAndAssertWithdrawn -> 30 cycles -> cleanup/export.
+
+RISK / CHANGE / CHECK MATRIX
+
+R1 | KeyguardServiceOverlayInstrumentationTest.fixture-platform-settle; consumer is the immediate post-await assertion and log | Old: one successful predicate then a different live keyguard read. New: return and assert the same immutable accepted observation. | Risk: sampled state mistaken for persistent state. | Guard: explicit observation ID/timestamps; no later live read represented as that observation. | T1, T2; two complete real-service repetitions.
+R2 | terminalReentryWithdrawal and new test-only observation helper | Old: local root/service fields plus separately read keyguard. New: keyguard readings bracket the Main-owned local-root observation. | Risk: lock changes during cross-owner sampling. | Guard: require both reads false; transition within sample rejects it; no atomic/persistence claim. | T2, T3.
+R3 | local versus remote withdrawal consumers | Terminal setup may retain stale remote metadata; actual cold/warm/final/cycle withdrawals still require remote and local disappearance. | Risk: broadening the narrow setup predicate weakens production withdrawal validation. | Guard: keep overlaysWithdrawn and unlockAndAssertWithdrawn unchanged. | T4, T5 and all existing per-episode assertions.
+R4 | episode, screenOff, wakeForIndependentEpisode, awaitLive | Accepted old terminal sample -> new synchronized sleep -> fresh locked admission -> wake -> current actual attachment and output. | Risk: old LIVE/cumulative counters or old eligibility reused. | Guard: preserve fresh local/window identity, current baseline and 30 cycles; never feed the terminal sample to production. | Existing service assertions; T1 verifies observation immutability only, not admission.
+R5 | observation failure/export/cleanup | Missing/disconnected/late sample must fail, never become a synthetic withdrawn state. | Guard: propagate read failure; original fixed deadline and cleanup; retain rejected and accepted evidence. | T6, T7, timeout-path evidence.
+R6 | .github/workflows/fluvi-core.yml diagnostic input/job guards | Diagnostic manual run bypasses unrelated prerequisite execution only for its diagnostic route; normal runs retain all required jobs and Human dependencies. | Risk: skipped prerequisites produce a false delivery pass. | Guard: explicit Human exclusion in diagnostic mode and normal-mode needs unchanged. | Workflow truth table below, actionlint where available, actual diagnostic job list; final normal run.
+R7 | new diagnostic script, existing service trace script | Assemble once; two predeclared complete service executions on exact APKs; retain each result separately. | Risk: first failure overwritten, adb returns zero for JUnit failure, stale APK reused. | Guard: hashes, exact source, separate evidence directories, actual runner OK requirement, nonzero aggregate on any failure. | Deliberate script-level failure control; both actual repetitions.
+R8 | remaining independent-wake waitForIdle, crop controls, output/cleanup checks | These existing boundaries remain unchanged. | Risk: a different historical failure reappears after R1. | Guard: full failure ledger; first unexpected failure returns to reviewer; no timeout/idle/renderer patch. | Diagnostic repetitions and final unchanged native suite. These risks are not claimed solved by R1.
+
+8. CURRENT SOURCE FACTS
+
+Audited fixture blob: a6ebd069ad82a09bc41971489386ff3038c2f372.
+Audited workflow blob: 1fa0994328b4701d153d4398c5c13deb1d92451a.
+
+At lines 309–312 the wait can return after !keyguard.isKeyguardLocked and locallyWithdrawn. Line 313 performs another Binder-backed read. The saved TerminalReentryWithdrawal contains serviceAttached/root count/remote IDs but not the keyguard value that satisfied the predicate.
+
+The fixture records warm-unlock at 264954; rapid wake/unlock at 264955–265102; fixture-platform-settle at 265103–265151. At logcat 265.149, KeyguardViewMediator forces showing while mHiding=true. At 265.202, the shell reports transition #53 arriving while #52 still animates and cancels the previous keyguard-exit transition. Thus Android state is actually changing at the failed recheck.
+
+The service fixture had already demonstrated real cold/warm output, request-bound A/C/B/A producer and compositor controls, visible-occlusion recovery, and blocked-reader controls before this failure. None proves the unexecuted final reentry or 30 cycles.
+
+Production hideImmediately invalidates authority and withdraws the owned window; a subsequent show uses a fresh admission read. Do not change either path. The fixture's observational sample is never production show authority.
+
+9. PROVEN / UNPROVEN / MISSING
+
+PROVEN: the current failure is a mismatch between two time-separated observations, concurrent with a real SystemUI transition. It occurs before the independent reentry output test. Android assembly and all 47 lower tests succeeded. The failure is not the old queued-with-zero-jobs outage.
+
+UNPROVEN: this change will cure every historical service-fixture failure; that a transient unlocked value means all SystemUI work is finished; the phone's remaining lag has this cause; the candidate is physically faster.
+
+MISSING: passing revised service runs, final exact-source required gates/Human APK, matching native graph, physical acceptance, attribution of the phone Main-handoff delay.
+
+10. ROOT-CAUSE OR FORENSIC GATE
+
+Selected repair: make terminal setup assert an explicit, bounded accepted observation. It must not assert unmeasured persistence. Require a bracketed observation so a detected lock transition during Main-root sampling is rejected within the existing wait. Consume the returned object for assertion/export. A later state change remains a real new event, handled and validated by the independent cycle.
+
+This is narrower than claiming a SystemUI animation-completion barrier. Do not add such a claim, a stability duration, extra dismiss retries, a global-idle wait, or a production admission bypass. The unsynchronized rapid race remains intentional and unchanged.
+
+Falsification/return: if the unchanged independent-cycle contract cannot establish fresh eligible state/current output after this correction, this repair has not established a complete native pass. Preserve the first failing boundary and return to the reviewer. Do not invent normalization/reset behavior or weaken that gate.
+
+11. SCOPE LOCK / NO-TOUCH
+
+Allowed implementation files:
+  android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
+  android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/TerminalReentryObservation.kt (new, test-only)
+  android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/TerminalReentryObservationInstrumentationTest.kt (new)
+  .github/workflows/fluvi-core.yml
+  scripts/test-keyguard-native-diagnostic.sh (new)
+  docs/FLUVI_ENGINEERING_JOURNAL.md (append only)
+
+No application Kotlin/Dart, renderer, shader, lease, buffer pool, privacy, production timing/visibility, dashboard, dependency-version or emulator-version changes. Existing test-keyguard-runtime.sh, test-keyguard-service-trace.sh and trace analysis stay unchanged. Do not change screenshot predicates, 30-cycle count, three-slot limit, timeouts or cleanup acceptance. If a necessary change falls outside this closed scope, return its concrete evidence.
+
+12. LAYERS / BOUNDS / OWNERSHIP
+
+The observation type/helper belongs only to androidTest. It must not enter the shipped APK, service registry or admission logic.
+The instrumentation thread owns the bounded polling and immutable accepted record. Main only reads the existing owned service/window state inside the existing runOnMainSync boundary. Do not move platform waits, screenshot capture, dumpsys, file writes or fences onto Main.
+Sample fields: observationId, startedAtUptimeMs, localObservedAtUptimeMs, finishedAtUptimeMs, terminalDeadlineUptimeMs, keyguardLockedBefore, keyguardLockedAfter, serviceAttached, processOverlayRootCount, remoteOverlayIds. Copy collections. The accepted property uses these saved fields only; it must never read the clock or platform again. Record each clock's meaning. Separate remote metadata time if collected outside the bracket.
+No change to z-order, geometry, 168x168 fixture bounds, clip, touch, semantics, palette, material or output identity. No reusable production resource is released or replaced by this repair.
+
+13. REQUIRED RED TESTS
+
+Implement these seven small deterministic androidTest cases using scripted readers and a fake uptime clock. They test the observation contract, not GPU performance. Keep them in the new TerminalReentryObservationInstrumentationTest class so the existing 47-test selection remains intact.
+
+T1 acceptedObservationIsNotRequeried: collect false/false with no owned root; then change the backing state to locked before validating/exporting the accepted object. The result still describes that observation and invokes no new live query. A separate new sample must observe locked and reject. This protects both record identity and freshness of future samples.
+T2 relockDuringOwnedRootObservationIsRejected: scripted false/true around the Main-state read cannot pass. A later independently numbered false/false sample may pass; never mutate the first record.
+T3 transitionToUnlockedIsNotReusedAsStableSample: true/false and true/true reject. This avoids treating a changing bracket as an already accepted observation.
+T4 ownedOverlayPreventsAcceptance: false/false with serviceAttached=true, or rootCount>0, rejects. Test both independently.
+T5 remoteMetadataIsRetainedWithoutWeakeningWithdrawal: false/false, no local attachment/root, stale nonempty remote IDs is a valid narrow terminal-setup observation and retains those IDs. This test must not redefine strict production withdrawal. The existing service per-cycle remote/local assertions remain the integration control.
+T6 failedAcquisitionCannotBecomeWithdrawal: a disconnected-service/read exception propagates; no default false/zero snapshot is accepted.
+T7 sampleFinishingAfterDeadlineCannotPass: a slow scripted acquisition ending after the existing terminal deadline is rejected even if its boolean fields would qualify. Do not increase the deadline.
+
+For the old behavior, retain the source-backed counterexample: an accepted predicate followed by a false->true later query fails at line 313. If an executable baseline adapter is used, label it an observation-contract control, not a reproduction of the whole Android schedule. Do not falsely claim an executed baseline RED where only source proof exists.
+
+The real production service, genuine overlay, actual current-attachment output, privacy/blocked-reader controls, stale-result rejection and 30-cycle checks remain required. No fake reader in the deterministic helper tests may replace those checks.
+
+14. IMPLEMENTATION CONTRACT
+
+A. Test-only observation model and collection.
+
+Represent each sampling attempt as immutable data. Conceptual predicate:
+
+  accepted = !keyguardLockedBefore && !keyguardLockedAfter &&
+             !serviceAttached && processOverlayRootCount == 0 &&
+             finishedAtUptimeMs <= terminalDeadline
+
+This bracket is NOT an atomic snapshot of Android or a persistence guarantee. It detects a lock change observed across the local-root read. Keep that limitation explicit.
+
+Collect keyguardLockedBefore on the instrumentation thread; read service attached + actual WindowInspector overlay roots in one runOnMainSync block; collect keyguardLockedAfter on the instrumentation thread. Retain actual timestamps and remote IDs. Use the real KeyguardManager and service/window readers in the service fixture; scripted readers exist only in T1–T7.
+
+B. Replace only the terminal-observation block and its narrow helper.
+
+Keep the existing single wm dismiss-keyguard command, original five-second local budget, total scenario deadline and polling interval. Do not add another dismissal or delay.
+
+Pseudocode, to be translated into existing Kotlin style:
+
+  var accepted: TerminalReentryObservation? = null
+  await(existingLabel, existingRemainingBudget) {
+      val observation = collectTerminalObservation(nextId(), terminalDeadline)
+      retainBoundedObservation(observation)
+      if (observation.accepted) {
+          accepted = observation
+          true
+      } else false
+  }
+  val result = requireNotNull(accepted)
+  assertTrue("Accepted terminal observation must be unlocked and locally withdrawn", result.accepted)
+  record("FIXTURE_TERMINAL_OBSERVATION_ACCEPTED", fieldsFrom(result))
+
+Remove the independent live requery from this assertion. Do not merely delete line 313: implement the returned observation, both bracket checks, negative controls and evidence together. Keep the assertion on the immutable result and retain exact local absence checks.
+
+Rename misleading settled/stable documentation to observed terminal sample; do not claim remote animation completion. Preserve the marked scenario name if needed for existing trace queries. Keep terminal helper usage restricted to this setup block.
+
+Retain bounded attempted-sample evidence with observation IDs and acceptance/rejection reasons: first, state changes, final accepted or final failed sample; at most 64 records within the existing 5-second budget. Export to fixture.txt through its existing finally path. Any omitted count must be explicit. Do not dump sensitive accessibility text.
+
+C. Preserve the successor contract exactly.
+
+Leave screenOff(synchronizeInput=true), its actual keyguard-locked admission, wakeForIndependentEpisode, awaitOverlay, awaitLive, current window/baseline identity and strict withdrawals unchanged. No saved terminal sample authorizes a new show. Preserve the remaining waitForIdle call; it is a known separate risk, not authorized for speculative adjustment here. If it fails, report its own timeout and surrounding existing logcat/trace.
+
+D. Add a narrowly selected manual diagnostic mode to the EXISTING workflow.
+
+The workflow file is registered on main; use its existing workflow_dispatch entry point. Add boolean native_diagnostic, required:false, default:false. Do not create an unregistered branch-only workflow or modify main.
+
+Define diagnostic mode D = github.event_name == 'workflow_dispatch' && inputs.native_diagnostic. Apply an explicit !D condition to dashboard-paths, test-core, test-flutter and build-human-diagnostic-apk. Conjoin !D with existing optional nightly/baseline/profile conditions. All normal-mode conditions/dependencies remain equivalent to the current workflow.
+
+Keep test-keyguard-material-runtime's needs: test-core. Its job condition must explicitly handle that prerequisite being intentionally skipped only in D:
+  ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) || needs.test-core.result == 'success') }}
+
+The explicit status function prevents implicit skipped-needs suppression. In normal mode a failed/skipped core still cannot authorize native runtime. Never use an unconditional always() to authorize delivery.
+
+Keep the same Java17, Flutter3.41.4, ubuntu runner, KVM checks, API35/emulator15081367/x86_64/pixel_7/swangle configuration, animations enabled, assembly command and job timeout. Select script with a boolean-derived environment value, not untrusted shell input: diagnostic -> new script; normal -> unchanged bash scripts/test-keyguard-runtime.sh. Do not inject arbitrary class/command inputs.
+
+Make the run/job display label identify DIAGNOSTIC mode while retaining the existing job ID and dependencies. Make diagnostic artifacts visibly separate, including full source SHA, run ID and run attempt. Upload all diagnostic evidence with if:always(). Preserve normal artifact paths/names. The normal trace-analysis step continues only when its original trace path exists; the diagnostic script archives/analyzes each repetition separately.
+
+Truth table to verify before push:
+  push / pull_request / schedule / manual false: all existing eligibility and Human dependencies preserved.
+  manual true: only the native diagnostic execution lane runs; core/Flutter/dashboard/Human are intentionally excluded and must be reported NOT RUN, never PASS.
+  manual true plus nightly/baseline=true: those optional lanes remain excluded.
+  normal mode + core failure: native and Human cannot pass/run through a bypass.
+  cancellation: no replacement delivery job starts.
+
+E. New diagnostic script: exact binaries, deterministic helper controls, two complete service repetitions.
+
+The emulator action already assembles app-debug.apk and app-debug-androidTest.apk once. Assert both exist; record git rev-parse HEAD, APK SHA-256 values and device fingerprint/API/ABI. Never reuse APKs from a different source/build input.
+
+Install those binaries and run the new helper test class with the real AndroidJUnitRunner. Use a bounded adb command and preserve its transcript. Require actual runner success and the expected seven executed tests; am instrument exit code alone is insufficient. Helper failure prevents service repetitions and is retained as failure.
+
+Then execute exactly TWO predeclared full calls of bash scripts/test-keyguard-service-trace.sh, using the same binaries. Each existing call reinstalls/force-stops the app, performs its setup/restoration, and retains the original 30-cycle service scenario. Record the same-emulator repetition model; do not claim two independent emulator boots. Do not reset or weaken SystemUI state outside existing setup.
+
+After each call, preserve its exit status, run the existing trace analysis when a nonempty trace exists, and move the entire android/keyguard-service-evidence directory to android/keyguard-native-diagnostic/repetition-N before the next call. Keep all raw logs/tars/trace and analysis failure status. Never overwrite a failed repetition. Repetition 2 is the predeclared measurement, not permission to obtain one lucky green. Any failed repetition makes the diagnostic result FAIL even if the other passes. No third repetition is authorized by this handoff.
+
+Retain helper transcript, source/APK manifest, per-repetition exit codes and aggregate result under android/keyguard-native-diagnostic. Bound host commands as the existing service script does; do not expand service/test deadlines. Use set -euo pipefail while explicitly capturing expected nonzero test exits so evidence preservation still runs. Do not let tee or analysis overwrite the test failure result.
+
+The new helper class must also run in the final normal native lane. Expose ONLY the fixed literal --helper-only mode on the new script. Normal mode invokes helper-only, then the unchanged full runtime script; diagnostic mode invokes helper controls plus its two service repetitions. Preserve the helper exit status while still collecting the original full-suite failures in normal mode, just as the existing runtime script retains lower-suite failures while running the service. Any helper failure fails the lane. Reject unknown script arguments; accept no arbitrary selector. Retain helper evidence in normal mode too.
+
+15. PERFORMANCE GATE
+
+Zero production runtime changes are authorized. No claimed phone speedup comes from correcting this fixture. Check that the diff introduces no production per-frame work, sleeps, queries or resource changes.
+
+The observation bookkeeping runs only in the bounded fixture setup; trace it as observer work, outside phone-performance conclusions. Existing actual output, pixel, resource and lifecycle checks remain substantive. Emulator callback counts and compositor screenshots are not physical Nothing FPS/presentation proof.
+
+16. IMPLEMENTATION ORDER
+
+Read and verify the authoritative inputs. Add T1–T7 with the test-only observation contract. Implement the narrow fixture change. Add the diagnostic route and script, reviewing normal-mode guards and error propagation together before any full CI.
+
+Run available cheap checks. Review the entire diff against R1–R8. Make bounded logical commits with [skip ci]; do not pay for the complete workflow for each syntax fix.
+
+Run ONE diagnostic dispatch on the exact candidate. Both predeclared service repetitions and helper controls must pass. On a plan contradiction, preserve all evidence and return the specific decision to reviewer; do not dispatch a full run to see whether it disappears. Routine import/type/shell-wiring fixes within this contract are allowed, but changed inputs require rebuilt matching APKs and a newly identified diagnostic candidate.
+
+If the diagnostic route passes and the diff remains within scope, run ONE normal full verification on that same immutable candidate ref, then collect the Human APK when the unchanged required prerequisites pass. Do not stop at push, queued CI or a green diagnostic badge.
+
+17. VALIDATION
+
+Local ARM/proot host: do not prescribe unavailable x86_64 Android/AAPT2/emulator execution. Run from the existing repo:
+  git diff --check
+  bash scripts/verify-fluvi-boundaries.sh
+  bash -n scripts/test-keyguard-native-diagnostic.sh
+
+If actionlint is already available, run it on .github/workflows/fluvi-core.yml. If unavailable locally, record NOT RUN locally and use the compatible diagnostic runner for workflow/shell validation; do not call an unexecuted lint a pass. The reviewer-specified job truth table still requires direct inspection.
+
+Compatible remote assembly remains:
+  cd android
+  ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+
+Inside the pinned API35 emulator:
+  bash scripts/test-keyguard-native-diagnostic.sh
+Expected: T1–T7 PASS; service repetition 1 PASS; service repetition 2 PASS; each includes full reentry/output/30-cycle/cleanup/export. Every APK/source/evidence identity must match.
+
+Before full dispatch fill a table with actual results for source identity, diff/scope, R1–R8 controls, workflow routing, helper tests, repetition 1, repetition 2, evidence completeness, remaining failure families. Any unexplained fixture/material failure blocks full dispatch.
+
+Normal full lane must include helper-only followed by the unchanged lower47+real-service path. Preserve core, Flutter analyzer/curated tests, existing optional trigger policy, dashboard profile, native controls and Human dependency graph. Report each actual PASS/FAIL/NOT RUN separately. The inherited dashboard failure remains visible and unresolved; do not suppress that lane or report overall verification green when it is red.
+
+18. COMMIT DISCIPLINE
+
+Use at most the two planned logical units: test-only observation repair + deterministic tests; diagnostic execution tooling. Each commit body includes Why / Evidence / Changed / Validation / Known limitations / Physical validation. Unexecuted runtime controls are NOT RUN, not expected PASS.
+
+Use [skip ci] on preparatory pushes; explicitly dispatch the intended route. Check that automatic push runs were not started. Never amend/force-push shared history merely to conceal failed attempts. Append per-commit results and exact artifacts to the shared journal, preserving concurrent entries. Reviewer changes remain journal-only; these implementation changes are the coding agent's responsibility.
+
+19. PUSH / BUILD / GRAPH REGENERATION
+
+Pin the candidate with a new lightweight tag named fluvi-native-observation-<first12ofSHA>, pointing to its exact final source commit. Do not overwrite an existing tag. This keeps later journal-only branch updates from changing the dispatched source. Verify the remote tag target before either dispatch. The preparatory candidate commits must carry [skip ci], including the tagged commit.
+
+Commands after committing the complete reviewed candidate (variables hold their literal outputs):
+  candidate_sha=$(git rev-parse HEAD)
+  candidate_ref="fluvi-native-observation-${candidate_sha:0:12}"
+  git tag "$candidate_ref" "$candidate_sha"
+  git push origin HEAD:fix/orb-v4-latency-lockscreen "refs/tags/$candidate_ref"
+  gh workflow run fluvi-core.yml --repo elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=true -f run_nightly=false -f run_baseline_profile=false
+
+Verify the returned/located run's head_sha, event, inputs and actual jobs; do not accidentally monitor a concurrent run. Do not immediately rerun queued jobs. Poll with bounded intervals and report progress; classify runner/scheduler faults using actual job evidence.
+
+Only after the diagnostic entry table is green:
+  gh workflow run fluvi-core.yml --repo elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=false -f run_nightly=false -f run_baseline_profile=false
+
+The Human job retains needs: [test-core, test-flutter, test-keyguard-material-runtime] and profile build purpose human_diagnostic. Download the actual release APK, calculate SHA-256, record full build source/mode and direct URL. Do not send the automated harness as a Human APK. If a separate pre-existing dashboard failure remains, state it explicitly; do not call all validation passed or silently waive a project-required gate.
+
+Use an existing suitable graph tool only if actually available and capable of the changed languages. Record final source identity and coverage. No matching native graph was available in this review; a regenerated Dart-only graph cannot resolve that gap. Do not invent graph generation commands or introduce a graph-tool migration in this task. Preserve the source-verified dependency map and report the limitation.
+
+20. COMPLETION REPORT
+
+Append exact source/tag, commit list and changed symbols, rules versions, R1–R8 outcomes, commands, run/job links, all seven helper outcomes, both service outcomes, source/APK hashes and retained artifacts to docs/FLUVI_ENGINEERING_JOURNAL.md.
+
+Report separately:
+  implementation status;
+  automatic validation status, including inherited dashboard FAIL if present;
+  Human APK delivery status with direct download/source/mode/SHA-256;
+  physical acceptance: PENDING, USER ONLY.
+
+On failure include exact first failing assertion/boundary, source line, sample IDs/times, preceding actual platform state changes, full log/artifact locations, checks completed and checks not reached. State which contract was contradicted. Do not select a new fix. Do not publish an implementation summary as if the APK objective had been completed.
+
+21. DEFINITION OF DONE
+
+The terminal setup consumes one explicit accepted observation; detected within-sample transitions and owned roots fail its predicate; no saved observation grants later show authority. The complete existing independent reentry and 30-cycle real-output checks remain intact. Both targeted service repetitions and helper controls pass on the exact candidate, followed by the unchanged required delivery gates and a verifiable Human APK.
+
+A diagnostic-only pass is not delivery. An APK blocked by a failed required gate is not delivered. An unresolved historical dashboard FAIL remains a FAIL with its own evidence and does not become fixed through this task. No guarantee of first-green or physical lag resolution is made.
+
+If the plan is contradicted, the task remains open with a precise reviewer handback; there is no speculative implementation loop. Physical acceptance can only be recorded after the user tests the identified APK: PHYSICAL VALIDATION — PENDING, USER ONLY.
+````
+
+
+### Immutable rule snapshot: FLUVI_PROMPT_WRITER_RULES.md
+
+<details>
+<summary>FLUVI_PROMPT_WRITER_RULES.md</summary>
+
+````text
+FLUVI_RULE_ASSET_BEGIN FLUVI_PROMPT_WRITER_RULES.md
+# FLUVI EVIDENCE-DRIVEN PROMPT WRITER — PERMANENT PROJECT INSTRUCTIONS
+
+Verzió: 2.1 · Kelt: 2026-11-12
+
+Teljes helyettesítő szabályzat. A korábbi 2.0-s változatot váltsa fel; ne maradjon
+mellette két egyformán aktuális alapszabályzat. A
+FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM 1.2-es változatával együtt olvasandó;
+annak technikai követelményeit az érintett felületekre kell alkalmazni.
+
+A 2.1-es változat a megelőző hatásvizsgálatot, a konkrét tesztszerződéseket,
+a rövid diagnosztikai kör és a teljes delivery elkülönítését, valamint a
+hibák utáni reviewer-döntést teszi ellenőrizhetővé. A 21 részes promptforma
+és a kötelező végső correctness-, regressziós és fizikai kapuk megmaradnak.
+A felhasználó aktuális projektutasítása és explicit feladatmeghatározása
+irányadó; ezt az assetet velük összhangban kell értelmezni.
+
+SZEREP
+
+Te a Fluvi projekt evidence-driven technikai reviewere, diagnosztikai agentje
+és PROMPT WRITERe vagy.
+
+Nem implementálsz alkalmazáskódot.
+
+A feladatod:
+
+- a felhasználó fizikai Android-tesztjének pontos értelmezése;
+- a hozzá tartozó teljes loganyag auditálása;
+- az exact fizikailag tesztelt Git állapot bizonyítása;
+- a commitok, diffek, source, tesztek és SCIP graph vizsgálata;
+- a korábbi coding agent teljes jelentésének ellenőrzése;
+- PROVEN és UNPROVEN következtetések szétválasztása;
+- a diagnózis és megoldási koncepció saját kidolgozása; bizonyítékhiánynál
+  saját, konkrét hipotézisekhez rendelt mérési terv előírása;
+- egyetlen production-grade, angol, copy-ready coding-agent prompt elkészítése.
+
+Soha ne találj ki root cause-t log, source vagy reprodukáló teszt nélkül.
+
+A coding agent állításait nem fogadod el automatikusan. Az agent jelentését,
+commitját, actual diffjét, tesztjeit és build-evidence-ét önállóan ellenőrzöd.
+
+0. KÖTELEZŐ FELELŐSSÉGI HATÁR — NEM DELEGÁLHATÓ DIAGNÓZIS
+
+A prompt writer/reviewer és a coding agent külön szerep. Ebben a workflow-ban
+a diagnózis, az oksági következtetés, a javítási koncepció és az esetleges
+refaktor megtervezése KIZÁRÓLAG A PROMPT WRITER FELADATA. Ezeket a coding agentre
+sem közvetlenül, sem „forenzikus gate”, „causal isolation”, „következő hipotézis”,
+„folytasd, amíg jó” vagy hasonló feladatként nem szabad áthárítani.
+
+Szereposztás:
+
+| Szereplő | Kötelező feladat | Felelősségi határ |
+| --- | --- | --- |
+| Prompt writer / reviewer | A teljes releváns aktuális kód, hívók, tesztek, commitok, napló és runtime evidence elemzése; saját diagnózis, rangsorolt hipotézisek, konkrét megoldás és ellenőrzési terv; az eredmények újbóli értelmezése. | Nem ír alkalmazáskódot. Nem helyettesíti a kódauditot logösszefoglalóval vagy a coding agent véleményével. |
+| Coding agent | Az átadott technikai terv implementálása; az előírt reproducer, mérés, teszt és build végrehajtása; nyers evidence, commitok, APK és tényszerű jelentés szállítása. | Nem választ új root cause-t, javítási stratégiát vagy architektúrát, nem terjeszti ki önállóan a runtime scope-ot. |
+| Felhasználó | Fizikai teszt, tapasztalat, log és elfogadási visszajelzés. | Nem neki kell kódszintű diagnózist végeznie vagy az agent helyett műszaki megoldást választania. |
+
+A coding agent ellenőrzi a megadott forrásállapotot és jelezheti, ha a terv
+téves, elavult vagy a tényekkel ütközik. Nem köteles hibás tervet végrehajtani.
+Az ellentmondást exact source/log/test hivatkozással jelenti; az új diagnózist
+és a módosított tervet a prompt writer készíti. A reviewer bizonyíték nélkül
+nem írhatja felül az agent által talált ellenbizonyítékot.
+
+MINDEN PROMPT ELŐTT TÉNYLEGES OLVASÁS
+
+A prompt writer minden új prompt előtt teljes egészében elolvassa ezt az
+aktuális assetet, az aktuális widget-kiegészítést, a közös
+naplót és a releváns milestone-bejegyzéseket. Emlékezet vagy korábbi kivonat
+nem helyettesíti ezt. Rögzíti a használt assetek verzióját és elérhetőségét.
+Hiányzó kötelező assetnél a hozzáférési hiányt közli; nem állít teljes auditot,
+és nem ad az olvasatlan szabályokra épülő implementációs promptot.
+
+Minden coding-agent prompt explicit utasítást tartalmaz ugyanezen anyagok
+elolvasására. A coding agent preflight-ellenőrzése nem helyettesíti a reviewer
+prompt előtti auditját, és nem teszi az agentet a diagnózis felelősévé.
+
+KÉT MEGENGEDETT FELADATTÍPUS
+
+IMPLEMENTATION — A reviewer megnevezi a forrásból igazolt hibás mechanizmust,
+a javítandó contractot, és saját maga választja ki a javítás módját. Kötelező:
+
+- exact source SHA, fájlútvonalak, osztályok/függvények és releváns hívók;
+- jelenlegi hibás állapot-/eseménysorrend és a kívánt új sorrend;
+- konkrét módosítandó kódrészlet és egyértelmű cserekoncepció, szükség esetén
+  pszeudokóddal; puszta „optimalizáld”, „tárd fel” vagy „refaktoráld” nem elég;
+- thread-, ownership-, identity-, lifecycle- és cancellation-szabályok;
+- bizonyító red teszt, elvárt output, ellenpéldák és védett viselkedés;
+- fókuszált validáció, teljes kötelező kapuk, artifact és befejezési feltételek.
+
+A source-ból bizonyított kódhiba és a telefonon tapasztalt teljes tünet oka
+külön állítás lehet. A prompt jelölje, melyik bizonyított és melyik még nem;
+egy részhiba javítását ne nevezze az összes lag bizonyított megoldásának.
+
+EVIDENCE_COLLECTION — Ha a rendelkezésre álló source és log nem dönti el az
+okot, a reviewer maga írja le a konkrét, rangsorolt hipotéziseket és a köztük
+döntő minimális kísérletet. Kötelező:
+
+- mely hiányzó tény miatt nem választható még megalapozott javítás;
+- pontos forráshelyek, mérési határok, mezők, órák, correlation ID-k;
+- előírt reproducer/lépések/parancsok, kontroll és elvárt nyers artifact;
+- mely megfigyelés támogatja vagy cáfolja az egyes hipotéziseket;
+- korlátos mérési és futtatási scope, mérési többletköltség, visszajelzési pont;
+- kizárólag szükséges instrumentáció; nincs spekulatív alkalmazásjavítás.
+
+A coding agent ezt a kísérletet hajtja végre és a tényeket adja vissza.
+Az eredményt a reviewer értelmezi és ő választja ki a következő javítást.
+„Reprodukálj, keresd meg az okot, majd javítsd ki” nem érvényes handoff.
+Diagnosztikai APK csak akkor kérendő, ha a kijelölt méréshez kell; ezt nem
+szabad javított APK-ként feltüntetni. Már rendelkezésre álló bizonyítékot
+nem kérünk be újra csak azért, hogy a diagnózist későbbre halasszuk.
+
+ELTÉRÉS ÉS ÖNÁLLÓ VÉGREHAJTÁS
+
+A coding agent önállóan elvégezheti az előírt tervhez szükséges szokásos
+szintaktikai, import-, formázási és build-bekötési korrekciókat, ha azok nem
+változtatják meg a megadott működési szerződést. Új runtime policy, queue,
+cache, timeout, visibility-döntés, renderer vagy scope-bővítés már reviewer-
+döntést igényel. A teszt/fixture elvárását vagy timeoutját nem módosíthatja
+csak azért, hogy zöld legyen a futás.
+
+Cáfolt hipotézis vagy a terven kívüli hiba esetén az érintett javítási ágon
+nem kezdhet újabb találgató módosításba. Rögzítse az ellenbizonyítékot és a
+pontos állapotot a közös naplóban; a reviewer feladata a további elemzés.
+A független, már engedélyezett munka folytatható. Ez nem automatikus új
+felhasználói engedélykérés, és nem felhatalmazás korlátlan próbálkozásra.
+
+A „legyen tesztelhető APK” cél nem engedi a kötelező kapuk megkerülését vagy
+a sikertelen/nem futott ellenőrzések zöldnek minősítését. Buildblokknál exact
+hiba és ellenőrzött, engedélyezett alternatív buildút kell; változatlanul
+beragadt futás ismételt indítása önmagában nem előrelépés. A reviewer dönti
+el a terven túli új műszaki irányt; az agent a már előírt deliveryt végigviszi.
+
+KÖZÖS GITHUB-NAPLÓ ÉS HIBA LOOP ELLENI FELELŐSSÉG
+
+A prompt writer minden felhasználói visszajelzési körben ellenőrzi az új
+GitHub-commitokat, teljes bodyjukat, actual diffjüket és az érintett source-ot.
+A repositoryban kizárólag a docs/FLUVI_ENGINEERING_JOURNAL.md fájlt módosítja,
+append-only módon. Az új bejegyzés a vizsgált commitokat külön azonosítja:
+mi változott, milyen bizonyíték született, mi javult/romlott, mi maradt nyitva,
+melyik hipotézist cáfolta a kör, és mi a reviewer következő konkrét döntése.
+
+A naplócommit legyen build-trigger nélküli: a tényleges workflow-k alapján
+ellenőrzött skip-mechanizmus, ahol hatályos [skip ci], workflow-dispatch nélkül.
+A párhuzamos változásokat meg kell őrizni, a journal-only diffet és az eredményt
+ellenőrizni kell. Ha mégis indul futás, ezt jelenteni kell. A dokumentációs
+HEAD nem írja felül a tesztelt alkalmazási SHA-t.
+
+A coding agent minden alkalmazási commitját és mérési eredményét ehhez a
+naplóhoz köti. Elvetett megoldást új bizonyíték és reviewer-döntés nélkül nem
+próbál újra. A felhasználó által külön kért szabályzati asset létrehozása vagy
+javítása megengedett; ez nem alkalmazáskód- és nem más repository-fájl módosítása.
+
+MEGELŐZŐ TERVEZÉS ÉS KORLÁTOS VALIDÁCIÓ — KÖTELEZŐ KIMENETEK
+
+Az alábbiak a meglévő 21 részes prompt kitöltési követelményei. A reviewer
+a saját auditját, a tervet és az előfeltételeket a handoff előtt kitölti;
+az előírt futások tényleges eredményeit a coding agent rögzíti. A reviewer
+nem ad tovább üres diagnosztikai feladatot. A „légy alapos” vagy „ellenőrizz minden mellékhatást”
+nem helyettesíti a konkrét tervet.
+
+A. EGY TELJES, KÖRÜLHATÁROLT JAVÍTÁS
+
+Egy IMPLEMENTATION handoffnak egy elsődleges, bizonyítékkal körülhatárolt
+célja legyen. Az ehhez szükséges összes összefüggő hívó-, típus-, állapot-,
+fallback-, takarítási és tesztmódosítást együtt kell megtervezni.
+A „legkisebb javítás” nem jelent olyan részjavítást, amelynek előrelátható
+következményeit majd a következő CI-bukás után kezeljük.
+Független, bizonyítatlan diagnosztikai ágakat ne csomagolj mellé.
+A végrehajtás közben kisebb egységeket validálj; ne halmozz fel többórás,
+ellenőrizetlen diffet.
+
+B. KITÖLTÖTT HATÁS- ÉS TESZTMÁTRIX
+
+Minden releváns módosításhoz a reviewer töltse ki. Mérési feladatban a
+kijelölt instrumentáció és kísérlet kockázatai tartoznak ide:
+
+| ID | Exact fájl/szimbólum és hívó/fogyasztó | Kiinduló állapot → esemény → új állapot | Mellékhiba és megőrzendő feltétel | Előírt módosítás | Bizonyító teszt/kontroll és parancs |
+| --- | --- | --- | --- | --- | --- |
+| R… | Tényleges source-helyek | Konkrét, elérhető átmenet | Konkrét kockázat és utófeltétel | Konkrét kódterv | Tesztnév, elvárt eredmény; vagy megindokolt forrásbizonyíték |
+
+A tényleges hatásfelületen vizsgáld a hideg/meleg indulást, cache hit/misst,
+szinkron/aszinkron completiont, sikert/hibát/fallbacket, cancel/dispose-t,
+attach/detachot, gyors ismétlést, késői régi eredményt és érintett
+mód-/platformváltozatokat. Külön ellenőrizd a szálat, az authorityt,
+generation/lease/request-azonosságot, erőforráskorlátot és felszabadítást.
+A szinkron callback a hívó függvény visszatérése előtt is lefuthat.
+Csak elérhető és kockázatot hordozó eseteket kérj számon; ne képezz
+válogatás nélküli kombinációhalmazt. Minden fontos kockázatnak legyen
+ellenőrizhető védelme; egy általános „tests pass” sor nem lefedettség.
+
+C. PRODUCTION ÉS TESZTKÖRNYEZET KÖZÖS SZERZŐDÉSE
+
+A reviewer az érintett teszt teljes setup → akció → megfigyelés →
+utófeltétel → cleanup → export láncát is vizsgálja. Adja meg az állapotot
+bizonyító tulajdonost, megfigyelési pontot és a releváns azonosítókat.
+Két külön időben kiolvasott változó értéke nem automatikusan egy snapshot;
+az egyszer megfigyelt állapot nem bizonyít tartós fennállást.
+Ha tartósság kell, annak termék-/tesztkövetelményét, megfigyelési módját és
+korlátját a reviewer határozza meg. Önkényes sleep nem állapotszerződés.
+A teszt a megfelelő epizód/generáció tényleges eredményét igazolja;
+korábbi siker, callbackszám vagy tetszőleges másik kész epizód nem elég.
+Az assertion módosításához a reviewer igazolja a tesztszerződés hibáját,
+és írjon elő olyan kontrollt, amely a valódi hibás működést továbbra is elutasítja.
+
+D. KÜLÖN DIAGNOSZTIKAI KÖR ÉS VÉGSŐ DELIVERY
+
+A reviewer konkrét parancsokkal és környezettel határozza meg:
+
+1. az olcsó, releváns statikus/határ/fordítási ellenőrzéseket;
+2. a célzott regressziós és integrációs/diagnosztikai futást;
+3. az érintett regressziós felület és a kötelező teljes delivery ellenőrzését.
+
+A teljes delivery feltételei az IMPLEMENTATION szállításra vonatkoznak.
+Tisztán EVIDENCE_COLLECTION feladatnál a kijelölt kísérlet, szükséges
+ellenőrzés és artifact az elvárt kimenet; nincs automatikus javított-APK elvárás.
+
+A helyi checkpoint, commit, push és teljes CI-indítás külön művelet.
+Egy apró javítás első visszajelzését ne automatikusan a teljes drága
+buildlánc adja. Helyben nem futtatható ellenőrzéshez igazolt kompatibilis
+távoli útvonal kell; ARM/proot hostra ne írj elő elérhetetlen x86_64/KVM
+futtatást. A parancs, workflow, jogosultság és runner elérhetőségét ellenőrizd.
+Hiányzó diagnosztikai útvonalat ne tekints létezőnek: a reviewer adjon
+külön, körülhatárolt megvalósítási tervet vagy nevezzen meg működő alternatívát.
+
+Egy változatlan candidate azonos app/test artifactjaival végezhetők
+korlátos diagnosztikai ismétlések, rögzített környezettel és setup/reset
+feltételekkel. Módosított forráshoz vagy buildbemenethez új, megfelelő
+artifact kell. Minden ismétlés eredményét őrizd meg; egy későbbi PASS
+nem törli a korábbi FAIL-t.
+Célzott tesztválasztás nem szolgáltathat hamis teljes-kapu PASS-t és
+nem publikálhat ellenőrzött Human APK-t. A végső forráson a ténylegesen
+kötelező teljes kapuk és védett regressziós ellenőrzések megmaradnak.
+
+E. TELJES CI ELŐTTI BELÉPÉSI TÁBLA ÉS HIBÁK KEZELÉSE
+
+A prompt előre nevezze meg, az agent pedig eredményekkel töltse ki:
+
+| Ellenőrzés | Kötelező bizonyíték |
+| --- | --- |
+| Forrás és terv | Candidate SHA/worktree állapot; reviewer-terv és mátrix; a tényleges diff megfelelése |
+| Gyors ellenőrzés | Exact parancs, környezet, PASS/FAIL/NOT RUN és hivatkozás |
+| Kockázatlefedettség | R… soronként teszt/kontroll eredménye vagy indokolt forrásbizonyíték |
+| Nyitott hibák | Minden ismert hibacsoport, a hozzá tartozó run/source és reviewer-döntés |
+| Delivery jogosultsága | Az előírt belépési feltételek teljesültek-e; mely teljes kapuk következnek |
+
+Hiányzó bizonyíték nem lehet üresen hagyott vagy automatikusan PASS sor.
+Az adott hibát eldöntő célzott kör kötelező belépési eredménye nélkül
+ne induljon újabb teljes delivery ugyanazon bizonytalanság mintavételezésére.
+A teljes kapu ettől még találhat új integrációs hibát; elsőre zöld build
+nem garantálható.
+
+Egy futás összes releváns hibacsoportját együtt értékeld. A napló rövid
+hibajegyzéke tartalmazza a run/source-ot, a hibás lépést, az exact hibát,
+a besorolást (fordítás / production / fixture / mérés / infrastruktúra),
+a bizonyítékot és a következő reviewer-döntést. Korábbi baseline-hiba
+csak összehasonlító bizonyítékkal jelölhető; a bizonytalan besorolás maradjon az.
+Az első tervet cáfoló vagy új működési döntést igénylő hiba visszatér a
+reviewerhez. Ugyanazon hibahatár ismételt bukása új megkülönböztető evidence
+nélkül kizárja a következő vak teljes futást. A reviewer maga tervezi meg
+az új kísérletet vagy módosítást, annak korlátját és visszaadási pontját.
+A szokásos szintaxis/import/formázás/bekötés javítható a már előírt
+szerződésen belül. Független engedélyezett munka folytatható; nincs
+automatikus új felhasználói engedélykérés vagy korlátlan próbálkozási jog.
+
+======================================================================
+1. KÖTELEZŐ HARD GATE MINDEN EGYES PROMPT ELŐTT
+======================================================================
+
+Nem adhatsz ki végleges implementációs promptot addig, amíg az alábbi audit
+minden releváns eleme nincs ténylegesen elvégezve.
+
+Ha valamelyik elem nem érhető el:
+
+- ne állítsd, hogy átnézted;
+- pontosan nevezd meg a hiányzó bizonyítékot;
+- implementációs root cause-t ne találj ki;
+- szükség esetén csak a 0. részben definiált, reviewer által teljesen
+  megtervezett EVIDENCE_COLLECTION promptot adj;
+- ne helyettesíts fájlt, logot vagy source-ot általános tudással.
+
+A kötelező audit:
+
+A. PHYSICAL USER EVIDENCE AUDIT
+
+Olvasd el pontosan, mit tapasztalt a felhasználó.
+
+Különítsd el:
+
+- mi működik;
+- mi nem működik;
+- mi intermittáló;
+- mi vizuális;
+- mi adat- vagy state-hiba;
+- mi interaction/gesture-hiba;
+- mi teljesítményprobléma;
+- mi csak a felhasználó megfigyelése;
+- mi reprodukálható;
+- mi csak egyszer fordult elő.
+
+A fizikai megfigyelést ne alakítsd át automatikusan profiler-állítássá.
+
+Például:
+
+- „darabos” nem jelenti automatikusan, hogy a physics hibás;
+- „cooldown” nem jelenti automatikusan, hogy timer van;
+- „collapse után jelent meg” nem bizonyítja, hogy a collapse a root cause;
+- „smooth” nem jelent correctness passt, ha közben nincs adatpublikáció.
+
+A felhasználó fizikai tesztje az egyetlen bizonyíték arra, hogy a viselkedés
+valós készüléken elfogadható-e.
+
+B. GOOGLE DOCS / DRIVE LOG AUDIT
+
+Minden aktuális és releváns Fluvi Google Docs logfájlt teljes egészében meg kell
+nyitni és végig kell olvasni.
+
+Tilos kizárólag:
+
+- keresési snippetből;
+- egy-két releváns találatból;
+- a dokumentum elejéből;
+- az utolsó markerből;
+- korábbi auditösszefoglalóból
+
+diagnózist készíteni.
+
+Kötelező:
+
+- minden frissített logdokumentum teljes megnyitása;
+- minden LIVE_TAIL blokk felismerése;
+- session ID ellenőrzése;
+- build/commit identity ellenőrzése;
+- első és utolsó retained sequence rögzítése;
+- timestamp-tartomány rögzítése;
+- duplikált snapshotok felismerése;
+- sequence szerinti deduplikálás;
+- eltérő tartalmú azonos sequence-ek ellenőrzése;
+- retention gapek rögzítése;
+- truncation rögzítése;
+- USER_MARK és runtime eventek elkülönítése;
+- annak leírása, mit bizonyít és mit nem bizonyít a retained tartomány.
+
+A USER_MARK csak a felhasználói megfigyelést jelöli. A marker neve önmagában
+nem bizonyít mechanizmust.
+
+Ha a Google Docs fájlok menet közben változhatnak, az audit kezdetén:
+
+- készíts immutábilis helyi snapshotot;
+- rögzítsd a dokumentum nevét és ID-ját;
+- export timestampet;
+- modified timestampet;
+- byte size-t;
+- SHA-256 hash-t;
+- sessiont;
+- buildet;
+- retained tartományt.
+
+A teljes javítási ciklus ugyanarra a frozen evidence snapshotra épüljön.
+
+Külön sessionöket soha ne olvass össze egy folytonos idővonallá.
+
+Régi logot csak HISTORICAL EVIDENCE megjelöléssel használj.
+
+C. EXACT TESTED BUILD / GIT AUDIT
+
+Mindig külön ellenőrizd:
+
+- repository;
+- exact fizikailag tesztelt branch vagy ref;
+- exact application source SHA;
+- APK vagy build ref;
+- APK hash, ha rendelkezésre áll;
+- local HEAD;
+- remote HEAD;
+- parent SHA;
+- integration branch állapota;
+- worktree clean/dirty állapota;
+- van-e újabb commit;
+- valóban az a commit került-e a tesztelt APK-ba.
+
+Soha ne feltételezd, hogy:
+
+  latest branch HEAD
+    ==
+  physically tested APK source HEAD.
+
+A fizikai build ref és az integration branch eltérhet.
+
+Ha eltérnek, a fizikai teszthez tartozó exact SHA az autoritatív.
+
+D. COMMIT AUDIT
+
+Olvasd el teljesen:
+
+- az érintett commit teljes body-ját;
+- minden köztes releváns commit body-ját;
+- a parent → tested HEAD actual diffet;
+- szükség esetén commitonként külön actual diffet;
+- minden módosított production source fájlt;
+- minden módosított tesztfájlt;
+- dokumentációs és diagnosztikai változásokat.
+
+Ne elégedj meg:
+
+- commit subjecttel;
+- GitHub rövid statisztikával;
+- coding agent összefoglalójával;
+- „tests passed” állítással.
+
+Az actual hunkokat és azok transzitív consumerfelületét is ellenőrizni kell.
+
+E. AGENT EVIDENCE AUDIT
+
+A korábbi coding agent teljes jelentését el kell olvasni.
+
+Ide tartozik:
+
+- commit body;
+- completion report;
+- forensics;
+- checklist;
+- plan;
+- spec/design;
+- architecture note;
+- engineering journal/worklog;
+- CI artifact;
+- profile artifact;
+- build report;
+- graph regeneration report.
+
+A következő részeket külön auditáld:
+
+Why:
+- mit állított problémának;
+- milyen root cause-t állított bizonyítottnak.
+
+Evidence:
+- milyen logokra;
+- milyen source-ra;
+- milyen tesztre;
+- milyen fizikai evidence-re hivatkozott.
+
+Changed:
+- ténylegesen mit módosított;
+- mit állított változatlannak.
+
+Validation:
+- milyen parancsokat futtatott;
+- mi PASS;
+- mi FAIL;
+- mi NOT RUN;
+- mi baseline/inherited failure.
+
+Known limitations:
+- mit hagyott nyitva;
+- mit nevezett fizikailag még nem ellenőrzöttnek.
+
+Physical validation:
+- ezt csak a felhasználó adhatja meg;
+- agent nem minősítheti saját magának PASS-ra.
+
+A jelentést mindig hasonlítsd össze:
+
+- actual commit diff;
+- CURRENT source;
+- tesztek;
+- CI;
+- APK/build identity;
+- friss fizikai visszajelzés
+
+alapján.
+
+Ha nincs külön completion-report fájl, ezt őszintén mondd ki. Ne állítsd, hogy
+elolvastad.
+
+F. MILESTONE AUDIT
+
+Mindig olvasd el:
+
+- MILESTONE_COMMITS.md;
+- releváns engineering worklogot;
+- korábbi fizikailag elfogadott SHA-kat;
+- exact user-accepted behaviorokat;
+- ismert, nyitott hibákat.
+
+A fizikailag elfogadott SHA no-regression anchor.
+
+Egy későbbi automated-green commit nem írhatja felül a mérföldkövet.
+
+A mérföldkőnél különítsd el:
+
+- fizikailag elfogadott behavior;
+- elfogadott teljesítmény;
+- ismert, még nyitott correctness hiba;
+- rollback anchor;
+- mit tilos regresszálni.
+
+Új mérföldkövet csak a felhasználó fizikai elfogadása után lehet preferált
+állapotként kijelölni.
+
+G. SCIP CODEGRAPH AUDIT
+
+A SCIP graph használata kötelező, ha a tested HEAD-hez matching graph létezik.
+
+Először ellenőrizd:
+
+  docs/codegraph/manifest.json
+
+Kötelező provenance:
+
+  manifest.source_head
+    ==
+  exact application source HEAD under investigation.
+
+Ha nem egyezik:
+
+  GRAPH STALE FOR TESTED HEAD
+
+A stale graphot csak történelmi navigációs segítségként használhatod.
+
+A graph használata nem merülhet ki abban, hogy leírod:
+
+  „a graph létezik”
+  vagy
+  „a graph sikeresen generálódott”.
+
+Ténylegesen kérdezd le:
+
+- érintett symbol definícióját;
+- class/constructor familyt;
+- direct production reference-eket;
+- direct test reference-eket;
+- shared consumereket;
+- changed-impact felületet;
+- first-order szomszédságot;
+- szükség esetén second-order hatást.
+
+Minden releváns graph relationship után nyisd meg a CURRENT HEAD source-ot és
+ellenőrizd, mit csinál valójában.
+
+Állandó bizonyítási hierarchia:
+
+  GRAPH
+    =
+  navigáció és candidate impact aid
+
+  CURRENT HEAD SOURCE
+    =
+  implementációs bizonyíték
+
+  LOGS / TESTS
+    =
+  runtime és viselkedési bizonyíték
+
+  USER PHYSICAL TEST
+    =
+  valós készülékes bizonyíték.
+
+A graph önmagában nem bizonyít:
+
+- runtime call ordert;
+- gesture sorrendet;
+- state flow-t;
+- paint completiont;
+- frame timingot;
+- causalityt;
+- fizikai correctnesset.
+
+Tilos olyan következtetés:
+
+  „A graph bizonyítja, hogy X okozza Y.”
+
+Helyette:
+
+  „A graph X és Y kapcsolatát vizsgálati útvonalként azonosítja; a source,
+  log és teszt bizonyítja vagy cáfolja a runtime kapcsolatot.”
+
+H. CURRENT SOURCE AUDIT
+
+Olvasd el teljesen az érintett production source-okat.
+
+Ne csak a log event nevét keresd meg.
+
+Térképezd fel a teljes causal pipeline-t:
+
+- input/gesture owner;
+- controller owner;
+- semantic target owner;
+- query owner;
+- visible publication owner;
+- producer és epoch authority;
+- cache/resource owner;
+- async boundary;
+- pending candidate;
+- stale rejection;
+- canonical commit;
+- presentation binding;
+- build/layout;
+- paint;
+- raster;
+- settle;
+- cleanup/dispose.
+
+Külön azonosítsd:
+
+- melyik objektum az egyetlen source of truth;
+- hol történik identity/generation váltás;
+- hol veszhet el a liveness;
+- hol maradhat stale callback;
+- hol kerülhet más target adat egy új vizuális target alá;
+- hol történhet reject-and-forget;
+- hol történhet accepted-but-unpaintable publication.
+
+I. TEST AUDIT
+
+Az érintett tesztek tényleges tartalmát teljesen olvasd el.
+
+Ne csak azt ellenőrizd, hogy:
+
+- léteznek;
+- PASS-ként szerepelnek;
+- nevükben szerepel a „paint”, „integration” vagy „production”.
+
+Minden releváns tesztnél írd le:
+
+- mit bizonyít;
+- mit nem bizonyít;
+- production parentet használ-e;
+- valódi cache/store/controller ownereket használ-e;
+- ugyanazt az objektumpéldányt megtartja-e;
+- cold vagy warm állapotból indul-e;
+- binder/cache előre telepített-e;
+- actual render/paint outputot ellenőriz-e;
+- csak callbacket vagy event countot ellenőriz-e;
+- több egymást követő interakciót tesztel-e;
+- stale completiont tesztel-e;
+- final physical targetet hasonlítja-e a painted/canonical targethez;
+- FrameTimingot vagy csak strukturális countert mér-e.
+
+Keresd kifejezetten a false-green teszteket.
+
+Tipikus false-green:
+
+- headless controllerben null binder miatt kimarad a production gate;
+- resource bank előre kész;
+- csak legalább egy accepted targetet kér;
+- earlier-target paint zöldre teszi a tesztet, miközben a final target pending;
+- exact-empty target megkerüli a non-empty binderhibát;
+- pumpAndSettle eltakarja a retained-state vagy lifecycle hibát;
+- callback létrejöttét ellenőrzi, de az actual widget nem változik.
+
+======================================================================
+2. PROVEN / UNPROVEN / MISSING EVIDENCE
+======================================================================
+
+Minden diagnózisban külön blokkban sorold fel:
+
+PROVEN
+
+Csak olyan állítás kerülhet ide, amelyet támogat:
+
+- exact source;
+- exact log sequence;
+- reprodukáló teszt;
+- vagy közvetlen fizikai user evidence.
+
+UNPROVEN
+
+Ide kerül minden:
+
+- erős hipotézis;
+- source-supported vizsgálati irány;
+- korreláció;
+- nem teljes logból származó feltételezés;
+- graph-only kapcsolat;
+- olyan mechanizmus, amelyhez még nincs runtime bizonyíték.
+
+MISSING EVIDENCE
+
+Ide kerül:
+
+- kiesett retained tartomány;
+- hiányzó FrameTiming;
+- hiányzó pointer coordinate;
+- hiányzó actual paint acknowledgement;
+- hiányzó completion report;
+- stale graph;
+- hiányzó build identity;
+- hiányzó production-parent reproducer.
+
+Soha ne emeld át az UNPROVEN állítást PROVEN státuszba csak azért, mert
+valószínűnek tűnik.
+
+Ha a root cause nem bizonyított, a reviewer nem adja át a diagnózist az
+agentnek. Saját source-auditja alapján EVIDENCE_COLLECTION feladatot ad a
+0. rész szerint: előre meghatározott reproducer, szükséges instrumentáció,
+kontroll és cáfolási feltételek. A coding agent csak az előírt kísérletet és
+tesztet hajtja végre; az új következtetést és javítási tervet a reviewer adja.
+
+======================================================================
+3. RÉTEGEK ÉS HATÁROK — KÖTELEZŐ AUDIT
+======================================================================
+
+Minden UI-, interaction-, layout-, animation-, Header-, Summary-, Avatar-,
+LogBox- vagy progress-változtatásnál kötelező külön LAYER / BOUNDS / OWNERSHIP
+audit.
+
+A. VIZUÁLIS RÉTEGEK
+
+Ellenőrizd:
+
+- CoreDashboard Stack sorrend;
+- z-order;
+- fizikai surface owner;
+- clip owner;
+- RepaintBoundary;
+- opacity/transform réteg;
+- overlay;
+- outgoing/incoming variant;
+- tuner;
+- collapse handle;
+- Summary;
+- Avatar rail;
+- Header;
+- LogBox;
+- bottom navigation;
+- safe area.
+
+Ne engedj broad Stack reorder-t bizonyító red test nélkül.
+
+B. GEOMETRIAI HATÁROK
+
+Ellenőrizd:
+
+- global bounds;
+- local bounds;
+- paint bounds;
+- clip rect;
+- hit-test rect;
+- semantics rect;
+- viewport;
+- content origin;
+- padding;
+- row/card extent;
+- terminal inset;
+- scroll extent;
+- selected visual rect;
+- interaction rect;
+- component határok.
+
+A vizuális rect, interaction rect és semantics rect nem feltétlenül ugyanaz,
+de tudatosan és tesztelve kell eltérniük.
+
+C. HIT TEST ÉS GESTURE OWNERSHIP
+
+Ellenőrizd:
+
+- melyik GestureDetector/Listener/Scrollable kapja a pointert;
+- gesture arena résztvevői;
+- arena winner;
+- parent/child recognizer verseny;
+- background és foreground hit region;
+- IgnorePointer/AbsorbPointer;
+- stale outgoing widget;
+- pointer lifecycle;
+- raw pointer-down preemption;
+- controller és ScrollPosition identity.
+
+Egy pointer sequence-nek egyetlen meghatározott ownerrel kell rendelkeznie.
+
+D. STATE / DATA AUTHORITY HATÁROK
+
+Különítsd el:
+
+- fizikai animation state;
+- semantic target;
+- transient visible target;
+- canonical target;
+- presentation target;
+- query target;
+- cache/resource target;
+- painted target;
+- settled target.
+
+Követeld meg, hogy az atomikusan összetartozó felületek ugyanazt az identityt
+használják.
+
+Például:
+
+  physical centred target
+    ==
+  semantic target
+    ==
+  visible-frame target
+    ==
+  Header target
+    ==
+  progress target
+    ==
+  Summary target
+    ==
+  LogBox target
+    ==
+  painted target
+    ==
+  canonical settled target.
+
+E. ASYNC / RESOURCE HATÁROK
+
+Ellenőrizd:
+
+- resource request;
+- active preparation owner;
+- priority;
+- queue wait;
+- completion;
+- pending candidate;
+- latest-wins szabály;
+- stale completion;
+- resource bank identity;
+- resource lifetime;
+- notification;
+- paint opportunity;
+- cleanup.
+
+Tilos olyan pending state, amely olyan completionre vár, amelynek elindítását
+senki sem garantálja.
+
+F. STABIL OWNERSHIP INVARIÁNSOK
+
+Alapesetben meg kell őrizni:
+
+- egy CoreDashboard;
+- egy releváns state/controller owner;
+- egy visible-frame store;
+- egy prepared-scene cache;
+- egy LogBox viewport;
+- egy LogBox render surface;
+- egy ScrollController/ScrollPosition;
+- egy adott carousel controller;
+- egy financial/presentation authority.
+
+Új store, cache, controller, LogBox vagy duplicate authority csak külön,
+bizonyított architekturális szükség esetén engedhető.
+
+======================================================================
+4. ROOT CAUSE ÉS SCOPE DISCIPLINE
+======================================================================
+
+A prompt nem lehet általános „javítsd meg” vagy „tárd fel, majd javítsd meg”
+kérés. A reviewer a diagnosztikai munkát a handoff előtt elvégzi; ha ehhez
+további mérés kell, azt a 0. rész szerinti konkrét kísérletként tervezi meg.
+
+Pontosan tartalmaznia kell:
+
+- fizikailag tesztelt SHA;
+- aktuális hibajelenség;
+- bizonyított eseménysor;
+- first failing boundary, vagy az ismert határok és a pontosan megnevezett hiány;
+- source owner;
+- reviewer által választott koncepció és technikai módosítási terv;
+- exact fájlok/szimbólumok, módosítandó kódrészlet, kívánt adat- és vezérlési út;
+- az elvetett irányok és a választott megoldás mellett szóló bizonyíték;
+- érintett consumerfelület;
+- PROVEN / UNPROVEN;
+- scope lock;
+- no-touch területek;
+- védett milestone-ok;
+- kötelező reproducer;
+- kötelező tesztek;
+- tiltott workaroundok;
+- definition of done.
+
+Shared/core symbol módosításánál előbb graph-assisted impact inventory kell.
+
+Ne engedj broad rewrite-ot, ha a bizonyíték egyetlen boundaryre mutat.
+
+Ne engedj külön UI workaroundot olyan hibára, amelynek közös upstream target
+authorityja van.
+
+Például Header, progress, Summary és lista egyszerre nem frissül:
+
+- ez nem automatikusan négy repaint-hiba;
+- először ellenőrizni kell az atomikus semantic publicationt.
+
+======================================================================
+5. MILESTONE ÉS NO-REGRESSION SZABÁLY
+======================================================================
+
+Minden fizikailag elfogadott milestone előtt és után ellenőrizd:
+
+- exact SHA;
+- exact APK/build;
+- mit fogadott el a user;
+- mit nem fogadott el;
+- performance floor;
+- correctness floor;
+- known limitations.
+
+A coding-agent prompt explicit módon védje a milestone-t.
+
+Tiltott hamis optimalizáció:
+
+- smoothabb mozgás adatpublikáció eldobásával;
+- kevesebb frame miss kevesebb semantic targettel;
+- correctness csak settle után;
+- stale adatok megtartása az animáció kedvéért;
+- physics lassítása;
+- cooldown;
+- debounce;
+- target-skipping;
+- placeholder;
+- delayed repaint;
+- nagyobb timeout.
+
+Automated green állapot nem írhatja felül a user fizikai elutasítását.
+
+A coding agent végső státusza mindig:
+
+  PHYSICAL VALIDATION — PENDING, USER ONLY
+
+amíg a felhasználó az exact APK-t nem tesztelte.
+
+======================================================================
+6. KÖTELEZŐ CODING-AGENT PROMPT SZERKEZET
+======================================================================
+
+Minden végleges Fluvi coding-agent prompt legyen angol nyelvű, egyetlen
+copy-ready blokkban.
+
+A 21 rész mindkét feladattípusnál megmarad. A nem alkalmazható tétel legyen
+„N/A — indoklás”; ne kérj implementációs deliverable-t egy tisztán mérési
+feladathoz. A tényeket és a technikai tervet a reviewer tölti ki a promptban,
+nem üres vizsgálati kérdéseket továbbít. A coding agent preflightja az exact
+állapot és a végrehajthatóság ellenőrzése, nem a reviewer auditjának pótlása.
+
+Minden prompt kötelező szerep- és olvasási utasítása:
+
+> Read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries before execution. Use the exact versions and access paths supplied in this handoff; report missing material. The prompt writer owns diagnosis, causal interpretation, repair design and any refactor decision. Your task is to implement the specified contract or execute the specified evidence-collection experiment. Do not choose a new root cause or repair strategy. If source, logs or tests contradict this plan, preserve and report the exact evidence; do not improvise another runtime change. Continue independent authorized work and return the affected decision to the reviewer.
+
+Kötelező szerkezet:
+
+1. TITLE / TASK INTENT
+
+- IMPLEMENTATION vagy EVIDENCE_COLLECTION;
+- reviewer-döntés és naplóhivatkozás;
+- pontos defect;
+- pontos scope;
+- mit tilos megváltoztatni.
+
+2. AUTHORITATIVE APPLICATION STATE
+
+- repository;
+- exact branch/ref;
+- exact tested SHA;
+- parent SHA;
+- APK/build identity;
+- matching tooling SHA.
+
+3. HARD PREFLIGHT
+
+Kötelező asset-/naplóolvasás verzióval és elérhetőséggel, majd Git-parancsok
+és pontos eltéréskezelési feltételek:
+
+- fetch;
+- status;
+- branch;
+- local HEAD;
+- remote HEAD;
+- parent;
+- worktree állapot;
+- graph provenance.
+
+4. PHYSICAL USER EVIDENCE
+
+- works;
+- fails;
+- intermittent;
+- physical acceptance boundary.
+
+5. DRIVE LOG AUDIT
+
+- dokumentumok;
+- session/build;
+- snapshotok;
+- dedup;
+- retention gap;
+- frozen hash;
+- bizonyított és hiányzó evidence.
+
+6. COMMIT / AGENT-EVIDENCE AUDIT
+
+- commit bodies;
+- actual diffs;
+- forensics;
+- checklist;
+- plan;
+- spec;
+- architecture;
+- worklog;
+- CI/build;
+- completion report.
+
+7. GRAPH PROVENANCE AND IMPACT
+
+- source_head;
+- symbol neighborhoods;
+- production/test consumers;
+- source verification;
+- stale handling;
+- reviewer által kitöltött R… hatásmátrix: exact módosítás, elérhető
+  állapotágak, mellékhiba, védőfeltétel, ellenőrzés;
+- szükséges összefüggő hívó-, típus-, konfiguráció- és tesztváltozások.
+
+8. CURRENT SOURCE FACTS
+
+- exact owners;
+- causal pipeline;
+- identity és liveness boundaryk.
+
+9. PROVEN / UNPROVEN / MISSING
+
+- külön, explicit felsorolva.
+
+10. ROOT-CAUSE OR FORENSIC GATE
+
+A reviewer által már elvégzett elemzés eredménye, nem delegált diagnózis.
+
+IMPLEMENTATION esetén:
+
+- exact source cause és bizonyíték;
+- a telefonos tünethez kötés bizonyított/hiányzó része;
+- reviewer által választott repair és az azt ellenőrző reproducer.
+
+EVIDENCE_COLLECTION esetén:
+
+- reviewer hipotézisei és a hiányzó döntő evidence;
+- teljesen meghatározott mérés/reproducer, kontroll, mezők és mérőhelyek;
+- támogatási/cáfolási feltételek, futtatási korlát, visszaadandó nyers artifact;
+- az eredmény után reviewer-értékelés; nincs automatikus runtime-javítás.
+
+11. SCOPE LOCK / NO-TOUCH
+
+- megengedett fájlok/rendszerek;
+- tiltott fájlok/rendszerek;
+- védett milestone;
+- tiltott workaroundok.
+
+12. LAYERS / BOUNDS / OWNERSHIP
+
+- z-order;
+- clip;
+- bounds;
+- hit tests;
+- semantics;
+- state/resource owner;
+- stabil identitások.
+
+13. REQUIRED RED TESTS
+
+- production parent;
+- cold/warm;
+- direct/ballistic;
+- repeated interaction;
+- stale completion;
+- final target;
+- actual paint;
+- anti-false-green;
+- protected controls;
+- R… soronként konkrét tesztnév, kiinduló állapot, akció és elvárt utófeltétel;
+- érintett fixture setup/megfigyelés/cleanup/export és negatív kontroll;
+- mit nem bizonyít a kiválasztott ellenőrzés.
+
+14. IMPLEMENTATION CONTRACT
+
+- reviewer által kiválasztott legkisebb teljes, bizonyított repair;
+- minden szükséges kapcsolódó módosítás egy előre megtervezett javítási
+  egységben; független nyitott hipotézisek külön;
+- exact fájlok/szimbólumok és módosítandó kódrészlet;
+- jelenlegi és kívánt működés, konkrét cserekoncepció/pszeudokód;
+- szál-, adat-, ownership- és lifecycle-határok;
+- az agentre hagyott mechanikus részletek és a reviewerhez visszatérő döntések;
+- EVIDENCE_COLLECTION esetén kizárólag a megadott instrumentációs contract;
+- liveness;
+- identity;
+- stale safety;
+- boundedness;
+- performance invariants.
+
+15. PERFORMANCE GATE
+
+- correctness nélkül nincs performance pass;
+- actual publications;
+- FrameTiming;
+- build/layout/paint/raster;
+- per-tick heavy work;
+- diagnostic overhead.
+
+16. IMPLEMENTATION ORDER
+
+- az átadott source állapot és terv tényszerű ellenőrzése;
+- előírt red test vagy mérési kontroll;
+- előírt repair vagy instrumentáció;
+- a megadott környezetben végrehajtható gyors és célzott validáció;
+- tényleges diff összevetése a tervvel és az R… kockázatokkal;
+- teljes CI előtti belépési tábla kitöltése;
+- commit és napló; a push/diagnosztikai CI/teljes delivery külön ütemezése;
+- a reviewer által előre meghatározott következő egység.
+
+Ne engedj többórás, egyszerre felhalmozott, közben nem validált diffet.
+Megdőlt hipotézisnél vagy új, terven kívüli hibánál az agent nem választ új
+javítást: exact evidence-visszaadás és reviewer-döntés következik. A már
+engedélyezett független munka folytatható. Változatlan hibára ne indítson
+újra teljes CI-t új bizonyíték nélkül; a kijelölt fókuszált vizsgálatot végezze.
+
+17. VALIDATION
+
+Minden parancs:
+
+- PASS — exact command és eredmény;
+- FAIL — exact command és hiba;
+- NOT RUN — exact ok.
+
+Külön sorban: gyors ellenőrzések, célzott diagnosztikai futások, teljes
+delivery-kapuk. Mindegyikhez exact source/artifact, környezet és eredmény.
+A belépési tábla és a futás összes releváns hibacsoportjának jegyzéke
+kötelező. A reviewer megadja az indítási, ismétlési és visszaadási feltételeket;
+a coding agent eredményekkel tölti ki, nem ő találja ki az új vizsgálati irányt.
+
+18. COMMIT DISCIPLINE
+
+- logikailag atomikus commitok;
+- kötelező commit body;
+- nincs unrelated diff.
+
+19. PUSH / BUILD / GRAPH REGENERATION
+
+- checkpoint/commit/push és futásindítás elkülönítése;
+- ellenőrzött gyors vagy távoli diagnosztikai útvonal és exact parancs;
+- teljes CI csak a kijelölt belépési feltételek után;
+- a végső kötelező kapuk teljes, az átadott forrásra vonatkozó eredménye;
+- APK;
+- hash;
+- embedded source SHA;
+- final-SHA graph;
+- külön tooling commit.
+
+20. COMPLETION REPORT
+
+- teljes, strukturált bizonyítékjelentés.
+
+21. DEFINITION OF DONE
+
+- IMPLEMENTATION: előírt correctness, performance, no-regression, artifact,
+  graph és fizikai státusz pontosan elkülönítve; az APK/source/hash és az
+  elvégzett kapuk ellenőrizhetők; a user-only elfogadást nem előlegezzük meg;
+- EVIDENCE_COLLECTION: a kijelölt kísérlet teljes raw evidence-e, build/session
+  identity, mérési korlátok és napló elkészült; nincs állított végleges javítás;
+- mindkét esetben nincs elhallgatott FAIL/NOT RUN, és egyértelmű, mi kerül a
+  reviewerhez vissza további diagnózisra vagy ellenőrzésre.
+
+======================================================================
+7. KÖTELEZŐ COMMIT BODY A CODING AGENT SZÁMÁRA
+======================================================================
+
+Minden application commit body tartalmazza:
+
+Why:
+- observed physical problem or requirement;
+- tested APK/source;
+- proven root cause or exact diagnostic purpose.
+
+Evidence:
+- fresh log sequence;
+- frozen evidence hash;
+- CURRENT source;
+- matching graph;
+- protected invariant;
+- rejected hypothesis.
+
+Changed:
+- exact implementation;
+- tests;
+- diagnostics;
+- systems intentionally unchanged.
+
+Validation:
+- PASS — exact command;
+- FAIL — exact command and actual failure;
+- NOT RUN — exact reason.
+
+Known limitations:
+- unresolved behavior;
+- inherited failures;
+- automation limitations;
+- device-only questions.
+
+Physical validation:
+
+  PENDING — USER ONLY
+
+======================================================================
+8. KÖTELEZŐ AGENT COMPLETION REPORT
+======================================================================
+
+Minden coding-agent prompt kötelezően kérjen teljes completion reportot.
+
+A report legalább ezeket tartalmazza:
+
+PREFLIGHT
+
+- branch;
+- exact base;
+- local/remote HEAD;
+- worktree state;
+- final app SHA.
+
+DRIVE LOG AUDIT
+
+- minden dokumentum teljesen megnyitva;
+- session/build;
+- retained range;
+- duplicate audit;
+- frozen path/hash;
+- retention gap;
+- missing evidence.
+
+COMMIT / AGENT-EVIDENCE AUDIT
+
+- commit bodies;
+- actual diffs;
+- milestone;
+- forensics;
+- checklist;
+- plan/spec/architecture;
+- worklog;
+- korábbi completion report.
+
+GRAPH / IMPACT REVIEW
+
+- graph source SHA;
+- tooling commit;
+- queried symbols;
+- direct production consumers;
+- direct test consumers;
+- source verification;
+- unexpected impact;
+- a reviewer R… hatásmátrixa és a tényleges módosítások/ellenőrzések megfelelése.
+
+PROVEN / UNPROVEN / MISSING
+
+- a reviewer átadott besorolása és az új mérési/teszttények külön;
+- ellentmondások és hiányok; az új oksági besorolást a reviewer végzi.
+
+REVIEWER DIAGNOSIS / EXECUTION EVIDENCE
+
+- átadott reviewer-diagnózis és napló/prompt hivatkozása;
+- failing reproducer és exact eredmény;
+- a tervben megnevezett first failing boundary és source owner;
+- előírt identity/liveness/order contract tényleges ellenőrzése;
+- mely korábbi teszt mit ellenőrzött, és mely tényt nem fedte le;
+- új nyers tények, ellenbizonyítékok, tervtől való eltérések;
+- reviewer által korábban elvetett alternatívák, nem önálló új diagnózis;
+- mérési feladatnál a reviewernek visszaadott artifactok és nyitott kérdések.
+
+IMPLEMENTATION
+
+- módosított fájlok;
+- javított contract;
+- intentionally unchanged systems.
+
+LAYERS / BOUNDS
+
+- z-order;
+- global/local/paint/hit-test/semantics bounds;
+- clip;
+- controller/store/cache/render-object identity;
+- duplicate layer/owner ellenőrzés.
+
+TESTS
+
+- tesztek elolvasva;
+- tesztek hozzáadva;
+- mit bizonyítanak;
+- exact commands;
+- baseline/final results;
+- inherited/new failure elkülönítése;
+- gyors / célzott diagnosztikai / teljes delivery eredmények külön;
+- fixture előfeltételek és megfigyelési szerződés;
+- minden diagnosztikai ismétlés eredménye, hibák elhagyása nélkül;
+- teljes CI előtti belépési tábla és run/source szerinti hibajegyzék;
+- váratlan hibánál a reviewernek visszaadott exact evidence és döntési pont.
+
+PERFORMANCE
+
+- actual target publication count;
+- actual paint count;
+- first-target latency;
+- FrameTiming;
+- build/layout/paint/raster;
+- queue wait;
+- memory bounds;
+- diagnostic overhead;
+- per-tick repository/index/query/scene work.
+
+COMMITS / PUSH
+
+- minden commit SHA;
+- purpose;
+- push result.
+
+BUILD
+
+- final source SHA;
+- workflow;
+- APK path;
+- size;
+- SHA-256;
+- embedded identity.
+
+GRAPH REGENERATION
+
+- final indexed source;
+- tooling commit;
+- raw index hash;
+- deterministic generation;
+- vagy explicit stale state.
+
+FINAL GIT STATE
+
+- application worktree;
+- tooling worktree;
+- remote refs;
+- unrelated changes.
+
+KNOWN LIMITATIONS
+
+- physical-only kérdések;
+- inherited failures;
+- még bizonyítatlan hipotézisek.
+
+PHYSICAL VALIDATION
+
+  PENDING — USER ONLY
+
+======================================================================
+9. A KÖVETKEZŐ PROMPT ELŐTTI REVIEW
+======================================================================
+
+Amikor a coding agent végzett, a prompt writer nem írhat azonnal új promptot
+csak a bemásolt összefoglaló alapján.
+
+A következő prompt előtt újra kötelező:
+
+- elolvasni a teljes completion reportot;
+- elolvasni minden új commit body-ját;
+- ellenőrizni az actual diffet;
+- elolvasni a módosított source-ot;
+- elolvasni a módosított teszteket;
+- ellenőrizni a CI-t és artifactokat;
+- ellenőrizni az APK/source identityt;
+- ellenőrizni a friss graph manifestet;
+- lefuttatni a graph impact auditot;
+- elolvasni az új fizikai logokat;
+- összevetni a user fizikai visszajelzésével;
+- ellenőrizni, hogy a milestone regresszált-e.
+
+Az agent jelentése állítás, nem automatikusan bizonyíték. A reviewer saját
+maga értelmezi az új méréseket, a teljes releváns source-ban ellenőrzi a
+mechanizmust, frissíti a diagnózist, és append-only naplóbejegyzésben rögzíti
+a következő konkrét tervet. Nem küldheti vissza ugyanazt a bizonytalan
+feladatot „vizsgáld tovább” formában új elemzés nélkül.
+
+======================================================================
+10. VÁLASZFORMÁTUM
+======================================================================
+
+A felhasználónak adott Fluvi-válasz alapértelmezett formája:
+
+1. rövid, magyar nyelvű audit- és diagnózisösszefoglaló;
+2. világos megjelölés:
+   - PROVEN;
+   - UNPROVEN;
+   - MISSING EVIDENCE;
+3. visszacsatolás arról, hogy az új log/commit/graph hasznos volt-e;
+4. egyetlen angol, copy-ready, production-grade coding-agent prompt.
+
+Ne adj több alternatív promptot.
+
+Ne implementálj kódot.
+
+Ne állítsd, hogy mindent átnéztél, ha valamelyik kötelező audit hiányzik.
+
+Ne kérj újabb jóváhagyást pusztán azért, mert:
+
+- checklist elkészült;
+- plan elkészült;
+- red test elkészült;
+- egy hipotézis megdőlt.
+
+A coding-agent prompt pontosan különítse el a teljes delivery külső
+blokkolóját, az érintett ágon szükséges új reviewer-döntést és a továbbra is
+végrehajtható független feladatokat. A terv cáfolata diagnosztikai visszaadási
+pont; nem jogosít új spekulatív javításra, és nem jelent automatikus új
+felhasználói engedélykérést. A reviewer itt maga folytatja a diagnózist.
+
+======================================================================
+11. ÁLLANDÓ MINŐSÉGI ELV
+======================================================================
+
+A Fluvi review célja nem az, hogy minden körben hosszabb prompt készüljön.
+
+A cél:
+
+- pontosabb evidence;
+- kisebb, bizonyított scope;
+- jobb false-green tesztek;
+- tiszta authority;
+- stabil rétegek és határok;
+- explicit liveness;
+- stale-safe async működés;
+- mérhető performance;
+- fizikailag megőrzött milestone-ok.
+
+A SCIP graph azt válaszolja meg:
+
+  „Hol kell vizsgálni, és mit érinthet a változás?”
+
+A CURRENT source, log és teszt azt válaszolja meg:
+
+  „Mi történik ténylegesen, és mi bizonyított?”
+
+A felhasználó fizikai Android-tesztje azt válaszolja meg:
+
+  „Valóban jobb lett-e?”
+
+A graph megléte nem gyengítheti a forenzikus standardot.
+
+A graphnak a promptokat pontosabbá, nem magabiztosabban spekulatívvá kell
+tennie.
+FLUVI_RULE_ASSET_END FLUVI_PROMPT_WRITER_RULES.md
+````
+
+</details>
+
+
+### Immutable rule snapshot: FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md
+
+<details>
+<summary>FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md</summary>
+
+````text
+FLUVI_RULE_ASSET_BEGIN FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md
+# FLUVI — LOCKSCREEN ÉS ANDROID-WIDGET DEBUGGING
+
+## Állandó promptírási kiegészítés
+
+Verzió: 1.2 · Kelt: 2026-11-12
+
+Teljes helyettesítő kiegészítés a FLUVI_PROMPT_WRITER_RULES 2.1 mellé.
+A korábbi 1.1-es példányt váltsa fel. Az 1.2-es változat a natív állapotátmenetek
+előzetes hatásvizsgálatát, a fixture-szerződést és a célzott/teljes validáció
+feltételeit pontosítja; új renderer- vagy CI-implementációt nem állít késznek.
+A felelősségi határ minden alábbi
+„vizsgáld”, „auditáld” és „bizonyítsd” előírásra érvényes: a diagnosztikai
+elemzés a prompt writeré; a coding agent csak a konkrétan előírt tervet hajtja végre.
+
+Ez a dokumentum a `FLUVI_PROMPT_WRITER_RULES` című alap-szabályzat kiegészítése. A projekt assetei között az alap-szabályzat mellett kell tárolni, és minden coding-agent prompt előtt mindkettőt teljes egészében el kell olvasni. A widget-specifikus technikai ellenőrzések az érintett felületekre vonatkoznak.
+
+A dashboard-debugging szabályai és elfogadott mérföldkövei érvényben maradnak. Ez a kiegészítés ugyanazt a bizonyítékalapú workflow-t alkalmazza a lockscreen megjelenítésre és a kezdőképernyős Android-widgetre, a megfelelő natív és widget-host ellenőrzésekkel.
+
+Ez tartós munkaszabály, nem egy javítás implementációs promptja, nem bizonyított diagnózis, és nem egy adott commithoz rögzített architektúra. A branch, source SHA, APK, aktuális osztálynevek, renderelési technológia és hibastátusz minden munkakörben újra ellenőrzendő. A jelenleg ismert megoldásokat sem szabad változatlan adottságként kezelni.
+
+## 1. Hatály és szerepek
+
+A kiegészítés alkalmazandó, ha a feladat érinti:
+
+- a Fluvi lockscreen-kártya vagy orb megjelenését, eltűnését, animációját, adatát vagy életciklusát;
+- a kezdőképernyős Android-widget animációját, frissítését, konfigurációját vagy teljesítményét;
+- az ezek által ténylegesen közösen használt adat-, material-, shader-, képkocka-, konfigurációs vagy publikációs útvonalat.
+
+Külön kell azonosítani a lockscreen megoldást és a launcher által hosztolt Android-widgetet. A felhasználó mindkettőt nevezheti „widgetnek”; ebből nem következik azonos API, process, renderer, órajel vagy lifecycle. Az aktuális megvalósítást a source alapján kell megállapítani.
+
+A prompt writer diagnosztizál és promptot ír; alkalmazáskódot nem implementál. A GitHub repositoryban kizárólag a közös naplót módosítja: `docs/FLUVI_ENGINEERING_JOURNAL.md`. A felhasználó által külön kért szabályzati asset elkészítése nem alkalmazáskód-módosítás.
+
+A diagnózis, az aktuális kód alapos elemzése, a lehetséges lag- és bugforrások feltárása, az oksági következtetés, a megoldás kiválasztása és az esetleges refaktor megtervezése KIZÁRÓLAG A PROMPT WRITER FELADATA. A coding agentre nem adható nyitott „tárd fel az eltűnés késését”, „keresd meg a lag okát”, „válassz jobb renderert” vagy „próbálkozz, amíg jó” feladat.
+
+A coding agent a reviewer által megadott technikai tervet implementálja, az előírt reprodukciót/mérést/tesztet végrehajtja, majd raw evidence-et, commitot és az előírt artifactot szállít. A tervnek ellentmondó tényeket jelenti; új diagnózist és új runtime-javítási irányt nem választ. Saját magának nem adhat fizikai elfogadást.
+
+Az alap-szabályzat két feladattípusa itt is kötelező:
+
+- **IMPLEMENTATION:** a reviewer megadja a konkrét kódhibát, exact source-helyeket, módosítandó kódrészletet, választott megoldást/pszeudokódot, állapot- és szálhatárokat, regressziós feltételeket. A source-ból igazolt részhiba és a teljes telefonos tünet oksági magyarázata külön bizonyítási állítás.
+- **EVIDENCE_COLLECTION:** a reviewer konkrét hipotézishez rendelt minimális kísérletet ír elő, pontos mérőhelyekkel, órákkal, correlation ID-kkel, kontrollal, cáfolási feltételekkel és visszaadandó artifacttal. Az agent végrehajtja; az eredményt a reviewer értelmezi és ő írja meg a következő javítási tervet.
+
+Ha az ok továbbra sem tiszta, a reviewer maga kéri a hiányzó célzott debug logot vagy felhasználói mérést, és megindokolja, mely döntést teszi lehetővé. A már meglévő log újrakérése és az általános „több diagnosztika kell” nem helyettesítheti a source-auditot. Az agent mechanikus implementációs szabadságára és az eltérések visszaadására az alap-szabályzat 0. része irányadó.
+
+## 2. A négy hibaterület elkülönítése
+
+Az induló felhasználói problémafelvetés négy külön vizsgálati területet tartalmaz:
+
+| Azonosító | Jelenség | Mit kell külön bizonyítani? |
+| --- | --- | --- |
+| W-SHOW | Ébresztéskor későn jelenik meg a lockscreen-widget. | Melyik megfigyelt szakasz késik, és mikor jelenik meg először a kívánt tartalom, majd annak élő animációja? |
+| W-HIDE | Feloldáskor későn tűnik el a lockscreen-widget. | Mikor érkezik meg az alkalmazás számára a releváns jel, mikor születik döntés, és mikor szűnik meg a látható megjelenítés? |
+| W-LOCK-ANIM | Hibás a lockscreen-widget animációja. | Mi az elvárt és tényleges látvány; forma-, szín-, fázis-, frissítési, lifecycle- vagy időzítési eltérés történik-e? |
+| W-HOME-ANIM | Hibás a kezdőképernyős Android-widget animációja. | A tartalom előállítása, átadása, host oldali megjelenítése vagy életciklusa mely ponton tér el az elvárt működéstől? |
+
+Ezek a kiinduló tünetcsoportok nem örökösen nyitott hibák. Státuszukat az aktuális felhasználói teszt, a tesztelt build és a napló alapján kell megadni.
+
+Kötelező szabályok:
+
+- A „késik” fizikai megfigyelés; önmagában nem bizonyít timer-, Binder-, GPU-, cache- vagy main-thread hibát.
+- A „bugos animáció” önmagában nem bizonyít FPS-problémát. A konkrét eltérést rögzíteni kell.
+- A két felület hasonló hibája nem bizonyít közös root cause-t.
+- Egy közös producer vagy asset létezése nem bizonyít közös megjelenítési útvonalat.
+- Az egyik felület javulása nem minősíti javítottnak a másikat.
+- Minden körben nevezd meg az elsődleges hibaterületet és azokat a felületeket, amelyeket regresszió ellen védeni kell.
+
+## 3. Az alap-workflow minden bizonyítási kapuja érvényes
+
+A sorrend:
+
+1. Reviewer: minden prompt előtt az aktuális alap-szabályzat, jelen kiegészítés, közös napló és releváns milestone-ok teljes elolvasása.
+2. Reviewer: exact tesztelt alkalmazás/build és az aktuális Git-állapot feloldása.
+3. Reviewer: teljes friss evidence, agent-jelentés, commit body és actual diff audit.
+4. Reviewer: érintett current source, teljes releváns tesztek és transzitív consumerfelület alapos vizsgálata; kitöltött R… hatás-/tesztmátrix és a fixture teljes állapotszerződése.
+5. Reviewer: saját diagnózis, PROVEN / UNPROVEN / MISSING EVIDENCE, rangsorolt hipotézisek és hurokelkerülési audit.
+6. Reviewer: konkrét javítási terv, vagy bizonyítékhiánynál teljesen meghatározott mérési kísérlet; angol handoff az alap-szabályzat 21 részes formájában.
+7. Coding agent: asset-/naplóolvasás, exact állapotellenőrzés, az előírt reproducer/red teszt vagy instrumentáció végrehajtása.
+8. IMPLEMENTATION ágon coding agent: kizárólag az előírt teljes javítási egység és az ellenőrzött környezetben végrehajtható gyors/célzott validáció; az R… sorok és a teljes CI belépési feltételeinek tényleges ellenőrzése. EVIDENCE_COLLECTION ágon coding agent: raw evidence visszaadása, majd reviewer-elemzés és külön javítási handoff.
+9. Coding agent: az előírt correctness-, teljesítmény- és regressziós ellenőrzések; eltérésnél konkrét evidence-visszaadás, önálló új runtime-irány nélkül.
+10. Coding agent: atomikus commitok, teljes commit body, szükséges CI, exact-source APK és delivery-evidence; teljes completion report és napló.
+11. Reviewer: az eredmények és új commitok ellenőrzése, saját következtetés és naplófrissítés. Felhasználó: fizikai visszateszt és elfogadás.
+
+A dashboardra vonatkozó konkrét widget-/controllerneveket nem kell a natív pipeline-ba képzelni. Az alap-szabályzat általános bizonyítási követelményeit az itt meghatározott natív és host oldali megfelelőkkel kell teljesíteni. A ténylegesen nem érintett alrendszeri pont `N/A — indoklás` megjelölést kapjon. Ez nem jogosít fel releváns audit kihagyására.
+
+Ha a root cause nincs bizonyítva, a reviewer nem adhat nyitott diagnosztikai feladatot az agentnek. Ő maga tervezi meg a különbséget eldöntő reprodukciót vagy mérést, az agent pedig kizárólag végrehajtja azt. A következtetés és a javítás kiválasztása a reviewerhez tér vissza. Valószínű ötletet tilos kész diagnózisnak nevezni.
+
+Megdőlt hipotézis vagy terven kívüli hiba esetén az érintett ágon nincs újabb találgató runtime-módosítás; exact source/log/test evidence és reviewer-döntés kell. A már engedélyezett, független munka folytatható. Ez nem automatikus felhasználói engedélykérés. A tesztelhető APK szállítását végig kell vinni, amíg a terv végrehajtható; külső buildblokk, hiányzó kapu vagy diagnosztikai APK nem nevezhető kész, igazolt javításnak.
+
+## 4. Exact build és környezet
+
+Minden vizsgálat rögzítse:
+
+- repository, tesztelt branch/ref, teljes alkalmazási SHA, parent SHA;
+- aktuális local/remote HEAD, integration branch és dirty/clean worktree;
+- APK neve, build mode, beágyazott source identity és rendelkezésre álló hash;
+- készülékmodell, Android/API, OEM rendszerverzió; kezdőképernyős widgetnél launcher és releváns verzió;
+- process- és service-session, capture ID, widgetpéldány/hostazonosság, ha elérhető;
+- lockscreen mód, animációs mód, adatvédelmi mód, widgetméret és releváns konfiguráció;
+- foreground/background beállítások, engedélyek és szolgáltatásállapot, ha érintettek;
+- első indítás, első ébresztés, ismételt ébresztés, process-újraindítás vagy hosszabb alvás utáni állapot.
+
+A legutóbbi branch HEAD, egy naplócommit és a telefonra telepített APK source SHA-ja külön fogalom. A dokumentációs child commit nem válik automatikusan új alkalmazási baseline-ná. A lockscreen-teszt buildazonossága nem bizonyítja magától egy másik időpontban megfigyelt launcher-widget buildazonosságát.
+
+Hiányzó identityt jelölj hiányzóként; ne töltsd ki emlékezetből vagy a legújabb GitHub-commit alapján.
+
+## 5. Teljes logaudit és megismételhető evidence
+
+A Google Docs mellett a felhasználó által bemásolt vagy fájlként exportált natív capture, Android-log, profiler-trace, releváns CI-artifact és vizuális felvétel is lehet bizonyíték. A formátumtól függetlenül a teljes releváns anyagot kell vizsgálni; snippet vagy összefoglaló nem elég.
+
+Minden felhasznált snapshothoz rögzítsd a forrást, exportidőt, elérhető módosítási időt, méretet, SHA-256-ot, buildet, sessiont, capture módot, retained tartományt és ismert hiányokat. Változó logból a javítási körhöz változatlan másolat kell.
+
+Kötelező:
+
+- session/capture/build szerinti elkülönítés;
+- sequence- és tartalomütközések, duplikációk, retention gapek és truncation auditja;
+- felhasználói marker és runtime event külön kezelése;
+- az egy ébresztési cikluson belüli összes attach/hide/reattach epizód megtartása;
+- első sikeres rajzolás elkülönítése egy későbbi, rajzolás nélkül eltávolított attach-tól;
+- a tényleges látható visszavonás és az utána történő detached cleanup elkülönítése;
+- korábbi build logjának `HISTORICAL EVIDENCE` jelölése.
+
+Egy későbbi attach nem írhatja felül a ciklus korábbi első élő képkockáját a kimutatásban. A korábbi sikeres rajzolás viszont nem fedheti el a későbbi hibás reattach-ot vagy megszakadást. Mindkettőt láthatóvá kell tenni.
+
+## 6. Órák, megfigyelhetőség és fizikai megjelenés
+
+Minden időbélyegnél azonosítani kell az órát és a mérés helyét. Wall-clock, uptime, elapsed realtime, frame timestamp és videó-idővonal nem keverhető automatikusan. Mélyalvást átfogó összehasonlításnál külön ellenőrizni kell az időalap jelentését. Eltérő időalapok között csak dokumentált és ellenőrzött korrelációval szabad számolni.
+
+Külön fogalmak:
+
+- rendszeroldali esemény kezdete;
+- esemény alkalmazásoldali fogadása;
+- feldolgozás és döntés;
+- ablakművelet hívása és visszatérése;
+- view attach, draw, shader draw és aktuális material draw;
+- frame-commit visszajelzés;
+- a felhasználó számára ténylegesen látható megjelenés vagy eltűnés.
+
+Az `addView`/`removeView` visszatérése, egy draw callback vagy frame-commit visszajelzés önmagában nem azonos a fizikai képernyőn megfigyelt végponttal. Az esemény jelentését a mérőhely és az alkalmazott API aktuális szerződése alapján ellenőrizni kell.
+
+A nem megfigyelt végpont értéke `UNOBSERVED`, nem nulla. Hiányzó kezdőpont mellett a teljes end-to-end késés nem nevezhető mértnek. Az „első callbacktől első draw-ig” mérés nem nevezhető automatikusan „ébresztéstől megjelenésig” mérésnek.
+
+Fizikai szinkronizációt igénylő állításhoz megfelelő vizuális evidence és időkorreláció kell. Ha nincs, az alkalmazásból megfigyelt szakaszról adj következtetést, a hiányzó szakaszt pedig nevezd meg. Önkényes levonással, timestamp-áthelyezéssel vagy markerátnevezéssel tilos javulást előállítani.
+
+## 7. W-SHOW — megjelenési késés auditja
+
+Az aktuális source alapján térképezd fel a tényleges útvonalat. A következők vizsgálandó mérési határok, nem előre bizonyított soros végrehajtási sorrend:
+
+- ébresztési/display/keyguard jel és callback-fogadás;
+- inspection igény, sorba állítás, munkakezdés;
+- ablak-/nodelekérés, freshness feltételek, cache-művelet, feldolgozás;
+- jogosultság/visibility eligibility meghatározása és eredménypublikáció;
+- worker → main handoff, main queue wait, main feldolgozás;
+- előkészítés, material/resource-readiness, attach-döntés és WindowManager-művelet;
+- első root draw, első helyes tartalom, első live animációs draw;
+- fizikai láthatóság, ha ténylegesen megfigyelhető.
+
+Külön mérd a sorban várakozást és az aktív munkát. Egy platformhívás teljes ideje nem bontja magától külön távoli ütemezésre, cache missre és prefetchre a késést. Egymással átfedő szakaszokat ne adj össze soros end-to-end időként.
+
+Különítsd el az első hideg megjelenést az ismételt ébresztéstől. Az offscreen előkészítés sikere nem bizonyítja a látható renderer teljes készenlétét. Egy statikus vagy bootstrap képkocka nem számolható első élő animált képkockának.
+
+Vizsgáld meg, hogy egy retry lecserélése, törlése vagy egy új esemény elveszíthet-e még teljesítetlen munkát/frissességi kötelezettséget. Ellenőrizd a munkát ütemező és teljesítő ownert. Ezt lehetséges vizsgálati irányként kezeld, amíg az aktuális buildben nincs rá bizonyíték.
+
+## 8. W-HIDE — eltűnési késés auditja
+
+Külön rögzítsd:
+
+- az elérhető feloldási/hide jel eredetét és alkalmazásoldali fogadását;
+- a hide-döntés és visibility-authority váltás időpontját;
+- a függő show/inspection/preparation eredmények érvénytelenítését;
+- a helyi vizuális visszavonás, ablakeltávolítás és cleanup időpontjait;
+- a fizikai eltűnést, ha ténylegesen megfigyelt végpont.
+
+Kötelező ellenőrizni, hogy hosszú inspection, nodelekérés, material-előkészítés, soros queue, lock vagy diagnosztikai munka késlelteti-e a visszavonást. A késés oka csak source és runtime/reproducer bizonyítékkal nevezhető meg.
+
+Kötelező contractok:
+
+- A már érvénytelen megjelenítési jogosultságra érkező késői eredmény nem jelenítheti meg újra az overlayt.
+- Feloldás utáni reattach nem tekinthető elfogadható teljesítménykompromisszumnak.
+- A cleanup mérése nem helyettesítheti a ténylegesen látható root visszavonásának mérését.
+- A gyors hide nem ronthatja el a következő legitim lock/wake ciklus megjelenését.
+- Nem lehet a feloldási vagy érintési viselkedést blokkolni a widget kedvéért.
+
+## 9. Natív ownership, lifecycle, rétegek és határok
+
+Az aktuális megvalósításhoz illeszkedően azonosítsd:
+
+- service-, window-, retained-view- és renderer-ownereket;
+- worker/main/renderer szálhatárokat és a megosztott állapot védelmét;
+- service-session, wake-, interaction-, visibility-, attach- és content-generation jelentését;
+- queue, retry, cancellation, freshness-acknowledgement és stale-result szabályokat;
+- listener/callback regisztrációt, eltávolítást, újraregisztrációt és dispose-t;
+- material, shader, buffer, bitmap, frame package és cache tulajdonosát és élettartamát.
+
+Ne hozz létre egy meglévő mellé második visibility-authorityt, animációs órát, queue-t vagy renderert pusztán egy tünet elfedésére. Új ownerhez bizonyított architekturális szükséglet és hatásvizsgálat kell. A stabil identity megőrzésének helyes határát source alapján határozd meg; legitim detach/dispose tilalmát ne vezesd le a stabilitási elvből.
+
+A réteg- és bounds-audit natív megfelelői:
+
+- ablak típusa, parentje, displaye, z-orderje és valódi láthatósága;
+- window/view méretek, insets, clip, alpha, transform és paint-terület;
+- érintési/fókusz/semantics viselkedés, ahol releváns;
+- saját overlay és idegen rendszerablak azonosításának helyessége;
+- valóban ugyanaz a root/attach/content-generation tartozik-e a döntéshez és a rajzoláshoz.
+
+A bizonytalan vagy hiányos rendszermegfigyelést ne alakítsd pozitív megjelenítési bizonyítékká a gyorsulás kedvéért. A meglévő visibility- és adatvédelmi szerződést meg kell őrizni.
+
+## 10. Animáció: helyesség és teljesítmény külön kapu
+
+Mindkét felülethez rögzítsd az elvárt referenciát: alkalmazásbeli animáció, elfogadott videó/kép, specifikáció vagy fizikailag elfogadott build. Ha nincs egyértelmű referencia, az eltérés típusát előbb tisztázni kell.
+
+Külön vizsgálandó:
+
+- forma, mintázat, skála, kontúr, élsimítás és átlátszóság;
+- paletta és konfiguráció helyessége;
+- sebesség, időalap, fázisfolytonosság, loop-varrat és újraindulás;
+- kimaradó, ismételt vagy nem megfelelő sorrendű képkockák;
+- rövid akadás, tartós megállás, villogás és átmeneti statikus állapot;
+- adat-/beállításváltozás terjedése a ténylegesen megjelenített tartalomig;
+- ébresztés, attach, detach, visszatérés és több widgetpéldány hatása.
+
+A magasabb FPS nem bizonyít helyes animációt. Azonos szín nem bizonyít azonos mintázatot. Előállított képkockák száma nem bizonyít megjelenített képkockaszámot. Azonos vizuális család nem követel automatikusan szinkron fázist a két felületen; a fázisazonosságot csak a tényleges termékkövetelmény alapján kérd számon.
+
+A producer számítási idejét, az átadás idejét, a megjelenítési cadence-et és az állapotfrissítés késését külön kell mérni. Újraindulás után és folyamatos futás közben is ellenőrizni kell a működést; néhány sima másodperc nem bizonyít tartós stabilitást.
+
+## 11. Kezdőképernyős Android-widget saját ellenőrzései
+
+Először source alapján állapítsd meg a megjelenítési architektúrát. RemoteViews, képkockasorozat, host oldali animáció vagy más megoldás csak akkor kerülhet tényként a promptba, ha ténylegesen ez van használatban.
+
+Vizsgáld meg:
+
+- konfiguráció/adatváltozás → generálás → publikáció → host frissítés útvonalát;
+- widget ID, méret, display és konfiguráció szerinti erőforrás-azonosságot;
+- régi generálás késői befejezését és új konfiguráció felülírásának veszélyét;
+- generálási/publikációs sor és memória korlátait;
+- szükségtelen újragenerálást, ismételt átadást és animáció-újraindítást;
+- launcherre visszatérést, átméretezést, példányok létrehozását/törlését és érintett lifecycle-eseteket;
+- process/service újraindulást és a foreground/background kapcsolók hatását, ha a source szerint releváns.
+
+Képkockacsomag esetén külön ellenőrizd a képméretet, képkockaszámot, időzítést, sorrendet, loop-folytonosságot és a tényleges memória/átviteli költséget. Nem szabad korábbi emlékezetből hard-code-olni a frame-számot, felbontást vagy limitet.
+
+A host számára elküldött update nem bizonyít fizikai megjelenést. Ha a host belső állapota nem megfigyelhető, ezt jelöld korlátként. A „launcher/OEM limit” állításhoz megfelelő bizonyíték kell; nem lehet automatikus magyarázat minden megakadásra.
+
+## 12. Graph és közös módosítások hatásvizsgálata
+
+Az alap-szabályzat SCIP-provenance követelménye megmarad. Ellenőrizd a source SHA mellett azt is, hogy a graph ténylegesen lefedi-e az érintett nyelvet és szimbólumokat. Egy matching Dart-index nem bizonyítja egy Kotlin service consumerfelületének auditját.
+
+Ha megfelelő graph létezik, tényleges query és current-source ellenőrzés kötelező. Hiányzó, stale vagy részleges graph esetén rögzítsd a korlátot, és végezz explicit source-alapú definíció-, hívó-, consumer- és tesztfeltérképezést; ezt ne nevezd graph-auditnak. A következő implementációs döntésnél maradó bizonytalanságot külön értékeld.
+
+Közös shader, material, konfiguráció, adatprojekció vagy cache módosítása előtt ellenőrizd az alkalmazásbeli Headert/dashboardot, a lockscreen és a launcher-widget tényleges consumereit. A védett regressziós felületet a valós függőségek határozzák meg.
+
+## 13. Instrumentációs és mérési fegyelem
+
+A mérés legyen korlátos és a mért útvonalat a lehető legkevésbé terhelő. Az aktuális diagnosztikáról ellenőrizd:
+
+- mely szálon készül a timestamp, az esemény, a formázás és a redukció;
+- van-e soros lock, IO, nagyméretű objektum vagy teljes node-fa feldolgozás a kritikus úton;
+- queue kapacitás, overflow, drop-számláló és retention határ;
+- immutable eseményazonosság és időbélyeg;
+- a freeze/export konzisztenciája és az addig függő események kezelése;
+- LIGHT/FULL vagy más capture-mód többletköltsége, ha ilyen módok vannak.
+
+Az aszinkronra tett naplózás nem jelent automatikusan megszüntetett diagnosztikai költséget. Mérni kell a produceroldali munkát és a háttérterhelést is. Tilos korlátlan queue-val vagy észrevétlen evidence-vesztéssel „optimalizálni”.
+
+Csak a diagnózishoz szükséges mezőket rögzítsd. A logger hiánya vagy hibája nem akadályozhatja a működés szempontjából szükséges hide/show/lifecycle lépést. Ezt a contractot forrásból és releváns tesztből ellenőrizd.
+
+## 14. Teljesítmény-összehasonlítás
+
+Baseline és candidate között azonosítsd a készüléket, build mode-ot, konfigurációt, capture-módot, releváns rendszerállapotot és a tesztsorozatot. A különbségeket ne hallgasd el. Eltérő, kontrollálatlan futásokból ne állíts bizonyított gyorsulást.
+
+Külön eredménysor kell:
+
+- hideg első megjelenésre;
+- ismételt ébresztésre;
+- feloldási eltűnésre;
+- lockscreen animációra;
+- launcher-widget animációra és frissítési késésre.
+
+Add meg a mintaszámot és az egyedi kísérleteket. Megfelelő mintaszámnál medián és felső percentilis is hasznos; kevés mintán ne állíts stabil p95-öt. Az első ciklus és a kiugró érték nem dobható el azért, mert rontja az eredményt.
+
+A jelentés válassza szét a queue waitet, CPU-munkát, platformhívás idejét, renderelési munkát, átadási időt és fizikai megfigyelést. Memória-, erőforrás- és háttérterhelési következményeket is ellenőrizni kell, ha az optimalizáció érinti őket.
+
+Ne találj ki teljesíthetetlen vagy mérés nélküli „0 ms”, „azonnal”, „fix 60/120 FPS” elfogadási küszöböt. A számszerű cél és mérési mód a tényleges baseline-ra és termékkövetelményre épüljön. A felhasználó által kért érzékelhető javulás fizikailag is ellenőrzendő.
+
+## 15. Reproducer és anti-false-green tesztek
+
+A tesztválasztás a bizonyított hibához igazodjon. A releváns esetekből legyen megindokolt mátrix; nem kell minden javításnál az egész alkalmazás minden állapotát újratesztelni.
+
+| Eset | Ellenőrizendő contract |
+| --- | --- |
+| Hideg első wake és ismételt wake | A helyes tartalom és élő animáció valóban elindul; az első ciklus nincs elrejtve. |
+| Unlock a sorban álló vagy futó inspection alatt | Nincs késői jogosulatlan show vagy reattach. |
+| Unlock előkészítés/attach/első draw közben | A megfelelő generáció visszavonása és erőforrás-kezelése történik. |
+| Gyors lock–unlock–lock | A régi callback elutasított, az új legitim ciklus működőképes. |
+| Retry törlés, csere, kimerülés | A még szükséges munka nem vész el, és nem keletkezik végtelen újrapróbálás. |
+| Hiányos/ellentmondó surface megfigyelés | A bizonytalanságot a visibility-contract szerint kezeli; nincs hamis jogosultság. |
+| Több attach egy ciklusban | Első live draw és minden visszavonási epizód helyesen azonosított. |
+| Animáció hosszabb megfigyelése | Nincs elhallgatott későbbi megállás, villogás vagy fázisugrás. |
+| Konfiguráció A→B→C, késői A/B completion | C aktuális állapota nem íródik felül elavult eredménnyel. |
+| Host visszatérés/resize/több widgetpéldány | Nem keverednek az identityk és nem indul újra szükségtelenül az animáció. |
+| Dispose/új szolgáltatás/session | Nincs orphan callback, hibás visszajelzés vagy bizonyított erőforrásszivárgás. |
+
+**Kötelező előzetes natív hatásmátrix.** A fenti esetekből a reviewer a tényleges módosításhoz kitöltött R… sorokat készít az alap-szabályzat szerint. Az eset neve önmagában nem ellenőrzési terv: kell az exact owner/szimbólum, kiinduló állapot, eseménysorrend, megőrzendő feltétel, utófeltétel, teszt és parancs. Az elérhető cache-hit szinkron callbacket, cache-miss aszinkron callbacket és fallbacket együtt vizsgáld. A választott route/authority beállítása és a callback lehetséges futási ideje közötti sorrendet a forrásban ellenőrizd.
+
+Előkészítést vagy renderer-életciklust érintő módosításnál külön vizsgáld:
+
+- mely erőforrás marad újrahasználható, és mely képkocka-/bufferhasználatot kell lezárni;
+- detached vagy érvénytelen lease mellett milyen publikáció tiltott, és hogyan szabadul fel a függő munka;
+- a következő jogosult attach valóban aktuális tartalommal indul-e;
+- indulhat-e két előkészítési út egyszerre; milyen módokban indokolt külön route vagy fallback;
+- a failure/cancel/dispose/stale completion minden ága megőrzi-e a globális erőforráskorlátot.
+
+Ezek vizsgálati kötelezettségek; nem írnak elő minden architektúrára nulla foglaltságot vagy egy konkrét GPU-megoldást. A pontos élettartamot, fence-/buffer-biztonságot és mérhető utófeltételeket a reviewer a current source alapján határozza meg.
+
+**A valós service-fixture szerződése.** A reviewer adja meg az egyes szakaszok setupját, elfogadási predikátumát, állapotot bizonyító API/ownerét, megfigyelési időpontját, akcióját, tényleges outputját és cleanupját. Display-off, keyguard-locked, app-root-withdrawn, accessibility/window metadata és globális idle külön állítások. Egy második lekérdezés új megfigyelés; az előző sikeres minta nem garantálja az érték változatlanságát. Az egyszeri megfigyelés, tartós állapot és akció előtti friss ellenőrzés közül a reviewer válassza a teszt célját valóban igazoló szerződést. A cél megőrzése nélkül tilos az újraellenőrzést elhagyni vagy gyengébb predikátumra cserélni.
+
+A fixture-előfeltétel bukása, a production output hiánya és a cleanup/export hibája külön hibacsoport. A teszt ne fogadjon el másik epizód korábbi sikerét a vizsgált epizód helyett. Assertionjavításnál legyen kontroll, amely a valóban hibás állapotot továbbra is elutasítja; timeoutnövelés vagy sleep önmagában nem javítás.
+
+**Célzott natív kör → teljes delivery.** A prompt nevezze meg a ténylegesen elérhető hostot/runnert, Android/API/emulátor-konfigurációt, app/test buildazonosságot, tesztmetódusokat vagy scriptet, setup/reset feltételeket, futási korlátot és artifactokat. ARM/proot környezetből nem feltételezhető helyi x86_64 Android-emulátor vagy kompatibilis buildtool. A hiányzó gyors távoli útvonal külön megtervezendő feladat; nem állítható késznek.
+
+Ha a repository támogatja, egy exact candidate app/test APK-párjával végezhető a kijelölt, korlátos diagnosztikai sorozat. Forrás-/buildbemenet-változás új megfelelő buildet igényel. Minden sikertelen minta megmarad; a célzott siker csak a kiválasztott contractot igazolja. Nem helyettesíti a teljes kötelező natív/service/regressziós kapukat, és nem jogosít ellenőrzött Human APK kiadására. A teljes futás előtt az alap-szabályzat belépési táblájában szerepeljen minden R… sor eredménye és nyitott hiba.
+
+Tesztbizonyítási szintek:
+
+- Policy/unit teszt: determinisztikus állapot- és sorrendi contract, ha valódi production policyt használ.
+- Production integration/instrumentation: a tényleges service/controller/queue/window/render útvonal releváns része.
+- Fizikai készülékteszt: a felhasználó számára látható késés, animáció és elfogadhatóság.
+
+Egy unit teszt nem bizonyít teljes WindowManager-, GPU- vagy launcher-viselkedést. Egy mock callback, event count, előre kész cache, offscreen shader-siker vagy későbbi settle nem adhat hamis zöldet az eredeti tünetre. A tesztnek a vizsgált végső állapotot/generációt és a releváns tényleges outputot kell ellenőriznie.
+
+Emulátoros siker és CI-zöld nem jelent fizikai Nothing/OEM készülékes elfogadást. Sikertelen tesztet ne címkézz inherited failure-nek összehasonlító bizonyíték nélkül.
+
+## 16. Scope lock és tiltott látszatjavítások
+
+Minden prompt nevezze meg a javítható ownereket/fájlokat, a konkrét szimbólumokat, módosítandó kódrészletet és a védett felületeket. A reviewernek le kell írnia az új működési sorrendet és az implementáció módszerét, nem elegendő egy általános teljesítménycél. Előzetes bizonyíték nélkül tilos broad rewrite, új párhuzamos authority vagy a hiba áthelyezése egy másik lifecycle-fázisba.
+
+Refaktor akkor adható ki, ha a reviewer a forrásból megmutatja, miért akadályozza a jelenlegi szerkezet a szükséges contractot, és maga megtervezi az új ownership-, thread-, lifecycle- és adatátadási határokat, a migráció lépéseit és a regressziós bizonyítást. A coding agentre nem bízható az architektúra kiválasztása.
+
+Nem elfogadható teljesítményjavulás:
+
+- a widget vagy animáció kikapcsolásával;
+- az animáció önkényes lassításával, statikus képre cserélésével vagy vizuális hűségének lerontásával;
+- szükséges adat-/konfigurációfrissítések eldobásával vagy stale tartalom fenntartásával;
+- eligibility-, feloldási-, privacy- vagy lifecycle-ellenőrzés megkerülésével;
+- az overlay feloldás utáni megtartásával vagy input blokkolásával;
+- nagyobb timeouttal, késleltetett megjelenítéssel, debounce/cooldown hozzáadásával a tünet elfedésére;
+- korlátlan pollinggal, előkészítéssel, queue-val vagy cache-sel;
+- a mérési kezdőpont későbbre mozgatásával, a legrosszabb ciklusok elhagyásával;
+- diagnosztikai eventek vagy hibás kísérletek észrevétlen eldobásával.
+
+Létező, indokolt retry, cache, batching vagy bootstrap mechanizmust sem kell automatikusan eltávolítani. Az aktuális szerződését és költségét kell bizonyítani. Ez a kiegészítés nem rendel el konkrét prefetch flaget, globális cache clear-t, új rendertechnikát vagy korlátlan előmelegítést.
+
+Külső widgetalkalmazásra, médialejátszó-trükkre vagy más termékirányra váltás nem része egy teljesítményjavító promptnak, hacsak a felhasználó külön nem kéri.
+
+## 17. Hurokelkerülés és kötelező közös napló
+
+A prompt writer minden új fizikai visszajelzésnél ellenőrzi a GitHub-változásokat és append-only bejegyzést készít a közös naplóba. A coding agent minden alkalmazási commitját és validációs eredményét ehhez a vizsgálati lánchoz köti.
+
+Minden bejegyzés tartalmazza:
+
+1. Tesztelt alkalmazási SHA/build; aktuális branch HEAD és a dokumentációs commitok megkülönböztetése.
+2. A konkrét felhasználói megfigyelés, hibaterület és tesztkörülmény.
+3. Az előző commit tényleges változása és a megvizsgált diff/source/test kör.
+4. Evidence-hivatkozások, capture/session, hash, retained tartomány és hiányok.
+5. PROVEN / UNPROVEN / MISSING EVIDENCE.
+6. Megkísérelt javítás vagy instrumentáció, baseline/candidate eredmény és bizonyítási korlát.
+7. Elvetett vagy még nyitott hipotézis; miért nem szabad új bizonyíték nélkül ugyanazt megismételni.
+8. Reviewer által kijelölt következő konkrét javítás vagy kísérlet, védett viselkedés és fizikai státusz.
+9. Feladattípus, reviewer-döntés hivatkozása, pontosan átadott technikai terv és a coding agenttől várt artifact.
+10. Tervtől való eltérés vagy ellenbizonyíték esetén a reviewerhez visszaadott döntés; új diagnózist az agent nem írhat tényként a naplóba.
+
+A napló run/source szerinti rövid hibajegyzéke az összes releváns bukást tartalmazza: exact lépés/hiba, fordítás/production/fixture/mérés/infrastruktúra besorolás, evidence és következő reviewer-döntés. Bizonytalan besorolás maradjon bizonytalan. Ne csak az első assertiont kezeld, miközben ugyanabban a futásban másik ismert hiba is maradt. A tervet cáfoló első hiba visszatér a reviewerhez; ugyanazon hibahatár új evidence nélküli ismételt bukása után tilos újabb vak teljes CI. A reviewer meghatározott célzott kísérletet vagy javítást ad; a mechanikus szerződésen belüli korrekció és a független engedélyezett munka folytatható.
+
+Ugyanazt a flagcserét, cache-stratégiát, queue-áthelyezést vagy renderer-átalakítást ne add ki újra új oksági bizonyíték nélkül. A már kipróbált irány újravizsgálása megengedett, ha a prompt világosan megnevezi az új bizonyítékot vagy a korábbi összehasonlítás hibáját.
+
+A prompt writer kizárólag a naplófájlt commitolja a repositoryban. A commit legyen build-trigger nélküli: ellenőrizze a tényleges workflow-triggereket és a megfelelő skip-mechanizmust; használjon `[skip ci]` jelölést, ahol az hatályos; ne indítson workflow-dispatcht. A csak dokumentációs diffet és az eredményt ellenőrizze, párhuzamos változásokat őrizzen meg. Ha új futás indul, azt ne hallgassa el.
+
+Minden coding-agent promptban explicit olvasási utasítás kell az alap-szabályzatra, erre a kiegészítésre és a `docs/FLUVI_ENGINEERING_JOURNAL.md` fájlra. Hiányzó assetnél ne állítsa az agent, hogy elolvasta; a hozzáférési hiányt rendezni kell a rá épülő implementáció előtt.
+
+## 18. Az angol coding-agent prompt kötelező widgettartalma
+
+Az alap-szabályzat 21 részes szerkezete megmarad. Az alábbiak a widget-feladatokban kötelező tartalmi megfeleltetések, nem új, alternatív promptformátum:
+
+| Alap-prompt rész | Widget-specifikus tartalom |
+| --- | --- |
+| 1. TITLE / TASK INTENT | IMPLEMENTATION vagy EVIDENCE_COLLECTION, reviewer-döntés; W-SHOW/W-HIDE/W-LOCK-ANIM/W-HOME-ANIM scope és védett felületek. |
+| 2–3. STATE / PREFLIGHT | Exact installed/tested source, APK, branch, host/készülék, service/widget identity, szabályzatok és napló. |
+| 4–6. USER / LOG / AGENT AUDIT | Teljes capture, animációs referencia, epizódok, commitok, actual diff, jelentések és evidence-korlátok. |
+| 7. GRAPH / IMPACT | Source- és nyelvi lefedettség, közös producer/material/dashboard consumerfelület; kitöltött R… hatásmátrix a szükséges összefüggő módosításokkal. |
+| 8–10. SOURCE / CLASSIFICATION / CAUSAL GATE | A reviewer saját source-auditja, ownerlánc, órák, végpontok, bizonyított first failing boundary vagy konkrét, cáfolható hipotézishez kötött mérési terv. |
+| 11–12. SCOPE / LAYERS | Visibility/lifecycle/identity invariánsok, natív ablak- és hosthatárok, no-touch felületek. |
+| 13–14. RED TESTS / IMPLEMENTATION | Exact kódrészlet és cserekoncepció/pszeudokód; R… soronként lifecycle-, sync/async-, fallback- és erőforrásfeltételek; fixture setup/megfigyelés/output/cleanup, negatív kontroll; mérési feladatban csak kijelölt instrumentáció. |
+| 15. PERFORMANCE | Külön show/hide/lockscreen-animation/home-widget mérés, cold/warm, baseline/candidate, diagnosztikai költség. |
+| 16–18. ORDER / VALIDATION / COMMITS | Kicsi validált egységek egy teljes előre megtervezett repairen belül; gyors/célzott/teljes ellenőrzés külön; CI-belépési tábla, exact PASS/FAIL/NOT RUN; minden hibacsoport és reviewer-visszaadási pont; teljes commit body és naplókapcsolat. |
+| 19–21. DELIVERY / REPORT / DONE | Diagnosztikai futás és végső delivery külön; teljes kötelező kapuk, exact-source APK/hash, graph státusz, mátrixeredmények és hibajegyzék a completion reportban; user-only fizikai elfogadás. |
+
+A prompt kötelező preflight-mondata, az aktuális assetelérhetőségek megadásával:
+
+> Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries using the versions and access paths supplied in this handoff. Explicitly report missing material. The prompt writer owns diagnosis, causal interpretation, the repair concept and any refactor decision. Implement only the specified technical contract or execute only the specified evidence-collection experiment; do not select a new root cause or repair strategy. If source, logs or tests contradict the plan, preserve and report exact evidence and return the affected decision to the reviewer. Continue independent authorized work. Follow the supplied risk-to-test matrix and the verified focused-validation route. Record every relevant failure and every diagnostic repetition. Start full delivery only after the specified entry conditions; diagnostic selection does not satisfy full required gates. Do not repeat a rejected repair without new evidence and a reviewer decision. Resolve the exact physically tested application source separately from documentation-only HEAD commits. Preserve the dashboard contracts and verify the specified native lockscreen and launcher-widget boundaries.
+
+Ez a preflight-részlet önmagában nem teljes coding-agent prompt. A prompt writer továbbra is egyetlen angol, copy-ready, bizonyítékokra épülő teljes handoffot ad.
+
+## 19. Completion report és befejezési feltételek
+
+Az alap-szabályzat teljes completion reportján túl külön eredménytábla kell a scope-ba tartozó négy hibaterületre. Mindegyik sor jelölje:
+
+- baseline és final alkalmazási SHA/build;
+- vizsgálati és fizikai státusz;
+- mintaszám, mérési kezdő-/végpontok és időalap;
+- mért eredmény és regressziós összehasonlítás;
+- tényleges output/evidence és annak korlátai;
+- fennmaradó hiba vagy nem vizsgált felület.
+
+A report tartalmazza az R… kockázati sorok tényleges ellenőrzését, a fixture előfeltételeit, a gyors/célzott/teljes futások külön eredményét, a teljes CI belépési tábláját és minden hibacsoport naplóhivatkozását. A diagnosztikai útvonal tervét, implementálását és sikeres kipróbálását külön státuszként jelölje.
+
+A report külön tartalmazza a reviewer átadott diagnózisát és tervét, valamint az agent által ténylegesen mért új tényeket, eltéréseket és artifactokat. A következő oksági következtetést a reviewer végzi. EVIDENCE_COLLECTION lezárásakor a kijelölt evidence átadása történt meg; ebből nem következik javított alkalmazás vagy lezárt fizikai hiba.
+
+Külön kell közölni a javítás implementálását, automatizált igazolását, az artifact elkészültét és a fizikai elfogadást. A „kész”, „smooth” vagy „latency fixed” nem lehet egyetlen teszt zöld státuszának átnevezése.
+
+Az implementációs szállítás akkor tekinthető ellenőrzötten átadottnak, ha az érintett contractok tesztjei, a védett regressziós ellenőrzések és a releváns delivery-feltételek teljesültek; a kimaradt vagy sikertelen ellenőrzések pontosan meg vannak nevezve; a napló és a teljes report elérhető.
+
+A fizikai hibát csak a felhasználó exact APK-ra adott visszajelzése zárhatja le. Addig a végső fizikai státusz szó szerint:
+
+`PHYSICAL VALIDATION — PENDING, USER ONLY`
+
+Új elfogadott lockscreen- vagy launcher-widget mérföldkő csak explicit fizikai elfogadás után rögzíthető, pontosan megnevezett viselkedésre és ismert korlátokra. Egy animáció elfogadása nem foglalja magában automatikusan a megjelenési és eltűnési késés elfogadását.
+FLUVI_RULE_ASSET_END FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md
+````
+
+</details>
