@@ -11230,3 +11230,28 @@ FLUVI_RULE_ASSET_END FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md
 - PASS — `bash scripts/verify-fluvi-boundaries.sh`.
 - NOT RUN — Android instrumentation compilation and T1–T7 execution: this Termux ARM host has no compatible local Kotlin/Android emulator/AAPT2 route. The prescribed API35 x86_64 diagnostic lane is added in the next tooling unit and remains the required execution route.
 - No phone-latency conclusion, native service PASS, Human APK, or physical acceptance is claimed by this source-only unit. `PHYSICAL VALIDATION — PENDING, USER ONLY`.
+
+
+## 2026-11-12 — Coding-agent unit 2: bounded native diagnostic execution route
+
+### Changed contract
+
+- Added manual boolean `native_diagnostic` to the registered `fluvi-core.yml`. In that mode only `test-keyguard-material-runtime` is eligible; `dashboard-paths`, core, Flutter, optional nightly/baseline/profile lanes and Human APK publication are explicitly excluded. The native job retains `needs: test-core` and its explicit status-function guard permits only this diagnostic mode to run after that intentionally skipped prerequisite.
+- Normal runs keep their existing prerequisite graph. The native job first runs the fixed helper-only observation controls, then the unchanged `scripts/test-keyguard-runtime.sh`; a helper failure fails the job while still allowing the existing lower-suite/service evidence collection. Normal Human delivery still requires successful core, Flutter and native jobs.
+- Added `scripts/test-keyguard-native-diagnostic.sh`. It accepts only no argument or `--helper-only`, records exact source/APK SHA-256/device identity, requires the real runner transcript to contain exactly seven helper tests, and in diagnostic mode performs exactly two complete calls of the unchanged service-trace script on the same identified emulator/APKs. Each service evidence directory is analyzed when its trace exists and moved to its own retained repetition directory; either failed repetition fails the aggregate. It has no Human-APK publication path.
+
+### Validation and limits
+
+- PASS — `git diff --check`.
+- PASS — `bash -n scripts/test-keyguard-native-diagnostic.sh`.
+- PASS — `bash scripts/verify-fluvi-boundaries.sh`.
+- PASS — unknown diagnostic-script argument is rejected with exit `64` before APK/device work.
+- PASS — source inspection confirms seven helper methods and no production Kotlin/Dart file in the uncommitted tooling delta.
+- NOT RUN locally — `actionlint` is not installed; the diagnostic workflow is the compatible workflow/shell validation route.
+- NOT RUN — API35 assembly, seven helper controls, both service repetitions, normal full lane, dashboard profile and Human APK. These remain required and are not inferred from shell syntax.
+
+### Scope and status
+
+- The diagnostic job labels and artifact names include diagnostic mode, full source SHA, run ID and attempt; normal artifact names/paths remain available, with a separate helper-evidence artifact.
+- The unrelated dashboard `RangeError(year)` remains a separate visible failure family. No graph regeneration is claimed because no Kotlin-capable graph tool/index was available.
+- No production performance change, phone-lag conclusion, green native gate, or Human APK is claimed. `PHYSICAL VALIDATION — PENDING, USER ONLY`.
