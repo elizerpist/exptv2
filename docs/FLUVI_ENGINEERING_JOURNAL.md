@@ -11284,3 +11284,517 @@ FLUVI_RULE_ASSET_END FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md
 - The normal native helper/real-service route failed before the terminal observation block. First failing boundary: `KeyguardServiceOverlayInstrumentationTest.screenOff`, called by initial `episode` at line `164`, timed out in `await` at line `1464` with `screen-off keyguard admission timed out; no classifier or callback bypass is permitted`. The independent terminal observation, reattach-after-rapid, and later 30-cycle section were not reached in this run. This is R8's separate independent-wake/admission risk, not a contradiction of the targeted diagnostic's two completed repetitions.
 - Retained native evidence: artifact `13974432927`, `keyguard-runtime-results-b82eb97c2ec98d8f6962365888fd4e428d2cf669`; helper artifact `13974203692`. The normal run had no dashboard profile execution because its Flutter prerequisite had already failed, so it neither proves nor resolves the known independent dashboard profile failure.
 - Required reviewer handback: decide the exact admission-path investigation/repair, if any, for the screen-off timeout and resolve the dashboard workflow-boundary test contract before another full dispatch. No timeout increase, classifier/callback bypass, fixture reset/normalization, renderer change, or Human-APK bypass was made. `PHYSICAL VALIDATION — PENDING, USER ONLY`.
+
+
+## 2026-11-12 — R-DELIVERY-SLEEP-ADMISSION-02: reviewer decisions for the two blocked delivery gates
+
+### Feedback, identity and audit receipt
+
+User supplied the coding-agent handback: terminal-observation diagnostic succeeds; normal delivery fails independently in a workflow boundary test and initial cold keyguard admission; no Human APK. This is CI feedback, not a new phone acceptance.
+
+Reviewed branch fix/orb-v4-latency-lockscreen at 9a2fa86b559777ef13cd41f278871bc2deaae42f, unchanged when rechecked. Both execution sources are b82eb97c2ec98d8f6962365888fd4e428d2cf669. Documentation children c83661259a47a3f18ed1c1981d03eca9afcf8fcb and 9a2fa86b are not new application builds. Earlier production candidate is 3b4dbba870cda66cbba830b1bcd1ca4183636d91; last phone source identified in relevant journal evidence remains 04e229c64e560bef9d49972c3413d1115fc36c41. No new production source was changed by the audited terminal/CI chain.
+
+Read complete current rule assets base2.1/widget1.2, complete MILESTONE_COMMITS.md, complete changed service fixture and terminal helper/tests, workflow, diagnostic/runtime/service scripts, failed dashboard boundary test and the other workflow-consuming boundary tests. Inspected all new commit bodies and actual changed hunks, current relevant journal entries, raw diagnostic and failed-run artifacts/logs. All test/boundary files were searched for workflow consumers. Complete recursive tree contains no matching native codegraph/manifest; the impact map is source-verified. The entire 1,749,619-byte journal was retrieved and its entry index inspected; a fresh line-by-line reread of every historic dashboard entry is NOT claimed. This remains an explicit audit limitation.
+
+### Audited commits
+
+- d5579b46cdd016c84a14bb966f8816b3320eb974: test-only immutable bracketed terminal observation, bounded retention and seven deterministic controls; production unchanged.
+- e1994c64d02b87a208e83b9a67be477f87c429fa: native_diagnostic mode and fixed helper/two-service execution script; excluded normal and Human jobs in diagnostic mode.
+- b82eb97c2ec98d8f6962365888fd4e428d2cf669: mechanical POSIX single-shell correction after run43277493392 failed before tests; no fixture/runtime contract change.
+- c83661259a47a3f18ed1c1981d03eca9afcf8fcb: journal diagnostic result only.
+- 9a2fa86b559777ef13cd41f278871bc2deaae42f: journal full-delivery blockers only.
+
+Reviewer accountability: the previous workflow change should have included its literal test consumers. Updating only the first failing assertion would leave the baseline assertion broken. The earlier diagnostic route also did not reproduce the full native lane's lower47 prelude. These are now explicit planned consumer/validation changes; the agent correctly returned the new contract decisions.
+
+### Frozen evidence and complete failure ledger
+
+Diagnostic run43279386597/job131396311966:
+- PASS7/7 terminal observation controls.
+- PASS two actual-service repetitions, accepted terminal observations, fresh reentry/current output and 30cycles in EACH.
+- Captures0acf2464-14c9-4108-b8bc-96c2c1713c1c and0268e709-7ffe-424d-82c1-dce90e30083e.
+- Cold synchronized-sleep fixture spans2397ms and2239ms (whole spans, not isolated Binder timings).
+- Artifact13972393235 ZIP SHA25632ce3278d06914fdb9e001c9f1f62d125a5181dd50c0b94d106889f9d80286ef.
+
+Normal run43282251052, exact headb82eb97c:
+| Boundary | Verified result | Classification / decision |
+| --- | --- | --- |
+| Core job131406320509 | PASS | Preserve final required execution. |
+| Flutter job131406321001 | FAIL at dashboard_interaction_performance_boundary_test.dart:310 | Workflow-consumer assertion drift; both current and baseline literals need correction. |
+| Native assembly/helper | PASS; helper7 | No compilation or terminal-helper repair indicated. |
+| Native lower XML | PASS47, failures0, errors0, skipped0 | Preserve all substantive tests. |
+| Native actual service job131409906103 | FAIL initial cold screenOff keyguard admission | Fixture preparation/observation deadline boundary, before terminal observation. |
+| Terminal/reentry/30cycles in this normal run | NOT REACHED | Prior diagnostic success does not make these passed here. |
+| Dashboard profile | SKIPPED due Flutter prerequisite | Not a fresh RangeError result. Historic separately proven RangeError remains unresolved. |
+| Human job131416965929 | SKIPPED | No candidate APK. |
+| Phone acceptance | PENDING — USER ONLY | No physical test of this candidate. |
+
+Native artifact13974432927 ZIP SHA2562cd094d4ce3708f061b090295bb64e3dc183aa7c20079030a94ceec46baf3844.
+probe.tar SHA256e11d0ef2b7af9c88d89116934488034314f3f0aab97c1fc6787d7398b44e1562.
+fixture.txt SHA256dd420a78ab264689551236e5110aabf966a035ff4c43082a2d12af6ff781cfdf.
+logcat.txt SHA25652e6d055805d35f8e7768bf45c645b7382803db8840e761a49e6c8ed82102ea0.
+Failure captureffbf6ac7-81c2-4acf-b0ca-bd6414fe976a.
+Native job log SHA256d42d71128ffdfa5b8878390374dd657d6bce63696adbcf4b708d493ec9e22589.
+Flutter job log SHA256146713da13b702d06056f71b3c2ced4246c3574cbd104353f9f7feb312b2a8a9.
+Raw source paths: android/keyguard-service-evidence/{instrumentation.txt,logcat.txt,probe.tar,fluvi-keyguard-service.perfetto-trace}; lower47 XML in build/app/outputs/androidTest-results/connected.
+
+### Proven first boundary
+
+F = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt.
+screenOff(true) awaits !power.isInteractive up to3s, then keyguard.isKeyguardLocked for a fresh3s, then strict overlay withdrawal up to4s. The first predicate is NOT actual display-OFF. episode invokes this at initial cold and each independent cycle; the rapid race uses false mode.
+
+Actual logcat monotonic seconds (fixture TIMEOUT also records aligned uptime/mono/boot clocks):
+-288.745 PowerManagerService begins sleep.
+-288.887 SystemUI NOTIFY_STARTED_GOING_TO_SLEEP.
+-289.935 GONE->DOZING FINISHED.
+-291.025 DisplayPowerController displayState=ON with displayPolicy=OFF.
+-292.087 FluviServiceProbe TIMEOUT screen-off keyguard admission.
+-292.442 DisplayPowerController displayState=OFF.
+-292.504 fixture RESULT FAIL after failure-window collection.
+-292.571 NOTIFY_FINISHED_GOING_TO_SLEEP.
+-292.616 KeyguardViewMediator updateActivityLockScreenState(true,false), SHOW.
+
+Thus the old admission deadline expired while actual display shutdown was unfinished. OFF precedes RESULT/finally; SHOW follows failure/cleanup entry, so it does not prove what a later in-test KeyguardManager sample would have read absent failure. The proposed corrected gate still requires real runtime verification. The post-failure window snapshot is not the rejecting inspection snapshot.
+
+Workflow test audit:
+- dashboard_interaction_performance_boundary_test.dart has TWO old unguarded literal conditions at current-profile and baseline-profile assertions. Both differ from the intended diagnostic-excluding workflow. The second assertion is latent behind the first failure.
+- human_diagnostic_apk_delivery_boundary_test.dart globally searches for needs:[core,Flutter], which is supplied by another job. It does not actually prove Human's required core+Flutter+native dependency. Correct this job-scoping false green, preserving all three prerequisites.
+- scripts/test-fluvi-fast.sh includes the dashboard workflow consumer but not the Human delivery boundary test.
+- Diagnostic execution currently runs helper+service+service. Normal runs helper+lower47/uninstall/service. Ordering difference is PROVEN; that the lower suite CAUSED the slower sleep is UNPROVEN.
+
+### Reviewer decisions and limits
+
+IMPLEMENTATION scope is delivery validation only; no production/refactor change.
+
+1. Preserve workflow routing, update both obsolete assertions as separately named job-scoped checks; tighten Human dependency assertions to its actual job, with negative mutations, and include that test in the fast suite. Add the three affected boundary-file tests before native emulator launch so static drift is caught cheaply.
+
+2. For synchronized independent sleep ONLY, retain the first3s non-interactive limit but replace the two independent preparation deadlines with fixed first=start+3s and total=start+6s, both global-deadline-clamped, measured from the existing post-input first-wait boundary. Require a new immutable bracketed observation of non-interactive, DEFAULT_DISPLAY STATE_OFF and keyguardLocked, with before/after states and finish<=deadline. UNKNOWN/missing display and read failures cannot pass. Keep input-start separately visible. No deadline restarts.
+
+This is explicitly a redistribution of phase budgets: the later phase may use unused first-phase allowance; it is not numerically unchanged per-phase behavior. The existing maximum aggregate6s is not enlarged. The observed unfinished display transition justifies revising this fixture contract; neither a successful future run nor a phone speedup is presumed. Keep withdrawal4s, global330s, host360s and nativejob30m. No new fixed sleep, reset, retry input, classifier bypass or disabled animation.
+
+3. Preserve unsynchronized rapid race, seven terminal controls, actual fresh-attachment output, A/C/B/A pixels, strict remote+local withdrawals, privacy/stale guards, all30cycles and global3-slot cap. Add seven deterministic sleep-observation controls and bounded first/change/final setup evidence.
+
+4. Next diagnostic: helpers7+7; repetition1 calls unchanged test-keyguard-runtime.sh (lower47 plus first service); repetition2 calls unchanged service-trace script. Exactly two service executions, same identified APKs/emulator, both outcomes retained. Check APK hashes around the Gradle runtime chain. Any helper/lower/service/analysis failure fails the aggregate; no third lucky attempt.
+
+5. Only after cheap checks and the explicit R1-R10 entry table pass, one normal full exact-source dispatch, followed through to the Human profile APK. The historic independent dashboard profile defect remains visible; no suppression or claim of all-green when red. Physical lag cannot be closed by fixture success.
+
+PROVEN: workflow-consumer drift, latent second failure, Human test false-green search, selected terminal repair success, and actual display stillON before failed admission deadline.
+UNPROVEN: cause of slower emulator transition; attribution to lower-suite preconditioning; complete next-CI success; physical lag fix.
+MISSING: revised contract runtime evidence, final required gates/APK, native graph and user acceptance.
+
+### Reviewer actions / verification status
+
+Read-only source checks PASS: both old literal strings are present in the test and absent from current workflow; existing diagnostic/runtime/service scripts pass bash -n. Proposed test/fixture modifications are NOT IMPLEMENTED by the reviewer and their runtime results are NOT RUN.
+Only this journal is appended in the repository. No application/test/workflow/tag change, dispatch, rerun or cancellation by the reviewer. Current sole workflow triggers are push/pull_request/schedule/workflow_dispatch; use [skip ci] for this journal-only commit, then verify exact append, single changed file/no deletions and zero associated runs.
+Single English21-section handoff prepared, structural/whitespace checked. File SHA256fb95778fa1ff32b37311d039a50c1f46cd7245adc4710ef2b17acac526f40fc2.
+Implementation: PENDING CODING AGENT. Proposed-change automated validation: NOT RUN. Human APK: NOT AVAILABLE. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+References:
+- https://github.com/elizerpist/exptv2/actions/runs/43279386597
+- https://github.com/elizerpist/exptv2/actions/runs/43282251052
+- https://developer.android.com/reference/android/os/PowerManager#isInteractive()
+- https://developer.android.com/reference/android/view/Display#getState()
+- https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs
+
+### Exact coding-agent handoff
+
+````text
+1. TITLE / TASK INTENT
+
+IMPLEMENTATION — R-DELIVERY-SLEEP-ADMISSION-02.
+Restore the correctness of the delivery validation path for the already implemented native candidate. Two explicit reviewer decisions are supplied together because both currently block Human APK delivery: align workflow-consumer tests with the approved diagnostic exclusion, and correct the independent-sleep fixture's observation/deadline contract. There is no production renderer/service/Dart repair or refactor in this task.
+
+The reviewer owns diagnosis, causal interpretation and repair design. Implement this closed plan; execute its controls and return raw evidence. Do not choose another cause or repair direction. If evidence contradicts this plan, preserve the exact source/log/test result and return that decision to the reviewer. Continue independent authorized work. Routine imports, types, formatting and shell wiring within this contract are permitted. A new timeout, reset, visibility policy or rendering strategy is not.
+
+2. AUTHORITATIVE APPLICATION STATE
+
+Repository: elizerpist/exptv2.
+Branch: fix/orb-v4-latency-lockscreen.
+Reviewed documentation HEAD: 9a2fa86b559777ef13cd41f278871bc2deaae42f.
+Both investigated executions used source b82eb97c2ec98d8f6962365888fd4e428d2cf669, parent e1994c64d02b87a208e83b9a67be477f87c429fa.
+Diagnostic: https://github.com/elizerpist/exptv2/actions/runs/43279386597
+Normal delivery: https://github.com/elizerpist/exptv2/actions/runs/43282251052
+Documentation descendants c83661259a47a3f18ed1c1981d03eca9afcf8fcb and 9a2fa86b are not new tested application builds.
+The earlier production candidate is 3b4dbba870cda66cbba830b1bcd1ca4183636d91. The subsequent terminal-observation and CI commits do not modify production source.
+Last phone source identified in the journal: 04e229c64e560bef9d49972c3413d1115fc36c41. The earlier e7905b6 capture is historical. Neither is a physical test of b82eb97.
+No Human APK was produced by the failed normal run.
+
+3. HARD PREFLIGHT
+
+Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM, docs/FLUVI_ENGINEERING_JOURNAL.md and relevant MILESTONE_COMMITS.md entries. Report missing material. These are mandatory inputs, not an invitation to rediagnose the defect.
+
+Current assets: base version 2.1 and widget addendum 1.2, dated 2026-11-12.
+Their complete immutable copies are already in docs/FLUVI_ENGINEERING_JOURNAL.md at reviewer commit c4babd0ba16eaf743f24f5a23558f3f81df649f4, between the exact FLUVI_RULE_ASSET_BEGIN / FLUVI_RULE_ASSET_END markers for:
+  FLUVI_PROMPT_WRITER_RULES.md
+  FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md
+Read the entire marked asset blocks, not just the preceding handoff.
+Expected UTF-8 SHA-256:
+  base: ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2
+  widget: c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b
+Access:
+  https://github.com/elizerpist/exptv2/blob/c4babd0ba16eaf743f24f5a23558f3f81df649f4/docs/FLUVI_ENGINEERING_JOURNAL.md
+  https://github.com/elizerpist/exptv2/blob/9a2fa86b559777ef13cd41f278871bc2deaae42f/MILESTONE_COMMITS.md
+Read the current branch journal too, including R-DELIVERY-SLEEP-ADMISSION-02 and any intervening entries.
+
+From the existing worktree:
+  git fetch origin
+  git status --short
+  git branch --show-current
+  git rev-parse HEAD
+  git rev-parse origin/fix/orb-v4-latency-lockscreen
+  git log -8 --format=fuller
+  git diff b82eb97c2ec98d8f6962365888fd4e428d2cf669..HEAD --name-status
+
+Documentation-only journal descendants are expected; preserve them. Unexpected application/test/workflow changes require an exact diff comparison and reviewer handback if they invalidate the plan. Do not reset other work, the untracked index.scip, or ignored build remnants.
+
+Reviewer reading receipt: complete current rule assets and milestone file were read; the complete changed fixture, new helpers/tests, workflow and execution scripts were read; all new commit bodies/diffs and current relevant journal entries were audited. The whole journal was retrieved and its entry index inspected. A fresh line-by-line reread of every historical dashboard entry is NOT claimed. No matching native codegraph exists in the reviewed tree. These audit limitations must not be reported as completed checks.
+
+4. PHYSICAL USER EVIDENCE
+
+The user reports improved wake presentation but remaining render/unlock delay. This feedback remains open. This task addresses two delivery blockers, not the proven cause of all physical lag.
+W-SHOW: production prewarm candidate awaits complete delivery and phone comparison.
+W-HIDE: physical delay remains open; the earlier phone Main-handoff interval is not explained by this fixture failure.
+W-LOCK-ANIM: preserve actual producer/compositor/lifecycle controls.
+W-HOME-ANIM and accepted dashboard/Avatar performance: protected; no source changes.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+5. DRIVE LOG AUDIT
+
+No new Drive document or phone capture was supplied for this iteration. Do not invent a fresh phone log or request the old capture again to diagnose this CI failure.
+Frozen CI evidence:
+- Diagnostic artifact 13972393235:
+  keyguard-native-diagnostic-b82eb97c2ec98d8f6962365888fd4e428d2cf669-run-43279386597-attempt-1
+  ZIP SHA-256 32ce3278d06914fdb9e001c9f1f62d125a5181dd50c0b94d106889f9d80286ef.
+- Normal native artifact 13974432927:
+  keyguard-runtime-results-b82eb97c2ec98d8f6962365888fd4e428d2cf669
+  ZIP SHA-256 2cd094d4ce3708f061b090295bb64e3dc183aa7c20079030a94ceec46baf3844.
+  probe.tar SHA-256 e11d0ef2b7af9c88d89116934488034314f3f0aab97c1fc6787d7398b44e1562.
+  fixture.txt SHA-256 dd420a78ab264689551236e5110aabf966a035ff4c43082a2d12af6ff781cfdf.
+  logcat.txt SHA-256 52e6d055805d35f8e7768bf45c645b7382803db8840e761a49e6c8ed82102ea0.
+  capture ffbf6ac7-81c2-4acf-b0ca-bd6414fe976a.
+Paths inside native artifact: android/keyguard-service-evidence/{instrumentation.txt,logcat.txt,probe.tar,fluvi-keyguard-service.perfetto-trace}; fixture.txt is inside probe.tar.
+The window failure snapshot was acquired AFTER the timeout; it is not the rejecting inspection's snapshot.
+
+Do not merge separate emulator captures into a single timeline. Fixture records supply uptime, monotonic and boottime timestamps. The specific logcat/fixture boundary below agrees at the recorded TIMEOUT; no claim of physical presentation is made.
+
+6. COMMIT / AGENT-EVIDENCE AUDIT
+
+Reviewed changes:
+- d5579b46cdd016c84a14bb966f8816b3320eb974: immutable bracketed terminal sample, bounded retention, seven controls; no production change.
+- e1994c64d02b87a208e83b9a67be477f87c429fa: diagnostic workflow mode and helper/two-service script.
+- b82eb97c2ec98d8f6962365888fd4e428d2cf669: one POSIX shell command instead of an emulator-action multiline if. Its earlier run 43277493392 failed before any test because separate physical script lines ran in separate shells.
+- c83661259a47a3f18ed1c1981d03eca9afcf8fcb: diagnostic PASS receipt only.
+- 9a2fa86b559777ef13cd41f278871bc2deaae42f: full-delivery failures receipt only.
+
+Independently checked:
+Diagnostic job 131396311966: seven controls PASS; both real-service repetitions PASS, including accepted terminal observation, fresh reentry/current output and all 30 cycles. Captures 0acf2464-14c9-4108-b8bc-96c2c1713c1c and 0268e709-7ffe-424d-82c1-dce90e30083e. Cold synchronized-sleep spans were 2397 ms and 2239 ms. These are whole fixture spans, not isolated Binder latency.
+Normal core 131406320509 PASS.
+Normal Flutter 131406321001 FAIL: dashboard_interaction_performance_boundary_test.dart:310.
+Normal native 131409906103: helper 7 PASS; XML lower suite tests=47,failures=0,errors=0,skipped=0; service FAIL at initial cold screenOff before terminal observation or reentry.
+Human 131416965929 SKIPPED. Dashboard profile SKIPPED because Flutter failed.
+The separately documented historical dashboard RangeError(year) is NOT a new result from this skipped job.
+
+Reviewer accountability: the previous workflow change should have included its static test consumers. The missed second baseline assertion and the different diagnostic/full native prelude are addressed explicitly here. The coding agent correctly returned the new contract decisions rather than choosing an unauthorized repair.
+
+7. GRAPH PROVENANCE AND IMPACT
+
+No docs/codegraph/manifest.json or matching Kotlin-capable index was found in the complete current recursive tree. A Dart index does not cover this native fixture. Use the source-verified map below; do not claim graph-backed causality or invent regeneration commands.
+
+Paths:
+F = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
+O = same directory/IndependentSleepAdmissionObservation.kt (new, test-only)
+T = same directory/IndependentSleepAdmissionObservationInstrumentationTest.kt (new)
+D = scripts/test-keyguard-native-diagnostic.sh
+W = .github/workflows/fluvi-core.yml
+B = test/boundary/dashboard_interaction_performance_boundary_test.dart
+H = test/boundary/human_diagnostic_apk_delivery_boundary_test.dart
+Q = scripts/test-fluvi-fast.sh
+
+| ID | Symbol / consumer | Old -> new transition | Risk / protective condition | Verification |
+| R1 | B, workflow profile/baseline job headers | Both old unguarded literal expectations -> exact current guarded expressions in two separately named tests | Fixing the first assertion alone leaves the second latent failure; preserve normal trigger clauses, needs, runner and all unrelated checks | Both job tests PASS; mutations removing diagnostic guard or normal trigger clause must be rejected |
+| R2 | H, Human job needs/if; Q | Global substring can match baseline job -> Human-job-scoped assertion of all three required prerequisites | Existing test falsely accepts a Human needs regression because another job contains the old string | Local mutated workflow text with native dependency removed must fail even while baseline needs remains; include H in curated fast suite |
+| R3 | F.screenOff(true), called by episode(cold/warm/reentry/30 cycles) | Early non-interactive sample starts separate 3s lock budget -> fixed aggregate 6s admission deadline starting at the original wait boundary, with original 3s non-interactive deadline retained | Device non-interactive is not Display.STATE_OFF or keyguard locked; never authorize wake on partial state | T1/T2/T3; live cold and all subsequent episodes record accepted current bracketed sample |
+| R4 | O collector / F admission wait | Sequential mutable platform reads -> immutable double-bracket sample with completion time and one episode deadline | Do not mix samples, accept read failure, missing display or after-deadline results | T3/T4/T5/T6/T7 |
+| R5 | F.screenOff(false), rapid-wake-unlock | Existing unsynchronized sleep -> unchanged | Synchronizing the intentional race would remove real stale-result coverage | Source diff; real rapid scenario and terminal controls remain strict |
+| R6 | F.overlaysWithdrawn, wakeForIndependentEpisode, awaitOverlay/awaitLive | Strict withdrawal and independent wake/current output -> unchanged | OFF/locked is not withdrawn, nor authority to show stale output | 4s strict screen-off withdrawal; existing wake/attachment/lease/pixel/30-cycle controls |
+| R7 | D diagnostic repetition 1; test-keyguard-runtime.sh | Helper -> service only -> helper -> unchanged lower47/uninstall/service runtime chain | Previously targeted PASS omitted full lane's prelude; lower failure must survive subsequent service success | Fixed call order; retained XML/logs; injected script exit failures cannot become aggregate PASS |
+| R8 | D repetition 2 and archives | Second service -> still second service using same source/APKs/emulator | Never overwrite first failure, change APKs, introduce retry-until-green or third run | Two declared results, per-stage codes, unchanged strict aggregate failure |
+| R9 | W native cheap preflight / artifact paths | Emulator first feedback -> three affected Flutter boundary files checked before emulator launch; retain added lower evidence in diagnostic artifact | Do not pay a native build cycle to discover an existing static consumer error; do not alter Human conditions | Cheap tests before KVM/emulator; single POSIX action line; same normal/diagnostic job truth table |
+| R10 | finally/export, bounded fixture records | Existing cleanup -> preserved; sleep record retention added only around setup | Observation exception or timeout must retain last sample and restore hooks/settings | T6 plus finally source review; service restoration/export must pass |
+
+Production cold/warm cache, renderer callbacks, lease ownership, palette and mode branches are unchanged; do not create speculative production changes for these cases. Their existing tests remain mandatory.
+
+8. CURRENT SOURCE FACTS
+
+F.screenOff currently injects SLEEP, awaits !power.isInteractive for 3000 ms, then in synchronized mode awaits keyguard.isKeyguardLocked for a NEW 3000 ms, then awaits strict overlaysWithdrawn for 4000 ms.
+F.episode uses synchronized mode. The deliberately racing rapid-wake-unlock block calls the default false mode.
+Each await clamps its relative timeout to the 330000 ms whole-fixture deadline. Host service watchdog is 360s. These are separate from platform admission.
+The terminal observation repair occurs much later and cannot cause the initial cold failure.
+
+Actual native chronology, monotonic seconds aligned with fixture uptime:
+288.745: PowerManagerService begins sleep.
+288.887: SystemUI NOTIFY_STARTED_GOING_TO_SLEEP.
+289.935: GONE -> DOZING transition reports FINISHED.
+291.025: DisplayPowerController still reports displayState=ON, displayPolicy=OFF.
+292.087: fixture screen-off keyguard admission TIMEOUT.
+292.442: DisplayPowerController reports displayState=OFF.
+292.504: fixture records FAIL after collecting failure evidence.
+292.571: SystemUI NOTIFY_FINISHED_GOING_TO_SLEEP.
+292.616: KeyguardViewMediator updateActivityLockScreenState(true,false), SHOW.
+Therefore the fixture expired before actual display-OFF and lock-state publication. GONE->DOZING completion and non-interactivity were not the desired completed admission predicate.
+
+B contains TWO outdated exact strings, near lines 313 and 325. The second is not reached after the first expect fails.
+H's current global contains('needs: [test-core, test-flutter]') can be satisfied by run-dashboard-profile-baseline even though Human correctly needs core+Flutter+native. This is an observed false-green test design, not a production dependency regression.
+Q currently includes B and dashboard_avatar_profile_boundary_test.dart but not H.
+
+9. PROVEN / UNPROVEN / MISSING
+
+PROVEN:
+- Both diagnostic service repetitions completed, so the terminal observation correction has selected runtime support.
+- Both stale workflow literals are absent from W, and both are still demanded by B.
+- The normal native failure precedes actual display-off and lock publication, and occurs before the terminal/reentry/30-cycle sections.
+- Diagnostic and full native execution sequences differ before the service test.
+- No production source was changed in the audited new chain.
+
+UNPROVEN:
+- That the preceding 47 tests caused the slower Android transition. Test ordering differs; causality is not established.
+- That correcting these two boundaries guarantees an entirely green next CI.
+- That this fixture repair fixes the user's remaining Nothing lag.
+- The exact scheduling/render-load reason why this platform transition was slower.
+- Whether the later keyguard SHOW would have occurred identically without the failing fixture entering cleanup. Display OFF was logged before RESULT/finally, but SHOW was logged afterwards; it is not a captured successful application KeyguardManager observation under the proposed deadline.
+
+MISSING:
+- Runtime result for the new admission contract under the full native prelude.
+- Final complete required gates and Human APK for the new candidate.
+- Matching native graph, phone acceptance and attribution of the outstanding phone Main delay.
+No new phone capture is required to decide this CI-fixture correction. Any later phone-log request must name the physical latency decision it addresses.
+
+10. ROOT-CAUSE OR FORENSIC GATE
+
+The reviewer selects a fixture-contract correction, not a renderer repair.
+
+A. Workflow: preserve the already approved !diagnostic guards. Update ALL affected test consumers, including the latent baseline assertion and the Human job's false-green global search. Do not remove the guards to match obsolete text.
+
+B. Independent sleep: model completed public admission explicitly. The two existing sequential preparation phases had a maximum combined 6000 ms allowance, but the first phase commonly completes almost immediately and leaves no time for the asynchronous display transition in the second fixed 3000 ms phase. Keep the first phase's 3000 ms limit; give the complete preparation sequence one fixed deadline at its original start + 6000 ms, clamped to the global fixture deadline. The admission predicate must additionally observe actual default-display OFF.
+
+This IS an explicit redistribution of phase budgets: a fast first phase can leave more than 3000 ms for the second. Do not describe it as numerically unchanged per-phase timeouts. It does not increase the existing aggregate preparation maximum; adding a strict display-state predicate and negative controls prevents accepting an unfinished sleep. This policy is grounded in the observed transition ending after the old second-phase deadline. It is not a new product performance target.
+
+Do not increase 6000 further, extend the 330s/360s/30m budgets, add fixed sleeps, dismiss again, reset SystemUI, force lock state or bypass the classifier. If the complete predicate is still absent within the fixed budget, fail with the actual sampled states and return to reviewer.
+
+Android public contract cross-check:
+https://developer.android.com/reference/android/os/PowerManager#isInteractive()
+https://developer.android.com/reference/android/view/Display#getState()
+Non-interactivity can coexist with a lit/dozing display; these are distinct observations. The actual failure attribution above comes from the retained emulator log, not generic documentation.
+
+11. SCOPE LOCK / NO-TOUCH
+
+Allowed implementation files only: B, H, Q, F, O, T, D and narrowly W as specified; append the common journal. No production Kotlin/Dart, renderer, shader, lifecycle policy, system-state reader, resource pool, app setting, dependency/pubspec or APK-build-purpose changes.
+Keep existing TerminalReentryObservation.kt and its seven tests unchanged.
+Keep scripts/test-keyguard-runtime.sh, scripts/test-keyguard-service-trace.sh and trace analysis unchanged; invoke them through the approved route.
+W changes: add cheap three-file boundary check before native emulator; add three lower-evidence paths to diagnostic upload. Existing job conditions/dependencies and single-line POSIX dispatch remain unchanged.
+No new workflow, runner, arbitrary CLI selector or service-reset mode.
+
+Protect MILESTONE_COMMITS.md, especially physical Avatar/general-performance floor 6e962187e90e2a82431b1f91b224d2b52a6e0ba7; do not relabel the unaccepted current phone behavior as a milestone.
+
+12. LAYERS / BOUNDS / OWNERSHIP
+
+No visual layer, z-order, clip, geometry, hit test, semantics or production ownership change.
+Display.DEFAULT_DISPLAY is the pinned emulator's fixture display; query DisplayManager.getDisplay(...).state using public APIs. Null/missing/STATE_UNKNOWN is not OFF. This is a sampled platform state, not physical panel presentation.
+All new acquisition/polling/retention runs on the instrumentation thread. Do not add Main reads, service callbacks, listeners, new threads or production logging.
+Retain strict remote overlay metadata + actual process WindowInspector roots in overlaysWithdrawn. Keep the terminal local-observation exception limited to its existing block.
+Fresh independent wake still uses its existing eligibility/idle checks and actual attachment/current-output requirements. The sleep observation is historical evidence, not future visibility authority.
+
+13. REQUIRED RED TESTS
+
+Existing frozen failures are the runtime RED; do not rebuild unchanged b82 merely to resample the race.
+
+Workflow controls:
+W1: separately named current-profile and baseline-profile tests assert the two exact current guarded job conditions AND their original needs/runs-on. Separate them from the large interaction test so both failures report in one cheap run; retain every unrelated interaction assertion.
+W2: H extracts ONLY the Human job and requires needs [test-core,test-flutter,test-keyguard-material-runtime], its explicit all-success condition and !diagnostic guard; it must not depend on dashboard profile.
+W3: use in-memory mutated workflow strings through the same narrow job-contract checker: removing native dependency from Human must fail even while baseline retains its two-needs string; removing a diagnostic exclusion or a normal trigger term must fail. No edited workflow file is used for mutation controls.
+Keep structural checks honest: these are source-contract tests, not an execution of the GitHub scheduler. The real diagnostic run must still verify job routing.
+
+Add exactly seven deterministic methods in T (cases may be table-driven within a method):
+T1 nonInteractiveDoesNotMeanDisplayOff: non-interactive ON/DOZE/UNKNOWN/missing-display observations reject even if locked; non-interactive OFF but unlocked also rejects.
+T2 delayedCompletedSleepUsesRemainingAggregateBudget: first phase observed at start+300 ms; incomplete sample at +3300 rejects; complete bracketed sample finishing +4000 accepts under start+6000. This is the regression schedule the old second 3s deadline would reject.
+T3 incompleteOrLateAdmissionFailsClosed: never locked, never OFF and finished after deadline reject; exact deadline boundary is explicitly tested.
+T4 phaseAndGlobalDeadlinesDoNotRestart: start fixed; first deadline start+3000; total start+6000; both clamped to earlier global deadline. Repeated samples never reset either; exhausted/negative remaining budget cannot pass. The first-phase check remains independently required.
+T5 transitionDuringSampleIsRejected: any interactive, display or keyguard disagreement across the bracket rejects; a new, separately numbered complete sample may later pass.
+T6 failedAcquisitionCannotBecomeAdmission: public read exception propagates; no default false/zero/empty success; missing display is UNKNOWN; rejected evidence is preserved.
+T7 acceptedRecordIsImmutableAndEpisodeSpecific: validation/export never requeries platform APIs, a later state change does not rewrite the accepted historical record, a new episode creates new IDs/start/deadline and must collect fresh state.
+These controls test fixture admission only. Existing 7 terminal controls, 47 lower tests, strict real-service output/pixels and all 30 cycles remain required.
+
+14. IMPLEMENTATION CONTRACT
+
+A. Workflow-consumer tests.
+Keep current W expressions exactly. Expected current-profile if:
+${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}
+Expected baseline if:
+${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}
+
+Use narrowly scoped job extraction (start at exact two-space job key; stop at next two-space job key; assert unique/present), and read job-level if/needs/runs-on lines. Whitespace normalization is allowed; dropping clauses is not. No YAML dependency or general GitHub expression interpreter is needed. In Dart, use raw strings or escape the literal dollar in ${{...}} to avoid an interpolation compilation failure.
+In H replace the global two-needs assertion with the exact Human three-needs contract from section13. Preserve APK/harness hermeticity assertions. Include H once in Q beside existing delivery/workflow boundary checks.
+
+B. Test-only immutable admission record and budget.
+Add O under androidTest only:
+- IndependentSleepAdmissionBudget(startedAtUptimeMs, globalDeadlineUptimeMs), with absolute nonInteractiveDeadline=min(global,start+3000) and admissionDeadline=min(global,start+6000); never recomputed from a later now.
+- IndependentSleepAdmissionObservation: episode ID, observation ID, start/finish uptime, fixed admission deadline; before/after interactive, default display state, keyguard locked values.
+- Collector with injectable read/clock lambdas for T. Read in a nested bracket on instrumentation:
+  nowStart;
+  interactiveBefore;
+  displayBefore;
+  lockedBefore;
+  lockedAfter;
+  displayAfter;
+  interactiveAfter;
+  nowFinish.
+Use captured values only for accepted/rejectionReason/evidence. Accepted iff both interactive values are false, both display states are Display.STATE_OFF, both locked values are true, and completion is within the absolute admission deadline. Preserve timestamps and order; do not call this an atomic system snapshot or persistent guarantee.
+Public display adapter: context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)?.state ?: Display.STATE_UNKNOWN. Acquisition exceptions are failures, not UNKNOWN-to-success conversion.
+
+C. F.screenOff integration.
+Preserve injected KEYCODE_SLEEP DOWN/UP and assertions.
+For synchronizeInput=false execute exactly the original branch: shell SLEEP, 3s !interactive wait, 4s strict withdrawal. Do not add the new gate there.
+For synchronizeInput=true:
+- Capture budget start immediately after the existing synchronized input pair returns, at the old first-wait start. Keep a separate SLEEP input-start timestamp in evidence; do not claim the measured complete operation starts later.
+- Keep the 3s first-phase non-interactivity limit using budget.nonInteractiveDeadline. Reject a completed first-phase observation after that absolute limit.
+- Collect and retain fresh immutable admission samples until one satisfies the full predicate by budget.admissionDeadline. Remaining time is admissionDeadline-now, never a fresh 6s/3s on each poll. Reject a sample that finishes late even if the generic await loop started it in time.
+- Reuse the current 100ms polling cadence; bound final yield by remaining time. No new fixed stabilization sleep, retry input or idle requirement.
+- Record first, changed-state and final sample; at most 8 retained samples PER independent episode, preserve first and final and count omissions. Emit these via a local finally even when acquisition or await fails, using existing fixture record/export. Include episode/capture IDs, input-start, wait-start, both deadlines, first non-interactive observation time and final accepted/rejected fields. No file I/O or heavy window dumps inside each poll.
+- Then execute the unchanged 4s strict overlaysWithdrawn gate.
+- Next wake remains entirely unchanged.
+
+Mechanical shape:
+  injectExistingSleepPair()
+  budget = fixedBudget(now(), globalDeadline)
+  awaitFirstNonInteractiveBy(budget.nonInteractiveDeadline)
+  accepted = awaitBracketedSleepAdmissionBy(budget.admissionDeadline)
+  record(accepted) // no live requery presented as the same observation
+  awaitExistingStrictWithdrawal(4000)
+  // caller retains existing wake/actual-output checks
+
+Use one per-screenOff local admission collector/retention lifetime. No cross-episode cached accepted state. Preserve cleanup on every throw.
+
+D. Fixed diagnostic execution order.
+D's helper phase continues the existing seven TerminalReentryObservation tests and then runs T in a separate AndroidJUnitRunner invocation. Keep the original transcript and add instrumentation-sleep-admission.txt/status for the new seven tests. Require exit/pipeline success AND exact OK (7 tests) independently for each class. Total 14 helper tests; do not replace the terminal seven or accidentally expect seven after selecting both classes in one invocation. Reject unknown CLI arguments as before.
+
+Diagnostic repetition1 MUST call unchanged:
+  bash scripts/test-keyguard-runtime.sh
+This executes lower47, retained smoke evidence, uninstall boundary, and the first complete real-service fixture, matching normal order. It is one service repetition, not an extra one.
+Diagnostic repetition2 MUST call unchanged:
+  bash scripts/test-keyguard-service-trace.sh
+No third service execution. Same identified candidate APK pair and emulator; do not claim independent boots. Compute APK SHA-256 before and after the runtime chain and before repetition2; connectedDebugAndroidTest must reuse the same identified bytes. If the chain rebuilds different bytes, preserve both identities and fail this comparability condition rather than silently claiming identical binaries.
+Keep lower-suite failures in repetition1's aggregate exit, even if its service succeeds. Name that stage runtime_chain_result rather than falsely calling it only service_result. Preserve XML47, draw-probe log, smoke tar/pull log. Run existing trace analysis and archive complete service evidence after EACH repetition as currently done.
+Update the manifest repetition_model to describe lower-prelude+service then service, not two equivalent clean boots. A failed first run remains failed even if the second passes; no discarded sample.
+Add to the diagnostic upload paths in W:
+  android/keyguard-draw-probe.log
+  android/keyguard-material-smoke.tar
+  android/keyguard-material-smoke-pull.log
+Existing XML/report paths and per-repetition archive paths already cover the rest.
+
+Normal mode remains helper-only (now two fixed seven-test invocations) then unchanged runtime chain. Preserve all failures while collecting the existing later evidence. The helper artifact glob already includes the new transcript.
+
+E. Cheap compatible-runner gate.
+In native job W, after setup-fluvi-flutter and BEFORE Enable KVM/emulator, add:
+  flutter test test/boundary/dashboard_interaction_performance_boundary_test.dart test/boundary/human_diagnostic_apk_delivery_boundary_test.dart test/boundary/dashboard_avatar_profile_boundary_test.dart --reporter expanded
+It runs in normal and diagnostic mode. This provides the same checked compatible environment when local proot Flutter is unavailable. Do not skip it on diagnostic runs. Do not change conditions, renderer flags, APK targets or native source assembly inputs.
+
+15. PERFORMANCE GATE
+
+No new production performance claim. Zero added production per-frame work, listeners, logging, sleeping or allocations.
+Admission instrumentation is finite setup-only work. Record elapsed preparation rather than subtracting it from application latency. Retain all slow first cycles.
+The emulator OFF/locked sample and screenshots are not physical Nothing presentation/removal timing. Preserve pixels, current attachment output, privacy/stale controls and the three-slot global cap.
+30 real cycles remain 30; global330s, service host360s and native job30m remain unchanged.
+
+16. IMPLEMENTATION ORDER
+
+1. Verify inputs and source; keep a clean bounded scope.
+2. Fix BOTH workflow-literal consumers plus Human job scoping, controls and Q inclusion. Run the three targeted Flutter files immediately; do not wait for native CI to discover a Dart string or second-assertion failure.
+3. Add O/T and integrate only synchronized F admission. Review rapid=false and all cleanup paths against R3-R6/R10.
+4. Update D and the two narrow W areas together. Validate fixed command order, two invocations/counts, failure retention and artifact paths.
+5. Cheap checks and full diff-to-matrix review; make at most two coherent implementation commits (workflow/test contract; native fixture+diagnostic wiring), with [skip ci]. More mechanical checkpoints are not reasons to dispatch full CI.
+6. ONE exact-source diagnostic run: cheap Flutter gate, assembly, 7+7 controls, lower47+service1, service2. Both service runs include unchanged full 30 cycles.
+7. Only after the entry table is green, ONE normal full delivery dispatch on the SAME immutable candidate. Follow it through required gates and download the Human APK; do not stop at push/queued/diagnostic PASS.
+A changed source requires new matching binaries and an identified candidate. A new semantic failure returns to reviewer with all relevant failures, not a guessed patch or blind full rerun.
+
+17. VALIDATION
+
+From the existing repository inside its already configured Ubuntu/proot Flutter environment:
+  git diff --check
+  bash scripts/verify-fluvi-boundaries.sh
+  flutter test test/boundary/dashboard_interaction_performance_boundary_test.dart test/boundary/human_diagnostic_apk_delivery_boundary_test.dart test/boundary/dashboard_avatar_profile_boundary_test.dart --reporter expanded
+  flutter analyze --no-fatal-infos lib test integration_test
+  bash -n scripts/test-keyguard-native-diagnostic.sh scripts/test-keyguard-runtime.sh scripts/test-keyguard-service-trace.sh
+
+Use the established proot invocation; do not invent a new installation path. If Flutter is not executable there, record NOT RUN locally and use the new mandatory pre-emulator runner step. Do not delete unrelated ignored build/ artifacts to make analyze pass.
+If actionlint is already available, run it on W; otherwise record unavailable, not PASS. Check the exact existing folded action command with sh -n, preserving one POSIX shell invocation.
+Review/script-test fixed helper counts, two-service call order and failure aggregation with inert adb/gradle/analyzer stubs in a temporary harness if needed; do not operate a phone for script tests. Cover helper nonzero/JUnit failure, lower failure followed by service PASS, first service FAIL followed by second PASS, analysis failure and missing evidence.
+
+Compatible remote route is the already successful ubuntu-latest/Java17/Flutter3.41.4/API35/x86_64/pixel_7/KVM/emulator15081367/swangle workflow. Do not require local ARM Android/AAPT2/KVM.
+Assembly remains:
+  (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon)
+Emulator diagnostic entry:
+  bash scripts/test-keyguard-native-diagnostic.sh
+
+Pre-full-CI table MUST contain actual evidence:
+source/APK identities; R1-R10 outcomes; all three cheap Flutter files; shell/wiring; 7 terminal controls; 7 sleep controls; XML47; service1 including actual cold accepted admission/reentry/30 cycles; service2 same; cleanup/trace analysis; every failure family. Missing or failed required row blocks full dispatch.
+
+Routing must remain:
+- push/PR/schedule/manual false: existing normal eligibility/dependencies.
+- manual true, even with nightly/baseline flags true: only native diagnostic job eligible; its cheap Flutter step is internal to that job, not a claimed full Flutter pass.
+- normal core failure/skipped: no native or Human bypass.
+- cancellation: no replacement delivery.
+- Human requires core+Flutter+native successful and !diagnostic.
+
+18. COMMIT DISCIPLINE
+
+Each implementation commit: Why / Evidence / Changed / Validation / Known limitations / Physical validation.
+Record exact commands and actual PASS/FAIL/NOT RUN. No expected result is an executed PASS.
+Append every commit and run result to docs/FLUVI_ENGINEERING_JOURNAL.md. Preserve all previous entries and concurrent reviewer updates.
+Use [skip ci] for preparatory commits/pushes; verify no accidental automatic runs. Do not amend/force-push shared failure history. The reviewer only appends journal entries; you implement the explicitly listed files.
+
+19. PUSH / BUILD / GRAPH REGENERATION
+
+After the complete reviewed candidate is committed:
+  candidate_sha=$(git rev-parse HEAD)
+  candidate_ref="fluvi-sleep-admission-${candidate_sha:0:12}"
+  git tag "$candidate_ref" "$candidate_sha"
+  git push origin HEAD:fix/orb-v4-latency-lockscreen "refs/tags/$candidate_ref"
+  gh workflow run fluvi-core.yml --repo elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=true -f run_nightly=false -f run_baseline_profile=false
+Never overwrite a tag. Verify remote ref target and actual run head_sha, event, inputs and job list. Retain every diagnostic result. No repeat-until-green.
+
+After ALL entry conditions pass, use the same ref:
+  gh workflow run fluvi-core.yml --repo elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=false -f run_nightly=false -f run_baseline_profile=false
+
+Full normal checks are not replaced by diagnostic selections. Preserve normal core, full configured Flutter, lower/native/service, dashboard trigger policy and Human dependencies.
+The existing Human job builds the ordinary profile entrypoint via scripts/build-human-diagnostic-apk.sh and publishes fluvi_HUMAN_DIAGNOSTIC_<shortSHA>.apk. Do not substitute AUTOMATED_TEST_HARNESS or an instrumented debug APK.
+Retrieve the actual download, record full source SHA, buildMode=profile, byte size, SHA-256 and embedded identity. Publish a direct user-download URL in the completion report.
+
+The previously proven baseline dashboard RangeError is a separately tracked open defect. Do not silently disable it, rewrite dashboard code or say the overall workflow is green if it fails again. Human's existing dependency graph does not depend on that profile job; do not add or remove a gate in this task. Report the actual required-gate result and the separate profile result honestly.
+
+Graph: retain source-verified impact map. If an already available tool supports the changed languages, regenerate with exact source provenance in its established tooling lane. Otherwise report native graph MISSING; do not fabricate a Dart graph as Kotlin coverage or install a new graph platform.
+
+20. COMPLETION REPORT
+
+Append and return:
+- preflight identity, asset versions and material-access limitations;
+- application source vs docs HEAD vs phone SHA;
+- every changed file/symbol and actual R1-R10 outcomes;
+- workflow test mutations, T1-T7 and unchanged terminal controls;
+- exact diagnostic and full run/job IDs, status, artifacts and hashes;
+- per-episode admission start/deadlines, observed state transitions and final accepted/rejected sample;
+- both service repetitions, lower47 XML, actual reentry output and 30 cycles, cleanup/export/analysis;
+- every failure, including skipped/unreached checks and the independent historical profile defect if encountered;
+- direct Human APK URL, full SHA, mode, size, SHA-256 and embedded identity;
+- final Git state, graph provenance/limitations and remaining phone questions.
+
+Separate implementation, automatic validation, APK delivery and physical acceptance. On contradiction identify the precise broken contract and give raw evidence to the reviewer; do not select a new root cause or another timeout.
+
+21. DEFINITION OF DONE
+
+Both workflow consumers are corrected together and prevent diagnostic delivery leakage or loss of normal prerequisites. Human prerequisite tests are job-scoped, with a negative control.
+Independent synchronized sleep requires a fresh bracketed non-interactive/OFF/locked observation within the explicitly authorized fixed aggregate budget; its first non-interactive bound and all production withdrawal/output gates are preserved.
+The diagnostic route includes the same native prelude that previously exposed the failure; all declared repetitions/results are retained.
+After focused checks, the normal required delivery gates pass on the same source and an identifiable Human profile APK is downloadable. An implementation commit or diagnostic PASS alone is not delivery. Any independent remaining FAIL remains visible.
+No first-green guarantee and no claim of physical lag resolution.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+````
