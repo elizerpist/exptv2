@@ -12605,3 +12605,65 @@ The user's physical lag issue remains open until the user tests and accepts this
 PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 ````
+
+## R-APK-DELIVERY-CONTINUATION-05 — implementation checkpoint
+
+Status: IMPLEMENTING / cheap controls complete; API35 diagnostic and Human delivery not yet run.
+
+Why:
+Run 43298487002 retained two lower-suite failures whose complete full-screen
+and crop evidence showed a focused Quickstep `Application Not Responding:
+com.android.launcher3` dialog over the orb rectangle. The isolated producer
+still contained request-bound material. The lower wrapper had no equivalent
+of the existing service fixture's bounded Launcher-ANR preparation.
+
+Evidence:
+- Base application/test candidate before this checkpoint:
+  `aa3b2784dbbe2d5c1ef40a9d37c757c1bb365714`; reviewer-only documentation
+  head merged before editing: `4b6972e0e4d2f2265ca77091411ee4994a3047fd`.
+- Frozen diagnostic run `43298487002`, native job `131463030732`, artifact
+  `13981004491`: lower47 had 47 tests / 2 failures / 0 errors / 0 skips;
+  both service scenarios passed. This checkpoint does not relabel those
+  occluded crops as a renderer failure or a phone-latency result.
+- Local inert preflight/wrapper controls pass. They use PATH-local fake
+  adb/gradle/service commands only and do not access a device.
+
+Changed:
+- Added a bounded `prepare-keyguard-lower-environment.sh`: it retains each
+  window read and exits cleanly without mutation, or performs exactly one
+  existing `CLOSE_SYSTEM_DIALOGS` + HOME preparation only for an exact focused
+  Launcher ANR. Unknown, unreadable, persistent, or malformed state fails
+  closed.
+- Runtime lower wrapper now retains before/preflight/lower/post-observation
+  outcomes, does not retry lower instrumentation, and continues the already
+  independently prepared service scenario while preserving a sticky failure.
+- Added inert shell coverage and additive workflow evidence upload/check step.
+- Completed the previously specified test-only sleep-admission record,
+  fixed completion-time helper, retention/finally evidence, diagnostic APK
+  identity comparisons, and job-scoped Flutter negative controls. No
+  production Kotlin/Dart, renderer, shader, lease, pool, privacy, or timing
+  policy changed.
+
+Validation recorded so far:
+- `git diff --check`: PASS.
+- `bash scripts/verify-fluvi-boundaries.sh`: PASS.
+- `bash -n` for the affected shell scripts: PASS.
+- `bash scripts/test-keyguard-lower-environment.sh`: PASS (clean, known
+  Launcher ANR, persistent/unknown/malformed/read-error, overwrite refusal,
+  sticky wrapper result controls).
+- Ubuntu/proot targeted Flutter boundary suite: PASS, 12 tests.
+- Local ARM Android instrumentation compilation/emulator: NOT RUN; required
+  API35 x86_64 CI diagnostic remains next.
+- `flutter analyze` was started in Ubuntu/proot; its final exit is not entered
+  here until captured from the completed command.
+
+Known limitations / next action:
+The known preflight is an observed CI environment repair, not proof that no
+later ANR can occur. The exact candidate still requires one immutable-tag
+diagnostic with terminal7 + sleep7 + lower47 + service1 + service2 and matching
+APK hashes before normal delivery. A passing diagnostic remains insufficient
+for Human delivery; normal core/Flutter/native prerequisites and the resulting
+profile APK must be completed and downloaded separately. Dashboard profile
+status and physical W-SHOW/W-HIDE/W-LOCK-ANIM remain independent.
+
+Physical validation: PENDING — USER ONLY.

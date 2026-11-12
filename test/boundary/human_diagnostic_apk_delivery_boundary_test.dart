@@ -34,6 +34,31 @@ void main() {
     expect(normalEntrypoint, isNot(contains('integration_test')));
     expect(normalEntrypoint, isNot(contains('_ProfileScenario')));
   });
+
+  test('human job contract is scoped and rejects dependency or diagnostic mutations', () {
+    final workflow = File(
+      '${Directory.current.path}/.github/workflows/fluvi-core.yml',
+    ).readAsStringSync();
+    expect(_hasHumanDeliveryContract(workflow), isTrue);
+
+    final humanJob = _job(workflow, 'build-human-diagnostic-apk');
+    final missingNative = workflow.replaceFirst(
+      humanJob,
+      humanJob.replaceFirst(
+        'needs: [test-core, test-flutter, test-keyguard-material-runtime]',
+        'needs: [test-core, test-flutter]',
+      ),
+    );
+    expect(_hasHumanDeliveryContract(missingNative), isFalse);
+    final missingDiagnosticGuard = workflow.replaceFirst(
+      humanJob,
+      humanJob.replaceFirst(
+        '!(github.event_name == \'workflow_dispatch\' && inputs.native_diagnostic)',
+        'true',
+      ),
+    );
+    expect(_hasHumanDeliveryContract(missingDiagnosticGuard), isFalse);
+  });
 }
 
 String _job(String workflow, String name) {
@@ -41,4 +66,18 @@ String _job(String workflow, String name) {
   expect(start, greaterThanOrEqualTo(0), reason: 'workflow must contain $name');
   final end = workflow.indexOf(RegExp(r'^  [A-Za-z0-9_-]+:', multiLine: true), start + 1);
   return workflow.substring(start, end == -1 ? workflow.length : end);
+}
+
+bool _hasHumanDeliveryContract(String workflow) {
+  final matches = RegExp(r'^  build-human-diagnostic-apk:$', multiLine: true)
+      .allMatches(workflow)
+      .toList();
+  if (matches.length != 1) return false;
+  final job = _job(workflow, 'build-human-diagnostic-apk');
+  return job.contains('needs: [test-core, test-flutter, test-keyguard-material-runtime]') &&
+      job.contains("needs.test-core.result == 'success'") &&
+      job.contains("needs.test-flutter.result == 'success'") &&
+      job.contains("needs.test-keyguard-material-runtime.result == 'success'") &&
+      job.contains("!(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic)") &&
+      job.contains('runs-on: ubuntu-latest');
 }

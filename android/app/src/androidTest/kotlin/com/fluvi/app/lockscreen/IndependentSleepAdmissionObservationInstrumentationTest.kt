@@ -8,34 +8,74 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class IndependentSleepAdmissionObservationInstrumentationTest {
-    private fun sample(values: MutableList<Any>, now: MutableList<Long>, deadline: Long = 6_000L) =
-        IndependentSleepAdmissionCollector({ now.removeAt(0) }, { values.removeAt(0) as Boolean },
-            { values.removeAt(0) as Int }, { values.removeAt(0) as Boolean }).collect(1, 1, deadline)
+    private fun collect(
+        episodeId: Long = 1L,
+        observationId: Long = 1L,
+        start: Long = 0L,
+        finish: Long = 1L,
+        deadline: Long = 6_000L,
+        interactiveBefore: Boolean = false,
+        displayBefore: Int = Display.STATE_OFF,
+        lockedBefore: Boolean = true,
+        lockedAfter: Boolean = true,
+        displayAfter: Int = Display.STATE_OFF,
+        interactiveAfter: Boolean = false,
+    ): IndependentSleepAdmissionObservation {
+        val times = ArrayDeque(listOf(start, finish))
+        val interactive = ArrayDeque(listOf(interactiveBefore, interactiveAfter))
+        val displays = ArrayDeque(listOf(displayBefore, displayAfter))
+        val locks = ArrayDeque(listOf(lockedBefore, lockedAfter))
+        return IndependentSleepAdmissionCollector(
+            { times.removeFirst() },
+            { interactive.removeFirst() },
+            { displays.removeFirst() },
+            { locks.removeFirst() },
+        ).collect(episodeId, observationId, deadline)
+    }
 
     @Test fun nonInteractiveDoesNotMeanDisplayOff() {
         listOf(Display.STATE_ON, Display.STATE_DOZE, Display.STATE_UNKNOWN).forEach { state ->
-            assertFalse(sample(mutableListOf(false, state, true, true, state, false), mutableListOf(0, 1)).accepted)
+            assertFalse(collect(displayBefore = state, displayAfter = state).accepted)
         }
-        assertFalse(sample(mutableListOf(false, Display.STATE_OFF, false, false, Display.STATE_OFF, false), mutableListOf(0, 1)).accepted)
+        assertFalse(collect(lockedBefore = false, lockedAfter = false).accepted)
     }
+
     @Test fun delayedCompletedSleepUsesRemainingAggregateBudget() {
-        val budget = IndependentSleepAdmissionBudget(0, 9_000)
-        assertEquals(3_000, budget.nonInteractiveDeadlineUptimeMs)
-        assertTrue(sample(mutableListOf(false, Display.STATE_OFF, true, true, Display.STATE_OFF, false), mutableListOf(3_300, 4_000), budget.admissionDeadlineUptimeMs).accepted)
+        val budget = IndependentSleepAdmissionBudget(0L, 9_000L)
+        assertEquals(3_000L, budget.nonInteractiveDeadlineUptimeMs)
+        assertEquals(6_000L, budget.admissionDeadlineUptimeMs)
+        assertFalse(collect(start = 3_300L, finish = 3_300L, deadline = 3_300L).accepted)
+        assertTrue(collect(start = 3_900L, finish = 4_000L, deadline = budget.admissionDeadlineUptimeMs).accepted)
+        assertFalse(collect(start = 3_900L, finish = 4_000L, deadline = 3_300L).accepted)
     }
+
     @Test fun incompleteOrLateAdmissionFailsClosed() {
-        assertFalse(sample(mutableListOf(false, Display.STATE_OFF, false, false, Display.STATE_OFF, false), mutableListOf(0, 6_000)).accepted)
-        assertFalse(sample(mutableListOf(false, Display.STATE_OFF, true, true, Display.STATE_OFF, false), mutableListOf(0, 6_001)).accepted)
+        assertFalse(collect(lockedBefore = false, lockedAfter = false).accepted)
+        assertTrue(collect(finish = 6_000L).accepted)
+        assertFalse(collect(finish = 6_001L).accepted)
     }
+
     @Test fun phaseAndGlobalDeadlinesDoNotRestart() {
-        val b = IndependentSleepAdmissionBudget(100, 5_500)
-        assertEquals(3_100, b.nonInteractiveDeadlineUptimeMs); assertEquals(5_500, b.admissionDeadlineUptimeMs)
-        assertFalse(5_600 <= b.admissionDeadlineUptimeMs)
+        val budget = IndependentSleepAdmissionBudget(100L, 5_500L)
+        assertEquals(3_100L, budget.nonInteractiveDeadlineUptimeMs)
+        assertEquals(5_500L, budget.admissionDeadlineUptimeMs)
+        var time = 3_099L
+        assertNull(awaitIndependentSleepNonInteractive(3_100L, { time }, { time = 3_101L; false }, {}))
+        time = 3_099L
+        assertEquals(3_100L, awaitIndependentSleepNonInteractive(3_100L, { time }, { time = 3_100L; false }, {}))
+        var reads = 0
+        assertNull(awaitIndependentSleepNonInteractive(3_100L, { 3_100L }, { reads += 1; false }, {}))
+        assertEquals(0, reads)
+        assertTrue(5_600L > budget.admissionDeadlineUptimeMs)
     }
+
     @Test fun transitionDuringSampleIsRejected() {
-        assertFalse(sample(mutableListOf(false, Display.STATE_OFF, true, false, Display.STATE_OFF, false), mutableListOf(0, 1)).accepted)
-        assertTrue(sample(mutableListOf(false, Display.STATE_OFF, true, true, Display.STATE_OFF, false), mutableListOf(2, 3)).accepted)
+        assertFalse(collect(interactiveAfter = true).accepted)
+        assertFalse(collect(displayAfter = Display.STATE_DOZE).accepted)
+        assertFalse(collect(lockedAfter = false).accepted)
+        assertTrue(collect(episodeId = 2L, observationId = 2L, start = 2L, finish = 3L).accepted)
     }
+
     @Test fun failedAcquisitionCannotBecomeAdmission() {
         val expected = IllegalStateException("read")
         val collector = IndependentSleepAdmissionCollector(
@@ -48,11 +88,49 @@ class IndependentSleepAdmissionObservationInstrumentationTest {
             failure = error
         }
         assertSame("read failure must propagate", expected, failure)
+
+        val retention = IndependentSleepAdmissionRetention()
+        val rejected = collect(observationId = 7L, lockedBefore = false, lockedAfter = false)
+        retention.retain(rejected)
+        assertEquals(1, retention.totalCompleted)
+        assertEquals(7L, retention.observations().single().observationId)
+        assertEquals(0, retention.omittedCompleted())
     }
+
     @Test fun acceptedRecordIsImmutableAndEpisodeSpecific() {
-        val accepted = sample(mutableListOf(false, Display.STATE_OFF, true, true, Display.STATE_OFF, false), mutableListOf(0, 1))
-        assertTrue(accepted.accepted); assertEquals(1, accepted.episodeId)
-        val next = accepted.copy(episodeId = 2, observationId = 2, startedAtUptimeMs = 9, admissionDeadlineUptimeMs = 6_009)
-        assertNotEquals(accepted.episodeId, next.episodeId)
+        var now = 0L
+        var interactive = false
+        var display = Display.STATE_OFF
+        var locked = true
+        var reads = 0
+        val collector = IndependentSleepAdmissionCollector(
+            { now += 1L; now },
+            { reads += 1; interactive },
+            { reads += 1; display },
+            { reads += 1; locked },
+        )
+        val first = collector.collect(1L, 1L, 6_000L)
+        assertTrue(first.accepted)
+        val afterFirstReads = reads
+        locked = false
+        repeat(3) {
+            assertTrue(first.accepted)
+            assertEquals("historical record must not requery", afterFirstReads, reads)
+            assertTrue(first.evidenceFields().contains("episodeId=1"))
+        }
+        val second = collector.collect(2L, 1L, 6_100L)
+        assertFalse(second.accepted)
+        assertNotEquals(first.episodeId, second.episodeId)
+        assertNotEquals(first.startedAtUptimeMs, second.startedAtUptimeMs)
+
+        val retention = IndependentSleepAdmissionRetention()
+        repeat(10) { index ->
+            retention.retain(collect(observationId = (index + 1).toLong(), start = index.toLong(), finish = index + 1L,
+                lockedBefore = index % 2 == 0, lockedAfter = index % 2 == 0))
+        }
+        assertTrue(retention.observations().size <= 8)
+        assertEquals(1L, retention.observations().first().observationId)
+        assertEquals(10L, retention.observations().last().observationId)
+        assertEquals(10 - retention.observations().size, retention.omittedCompleted())
     }
 }

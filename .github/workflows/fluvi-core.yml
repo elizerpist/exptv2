@@ -176,6 +176,9 @@ jobs:
       - name: Check affected delivery boundary contracts
         run: flutter test test/boundary/dashboard_interaction_performance_boundary_test.dart test/boundary/human_diagnostic_apk_delivery_boundary_test.dart test/boundary/dashboard_avatar_profile_boundary_test.dart --reporter expanded
 
+      - name: Check lower screenshot environment wrapper
+        run: bash scripts/test-keyguard-lower-environment.sh
+
       - name: Enable KVM for material runtime
         run: |
           test -e /dev/kvm
@@ -223,6 +226,7 @@ jobs:
             android/keyguard-draw-probe.log
             android/keyguard-material-smoke.tar
             android/keyguard-material-smoke-pull.log
+            android/keyguard-lower-environment/**
             android/keyguard-service-evidence/**
           retention-days: 14
 
@@ -245,6 +249,7 @@ jobs:
             android/keyguard-draw-probe.log
             android/keyguard-material-smoke.tar
             android/keyguard-material-smoke-pull.log
+            android/keyguard-lower-environment/**
             build/app/reports/androidTests/connected/**
             build/app/outputs/androidTest-results/connected/**
           if-no-files-found: warn

@@ -85,6 +85,24 @@ run_helper() {
 require_apk "$app_apk"
 require_apk "$test_apk"
 
+if [[ -e "$evidence_root" ]]; then
+  printf 'Refusing to overwrite diagnostic evidence: %s\n' "$evidence_root" >&2
+  exit 1
+fi
+mkdir -p "$evidence_root"
+sha256sum "$app_apk" "$test_apk" > "$evidence_root/apk-baseline.sha256"
+
+verify_apk_identity() {
+  local stage=$1 actual="$evidence_root/apk-${stage}.sha256" check="$evidence_root/apk-${stage}.check.txt"
+  sha256sum "$app_apk" "$test_apk" > "$actual"
+  set +e
+  sha256sum --check "$evidence_root/apk-baseline.sha256" > "$check" 2>&1
+  local rc=$?
+  set -e
+  printf '%s\n' "$rc" > "$evidence_root/apk-${stage}.exit"
+  return "$rc"
+}
+
 if ! run_helper; then
   printf 'aggregate_result=FAIL helper controls failed; service repetitions not started\n' \
     > "$evidence_root/aggregate-status.txt"
@@ -107,6 +125,14 @@ for repetition in 1 2; do
   if [[ -e "$repetition_dir" ]]; then
     printf 'Refusing to overwrite diagnostic repetition evidence: %s\n' "$repetition_dir" >&2
     exit 1
+  fi
+
+  if ! verify_apk_identity "before-repetition-$repetition"; then
+    aggregate_result=1
+    mkdir -p "$repetition_dir"
+    printf 'runtime_chain_result=NOT_RUN\nanalysis_result=NOT_RUN\nidentity_result=FAIL\n' > "$repetition_dir/diagnostic-status.txt"
+    # A changed pair cannot produce a comparable later service result.
+    break
   fi
 
   set +e
@@ -139,6 +165,19 @@ for repetition in 1 2; do
     printf 'runtime_chain_result=%s\nanalysis_result=%s\nevidence_directory=MISSING\n' \
       "$service_result" "$analysis_result" > "$repetition_dir/diagnostic-status.txt"
     aggregate_result=1
+  fi
+
+  if ! verify_apk_identity "after-repetition-$repetition"; then
+    aggregate_result=1
+    printf 'identity_result=FAIL\n' >> "$repetition_dir/diagnostic-status.txt"
+    if (( repetition == 1 )); then
+      mkdir -p "$evidence_root/repetition-2"
+      printf 'runtime_chain_result=NOT_RUN\nanalysis_result=NOT_RUN\nidentity_result=FAIL prior APK bytes changed\n' \
+        > "$evidence_root/repetition-2/diagnostic-status.txt"
+      break
+    fi
+  else
+    printf 'identity_result=PASS\n' >> "$repetition_dir/diagnostic-status.txt"
   fi
 done
 

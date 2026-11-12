@@ -619,6 +619,44 @@ void main() {
       reason: 'The milestone profile must share the bounded drive lifetime.',
     );
   });
+
+  test('current dashboard profile workflow contract rejects diagnostic or trigger mutations', () {
+    final workflow = _read(Directory.current, '.github/workflows/fluvi-core.yml');
+    expect(_hasProfileContract(workflow, baseline: false), isTrue);
+    final job = _workflowJob(workflow, 'run-dashboard-profile');
+    final noDiagnosticGuard = workflow.replaceFirst(
+      job,
+      job.replaceFirst(
+        r"!(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic)",
+        'true',
+      ),
+    );
+    expect(_hasProfileContract(noDiagnosticGuard, baseline: false), isFalse);
+    final noNormalTrigger = workflow.replaceFirst(
+      job,
+      job.replaceFirst("needs.dashboard-paths.outputs.profile == 'true'", 'false'),
+    );
+    expect(_hasProfileContract(noNormalTrigger, baseline: false), isFalse);
+  });
+
+  test('baseline dashboard profile workflow contract remains independently guarded', () {
+    final workflow = _read(Directory.current, '.github/workflows/fluvi-core.yml');
+    expect(_hasProfileContract(workflow, baseline: true), isTrue);
+    final job = _workflowJob(workflow, 'run-dashboard-profile-baseline');
+    final noDiagnosticGuard = workflow.replaceFirst(
+      job,
+      job.replaceFirst(
+        r"!(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic)",
+        'true',
+      ),
+    );
+    expect(_hasProfileContract(noDiagnosticGuard, baseline: true), isFalse);
+    final noManualTerm = workflow.replaceFirst(
+      job,
+      job.replaceFirst('inputs.run_baseline_profile', 'false'),
+    );
+    expect(_hasProfileContract(noManualTerm, baseline: true), isFalse);
+  });
 }
 
 String _sources(Directory root, String relativePath) {
@@ -640,4 +678,32 @@ String _between(String source, String startMarker, String endMarker) {
   expect(start, isNonNegative, reason: 'Missing source marker: $startMarker');
   expect(end, greaterThan(start), reason: 'Missing source marker: $endMarker');
   return source.substring(start, end);
+}
+
+String _workflowJob(String workflow, String name) {
+  final headers = RegExp('^  ${RegExp.escape(name)}:', multiLine: true)
+      .allMatches(workflow)
+      .toList();
+  expect(headers, hasLength(1), reason: 'workflow must contain one $name job');
+  final start = headers.single.start;
+  final next = RegExp(r'^  [A-Za-z0-9_-]+:', multiLine: true)
+      .firstMatch(workflow.substring(headers.single.end));
+  final end = next == null ? workflow.length : headers.single.end + next.start;
+  return workflow.substring(start, end);
+}
+
+bool _hasProfileContract(String workflow, {required bool baseline}) {
+  final name = baseline ? 'run-dashboard-profile-baseline' : 'run-dashboard-profile';
+  final headers = RegExp('^  ${RegExp.escape(name)}:', multiLine: true)
+      .allMatches(workflow)
+      .toList();
+  if (headers.length != 1) return false;
+  final job = _workflowJob(workflow, name);
+  final condition = baseline
+      ? r"if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}"
+      : r"if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}";
+  final needs = baseline
+      ? 'needs: [test-core, test-flutter]'
+      : 'needs: [test-core, test-flutter, dashboard-paths]';
+  return job.contains(condition) && job.contains(needs) && job.contains('runs-on: ubuntu-latest');
 }

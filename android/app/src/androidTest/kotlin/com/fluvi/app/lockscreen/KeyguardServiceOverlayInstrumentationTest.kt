@@ -1132,27 +1132,70 @@ class KeyguardServiceOverlayInstrumentationTest {
             val budget = IndependentSleepAdmissionBudget(SystemClock.uptimeMillis(), deadline)
             val episodeId = ++nextSleepAdmissionEpisodeId
             record("SLEEP_ADMISSION_BUDGET", "episodeId=$episodeId inputStartedAtUptimeMs=$sleepInputStartedAt waitStartedAtUptimeMs=${budget.startedAtUptimeMs} nonInteractiveDeadlineUptimeMs=${budget.nonInteractiveDeadlineUptimeMs} admissionDeadlineUptimeMs=${budget.admissionDeadlineUptimeMs}")
-            awaitUntil("screen off", budget.nonInteractiveDeadlineUptimeMs) { !power.isInteractive }
-            val collector = IndependentSleepAdmissionCollector(
-                uptimeMillis = SystemClock::uptimeMillis,
-                interactive = { power.isInteractive },
-                displayState = { context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)?.state ?: Display.STATE_UNKNOWN },
-                keyguardLocked = { keyguard.isKeyguardLocked },
-            )
+            val retention = IndependentSleepAdmissionRetention()
             var observationId = 0L
             var accepted: IndependentSleepAdmissionObservation? = null
-            var last: IndependentSleepAdmissionObservation? = null
-            while (SystemClock.uptimeMillis() < budget.admissionDeadlineUptimeMs && accepted == null) {
-                val observation = collector.collect(episodeId, ++observationId, budget.admissionDeadlineUptimeMs)
-                last = observation
-                if (observationId <= 8L || observation.accepted) record("SLEEP_ADMISSION_OBSERVATION", observation.evidenceFields())
-                if (observation.accepted) accepted = observation else SystemClock.sleep(minOf(100L, (budget.admissionDeadlineUptimeMs - SystemClock.uptimeMillis()).coerceAtLeast(0L)))
+            var firstNonInteractiveAt: Long? = null
+            var failure: Throwable? = null
+            try {
+                firstNonInteractiveAt = awaitIndependentSleepNonInteractive(
+                    deadlineUptimeMs = budget.nonInteractiveDeadlineUptimeMs,
+                    uptimeMillis = SystemClock::uptimeMillis,
+                    interactive = { power.isInteractive },
+                    pauseMillis = SystemClock::sleep,
+                )
+                if (firstNonInteractiveAt == null) {
+                    record("TIMEOUT", "screen off reason=${KeyguardCardDiagnostics.lastReason(context)}")
+                    recordFailureWindows("screen off")
+                    throw AssertionError("screen off timed out; no classifier or callback bypass is permitted")
+                }
+                val collector = IndependentSleepAdmissionCollector(
+                    uptimeMillis = SystemClock::uptimeMillis,
+                    interactive = { power.isInteractive },
+                    displayState = {
+                        context.getSystemService(DisplayManager::class.java)
+                            ?.getDisplay(Display.DEFAULT_DISPLAY)?.state ?: Display.STATE_UNKNOWN
+                    },
+                    keyguardLocked = { keyguard.isKeyguardLocked },
+                )
+                while (SystemClock.uptimeMillis() < budget.admissionDeadlineUptimeMs && accepted == null) {
+                    val observation = collector.collect(episodeId, ++observationId, budget.admissionDeadlineUptimeMs)
+                    retention.retain(observation)
+                    if (observation.accepted) {
+                        accepted = observation
+                    } else {
+                        SystemClock.sleep(minOf(100L, (budget.admissionDeadlineUptimeMs - SystemClock.uptimeMillis()).coerceAtLeast(0L)))
+                    }
+                }
+                if (accepted == null) {
+                    throw AssertionError("screen-off completed admission timed out; no classifier or callback bypass is permitted")
+                }
+                // This exact immutable observation is evidence for this setup
+                // only; it is never read again or reused as later show authority.
+                record("SLEEP_ADMISSION_ACCEPTED", accepted.evidenceFields())
+            } catch (error: Throwable) {
+                failure = error
+                throw error
+            } finally {
+                retention.observations().forEach {
+                    record("SLEEP_ADMISSION_OBSERVATION", it.evidenceFields())
+                }
+                val final = retention.observations().lastOrNull()
+                record(
+                    "SLEEP_ADMISSION_FINAL",
+                    "episodeId=$episodeId inputStartedAtUptimeMs=$sleepInputStartedAt " +
+                        "waitStartedAtUptimeMs=${budget.startedAtUptimeMs} " +
+                        "nonInteractiveDeadlineUptimeMs=${budget.nonInteractiveDeadlineUptimeMs} " +
+                        "admissionDeadlineUptimeMs=${budget.admissionDeadlineUptimeMs} " +
+                        "firstNonInteractiveAtUptimeMs=${firstNonInteractiveAt ?: "NONE"} " +
+                        "finalObservationId=${final?.observationId ?: "NONE"} " +
+                        "finalAccepted=${accepted?.accepted ?: false} " +
+                        "completedObservationCount=${retention.totalCompleted} " +
+                        "retainedObservationCount=${retention.observations().size} " +
+                        "omittedCompleted=${retention.omittedCompleted()} " +
+                        "failure=${failure?.javaClass?.name ?: "NONE"}:${failure?.message ?: "NONE"}",
+                )
             }
-            if (accepted == null) {
-                record("SLEEP_ADMISSION_FINAL", last?.evidenceFields() ?: "episodeId=$episodeId noSample=true")
-                throw AssertionError("screen-off completed admission timed out; no classifier or callback bypass is permitted")
-            }
-            record("SLEEP_ADMISSION_ACCEPTED", accepted.evidenceFields())
             // A completed injected SLEEP input and a non-interactive display
             // do not order SystemUI's asynchronous keyguard transition. In
             // run 43242829409, the next synchronized WAKE arrived after the
