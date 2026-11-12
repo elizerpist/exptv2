@@ -632,8 +632,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val controlledTime = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
         val submissions = SubmittedFrameTracker()
         val producerSamples = CalibratedProducerSamples()
+        // First publication replaces a palette-compatible View bootstrap.
+        // It is a real A submission but cannot be the screenshot reference:
+        // the submission observer runs before Main suppresses that View.
+        // Prime the layer, observe that handoff, then submit a second exact A
+        // for the A/C/B/A compositor reference sequence below.
         submissions.expect(1L, PHASE_A)
-        producerSamples.expect(1L)
         controlledTime.submit(1L, calibratedMaterialTime(PHASE_A))
         KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
         KeyguardOrbBufferRendererTestHooks.frameObserver = producerSamples
@@ -661,8 +665,22 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             }
             assertTrue("isolated ORB never completed a buffer", waitForIsolatedOutput(instrumentation, window))
             submissions.await(1L)
-            val producerA = producerSamples.await(1L)
+            assertTrue(
+                "first isolated buffer did not replace the View bootstrap before reference sampling",
+                waitForIsolatedBootstrapReplacement(instrumentation, manager),
+            )
+            val publishedPrimer = isolatedPublished(instrumentation, window)
+
+            submissions.expect(2L, PHASE_A)
+            producerSamples.expect(2L)
+            controlledTime.submit(2L, calibratedMaterialTime(PHASE_A))
+            submissions.await(2L)
+            val producerA = producerSamples.await(2L)
             persistProducerEvidence(activity, "isolated-producer-a", producerA)
+            assertTrue(
+                "isolated ORB did not publish reference A after bootstrap replacement",
+                waitForIsolatedOutput(instrumentation, window, publishedPrimer),
+            )
             // The ORB is in a separate TYPE_APPLICATION_PANEL, not in the
             // Activity Window. Capture the compositor's actual panel bounds;
             // PixelCopy(activity.window) cannot validate that child surface.
@@ -674,11 +692,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             )
             val publishedA = isolatedPublished(instrumentation, window)
 
-            submissions.expect(2L, PHASE_C)
-            producerSamples.expect(2L)
-            controlledTime.submit(2L, calibratedMaterialTime(PHASE_C))
-            submissions.await(2L)
-            val producerC = producerSamples.await(2L)
+            submissions.expect(3L, PHASE_C)
+            producerSamples.expect(3L)
+            controlledTime.submit(3L, calibratedMaterialTime(PHASE_C))
+            submissions.await(3L)
+            val producerC = producerSamples.await(3L)
             persistProducerEvidence(activity, "isolated-producer-c", producerC)
             assertTrue("isolated ORB did not publish controlled C", waitForIsolatedOutput(instrumentation, window, publishedA))
             imageC = awaitCompositorCrop(
@@ -689,11 +707,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             )
             val publishedC = isolatedPublished(instrumentation, window)
 
-            submissions.expect(3L, PHASE_B)
-            producerSamples.expect(3L)
-            controlledTime.submit(3L, calibratedMaterialTime(PHASE_B))
-            submissions.await(3L)
-            val producerB = producerSamples.await(3L)
+            submissions.expect(4L, PHASE_B)
+            producerSamples.expect(4L)
+            controlledTime.submit(4L, calibratedMaterialTime(PHASE_B))
+            submissions.await(4L)
+            val producerB = producerSamples.await(4L)
             persistProducerEvidence(activity, "isolated-producer-b", producerB)
             assertTrue("isolated ORB did not publish controlled B", waitForIsolatedOutput(instrumentation, window, publishedC))
             imageB = awaitCompositorCrop(
@@ -704,11 +722,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             )
             val publishedB = isolatedPublished(instrumentation, window)
 
-            submissions.expect(4L, PHASE_A)
-            producerSamples.expect(4L)
-            controlledTime.submit(4L, calibratedMaterialTime(PHASE_A))
-            submissions.await(4L)
-            val producerReturnA = producerSamples.await(4L)
+            submissions.expect(5L, PHASE_A)
+            producerSamples.expect(5L)
+            controlledTime.submit(5L, calibratedMaterialTime(PHASE_A))
+            submissions.await(5L)
+            val producerReturnA = producerSamples.await(5L)
             persistProducerEvidence(activity, "isolated-producer-return-a", producerReturnA)
             assertTrue("isolated ORB did not return to controlled A", waitForIsolatedOutput(instrumentation, window, publishedB))
             imageReturnA = awaitCompositorCrop(
@@ -1100,6 +1118,23 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         return false
     }
 
+    /** The first exact isolated submission is ordered before Main suppresses
+     * the retained View placeholder. A screenshot collected in that gap is a
+     * valid bootstrap image but not evidence for the buffer/compositor route. */
+    private fun waitForIsolatedBootstrapReplacement(
+        instrumentation: Instrumentation,
+        manager: TestPanelWindowManager,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+        while (System.nanoTime() < deadline) {
+            var replaced = false
+            instrumentation.runOnMainSync { replaced = manager.isOrbBootstrapSuppressed() }
+            if (replaced) return true
+            Thread.sleep(24)
+        }
+        return false
+    }
+
     /** Captures the request id from the same immutable test-time sample that
      * the renderer uses to record a frame. Production keeps its monotonic
      * source and returns no test id. */
@@ -1266,6 +1301,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             orb.getLocationOnScreen(location)
             return Rect(location[0], location[1], location[0] + orb.width, location[1] + orb.height)
         }
+
+        fun isOrbBootstrapSuppressed(): Boolean = requireNotNull(currentRoot)
+            .findViewById<View>(R.id.fluvi_financial_snapshot_orb)
+            .visibility == View.INVISIBLE
     }
 
     @Test fun productionOffscreenPreparationAcquiresGpuOutput() {
