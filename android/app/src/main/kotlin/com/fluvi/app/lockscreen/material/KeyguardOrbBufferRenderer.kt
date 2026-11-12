@@ -65,6 +65,12 @@ internal data class KeyguardOrbBufferRendererSnapshot(
     val inFlight: Int,
     val ready: Int,
     val compositorOwned: Int,
+    /** Advisory worker-control state for bounded lifecycle diagnostics. */
+    val workerRunning: Boolean,
+    val workerDesiredAttachment: Long,
+    val workerDesiredGeneration: Long,
+    val workerAttachedAttachment: Long,
+    val workerAttachedGeneration: Long,
     /** Worker completion cadence, not display/compositor presentation. */
     val completionGapMaxMs: Long,
 )
@@ -253,7 +259,24 @@ internal class KeyguardOrbBufferRenderer(
     }
 
     fun snapshot(): KeyguardOrbBufferRendererSnapshot = api34?.snapshot()
-        ?: KeyguardOrbBufferRendererSnapshot(false, false, false, 0, 0, 0, 0, 0, 0, 0, 0)
+        ?: KeyguardOrbBufferRendererSnapshot(
+            enabled = false,
+            attached = false,
+            layerVisible = false,
+            framesProduced = 0,
+            framesPublished = 0,
+            framesDropped = 0,
+            failures = 0,
+            inFlight = 0,
+            ready = 0,
+            compositorOwned = 0,
+            workerRunning = false,
+            workerDesiredAttachment = -1L,
+            workerDesiredGeneration = -1L,
+            workerAttachedAttachment = -1L,
+            workerAttachedGeneration = -1L,
+            completionGapMaxMs = 0L,
+        )
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun delegate(): Api34 = api34 ?: Api34().also { api34 = it }
@@ -375,6 +398,11 @@ internal class KeyguardOrbBufferRenderer(
                 inFlight = workerSnapshot.inFlight,
                 ready = workerSnapshot.ready,
                 compositorOwned = workerSnapshot.compositorOwned,
+                workerRunning = workerSnapshot.running,
+                workerDesiredAttachment = workerSnapshot.desiredAttachment,
+                workerDesiredGeneration = workerSnapshot.desiredGeneration,
+                workerAttachedAttachment = workerSnapshot.attachedAttachment,
+                workerAttachedGeneration = workerSnapshot.attachedGeneration,
                 completionGapMaxMs = workerSnapshot.completionGapMaxMs,
             )
         }
@@ -703,6 +731,11 @@ internal class KeyguardOrbBufferRenderer(
         @Volatile private var snapshotInFlight = 0
         @Volatile private var snapshotReady = 0
         @Volatile private var snapshotCompositorOwned = 0
+        @Volatile private var snapshotRunning = false
+        @Volatile private var snapshotDesiredAttachment = -1L
+        @Volatile private var snapshotDesiredGeneration = -1L
+        @Volatile private var snapshotAttachedAttachment = -1L
+        @Volatile private var snapshotAttachedGeneration = -1L
         @Volatile private var completionGapMaxMs = 0L
         private var previousCompletionAtUptimeMs = 0L
 
@@ -714,6 +747,11 @@ internal class KeyguardOrbBufferRenderer(
             val inFlight: Int,
             val ready: Int,
             val compositorOwned: Int,
+            val running: Boolean,
+            val desiredAttachment: Long,
+            val desiredGeneration: Long,
+            val attachedAttachment: Long,
+            val attachedGeneration: Long,
             val completionGapMaxMs: Long,
         )
 
@@ -727,12 +765,15 @@ internal class KeyguardOrbBufferRenderer(
             handler.post {
                 if (disposed) return@post
                 desired = value
-                if (!ensureResources(value)) return@post
-                publishSlotSnapshot()
+                if (!ensureResources(value)) {
+                    publishSlotSnapshot()
+                    return@post
+                }
                 // Detached preparation renders one real frame into a
                 // READY_FOR_MAIN
                 // slot. It does not start a continuous animation loop.
                 requestFrame()
+                publishSlotSnapshot()
             }
         }
 
@@ -751,6 +792,7 @@ internal class KeyguardOrbBufferRenderer(
                 attachedLease = lease
                 running = true
                 requestFrame()
+                publishSlotSnapshot()
             }
         }
 
@@ -915,7 +957,9 @@ internal class KeyguardOrbBufferRenderer(
             // exposing the mutable slot list across thread ownership.
             return Snapshot(
                 produced, published, dropped, failures, snapshotInFlight, snapshotReady,
-                snapshotCompositorOwned, completionGapMaxMs,
+                snapshotCompositorOwned, snapshotRunning, snapshotDesiredAttachment,
+                snapshotDesiredGeneration, snapshotAttachedAttachment, snapshotAttachedGeneration,
+                completionGapMaxMs,
             )
         }
 
@@ -1303,6 +1347,11 @@ internal class KeyguardOrbBufferRenderer(
             snapshotCompositorOwned = slots.count {
                 it.state == SlotState.PUBLISHED || it.state == SlotState.WAIT_RELEASE_FENCE
             }
+            snapshotRunning = running
+            snapshotDesiredAttachment = desired?.lease?.attachment ?: -1L
+            snapshotDesiredGeneration = desired?.lease?.generation ?: -1L
+            snapshotAttachedAttachment = attachedLease?.attachment ?: -1L
+            snapshotAttachedGeneration = attachedLease?.generation ?: -1L
         }
     }
 

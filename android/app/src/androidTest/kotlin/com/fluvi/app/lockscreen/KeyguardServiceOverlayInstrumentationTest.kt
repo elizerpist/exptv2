@@ -359,6 +359,11 @@ class KeyguardServiceOverlayInstrumentationTest {
         val isolatedInFlight: Long,
         val isolatedReady: Long,
         val isolatedCompositorOwned: Long,
+        val isolatedWorkerRunning: Boolean,
+        val isolatedWorkerDesiredAttachment: Long,
+        val isolatedWorkerDesiredGeneration: Long,
+        val isolatedWorkerAttachedAttachment: Long,
+        val isolatedWorkerAttachedGeneration: Long,
         val state: String,
         val hardware: Boolean,
         val activeRenderer: String?,
@@ -1027,6 +1032,15 @@ class KeyguardServiceOverlayInstrumentationTest {
                     isolatedReady = (values["isolatedOrbFramesReady"] as? Number)?.toLong() ?: 0L,
                     isolatedCompositorOwned =
                         (values["isolatedOrbFramesCompositorOwned"] as? Number)?.toLong() ?: 0L,
+                    isolatedWorkerRunning = values["isolatedOrbWorkerRunning"] == true,
+                    isolatedWorkerDesiredAttachment =
+                        (values["isolatedOrbWorkerDesiredAttachment"] as? Number)?.toLong() ?: -1L,
+                    isolatedWorkerDesiredGeneration =
+                        (values["isolatedOrbWorkerDesiredGeneration"] as? Number)?.toLong() ?: -1L,
+                    isolatedWorkerAttachedAttachment =
+                        (values["isolatedOrbWorkerAttachedAttachment"] as? Number)?.toLong() ?: -1L,
+                    isolatedWorkerAttachedGeneration =
+                        (values["isolatedOrbWorkerAttachedGeneration"] as? Number)?.toLong() ?: -1L,
                     state = values["coldPresentationState"].toString(),
                     hardware = values["hardwareAccelerated"] == true,
                     activeRenderer = values["activeRenderer"] as? String,
@@ -1041,6 +1055,9 @@ class KeyguardServiceOverlayInstrumentationTest {
             " isolatedDropped=${material.isolatedDropped}" +
             " isolatedSlots=inFlight:${material.isolatedInFlight},ready:${material.isolatedReady}," +
             "compositorOwned:${material.isolatedCompositorOwned}" +
+            " worker=running:${material.isolatedWorkerRunning}," +
+            "desired:${material.isolatedWorkerDesiredAttachment}/${material.isolatedWorkerDesiredGeneration}," +
+            "attached:${material.isolatedWorkerAttachedAttachment}/${material.isolatedWorkerAttachedGeneration}" +
             " renderer=${material.activeRenderer}" +
             " state=${material.state}")
         return material

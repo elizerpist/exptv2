@@ -550,6 +550,11 @@ internal class KeyguardCardMaterialController(
         isolatedFramesInFlight = buffer?.inFlight ?: 0,
         isolatedFramesReady = buffer?.ready ?: 0,
         isolatedFramesCompositorOwned = buffer?.compositorOwned ?: 0,
+        isolatedWorkerRunning = buffer?.workerRunning ?: false,
+        isolatedWorkerDesiredAttachment = buffer?.workerDesiredAttachment ?: -1L,
+        isolatedWorkerDesiredGeneration = buffer?.workerDesiredGeneration ?: -1L,
+        isolatedWorkerAttachedAttachment = buffer?.workerAttachedAttachment ?: -1L,
+        isolatedWorkerAttachedGeneration = buffer?.workerAttachedGeneration ?: -1L,
         isolatedCompletionGapMaxMs = buffer?.completionGapMaxMs ?: 0L,
     )
     }
@@ -963,5 +968,10 @@ internal data class KeyguardMaterialDiagnostics(
     val isolatedFramesInFlight: Int,
     val isolatedFramesReady: Int,
     val isolatedFramesCompositorOwned: Int,
+    val isolatedWorkerRunning: Boolean,
+    val isolatedWorkerDesiredAttachment: Long,
+    val isolatedWorkerDesiredGeneration: Long,
+    val isolatedWorkerAttachedAttachment: Long,
+    val isolatedWorkerAttachedGeneration: Long,
     val isolatedCompletionGapMaxMs: Long,
 )
