@@ -3860,6 +3860,82 @@ EVENTS
 END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
 ```
 
+## 2026-11-12 — actual isolated ORB preparation candidate (`ef366946`)
+
+**Why.** The frozen `04e229c` phone exports establish a real preparation
+mismatch: `prepareRetainedView` prepared source/program artifacts and a
+disposable `HardwareRenderer`/`ImageReader`, but did not configure the
+isolated `KeyguardOrbBufferRenderer` which owns the eventual three-buffer
+pool and slot-local shaders. The FULL export separately establishes an
+83 ms inspection plus 89 ms Main-handoff interval for withdrawal request 261;
+it does not establish what occupied Main during that interval.
+
+**Evidence reviewed.** Application baseline `04e229c64e560bef9d49972c3413d1115fc36c41`;
+reviewer-only journal head `0bc1a54081fe816d75a55c634f960760d10eec96`.
+The original frozen LIGHT/FULL exports embedded above remain the source
+evidence: LIGHT 30,534 bytes SHA-256
+`917088d296edfe82bdc3d888ec9cce2d5e3142891e1e78088dfba49c575b09d1`;
+FULL 29,079 bytes SHA-256
+`903d0a42809e95c3795260afe491accb2eea0736d3683e0e997e6b10f277ae66`.
+They are truncated and do not observe physical presentation/removal. The
+matching Dart-only graph was queried at tooling `6b3298f3303b3f27c7a523763110971660c8afb9`
+(source `04e229c`): `KeyguardTimingCaptureBridge` reports 8 references
+(3 production/5 test), and `KeyguardTimingCaptureSnapshot` 12 production
+references. This is navigation evidence only; native Kotlin ownership was
+audited directly through service → window → material controller → isolated
+renderer → diagnostics/tests.
+
+**Changed.** `KeyguardCardMaterialController.prepare` now selects supported
+animated ORB-only input while detached and reconciles the *same* bounded
+isolated renderer used after attachment. Its worker performs one real
+detached frame, retaining the existing single READY frame but no parent layer
+or visibility authority. A fresh authorized attachment still receives a new
+lease and must publish a current frame before it can replace the View
+bootstrap. `MATERIAL_ISOLATED_BACKEND_PREPARED` records that actual detached
+completion with program, lease and dimensions; this is not a presentation
+marker. The old disposable GPU warmup remains only for routes that still need
+the legacy View path; it is no longer misrepresented as isolated-backend
+readiness.
+
+The same commit adds FULL-only, bounded correlation for a Main handoff of at
+least one display interval: immutable `System.nanoTime` request/entry
+endpoints and at most three overlapping *Fluvi-owned* Main scopes, with
+omission/eviction/coverage flags. Empty or incomplete evidence is explicitly
+not an attribution to RenderThread, GPU, Binder, framework, or scheduler.
+LIGHT preserves scalar timing without copying spans.
+
+**Regression intent.**
+
+- `retainedPreparationWarmsActualIsolatedBackendBeforeFirstShow` is a
+  baseline RED against `04e229c`: old service preparation cannot produce a
+  detached isolated output because `isolatedOrbRequested` is still false.
+  It requires before-show actual output, zero publication, and a distinct
+  current output after authorized attachment.
+- `fullCapturePinsBoundedSlowMainHandoffEvidenceInTheCausalSpine` verifies
+  that bounded attribution fields survive raw-event pressure through the
+  causal spine.
+
+**Validation at commit.**
+
+- PASS: `git diff --check`.
+- PASS: `bash scripts/verify-fluvi-boundaries.sh`.
+- NOT RUN locally: `proot-distro login ubuntu -- bash -lc '... ./gradlew
+  --no-daemon :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin
+  --stacktrace'` reached `:app:processDebugResources` but failed before
+  Kotlin compilation because the cached x86_64 AAPT2 binary cannot start in
+  ARM64/proot (`Exec failed, error: 2`). This is the established host
+  limitation, not a PASS and not source-compile evidence.
+- PENDING: x86_64 Android compilation, lower API35 instrumentation, real
+  service fixture, core/Flutter gates, Human APK job, and physical test.
+
+**Rejected/non-claims.** This does not claim that the 04e phone lag is fixed,
+that the 89 ms handoff is GPU work, that local hide submission is physical
+removal, or that a green test would establish phone pacing. No dashboard,
+launcher widget, shader equations, privacy policy, input handling, pool bound,
+or stale lease authority was changed.
+
+**Physical validation: PENDING — USER ONLY.**
+
 </details>
 
 ## 2026-11-10 — Attachment observation repair, unit 1
