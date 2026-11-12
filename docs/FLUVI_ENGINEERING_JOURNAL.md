@@ -12674,3 +12674,33 @@ service behavior. The exact source will be immutable-tagged before diagnostic
 dispatch. Current untracked `index.scip` remains outside the candidate.
 
 Physical validation: PENDING — USER ONLY.
+
+## R-APK-DELIVERY-CONTINUATION-05 — diagnostic correction
+
+Diagnostic source `cf76118a1f4dfd11349f3b779a9907fd60474d71`, immutable tag
+`fluvi-lower-environment-cf76118a1f4d`, ran as
+[43316202061](https://github.com/elizerpist/exptv2/actions/runs/43316202061),
+native job `131524763206`. The branch documentation head was
+`d9cef063e82673eedbe32c79ff4639ab55e57568`; it is not the built source.
+
+The run reached API35 Android-test compilation successfully. Terminal
+observation controls were `OK (7 tests)`. The sleep-admission helper then had
+one deterministic failure in
+`delayedCompletedSleepUsesRemainingAggregateBudget` at
+`IndependentSleepAdmissionObservationInstrumentationTest.kt:47`: its supposed
+incomplete `+3300 ms` observation had all complete admission fields and ended
+exactly at its own deadline, so the immutable predicate correctly accepted it.
+This is a fixture datum error, not a runtime admission, lower-compositor, or
+renderer failure. Lower47, service repetition 1, service repetition 2, trace
+analysis and Human delivery were NOT RUN because helper failure correctly
+stopped that diagnostic chain. Evidence was downloaded to the coding
+environment under `fluvi-diag-43316202061.JBxwRs`; artifact upload succeeded.
+
+Application/test correction `777ad19627e9e4a67bb0a61d3088d55baaae987d`
+changes only that T2 sample to an unlocked (therefore genuinely incomplete)
+bracket. T3 retains exact-deadline eligible acceptance. Local post-correction
+`git diff --check`, shell syntax and inert lower-environment controls pass.
+The next candidate requires a new immutable tag and one diagnostic run; the
+failed tag remains preserved and will not be retried.
+
+Physical validation: PENDING — USER ONLY.
