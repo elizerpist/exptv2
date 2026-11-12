@@ -1054,6 +1054,18 @@ class KeyguardServiceOverlayInstrumentationTest {
             shell("input keyevent KEYCODE_SLEEP")
         }
         await("screen off", 3_000) { !power.isInteractive }
+        if (synchronizeInput) {
+            // A completed injected SLEEP input and a non-interactive display
+            // do not order SystemUI's asynchronous keyguard transition. In
+            // run 43242829409, the next synchronized WAKE arrived after the
+            // display was OFF but before SystemUI processed STARTED_GOING_TO_
+            // SLEEP; it consequently cancelled an old dismissal and never
+            // reached the production admission gate. Require the same public
+            // KeyguardManager condition that the following wake must satisfy
+            // before issuing that next input. The unsynchronised rapid-race
+            // scenario deliberately remains unchanged.
+            await("screen-off keyguard admission", 3_000) { keyguard.isKeyguardLocked }
+        }
         await("screen-off withdrawal", 4_000) { overlaysWithdrawn() }
     }
 
