@@ -164,14 +164,16 @@ class KeyguardServiceOverlayInstrumentationTest {
             producerProbe.persist(output, "producer-a", producerA)
             producerProbe.awaitSubmitted(requestA)
             val liveA = awaitLive("phase-a-current-lease", cold.material, minimumAdvances = 1, expectedWindowId = cold.window.id)
-            val firstImage = copyOrb(cold.window, "cold-orb-a.png")
+            val firstImage = awaitOrb(cold.window, "cold-orb-a.png") { hasColoredMaterial(it) }
             val requestC = producerProbe.arm(currentLease, PHASE_C)
             controlledTime.submit(requestC.requestId, materialTime(PHASE_C))
             val producerC = producerProbe.await(requestC)
             producerProbe.persist(output, "producer-c", producerC)
             producerProbe.awaitSubmitted(requestC)
             val liveC = awaitLive("phase-c-current-lease", liveA, minimumAdvances = 1, expectedWindowId = cold.window.id)
-            val imageC = copyOrb(cold.window, "cold-orb-c.png")
+            val imageC = awaitOrb(cold.window, "cold-orb-c.png") {
+                compareOrbPixels(firstImage, it).nearlyEqual()
+            }
             // A quiet, explicitly marked interval, not a FPS target. No
             // diagnostic polling, input, screenshots or window reads during
             // this interval; system trace owns its frame/thread attribution.
@@ -193,14 +195,18 @@ class KeyguardServiceOverlayInstrumentationTest {
             producerProbe.persist(output, "producer-b", producerB)
             producerProbe.awaitSubmitted(requestB)
             val liveB = awaitLive("phase-b-current-lease", steady, minimumAdvances = 1, expectedWindowId = cold.window.id)
-            val secondImage = copyOrb(requireOverlay(), "cold-orb-b.png")
+            val secondImage = awaitOrb(requireOverlay(), "cold-orb-b.png") {
+                compareOrbPixels(firstImage, it).meaningful()
+            }
             val requestReturnA = producerProbe.arm(currentLease, PHASE_A)
             controlledTime.submit(requestReturnA.requestId, materialTime(PHASE_A))
             val producerReturn = producerProbe.await(requestReturnA)
             producerProbe.persist(output, "producer-return-a", producerReturn)
             producerProbe.awaitSubmitted(requestReturnA)
             val liveReturnA = awaitLive("phase-return-a-current-lease", liveB, minimumAdvances = 1, expectedWindowId = cold.window.id)
-            val imageReturnA = copyOrb(requireOverlay(), "cold-orb-return-a.png")
+            val imageReturnA = awaitOrb(requireOverlay(), "cold-orb-return-a.png") {
+                compareOrbPixels(firstImage, it).nearlyEqual()
+            }
 
             // All producer buffers and actual composed crops are persisted
             // before an oracle assertion can stop this lifecycle scenario.
@@ -221,10 +227,10 @@ class KeyguardServiceOverlayInstrumentationTest {
                     producer.meaningful(),
                 )
                 assertTrue("A-B-A producer return exceeded equality tolerance: $returnDelta", returnDelta.nearlyEqual())
-                val compositorA = requireNotNull(firstImage) { "A compositor crop was unobserved" }
-                val compositorC = requireNotNull(imageC) { "C compositor crop was unobserved" }
-                val compositorB = requireNotNull(secondImage) { "B compositor crop was unobserved" }
-                val compositorReturnA = requireNotNull(imageReturnA) { "return-A compositor crop was unobserved" }
+                val compositorA = firstImage
+                val compositorC = imageC
+                val compositorB = secondImage
+                val compositorReturnA = imageReturnA
                 assertTrue("A compositor crop contains no nonempty material", hasColoredMaterial(compositorA))
                 assertTrue("B compositor crop contains no nonempty material", hasColoredMaterial(compositorB))
                 val compositorPlateau = compareOrbPixels(compositorA, compositorC)
@@ -1048,7 +1054,44 @@ class KeyguardServiceOverlayInstrumentationTest {
         return overlays.single()
     }
 
-    private fun copyOrb(window: Overlay, name: String): Bitmap? {
+    /**
+     * Exact Main submission identifies the requested frame, but it does not
+     * latch UiAutomation's next compositor screenshot. Keep the controlled
+     * time fixed and accept only a crop that meets the requested phase's
+     * predicate. This is test-only observation, not physical presentation.
+     */
+    private fun awaitOrb(
+        window: Overlay,
+        name: String,
+        accepts: (Bitmap) -> Boolean,
+    ): Bitmap {
+        val end = minOf(deadline, SystemClock.uptimeMillis() + 8_000L)
+        var last: Bitmap? = null
+        while (SystemClock.uptimeMillis() < end) {
+            val candidate = captureOrb(window)
+            if (candidate != null) {
+                if (accepts(candidate)) {
+                    last?.recycle()
+                    persistOrb(name, candidate)
+                    return candidate
+                }
+                last?.recycle()
+                last = candidate
+            }
+            // Only yield for a fresh composed observation. The selected
+            // request time is held constant and no renderer/fence wait is
+            // introduced into production.
+            SystemClock.sleep(32)
+        }
+        try {
+            last?.let { persistOrb("$name.observation-timeout", it) }
+        } finally {
+            last?.recycle()
+        }
+        throw AssertionError("$name compositor crop never met its request-bound predicate")
+    }
+
+    private fun captureOrb(window: Overlay): Bitmap? {
         val screen = automation.takeScreenshot() ?: run {
             record("SCREENSHOT_UNOBSERVED", "reason=UiAutomationReturnedNull")
             return null
@@ -1058,10 +1101,12 @@ class KeyguardServiceOverlayInstrumentationTest {
             if (!bounds.intersect(0, 0, screen.width, screen.height) || bounds.width() != 168 || bounds.height() != 168) {
                 record("SCREENSHOT_UNOBSERVED", "reason=unexpectedBounds")
                 null
-            } else Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height()).also { crop ->
-                File(output, name).outputStream().use { crop.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            }
+            } else Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
         } finally { screen.recycle() }
+    }
+
+    private fun persistOrb(name: String, crop: Bitmap) {
+        File(output, name).outputStream().use { crop.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     private data class OrbPixelComparison(

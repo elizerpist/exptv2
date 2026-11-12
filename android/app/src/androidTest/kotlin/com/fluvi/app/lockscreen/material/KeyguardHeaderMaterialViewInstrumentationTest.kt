@@ -338,7 +338,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 view.frame(1L)
             }
             assertTrue("production View never reached a hardware Canvas", waitForPreparedShader(instrumentation, view))
-            fun capture(phase: Float, label: String): Bitmap {
+            fun capture(
+                phase: Float,
+                label: String,
+                accepts: (Bitmap) -> Boolean,
+            ): Bitmap {
                 var before = 0
                 instrumentation.runOnMainSync {
                     before = view.diagnostics().shaderDrawCount
@@ -346,14 +350,27 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     view.frame(System.nanoTime())
                 }
                 assertTrue("hardware Canvas did not draw controlled $label", waitForShaderDraw(instrumentation, view, before))
-                return copyMaterialView(instrumentation, view).also { persistPanelEvidence(activity, label, it) }
+                return awaitCompositorCrop(
+                    label = label,
+                    capture = { copyMaterialView(instrumentation, view) },
+                    persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
+                    accepts = accepts,
+                )
             }
 
-            imageA = capture(PHASE_A, "canvas-a")
-            imageFrozenA = capture(PHASE_A, "canvas-a-frozen")
-            imageC = capture(PHASE_C, "canvas-c")
-            imageB = capture(PHASE_B, "canvas-b")
-            imageReturnA = capture(PHASE_A, "canvas-return-a")
+            imageA = capture(PHASE_A, "canvas-a") { hasVisibleMaterial(it) }
+            imageFrozenA = capture(PHASE_A, "canvas-a-frozen") {
+                compareMaterialPixels(requireNotNull(imageA), it).nearlyEqual()
+            }
+            imageC = capture(PHASE_C, "canvas-c") {
+                compareMaterialPixels(requireNotNull(imageA), it).nearlyEqual()
+            }
+            imageB = capture(PHASE_B, "canvas-b") {
+                compareMaterialPixels(requireNotNull(imageA), it).meaningful()
+            }
+            imageReturnA = capture(PHASE_A, "canvas-return-a") {
+                compareMaterialPixels(requireNotNull(imageA), it).nearlyEqual()
+            }
 
             // Every image is retained before assertion. The frozen and A/C
             // controls must not satisfy the meaningful-motion predicate.
@@ -485,7 +502,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             // Arm only after the test has observed a real current-layer
             // output, so the held work is unquestionably a live producer
             // frame rather than a prewarm completion.
-            if (blockNextRender.get()) {
+            // Consume the test gate for exactly one already-live A frame.
+            // Leaving it armed would also withhold B after reattach, so the
+            // test would deliberately deny the safe capacity it requires to
+            // verify B-owned recovery.
+            if (blockNextRender.compareAndSet(true, false)) {
                 enteredBlockedFrame.countDown()
                 // Bounded release keeps a broken implementation from hanging
                 // an emulator job while still exposing a wait-on-renderer bug.
@@ -599,32 +620,48 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             // The ORB is in a separate TYPE_APPLICATION_PANEL, not in the
             // Activity Window. Capture the compositor's actual panel bounds;
             // PixelCopy(activity.window) cannot validate that child surface.
-            imageA = copyPanelOrb(instrumentation, manager)
-            persistPanelEvidence(activity, "isolated-orb-a", requireNotNull(imageA))
+            imageA = awaitCompositorCrop(
+                label = "isolated-orb-a",
+                capture = { copyPanelOrb(instrumentation, manager) },
+                persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
+                accepts = { hasVisibleMaterial(it) },
+            )
             val publishedA = isolatedPublished(instrumentation, window)
 
             submissions.expect(2L, PHASE_C)
             controlledTime.submit(2L, calibratedMaterialTime(PHASE_C))
             submissions.await(2L)
             assertTrue("isolated ORB did not publish controlled C", waitForIsolatedOutput(instrumentation, window, publishedA))
-            imageC = copyPanelOrb(instrumentation, manager)
-            persistPanelEvidence(activity, "isolated-orb-c", requireNotNull(imageC))
+            imageC = awaitCompositorCrop(
+                label = "isolated-orb-c",
+                capture = { copyPanelOrb(instrumentation, manager) },
+                persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
+                accepts = { compareMaterialPixels(requireNotNull(imageA), it).nearlyEqual() },
+            )
             val publishedC = isolatedPublished(instrumentation, window)
 
             submissions.expect(3L, PHASE_B)
             controlledTime.submit(3L, calibratedMaterialTime(PHASE_B))
             submissions.await(3L)
             assertTrue("isolated ORB did not publish controlled B", waitForIsolatedOutput(instrumentation, window, publishedC))
-            imageB = copyPanelOrb(instrumentation, manager)
-            persistPanelEvidence(activity, "isolated-orb-b", requireNotNull(imageB))
+            imageB = awaitCompositorCrop(
+                label = "isolated-orb-b",
+                capture = { copyPanelOrb(instrumentation, manager) },
+                persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
+                accepts = { compareMaterialPixels(requireNotNull(imageA), it).meaningful() },
+            )
             val publishedB = isolatedPublished(instrumentation, window)
 
             submissions.expect(4L, PHASE_A)
             controlledTime.submit(4L, calibratedMaterialTime(PHASE_A))
             submissions.await(4L)
             assertTrue("isolated ORB did not return to controlled A", waitForIsolatedOutput(instrumentation, window, publishedB))
-            imageReturnA = copyPanelOrb(instrumentation, manager)
-            persistPanelEvidence(activity, "isolated-orb-return-a", requireNotNull(imageReturnA))
+            imageReturnA = awaitCompositorCrop(
+                label = "isolated-orb-return-a",
+                capture = { copyPanelOrb(instrumentation, manager) },
+                persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
+                accepts = { compareMaterialPixels(requireNotNull(imageA), it).nearlyEqual() },
+            )
 
             // Persist every crop before asserting, so an oracle failure keeps
             // paired evidence. A/C deliberately samples the known plateau;
@@ -1214,6 +1251,42 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
+    /**
+     * A SurfaceControl submission is not a screenshot latch. Keep the
+     * requested test time fixed and observe compositor crops until their
+     * phase-specific predicate is true. This is bounded test-only readback;
+     * it is not a transaction callback or a claim about physical display
+     * presentation.
+     */
+    private fun awaitCompositorCrop(
+        label: String,
+        capture: () -> Bitmap,
+        persist: (String, Bitmap) -> Unit,
+        accepts: (Bitmap) -> Boolean,
+    ): Bitmap {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+        var last: Bitmap? = null
+        while (System.nanoTime() < deadline) {
+            val candidate = capture()
+            if (accepts(candidate)) {
+                last?.recycle()
+                persist(label, candidate)
+                return candidate
+            }
+            last?.recycle()
+            last = candidate
+            // Yield only for another composed screenshot; test time remains
+            // fixed and no production frame/fence wait is introduced.
+            Thread.sleep(32)
+        }
+        try {
+            last?.let { persist("$label-observation-timeout", it) }
+        } finally {
+            last?.recycle()
+        }
+        throw AssertionError("$label compositor crop never met its request-bound predicate")
+    }
+
     private data class MaterialPixelComparison(
         val changedPixels: Int,
         val totalDelta: Long,
@@ -1249,6 +1322,19 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             maximum = maxOf(maximum, delta)
         }
         return MaterialPixelComparison(substantive, totalDelta, maximum)
+    }
+
+    private fun hasVisibleMaterial(bitmap: Bitmap): Boolean {
+        var first: Int? = null
+        for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
+            val dx = x + .5f - bitmap.width / 2f
+            val dy = y + .5f - bitmap.height / 2f
+            if (dx * dx + dy * dy >= bitmap.width * bitmap.width * .1764f) continue
+            val color = bitmap.getPixel(x, y)
+            if ((color ushr 24) == 0) continue
+            if (first == null) first = color else if (first != color) return true
+        }
+        return false
     }
 
     private fun isolatedPublished(instrumentation: Instrumentation, window: KeyguardCardWindow): Int {
