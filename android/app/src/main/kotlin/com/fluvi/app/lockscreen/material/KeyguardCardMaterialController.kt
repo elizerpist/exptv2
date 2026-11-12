@@ -124,6 +124,25 @@ internal class KeyguardCardMaterialController(
             onLayerHideSubmitted = { submission ->
                 onIsolatedLayerHideSubmitted?.invoke(submission)
             },
+            onDetachedBackendPrepared = { lease, observedAtUptimeMs ->
+                // A detached completion proves the actual persistent
+                // HardwareBufferRenderer path is prepared.  It still has no
+                // attachment/layer, and the later current lease must render
+                // and publish independently after authorization.
+                if (!attached && isolatedOrbRequested && activeOrbLease == lease) {
+                    onPreparationStage?.invoke(
+                        "MATERIAL_ISOLATED_BACKEND_PREPARED",
+                        mapOf(
+                            "programKey" to lease.programKey,
+                            "leaseAttachment" to lease.attachment,
+                            "leaseGeneration" to lease.generation,
+                            "width" to lease.width,
+                            "height" to lease.height,
+                            "preparedAtUptimeMs" to observedAtUptimeMs,
+                        ),
+                    )
+                }
+            },
         )
     }
     private val isolatedOrbRenderer: KeyguardOrbBufferRenderer
@@ -501,7 +520,10 @@ internal class KeyguardCardMaterialController(
         animationMode: KeyguardCardAnimationMode,
         presentationMode: KeyguardCardPresentationMode,
         isFull: Boolean = true,
-    ) = prepareSelectedPrograms(profile, animationMode, presentationMode, isFull, installViewProgram = true)
+    ) {
+        prepareSelectedPrograms(profile, animationMode, presentationMode, isFull, installViewProgram = true)
+        prepareDetachedIsolatedOrbBackend(profile, animationMode, presentationMode, isFull)
+    }
 
     /** Called only after a verified bootstrap commit for the current attached
      * root. GPU readiness never causes visibility or attachment by itself. */
@@ -645,6 +667,59 @@ internal class KeyguardCardMaterialController(
             requestedProgramKeys.remove(background)
             deferredViewArtifacts.remove(background)
         }
+    }
+
+    /**
+     * Prepares the exact bounded isolated producer selected for an ORB-only
+     * presentation while the retained root is detached.  This is deliberately
+     * separate from attachment authorization: it never creates a child layer,
+     * sets root visibility, or starts the recurring renderer loop.  The first
+     * authorized attachment receives a distinct lease and must still publish
+     * a current buffer before it can replace the View bootstrap.
+     */
+    private fun prepareDetachedIsolatedOrbBackend(
+        profile: KeyguardMaterialProfile?,
+        animationMode: KeyguardCardAnimationMode,
+        presentationMode: KeyguardCardPresentationMode,
+        isFull: Boolean,
+    ) {
+        if (attached || profile == null) return
+        val effective = if (isFull) profile else profile.neutralized()
+        val scene = KeyguardMaterialScene(
+            profile = effective,
+            full = isFull,
+            appliedAtNanos = System.nanoTime(),
+        )
+        val canAnimate = animationMode != KeyguardCardAnimationMode.OFF && animationsAllowed
+        if (!canUseIsolatedOrb(scene, animationMode, presentationMode, canAnimate)) return
+
+        // A new visual selection is the only retry boundary after a producer
+        // failure.  This exactly mirrors update(), but happens without an
+        // attachment or a presentation grant.
+        if (isolatedOrbFailedVisualKey != scene.profile.visualKey) {
+            isolatedOrbFailed = false
+            isolatedOrbFailedVisualKey = null
+        }
+        if (isolatedOrbFailed) return
+
+        isolatedOrbRequested = true
+        latestOrbScene = scene
+        latestOrbPreviousScene = null
+        latestOrbPreviousArtifact = null
+        isolatedTransitionStartedNanos = 0L
+        onPreparationStage?.invoke(
+            "MATERIAL_ISOLATED_BACKEND_PREPARE_REQUESTED",
+            mapOf(
+                "effectId" to scene.profile.effectId,
+                "visualKey" to scene.profile.visualKey,
+                "surface" to "orb",
+            ),
+        )
+        // If the artifact callback was synchronous (or an unchanged program
+        // was already retained), this starts the actual Worker immediately.
+        // Otherwise prepareFor's existing artifact callback reaches this same
+        // reconciliation point.  Neither route creates a visible layer.
+        reconcileIsolatedOrbTarget()
     }
 
     private fun prepareFor(

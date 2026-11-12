@@ -57,6 +57,93 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
+    @Test fun retainedPreparationWarmsActualIsolatedBackendBeforeFirstShow() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        lateinit var window: KeyguardCardWindow
+        var createdWindow: KeyguardCardWindow? = null
+        val preparationEvents = mutableListOf<Pair<String, Map<String, Any?>>>()
+        try {
+            instrumentation.runOnMainSync {
+                window = KeyguardCardWindow(
+                    serviceContext = activity,
+                    onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> },
+                    onWindowDiagnostic = { stage, _, _, _, fields ->
+                        preparationEvents += stage to fields
+                    },
+                    manager = TestPanelWindowManager(activity),
+                )
+                createdWindow = window
+                val settings = KeyguardCardSettings(
+                    requested = true,
+                    showFinancialDetails = true,
+                    presentationMode = KeyguardCardPresentationMode.ORB,
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    orbPosition = KeyguardCardOrbPosition(.5f, .5f),
+                )
+                // This is the exact retained-root service preparation path;
+                // no WindowManager attach or presentation authorization exists
+                // while the bounded isolated producer warms its own slots.
+                window.prepareRetainedView(settings, calibratedOrbProfile())
+                assertFalse(window.isAttached)
+            }
+            assertTrue(
+                "service preparation did not warm the actual isolated ORB backend",
+                waitForDetachedIsolatedBackend(instrumentation, window),
+            )
+            var producedBeforeShow = 0
+            instrumentation.runOnMainSync {
+                val diagnostics = requireNotNull(window.materialDiagnostics())
+                assertEquals("HardwareBufferRenderer/SurfaceControl", diagnostics.activeRenderer)
+                assertTrue(diagnostics.isolatedFramesProduced >= 1)
+                assertEquals(
+                    "detached preparation must not publish or expose a layer",
+                    0,
+                    diagnostics.isolatedFramesPublished,
+                )
+                assertFalse(window.isAttached)
+                producedBeforeShow = diagnostics.isolatedFramesProduced
+                val prepared = preparationEvents.lastOrNull { it.first == "MATERIAL_ISOLATED_BACKEND_PREPARED" }
+                assertTrue("actual detached backend completion was not reported", prepared != null)
+                assertEquals(0L, prepared?.second?.get("leaseAttachment"))
+                assertTrue((prepared?.second?.get("leaseGeneration") as? Long ?: 0L) > 0L)
+            }
+            instrumentation.runOnMainSync {
+                val settings = KeyguardCardSettings(
+                    requested = true,
+                    showFinancialDetails = true,
+                    presentationMode = KeyguardCardPresentationMode.ORB,
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+                    orbPosition = KeyguardCardOrbPosition(.5f, .5f),
+                )
+                assertEquals(
+                    KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings),
+                )
+            }
+            assertTrue(
+                "first authorized attachment did not publish its own current buffer",
+                waitForIsolatedOutput(instrumentation, window),
+            )
+            instrumentation.runOnMainSync {
+                val diagnostics = requireNotNull(window.materialDiagnostics())
+                assertTrue(diagnostics.isolatedFramesProduced > producedBeforeShow)
+                assertTrue(diagnostics.isolatedFramesPublished >= 1)
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                createdWindow?.dispose()
+                activity.finish()
+            }
+        }
+    }
+
     @Test fun detachedPreparationConstructsAndPromotesTheSelectedProgram() {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -1125,6 +1212,26 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 active = diagnostics?.activeRenderer
             }
             if (active == "HardwareBufferRenderer/SurfaceControl" && published > minimumPublishedExclusive) return true
+            Thread.sleep(24)
+        }
+        return false
+    }
+
+    private fun waitForDetachedIsolatedBackend(
+        instrumentation: Instrumentation,
+        window: KeyguardCardWindow,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(12)
+        while (System.nanoTime() < deadline) {
+            var ready = false
+            instrumentation.runOnMainSync {
+                val diagnostics = window.materialDiagnostics()
+                ready = !window.isAttached &&
+                    diagnostics?.activeRenderer == "HardwareBufferRenderer/SurfaceControl" &&
+                    (diagnostics.isolatedFramesProduced >= 1) &&
+                    diagnostics.isolatedFramesPublished == 0
+            }
+            if (ready) return true
             Thread.sleep(24)
         }
         return false

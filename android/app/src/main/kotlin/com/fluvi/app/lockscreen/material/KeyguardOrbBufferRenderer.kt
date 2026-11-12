@@ -241,6 +241,10 @@ internal class KeyguardOrbBufferRenderer(
     /** Observes only the exact Main transaction submission. It carries no
      * visibility or buffer-lifetime authority. */
     private val onLayerHideSubmitted: (KeyguardOrbLayerHideSubmission) -> Unit = {},
+    /** A detached frame has completed through the same bounded buffer owner
+     * used after attachment.  This is observational only: a detached frame
+     * remains without a parent layer and is never a visibility grant. */
+    private val onDetachedBackendPrepared: (KeyguardOrbBufferLease, Long) -> Unit = { _, _ -> },
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
 ) {
     private var api34: Api34? = null
@@ -628,6 +632,12 @@ internal class KeyguardOrbBufferRenderer(
         private fun onFrameReady(frame: ReadyFrame) {
             mainHandler.post publish@{
                 if (!disposed && attachment == null && desired?.lease == frame.lease) {
+                    // This completion has allocated the actual fixed pool,
+                    // configured its slot-local shader and rendered a real
+                    // buffer.  It is deliberately reported before retaining
+                    // the one detached READY frame, rather than pretending
+                    // the separate HardwareRenderer warm-up proves it.
+                    onDetachedBackendPrepared(frame.lease, android.os.SystemClock.uptimeMillis())
                     val replaced = deferredReady
                     deferredReady = frame
                     if (replaced != null) worker.dropReady(replaced)

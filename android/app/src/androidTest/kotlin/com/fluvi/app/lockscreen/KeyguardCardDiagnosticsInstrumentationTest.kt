@@ -444,6 +444,37 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("mainEntryToDecisionMs=10"))
     }
 
+    @Test fun fullCapturePinsBoundedSlowMainHandoffEvidenceInTheCausalSpine() {
+        KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug", "FULL")
+        val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 42L, 1L, "wake", 0L))
+        KeyguardCardDiagnostics.captureEvent(
+            context, "INSPECTION_MAIN_APPLY_STARTED", "unlock", requestId = 71L,
+            observedUptimeMs = 230L, diagnosticContext = attempt,
+            fields = mapOf(
+                "mainHandoffRequestedAtUptimeMs" to 140L,
+                "mainApplyEnteredAtUptimeMs" to 230L,
+                "mainHandoffEvidenceMode" to "ownedMainScopesOnly",
+                "mainHandoffClock" to "System.nanoTime",
+                "mainHandoffDurationNs" to 90_000_000L,
+                "mainHandoffWorkSession" to 42L,
+                "mainHandoffWorkThreadId" to 991L,
+                "mainHandoffWorkOmitted" to 1,
+                "mainHandoffWorkEvicted" to 2L,
+                "mainHandoffWorkCoverageIncomplete" to true,
+                "mainHandoffWorkInvalid" to 0L,
+                "mainHandoffWorkSpan0" to "systemGate:71:1:2:3:1",
+                "mainHandoffWorkSpan1" to "NONE",
+                "mainHandoffWorkSpan2" to "NONE",
+            ),
+        )
+
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.contains("mainHandoffEvidenceMode=ownedMainScopesOnly"))
+        assertTrue(report.contains("mainHandoffDurationNs=90000000"))
+        assertTrue(report.contains("mainHandoffWorkCoverageIncomplete=true"))
+        assertTrue(report.contains("mainHandoffWorkSpan0=systemGate:71:1:2:3:1"))
+    }
+
     @Test fun lightCaptureKeepsMilestonesWithoutRawAccessibilityFlood() {
         KeyguardCardDiagnostics.startCapture(context, "test-sha", "debug", "LIGHT")
         val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 42L, 1L, "wake", 0L))

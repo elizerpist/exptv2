@@ -428,7 +428,12 @@ internal class KeyguardCardWindow(
             isolatedOrbMaterialTimeSource = isolatedOrbMaterialTimeSource,
         ).also { controller ->
             controller.onPreparationStage = { stage, fields ->
-                reportWindowDiagnostic(stage, fields["programKey"]?.toString() ?: "material", null)
+                reportWindowDiagnostic(
+                    stage,
+                    fields["programKey"]?.toString() ?: "material",
+                    null,
+                    fields = fields,
+                )
             }
             controller.onIsolatedLayerHideSubmitted = { submission ->
                 reportWindowDiagnostic(

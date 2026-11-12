@@ -808,6 +808,10 @@ internal object KeyguardCardDiagnostics {
         "queueMs", "inspectionTotalMs", "windowsReadMs", "treeScanMs", "mainApplyQueueMs",
         "inspectionFinishToHandoffMs", "handoffToMainEntryMs", "mainEntryToDecisionMs",
         "diagnosticPreparationFinishedAtUptimeMs", "mainHandoffRequestedAtUptimeMs", "mainApplyEnteredAtUptimeMs",
+        "mainHandoffEvidenceMode", "mainHandoffClock", "mainHandoffDurationNs", "mainHandoffWorkSession",
+        "mainHandoffWorkThreadId", "mainHandoffWorkOmitted", "mainHandoffWorkEvicted",
+        "mainHandoffWorkCoverageIncomplete", "mainHandoffWorkInvalid", "mainHandoffWorkSpan0",
+        "mainHandoffWorkSpan1", "mainHandoffWorkSpan2",
         "rejectionReason", "decision", "abortedStale", "attachedBefore",
         "attachedAfter", "triggerReceivedUptimeMs", "terminalWake", "retryId", "retryIndex",
         "requestedDelayMs", "schedulerLatenessMs", "causingRequestId", "rootWasPrepared",
@@ -1071,6 +1075,11 @@ internal object KeyguardCardDiagnostics {
         return token.mode == KeyguardDiagnosticCaptureMode.FULL ||
             stage !in LIGHT_REDUNDANT_STAGES
     }
+
+    /** Expensive correlation snapshots are retained only for an explicitly
+     * requested FULL capture. LIGHT still records scalar timing boundaries
+     * without copying Main-thread span records on that critical callback. */
+    fun wantsFullEvidence(): Boolean = ingress?.mode == KeyguardDiagnosticCaptureMode.FULL
 
     private val LIGHT_REDUNDANT_STAGES = setOf("ACCESSIBILITY_EVENT", "WINDOWS_READ_FINISHED", "TREE_SCAN_FINISHED")
 
@@ -1683,7 +1692,7 @@ internal object KeyguardCardDiagnostics {
                 listOf(
                     "SERVICE_CONNECTED", "SETTINGS_LOAD_START", "SETTINGS_LOAD_END", "PROFILE_LOAD_START", "PROFILE_LOAD_END",
                     "ROOT_PREPARE_START", "ROOT_PREPARE_END", "MATERIAL_PREPARE_REQUESTED", "MATERIAL_ARTIFACT_READY",
-                    "MATERIAL_PROGRAM_PREPARED", "MATERIAL_PROGRAM_PROMOTED", "MATERIAL_GPU_PREPARATION_STARTED", "MATERIAL_GPU_PREPARATION_COMPLETED", "MATERIAL_GPU_PREPARATION_FAILED", "FIRST_ATTACH", "FIRST_ROOT_DRAW", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "FIRST_SHADER_DRAW",
+                    "MATERIAL_PROGRAM_PREPARED", "MATERIAL_PROGRAM_PROMOTED", "MATERIAL_GPU_PREPARATION_STARTED", "MATERIAL_GPU_PREPARATION_COMPLETED", "MATERIAL_GPU_PREPARATION_FAILED", "MATERIAL_ISOLATED_BACKEND_PREPARE_REQUESTED", "MATERIAL_ISOLATED_BACKEND_PREPARED", "FIRST_ATTACH", "FIRST_ROOT_DRAW", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "FIRST_SHADER_DRAW",
                     "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED",
                 ).forEach { stage -> appendLine("$stage=${cold.stages[stage] ?: "UNOBSERVED"}") }
             }

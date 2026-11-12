@@ -967,8 +967,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // and Dispatchers.Main so the resulting interval is honest.
                 val diagnosticPreparationFinishedAt = SystemClock.uptimeMillis()
                 val mainHandoffRequestedAt = SystemClock.uptimeMillis()
+                val mainHandoffRequestedAtNs = System.nanoTime()
                 withContext(Dispatchers.Main.immediate) {
                     val mainApplyEnteredAt = SystemClock.uptimeMillis()
+                    val mainApplyEnteredAtNs = System.nanoTime()
                     inspectionProbeForTest?.beforeApply(active, result.decision)
                     applyInspection(
                         inspection = result,
@@ -978,6 +980,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                         diagnosticPreparationFinishedAt = diagnosticPreparationFinishedAt,
                         mainHandoffRequestedAt = mainHandoffRequestedAt,
                         mainApplyEnteredAt = mainApplyEnteredAt,
+                        mainHandoffRequestedAtNs = mainHandoffRequestedAtNs,
+                        mainApplyEnteredAtNs = mainApplyEnteredAtNs,
                     )
                     inspectionProbeForTest?.afterApply(active, result.decision)
                 }
@@ -1435,7 +1439,17 @@ class FluviKeyguardCardService : AccessibilityService() {
         diagnosticPreparationFinishedAt: Long,
         mainHandoffRequestedAt: Long,
         mainApplyEnteredAt: Long,
+        mainHandoffRequestedAtNs: Long,
+        mainApplyEnteredAtNs: Long,
     ) {
+        // Captured at Main entry before policy/diagnostic work. This can only
+        // correlate Fluvi-owned spans; a missing or partial snapshot is not
+        // evidence that the uncovered time belongs to GPU, Binder, or the
+        // scheduler.
+        val mainHandoffEvidence = slowMainHandoffEvidenceFields(
+            mainHandoffRequestedAtNs,
+            mainApplyEnteredAtNs,
+        )
         withMainWorkEvidence(KeyguardMainWorkEvidence.INSPECTION_APPLY, request.id) {
         var decisionObservedAt: Long? = null
         try {
@@ -1583,10 +1597,41 @@ class FluviKeyguardCardService : AccessibilityService() {
                     "inspectionFinishToHandoffMs" to (mainHandoffRequestedAt - inspectionFinishedAt),
                     "handoffToMainEntryMs" to (mainApplyEnteredAt - mainHandoffRequestedAt),
                     "mainEntryToDecisionMs" to (decisionObservedAt?.let { it - mainApplyEnteredAt } ?: "NA"),
-                ),
+                ) + mainHandoffEvidence,
             )
         }
         }
+    }
+
+    /**
+     * Retains at most three overlapping, owned Main scopes for a slow handoff
+     * in a FULL diagnostic capture.  Endpoint clock is System.nanoTime;
+     * nearby Uptime values remain the cross-event timeline clock.  CPU spans
+     * are deliberately not summed because they may be nested.
+     */
+    private fun slowMainHandoffEvidenceFields(fromNs: Long, toNs: Long): Map<String, Any?> {
+        if (!KeyguardCardDiagnostics.wantsFullEvidence() || toNs <= fromNs) return emptyMap()
+        val durationNs = toNs - fromNs
+        if (durationNs < SLOW_MAIN_HANDOFF_EVIDENCE_NS) return emptyMap()
+        val snapshot = mainWorkEvidence.snapshotOverlapping(fromNs, toNs)
+        fun span(index: Int): String = snapshot.spans.getOrNull(index)?.let { value ->
+            "${KeyguardMainWorkEvidence.kindName(value.kind)}:${value.requestId}:" +
+                "${value.startedNs}:${value.endedNs}:${value.cpuNs}:${value.overlapNs}"
+        } ?: "NONE"
+        return mapOf(
+            "mainHandoffEvidenceMode" to "ownedMainScopesOnly",
+            "mainHandoffClock" to "System.nanoTime",
+            "mainHandoffDurationNs" to durationNs,
+            "mainHandoffWorkSession" to snapshot.serviceSession,
+            "mainHandoffWorkThreadId" to snapshot.ownerThreadId,
+            "mainHandoffWorkOmitted" to snapshot.omittedOverlapping,
+            "mainHandoffWorkEvicted" to snapshot.overwrittenSpans,
+            "mainHandoffWorkCoverageIncomplete" to snapshot.coverageIncomplete,
+            "mainHandoffWorkInvalid" to snapshot.invalidSpans,
+            "mainHandoffWorkSpan0" to span(0),
+            "mainHandoffWorkSpan1" to span(1),
+            "mainHandoffWorkSpan2" to span(2),
+        )
     }
 
     /**
@@ -2501,6 +2546,9 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     companion object {
         private val RETRY_DELAYS_MS = longArrayOf(16L, 32L, 64L)
+        /** One display interval: below this scalar handoff timing remains
+         * available, but a FULL capture does not copy correlation spans. */
+        private const val SLOW_MAIN_HANDOFF_EVIDENCE_NS = 16_000_000L
         const val ACTION_OPEN_FOCUS = "com.fluvi.app.lockscreen.OPEN_FOCUS"
         const val EXTRA_MODE = "com.fluvi.app.lockscreen.MODE"
         const val EXTRA_AXIS = "com.fluvi.app.lockscreen.AXIS"
