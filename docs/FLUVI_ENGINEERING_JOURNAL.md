@@ -8602,3 +8602,38 @@ it does not quantify Nothing-device latency, establish physical display
 timing, or attribute the 89 ms Main-handoff interval.
 
 Physical validation: PENDING — USER ONLY
+
+
+## 2026-11-12 — prompt-rule assets revised: diagnosis cannot be delegated
+
+### User request and completed rule changes
+
+The user explicitly requested replacement prompt rules because the project instructions already assigned diagnosis to the reviewer, while the uploaded rules still permitted an ambiguous forensic handoff. This entry records a rules-only correction, not a new runtime diagnosis or implementation prompt.
+
+- Full base rules revised to version 2.0: FLUVI_PROMPT_WRITER_RULES.md, SHA-256 0eba0a5e96358666ee43ea339b2df44e6b2855741d17c31255c1b53b5a324abf.
+- Full widget addendum revised to version 1.1: FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, SHA-256 2bc34beffe6975fab78279329904e45b4e70e9046e72f8ceb3c12418c90a6e6a.
+- Both revised files were saved as new versions of their existing document identities. Direct replacement of a ChatGPT Project source attachment is not available through this session's tools; the user must replace the attached source copies with these revised files. Do not assume that saving the documents automatically updated the project's attachment snapshots.
+- The prior conflicting passages were replaced throughout the role definition, unproven-cause gate, technical contract, execution order, completion report and widget preflight. This is not merely a new disclaimer appended to contradictory older instructions.
+- REVIEWER exclusively owns current-source analysis, diagnosis, causal interpretation, hypothesis selection, solution design and refactor design.
+- CODING AGENT implements the specified technical contract or executes the precisely specified evidence-collection experiment. It reports exact observations and contradictions; it must not choose another root cause, redesign, or speculative repair.
+- IMPLEMENTATION requires reviewed source locations/symbols, the code section to change, the selected replacement method or pseudocode, ordering/ownership/lifecycle invariants and falsifiable validation.
+- EVIDENCE_COLLECTION requires reviewer-defined hypotheses, discriminating measurement points, clocks/IDs, controls, expected raw artifacts, bounded execution and a return point. The reviewer interprets the result and selects the subsequent repair.
+- An invalidated plan returns the affected decision to the reviewer. Independent authorized work can continue; routine syntax/import/build wiring within the contract remains permitted. No automatic new user approval is required.
+- Full asset/journal reading before every prompt, exact-build provenance, journal-only reviewer commits, the 21-part English handoff, dashboard protections and user-only physical acceptance remain mandatory.
+- Neither an APK goal nor a blocked CI run permits weakened assertions, skipped mandatory gates reported as green, an invented diagnosis, or unbounded trial-and-error changes.
+
+### Concurrent repository changes preserved
+
+- Initial checkpoint was reviewer commit 42d1a02a1e07cdce031e8448ab4ee845def7d7c2. Immediately before this append, HEAD was 3eade5f203b169dba639e33a84f5886782538b38.
+- Read both new complete commit messages and the actual comparison: application commit 3b4dbba870cda66cbba830b1bcd1ca4183636d91 changes KeyguardCardMaterialController to select detached isolated ORB preparation before artifact callbacks, conditionally skip the duplicate legacy GPU warmup, and invoke legacy preparation at the failure fallback boundary.
+- Its instrumentation change adds the gpuPreparationRequests == 0 assertion to the existing isolated-backend preparation test. This records the source/test delta; it does not claim a new successful API35 run or phone improvement.
+- Documentation commit 3eade5f203b169dba639e33a84f5886782538b38 records that change. Its commit body mentions cc437c207d7436ff7f070b65cf58533e3ab8c963, whereas the actual commit chain and current journal entry identify 3b4dbba870cda66cbba830b1bcd1ca4183636d91. Use the verified actual chain for provenance.
+- The concurrent journal contents are preserved exactly as received; this reviewer appends only. The previous rule clarification remains binding. No new source-level fix or full runtime revalidation is claimed by this asset-editing task.
+
+### Validation and delivery boundary
+
+- Reviewed both asset diffs; retained all 21 prompt sections and the existing technical contracts. Local checks confirmed explicit responsibility in both assets, removal of the old open-ended diagnostic handoff, and no whitespace errors.
+- Current tree contains the unchanged .github/workflows/fluvi-core.yml blob 1fa0994328b4701d153d4398c5c13deb1d92451a with push/pull_request/schedule/workflow_dispatch triggers. This journal-only append uses [skip ci]; no workflow dispatch is requested.
+- No application source, test, workflow or other repository file is modified by this reviewer action. Rule assets are delivered separately.
+- W-HIDE's unattributed phone Main-handoff interval and other previously stated physical acceptance limits are not resolved by rewriting rules.
+- PHYSICAL VALIDATION — PENDING, USER ONLY.
