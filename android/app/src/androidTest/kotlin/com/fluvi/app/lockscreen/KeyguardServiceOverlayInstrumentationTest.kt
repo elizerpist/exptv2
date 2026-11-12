@@ -288,17 +288,20 @@ class KeyguardServiceOverlayInstrumentationTest {
             // wm dismiss-keyguard returns before SystemUI finishes its
             // asynchronous exit. On API 35 the rapid sleep/wake sequence can
             // transiently report unlocked, then re-lock while the pending
-            // exit is cancelled, before its final dismiss completes. The
-            // public accessibility idle boundary is not a terminal-keyguard
-            // boundary, so it cannot by itself gate the next independent
-            // wake. This waits for the already-required terminal state within
-            // the existing bounded fixture budget; it is not a shipped delay
-            // or a presentation claim.
+            // exit is cancelled. The public accessibility idle boundary is
+            // not terminal-keyguard evidence: it can arrive after the
+            // cancellation, with the fixture now re-locked. Reissue the same
+            // public test dismissal used above, then require the terminal
+            // state within the original fixed five-second fixture budget.
+            // This prepares the next independent wake only; it is not a
+            // shipped delay or a presentation claim.
             marked("fixture-platform-settle") {
                 val settleDeadline = minOf(deadline, SystemClock.uptimeMillis() + 5_000L)
                 val initialRemaining = settleDeadline - SystemClock.uptimeMillis()
                 assertTrue("Fixture budget exhausted before platform settling", initialRemaining >= 500L)
                 automation.waitForIdle(500L, initialRemaining)
+                record("FIXTURE_TERMINAL_DISMISS", "afterIdle=true")
+                shell("wm dismiss-keyguard")
                 val terminalRemaining = settleDeadline - SystemClock.uptimeMillis()
                 assertTrue("Fixture budget exhausted before terminal platform state", terminalRemaining > 0L)
                 await("independent reentry terminal unlocked withdrawal", terminalRemaining) {
