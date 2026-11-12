@@ -288,28 +288,21 @@ class KeyguardServiceOverlayInstrumentationTest {
             // wm dismiss-keyguard returns before SystemUI finishes its
             // asynchronous exit. On API 35 the rapid sleep/wake sequence can
             // transiently report unlocked, then re-lock while the pending
-            // exit is cancelled. The public accessibility idle boundary is
-            // not terminal-keyguard evidence: it can arrive after the
-            // cancellation, with the fixture now re-locked. Reissue the same
-            // public test dismissal used above, then require the terminal
-            // state within the original fixed five-second fixture budget.
-            // This prepares the next independent wake only; it is not a
-            // shipped delay or a presentation claim.
+            // exit is cancelled. UiAutomation's global idle is not
+            // terminal-keyguard evidence either: API35 can continue emitting
+            // unrelated accessibility traffic through the entire bounded
+            // interval. Reissue the public test dismissal, then require the
+            // actual keyguard and owned-layer terminal state within the
+            // original fixed five-second fixture budget. The following
+            // independent sleep/wake owns its own public-input synchronization.
+            // This is fixture ordering only, not a shipped delay or
+            // presentation claim.
             marked("fixture-platform-settle") {
                 val settleDeadline = minOf(deadline, SystemClock.uptimeMillis() + 5_000L)
                 val initialRemaining = settleDeadline - SystemClock.uptimeMillis()
                 assertTrue("Fixture budget exhausted before platform settling", initialRemaining >= 500L)
-                automation.waitForIdle(500L, initialRemaining)
-                record("FIXTURE_TERMINAL_DISMISS", "afterIdle=true")
+                record("FIXTURE_TERMINAL_DISMISS", "globalIdle=notRequired")
                 shell("wm dismiss-keyguard")
-                // The second public dismissal itself begins an asynchronous
-                // SystemUI exit. Wait for its public idle boundary before
-                // considering the unlocked/withdrawn predicate terminal;
-                // otherwise the next synthetic sleep can overlap that exit.
-                val postDismissRemaining = settleDeadline - SystemClock.uptimeMillis()
-                assertTrue("Fixture budget exhausted before terminal dismissal settled", postDismissRemaining >= 500L)
-                automation.waitForIdle(500L, postDismissRemaining)
-                record("FIXTURE_TERMINAL_IDLE", "afterDismiss=true")
                 val terminalRemaining = settleDeadline - SystemClock.uptimeMillis()
                 assertTrue("Fixture budget exhausted before terminal platform state", terminalRemaining > 0L)
                 var terminalWithdrawal = terminalReentryWithdrawal()
