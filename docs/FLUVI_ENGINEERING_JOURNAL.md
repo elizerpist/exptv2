@@ -12754,3 +12754,71 @@ Next action: continue the already authorized active diagnostic and R-05 normal-d
 
 This entry appends only the common journal. Workflow trigger policy remains unchanged by the five additive workflow lines. Use [skip ci], verify journal-only append and zero associated runs. Physical baseline and protected milestones unchanged.
 PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+## 2026-11-12 — Reviewer process/root-cause audit: why orb-v4 consumes repeated build cycles
+
+User asks why the coding agent repeatedly fails to produce usable code within2-3 attempts, why this differs from other Fluvi work, and whether orb-v4 is a special branch. This entry is an engineering-process diagnosis with source/CI evidence, not a new application repair prompt.
+
+### Scope and source provenance
+
+Current reviewed branch HEADcbf485dc6deca894e22ac7fe98d192c2aadafd3e is documentation-only; latest executed candidate1fae161e057476c7fc176a386ce19179e6dc1597. Read the latest200 commit metadata entries; inspected the complete comparison file inventory since delivered04e229c64e560bef9d49972c3413d1115fc36c41, selected actual production/test/workflow diffs, current native renderer ownership declarations/state machine, runner scripts, current job graphs and selected full job logs. No claim of auditing every historical runtime failure or rereading every historical journal line.
+
+Git branch facts: default main is381f2306856fcf6903b53e41b3b0c897aa497e1b, committed2026-08-10. Exact-SHA comparison reports feature branch ahead1206,behind0,merge-base=main. These1206 are the branch's complete development ancestry, NOT1206 orb fixes. Comparison file listing capped at300 and not used as a full main-diff audit. The sole workflow has no orb-v4 branch-name-specific condition; the behavior comes from the source/workflow content, not a magical branch mode. Returning to main is not a diagnosed remedy.
+
+### Actual complexity versus preventable mistakes
+
+The isolation commit0133181b8cc5ed74eb069ea0a45e338487007792 introduced a new782-line KeyguardOrbBufferRenderer and314 controller additions, with API34+ HardwareBufferRenderer/SurfaceControl child-layer ownership. Current renderer1433lines includes Main layer lifecycle, render HandlerThread, fence HandlerThread, three-slot backpressure, six slot states, exact attachment/lease/use/request identities and late release/retirement handling. These inspected mechanisms explain why the native overlay is a harder subsystem than a Flutter-only view change; they do NOT excuse deterministic language/runner mistakes.
+
+Initial0133181 report had37 pure JVM system-gate tests PASS but local Android compile/instrumentation NOT RUN. The existing scripts/test-keyguard-system-gate-jvm.sh compiles system-state/inspection/freshness owners, not this Android graphics backend. Flutter analysis or those pure tests cannot stand in for compiling the changed Android renderer/androidTest sources. ARM/proot AAPT2 startup limitations are recorded in the actual follow-up commits; remote x86_64 CI was the working Android compile/runtime route. This makes each missed cheap error disproportionately expensive.
+
+Independently confirmed compiler chain:
+- Run43117586232/job130849456861: ReadyFrame positional arguments mismatched after constructor identity fields changed; HardwareBuffer bound where lease expected and SyncFence where Long expected.03ce463db5321a3c66c0e5270aedd8209703cd26 changed to named arguments.
+- Run43118661028/job130857764149: test accesses private Request.submission at542/544. bc33ad530172744c9f5637b26764c557314faa15 encapsulated the operation but ALSO made Request private.
+- Run43121400061/job130865434194: outer test consumers at162/169/191/198 could no longer access that Request. d7378ba9cbb76f5d68715940b8c8f9c863a1c1cf restored the callable request API with private acknowledgement behind a closure.
+This is direct evidence of incomplete caller/type-impact review and sequential first-error repair. It is not unexplained GPU behavior.
+
+Further inspected deterministic failure families:
+- e1994c64 workflow used multiline Bash conditional in action input executed linewise by /usr/bin/sh; b82eb97 corrected one POSIX command. The older runtime-wrapper comment already documented this action-shell constraint.
+- 9d6249aa's Android-test assertThrows was unavailable in its actual instrumentation compile classpath; aa3 corrected it without dependency changes.
+- cf76118a's supposed incomplete T2 datum was fully eligible at the exact deadline;777ad196 corrected the data.
+- 777ad196's diagnostic hash helper referenced stage inside its own combined local declaration under set-u;1fae161e separated binding from derived paths.
+- The inert shell suite executes the lower preflight/wrapper, not the new diagnostic identity helper. Its PASS plus bash-n therefore did not cover the failed path. Existing prompt demand for a cheap identity negative control was not actually satisfied by that suite.
+
+### Scope growth and feedback costs
+
+Diff04e229c..1fae161e:40commits,24 documentation and16 non-documentation by actual commit classification. Changed production files5 (+212/-33); instrumentation7 (+1122/-27); CI/shell6 (+604/-14); Dart boundary tests2 (+120/-7); journal+4937lines. These are diff line/file counts, not estimates of developer hours or independent defect counts.
+
+Diff3b4dbba870cda66cbba830b1bcd1ca4183636d91..1fae161e:24commits, zero lib/ or src/main/ changes. Last production change in this interval is2026-11-12T15:52:06Z (16:52 Budapest); subsequent work modifies validation/fixture/CI/documentation. Do not call all elapsed wall time active coding.
+
+The reviewer R-05 prompt expanded the immediate launcher-ANR setup correction by retaining unfinished R-03 admission, retention, identity and workflow-test requirements. That scope choice is reviewer responsibility. It creates more modified validation code and more possible breakpoints before the requested APK. The coding agent owns the concrete implementation mistakes; the reviewer owns the insufficiently controlled task size and any incomplete prior impact plan. More prose/rules alone do not prove a branch was executed or a consumer checked.
+
+Current shared journal is about1.9million characters/12757lines; R-05 prompt47183UTF-8bytes. These are observed sizes. Broad mandatory rereading and repeated full prompts/asset blocks create context and navigation load; this is a plausible process risk, NOT proof that a specific model/context limitation caused any individual bug. Model/version/configuration degradation is UNPROVEN; no controlled comparison exists.
+
+Two recent preventable diagnostic runs took about8minutes each from creation to completed workflow, before lower/service. Normal runs often also pay core/Flutter setup plus native emulator and an unrelated dashboard benchmark. The useful improvement is verifying the changed executable path early, not merely listing more PASS commands.
+
+### Workflow red is not identical to broken application/APK
+
+Nine sampled normal feature-line runs43215481141,43220246563,43224320186,43228827810,43232737452,43236915885,43242829409,43248694676,43252599652 each have corePASS and FlutterPASS, with nativeFAIL. This sample locates the recurring delivery blocker; it does not establish all failures share one cause.
+
+Delivered-source runs43143048479(52bcda05),43150968747(e7905b63),43197084553(04e229c6), and42929281876(dc591498) are overallFAIL while their core/Flutter/native/Human jobs areSUCCESS; the separate dashboard-profile job fails. In04e profile job131113712869 the inspected log records RangeError(year):2026 outside2027..2051. Human's dependencies do not include dashboard-profile. Therefore raw red-workflow counts overstate failed APK compilation/delivery and must not be presented as the agent's universal failure rate. A successful Human build still does not prove physical performance acceptance.
+
+### New current-run result observed during this audit
+
+Run43319482620/source1fae161e/job131536088989 completedFAIL at22:40:05Z (23:40 Budapest). Log independently shows:
+- Android assembly BUILD SUCCESSFUL.
+- terminal7 and sleep7 each OK(7 tests).
+- lower lane starts/finishes47tests and connected build succeeds.
+- first service: rapid-cycle-8 actual live shader/phase output timed out; await at1538,awaitLive1314; FAIL1test.
+- second service: OK(1 test).
+- artifact13991760363,41402134bytes, metadata digest7532e56729cd657d68d94bdeb19c05daf4d44a9219f139443d9877f42b6d4dea.
+Artifact bytes/probe/trace and cross-repetition hash evidence have NOT yet been independently inspected in this process audit; no detailed cause or comparability conclusion is asserted.
+This is a new runtime-observation failure boundary, not the old compiler/shell failures. One pass and one failure do not prove a harmless flaky test or a renderer bug. No normal delivery or Human APK is justified by this failed diagnostic.
+
+### Reviewer conclusions and next decisions
+
+PROVEN contributing factors: harder multi-owner native graphics/lifecycle scope; lack of equivalent cheap local Android compilation; actual missed caller/visibility changes; tooling/fixture defects discovered only in expensive CI; incomplete execution coverage behind superficially green cheap checks; growing validation scope; overall workflow status mixing unrelated failures with successful Human delivery.
+UNPROVEN: a weaker model, an inherently corrupt branch, one universal renderer root cause, or a justified need for another broad renderer rewrite.
+Process correction direction: keep one frozen delivery objective, separate unrelated validation-framework growth; demonstrate execution coverage of changed pure/shell paths; use actual production+androidTest compilation before hardware gates; distinguish application/fixture/measurement/tooling/infra results; keep a concise active handoff separate from historical evidence if the user elects to revise the full-journal rule. Do not weaken required correctness gates or implement a new CI/architecture refactor from this audit alone.
+Next causal work belongs to reviewer: compare the current failed rapid-cycle8 evidence against its immediately preceding successful cycle and the second service run, tracing current lease/attach/publication/output identity. No blind rerun or new renderer edit is authorized by this entry. This is not a coding prompt and does not delegate diagnosis.
+Reviewer modified only this journal append; no builds dispatched, no production/test/workflow edits. Verify append-only diff and no Actions run for the[skip ci] documentation commit.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
