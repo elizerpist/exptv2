@@ -93,7 +93,9 @@ mkdir -p "$evidence_root"
 sha256sum "$app_apk" "$test_apk" > "$evidence_root/apk-baseline.sha256"
 
 verify_apk_identity() {
-  local stage=$1 actual="$evidence_root/apk-${stage}.sha256" check="$evidence_root/apk-${stage}.check.txt"
+  local stage=$1
+  local actual="$evidence_root/apk-${stage}.sha256"
+  local check="$evidence_root/apk-${stage}.check.txt"
   sha256sum "$app_apk" "$test_apk" > "$actual"
   set +e
   sha256sum --check "$evidence_root/apk-baseline.sha256" > "$check" 2>&1
