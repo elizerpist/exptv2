@@ -12240,3 +12240,368 @@ PHYSICAL VALIDATION — PENDING, USER ONLY.
 References:
 - https://github.com/elizerpist/exptv2/actions/runs/43298487002
 - https://github.com/elizerpist/exptv2/commit/aa3b2784dbbe2d5c1ef40a9d37c757c1bb365714
+
+## 2026-11-12 — R-APK-DELIVERY-CONTINUATION-05: explicit lower preflight and continuation to Human APK
+
+User requests one execution prompt that continues through a delivered APK, not another end-of-turn at queued CI or diagnostic completion. No new physical result is supplied.
+
+Reviewed current documentation HEAD2a0a22cf851707b08c23a2f95761a4cbf850edb3, executable/test sourceaa3b2784dbbe2d5c1ef40a9d37c757c1bb365714. No additional executable changes since R-04. Source tree89bc40dff6f0e69ae56be343e2fd751bd35f0bb2; journal blob3c01f0f500be213410ea86b61ad69c18a641f83d.
+
+Evidence and classification remain R-04: run43298487002, artifact13981004491 (ZIP SHA-256c8d4ebbb5fa5d067c0fa18d096c5dffa4440cec0e24c9b4cdfd7e789bc29360b). PASS Flutter boundary9, Android assembly, terminal7, sleep7, both complete real-service scenarios and trace analyses. FAIL lower47 with two first-A samples obscured by the same Quickstep ANR modal; overall diagnostic FAIL. Core/full Flutter/normal delivery NOT RUN; Human SKIPPED in diagnostic mode. Phone lag remains open.
+
+Reviewer decision:
+- Add one lower-only, bounded, evidence-preserving preflight before connectedDebugAndroidTest, using the existing identified-launcher ANR setup action only when that exact obstruction is observed. Keep the already passing service setup unchanged.
+- Clean setup performs no reset. Unknown/malformed/failed state or persistent ANR fails closed. One recognized pre-existing launcher ANR allows one targeted premeasurement cleanup. Any ANR during measured tests is retained as failure, never silently dismissed/retried.
+- Runtime wrapper retains independent service work and sticky aggregate failure. Before/post-lower snapshots go to a new directory uploaded in both normal and diagnostic modes. Add inert shell controls before expensive emulator work.
+- Preserve all current production code, pixel predicates, identity/lifecycle contracts, numerical budgets and required delivery gates.
+- R-03 source-contract completions were not implemented by aa3 and remain explicitly required: fresh episode/immutability controls, first-phase completion deadline, bounded finally retention, between-repetition APK identity checks and workflow-condition negative controls. No new independent runtime repair is delegated.
+- Diagnostic PASS automatically leads to normal dispatch on the exact candidate. Pending CI, mechanical corrections, commit/push or completed diagnostics are not completion. Actual Human download plus source/mode/hash/test report is the artifact endpoint.
+- A genuinely new semantic contradiction still requires reviewer interpretation; no automatic cross-session reviewer connection is invented. Continue independent authorized work and provide exact evidence rather than a bare “cause pending”.
+
+The prompt contains21 English sections, R1-R12/P1-P8 impact/verification coverage, precise allowed files, preflight outcomes, fixed diagnostic repetitions, commands and delivery conditions.
+File: FLUVI_APK_DELIVERY_R05_2026-11-12.txt.
+UTF-8 bytes47183; SHA-25668d5b6617e31251a3c1471155dcde4e09bb814547def35c904864d69794ae37d.
+
+Audit limits retained honestly: complete current rule assets and milestone file read; complete runtime/service/diagnostic wrappers and current relevant workflow/boundary consumers examined, with the prior source/test/evidence audit carried forward. Entire historical journal was retrieved/indexed, relevant R-02/R-03/R-04 entries read; no fresh line-by-line reread of all historical dashboard entries is claimed. No verified native graph. Default-branch code search returning no hits is not branch consumer proof. Source map and local rg verification are specified instead.
+
+Reviewer mutation is this journal append only. No application/test/workflow edit and no workflow dispatch. Sole workflow triggers checked: push,pull_request,schedule,workflow_dispatch. [skip ci] applies to this documentation push; verify exact journal-only append and associated run count after commit.
+Implementation/APK delivery remain PENDING; automatic results are those listed above, not candidateR05 execution.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+### Exact copy-ready R-05 execution prompt
+
+````text
+1. TITLE / TASK INTENT
+
+IMPLEMENTATION — R-APK-DELIVERY-CONTINUATION-05.
+Execute this closed continuation through a downloadable, verified Human APK. The reviewer has resolved the two lower47 compositor failures in run43298487002 to an observed launcher ANR dialog covering the sampled rectangle. Correct the missing BEFORE-LOWER environment preparation, finish the already specified R-03 contract items below, then follow focused validation AND normal delivery without another user prompt.
+
+This prompt supersedes the R-03 prohibition on changing the runtime wrapper/workflow ONLY for the exact preflight and artifact changes below. Its remaining contracts are retained here. No production renderer change is authorized or needed to address the observed occluded samples.
+
+CONTINUATION CONTRACT:
+- A checkpoint, commit, push, queued/running CI, successful helper, or successful diagnostic is an intermediate state. Do not end there or wait for another “APK?” message.
+- Fetch failures and artifacts yourself. Correct mechanical implementation errors within this contract (imports, types, supported assertion syntax, quoting, paths, exit-status propagation); rerun the cheapest affected check, then the prescribed next stage. Do not ask for permission already supplied here.
+- After focused entry criteria PASS, automatically dispatch normal delivery on the exact candidate. Monitor the Human job, obtain its release, DOWNLOAD the APK, verify identity/size/hash, and only then report artifact delivery.
+- Do not fabricate a green gate, repeatedly rerun an unchanged failed candidate, or invent a new runtime repair. A genuinely new semantic contradiction is an evidence handback to the reviewer after the specified collection and independent authorized work; it is not a successful completion or a fresh user-permission request.
+- Keep progress messages during waits. If execution context is compacted, continue from the recorded run/ref/stage. Do not abandon active work because one command returned “running”.
+
+Reviewer decision/evidence: journal R-REVIEWER-HANDOFF-04 at commit2a0a22cf851707b08c23a2f95761a4cbf850edb3, and this R-05 entry. The prompt writer owns diagnosis and all behavioral choices; the coding agent implements and reports measured facts.
+
+2. AUTHORITATIVE APPLICATION STATE
+
+Repository: elizerpist/exptv2. Branch: fix/orb-v4-latency-lockscreen.
+Latest reviewed executable/test candidate: aa3b2784dbbe2d5c1ef40a9d37c757c1bb365714.
+Its parent: 5ec13dfc41fbb897a0600b828eb2db75e9dac23c (reviewer journal).
+Reviewed documentation-only HEAD: 2a0a22cf851707b08c23a2f95761a4cbf850edb3; tree89bc40dff6f0e69ae56be343e2fd751bd35f0bb2. This prompt's later journal-only append is not a new executable baseline.
+Failed immutable tag: fluvi-delivery-continuation-aa3b2784dbbe. Preserve it.
+Run: https://github.com/elizerpist/exptv2/actions/runs/43298487002
+Native job131463030732; artifact13981004491; Human job131477000140 skipped in diagnostic mode.
+No Human APK exists for this candidate. Latest phone source in the relevant journal: 04e229c64e560bef9d49972c3413d1115fc36c41, historical rather than a phone test of aa3. Earlier e7905 capture likewise remains historical.
+No matching verified Kotlin/shell graph is available. Do not confuse a Dart index or a documentation SHA with native source/build provenance.
+
+3. HARD PREFLIGHT
+
+Read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM, docs/FLUVI_ENGINEERING_JOURNAL.md and relevant MILESTONE_COMMITS.md entries before execution. Report missing material explicitly. The prompt writer owns diagnosis, causal interpretation, repair design and refactor decisions. Implement only the specified contract. If source/logs/tests contradict it, preserve exact evidence and return the affected decision to the reviewer while continuing independent authorized work.
+
+Actual reproducible asset access:
+https://github.com/elizerpist/exptv2/blob/c4babd0ba16eaf743f24f5a23558f3f81df649f4/docs/FLUVI_ENGINEERING_JOURNAL.md
+Read the complete FLUVI_RULE_ASSET_BEGIN / FLUVI_RULE_ASSET_END blocks for FLUVI_PROMPT_WRITER_RULES.md v2.1 and FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md v1.2.
+Base SHA-256: ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2.
+Widget SHA-256: c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b.
+Current common journal: docs/FLUVI_ENGINEERING_JOURNAL.md on the branch, especially R-02, R-03, R-04, R-05 and intervening agent results.
+Exact R-03 handoff: same journal at5ec13dfc41fbb897a0600b828eb2db75e9dac23c.
+Milestones: https://github.com/elizerpist/exptv2/blob/2a0a22cf851707b08c23a2f95761a4cbf850edb3/MILESTONE_COMMITS.md
+
+Run in the existing checkout, using its configured Bash/proot environment:
+  git fetch origin
+  git status --short
+  git branch --show-current
+  git rev-parse HEAD
+  git rev-parse origin/fix/orb-v4-latency-lockscreen
+  git log -5 --format=fuller
+  git diff aa3b2784dbbe2d5c1ef40a9d37c757c1bb365714..HEAD --name-status
+Preserve concurrent journal appends and unrelated generated/index remnants. Journal-only descendants do not invalidate the plan. Compare any new executable changes before applying it; never reset others' work.
+
+Reviewer audit disclosure: complete rule assets and milestone file were read; relevant current source, consumers, tests, commits, job logs and retained failure/service evidence were audited. The complete large journal was retrieved/indexed, and relevant current entries read; a new line-by-line reading of every historical dashboard entry is NOT claimed. No matching native graph is claimed. These are explicit audit limitations, not substituted evidence of a runtime cause.
+
+4. PHYSICAL USER EVIDENCE
+
+User reports improved wake appearance but remaining render/hide delay and wants an APK to test. This task unblocks truthful validation/delivery; it does not establish that all physical lag is fixed. No new phone capture is needed to identify the existing CI screenshot occlusion.
+W-SHOW, W-HIDE, W-LOCK-ANIM: pending exact-candidate physical comparison. W-HOME-ANIM and accepted dashboard interaction remain protected.
+Preserve physical performance milestone6e962187e90e2a82431b1f91b224d2b52a6e0ba7, including Avatar/Time ownership and current-target publication.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+5. DRIVE LOG AUDIT
+
+No new Drive document or phone recording was supplied. Authoritative new evidence is the complete CI artifact13981004491 for run43298487002/sourceaa3b2784.
+ZIP SHA-256: c8d4ebbb5fa5d067c0fa18d096c5dffa4440cec0e24c9b4cdfd7e789bc29360b, independently matched to GitHub metadata.
+Inside android/keyguard-material-smoke.tar -> files/keyguard-material-smoke/:
+- canvas-a-observation-timeout-screen.png and isolated-orb-a-observation-timeout-screen.png BOTH show the Quickstep ANR modal over the target.
+- Both timeout records: activityWindowFocus=false; target x456,y1116,width168,height168.
+- Both crops exactly equal their full screenshot rectangle; crops are byte-identical, SHA-256 c160cb8bd5a45427be9eb8bdb5435403e910e458677581baa9396f2f5486b8fc. They measure the dialog, not the orb.
+- isolated-producer-a.png contains colored material; SHA-256 e74545c8e0f3575afe468c7c43faa4606052214e92b2390722dba534956a0869; lease1/1,slot3,use1,requestId2,phase1.196795.
+- Service repetition1 window-before-service.txt names focused Application Not Responding: com.android.launcher3. Existing launcher-reset.txt records the targeted setup broadcast and HOME launch, then the ANR is no longer focused. Both subsequent service scenarios pass.
+Each test failed on its FIRST A hasVisibleMaterial predicate, before phase comparisons. Do not call this demonstrated A/C/B/A freezing.
+Missing: before-lower state and exact ANR onset. A clean preflight cannot prove no later ANR; retain all in-test failures.
+
+6. COMMIT / AGENT-EVIDENCE AUDIT
+
+aa3b2784: “test(keyguard): use compatible admission exception assertion [skip ci]”. Actual diff: one test file,10 additions/2 deletions, replacing unavailable assertThrows with try/catch/assertSame. No production, lower47, workflow or service-fixture change. This compiler correction is complete; do not redo it.
+2a0a22cf: reviewer-only journal,97 additions/0 deletions,0 associated Actions runs at verification. No executable change.
+Run43298487002 verified results:
+- Three Flutter workflow/Human boundary files: PASS9.
+- Android test assembly: PASS. Terminal helper7: PASS. Sleep helper7: PASS.
+- lower47:47 tests,2 failures,0 errors,0 skipped. Both retained compositor crops obscured as above.
+- Service1: OK(1 test), capture93fe7027-b161-4510-9642-bb516ea07019, admission/reentry/current output and30cycles PASS; analysis0. runtime_chain_result1 includes the preceding lower failure and does NOT mean service1 failed.
+- Service2: OK(1 test), capture2a096bcd-375e-473a-a26b-450154ea3590,30cycles/current output PASS; analysis0.
+- Aggregate diagnostic FAIL correctly. Normal delivery/core/full Flutter NOT RUN. Human SKIPPED because diagnostic mode excludes it independently of diagnostic success.
+Remaining R-03 source-contract completion is still required: real fresh-read/immutable-record controls; first-phase read-completion deadline; bounded failure-finally retention; APK equality across repetitions; independent workflow-condition negative controls. These are already specified requirements, not newly diagnosed phone defects. They are included below to avoid another incomplete candidate.
+
+7. GRAPH PROVENANCE AND IMPACT
+
+Current reviewed tree89bc40dff6f0e69ae56be343e2fd751bd35f0bb2 has no matching Kotlin-capable graph/manifest. Untracked index.scip is not verified native coverage. Use this source-verified map; do not claim graph-based causality.
+Path aliases:
+O = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/IndependentSleepAdmissionObservation.kt
+T = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/IndependentSleepAdmissionObservationInstrumentationTest.kt
+F = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
+D = scripts/test-keyguard-native-diagnostic.sh
+B = test/boundary/dashboard_interaction_performance_boundary_test.dart
+H = test/boundary/human_diagnostic_apk_delivery_boundary_test.dart
+W = .github/workflows/fluvi-core.yml
+
+ID | File/symbol and caller | Old -> required transition | Risk and guard | Check
+R1 | T.failedAcquisitionCannotBecomeAdmission; AndroidJUnitRunner | compatible try/catch/assertSame already implemented | preserve exact exception-instance rejection | Android assembly + T6
+R2 | T sample helper/T2-T7; O.collect | copy/same IDs/thin controls -> real separately numbered reads, counter assertions and boundary schedules | stale historical success masquerades as fresh admission | seven methods, expanded table cases
+R3 | F.awaitUntil, sole caller screenOff(true) | accepts predicate finishing after deadline -> completion timestamp must satisfy fixed first deadline | late false-green; no restart or longer budget | deterministic first-phase helper controls + F source link
+R4 | F.screenOff(true) local evidence, outer finally | first eight polls/no failure-finally -> bounded first/change/final observations on all exits | missing rejecting state or ninth retained object | retention/control cases, failure/export evidence
+R5 | D fixed two repetitions/runtime chain | initial hashes only -> compare the same APK pair around each repetition | rebuilt bytes silently change experiment identity | immutable baseline hashes + mismatch negative control
+R6 | B profile checks/H Human checker | broad/partial substring checks -> unique job-scoped complete conditions + negative mutations | diagnostic leak or loss of native prerequisite hidden by other jobs | targeted Flutter files before emulator
+R7 | execution state after diagnostic; W existing Human needs | queued/failure treated as end -> observe, correct mechanical defects, then normal delivery | premature stop or diagnostic mistaken for delivery | source/run status ledger + downloaded Human artifact
+
+F callers: episode(cold/warm/reentry/each of 30 cycles) uses screenOff(true); deliberate rapid-wake-unlock uses default false and remains unchanged. Strict withdrawal, independent wake, attachment identity, actual output/pixels and terminal observation remain separate conditions. New helpers/retention are instrumentation-thread-only, per-episode, no production owner/thread/resource change.
+
+Additional source-verified preflight impact rows:
+R8 | NEW scripts/prepare-keyguard-lower-environment.sh; called only by runtime wrapper before lower47 | unchecked environment -> read/capture, clean no-op OR one identified launcher-ANR cleanup before measurement | broad dismissal/failed adb read treated as clean; fail closed, no runtime renderer edits | clean/known/unknown/stuck/error stub cases
+R9 | scripts/test-keyguard-runtime.sh | immediately run Gradle -> preflight once, execute lower only if preflight succeeded, preserve failure while retaining independent service path | early set-e exit/later PASS erases failure; explicit stage results and aggregate nonzero | wrapper stub outcomes and real XML
+R10 | lower evidence export; W normal/diagnostic upload paths | no before-lower proof -> retained preflight and post-lower observation in BOTH modes | lost/overwritten evidence; own new directory, no reset during measured tests | path checks, artifact inspection
+R11 | normal/diagnostic callers of runtime wrapper | existing wrapper entry retained | changing workflow literal/needs creates another boundary failure; only add evidence paths and cheap script-test step | all three boundary files before emulator
+R12 | in-test ANR/other material failure | failed screenshot -> preserve exact full screen/crop/producer/window/logcat and FAIL | dismiss/retry hides fault; observation-only after lower, no recovery then | unchanged two compositor assertions and negative no-reset control
+
+Use an isolated lower-only setup helper rather than refactoring the already passing service setup in this delivery. The service wrapper remains unchanged. No shared production symbol, callback, lease, GPU buffer, or application lifetime is modified. The new helper is Bash runner setup, not an Android widget feature.
+Call graph verified from source: W -> D(diagnostic)/helper-only(normal) -> runtime wrapper -> lower instrumentation -> existing service wrapper; D separately invokes service wrapper for repetition2. Code-search over the repository default branch returned no runtime-wrapper matches and is not proof of absence on this feature branch; use the explicit branch source map and local rg to check unanticipated consumers.
+
+8. CURRENT SOURCE FACTS
+
+scripts/test-keyguard-runtime.sh (blob9f02a3213258da28f8706d516ba9cd2a070b0816) changes cwd to android, runs connectedDebugAndroidTest for four lower classes, retains draw/smoke evidence, uninstalls app/test and then runs service trace. There is no launcher-ANR preparation before Gradle.
+scripts/test-keyguard-service-trace.sh (blobe4ac7233cf9ba8afbac1510bd243cbf6ecb94c96) already snapshots window-before-service.txt, detects the identified launcher ANR, sends CLOSE_SYSTEM_DIALOGS to packageandroid, polls boundedly, starts HOME and checks the ANR is no longer focused BEFORE Perfetto/service measurement. Preserve this functioning independent setup.
+The workflow already assembles both APKs before emulator startup; API35/x86_64/pixel_7/KVM/emulator15081367/swangle is the verified route. Its emulator script is one folded POSIX shell command; do not replace it with Bash-only syntax interpreted by /usr/bin/sh.
+Current workflow artifact paths omit the new lower-preflight directory, so both normal and diagnostic uploads need the specific additive path below.
+D currently records only initial APK hashes; subsequent comparisons are still required by R-03. O already has immutable bracketed samples and fixed deadlines. F.awaitUntil still accepts a noninteractive read without checking completion time; its generic await is a different shared helper and must remain unchanged.
+Human has needs[test-core,test-flutter,test-keyguard-material-runtime] plus explicit all-success, not-cancelled and NOT-diagnostic conditions. Diagnostic PASS cannot itself create Human. The separate dashboard profile job is not in Human needs; do not change this dependency graph.
+
+9. PROVEN / UNPROVEN / MISSING
+
+PROVEN: retained failed pixels are the occluding Quickstep ANR dialog; isolated producerA has material; both full service scenarios pass after the existing setup; lower entry lacks that setup; diagnostic correctly preserves failure and excludes Human; assertThrows compile issue is resolved.
+UNPROVEN: exact cause/onset of the launcher ANR; that setup alone prevents all future ANRs; that unobscured A/C/B/A and all required gates pass; that phone lag is fixed.
+MISSING EVIDENCE: before-lower and after-preparation observations; corrected candidate full lower47; completion of R-03 source contracts; normal delivery results; identified Human APK; physical acceptance.
+Do not convert an infrastructure/window-occlusion observation into a proven renderer defect or claim a phone performance fix from this CI repair.
+
+10. ROOT-CAUSE OR FORENSIC GATE
+
+Reviewer-selected repair: establish and record the existing known launcher-ANR setup precondition at the earlier screenshot-suite entry, using the already verified targeted action only when that exact pre-existing obstruction is observed. This removes an actual source-level setup gap and tests whether the observed blocker existed before lower execution. It does not presume the ANR onset.
+Keep the material predicates, rectangles, request/lease matching and time budgets intact. Do not enlarge awaitCompositorCrop deadlines or change renderer/compositor production code.
+Bounded outcomes are selected HERE, not by the coding agent:
+1. Clean valid preflight -> no reset, run lower once.
+2. Exact focused launcher ANR -> retain before evidence, ONE targeted premeasurement cleanup sequence, verify final state, then run lower once if clean.
+3. Unknown ANR, unreadable state, failed command or persistent known ANR -> preflight FAIL, lower NOT RUN, preserve evidence and run only the already independent service work under its own setup. Aggregate remains FAIL.
+4. ANR appears/reappears DURING lower -> retain failure and post-state, no mid-test cleanup or lower retry; complete the predeclared independent service runs. This falsifies sufficiency of this setup for that attempt and returns a precisely evidenced onset boundary to reviewer.
+5. Clean retained failed compositor screen -> preserve full screen/crop/producer and metadata; no renderer guess. The existing measured predicates identify the next reviewer decision.
+No additional full run of unchanged aa3 is authorized. One corrected candidate diagnostic with the existing fixed two service repetitions is authorized; normal delivery follows only on the declared green entry table.
+
+11. SCOPE LOCK / NO-TOUCH
+
+Allowed new narrow unit: scripts/prepare-keyguard-lower-environment.sh; scripts/test-keyguard-lower-environment.sh (inert stub tests); scripts/test-keyguard-runtime.sh (entry invocation, result accounting and post-lower observation); W only for additive evidence upload paths and the cheap preflight-test step. Append the common journal.
+Also complete unchanged R-03 requirements in O/T/F, D, B/H as restated in sections13-14. Compiler correctionR1 is already done. Do not duplicate it.
+Leave scripts/test-keyguard-service-trace.sh, trace analyzer, production Kotlin/Dart, shaders, renderer, classifier, privacy/system gates, dependencies, build-purpose settings, all workflow job conditions/needs/selection and emulator configuration unchanged. No additional workflow, new UI, daemon, automatic reviewer agent or dependency upgrade.
+Keep first3s/aggregate6s, withdrawal4s, global330s, host360s, native job30m,30cycles,three-slot cap and every substantive pixel/current-output/withdrawal assertion. New host setup watchdogs bound setup; they do not extend instrumentation budgets.
+No app-data reset, disable-ANR-dialog flag, arbitrary force-stop, sleep-until-green or dismissal inside measured tests. No change to accepted dashboard/launcher-widget behavior.
+
+12. LAYERS / BOUNDS / OWNERSHIP
+
+The failed full-display crop observes the TOP composed layer at the intended orb rectangle. A foreign system modal can own those pixels while producer output is healthy. Do not redefine the pixel test to accept that modal, use only an offscreen image, or infer physical presentation from a Canvas callback.
+New preflight owns only host-side setup before the lower suite, with one fresh evidence directory and bounded subprocesses. It has no production listeners, main-thread work, animation clock or resource authority. Post-lower capture is observational and cannot mutate focus/windows.
+F/O admission and retention remain per-screenOff instrumentation state; accepted old records never authorize a new episode. Missing display/failed acquisition remain rejection/error. Existing cleanup/export and the rapid unsynchronized branch are protected.
+
+13. REQUIRED RED TESTS
+
+R1 is already green ataa3; preserve it. The retained old compiler failure remains historical RED evidence, with no redundant rebuild. Keep exactly the seven named sleep-test methods so the fixed runner count remains valid; table-driven cases may expand inside them.
+T1 nonInteractiveDoesNotMeanDisplayOff: ON, DOZE, UNKNOWN/missing mapping reject even when locked; OFF but unlocked rejects.
+T2 delayedCompletedSleepUsesRemainingAggregateBudget: first phase completes at +300ms; incomplete +3300 sample rejects; complete sample finishing +4000 accepts against +6000 and rejects against the old second-phase deadline +3300. No fabricated live timing claim.
+T3 incompleteOrLateAdmissionFailsClosed: never OFF/locked rejects; sample finishing exactly deadline passes if all states agree; one ms late rejects.
+T4 phaseAndGlobalDeadlinesDoNotRestart: exercise the actual first-phase helper with injected clock/read/yield. A read begun before the first deadline but completed after it cannot pass; exact-boundary completion may pass; exhausted deadline makes no read; false observations use only remaining bounded 100ms polls. Both absolute deadlines remain fixed/clamped across attempts.
+T5 transitionDuringSampleIsRejected: power, display and keyguard disagreement each reject. A separately numbered subsequent complete observation may pass.
+T6 failedAcquisitionCannotBecomeAdmission: injected exception propagates as the same Throwable; do not substitute a successful default. Retention retains the last completed rejected sample on an exceptional exit; no-sample failure is explicitly distinguished.
+T7 acceptedRecordIsImmutableAndEpisodeSpecific: use mutable platform fake readers with counters. Collect episode1; change backing state; repeatedly evaluate accepted/reason/evidenceFields with ZERO new reads; then collect episode2 with new IDs/start/deadline and assert current changed state rejects. Copying the old accepted record is not this test. Include bounded retention overflow: first/final retained, <=8 distinct samples, omissions explicit.
+
+B/H: independently named profile/baseline checks; exact existing job-level if/needs/runner after unique extraction. Negative in-memory mutations remove Human native needs, flip/remove diagnostic exclusion, or remove a normal profile trigger term. Each must fail through the same checker used on real source. Do not edit W for these controls; preserve every unrelated assertion.
+Shell: inert isolated stubs exercise identity mismatch and existing aggregate failures without a device. A failed helper, lower suite, either service or analysis cannot become PASS because a later stage passed. These controls do not prove Android runtime behavior.
+
+Preflight/wrapper inert shell controls (no device or emulator required):
+- P1 clean recognized window snapshot: zero broadcast/HOME calls; lower executes once.
+- P2 focused exact launcher ANR -> clear -> HOME final clean: one broadcast, one HOME, retained original snapshot; lower once after final check.
+- P3 known ANR persists: bounded failure; lower zero; independent service may execute but final result stays nonzero.
+- P4 another ANR owner, malformed/empty dumpsys, adb nonzero or timeout: no reset, no lower, explicit failure evidence.
+- P5 read fails AFTER a prior success: failure, never reuse stale clean contents.
+- P6 first lower fails or post-state contains ANR: no new reset/retry; smoke capture and service continuation remain; aggregate failure survives later success.
+- P7 preflight failure and service success / lower failure and service success / lower success and service failure / all pass: final status nonzero/nonzero/nonzero/zero respectively.
+- P8 existing evidence directory: refuse overwrite; unrelated files untouched. Post-observation failure remains visible and cannot be labelled clean.
+Use PATH-local fake adb/gradle and temporary directories; never invoke real adb from these tests. The tests verify subprocess order/arguments/results, not just string presence. Include controls against arbitrary package matches. Match known launcher package as an exact token.
+The saved original screenshots/XML are the observed RED for the real defect. Do not intentionally ANR a real emulator or rerun unchanged baseline just to obtain another red.
+
+14. IMPLEMENTATION CONTRACT
+
+G. NEW lower-suite preparation (primary R-05 change).
+Add scripts/prepare-keyguard-lower-environment.sh, invoked through Bash, taking exactly one evidence-directory argument. It changes no working-directory-dependent application state. mkdir the directory only if absent; refuse overwrite. Record source SHA, stage=before-lower, attempt/run identity from available environment, command exit statuses and host timestamps explicitly labelled host clock. Never subtract host times from device uptime.
+Read dumpsys window with timeout -k2s5s and retain stdout/stderr/exit separately. Accept a snapshot only on command success, nonempty content and an mCurrentFocus field. Null focus is not a malformed dump and is not proof of visible material; the later real screenshot predicates remain authoritative. A failed read is never “no ANR”.
+Detection: inspect current-focus records; the known target is the exact package com.android.launcher3 in an Application Not Responding window. If another focused ANR is also present, fail without cleanup. Escape package dots and require a token boundary; do not match arbitrary substring packages.
+If no focused ANR: status=CLEAN_NO_RESET; exit0. Do not launch HOME or sleep on this path.
+If only the identified launcher ANR: retain before-window plus a complete-screen PNG (timeout -k2s5s adb exec-out screencap -p) and logcat (timeout -k2s10s adb logcat -b all -d -v monotonic) BEFORE mutation. A failed screenshot capture is explicitly recorded and fails setup; do not silently discard the observed blocker. Then execute ONCE:
+  timeout -k 2s 10s adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS -p android
+This is the existing service precondition action, gated by actual evidence, not a generic reset. No app data clearing or Fluvi force-stop is added.
+Poll at most20 times with a bounded5s dumpsys call each; retain each numbered snapshot and command status. Between still-blocked observations use the existing0.25s cadence. Break as soon as the identified focused ANR clears; any unknown ANR/read error fails. Run the already used HOME command at most once, only after clearance:
+  timeout -k 2s 20s adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME
+Then obtain a fresh bounded window snapshot; any focused ANR, malformed/read failure or unsuccessful HOME command fails. No global-idle/settling requirement or unconditional sleep. Final status=PREPARED_KNOWN_LAUNCHER_ANR only on success.
+The caller bounds the WHOLE helper with timeout -k2s60s; the enclosing wrapper records its exit (including124/137) outside the helper so a killed helper cannot leave an apparently successful status. Trap may add diagnostics but cannot turn failure into success. Do not replace failed snapshots with old data. Limit helper evidence to20polls plus before/final states, one screenshot and one bounded logcat.
+
+H. Runtime wrapper insertion and evidence.
+After its existing cd to android and before connectedDebugAndroidTest, create the new evidence ROOT android/keyguard-lower-environment relative to repository root (therefore keyguard-lower-environment in that cwd). Use child preflight for the helper so the root and wrapper status can exist before the helper. Refuse old root to preserve experiments.
+Run `timeout -k 2s 60s bash ../scripts/prepare-keyguard-lower-environment.sh keyguard-lower-environment/preflight` and capture its real exit without set-e abort. Execute the EXISTING unmodified lower47 Gradle command exactly once only on preflight success. Otherwise record lower=NOT_RUN/preflight failure.
+After lower returns, and BEFORE the existing uninstalls/service setup, save fresh dumpsys window (timeout -k2s5s), complete-screen PNG via adb exec-out screencap -p (timeout -k2s5s) and logcat -b all -d -v monotonic (timeout -k2s10s) to keyguard-lower-environment/post-lower; observe only. This must not send HOME, broadcast, force-stop or input. A recorded current ANR or failed mandatory state read makes the stage fail even if Gradle returned0; preserve the Gradle result separately. Do not add screenshot stability timing, alter test predicates or rerun lower. Retain existing smoke/draw capture before uninstalls.
+Record preflight/lower/post-observation/cleanup/service results separately; aggregate with a sticky nonzero failure. Preserve the existing independent service invocation after either lower failure or preflight failure; its existing setup owns its own precondition. Guard uninstalls if no lower was launched, because a helper-only install is not the same as a lower-created installation; preserve the existing clean installation boundary when lower actually ran. Do not allow an absent-package cleanup to erase the original failure or create a false green.
+The normal workflow and D still call the same wrapper. D repetition1 means runtime-chain result, not service-only result. Do not change service repetition2, reduce repetitions or label a failed preflight as a passing lower suite.
+
+I. Artifact and cheap-check consumers.
+In W add `android/keyguard-lower-environment/**` to BOTH `Retain native runtime and observer evidence` and `Retain native diagnostic evidence` path lists. Preserve names, if conditions, retention and all old paths.
+Add one ordinary runner step executing `bash scripts/test-keyguard-lower-environment.sh` BEFORE KVM/emulator work in test-keyguard-material-runtime. Do not create jobs or alter the folded POSIX emulator script, three emulator declarations, Human needs/if, profile triggers or build commands.
+The shell test entry uses inert stubs for helper/wrapper outcomes, with temporary isolated evidence and automatic cleanup. Add it to local cheap validation too. Keep paths quoted and preserve failure code through pipelines; never use `if ! command; then rc=$?` to capture the original exit (that captures the negation).
+
+J. R-03 completion remains a prerequisite, not an open diagnosis. The following precise B-F requirements are retained; R1's already implemented compatible exception assertion stays unchanged. Implement these test-only corrections as one reviewed unit with their callers and cheap controls before the next expensive candidate. No new contract may be inferred beyond them.
+
+B. Complete T1-T7 using actual O collectors and explicit scripted/mutable readers; allow sample helper parameters for episodeId/observationId/deadline instead of hard-coding 1/1. Do not manufacture next-episode success with copy(). Preserve existing O bracket/acceptance.
+
+C. First-phase completion boundary, without changing shared generic await:
+Add one internal test-only helper in O, awaitIndependentSleepNonInteractive(deadlineUptimeMs, uptimeMillis, interactive, pauseMillis): Long?. It returns the accepted read-completion uptime, or null at exhaustion; exceptions propagate. Use this exact algorithm:
+  while (uptimeMillis() < deadlineUptimeMs) {
+      val isInteractive = interactive()
+      val finishedAt = uptimeMillis()
+      if (!isInteractive && finishedAt <= deadlineUptimeMs) return finishedAt
+      val remaining = deadlineUptimeMs - finishedAt
+      if (remaining <= 0L) break
+      pauseMillis(minOf(100L, remaining))
+  }
+  return null
+Replace only F.awaitUntil's inner polling with this helper for its sole first-phase caller, returning the accepted timestamp. Supply SystemClock::uptimeMillis, power.isInteractive and SystemClock.sleep adapters. Retain TIMEOUT/failure-window evidence and throw on null. Do not modify await(label, timeoutMs, pollMs, condition).
+Record the accepted first non-interactive completion time in this episode's summary. Preserve budget start after the original synchronized input pair and keep separate input-start time. No deadline restarts or new waits.
+
+D. Finish the prescribed admission evidence path:
+Use a local per-screenOff bounded retention object in O, called from F. Count all completed observations; retain the first, changed state samples and the final/latest sample, at most 8 distinct records. State comparison uses captured power/display/keyguard/accepted/reason fields, not IDs or timestamps. If full, preserve first and reserve/replace the final slot for latest; omittedCompleted = totalCompleted - retainedDistinct. No per-poll log formatting or I/O.
+Wrap first-phase + admission loop in a local try/catch/finally. Capture exception class/message only for evidence, rethrow the original. Finally emits retained observations plus one summary containing episode/input/wait/deadlines/first-phase-time/final-ID-or-NONE/accepted-or-rejected-or-acquisition-failed/counts. Failure before the first complete sample is not a fabricated rejected sample. Success records the SAME accepted object, without live requery. Preserve existing outer restoration/export. Keep the final 4s strict withdrawal outside and after successful admission. Unsynchronized false branch is byte-for-byte behaviorally unchanged.
+Keep the aggregate admission loop's existing completed-sample deadline rejection. No additional platform polling, stabilization sleep, input retry or global-idle requirement. Retention is setup-only instrumentation, not production telemetry.
+
+E. Complete D APK comparability checks:
+After require_apk and before helpers, write one immutable checksum baseline for app_apk/test_apk in evidence_root. Compare that baseline with sha256sum --check before repetition1, after repetition1, before repetition2 and after repetition2; capture actual hashes and the comparison exit for every stage. Do not overwrite the baseline with later hashes. Preserve both identities on mismatch.
+The runtime chain can rebuild: if bytes differ, mark comparability FAIL; preserve/archive available runtime/trace evidence before exiting. Do not reinstall the old pair to conceal a mismatch, or run another service with changed bytes as a comparable repetition. A dependent second repetition is NOT RUN with the precise identity reason. Ordinary runtime/analysis failure with unchanged bytes still retains both predeclared service outcomes as previously specified. Aggregate result remains FAIL on any failed stage.
+Preserve helper-only behavior, separate exact seven-test runner invocations, existing scripts, evidence directories and refusal to overwrite previous evidence. No third service run. The status for repetition1 represents runtime-chain result, not service-only success.
+
+F. Complete existing B/H consumer checks without changing workflow conditions or dependencies:
+Extract exactly one two-space job header and end at the next such header. Assert uniqueness/presence before substring operations. Assert job-level if, needs and runs-on, including negative diagnostic polarity. In H require exactly the existing Human needs [test-core, test-flutter, test-keyguard-material-runtime] and its existing explicit all-success/!cancelled/!diagnostic condition. Do not add dashboard profile to Human needs.
+Move B's two profile header checks into independent tests preserving their current exact strings and all unrelated assertions. Test the specified in-memory mutations. Dart literal ${{...}} must be escaped or a raw string; do not introduce another interpolation compile failure. No YAML parser dependency/general expression interpreter.
+
+15. PERFORMANCE GATE
+
+Zero production per-frame changes. No claim of phone acceleration. Existing pixel/actual-output/current-lease tests remain mandatory. Additional retention is bounded to eight setup observations per independent episode and one summary; no per-poll dumps or file I/O. Do not omit a slow cold episode or reduce cycles to meet the existing budget.
+
+16. IMPLEMENTATION ORDER
+
+1. Resolve exact refs/assets/journal and preserve the existing failed artifact. Verify no executable drift beyond aa3.
+2. Implement/test the lower preflight and wrapper with inert controlsP1-P8. Complete retained R-03 B-F source contracts; compiler correctionA is already done.
+3. Run diff/shell/boundary/analyzer/Flutter controls. Review every changed caller/type/exit path and every R/P row before committing. No full CI per small edit.
+4. Commit coherent candidate with [skip ci], push and create one immutable exact-source tag; verify no unintended push-trigger run. Dispatch one focused diagnostic through the existing route.
+5. FOLLOW it to terminal state. Fetch all relevant failures and artifacts immediately. Routine contract-preserving corrections continue automatically with a new source/tag and cheap checks; unchanged semantic failures do not get a blind rerun.
+6. Complete the fixed two service outcomes and evidence retrieval even when lower fails, subject to the prescribed identical-byte constraint. Do not stop at the first assertion or collapse chain failure into service failure.
+7. When the entry table passes, automatically dispatch NORMAL delivery on the same candidate ref. Do not ask the user whether to proceed and do not end after diagnosticPASS.
+8. Follow required gates AND Human job; locate/download the actual Human release asset, verify source/build/hash/size, append outcomes and deliver its direct URL. This is the executable endpoint.
+
+Progress states: IMPLEMENTING -> CHEAP_CHECKS -> DIAGNOSTIC_RUNNING -> DIAGNOSTIC_VERIFIED -> NORMAL_DELIVERY_RUNNING -> APK_DOWNLOADED_AND_VERIFIED. FAILED is an event to inspect and handle under the authorized branches, not an automatic task-ending state.
+
+17. VALIDATION
+
+On the existing configured Ubuntu/proot Flutter environment:
+  git diff --check
+  bash scripts/verify-fluvi-boundaries.sh
+  bash -n scripts/prepare-keyguard-lower-environment.sh scripts/test-keyguard-lower-environment.sh scripts/test-keyguard-native-diagnostic.sh scripts/test-keyguard-runtime.sh scripts/test-keyguard-service-trace.sh
+  bash scripts/test-keyguard-lower-environment.sh
+  flutter test test/boundary/dashboard_interaction_performance_boundary_test.dart test/boundary/human_diagnostic_apk_delivery_boundary_test.dart test/boundary/dashboard_avatar_profile_boundary_test.dart --reporter expanded
+  flutter analyze --no-fatal-infos lib test integration_test
+Use the already established proot invocation. Do not invent a local Flutter/Android installation or delete ignored generated remnants. If local Flutter is unavailable, state NOT RUN locally and use the existing mandatory pre-emulator three-file CI step. Its test count may grow when adding negative controls; do not require the old Flutter count9. Each native helper class remains exactly seven methods.
+
+Compatible remote assembly already configured in W:
+  cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+This compiles the actual Android-test source/classpath. JVM unit compilation is not a substitute. Use existing ubuntu-latest/Java17/API35/x86_64/pixel_7/KVM/emulator15081367/swangle route. No local ARM emulator requirement or new workflow.
+
+Pre-normal-delivery table must contain executed results:
+- cheap Flutter boundary + mutation tests; shell/diff/boundary checks;
+- Android test assembly;
+- terminal7 and sleep7 separately;
+- lower47 XML (failures/errors/skipped explicit);
+- service1 under full native prelude and service2, each with actual admission, reentry/current output, 30 cycles, cleanup and trace analysis;
+- identical app/test APK hashes at all specified stages;
+- R1-R12/P1-P8, retained before/after-lower environment evidence and unchanged protected conditions; no undisclosed failure.
+Mark each PASS/FAIL/NOT RUN with exact command/source/run/evidence. Source review is not execution. The current run has two actual lower failures and two completed successful service scenarios. Preserve that classification; it is no longer the old compile-only failure.
+
+18. COMMIT DISCIPLINE
+
+Every application/test/tooling commit body: Why, Evidence, Changed, Validation, Known limitations, Physical validation. Record precise commands/results and R-05 association, with the retained R-03 completion items. Append every new commit/run/outcome to docs/FLUVI_ENGINEERING_JOURNAL.md, preserving concurrent reviewer entries. A journal-only child is not a new application identity.
+Do not amend away the failed source, move its tag or force-push shared history. [skip ci] is for checkpoints; final normal workflow_dispatch still runs explicitly. Do not dispatch full delivery per tiny edit.
+
+19. PUSH / BUILD / GRAPH REGENERATION
+
+For the corrected committed candidate, in the repository's Bash environment:
+  candidate_sha=$(git rev-parse HEAD)
+  candidate_ref="fluvi-lower-environment-${candidate_sha:0:12}"
+  git tag "$candidate_ref" "$candidate_sha"
+  git push origin HEAD:fix/orb-v4-latency-lockscreen "refs/tags/$candidate_ref"
+  gh workflow run fluvi-core.yml --repo elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=true -f run_nightly=false -f run_baseline_profile=false
+Verify remote tag and actual run headSha/event/job graph. Select the created run by exact SHA/ref/event, not merely “latest”. Follow status using:
+  gh run view RUN_ID --repo elizerpist/exptv2 --json status,conclusion,headSha,jobs
+On failure retain:
+  gh run view RUN_ID --repo elizerpist/exptv2 --log-failed
+  gh run download RUN_ID --repo elizerpist/exptv2 --dir UNIQUE_EVIDENCE_DIRECTORY
+If artifacts do not exist, retain logs and report that fact rather than failing to inspect the error.
+
+After all focused entry rows PASS, automatically dispatch:
+  gh workflow run fluvi-core.yml --repo elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=false -f run_nightly=false -f run_baseline_profile=false
+Follow the normal core, Flutter and native requirements and existing Human job. Diagnostic=true can NEVER deliver Human. Do not patch its guard to make it publish.
+Existing Human job uses scripts/build-human-diagnostic-apk.sh, ordinary profile entrypoint, and publishes fluvi_HUMAN_DIAGNOSTIC_<shortSHA>.apk. Obtain the actual release/download URL, download it, compute sha256sum and size, and record full source SHA/build mode/identity evidence. Never substitute AUTOMATED_TEST_HARNESS, androidTest or a prior APK.
+The separately recorded dashboard profile RangeError remains separate: do not change dashboard code or hide its failure. Human's existing dependency graph does not require that job; preserve the graph and report its actual status separately. A delivered Human APK is not permission to call a red overall workflow green.
+Graph remains source-verified/MISSING native coverage unless the existing available tooling produces matching coverage. No new graph platform installation.
+
+Do not treat lack of a local ARM Android toolchain as a blocker: this exact remote assembly/runner route already compiled and executed the reviewed tests. Do not create a parallel unverified build path.
+If CI is queued, record the exact run and poll status in short waits with progress updates; do not end merely because scheduling is pending. If the platform session itself ends or a verified external dependency becomes unavailable, preserve the exact resume checkpoint and report that real limitation, without implying background continuation that does not exist.
+Do not dispatch a second concurrent normal run or reuse a mutable branch name for source identity. If required gates pass but artifact publication has a transport-only failure, retain the already built candidate evidence and report the exact step; do not substitute an older APK, skip validation or change source just to change the release name.
+
+20. COMPLETION REPORT
+
+Lead a successful report with DIRECT HUMAN APK DOWNLOAD URL. Then full source SHA, immutable candidate ref, profile mode, byte size, SHA-256 and embedded source-identity evidence; separate implementation, automatic validation, artifact delivery and physical acceptance.
+Include exact refs/worktree state, source versus docs HEAD versus phone identity, asset/audit limitations, changed files, R1-R12/P1-P8 and T1-T7/mutation results, every run/job/artifact, all failure families, both service results and APK comparisons, protected milestones, graph status, final Git state and journal link. Show W-SHOW/W-HIDE/W-LOCK-ANIM/W-HOME-ANIM status without declaring phone acceptance.
+For a genuinely new contradiction, first complete the authorized artifact collection and independent work. Hand back exact failing task/test/predicate, source/run/job/artifact, full relevant errors, failed full-display/crop/producer images, before/after focus state, all attempted outcomes, what was not reached, and which numbered contract is contradicted. An opaque “cause pending”, “requires reviewer decision”, “CI running” or “no APK” alone is not a sufficient result.
+Do not diagnose a new architecture, weaken a gate or manufacture a successful completion. The reviewer—not the user—is responsible for the next causal decision. No automatic cross-session reviewer connection is assumed; do not pretend one was invoked.
+
+21. DEFINITION OF DONE
+
+The exact lower-entry preparation and retained R-03 contracts are implemented and verified; focused entry rows pass; final core/Flutter/native service gates pass on the delivered candidate; the Human profile APK is actually downloadable and has been downloaded, hashed and identified; report/journal are complete. DiagnosticPASS, implementation, queued run or a test-harness APK is insufficient.
+Continue all authorized executable work until that artifact endpoint. This prompt grants the normal-delivery continuation in advance; no new user confirmation is required between its stages. It does not authorize endless speculative changes or promise that unknown failures and infrastructure outages are impossible.
+The user's physical lag issue remains open until the user tests and accepts this exact APK.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+````
