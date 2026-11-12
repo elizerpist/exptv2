@@ -12822,3 +12822,6 @@ Process correction direction: keep one frozen delivery objective, separate unrel
 Next causal work belongs to reviewer: compare the current failed rapid-cycle8 evidence against its immediately preceding successful cycle and the second service run, tracing current lease/attach/publication/output identity. No blind rerun or new renderer edit is authorized by this entry. This is not a coding prompt and does not delegate diagnosis.
 Reviewer modified only this journal append; no builds dispatched, no production/test/workflow edits. Verify append-only diff and no Actions run for the[skip ci] documentation commit.
 PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+
+Arithmetic clarification to the preceding process audit: the40-commit interval contains23 docs-prefixed commits and17 other commits, not24/16. This split is by commit-message prefix; the complete comparison file/line inventory is the separately verified evidence. The production/test/CI file counts and the24-commit interval since3b4dbba are unchanged.
