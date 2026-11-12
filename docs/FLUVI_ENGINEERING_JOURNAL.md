@@ -3858,6 +3858,7 @@ seq=1447 up=420151418 req=280 attach=9 hideOp=25 stage=HIDE_COMPLETED reason=cur
 showingInspection req=237 queued=420148493 started=420148495 finished=420148592 mainApply=420148592 authorityAtStart=true
 EVENTS
 END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
+
 ```
 
 ## 2026-11-12 — Calibrated compositor-crop boundary: timeout evidence expansion
@@ -8469,3 +8470,49 @@ In all seven, core and Flutter passed, native runtime failed, and Human APK was 
 - No new repair prompt, application code, test patch, workflow dispatch, cancellation or message to the coding agent was sent by the reviewer in this status review.
 - Rules assets hashes checked unchanged: basef5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297; widgetdc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c. Existing workflow definition is unchanged and uses push/pull_request/schedule/workflow_dispatch; this append uses[skip ci].
 - Reviewer action is append-only journal status evidence. No new Human APK or physical improvement is claimed. PHYSICAL VALIDATION — PENDING, USER ONLY.
+## 2026-11-12 — API35 lifecycle-fixture sleep admission ordering
+
+Application commit: `550c085d22e4152d36e9f99408c8b679ea43da7d` (parent
+`71add61a0f62e5c9d173068f4735bef12ba1494c`).
+
+Why:
+
+The exact-source native gate `43242829409` compiled production and
+instrumentation Kotlin, passed all 47 lower API35 tests (including the
+calibrated Canvas and isolated compositor A/C/B/A controls), then failed the
+separate real-service fixture before the 30-cycle section.
+
+Evidence:
+
+`KeyguardServiceOverlayInstrumentationTest` failed at
+`wakeForIndependentEpisode` with `reattach-after-rapid keyguard eligible
+device gates timed out`. Its retained `logcat.txt` shows that the
+synchronised SLEEP had made the display non-interactive at 344856, while
+SystemUI did not process `NOTIFY_STARTED_GOING_TO_SLEEP` until 345317, after
+the next synchronised WAKE at 344924. That WAKE cancelled a prior dismissal;
+the exact public `KeyguardManager.isKeyguardLocked` admission predicate stayed
+false through the fixed five-second wake budget. This is fixture input
+ordering, not a renderer, compositor, or phone-latency conclusion.
+
+Changed:
+
+For synchronised independent episodes only, `screenOff` now requires the
+same public KeyguardManager locked state after the display-off boundary and
+before it injects the next WAKE. The deliberately unsynchronised rapid
+wake/unlock race is unchanged. No production source, graphics ownership,
+timeouts, privacy policy, or eligibility predicate changed.
+
+Validation:
+
+`git diff --check` PASS; `bash scripts/verify-fluvi-boundaries.sh` PASS.
+Local Android execution remains unavailable in the Termux ARM/proot host due
+to the established AAPT2 limitation. Required API35 runtime rerun: PENDING.
+
+Known limitations:
+
+This corrects a demonstrated test-fixture ordering boundary only. The
+already implemented actual isolated-backend prewarm remains the production
+W-SHOW repair under validation. The 89 ms phone Main-handoff interval and
+physical presentation/removal timing remain unproven.
+
+Physical validation: PENDING — USER ONLY
