@@ -12143,3 +12143,100 @@ Continue while the authorized plan is executable. Do not weaken gates or promise
 PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 ````
+
+## 2026-11-12 — R-REVIEWER-HANDOFF-04: launcher ANR occludes both compositor controls
+
+### Feedback and scope of this review
+
+User asks whether repeated coding-agent stops are caused by excessively strict diagnosis rules. This entry answers that workflow question and records an independently inspected CI failure. It is not a new implementation prompt and does not authorize speculative renderer changes. The reviewer retains diagnosis responsibility. Existing authorized independent R-03 work remains open.
+
+Reviewed branch/source aa3b2784dbbe2d5c1ef40a9d37c757c1bb365714, tag fluvi-delivery-continuation-aa3b2784dbbe, run43298487002, native job131463030732. Parent is reviewer journal commit5ec13dfc41fbb897a0600b828eb2db75e9dac23c. Only one new commit exists:
+aa3b2784 — test(keyguard): use compatible admission exception assertion [skip ci].
+Actual diff: one instrumentation test file,10 additions/2 deletions, replacing assertThrows with try/catch plus assertSame. No production, lower47, workflow or service-fixture changes. Other R-03 completion items were not implemented by this commit. No current-run result had yet been appended by the coding agent at audit time.
+
+### Verified execution results
+
+- PASS: pre-emulator three-file Flutter suite9; Android test compilation; terminal7 and sleep7, each with exact OK(7 tests).
+- lower47 XML: tests47,failures2,errors0,skipped0. Failures:
+  productionAssetCompilesAndDrawsCalibratedHardwareCanvas at line478/capture461/awaitCompositorCrop1704: canvas-a predicate.
+  isolatedOrbPublishesCalibratedCompositorPixels at line800/awaitCompositorCrop1704: isolated-orb-a predicate.
+  Both are FIRST A visibility checks, before the A/C/B/A comparison sequence; do not describe them as demonstrated phase freezing.
+- Service repetition1: actual instrumentation OK(1 test), capture93fe7027-b161-4510-9642-bb516ea07019, accepted sleep observations, RAPID_LIFECYCLE cycles=30, OUTPUT_LIVENESS_PASS. Trace analysis0. runtime_chain_result1 retains the earlier lower47 failure; it does not mean this service test failed.
+- Service repetition2: OK(1 test), capture2a096bcd-375e-473a-a26b-450154ea3590, accepted sleep observations, cycles=30, OUTPUT_LIVENESS_PASS; runtime_chain_result0, analysis0.
+- Overall diagnostic FAIL, correctly preserving lower47 failures. Core/full Flutter/normal delivery not run in this diagnostic. Human job131477000140 skipped by diagnostic exclusion. No Human APK or physical acceptance.
+- Same-byte comparison around repetitions is still absent; do not promote initial manifest hashes into proof that all subsequent APK bytes were compared.
+
+Artifact13981004491:
+keyguard-native-diagnostic-aa3b2784dbbe2d5c1ef40a9d37c757c1bb365714-run-43298487002-attempt-1.
+Downloaded ZIP SHA-256 verified against GitHub metadata:
+c8d4ebbb5fa5d067c0fa18d096c5dffa4440cec0e24c9b4cdfd7e789bc29360b.
+
+### New source-plus-image evidence
+
+Read failure XML, both failure stacks, saved timeout metadata, both complete-display failure images, both crops, isolated producer image and metadata, service result/fixture/status records, before/after launcher window state, current runtime/service scripts, and relevant current test functions. The following are directly observed:
+
+1. BOTH saved full screenshots contain the system “Quickstep isn't responding” modal over the intended orb rectangle.
+2. BOTH timeout records say activityWindowFocus=false. Recorded target bounds are x456,y1116,width168,height168. Each saved crop exactly matches that rectangle of its associated complete-display screenshot.
+3. The two crops are byte-for-byte IDENTICAL despite testing different rendering routes:
+   canvas-a-observation-timeout.png and isolated-orb-a-observation-timeout.png
+   SHA-256 c160cb8bd5a45427be9eb8bdb5435403e910e458677581baa9396f2f5486b8fc.
+   They contain the ANR dialog background/text, not a visible calibrated Fluvi orb.
+4. isolated-producer-a.png contains the expected visibly colored orb; metadata lease1/1,slot3,use1,requestId2,phase1.196795.
+   Producer image SHA-256 e74545c8e0f3575afe468c7c43faa4606052214e92b2390722dba534956a0869.
+5. The saved service repetition1 window-before-service.txt identifies:
+   mCurrentFocus=Window{ae28c7d u0 Application Not Responding: com.android.launcher3}.
+   launcher-reset.txt records the existing targeted CLOSE_SYSTEM_DIALOGS broadcast and HOME launch. The next window snapshot no longer focuses the ANR dialog. Service1 then passes; service2 starts without that focused ANR dialog and also passes.
+6. scripts/test-keyguard-runtime.sh invokes connectedDebugAndroidTest before any launcher-ANR precondition check; after collecting lower evidence and uninstalling it invokes scripts/test-keyguard-service-trace.sh.
+7. The service script already contains a bounded, identified-launcher-only ANR preparation path (documented for older runs42856983444/42861703743). Thus the known environment precondition is handled for service execution but not for the earlier screenshot-based lower47 lane.
+
+Full screenshots:
+canvas-a-observation-timeout-screen.png SHA-2565771db2587ba7c0de63ddd3049d209bbc5b6a8fdc3f4aaee369315391d9eee83.
+isolated-orb-a-observation-timeout-screen.png SHA-256748a85670be726a0bce9914f3a568a4b90f8a67aa366ca0c3b9875e2d228d6b1.
+Paths inside artifact: android/keyguard-material-smoke.tar -> files/keyguard-material-smoke/*.
+
+### Reviewer classification and next decision
+
+PROVEN:
+- The retained failed compositor samples measure an occluding launcher ANR dialog at the intended coordinates.
+- Producer A contains material; both complete real-service scenarios subsequently pass, including30cycles.
+- The current runtime wrapper lacks the environment preparation already present later in the service wrapper.
+- The current report's “two compositor failures” is accurate as test-result classification but insufficient to classify a renderer/compositor implementation defect.
+- The coding agent did continue the predeclared second service run, so this was not an immediate abort at the first lower assertion.
+
+UNPROVEN:
+- The cause and precise onset of the Launcher ANR; the artifact proves it during the failed samples and before service preparation, not necessarily before the lower suite began.
+- That removing the occlusion proves all A/C/B/A predicates or future required gates pass.
+- Whether any additional renderer defect exists behind the obscured screenshot, or whether phone lag is resolved.
+
+MISSING:
+- Before-lower environment/focus evidence, unobscured lower47 success on the corrected setup, remaining R-03 contract completions, final normal delivery and Human APK.
+- No new phone log is needed to decide that these retained crops are invalid material observations.
+
+Next repair direction selected by reviewer: bring the known, bounded identified-launcher environment preparation/check to the entry boundary of the lower screenshot suite as well, with retained before/after evidence; preserve the existing service preparation and all test predicates/budgets. Before issuing an implementation prompt, finish its impact/consumer audit and define handling of an ANR arising DURING measured tests. A new in-test ANR must remain a recorded failure, not be silently dismissed/retried to get green. No renderer rewrite, threshold weakening, longer compositor wait or blind rerun is justified by this artifact.
+
+### Workflow diagnosis and accountability
+
+The strict division of responsibility deliberately requires a reviewer decision at an unplanned semantic boundary. With separate manual sessions, that creates a handoff requiring the user to relay results; “do not stop until APK” alone cannot remove that structural limitation. This current decision handback is legitimate; the earlier unsupported assertThrows correction was already a permitted mechanical correction and did not require a new diagnosis.
+
+The reviewer must respond with evidence and a bounded next plan, rather than repeat “investigate compositor” to the agent. This review has identified the concrete occluding dialog from the already-retained artifact. The earlier prompt's non-stop wording should not have implied that a prompt can guarantee an uninterrupted cross-session reviewer loop.
+
+Rules should distinguish:
+- routine contract-preserving corrections: continue;
+- evidence retrieval/failed-image inspection/status reconciliation: complete before handback;
+- preplanned discriminating measurements: execute within their stated bounds;
+- genuinely new behavioral decision: reviewer owns it, with exact evidence; preserve ongoing independent authorized work.
+
+Do not relax final quality gates to manufacture an APK. Do not transfer diagnosis to the coding agent. The full continuation needs an actual reviewer handoff mechanism or a manually supplied reviewer decision; the current environment has no established automatic cross-session mechanism.
+
+### Reviewer actions
+
+Read-only GitHub/source/artifact audit; only this journal appended. No application/test/workflow edit, diagnostic rerun, dispatch, asset modification or claim of completed repair. This is a scoped feedback review, not a claim to have freshly reread all historical journal entries or completed a new full21-section coding prompt preflight.
+Current sole workflow triggers push/pull_request/schedule/workflow_dispatch; use [skip ci], verify journal-only append and associated run count.
+Implementation: compiler correction DONE; remaining R-03 and environment correction PENDING.
+Automatic validation: helper14 PASS; lower47 FAIL2; both service scenarios PASS.
+Human APK: NOT AVAILABLE.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+References:
+- https://github.com/elizerpist/exptv2/actions/runs/43298487002
+- https://github.com/elizerpist/exptv2/commit/aa3b2784dbbe2d5c1ef40a9d37c757c1bb365714
