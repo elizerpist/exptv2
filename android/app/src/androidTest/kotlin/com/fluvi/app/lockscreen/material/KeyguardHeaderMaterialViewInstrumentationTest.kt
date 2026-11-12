@@ -103,6 +103,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertEquals("HardwareBufferRenderer/SurfaceControl", diagnostics.activeRenderer)
                 assertTrue(diagnostics.isolatedFramesProduced >= 1)
                 assertEquals(
+                    "the detached isolated backend must replace, not duplicate, the disposable GPU warmup",
+                    0,
+                    diagnostics.gpuPreparationRequests,
+                )
+                assertEquals(
                     "detached preparation must not publish or expose a layer",
                     0,
                     diagnostics.isolatedFramesPublished,

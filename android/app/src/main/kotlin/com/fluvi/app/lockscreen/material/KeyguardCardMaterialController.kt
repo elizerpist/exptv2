@@ -99,6 +99,9 @@ internal class KeyguardCardMaterialController(
      */
     private var isolatedOrbRequested = false
     private var isolatedOrbFailed = false
+    /** True only when the detached retained-root path selected preparation of
+     * the persistent isolated producer itself. */
+    private var detachedIsolatedBackendSelected = false
     /** A failed visual key stays on the established View route until the
      * semantic material actually changes; this avoids endless GPU retries. */
     private var isolatedOrbFailedVisualKey: String? = null
@@ -310,6 +313,7 @@ internal class KeyguardCardMaterialController(
             isolatedOrbRenderer.retire("privacy-tightening")
         }
         if (!isolatedOrbRequested) {
+            detachedIsolatedBackendSelected = false
             isolatedOrbFailed = false
             isolatedOrbFailedVisualKey = null
             activeOrbLease = null
@@ -392,6 +396,7 @@ internal class KeyguardCardMaterialController(
         if (isolatedOrbRequested && root == null) {
             isolatedOrbRequested = false
             isolatedOrbFailed = false
+            detachedIsolatedBackendSelected = false
             orb.setBootstrapActive(false)
         }
         if (!attached) {
@@ -521,8 +526,11 @@ internal class KeyguardCardMaterialController(
         presentationMode: KeyguardCardPresentationMode,
         isFull: Boolean = true,
     ) {
-        prepareSelectedPrograms(profile, animationMode, presentationMode, isFull, installViewProgram = true)
+        // The artifact store may complete synchronously. Select the persistent
+        // isolated producer first so its callback cannot also start the
+        // disposable HardwareRenderer/ImageReader warmup for this same ORB.
         prepareDetachedIsolatedOrbBackend(profile, animationMode, presentationMode, isFull)
+        prepareSelectedPrograms(profile, animationMode, presentationMode, isFull, installViewProgram = true)
     }
 
     /** Called only after a verified bootstrap commit for the current attached
@@ -655,10 +663,11 @@ internal class KeyguardCardMaterialController(
         }
         val effective = if (isFull) profile else profile.neutralized()
         requiredGpuPreparationKeys.clear()
+        val skipLegacyOrbGpuPreparation = shouldSkipLegacyOrbGpuPreparation(orb)
         expectedGpuPreparationCount = if (
             presentationMode == KeyguardCardPresentationMode.CARD &&
                 animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND
-        ) 2 else 1
+        ) 2 else if (skipLegacyOrbGpuPreparation) 0 else 1
         prepareFor(orb, effective, installViewProgram)
         if (presentationMode == KeyguardCardPresentationMode.CARD &&
             animationMode == KeyguardCardAnimationMode.ORB_AND_BACKGROUND
@@ -683,7 +692,11 @@ internal class KeyguardCardMaterialController(
         presentationMode: KeyguardCardPresentationMode,
         isFull: Boolean,
     ) {
-        if (attached || profile == null) return
+        if (attached) return
+        if (profile == null) {
+            detachedIsolatedBackendSelected = false
+            return
+        }
         val effective = if (isFull) profile else profile.neutralized()
         val scene = KeyguardMaterialScene(
             profile = effective,
@@ -691,7 +704,10 @@ internal class KeyguardCardMaterialController(
             appliedAtNanos = System.nanoTime(),
         )
         val canAnimate = animationMode != KeyguardCardAnimationMode.OFF && animationsAllowed
-        if (!canUseIsolatedOrb(scene, animationMode, presentationMode, canAnimate)) return
+        if (!canUseIsolatedOrb(scene, animationMode, presentationMode, canAnimate)) {
+            detachedIsolatedBackendSelected = false
+            return
+        }
 
         // A new visual selection is the only retry boundary after a producer
         // failure.  This exactly mirrors update(), but happens without an
@@ -703,6 +719,7 @@ internal class KeyguardCardMaterialController(
         if (isolatedOrbFailed) return
 
         isolatedOrbRequested = true
+        detachedIsolatedBackendSelected = true
         latestOrbScene = scene
         latestOrbPreviousScene = null
         latestOrbPreviousArtifact = null
@@ -756,9 +773,23 @@ internal class KeyguardCardMaterialController(
                         // retained for promotion.
                         deferredViewArtifacts[view] = artifact to requestedKey
                     }
-                    // The worker-owned offscreen draw is independent of the
-                    // View instance and can begin before any visible attach.
-                    prepareGpuProgram(view, profile, artifact, requestedKey)
+                    // The detached eligible ORB prepares the persistent
+                    // HardwareBufferRenderer path. Do not also create and
+                    // destroy the legacy HardwareRenderer/ImageReader warmup
+                    // for that same route; CARD and legacy View routes keep
+                    // their established preparation.
+                    if (shouldSkipLegacyOrbGpuPreparation(view)) {
+                        onPreparationStage?.invoke(
+                            "MATERIAL_GPU_PREPARATION_SKIPPED",
+                            mapOf(
+                                "programKey" to artifact.programKey,
+                                "surface" to surfaceName(view),
+                                "reason" to "isolated-backend",
+                            ),
+                        )
+                    } else {
+                        prepareGpuProgram(view, profile, artifact, requestedKey)
+                    }
                     reconcileIsolatedOrbTarget()
                 }
                 reconcileClock()
@@ -868,6 +899,13 @@ internal class KeyguardCardMaterialController(
 
     private fun surfaceName(view: KeyguardHeaderMaterialView): String = if (view === orb) "orb" else "background"
 
+    /** The retained root selected the persistent producer while detached, so
+     * that producer is the one GPU warmup for this ORB. Other View routes
+     * retain the legacy preparer. */
+    private fun shouldSkipLegacyOrbGpuPreparation(view: KeyguardHeaderMaterialView): Boolean =
+        view === orb && detachedIsolatedBackendSelected &&
+            isolatedOrbRequested && !isolatedOrbFailed
+
     private fun canUseIsolatedOrb(
         scene: KeyguardMaterialScene?,
         animationMode: KeyguardCardAnimationMode,
@@ -966,6 +1004,7 @@ internal class KeyguardCardMaterialController(
         if (activeOrbLease != lease) return
         isolatedOrbFailed = true
         isolatedOrbFailedVisualKey = lease.visualKey
+        detachedIsolatedBackendSelected = false
         // A permanent bootstrap would turn a transient platform/output error
         // into a static ORB. Fall back to the established, already-prepared
         // View renderer immediately; a different material key may try the
@@ -984,8 +1023,21 @@ internal class KeyguardCardMaterialController(
         // Compatibility fallback is the pre-existing View renderer. It uses
         // the same prepared artifact/scene and does not wait for a renderer
         // lock or alter visibility authority.
+        prepareLegacyOrbFallback()
         orb.invalidate()
         reconcileClock()
+    }
+
+    /** A persistent-producer failure returns to the established View route.
+     * Start its bounded legacy preparation only at this real fallback
+     * boundary; the successful isolated route must not pay for both paths. */
+    private fun prepareLegacyOrbFallback() {
+        val scene = latestOrbScene ?: return
+        val artifact = latestOrbArtifact?.takeIf {
+            it.effectId == scene.profile.effectId && it.usesPortal == scene.profile.usesPortal
+        } ?: return
+        val requestedKey = requestedProgramKeys[orb] ?: return
+        prepareGpuProgram(orb, scene.profile, artifact, requestedKey)
     }
 
     private fun promoteLiveIfReady() {
