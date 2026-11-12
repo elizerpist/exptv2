@@ -286,15 +286,24 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("rapid terminal withdrawal", 5_000) { overlaysWithdrawn() }
             }
             // wm dismiss-keyguard returns before SystemUI finishes its
-            // asynchronous exit. The real rapid exclusion above deliberately
-            // remains unsynchronised; before the next independent wake, wait
-            // for the public accessibility-event idle boundary and prove the
-            // terminal state is still unlocked and locally withdrawn. This
-            // is fixture ordering, not a shipped delay or presentation claim.
+            // asynchronous exit. On API 35 the rapid sleep/wake sequence can
+            // transiently report unlocked, then re-lock while the pending
+            // exit is cancelled, before its final dismiss completes. The
+            // public accessibility idle boundary is not a terminal-keyguard
+            // boundary, so it cannot by itself gate the next independent
+            // wake. This waits for the already-required terminal state within
+            // the existing bounded fixture budget; it is not a shipped delay
+            // or a presentation claim.
             marked("fixture-platform-settle") {
-                val remaining = deadline - SystemClock.uptimeMillis()
-                assertTrue("Fixture budget exhausted before platform settling", remaining >= 500L)
-                automation.waitForIdle(500L, minOf(5_000L, remaining))
+                val settleDeadline = minOf(deadline, SystemClock.uptimeMillis() + 5_000L)
+                val initialRemaining = settleDeadline - SystemClock.uptimeMillis()
+                assertTrue("Fixture budget exhausted before platform settling", initialRemaining >= 500L)
+                automation.waitForIdle(500L, initialRemaining)
+                val terminalRemaining = settleDeadline - SystemClock.uptimeMillis()
+                assertTrue("Fixture budget exhausted before terminal platform state", terminalRemaining > 0L)
+                await("independent reentry terminal unlocked withdrawal", terminalRemaining) {
+                    !keyguard.isKeyguardLocked && overlaysWithdrawn()
+                }
                 assertFalse("Independent reentry must start unlocked", keyguard.isKeyguardLocked)
                 assertTrue("Settled terminal state must not retain an overlay", overlaysWithdrawn())
             }
