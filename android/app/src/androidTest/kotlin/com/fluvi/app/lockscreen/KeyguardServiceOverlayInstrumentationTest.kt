@@ -353,6 +353,12 @@ class KeyguardServiceOverlayInstrumentationTest {
         val phase: Long,
         /** Exact child-layer buffer submissions for the API-34 isolated path. */
         val isolatedPublished: Long,
+        /** Bounded worker-slot state, sampled only at test observation boundaries. */
+        val isolatedProduced: Long,
+        val isolatedDropped: Long,
+        val isolatedInFlight: Long,
+        val isolatedReady: Long,
+        val isolatedCompositorOwned: Long,
         val state: String,
         val hardware: Boolean,
         val activeRenderer: String?,
@@ -1015,6 +1021,12 @@ class KeyguardServiceOverlayInstrumentationTest {
                     shader = (values["shaderDrawCount"] as? Number)?.toLong() ?: 0L,
                     phase = (values["phaseAdvanceCount"] as? Number)?.toLong() ?: 0L,
                     isolatedPublished = (values["isolatedOrbFramesPublished"] as? Number)?.toLong() ?: 0L,
+                    isolatedProduced = (values["isolatedOrbFramesProduced"] as? Number)?.toLong() ?: 0L,
+                    isolatedDropped = (values["isolatedOrbFramesDropped"] as? Number)?.toLong() ?: 0L,
+                    isolatedInFlight = (values["isolatedOrbFramesInFlight"] as? Number)?.toLong() ?: 0L,
+                    isolatedReady = (values["isolatedOrbFramesReady"] as? Number)?.toLong() ?: 0L,
+                    isolatedCompositorOwned =
+                        (values["isolatedOrbFramesCompositorOwned"] as? Number)?.toLong() ?: 0L,
                     state = values["coldPresentationState"].toString(),
                     hardware = values["hardwareAccelerated"] == true,
                     activeRenderer = values["activeRenderer"] as? String,
@@ -1024,7 +1036,12 @@ class KeyguardServiceOverlayInstrumentationTest {
             } finally { Trace.endSection() }
         }
         record("BOUNDARY", "name=$label shader=${material.shader} phase=${material.phase}" +
-            " isolatedPublished=${material.isolatedPublished} renderer=${material.activeRenderer}" +
+            " isolatedProduced=${material.isolatedProduced}" +
+            " isolatedPublished=${material.isolatedPublished}" +
+            " isolatedDropped=${material.isolatedDropped}" +
+            " isolatedSlots=inFlight:${material.isolatedInFlight},ready:${material.isolatedReady}," +
+            "compositorOwned:${material.isolatedCompositorOwned}" +
+            " renderer=${material.activeRenderer}" +
             " state=${material.state}")
         return material
     }
