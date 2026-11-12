@@ -11203,3 +11203,30 @@ FLUVI_RULE_ASSET_END FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md
 ````
 
 </details>
+
+
+## 2026-11-12 — Coding-agent unit 1: immutable terminal fixture observation
+
+### Scope and source identity
+
+- Reviewer decision: `R-NATIVE-TERMINAL-OBSERVATION-01` from the immediately preceding reviewer entry. Implementation began from documentation head `c4babd0ba16eaf743f24f5a23558f3f81df649f4`; the application candidate under test remains `3b4dbba870cda66cbba830b1bcd1ca4183636d91` until the new test-only candidate is built.
+- This unit changes only Android instrumentation code. No production Kotlin/Dart, renderer, shader, visibility/admission policy, timeout, pixel predicate, lifecycle-cycle count, resource cap, dashboard code, or existing runtime/service script was changed.
+- The unrelated local `index.scip` remains untracked and untouched. No matching Kotlin graph was available; the service-fixture edge is source-verified.
+
+### Why and evidence
+
+- Run `43252599652` attempt 2 / native job `131310082795` failed at the former `KeyguardServiceOverlayInstrumentationTest.kt:313` requery after the existing wait had accepted a distinct earlier predicate. The retained artifact is `13960449237`, archive SHA-256 `d088125cd021e92e40f8adc1b28d82fbd8b334ffee217194213a7e37eac6e16b`; fixture capture `370dfab4-8d0b-466f-bd89-e67c7d8c2f30`, fixture SHA-256 `d0626245590316bed6dd10f8064a4b3786e70fd81ccdfc91d7ad7058f8d184cd`.
+- Reviewer evidence records the actual API35 relock while SystemUI cancelled overlapping transitions. The accepted observation is therefore intentionally not a persistence or animation-completion claim.
+
+### Changed contract
+
+- Added test-only `TerminalReentryObservation`, local/remote observation records, and a collector that samples `KeyguardManager` before and after one Main-owned local service/root read. Remote overlay metadata is copied and timestamped separately. The immutable `accepted` predicate uses only saved fields and the saved terminal deadline.
+- Replaced the terminal fixture's old predicate-plus-requery with an accepted observation. It records both keyguard reads, local absence, deadline and remote metadata from that same object, preserves bounded first/state-change/final attempted-observation evidence (maximum 64), and exports it through the existing `fixture.txt` finally path.
+- Added seven deterministic `TerminalReentryObservationInstrumentationTest` controls: no requery; in-sample relock; transition-to-unlocked; service/root ownership; stale remote metadata; acquisition exception; and deadline overrun. They test only the fixture observation contract. The following independent sleep/locked-admission/wake/current-output path and the fixed 30 cycles remain unchanged.
+
+### Validation and limits
+
+- PASS — `git diff --check`.
+- PASS — `bash scripts/verify-fluvi-boundaries.sh`.
+- NOT RUN — Android instrumentation compilation and T1–T7 execution: this Termux ARM host has no compatible local Kotlin/Android emulator/AAPT2 route. The prescribed API35 x86_64 diagnostic lane is added in the next tooling unit and remains the required execution route.
+- No phone-latency conclusion, native service PASS, Human APK, or physical acceptance is claimed by this source-only unit. `PHYSICAL VALIDATION — PENDING, USER ONLY`.

@@ -72,6 +72,8 @@ class KeyguardServiceOverlayInstrumentationTest {
     private var captureId = "not-started"
     private val evidence = StringBuilder()
     private val knownOwnWindowIds = mutableSetOf<Int>()
+    private val terminalObservationRetention = TerminalObservationRetention()
+    private var nextTerminalObservationId = 0L
     private var occlusionProbe: OcclusionSuccessorProbe? = null
     private val keyguard get() = context.getSystemService(KeyguardManager::class.java)
     private val power get() = context.getSystemService(PowerManager::class.java)
@@ -109,6 +111,7 @@ class KeyguardServiceOverlayInstrumentationTest {
         KeyguardOrbBufferRendererTestHooks.publicationObserver = producerProbe
         KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
         try {
+            terminalObservationRetention.reset()
             assertFalse("Secure credentials require a different, explicit fixture", keyguard.isDeviceSecure)
             assertTrue("Cannot safely restore unknown lockscreen setting: $savedLockDisabled",
                 savedLockDisabled == "true" || savedLockDisabled == "false")
@@ -286,17 +289,9 @@ class KeyguardServiceOverlayInstrumentationTest {
                 await("rapid terminal withdrawal", 5_000) { overlaysWithdrawn() }
             }
             // wm dismiss-keyguard returns before SystemUI finishes its
-            // asynchronous exit. On API 35 the rapid sleep/wake sequence can
-            // transiently report unlocked, then re-lock while the pending
-            // exit is cancelled. UiAutomation's global idle is not
-            // terminal-keyguard evidence either: API35 can continue emitting
-            // unrelated accessibility traffic through the entire bounded
-            // interval. Reissue the public test dismissal, then require the
-            // actual keyguard and owned-layer terminal state within the
-            // original fixed five-second fixture budget. The following
-            // independent sleep/wake owns its own public-input synchronization.
-            // This is fixture ordering only, not a shipped delay or
-            // presentation claim.
+            // asynchronous exit. This is a bounded accepted observation, not
+            // a claim that Android remains unlocked after it. The independent
+            // episode below owns a fresh locked admission and current output.
             marked("fixture-platform-settle") {
                 val settleDeadline = minOf(deadline, SystemClock.uptimeMillis() + 5_000L)
                 val initialRemaining = settleDeadline - SystemClock.uptimeMillis()
@@ -305,14 +300,33 @@ class KeyguardServiceOverlayInstrumentationTest {
                 shell("wm dismiss-keyguard")
                 val terminalRemaining = settleDeadline - SystemClock.uptimeMillis()
                 assertTrue("Fixture budget exhausted before terminal platform state", terminalRemaining > 0L)
-                var terminalWithdrawal = terminalReentryWithdrawal()
+                var acceptedObservation: TerminalReentryObservation? = null
                 await("independent reentry terminal unlocked withdrawal", terminalRemaining) {
-                    terminalWithdrawal = terminalReentryWithdrawal()
-                    !keyguard.isKeyguardLocked && terminalWithdrawal.locallyWithdrawn
+                    val observation = collectTerminalReentryObservation(
+                        observationId = ++nextTerminalObservationId,
+                        terminalDeadlineUptimeMs = settleDeadline,
+                    )
+                    terminalObservationRetention.retain(observation)
+                    if (observation.accepted) {
+                        acceptedObservation = observation
+                        true
+                    } else false
                 }
-                assertFalse("Independent reentry must start unlocked", keyguard.isKeyguardLocked)
-                assertTrue("Settled terminal state must withdraw the service attachment and process root",
-                    terminalWithdrawal.locallyWithdrawn)
+                val terminalObservation = requireNotNull(acceptedObservation) {
+                    "terminal observation await returned without an accepted sample"
+                }
+                terminalObservationRetention.finish(terminalObservation)
+                assertTrue("Accepted terminal observation must be unlocked and locally withdrawn",
+                    terminalObservation.accepted)
+                assertFalse("Accepted terminal observation must retain its first keyguard reading",
+                    terminalObservation.keyguardLockedBefore)
+                assertFalse("Accepted terminal observation must retain its second keyguard reading",
+                    terminalObservation.keyguardLockedAfter)
+                assertFalse("Accepted terminal observation must withdraw the service attachment",
+                    terminalObservation.serviceAttached)
+                assertEquals("Accepted terminal observation must withdraw the process root", 0,
+                    terminalObservation.processOverlayRootCount)
+                record("FIXTURE_TERMINAL_OBSERVATION_ACCEPTED", terminalObservation.evidenceFields())
                 // This public fixture's next wake needs the app-owned layer
                 // withdrawn, not eventual convergence of UiAutomation's
                 // remote window metadata. API35 can retain a known, already
@@ -320,9 +334,10 @@ class KeyguardServiceOverlayInstrumentationTest {
                 // the strict remote-metadata predicate remains required by
                 // every production withdrawal assertion below.
                 record("FIXTURE_TERMINAL_WITHDRAWAL",
-                    "serviceAttached=${terminalWithdrawal.serviceAttached}" +
-                        " processOverlayRootCount=${terminalWithdrawal.processOverlayRootCount}" +
-                        " remoteOverlayIds=${terminalWithdrawal.remoteOverlayIds}")
+                    "observationId=${terminalObservation.observationId}" +
+                        " serviceAttached=${terminalObservation.serviceAttached}" +
+                        " processOverlayRootCount=${terminalObservation.processOverlayRootCount}" +
+                        " remoteOverlayIds=${terminalObservation.remoteOverlayIds}")
             }
             val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual current-renderer output",
@@ -340,6 +355,9 @@ class KeyguardServiceOverlayInstrumentationTest {
             KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
             occlusionProbe?.close()
             occlusionProbe = null
+            terminalObservationRetention.emit { detail ->
+                record("FIXTURE_TERMINAL_OBSERVATION", detail)
+            }
             var cleanupFailure: Throwable? = null
             // Freeze before restoring settings so the report retains only the
             // controlled workload. Never block the main thread on export.
@@ -918,15 +936,67 @@ class KeyguardServiceOverlayInstrumentationTest {
     }
 
     private data class Overlay(val id: Int, val bounds: Rect)
-    private data class TerminalReentryWithdrawal(
-        val serviceAttached: Boolean,
-        val processOverlayRootCount: Int,
-        val remoteOverlayIds: List<Int>,
-    ) {
-        val locallyWithdrawn: Boolean
-            get() = !serviceAttached && processOverlayRootCount == 0
-    }
     private data class Episode(val material: Material, val window: Overlay)
+
+    /** Retains only bounded fixture evidence. Records are emitted through the
+     * existing finally/export path, so a failed terminal wait keeps its first,
+     * state-changing, and final sample without adding work to Main. */
+    private class TerminalObservationRetention {
+        private val retained = java.util.ArrayDeque<TerminalReentryObservation>()
+        private var omitted = 0
+        private var latest: TerminalReentryObservation? = null
+        private var previousState: String? = null
+
+        fun reset() {
+            retained.clear()
+            omitted = 0
+            latest = null
+            previousState = null
+        }
+
+        fun retain(observation: TerminalReentryObservation) {
+            latest = observation
+            val state = observationState(observation)
+            if (retained.isEmpty() || state != previousState) offer(observation)
+            previousState = state
+        }
+
+        fun finish(observation: TerminalReentryObservation) {
+            latest = observation
+            ensureRetained(observation)
+        }
+
+        fun emit(record: (String) -> Unit) {
+            val final = latest ?: return
+            ensureRetained(final)
+            retained.forEachIndexed { index, observation ->
+                record("kind=attempt index=$index ${observation.evidenceFields()}")
+            }
+            record(
+                "kind=summary retained=${retained.size} omitted=$omitted " +
+                    "finalObservationId=${final.observationId} ${final.evidenceFields()}",
+            )
+        }
+
+        private fun offer(observation: TerminalReentryObservation) {
+            if (retained.size < MAX_TERMINAL_OBSERVATION_RECORDS) retained.addLast(observation)
+            else omitted += 1
+        }
+
+        private fun ensureRetained(observation: TerminalReentryObservation) {
+            if (retained.any { it.observationId == observation.observationId }) return
+            if (retained.size == MAX_TERMINAL_OBSERVATION_RECORDS) {
+                retained.removeLast()
+                omitted += 1
+            }
+            retained.addLast(observation)
+        }
+
+        private fun observationState(observation: TerminalReentryObservation): String =
+            "${observation.keyguardLockedBefore}/${observation.keyguardLockedAfter}/" +
+                "${observation.serviceAttached}/${observation.processOverlayRootCount}/" +
+                "${observation.remoteOverlayIds}/${observation.accepted}/${observation.rejectionReason}"
+    }
 
     private fun recoverFromVisibleOcclusion(previous: Episode): Episode = marked("visible-occlusion-recovery") {
         val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
@@ -1128,27 +1198,42 @@ class KeyguardServiceOverlayInstrumentationTest {
     }
 
     /**
-     * Terminal setup for an independent wake must distinguish removal of the
-     * actual local overlay from stale UiAutomation metadata. It is deliberately
-     * narrower than [overlaysWithdrawn]: callers that validate a production
-     * withdrawal still require remote accessibility-window convergence.
+     * Terminal setup records one accepted observation. It brackets exactly one
+     * Main-owned local-root read with public keyguard reads on the
+     * instrumentation thread. Remote metadata has its own timestamp and is
+     * evidence only: strict production withdrawal checks continue to use
+     * [overlaysWithdrawn].
      */
-    private fun terminalReentryWithdrawal(): TerminalReentryWithdrawal {
-        val remoteOverlayIds = ownOverlays().map { it.id }
-        var attached = true
-        var roots = -1
-        instrumentation.runOnMainSync {
-            val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation()) {
-                "Accessibility service disconnected during terminal fixture"
+    private fun collectTerminalReentryObservation(
+        observationId: Long,
+        terminalDeadlineUptimeMs: Long,
+    ): TerminalReentryObservation = TerminalReentryObservationCollector(
+        uptimeMillis = { SystemClock.uptimeMillis() },
+        keyguardLocked = { keyguard.isKeyguardLocked },
+        localObservation = {
+            lateinit var local: TerminalReentryLocalObservation
+            instrumentation.runOnMainSync {
+                val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation()) {
+                    "Accessibility service disconnected during terminal fixture"
+                }
+                local = TerminalReentryLocalObservation(
+                    observedAtUptimeMs = SystemClock.uptimeMillis(),
+                    serviceAttached = service.inspectionStateForTest().attached,
+                    processOverlayRootCount = WindowInspector.getGlobalWindowViews().count {
+                        (it.layoutParams as? WindowManager.LayoutParams)?.type ==
+                            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+                    },
+                )
             }
-            attached = service.inspectionStateForTest().attached
-            roots = WindowInspector.getGlobalWindowViews().count {
-                (it.layoutParams as? WindowManager.LayoutParams)?.type ==
-                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-            }
-        }
-        return TerminalReentryWithdrawal(attached, roots, remoteOverlayIds)
-    }
+            local
+        },
+        remoteObservation = {
+            TerminalReentryRemoteObservation(
+                observedAtUptimeMs = SystemClock.uptimeMillis(),
+                overlayIds = ownOverlays().map { it.id }.toList(),
+            )
+        },
+    ).collect(observationId, terminalDeadlineUptimeMs)
 
     private fun awaitLive(label: String, baseline: Material, minimumAdvances: Long, expectedWindowId: Int): Material {
         var latest = baseline
@@ -1497,6 +1582,7 @@ class KeyguardServiceOverlayInstrumentationTest {
     companion object {
         private const val TAG = "FluviServiceProbe"
         private const val RAPID_LIFECYCLE_CYCLES = 30
+        private const val MAX_TERMINAL_OBSERVATION_RECORDS = 64
         private const val MAX_ISOLATED_BUFFER_SLOTS = 3L
         private const val SERVICE_SCENARIO_BUDGET_MS = 330_000L
         private const val PHASE_A = 1.196795f
