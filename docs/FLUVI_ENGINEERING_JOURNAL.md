@@ -12726,3 +12726,31 @@ the next diagnostic will use a new exact-source tag. No production behavior
 changed.
 
 Physical validation: PENDING — USER ONLY.
+
+## 2026-11-12 — Reviewer status audit R-05: two preventable pre-lower failures
+
+User asks what is taking time and why this task is difficult. This is a status/source/evidence audit, not a new implementation prompt, runtime diagnosis or CI dispatch.
+
+Inspected branch documentation HEAD11571789b9197ea7de6ce2ab77e92b0d1197f6ca; latest executable/test source1fae161e057476c7fc176a386ce19179e6dc1597. Audit interval starts at reviewer journal4b6972e0e4d2f2265ca77091411ee4994a3047fd.
+- cf76118a1f4dfd11349f3b779a9907fd60474d71: lower preflight/runtime wrapper, test-only sleep observation/fixture work, APK hash checks, boundary tests and additive workflow evidence/cheap-check wiring. No shipped production renderer/service/Dart change.
+- d9cef063e82673eedbe32c79ff4639ab55e57568: implementation journal only.
+- 777ad19627e9e4a67bb0a61d3088d55baaae987d: changes the supposed incomplete sleep sample to an actually unlocked bracket; exact-deadline eligible success stays covered.
+- 1d59e75e0c5227abbeba1668eec74862b245ef71: diagnostic journal only.
+- 1fae161e057476c7fc176a386ce19179e6dc1597: separates binding stage from checksum path expansion in verify_apk_identity.
+- 11571789b9197ea7de6ce2ab77e92b0d1197f6ca: shell-correction journal only.
+
+Independent log verification:
+- Run43316202061/job131524763206: assembly succeeded; terminal helper OK(7 tests); sleep helper FAIL1/7 at delayedCompletedSleepUsesRemainingAggregateBudget, line47. The test expected rejection although its old sample was eligible and completed exactly at its deadline. Lower/service not reached.
+- Run43317849772/job131530443890: both helpers OK(7 tests); diagnostic script line96 failed with stage: unbound variable before lower/service. Actual old code used local stage=$1 actual=...stage... check=...stage... in one declaration under set-u. Corrected source binds stage first. The job131524763206 cited in the 1fae commit body belongs to the earlier run; the journal correctly names131530443890 for this second run.
+- Latest observed run43319482620/source1fae161e057476c7fc176a386ce19179e6dc1597 is IN_PROGRESS; job131536088989 is in the API35 smoke step. This is not a PASS or delivery claim. Tagfluvi-lower-environment-1fae161e0574. No new Human APK verified in this status audit.
+
+Why time is spent:
+The R-05 prompt bundled the immediate launcher-ANR environment preparation with previously uncompleted R-03 validation contracts. That increases the test/tooling scope and is a reviewer planning responsibility. The latest two wasted CI cycles, however, are concrete test-data/shell-runtime defects, not demonstrated intrinsic renderer difficulty.
+The new inert shell tests execute the lower preparation/runtime wrapper, but do not invoke the diagnostic script's new verify_apk_identity path. Therefore their PASS plus bash-n did not cover the actual shell failure. This is a gap against the previously requested cheap diagnostic identity controls, not evidence those controls passed. The real Android helper needs the configured compatible remote route; nevertheless the inconsistent expected result was statically reviewable.
+
+PROVEN: two preventable pre-lower failures and their source corrections; third diagnostic still active at observation; no new production render refactor.
+UNPROVEN: current corrected diagnostic outcome, unoccluded lower47 success on this source, full normal gates, delivered APK and phone improvement.
+Next action: continue the already authorized active diagnostic and R-05 normal-delivery path if entry conditions pass. No parallel run or replacement prompt dispatched by reviewer. Retain all outcomes. Do not infer a new renderer repair from these two failures.
+
+This entry appends only the common journal. Workflow trigger policy remains unchanged by the five additive workflow lines. Use [skip ci], verify journal-only append and zero associated runs. Physical baseline and protected milestones unchanged.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
