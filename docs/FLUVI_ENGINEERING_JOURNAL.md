@@ -8432,3 +8432,40 @@ EVENTS
 seq=1200 up=598453558 el=606536061 stage=CAPTURE_FROZEN reason=user
 END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
 ```
+
+## 2026-11-12 — Reviewer: user reports >3h execution; repeated native validation failures after prewarm implementation
+
+- User asks what the coding agent was instructed to do and why it has spent more than three hours across failed attempts. This is execution-status feedback, not a new phone capture or physical acceptance.
+- Reviewed branch fix/orb-v4-latency-lockscreen at f53a84e06b6adab6f6aeee237d0c740af128b529 against prior reviewer journal commit0bc1a54081fe816d75a55c634f960760d10eec96. Physically tested application remains04e229c64e560bef9d49972c3413d1115fc36c41.
+- Original handoff requested three bounded investigations/repairs: actual isolated-backend cold preparation; attribution and repair of inspection/Main-handoff latency; startup slot/handoff liveness if proven. It also required baseline/candidate evidence, existing lower/real-service/pixel/lifecycle gates, exact-source Human APK, graph and full report. It did NOT authorize arbitrary broad refactoring or weakening tests.
+- Reviewer assessment of task design: this combined multiple causal tracks and complete delivery obligations without a sufficiently explicit escalation point after repeated fixture failures. The instruction to persist until APK delivery cannot itself prevent a repeated test-fix/CI cycle. This is a scope/execution-control weakness, not evidence that required correctness gates should be skipped.
+
+### Verified commit progression and actual scope
+
+- ef3669466002f6090592b609f604eeff11e09f81 (2026-11-12 13:08 Budapest): actual isolated-backend detached preparation plus FULL-only Main-handoff correlation diagnostics.
+- 22e5a617ee61d5e07993367e706b8f37ae492b30 (13:40 Budapest): drain the unauthorised detached prewarm result through dropReady, retaining safe resources. The agent attributes this to a pool-progress failure in rapid-cycle24; reviewer inspected the actual source delta, but did not independently re-download that older trace to prove its complete causal schedule.
+- 698eaa6451d3944dd90494cdf743b529d640bdfb (14:05),0a5eedbd2b3289d9000fdfb2fd9475419b2268c2 (14:35),495fc38b0339c93880ad1f159be9d6e284cc57d0 (15:00),b60b295ba2f47d2ccd3031ae2b4ec479c6b9b70c (15:24),f53a84e06b6adab6f6aeee237d0c740af128b529 (15:58) are five subsequent test/evidence corrections: independent-wake synchronization, terminal local-vs-remote metadata predicate, completed-episode export assertion, removal of global-idle terminal precondition, and failed-crop identity preservation.
+- The aggregate production diff changes actual preparation/draining and diagnostics. Service Main queue/inspection scheduling and production W-HIDE policy have not been repaired by this chain. The Nothing89ms Main delay remains unattributed. Thus production work occurred, but the later repeated commits do not constitute five additional phone-performance improvements.
+- The journal's ef366946 entry says the disposable warmup remains only for routes needing legacy View preparation. The inspected aggregate controller diff still calls prepareSelectedPrograms unconditionally before prepareDetachedIsolatedOrbBackend; prepareFor still calls prepareGpuProgram. That claimed route exclusion is not established by this implementation and must not be counted as a completed optimization.
+
+### Current CI evidence independently read
+
+Required job statuses were checked for all seven new runs:
+43215481141,43220246563,43224320186,43228827810,43232737452,43236915885,43242829409.
+In all seven, core and Flutter passed, native runtime failed, and Human APK was skipped. These are executed native failures, not the historic zero-job queued-run problem.
+
+- Run43236915885 / b60b295 / native job131251221216: downloaded job log confirms Android compilation succeeded; lower suite had two compositor-crop assertion failures (Canvas A and isolated A). Actual service fixture subsequently returned OK(1test). The agent's retained-image analysis is reported separately in preceding entries; this reviewer did not newly inspect those images.
+- Run43242829409 / f53a84e / native job131272369318: downloaded job log confirms Android compilation succeeded and all47 lower tests completed successfully. The actual service fixture failed at 16:19 Budapest:
+  reattach-after-rapid keyguard eligible device gates timed out; no classifier or callback bypass is permitted.
+  Stack points to wakeForIndependentEpisode and its public power/keyguard eligibility predicate (KeyguardServiceOverlayInstrumentationTest.kt:1078), before independent reentry output can be established.
+- Human job131280821644 is SKIPPED. The dashboard job was still running when checked; it is independent of this already failed native prerequisite. Do not wait for dashboard completion to discover the Human blocker.
+- One run passes the service fixture but fails compositor controls; the next passes all lower controls but fails service setup. This is evidence of inconsistent validation outcomes and unresolved fixture/environment/state attribution, not proof that every failure is harmless flakiness or a production renderer defect.
+
+### Anti-loop direction and limits
+
+- The next productive action is a focused reproduction of the specific independent-wake eligibility failure and an explicit fixture-state lifecycle contract. Classify whether powerInteractive, keyguardLocked or preceding SystemUI completion is missing; retain actual public state/event chronology. Avoid another unproven global-idle/sleep/timeout tweak or unrelated production renderer patch.
+- Where a supported environment allows it, repeat the focused failing fixture on a fixed source/build before paying for another complete CI cycle. Then run the unchanged full relevant gates for delivery. Do not weaken actual output, privacy, stale ownership or withdrawal assertions.
+- Keep the implemented preparation candidate fixed while diagnosing this test boundary unless evidence demonstrates a production contribution. Separately state that W-HIDE has new measurement fields, not an implemented phone-delay fix.
+- No new repair prompt, application code, test patch, workflow dispatch, cancellation or message to the coding agent was sent by the reviewer in this status review.
+- Rules assets hashes checked unchanged: basef5f3f324bfea16cf5740ae15d565c5ce8ed6d5526e0705d321a004ad0adf9297; widgetdc695dde88fab03765c03b1fd8b86d3b2683832d8c0eec73362d21a197b5992c. Existing workflow definition is unchanged and uses push/pull_request/schedule/workflow_dispatch; this append uses[skip ci].
+- Reviewer action is append-only journal status evidence. No new Human APK or physical improvement is claimed. PHYSICAL VALIDATION — PENDING, USER ONLY.
