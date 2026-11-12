@@ -12874,3 +12874,20 @@ PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 
 Arithmetic clarification to the preceding process audit: the40-commit interval contains23 docs-prefixed commits and17 other commits, not24/16. This split is by commit-message prefix; the complete comparison file/line inventory is the separately verified evidence. The production/test/CI file counts and the24-commit interval since3b4dbba are unchanged.
+
+## 2026-11-12 — documentation merge workflow cancellation
+
+Merge commit `dbcf4c074ada248f507d72ab91c7daeccf021753` contains only the
+append-only shared-journal reconciliation; it does not alter application,
+test, workflow, or build inputs. Its merge subject did not carry `[skip ci]`,
+so GitHub started push run
+[43323044002](https://github.com/elizerpist/exptv2/actions/runs/43323044002).
+It was cancelled as a documentation-only, non-candidate run. No step reached
+an application validation result and it is not evidence for the failed native
+candidate or Human delivery.
+
+The authoritative delivery blocker remains diagnostic run `43319482620` on
+`1fae161e057476c7fc176a386ce19179e6dc1597`: runtime-chain repetition 1
+failed the protected `rapid-cycle-8` current live-output assertion, while
+repetition 2 passed. Normal delivery remains undispatched and no Human APK is
+claimed. Physical validation: PENDING — USER ONLY.
