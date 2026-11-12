@@ -1,0 +1,47 @@
+{
+  "task": "FLUVI keyguard warm-attachment delivery provenance",
+  "application_source_head": "52bcda05cc1539d8f22d3b8584769fabc36c8a47",
+  "application_source_parent": "a4d1f4b12d821c9ddebe882dd18cde251cd332cf",
+  "application_branch_at_delivery": "fix/orb-v4-latency-lockscreen",
+  "application_documentation_descendant": "5fda8dda843d8279c21d5286b4bd57212319698f",
+  "source_ref_in_graph": "52bcda05cc1539d8f22d3b8584769fabc36c8a47",
+  "source_ref_note": "The branch had advanced only to the delivery-journal descendant before regeneration. The graph is intentionally pinned to the exact application source embedded in the Human APK, not to that documentation-only child.",
+  "index": {
+    "generator": "scip_dart 1.6.2 via tools/codegraph",
+    "sha256": "0197c2b6e9e68417652dda27f508e5ec14600307bc46ce9920a0c22c836a7a18",
+    "language_documents": { "Dart": 807 },
+    "kotlin_coverage": false
+  },
+  "dart_queries": {
+    "KeyguardTimingCaptureBridge": { "references": 8, "production": 3, "tests": 5 },
+    "KeyguardTimingCaptureSnapshot": { "references": 12, "production": 12, "tests": 0 },
+    "DebugConsoleDialog": { "references": 5, "production": 3, "tests": 2 }
+  },
+  "native_inventory": {
+    "coverage": "Explicit source inventory; it is not SCIP coverage.",
+    "chain": [
+      "FluviKeyguardCardService inspection/visibility authority",
+      "KeyguardCardWindow retained TYPE_ACCESSIBILITY_OVERLAY root",
+      "KeyguardCardMaterialController lease selection and attach generation",
+      "KeyguardOrbBufferRenderer Main Api34 layer binding",
+      "Worker HandlerThread HardwareBufferRenderer / fences / completed producer observation",
+      "Main SurfaceControl publication and compositor crop tests"
+    ],
+    "changed_owner": "KeyguardOrbBufferRenderer.Api34.ensureLayer arms one exact-current OnPreDrawListener only when initial root geometry, root SurfaceControl or reparent transaction is unavailable. The callback revalidates the attachment and desired lease before binding; retirement removes it.",
+    "preserved_owners": "Main remains the only layer visibility/parenting authority. The Worker retains slot, RenderNode, RuntimeShader, Paint, HardwareBuffer and fence ownership. No Flutter per-frame transport is introduced.",
+    "current_tests": [
+      "KeyguardHeaderMaterialViewInstrumentationTest.isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame",
+      "KeyguardHeaderMaterialViewInstrumentationTest.isolatedOrbPublishesChangingCompositorPixels",
+      "KeyguardServiceOverlayInstrumentationTest.connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles",
+      "KeyguardProducerSampleRequestBookInstrumentationTest",
+      "KeyguardCardDiagnosticsInstrumentationTest"
+    ]
+  },
+  "verification": {
+    "workflow": "https://github.com/elizerpist/exptv2/actions/runs/43143048479",
+    "required_gates": [ "test-core PASS", "test-flutter PASS", "test-keyguard-material-runtime PASS" ],
+    "human_apk_source": "52bcda05cc1539d8f22d3b8584769fabc36c8a47",
+    "physical_validation": "PENDING_USER"
+  },
+  "limits": "The graph is static Dart reference navigation only. It neither covers Kotlin nor proves runtime ordering, compositor presentation, device pacing, or physical acceptance. Those claims remain limited to the retained API35 test evidence and future user device capture."
+}
