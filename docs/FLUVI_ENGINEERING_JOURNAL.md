@@ -8850,3 +8850,34 @@ Garantált elsőre zöld buildet nem ígérhetsz; a megelőzhető hibák és biz
 ### Status
 
 No new implementation or runtime validation is claimed. The earlier diagnostic-workflow proposal remains a proposal. Physical validation: PENDING — USER ONLY.
+
+
+## 2026-11-12 — Reviewer decision: align rule assets with preventive validation requirements
+
+### Request and inspected state
+
+- User asks whether repeated multi-cycle CI failures require another prompt-rules change or whether the newly adopted project instructions are sufficient. This is a rules/process assessment, not a new implementation prompt or authorization to change application/workflow code.
+- Read the full current base asset v2.0 and widget addendum v1.1, the relevant current journal audit/result entries, and the unchanged workflow trigger/job dependencies. Remote HEAD remains 25ed481b8a43df7a11cb5e4558f855eb82b8fcc1: no intervening commit since the preceding reviewer entry. The application candidate remains 3b4dbba870cda66cbba830b1bcd1ca4183636d91.
+- The earlier eight-run log audit established successful Android assembly but failing native runtime gates, with core and Flutter passing; repeated failures must not be described as eight compiler failures. This entry relies on that recorded audit and does not claim another independent run-log reconstruction or a new physical diagnosis.
+
+### PROVEN / UNPROVEN / MISSING EVIDENCE
+
+- PROVEN: base section 0 and section 6 prompt item 16 already require reviewer-owned diagnosis, focused validation, return of unexpected failures and no full CI rerun without new evidence. Widget sections 15-18 already require relevant scenario coverage and scope discipline. Therefore missing words alone do not explain the observed loop.
+- PROVEN: the newly adopted project instructions require a concrete preventive impact table and staged validation. The asset's 21-part template does not yet make the full mapping between risk, exact production transition, protective assertion, runnable command and full-delivery eligibility an explicit completion artifact. This is a useful targeted alignment, not grounds for another wholesale rewrite.
+- PROVEN from the prior audited diffs: prewarm frame-use drainage, synchronous cache-hit callback order, exclusive isolated-versus-legacy warmup and genuine fallback were consequences to plan together. An earlier handoff mentioned draining and duplicate preparation but did not enforce concrete postconditions. The reviewer's preparation was insufficient; agent independence must not be used to transfer that responsibility.
+- UNPROVEN: the number of future failures or hours saved by these changes; not every OEM/GPU/scheduling outcome can be predicted statically. No guarantee of a first-green build is justified.
+- MISSING: an implemented, verified short native diagnostic CI route. The existing journal proposal remains unimplemented, so a prompt must not pretend it is available.
+
+### Concrete recommendation for the next asset revision
+
+1. Preserve one authoritative base rules file and one widget addendum. Make targeted edits to the existing base section 6 prompt items 7/13/14/16/17/19 and corresponding widget sections 15/17/18; do not create a competing third rules file or expand the 21-section structure.
+2. Require the reviewer to fill a change-risk matrix before handoff: exact symbol and affected callers/consumers; current/new transition; reachable sync/async, cache-hit/miss, success/fallback and lifecycle cases; protective condition; exact test/negative control; validation command. Include all changes necessary for one complete repair, without unrelated open diagnostic branches.
+3. Require production and fixture contracts to be reviewed together: setup state, observed predicate and time of observation, action boundary, actual output, terminal state, cleanup and exported episode identity. Treat compiler, production, fixture, diagnostics and external infrastructure failures separately; a green callback count is not actual output proof.
+4. Require a pre-delivery table with actual outcomes: source identity, focused compile/test results, covered risks, unresolved failure evidence, diagnostic execution route, and full-delivery entry conditions. Routine syntax/import/wiring corrections remain within agent authority when they preserve the prescribed contract.
+5. Distinguish diagnostic iterations from full delivery. On the ARM/proot host use a verified compatible remote route; the concrete earlier proposal is an isolated API35 diagnostic workflow/mode that assembles app/test APKs once for an exact candidate and runs selected tests against those APKs. Changed source requires a matching rebuild. Diagnostic selection cannot publish Human APKs or satisfy final required gates. Final full required checks remain intact.
+6. Record every observed failure family in one ledger per source/run, with baseline status only when evidenced. The reviewer specifies the next discriminating experiment and acceptance/return conditions; repeated full runs without new causal evidence are prohibited. The first unexpected contract failure returns to the reviewer, not a speculative agent repair. Fixed-size diagnostic repetitions retain every failure; they are not rerun-until-green acceptance.
+7. Enforce prompt readiness as concrete filled outputs, not a promise to audit later. A longer rules document cannot replace the reviewer's actual code reasoning or create the missing diagnostic infrastructure. The newly adopted instructions already govern current work; asset synchronization is recommended for consistent execution across contexts.
+
+### Changed and limitations
+
+Only this journal is appended. The uploaded rule assets, application, tests and workflow are unchanged. This records the assessment and exact next revision requirements; it is not a claim that the new rules or diagnostic pipeline have been implemented. No new native pass or APK is claimed. Physical validation: PENDING — USER ONLY.
