@@ -7557,3 +7557,37 @@ fun main() {
 - Corrected test observation contract under validation: retain the selected time until a bounded compositor crop meets its phase-specific predicate (visible A, equal frozen/A/C, meaningful B, equal return-A). Rejected hypothesis: these stale screenshots prove a frozen `RuntimeShader` or producer path. They do not; producer evidence is positive for A/B motion.
 - Independent recovery-fixture defect: `isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame` armed `blockNextRender=true` but never consumed it, blocking B as well as the intended old A. Its "new attachment did not obtain" result deliberately withheld all subsequent capacity. The barrier now compare-and-sets true to false for exactly one old frame; this is a test precondition repair, not a pool expansion or production lifecycle change.
 - Remaining failures before this repair: frozen Canvas control; isolated compositor A/C; service compositor A/B; the blocked-recovery fixture. Dashboard profile remains separate and no conclusion about it is made here. W-SHOW OPEN; W-HIDE OPEN; W-LOCK-ANIM validation in progress; W-HOME-ANIM protected. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+
+## 2026-11-12 — reviewer retrospective: day-long unsuccessful delivery loop
+
+- User asks why almost a full day of coding produced no corrected APK. This is a process/commit retrospective, not new physical acceptance.
+- Audit scope: branch commit/run lists; selected actual production/test diffs including 0133181b, 649b6532, 976f4424, 6c2d5c03, 46c0312c and all latest correction diffs; complete 8571539e review entry; recent journal entries; six fetched job logs with inspected compiler/runtime failure sections. Not a complete audit of every repository file, all historical logs/artifacts or the entire journal. The prior numerical saturation/screenshot reproduction is attributed to 8571539e, not re-executed here.
+- Snapshot statistics from Nov 11 00:00 Budapest (2026-11-10T23:00Z) through d7378ba9: 56 commits, 19 docs-prefixed; 36 listed workflows: 29 failure, 5 cancelled, 2 queued. Median failed-run created-to-updated span 22.5 minutes. Overall workflow failure does not mean every job failed; overlapping durations must not be added as elapsed user time. No claim that this excludes earlier manually delivered artifacts.
+
+### Causes supported by the audit
+1. Architecture expansion: 0133181b added a 782-line HardwareBufferRenderer/SurfaceControl renderer plus 314 controller additions and tests. This broadened buffer/fence/lease/compositor/lifecycle obligations before physical improvement was validated. Risk multiplier, not proof the architecture is wrong.
+2. Invalid motion precondition: the 8571539e audit records that sampled phases legitimately produced the same saturated image. Repeated static-output results nevertheless motivated sRGB, per-slot shader, selector uniform/literal, pruning and RenderNode changes. Actual diffs contain platform freeze/cache explanations later retracted by that review. Hypotheses became implementation facts before a calibrated positive/negative control.
+3. Measurement defects accumulated: boxed-Float CAS warning and first-phase timeout independently appear in native log 130752732282; request-book tests were initially omitted; aggregate counts did not attribute a screenshot to a requested frame; submission still differs from screenshot observation. These are distinct from the original phone lag.
+4. Compile feedback was too late: local ARM/proot aapt2 blockage is recorded. Actual CI logs independently confirm 65f55065 ReadyFrame argument type mismatch; 03ce463d private Request.submission access; bc33ad53 private Request inaccessible at outer callers. The latter visibility error was introduced by the immediately preceding repair. These three rounds failed before relevant instrumentation. Flutter analyze/diff checks/pure JVM tests cannot certify those Kotlin consumers.
+5. Actions availability interrupted one interval, but does not explain the day: old 2024a36f/7740ccd2 runs remain queued while later runs execute. The present blockage cannot be called solely a scheduler outage.
+6. Review process also failed to prevent loops: long prompts and journal entries did not function as executable early admission checks. Requiring persistence is appropriate but cannot replace a calibrated oracle and production+androidTest compilation. Reviewer shares responsibility for not enforcing a shorter validated path sooner.
+
+### Latest completed result independently checked
+- d7378ba9 run 43123648427: core and Flutter PASS; native job 130873118819 compiled instrumentation and ran 45 tests, three failed: blocked reattach current output; frozen Canvas comparison (1857 changed pixels / delta243813); isolated A/C compositor equality (15648 / delta2422928).
+- Separate service fixture failed A/B compositor motion (0 changed / 0 delta). Human APK job skipped because native prerequisite failed. Separate dashboard failure is not the APK dependency.
+- This proves failed contracts, not a shared GPU root cause or that all failures are test-only. No new physical timing result exists.
+
+### Concurrent coding work preserved
+- During this review the coding agent pushed 5fb84f2b3478311aafdba355e1d243b9a24c8a27; initial journal append correctly failed with 409 rather than overwriting it. Reviewer fetched the new diff and journal before retrying.
+- 5fb84f2b changes tests/journal only: bounded repeated compositor observations and a one-shot recovery barrier. Its journal reports producer A/C equality, A/B motion and identical saved service crops; artifact claims were not independently downloaded/reproduced this turn.
+- Source confirms previous blockNextRender.get() admitted every frame to the barrier, replaced with compareAndSet(true,false). Source also confirms accepting crops by expected equality/difference predicates. This needs independent control scrutiny: selecting an acceptable crop demonstrates eventual existence, not stable rendering or exact request identity by itself; equal A/C can accept an earlier A image. Do not mislabel these predicates physical-presentation acknowledgement or performance proof.
+- New run 43127039267 was in_progress at inspection. Its outcome is unknown and must not be predeclared successful or failed.
+
+### Recommended change in method
+- Fast compile of both production and androidTest on a compatible executor before expensive suites.
+- One falsifiable hypothesis and focused observable result per correction; calibrate same-profile/backend positive and negative controls before renderer changes.
+- Separate pixel observation from lifecycle liveness and from physical performance; preserve early/failed evidence instead of only the eventual accepted sample.
+- Audit speculative changes for continued justification after controls are trustworthy; no blind rollback, threshold weakening or required-gate bypass.
+- W-SHOW/W-HIDE improvement unproven; W-LOCK-ANIM validation incomplete; W-HOME-ANIM protected. PHYSICAL VALIDATION — PENDING, USER ONLY.
+- Reviewer changes only this journal, append-only, [skip ci], no dispatch or application edits.
