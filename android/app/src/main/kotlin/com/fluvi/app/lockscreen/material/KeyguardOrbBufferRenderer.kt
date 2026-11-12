@@ -319,9 +319,6 @@ internal class KeyguardOrbBufferRenderer(
          * not that signal. */
         private val retiringLayers = mutableMapOf<KeyguardOrbBufferLease, SurfaceControl>()
         private var firstPublishedLease: KeyguardOrbBufferLease? = null
-        /** A detached prewarm has real GPU output but no legal parent layer
-         * yet. Retain at most one such frame; it is never a visibility grant. */
-        private var deferredReady: ReadyFrame? = null
         private var attachListener: View.OnAttachStateChangeListener? = null
         private var layoutListener: View.OnLayoutChangeListener? = null
         /**
@@ -350,10 +347,6 @@ internal class KeyguardOrbBufferRenderer(
             val old = desired
             desired = spec
             if (old?.lease != spec.lease) {
-                // A prepared detached frame is bound to its exact lease. It
-                // cannot be stretched into a new attach, profile or program.
-                deferredReady?.let(worker::dropReady)
-                deferredReady = null
                 if (layerLease != null && layerLease != spec.lease) hideLayer()
             }
             // A full -> neutral transition must revoke an already presented
@@ -401,8 +394,6 @@ internal class KeyguardOrbBufferRenderer(
             attachment = null
             hideLayer()
             firstPublishedLease = null
-            deferredReady?.let(worker::dropReady)
-            deferredReady = null
             worker.retire(retiredLease, reason)
         }
 
@@ -536,19 +527,6 @@ internal class KeyguardOrbBufferRenderer(
                     .apply()
             }
             worker.setAttachment(spec.lease, requireNotNull(layer))
-            deferredReady?.let { frame ->
-                if (frame.lease == spec.lease) {
-                    deferredReady = null
-                    publishReady(frame)
-                } else {
-                    // A detached prewarm can finish between configure() and
-                    // attach(). It is not a candidate for this attachment.
-                    // Leaving that READY slot behind would prevent the sole
-                    // producer from making a current frame indefinitely.
-                    deferredReady = null
-                    worker.dropReady(frame)
-                }
-            }
         }
 
         /**
@@ -634,13 +612,15 @@ internal class KeyguardOrbBufferRenderer(
                 if (!disposed && attachment == null && desired?.lease == frame.lease) {
                     // This completion has allocated the actual fixed pool,
                     // configured its slot-local shader and rendered a real
-                    // buffer.  It is deliberately reported before retaining
-                    // the one detached READY frame, rather than pretending
-                    // the separate HardwareRenderer warm-up proves it.
+                    // buffer. It is deliberately reported before its render
+                    // result is drained: detached output has no legal
+                    // publication target, and retaining READY_FOR_MAIN would
+                    // strand one of the fixed pool's three handoff slots.
+                    // The renderer, HardwareBuffer allocation and slot-local
+                    // shader stay retained; only this unauthorised use is
+                    // returned fence-safely to FREE.
                     onDetachedBackendPrepared(frame.lease, android.os.SystemClock.uptimeMillis())
-                    val replaced = deferredReady
-                    deferredReady = frame
-                    if (replaced != null) worker.dropReady(replaced)
+                    worker.dropReady(frame)
                     return@publish
                 }
                 publishReady(frame)

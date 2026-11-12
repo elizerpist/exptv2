@@ -1229,7 +1229,14 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 ready = !window.isAttached &&
                     diagnostics?.activeRenderer == "HardwareBufferRenderer/SurfaceControl" &&
                     (diagnostics.isolatedFramesProduced >= 1) &&
-                    diagnostics.isolatedFramesPublished == 0
+                    diagnostics.isolatedFramesPublished == 0 &&
+                    // Detached preparation initializes the actual renderer,
+                    // but it must drain its unauthorised READY_FOR_MAIN use
+                    // rather than occupying a fixed-pool handoff slot until
+                    // some future attachment happens to arrive.
+                    diagnostics.isolatedFramesReady == 0 &&
+                    diagnostics.isolatedFramesInFlight == 0 &&
+                    diagnostics.isolatedFramesCompositorOwned == 0
             }
             if (ready) return true
             Thread.sleep(24)
