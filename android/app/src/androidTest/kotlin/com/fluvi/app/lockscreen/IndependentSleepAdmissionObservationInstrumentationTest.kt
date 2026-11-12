@@ -44,7 +44,7 @@ class IndependentSleepAdmissionObservationInstrumentationTest {
         val budget = IndependentSleepAdmissionBudget(0L, 9_000L)
         assertEquals(3_000L, budget.nonInteractiveDeadlineUptimeMs)
         assertEquals(6_000L, budget.admissionDeadlineUptimeMs)
-        assertFalse(collect(start = 3_300L, finish = 3_300L, deadline = 3_300L).accepted)
+        assertFalse(collect(start = 3_300L, finish = 3_300L, deadline = 3_300L, lockedBefore = false, lockedAfter = false).accepted)
         assertTrue(collect(start = 3_900L, finish = 4_000L, deadline = budget.admissionDeadlineUptimeMs).accepted)
         assertFalse(collect(start = 3_900L, finish = 4_000L, deadline = 3_300L).accepted)
     }
