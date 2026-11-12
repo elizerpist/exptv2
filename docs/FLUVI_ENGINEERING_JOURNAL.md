@@ -7778,3 +7778,519 @@ fun main() {
 - Separate tooling commit `6b3298f3303b3f27c7a523763110971660c8afb9` regenerates the final-source graph for this exact application SHA: `scip_dart 1.6.2`, index SHA-256 `e740710b7c92a0aebf98d6ceec7dedac92771585313886c00fbfb9a7dc86ee5e`, 807 Dart documents; `dart analyze` PASS and 16 tooling tests PASS. Coverage remains Dart-only; Kotlin ownership is explicit source inventory, not SCIP/runtime coverage.
 - Independent dashboard status: `run-dashboard-profile` job `131113712869` FAILed at `RangeError (year): 2026 outside 2027..2051`, followed by the profile test failure. It is outside the Human APK dependency graph; no dashboard change or causal baseline comparison was made by this W-HIDE delivery.
 - W-SHOW preserved with prior user-reported improvement, not newly physically accepted. W-HIDE has diagnostic/fixture evidence only and remains physically unresolved. W-LOCK-ANIM controlled lifecycle is automatically verified, including 30 cycles. W-HOME-ANIM protected/no change. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+## 2026-11-12 — Reviewer: 04e229c phone lag persists; acquisition/Main delay and cold isolated-backend preparation gap
+
+### User evidence, exact state and review scope
+
+- User feedback: "Még mindig van delay, van lag a renderkor és az eltűnéskor is." Earlier wake improvement remains a comparative user observation, not physical acceptance. Current scope is W-SHOW, W-HIDE, and transition/startup W-LOCK-ANIM. Do not reinterpret this as a quantified sustained-FPS complaint. W-HOME-ANIM and dashboard remain protected.
+- Physically logged application source: 04e229c64e560bef9d49972c3413d1115fc36c41; parent 865d84dcab2d0aa59f159e5e3ed5d321385b5d5c. Reviewed remote branch fix/orb-v4-latency-lockscreen HEAD f0132be9cae5b388dae7b8c342780f2a95047ede is a delivery-journal-only descendant. This reviewer changes only this journal; no implementation or instrumentation was run by the reviewer.
+- Both complete uploaded rule assets were read: 01-FLUVI_PROMPT_WRITER_RULES-1-.md and 02-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md. The journal's recent native history, rejected experiments, current delivery evidence and relevant milestone entries were reviewed. Protected milestones include dfa90b6741108f824244dbc11a3d73a6c5174472 and 6e962187e90e2a82431b1f91b224d2b52a6e0ba7.
+- Audit is source/commit/log forensics, not a fresh exhaustive runtime or complete transitive-code certification. Before implementation, the coding agent must complete the native caller/consumer/test audit and execute the baseline/candidate experiments below.
+
+### Actual changes since the e7905b6 phone build
+
+- ec3aab8487aa7f72eabf7ca26009679fdcd0d175 adds an observation of the existing isolated child-layer hide submission and its exact lease/outcome. It does not change production hide policy.
+- b0f51c50e5c516b51329e40b9e5d7035236ee59c adjusts the rapid-reentry fixture terminal predicate within its existing deadline.
+- b1aea959e2b6011a86dd12cc4ff2c85d370e4558 corrects the compositor reference-A observation ordering after bootstrap suppression.
+- 865d84dcab2d0aa59f159e5e3ed5d321385b5d5c adds the second public terminal fixture dismissal after the deliberate SystemUI race.
+- 04e229c64e560bef9d49972c3413d1115fc36c41 requires a real on-screen compositor crop and post-dismiss idle before the next synthetic cycle.
+- These actual diffs explain why this APK is a diagnostic/fixture delivery rather than an implemented phone-latency fix. Repeated fixture corrections consumed build iterations; they are not evidence that those iterations improved phone performance.
+- Verified current run 43197084553 job statuses: core, Flutter, API35 native runtime and Human APK PASS; dashboard-profile FAIL independently. The journal attributes the latter to RangeError(year), 2026 outside 2027..2051; that error text is agent-reported here, not a newly downloaded reviewer log.
+- Human release: https://github.com/elizerpist/exptv2/releases/download/fluvi-human-diagnostic-04e229c/fluvi_HUMAN_DIAGNOSTIC_04e229c.apk . Release metadata digest SHA256 72f7825cf02e16919ef8fdc337b6728094c4aa41214de7ff030759930a56026b; size 120197330. Earlier delivery entry records downloaded APK/signature/embedded-source checks; reviewer verified metadata, not a new binary download. Historic queued Actions are not the current delivery blocker.
+
+### Frozen source captures, retention and clocks
+
+Both original uploaded UTF-8 text files are preserved verbatim below, including their final newline. Hash only text between the corresponding fence lines; exclude the fences.
+
+| File | Capture | Mode | Bytes | SHA256 |
+|---|---|---|---|---|
+| Pasted text.txt | 27ebb0ba-caaf-4958-9183-1cf62b60e9aa | LIGHT | 30534 | 917088d296edfe82bdc3d888ec9cce2d5e3142891e1e78088dfba49c575b09d1 |
+| Pasted text (2).txt | d256cb47-2b84-44de-9406-34063c6aa6f6 | FULL | 29079 | 903d0a42809e95c3795260afe491accb2eea0736d3683e0e997e6b10f277ae66 |
+
+- Both: profile, process 27557-bdcc9ef1, serviceSession 1, Nothing A142/API35, ORB/orbOnly/privacy full, notificationTimeoutMs=0, foreground/background requests false.
+- LIGHT started 2026-11-12T12:20:40.382+0100, duration 21608ms; FULL started 12:24:44.892+0100, duration14784ms. They are distinct captures in the same process. FULL's COLD_PREPARATION repeats process history; it is not another independent cold process.
+- LIGHT: 920 recorded,273 retained,499 evicted,148 diagnosticDroppedRecords;47 distinct emitted seq lines spanning4..920. FULL:1200 recorded,272 retained,925 evicted,3 coalesced,0 diagnosticDroppedRecords;26 distinct emitted seq lines spanning2..1200. No conflicting same-sequence text found within either file. Raw event coverage is sparse in both: exportTruncated/rawEventsTruncated=true. Missing events/attempts are not zero-delay samples. The retained summaries and actual-withdrawal episodes survive independently of the raw ring.
+- System wake/unlock visual starts, physical presentation/removal and live frame commit remain UNOBSERVED. Same-uptime arithmetic below does not convert accessibility eventTime into unlock start. FIRST_LIVE_DRAW on the isolated route is a submission/control marker, not screen presentation.
+
+### Measured boundaries
+
+| Capture / attempts | SCREEN_ON to first live marker ms | actual hide callback to local hide ms | hide callback to child hide submit ms | removeView call ms |
+|---|---|---|---|---|
+| LIGHT /1,4,5,6 |387,310,352,275|4,17,22,24|5,17,22,24|323,11,14,10|
+| FULL /1,3,4,5 |245,80,229,213|19,21,174,20|19,21,174,21|11,9,9,9|
+
+Decisive FULL attempt4 / attach10 / hideOp27 / request261:
+- eventTime598448674 -> callback598448675 -> queue/start598448676 -> inspection finished/handoff598448759 -> Main entered/decision598448848 -> local hide and child submission598448849 -> remove598448850..598448859.
+- Thus callback-to-local174ms consists of1ms to start +83ms inspection +89ms Main handoff +1ms local application. Event delivery for THIS event is1ms. Active root22ms plus another root54ms accounts for76ms of the83ms inspection; the other root is w3023,t3,d0. Classification is HIDDEN_UNKNOWN/ROOT_UNAVAILABLE, despite two main markers. Do not skip that exclusion or mislabel this as a slow removeView case.
+- Other actual-withdrawal events have eventTime-to-callback intervals up to88ms in LIGHT and85ms in FULL. Those demonstrate additional event-delivery delay, but not its relationship to physical unlock start.
+- Local-root-hide to child-hide submission is0..1ms in all retained episodes. Source samples child submission time BEFORE Transaction.apply and records true after normal return. REMOVE_VIEW_BEGIN follows within0..2ms, bounding this local operation tightly in these episodes. This is not a compositor/physical disappearance proof.
+- The first LIGHT removeViewImmediate call takes323ms AFTER local hide and child submission. It is a separate genuine Main-blocking outlier. It does not explain FULL request261's preceding89ms handoff and cannot alone explain physical visibility after a successfully submitted child hide.
+
+W-SHOW/startup:
+- LIGHT initial inspection durations112/74/227/78ms; FULL120/69/105/76ms. LIGHT request93 spends132ms activeRoot and85ms child acquisition before returning UNKNOWN; successor102 later confirms SHOW. These are real acquisition delays, not evidence of expensive shader CPU.
+- Wake callback-to-first inspection enqueue reaches101ms in LIGHT attempt6 and73ms in FULL attempt5. Those intervals cross the earlier system-sampler path; they are not yet attributed to queue wait, platform getter time or Main handoff.
+- LIGHT first addViewReturn598196631 -> first live marker598196828 =197ms. FirstRoot598196680 -> live=148ms. First live -> local hide=790ms, but attachment summary reports only2 produced/2 published isolated frames,1 dropped,177ms maximum completion-to-completion gap. Later LIGHT attachments produce106/90/86 frames. This is a strong startup-progress anomaly, not proof of physical FPS or a specific GPU stall.
+- CompletionGapMax measures only intervals BETWEEN completed outputs. It misses a never-completed final render and does not explain the tail. Silent renderer return branches also are not included in dropped count. Zero legacy drawGap evidence does not certify the isolated backend's cadence.
+- LIGHT producer max24.679692ms versus FULL7.634231ms is not a controlled overhead comparison (cold/warm differ). Aggregate capture-lock time belongs to the dedicated diagnostic consumer and cannot be charged wholesale to Main.
+
+### Source findings and falsifiable hypotheses
+
+H1 — acquisition plus Main result-delivery delay (measured boundary; exact Main blocker unresolved).
+- Service processInspectionQueue acquires off Main, then awaits withContext(Dispatchers.Main.immediate) before completing its one-wide inspection queue. A pending acquisition can therefore be held behind application delivery. KeyguardSystemStateSampler likewise clears active and starts pending only inside its Main callback. These are source-proven coupling points, not proof that changing their queue ownership alone eliminates the measured89ms.
+- Recurring system acquisition ALREADY has its own executor. ACTION_USER_PRESENT ALREADY directly calls hideImmediately. Do not prescribe either old fix again.
+- ADMISSION and PUBLICATION fresh system reads can still execute on Main by design; their actual contribution to request261 is unknown. Other candidates include ViewRoot/RenderThread wait, GC/descheduling, owned callback work and framework work. Handler.createAsync does not preempt a busy Main thread; a blanket async/front-of-queue change is not a diagnosis.
+- KeyguardMainWorkEvidence retains32 owned scopes and selects up to3 overlaps, but current snapshots are attached to retained material DRAW_GAP samples. The isolated captures contain no such samples. Reuse bounded numeric evidence for slow inspection handoff/pre-enqueue/first-output intervals, with wall/CPU timestamps and incomplete-coverage flags; do not build another unbounded recorder.
+- Required experiment: distinguish callback->system enqueue->worker start->public getter start/end->Main post/entry->inspection enqueue, and inspection finish->Main entry. Use matching trace thread-state/Binder/RenderThread evidence if owned spans do not cover the gap. Then repair the demonstrated blocking work or result-delivery coupling, preserving exact authority, one active acquisition and bounded latest pending/result storage. A worker cannot perform View/WindowManager operations.
+
+H2 — actual isolated renderer is not prepared by service-start GPU preparation (source-proven preparation gap; causal contribution to197ms/2-frame anomaly must be tested).
+- KeyguardCardWindow.prepareRetainedView invokes materialController.prepare, which only invokes prepareSelectedPrograms. At initial service preparation, isolatedOrbRequested is false and latestOrbScene is null; reconcileIsolatedOrbTarget cannot initialize/configure the lazy isolated backend.
+- AndroidKeyguardGpuMaterialPreparer creates a separate HardwareRenderer/ImageReader and its own shader, draws once, then destroys those objects. Its READY record is not readiness of KeyguardOrbBufferRenderer's persistent pool/renderers/slot shaders.
+- The first authorized show calls updateMaterialForPresentation; only then does controller.update set isolatedOrbRequested/latestOrbScene, initialize the lazy isolated renderer and configure its resources. Worker.ensureResources allocates up to3 HardwareBuffers/HardwareBufferRenderers; prepareSlotShaders initializes slot-local shaders later. The existing "detached prewarm" starts immediately before addView and is not service-start preparation of this exact pipeline.
+- New justified repair candidate: an explicit bounded detached preparation phase for the selected isolated ORB backend, separated from presentation authority. Prepare/reuse the SAME bounded resource owner for the exact material/size; never relabel an old attachment's rendered frame as current. A fresh current lease must still authorize fresh output. No continuous hidden animation, extra per-attachment pools, Main wait or new show permission.
+- First prove the parent leaves these actual allocations/initializations on the show/first-frame path with a production-path test and measured setup spans. Then implement this narrow preparation refactor and demonstrate baseline/candidate setup removal and real current output. Do not claim all show or hide latency solved by prewarming.
+
+H3 — first-frame/slot handoff stalls (specific unresolved alternatives).
+- First isolated publish goes through Main and applyTransactionOnDraw plus root invalidation; steady buffer-only publications run on the renderer worker. The first submission marker precedes proof that the associated root traversal/transaction has reached the display.
+- Worker.render silently returns when ANY slot is READY_FOR_MAIN or RENDERING. Its no-FREE branch alone increments dropped. A slow producer callback, queued first Main bind/worker acknowledgement, running/callback liveness issue, or retired slot still draining can stop progress without a large dropped count.
+- Capture bounded exact lease/slot/use/phase-request state and last transition age BEFORE stop/retire mutates it: configure/attach/first bind/ack, render start and callback, acquire/release fence readiness, slot state/retired identity, running/callback-posted and skip reasons. An incomplete last render must appear as unfinished, not0ms.
+- Test one boundary at a time with independent barriers; release in finally. Fix only the demonstrated state/ownership flaw. No wholesale shader/SurfaceControl rewrite, altered on-draw ordering, larger buffer pool or fence timeout-as-success based solely on this symptom.
+
+Official contracts rechecked:
+- https://developer.android.com/reference/android/graphics/HardwareBufferRenderer — HardwareBufferRenderer and HardwareRenderer share the render thread; a separate HandlerThread does not imply a separate GPU/RenderThread.
+- https://developer.android.com/reference/android/view/AttachedSurfaceControl — applyTransactionOnDraw associates with the next hierarchy draw; queueing does not prove physical presentation. Current code explicitly invalidates, so "missing invalidate" is not an established bug.
+
+### Graph, tests, implementation and anti-loop gate
+
+- Tooling6b3298f3303b3f27c7a523763110971660c8afb9 manifest source_head04e229c64e560bef9d49972c3413d1115fc36c41; index SHA256e740710b7c92a0aebf98d6ceec7dedac92771585313886c00fbfb9a7dc86ee5e;807 Dart documents.
+- Reviewer executed class/constructor-family queries against fetched symbol/ref shards: KeyguardTimingCaptureBridge8 refs(3production/5test), KeyguardTimingCaptureSnapshot12(allproduction). Relevant references were checked against current-source lines in six consumers; the complete capture bridge was inspected. The tooling branch carries graph artifacts, not a parallel application tree. This graph does not index Kotlin. Native findings above come from source inspection, not graph proof.
+- Existing real-service awaitLive allows18seconds and requires eventual output advancement; unlock withdrawal waits for platform state and then overlay absence with multi-second deadlines. Its30cycle correctness is valuable but not a sub100ms latency or continuous-output guarantee. Keep lifecycle/pixel tests; add stage-isolation and cadence evidence rather than reducing all emulator timeouts.
+- Preserve exact request/lease/slot-use identity; lateA1 cannot satisfyA2. Preserve calibrated producer/Canvas/compositor A/C/B/A controls, real-service fixture, privacy, stale exclusion safety, next-cycle liveness, bound3including retired slots, renderer-owned fences and no Main join.
+- No fixed hide/show sleeps, broader UNKNOWN show policy, cached eligibility grant, guessed touch-unlock signal, FPS/resolution reduction, static-image substitution, or weakening of mandatory gates. Do not infer the83ms can be removed by blindly skipping a type3 root.
+- Next coding task must first establish cold-preparation RED and targeted latency attribution, then perform narrow proven production repairs. Extend diagnostics only for the named unresolved spans. Do not ship another measurement-only APK as a completed lag fix. If phone-specific attribution still cannot be obtained on the available host, specify the exact missing trace fields and one bounded user-operated capture; continue independent verifiable repair work meanwhile.
+- Delivery requires source-matched core/Flutter/native/service/correctness gates, a verified Human profile APK, direct link/hash/embedded source, tooling provenance and full report. Recover CI/compiler/fixture failures; do not stop at push/queued/status-only output. Do not bypass gates or fabricate success if a genuine external block remains.
+- Reviewer validation: PASS exact-source/commit/workflow/graph/log audit and capture hashes; Android/unit/instrumentation execution NOT RUN by reviewer; production repair NOT IMPLEMENTED by reviewer. W-SHOW OPEN; W-HIDE OPEN; W-LOCK-ANIM startup progress UNDER INVESTIGATION, physical acceptance pending; W-HOME-ANIM PROTECTED/UNCHANGED. PHYSICAL VALIDATION — PENDING, USER ONLY.
+- Journal commit uses [skip ci]. The reviewed sole workflow triggers push/pull_request/schedule/workflow_dispatch; no dispatch is requested. Verify post-commit diff is journal-only and query runs for this documentation SHA.
+
+### Frozen original LIGHT capture — 27ebb0ba-caaf-4958-9183-1cf62b60e9aa
+
+```text
+FLUVI_KEYGUARD_TIMING_CAPTURE_V1
+build=04e229c64e560bef9d49972c3413d1115fc36c41
+buildMode=profile
+captureId=27ebb0ba-caaf-4958-9183-1cf62b60e9aa
+captureState=FROZEN
+captureMode=LIGHT
+processInstance=27557-bdcc9ef1
+pid=27557
+androidApi=35
+manufacturer=Nothing
+model=A142
+startedAt=2026-11-12T12:20:40.382+0100
+durationElapsedMs=21608
+serviceConnected=true
+keyguardRequested=true
+foregroundRequested=false
+backgroundRequested=false
+presentationMode=ORB
+animationMode=orbOnly
+privacyMode=full
+notificationTimeoutMs=0
+CLOCKS
+uptimeMs=monotonic_excludes_deep_sleep
+elapsedMs=monotonic_includes_deep_sleep
+systemWakeVisualStart=UNOBSERVED
+systemUnlockAnimationStart=UNOBSERVED
+physicalOverlayPresentation=UNOBSERVED
+physicalOverlayRemoval=UNOBSERVED
+frameCommitMeaning=callback_receipt_not_physical_presentation liveFrameCommit=UNOBSERVED
+drawObservationMeaning=NO_DRAW_OBSERVED_is_not_proof_of_no_rendering
+drawGapClock=System.nanoTime frameNs=Choreographer cpuNs=threadCPU cbOut=ownedCallbackWorkEndBeforeProbe submit=CPUCanvasCall
+workKinds=1:systemGate,2:inspectionApply,3:diagnosticProducer nestedWorkNotAdditive=true workCoverage=ownedScopesOnly drawObserverNs=bookkeepingOnly
+COLD_PREPARATION
+serviceSession=1 processInstance=27557-bdcc9ef1 observedBeforeCapture=true
+SERVICE_CONNECTED=598181171
+SETTINGS_LOAD_START=598181179
+SETTINGS_LOAD_END=598181179
+PROFILE_LOAD_START=598181179
+PROFILE_LOAD_END=598181180
+ROOT_PREPARE_START=598181184
+ROOT_PREPARE_END=598181211
+MATERIAL_PREPARE_REQUESTED=598181211
+MATERIAL_ARTIFACT_READY=598181222
+MATERIAL_PROGRAM_PREPARED=598181234
+MATERIAL_PROGRAM_PROMOTED=598196561
+MATERIAL_GPU_PREPARATION_STARTED=598181234
+MATERIAL_GPU_PREPARATION_COMPLETED=598182032
+MATERIAL_GPU_PREPARATION_FAILED=UNOBSERVED
+FIRST_ATTACH=598196631
+FIRST_ROOT_DRAW=598196680
+BOOTSTRAP_DRAW=598196745
+BOOTSTRAP_COMMIT_CALLBACK_RECEIVED=UNOBSERVED
+MATERIAL_LIVE_PROMOTED=UNOBSERVED
+FIRST_SHADER_DRAW=598196828
+FIRST_CURRENT_MATERIAL_DRAW=598196828
+FIRST_LIVE_DRAW=598196828
+FRAME_COMMIT_CALLBACK_RECEIVED=UNOBSERVED
+RETENTION
+eventsRecorded=920
+eventsRetained=273
+eventsEvicted=499
+eventsCoalesced=0
+exportTruncated=true
+exportBytes=30534
+recoveredFromDisk=false
+hiddenNoopCount=51
+queuedForPersistenceSeq=920
+lastPersistedSeq=0
+unflushedTailMayBeMissing=true
+DIAGNOSTIC_COST
+diagnosticReductionThread=dedicatedWorker
+captureLockMeasurementOwner=diagnosticConsumer
+captureLockWaitNs=3455080
+captureLockHeldNs=1307028466
+diagnosticProducerTotalNs=87241684
+diagnosticProducerMaxNs=24679692
+legacyDiagnosticProducerTotalNs=4455073
+legacyWriteCount=17
+checkpointCount=2
+diagnosticDroppedRecords=148
+diagnosticQueueOverflow=0
+diagnosticConsumerFailures=0
+nativeDrawObservations=callbackAndCanvas flutterBuildRasterTiming=N/A
+retainedAttemptIds=1,4,5,6
+omittedEventLines=272
+omittedAttemptIds=5,6
+omittedSeqs=605-609,611-614,620-624,626-631,633-639,641-645,647-652,654-659,661-666,668-673,675-680,682-687,689-740,742-744,749-762,764,766-773,777-778,780-789,791-793,799-803,805-810,812-817,819-824,826-831,833-838,840-845,847-853,855-914,916-918
+omittedEvidenceRecords=4
+omittedCriticalRecordIds=none
+drawGapEvidenceExported=0 drawGapEvidenceOmitted=0
+omittedDrawGapRecordIds=none
+incompleteExportAttemptIds=none
+rawEventsTruncated=true rawOmissionDoesNotMeanNoDraw=true
+ATTEMPT_SUMMARIES
+attemptId=1 wakeSource=accessibility wakeCycleStartedAt=598196419 screenOnReceivedAt=598196441 presentationMode=ORB session=1 wake=2
+ firstInspectionRequestId=2 showingInspectionRequestId=2 requestsReceived=20 requestsReplaced=10 inspectionsStarted=10 inspectionsApplied=9 inspectionsRejected=1 staleInspectionCount=1
+ retries=scheduled:0,fired:0,cancelled:0,pending:0 attachCount=1 detachCount=1 finalState=DETACHED
+ awaiting=unknownWhileHidden:0,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:0,pendingRejectedAfterUnknown:0,visibleWithdrawalCount:0,retrySuppressedForPendingWork:0,retryBudgetExhaustedWhileAwaiting:0
+ cycleFirstRootShowOp=2 cycleFirstShaderShowOp=2 cycleFirstLiveShowOp=2 firstRootDrawObserved=true firstShaderDrawObserved=true
+ cycleToFirstRootDrawMs=261 cycleToFirstShaderDrawMs=409 cycleToFirstLiveDrawMs=409
+ screenOnToFirstRootDrawMs=239 screenOnToFirstShaderDrawMs=387 screenOnToFirstLiveDrawMs=387 wakeCallbackToFirstRootDrawMs=261 wakeCallbackToFirstShaderDrawMs=409
+ queueMs=1 inspectionTotalMs=112 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=0 mainEntryToDecisionMs=5 showDecisionToAddViewBeginMs=36
+ actualWithdrawalHideOp=3 terminalCleanupHideOp=3 triggerToLocalHideMs=4 triggerToLayerHideSubmitMs=5 triggerToRemoveReturnMs=329 hideDecisionToLocalHideMs=0 localHideToLayerHideSubmitMs=1 layerHideSubmitToRemoveBeginMs=1 removeViewCallMs=323 hideSignalToDecisionMs=4 hideSignalToRemoveReturnMs=329
+ causalSpineComplete=true causalSpineIndependentOfRawRing=true retainedShowEpisodes=1 retainedHideEpisodes=1 omittedShowEpisodes=0 omittedHideEpisodes=0 omittedSpineEvents=0
+ FIRST_INSPECTION req=2 trigger=accessibility callbackReceived=598196419 eventTime=598196362 queued=598196442 started=598196443 finished=598196555 handoff=598196555 mainApply=598196555 applied=598196558 authorityAtStart=true visibilityEpochAtRequest=1 visibilityEpochAtApply=1 pendingAtApply=7 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=21 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=38 perWindowRootMs=0 childCalls=20 childMs=35 childMaxMs=24 localMs=7 slowCalls=activeRoot:w_2977,38;child:w_2977,i_5,24;child:w_2977,i_1,11 rejected=NA followup=NA
+attemptId=4 wakeSource=wake wakeCycleStartedAt=598203728 screenOnReceivedAt=598203728 presentationMode=ORB session=1 wake=8
+ firstInspectionRequestId=60 showingInspectionRequestId=66 requestsReceived=33 requestsReplaced=16 inspectionsStarted=17 inspectionsApplied=17 inspectionsRejected=0 staleInspectionCount=0
+ retries=scheduled:3,fired:2,cancelled:1,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+ awaiting=unknownWhileHidden:6,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:4,pendingRejectedAfterUnknown:1,visibleWithdrawalCount:1,retrySuppressedForPendingWork:3,retryBudgetExhaustedWhileAwaiting:0
+ cycleFirstRootShowOp=9 cycleFirstShaderShowOp=9 cycleFirstLiveShowOp=9 firstRootDrawObserved=true firstShaderDrawObserved=true
+ cycleToFirstRootDrawMs=260 cycleToFirstShaderDrawMs=310 cycleToFirstLiveDrawMs=310
+ screenOnToFirstRootDrawMs=260 screenOnToFirstShaderDrawMs=310 screenOnToFirstLiveDrawMs=310 wakeCallbackToFirstRootDrawMs=260 wakeCallbackToFirstShaderDrawMs=310
+ queueMs=2 inspectionTotalMs=52 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=0 mainEntryToDecisionMs=2 showDecisionToAddViewBeginMs=2
+ actualWithdrawalHideOp=10 terminalCleanupHideOp=11 triggerToLocalHideMs=17 triggerToLayerHideSubmitMs=17 triggerToRemoveReturnMs=28 hideDecisionToLocalHideMs=1 localHideToLayerHideSubmitMs=0 layerHideSubmitToRemoveBeginMs=0 removeViewCallMs=11 hideSignalToDecisionMs=16 hideSignalToRemoveReturnMs=28
+ causalSpineComplete=true causalSpineIndependentOfRawRing=true retainedShowEpisodes=1 retainedHideEpisodes=2 omittedShowEpisodes=0 omittedHideEpisodes=0 omittedSpineEvents=0
+ FIRST_INSPECTION req=60 trigger=wake callbackReceived=598203728 eventTime=NA(sourceUnavailable) queued=598203773 started=598203776 finished=598203850 handoff=598203850 mainApply=598203855 applied=598203855 authorityAtStart=true visibilityEpochAtRequest=5 visibilityEpochAtApply=5 pendingAtApply=66 classification=HIDDEN_UNKNOWN reason=NO_MAIN_MARKER markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=7 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=67 perWindowRootMs=0 childCalls=6 childMs=0 childMaxMs=0 localMs=3 slowCalls=activeRoot:w_2977,67;child:w_2977,i_0,0;child:w_2977,i_0,0 rejected=NA followup=CONTINUE_PENDING
+attemptId=5 wakeSource=wake wakeCycleStartedAt=598206811 screenOnReceivedAt=598206811 presentationMode=ORB session=1 wake=10
+ firstInspectionRequestId=93 showingInspectionRequestId=102 requestsReceived=32 requestsReplaced=14 inspectionsStarted=18 inspectionsApplied=18 inspectionsRejected=0 staleInspectionCount=0
+ retries=scheduled:3,fired:2,cancelled:1,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+ awaiting=unknownWhileHidden:5,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:3,pendingRejectedAfterUnknown:0,visibleWithdrawalCount:1,retrySuppressedForPendingWork:3,retryBudgetExhaustedWhileAwaiting:0
+ cycleFirstRootShowOp=12 cycleFirstShaderShowOp=12 cycleFirstLiveShowOp=12 firstRootDrawObserved=true firstShaderDrawObserved=true
+ cycleToFirstRootDrawMs=344 cycleToFirstShaderDrawMs=352 cycleToFirstLiveDrawMs=352
+ screenOnToFirstRootDrawMs=344 screenOnToFirstShaderDrawMs=352 screenOnToFirstLiveDrawMs=352 wakeCallbackToFirstRootDrawMs=344 wakeCallbackToFirstShaderDrawMs=352
+ queueMs=15 inspectionTotalMs=53 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=1 mainEntryToDecisionMs=1 showDecisionToAddViewBeginMs=3
+ actualWithdrawalHideOp=13 terminalCleanupHideOp=14 triggerToLocalHideMs=22 triggerToLayerHideSubmitMs=22 triggerToRemoveReturnMs=37 hideDecisionToLocalHideMs=0 localHideToLayerHideSubmitMs=0 layerHideSubmitToRemoveBeginMs=1 removeViewCallMs=14 hideSignalToDecisionMs=22 hideSignalToRemoveReturnMs=37
+ causalSpineComplete=true causalSpineIndependentOfRawRing=true retainedShowEpisodes=1 retainedHideEpisodes=2 omittedShowEpisodes=0 omittedHideEpisodes=0 omittedSpineEvents=0
+ FIRST_INSPECTION req=93 trigger=wake callbackReceived=598206811 eventTime=NA(sourceUnavailable) queued=598206827 started=598206832 finished=598207059 handoff=598207059 mainApply=598207059 applied=598207059 authorityAtStart=true visibilityEpochAtRequest=7 visibilityEpochAtApply=7 pendingAtApply=102 classification=HIDDEN_UNKNOWN reason=ROOT_UNAVAILABLE markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=true walkTruncated=false truncationReasons=none visited=16 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=132 perWindowRootMs=1 childCalls=15 childMs=85 childMaxMs=37 localMs=2 slowCalls=activeRoot:w_2977,132;child:w_2977,i_0,37;child:w_2977,i_1,27 rejected=NA followup=CONTINUE_PENDING
+attemptId=6 wakeSource=wake wakeCycleStartedAt=598209907 screenOnReceivedAt=598209907 presentationMode=ORB session=1 wake=12
+ firstInspectionRequestId=125 showingInspectionRequestId=125 requestsReceived=35 requestsReplaced=19 inspectionsStarted=16 inspectionsApplied=16 inspectionsRejected=0 staleInspectionCount=0
+ retries=scheduled:3,fired:3,cancelled:0,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+ awaiting=unknownWhileHidden:5,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:3,pendingRejectedAfterUnknown:1,visibleWithdrawalCount:1,retrySuppressedForPendingWork:2,retryBudgetExhaustedWhileAwaiting:0
+ cycleFirstRootShowOp=15 cycleFirstShaderShowOp=15 cycleFirstLiveShowOp=15 firstRootDrawObserved=true firstShaderDrawObserved=true
+ cycleToFirstRootDrawMs=254 cycleToFirstShaderDrawMs=275 cycleToFirstLiveDrawMs=275
+ screenOnToFirstRootDrawMs=254 screenOnToFirstShaderDrawMs=275 screenOnToFirstLiveDrawMs=275 wakeCallbackToFirstRootDrawMs=254 wakeCallbackToFirstShaderDrawMs=275
+ queueMs=1 inspectionTotalMs=78 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=17 mainEntryToDecisionMs=2 showDecisionToAddViewBeginMs=3
+ actualWithdrawalHideOp=16 terminalCleanupHideOp=17 triggerToLocalHideMs=24 triggerToLayerHideSubmitMs=24 triggerToRemoveReturnMs=35 hideDecisionToLocalHideMs=1 localHideToLayerHideSubmitMs=0 layerHideSubmitToRemoveBeginMs=1 removeViewCallMs=10 hideSignalToDecisionMs=23 hideSignalToRemoveReturnMs=35
+ causalSpineComplete=true causalSpineIndependentOfRawRing=true retainedShowEpisodes=1 retainedHideEpisodes=2 omittedShowEpisodes=0 omittedHideEpisodes=0 omittedSpineEvents=0
+ FIRST_INSPECTION req=125 trigger=wake callbackReceived=598209907 eventTime=NA(sourceUnavailable) queued=598210008 started=598210009 finished=598210087 handoff=598210087 mainApply=598210104 applied=598210105 authorityAtStart=true visibilityEpochAtRequest=9 visibilityEpochAtApply=9 pendingAtApply=136 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:1,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=20 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=57 perWindowRootMs=0 childCalls=19 childMs=0 childMaxMs=0 localMs=1 slowCalls=activeRoot:w_2977,57;child:w_2977,i_0,0;child:w_2977,i_0,0 rejected=NA followup=NA
+EPISODES
+ EPISODE attempt=1 showOp=2 attach=1 req=2 decision=598196560 add=598196596/598196631 root=598196680 shader=598196828 currentMaterial=598196828 live=598196828 bootstrapDrawAt=598196745 bootstrapCommit=UNOBSERVED promoted=UNOBSERVED frameCommit=UNOBSERVED withdrawal=3 localHide=598197618 layerHideSubmit=598197619/true removeReturn=598197943
+ SHOWING_INSPECTION req=2 trigger=accessibility callbackReceived=598196419 eventTime=598196362 queued=598196442 started=598196443 finished=598196555 handoff=598196555 mainApply=598196555 applied=598196558 authorityAtStart=true visibilityEpochAtRequest=1 visibilityEpochAtApply=1 pendingAtApply=7 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=21 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=38 perWindowRootMs=0 childCalls=20 childMs=35 childMaxMs=24 localMs=7 slowCalls=activeRoot:w_2977,38;child:w_2977,i_5,24;child:w_2977,i_1,11 rejected=NA followup=NA
+ WITHDRAWAL hideOp=3 attach=1 req=NA attachedBefore=true trigger=598197614 decision=598197618 local=598197618 layerSubmit=598197619/true remove=598197620/598197943 detachFailed=false
+ ACTUAL_WITHDRAWAL_INSPECTION req=NA evidence=MISSING_REQUEST
+ RENDER attach=1 showOp=2 clockCallbacks=0 isolatedFramesProduced=2 isolatedFramesPublished=2 isolatedFramesDropped=1 isolatedCompletionGapMaxMs=177 shaderFrames=0 shaderCalls=0 phaseAdvances=0 firstPhase=NA lastPhase=NA firstShaderTraversalAt=NA lastShaderTraversalAt=NA drawGapCount=0 drawGapTotalMs=0 drawGapMaxMs=0 drawInvalidOrder=0 backgroundFrames=0 animationStarts=0 animationStops=0 clockRunning=false liveState=LIVE drawEvidenceMode=cpuSubmissionNotPresentation drawEvidenceOmitted=0 drawObserverNs=0 drawObservedFrames=0 drawUnpairedFrames=0 drawCoalescedCallbacks=0 drawEvidenceBreaks=0 drawEvidenceRejected=0 drawGapCaptureOmitted=0
+ EPISODE attempt=4 showOp=9 attach=4 req=66 decision=598203910 add=598203912/598203929 root=598203988 shader=598204038 currentMaterial=598204038 live=598204038 bootstrapDrawAt=598203989 bootstrapCommit=UNOBSERVED promoted=UNOBSERVED frameCommit=UNOBSERVED withdrawal=10 localHide=598205196 layerHideSubmit=598205196/true removeReturn=598205207
+ SHOWING_INSPECTION req=66 trigger=window callbackReceived=598203854 eventTime=598203814 queued=598203854 started=598203856 finished=598203908 handoff=598203908 mainApply=598203908 applied=598203909 authorityAtStart=true visibilityEpochAtRequest=5 visibilityEpochAtApply=5 pendingAtApply=68 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:1,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=20 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT cacheClear=notRequiredFrameworkManaged fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=43 perWindowRootMs=0 childCalls=19 childMs=2 childMaxMs=1 localMs=1 slowCalls=activeRoot:w_2977,43;child:w_2977,i_0,1;child:w_2977,i_5,1 rejected=NA followup=NA
+ WITHDRAWAL hideOp=10 attach=4 req=82 attachedBefore=true trigger=598205179 decision=598205195 local=598205196 layerSubmit=598205196/true remove=598205196/598205207 detachFailed=false
+ ACTUAL_WITHDRAWAL_INSPECTION req=82 trigger=window callbackReceived=598205179 eventTime=598205095 queued=598205179 started=598205180 finished=598205188 handoff=598205188 mainApply=598205195 applied=598205195 authorityAtStart=true visibilityEpochAtRequest=5 visibilityEpochAtApply=6 pendingAtApply=84 classification=HIDDEN_UNKNOWN reason=NO_MAIN_MARKER markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=2 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT cacheClear=notRequiredFrameworkManaged fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=4 perWindowRootMs=0 childCalls=1 childMs=0 childMaxMs=0 localMs=1 slowCalls=activeRoot:w_2977,4;child:w_2977,i_0,0 rejected=NA followup=CONTINUE_PENDING
+ RENDER attach=4 showOp=9 clockCallbacks=0 isolatedFramesProduced=106 isolatedFramesPublished=105 isolatedFramesDropped=30 isolatedCompletionGapMaxMs=23 shaderFrames=0 shaderCalls=0 phaseAdvances=0 firstPhase=NA lastPhase=NA firstShaderTraversalAt=NA lastShaderTraversalAt=NA drawGapCount=0 drawGapTotalMs=0 drawGapMaxMs=0 drawInvalidOrder=0 backgroundFrames=0 animationStarts=0 animationStops=0 clockRunning=false liveState=LIVE drawEvidenceMode=cpuSubmissionNotPresentation drawEvidenceOmitted=0 drawObserverNs=0 drawObservedFrames=0 drawUnpairedFrames=0 drawCoalescedCallbacks=0 drawEvidenceBreaks=0 drawEvidenceRejected=0 drawGapCaptureOmitted=0
+ EPISODE attempt=5 showOp=12 attach=5 req=102 decision=598207115 add=598207118/598207130 root=598207155 shader=598207163 currentMaterial=598207163 live=598207163 bootstrapDrawAt=598207156 bootstrapCommit=UNOBSERVED promoted=UNOBSERVED frameCommit=UNOBSERVED withdrawal=13 localHide=598208247 layerHideSubmit=598208247/true removeReturn=598208262
+ SHOWING_INSPECTION req=102 trigger=window callbackReceived=598207044 eventTime=598207043 queued=598207045 started=598207060 finished=598207113 handoff=598207113 mainApply=598207114 applied=598207115 authorityAtStart=true visibilityEpochAtRequest=7 visibilityEpochAtApply=7 pendingAtApply=104 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:1,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=23 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=MISSING_FRESHNESS_EVIDENCE cacheClear=cleared:MISSING_FRESHNESS_EVIDENCE fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=14 perWindowRootMs=19 childCalls=21 childMs=11 childMaxMs=11 localMs=3 slowCalls=root:w_2992,t_3,d_0,19;activeRoot:w_2977,14;child:w_2992,i_0,11 rejected=NA followup=NA
+ WITHDRAWAL hideOp=13 attach=5 req=116 attachedBefore=true trigger=598208225 decision=598208247 local=598208247 layerSubmit=598208247/true remove=598208248/598208262 detachFailed=false
+ ACTUAL_WITHDRAWAL_INSPECTION req=116 trigger=window callbackReceived=598208225 eventTime=598208214 queued=598208226 started=598208231 finished=598208242 handoff=598208242 mainApply=598208246 applied=598208247 authorityAtStart=true visibilityEpochAtRequest=7 visibilityEpochAtApply=8 pendingAtApply=NA classification=HIDDEN_UNKNOWN reason=NO_MAIN_MARKER markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=2 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT cacheClear=notRequiredFrameworkManaged fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=6 perWindowRootMs=0 childCalls=1 childMs=0 childMaxMs=0 localMs=0 slowCalls=activeRoot:w_2977,6;child:w_2977,i_0,0 rejected=NA followup=SCHEDULE_FALLBACK
+ RENDER attach=5 showOp=12 clockCallbacks=0 isolatedFramesProduced=90 isolatedFramesPublished=90 isolatedFramesDropped=37 isolatedCompletionGapMaxMs=40 shaderFrames=0 shaderCalls=0 phaseAdvances=0 firstPhase=NA lastPhase=NA firstShaderTraversalAt=NA lastShaderTraversalAt=NA drawGapCount=0 drawGapTotalMs=0 drawGapMaxMs=0 drawInvalidOrder=0 backgroundFrames=0 animationStarts=0 animationStops=0 clockRunning=false liveState=LIVE drawEvidenceMode=cpuSubmissionNotPresentation drawEvidenceOmitted=0 drawObserverNs=0 drawObservedFrames=0 drawUnpairedFrames=0 drawCoalescedCallbacks=0 drawEvidenceBreaks=0 drawEvidenceRejected=0 drawGapCaptureOmitted=0
+ EPISODE attempt=6 showOp=15 attach=6 req=125 decision=598210106 add=598210109/598210123 root=598210161 shader=598210182 currentMaterial=598210182 live=598210182 bootstrapDrawAt=598210161 bootstrapCommit=UNOBSERVED promoted=UNOBSERVED frameCommit=UNOBSERVED withdrawal=16 localHide=598211173 layerHideSubmit=598211173/true removeReturn=598211184
+ SHOWING_INSPECTION req=125 trigger=wake callbackReceived=598209907 eventTime=NA(sourceUnavailable) queued=598210008 started=598210009 finished=598210087 handoff=598210087 mainApply=598210104 applied=598210105 authorityAtStart=true visibilityEpochAtRequest=9 visibilityEpochAtApply=9 pendingAtApply=136 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:1,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=20 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=57 perWindowRootMs=0 childCalls=19 childMs=0 childMaxMs=0 localMs=1 slowCalls=activeRoot:w_2977,57;child:w_2977,i_0,0;child:w_2977,i_0,0 rejected=NA followup=NA
+ WITHDRAWAL hideOp=16 attach=6 req=149 attachedBefore=true trigger=598211149 decision=598211172 local=598211173 layerSubmit=598211173/true remove=598211174/598211184 detachFailed=false
+ ACTUAL_WITHDRAWAL_INSPECTION req=149 trigger=window callbackReceived=598211149 eventTime=598211061 queued=598211150 started=598211151 finished=598211165 handoff=598211165 mainApply=598211172 applied=598211172 authorityAtStart=true visibilityEpochAtRequest=9 visibilityEpochAtApply=10 pendingAtApply=151 classification=HIDDEN_UNKNOWN reason=NO_MAIN_MARKER markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=2 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT cacheClear=notRequiredFrameworkManaged fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=3 perWindowRootMs=0 childCalls=1 childMs=5 childMaxMs=5 localMs=1 slowCalls=child:w_2977,i_0,5;activeRoot:w_2977,3 rejected=NA followup=CONTINUE_PENDING
+ RENDER attach=6 showOp=15 clockCallbacks=0 isolatedFramesProduced=86 isolatedFramesPublished=85 isolatedFramesDropped=30 isolatedCompletionGapMaxMs=24 shaderFrames=0 shaderCalls=0 phaseAdvances=0 firstPhase=NA lastPhase=NA firstShaderTraversalAt=NA lastShaderTraversalAt=NA drawGapCount=0 drawGapTotalMs=0 drawGapMaxMs=0 drawInvalidOrder=0 backgroundFrames=0 animationStarts=0 animationStops=0 clockRunning=false liveState=LIVE drawEvidenceMode=cpuSubmissionNotPresentation drawEvidenceOmitted=0 drawObserverNs=0 drawObservedFrames=0 drawUnpairedFrames=0 drawCoalescedCallbacks=0 drawEvidenceBreaks=0 drawEvidenceRejected=0 drawGapCaptureOmitted=0
+ WITHDRAWAL hideOp=11 attach=4 req=NA attachedBefore=false trigger=598205394 decision=598205396 local=NA layerSubmit=NA/NA remove=NA/NA detachFailed=false
+ HIDE_CAUSE req=NA evidence=MISSING_REQUEST
+ WITHDRAWAL hideOp=14 attach=5 req=NA attachedBefore=false trigger=598208447 decision=598208457 local=NA layerSubmit=NA/NA remove=NA/NA detachFailed=false
+ HIDE_CAUSE req=NA evidence=MISSING_REQUEST
+ WITHDRAWAL hideOp=17 attach=6 req=NA attachedBefore=false trigger=598211382 decision=598211390 local=NA layerSubmit=NA/NA remove=NA/NA detachFailed=false
+ HIDE_CAUSE req=NA evidence=MISSING_REQUEST
+DRAW_GAPS
+CAUSAL_SPINES
+ attempt=1 seq=4 up=598196419 stage=WAKE_ATTEMPT reason=begin
+ attempt=1 seq=5 up=598196419 stage=WAKE_CYCLE_STARTED reason=accessibility
+ attempt=1 seq=6 up=598196442 req=2 stage=INSPECTION_QUEUED reason=accessibility triggerReceivedUptimeMs=598196419
+ attempt=1 seq=7 up=598196443 req=2 stage=INSPECTION_STARTED reason=accessibility queueMs=1
+ attempt=1 seq=8 up=598196441 stage=SCREEN_ON_RECEIVED reason=joined:accessibility
+ attempt=1 seq=13 up=598196560 req=2 attach=1 showOp=2 stage=SHOW_FOR_ATTACH reason=loading:accessibility presentationMode=ORB rootWasPrepared=true profileWasDecoded=true
+ attempt=1 seq=18 up=598196555 req=2 stage=INSPECTION_MAIN_APPLY_STARTED reason=accessibility diagnosticPreparationFinishedAtUptimeMs=598196555 mainHandoffRequestedAtUptimeMs=598196555 mainApplyEnteredAtUptimeMs=598196555 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=0 mainEntryToDecisionMs=3
+ attempt=1 seq=23 up=598196596 req=2 attach=1 showOp=2 stage=ADD_VIEW_BEGIN reason=windowManager
+ attempt=1 seq=24 up=598196555 req=2 stage=INSPECTION_FINISHED reason=MAIN_CONFIRMED triggerReceivedUptimeMs=598196419 inspectionTotalMs=112 windowsReadMs=11 treeScanMs=80 visitedNodeCount=21 rootUnavailable=false walkTruncated=false surfaceClassification=SHOW_FULL surfaceMarkers=main:2,credential:0,shade:0,occlusion:0 abortedStale=false
+ attempt=1 seq=25 up=598196555 req=2 stage=INSPECTION_MAIN_APPLY_POSTED reason=accessibility diagnosticPreparationFinishedAtUptimeMs=598196555 mainHandoffRequestedAtUptimeMs=598196555
+ attempt=1 seq=28 up=598196631 req=2 attach=1 showOp=2 stage=ADD_VIEW_RETURN reason=success
+ attempt=1 seq=30 up=598196680 req=2 attach=1 showOp=2 stage=FIRST_ROOT_DRAW reason=observed
+ attempt=1 seq=37 up=598196745 req=2 attach=1 showOp=2 stage=BOOTSTRAP_DRAW reason=paletteFallbackNotPhysicalPresentation
+ attempt=1 seq=43 up=598196828 req=2 attach=1 showOp=2 stage=FIRST_SHADER_DRAW reason=observed
+ attempt=1 seq=44 up=598196828 req=2 attach=1 showOp=2 stage=FIRST_CURRENT_MATERIAL_DRAW reason=observed
+ attempt=1 seq=45 up=598196828 req=2 attach=1 showOp=2 stage=FIRST_LIVE_DRAW reason=observed
+ attempt=1 seq=101 up=598197618 attach=1 hideOp=3 stage=HIDE_DECIDED reason=systemGate:accessibility triggerReceivedUptimeMs=598197614 terminalWake=true visibilityEpochBefore=1
+ attempt=1 seq=103 up=598197943 attach=1 hideOp=3 stage=HIDE_COMPLETED reason=systemGate:accessibility attachedAfter=false
+ attempt=1 seq=104 up=598197618 attach=1 hideOp=3 stage=LOCAL_HIDE_APPLIED reason=invisible
+ attempt=1 seq=109 up=598197619 attach=1 hideOp=3 stage=ISOLATED_LAYER_HIDE_SUBMITTED reason=isolatedSurfaceControl
+ attempt=1 seq=110 up=598197620 attach=1 hideOp=3 stage=REMOVE_VIEW_BEGIN reason=windowManager
+ attempt=1 seq=112 up=598197943 attach=1 hideOp=3 stage=REMOVE_VIEW_RETURN reason=success
+ attempt=4 seq=386 up=598203728 stage=WAKE_ATTEMPT reason=begin
+ attempt=4 seq=387 up=598203728 stage=SCREEN_ON_RECEIVED reason=wake
+ attempt=4 seq=388 up=598203774 req=60 stage=INSPECTION_QUEUED reason=wake triggerReceivedUptimeMs=598203728
+ attempt=4 seq=390 up=598203776 req=60 stage=INSPECTION_STARTED reason=wake queueMs=3
+ attempt=4 seq=396 up=598203855 req=60 stage=AWAITING_MAIN_SURFACE reason=NO_MAIN_MARKER decision=HIDDEN_UNKNOWN followupAction=CONTINUE_PENDING pendingRequestId=66 visibilityEpochBefore=5 visibilityEpochAfter=5
+ attempt=4 seq=399 up=598203855 req=60 stage=INSPECTION_MAIN_APPLY_STARTED reason=wake diagnosticPreparationFinishedAtUptimeMs=598203850 mainHandoffRequestedAtUptimeMs=598203850 mainApplyEnteredAtUptimeMs=598203855 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=5 mainEntryToDecisionMs=0
+ attempt=4 seq=400 up=598203850 req=60 stage=INSPECTION_FINISHED reason=NO_MAIN_MARKER triggerReceivedUptimeMs=598203728 inspectionTotalMs=74 windowsReadMs=1 treeScanMs=70 visitedNodeCount=7 rootUnavailable=false walkTruncated=false surfaceClassification=HIDDEN_UNKNOWN surfaceMarkers=main:0,credential:0,shade:0,occlusion:0 abortedStale=false
+ attempt=4 seq=401 up=598203850 req=60 stage=INSPECTION_MAIN_APPLY_POSTED reason=wake diagnosticPreparationFinishedAtUptimeMs=598203850 mainHandoffRequestedAtUptimeMs=598203850
+ attempt=4 seq=404 up=598203910 req=66 attach=4 showOp=9 stage=SHOW_FOR_ATTACH reason=loading:window presentationMode=ORB rootWasPrepared=true profileWasDecoded=true
+ attempt=4 seq=418 up=598203912 req=66 attach=4 showOp=9 stage=ADD_VIEW_BEGIN reason=windowManager
+ attempt=4 seq=419 up=598203929 req=66 attach=4 showOp=9 stage=ADD_VIEW_RETURN reason=success
+ attempt=4 seq=422 up=598203988 req=66 attach=4 showOp=9 stage=FIRST_ROOT_DRAW reason=observed
+ attempt=4 seq=423 up=598203989 req=66 attach=4 showOp=9 stage=BOOTSTRAP_DRAW reason=paletteFallbackNotPhysicalPresentation
+ attempt=4 seq=432 up=598204038 req=66 attach=4 showOp=9 stage=FIRST_SHADER_DRAW reason=observed
+ attempt=4 seq=433 up=598204038 req=66 attach=4 showOp=9 stage=FIRST_CURRENT_MATERIAL_DRAW reason=observed
+ attempt=4 seq=434 up=598204038 req=66 attach=4 showOp=9 stage=FIRST_LIVE_DRAW reason=observed
+ attempt=4 seq=498 up=598205195 req=82 attach=4 hideOp=10 stage=HIDE_DECIDED reason=HIDDEN_UNKNOWN:NO_MAIN_MARKER triggerReceivedUptimeMs=598205179 terminalWake=false visibilityEpochBefore=5
+ attempt=4 seq=500 up=598205207 req=82 attach=4 hideOp=10 stage=HIDE_COMPLETED reason=HIDDEN_UNKNOWN:NO_MAIN_MARKER attachedAfter=false
+ attempt=4 seq=506 up=598205196 req=82 attach=4 hideOp=10 stage=LOCAL_HIDE_APPLIED reason=invisible
+ attempt=4 seq=508 up=598205196 req=82 attach=4 hideOp=10 stage=ISOLATED_LAYER_HIDE_SUBMITTED reason=isolatedSurfaceControl
+ attempt=4 seq=509 up=598205196 req=82 attach=4 hideOp=10 stage=REMOVE_VIEW_BEGIN reason=windowManager
+ attempt=4 seq=512 up=598205207 req=82 attach=4 hideOp=10 stage=REMOVE_VIEW_RETURN reason=success
+ attempt=4 seq=559 up=598205396 attach=4 hideOp=11 stage=HIDE_DECIDED reason=systemGate:surfaceRetry triggerReceivedUptimeMs=598205394 terminalWake=true visibilityEpochBefore=6
+ attempt=4 seq=561 up=598205397 attach=4 hideOp=11 stage=HIDE_COMPLETED reason=systemGate:surfaceRetry attachedAfter=false
+EVENTS
+seq=920 up=598215871 el=606298373 stage=CAPTURE_FROZEN reason=user
+END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
+```
+
+### Frozen original FULL capture — d256cb47-2b84-44de-9406-34063c6aa6f6
+
+```text
+FLUVI_KEYGUARD_TIMING_CAPTURE_V1
+build=04e229c64e560bef9d49972c3413d1115fc36c41
+buildMode=profile
+captureId=d256cb47-2b84-44de-9406-34063c6aa6f6
+captureState=FROZEN
+captureMode=FULL
+processInstance=27557-bdcc9ef1
+pid=27557
+androidApi=35
+manufacturer=Nothing
+model=A142
+startedAt=2026-11-12T12:24:44.892+0100
+durationElapsedMs=14784
+serviceConnected=true
+keyguardRequested=true
+foregroundRequested=false
+backgroundRequested=false
+presentationMode=ORB
+animationMode=orbOnly
+privacyMode=full
+notificationTimeoutMs=0
+CLOCKS
+uptimeMs=monotonic_excludes_deep_sleep
+elapsedMs=monotonic_includes_deep_sleep
+systemWakeVisualStart=UNOBSERVED
+systemUnlockAnimationStart=UNOBSERVED
+physicalOverlayPresentation=UNOBSERVED
+physicalOverlayRemoval=UNOBSERVED
+frameCommitMeaning=callback_receipt_not_physical_presentation liveFrameCommit=UNOBSERVED
+drawObservationMeaning=NO_DRAW_OBSERVED_is_not_proof_of_no_rendering
+drawGapClock=System.nanoTime frameNs=Choreographer cpuNs=threadCPU cbOut=ownedCallbackWorkEndBeforeProbe submit=CPUCanvasCall
+workKinds=1:systemGate,2:inspectionApply,3:diagnosticProducer nestedWorkNotAdditive=true workCoverage=ownedScopesOnly drawObserverNs=bookkeepingOnly
+COLD_PREPARATION
+serviceSession=1 processInstance=27557-bdcc9ef1 observedBeforeCapture=true
+SERVICE_CONNECTED=598181171
+SETTINGS_LOAD_START=598181179
+SETTINGS_LOAD_END=598181179
+PROFILE_LOAD_START=598181179
+PROFILE_LOAD_END=598181180
+ROOT_PREPARE_START=598181184
+ROOT_PREPARE_END=598181211
+MATERIAL_PREPARE_REQUESTED=598181211
+MATERIAL_ARTIFACT_READY=598181222
+MATERIAL_PROGRAM_PREPARED=598181234
+MATERIAL_PROGRAM_PROMOTED=598196561
+MATERIAL_GPU_PREPARATION_STARTED=598181234
+MATERIAL_GPU_PREPARATION_COMPLETED=598182032
+MATERIAL_GPU_PREPARATION_FAILED=UNOBSERVED
+FIRST_ATTACH=598196631
+FIRST_ROOT_DRAW=598196680
+BOOTSTRAP_DRAW=598196745
+BOOTSTRAP_COMMIT_CALLBACK_RECEIVED=UNOBSERVED
+MATERIAL_LIVE_PROMOTED=UNOBSERVED
+FIRST_SHADER_DRAW=598196828
+FIRST_CURRENT_MATERIAL_DRAW=598196828
+FIRST_LIVE_DRAW=598196828
+FRAME_COMMIT_CALLBACK_RECEIVED=UNOBSERVED
+RETENTION
+eventsRecorded=1200
+eventsRetained=272
+eventsEvicted=925
+eventsCoalesced=3
+exportTruncated=true
+exportBytes=29079
+recoveredFromDisk=false
+hiddenNoopCount=37
+queuedForPersistenceSeq=1200
+lastPersistedSeq=1
+unflushedTailMayBeMissing=true
+DIAGNOSTIC_COST
+diagnosticReductionThread=dedicatedWorker
+captureLockMeasurementOwner=diagnosticConsumer
+captureLockWaitNs=7256756
+captureLockHeldNs=1384250180
+diagnosticProducerTotalNs=96911852
+diagnosticProducerMaxNs=7634231
+legacyDiagnosticProducerTotalNs=3722154
+legacyWriteCount=132
+checkpointCount=2
+diagnosticDroppedRecords=0
+diagnosticQueueOverflow=0
+diagnosticConsumerFailures=0
+nativeDrawObservations=callbackAndCanvas flutterBuildRasterTiming=N/A
+retainedAttemptIds=1,3,4,5
+omittedEventLines=271
+omittedAttemptIds=4,5
+omittedSeqs=755-757,760-761,766,768,770-771,774-775,778-779,781-782,784-785,788-789,791-792,794-795,798-799,801-802,804-805,808-809,811-812,814-815,818-819,821-822,824-825,828-829,831-832,834,837-844,847-849,851-855,857-861,865-872,875-877,879-883,886-887,889-890,892,894-898,901-907,910-918,921-922,924-930,933-935,937-939,959-961,963,965,967,969,971,973,975,977,979,981-982,984-985,987,989-990,more
+omittedEvidenceRecords=5
+omittedCriticalRecordIds=none
+drawGapEvidenceExported=0 drawGapEvidenceOmitted=0
+omittedDrawGapRecordIds=none
+incompleteExportAttemptIds=none
+rawEventsTruncated=true rawOmissionDoesNotMeanNoDraw=true
+ATTEMPT_SUMMARIES
+attemptId=1 wakeSource=accessibility wakeCycleStartedAt=598440335 screenOnReceivedAt=598440366 presentationMode=ORB session=1 wake=14
+ firstInspectionRequestId=160 showingInspectionRequestId=167 requestsReceived=26 requestsReplaced=9 inspectionsStarted=17 inspectionsApplied=17 inspectionsRejected=0 staleInspectionCount=0
+ retries=scheduled:3,fired:2,cancelled:1,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+ awaiting=unknownWhileHidden:5,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:3,pendingRejectedAfterUnknown:0,visibleWithdrawalCount:1,retrySuppressedForPendingWork:3,retryBudgetExhaustedWhileAwaiting:0
+ cycleFirstRootShowOp=18 cycleFirstShaderShowOp=18 cycleFirstLiveShowOp=18 firstRootDrawObserved=true firstShaderDrawObserved=true
+ cycleToFirstRootDrawMs=262 cycleToFirstShaderDrawMs=276 cycleToFirstLiveDrawMs=276
+ screenOnToFirstRootDrawMs=231 screenOnToFirstShaderDrawMs=245 screenOnToFirstLiveDrawMs=245 wakeCallbackToFirstRootDrawMs=262 wakeCallbackToFirstShaderDrawMs=276
+ queueMs=13 inspectionTotalMs=32 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=1 mainEntryToDecisionMs=1 showDecisionToAddViewBeginMs=1
+ actualWithdrawalHideOp=19 terminalCleanupHideOp=20 triggerToLocalHideMs=19 triggerToLayerHideSubmitMs=19 triggerToRemoveReturnMs=32 hideDecisionToLocalHideMs=0 localHideToLayerHideSubmitMs=0 layerHideSubmitToRemoveBeginMs=2 removeViewCallMs=11 hideSignalToDecisionMs=19 hideSignalToRemoveReturnMs=32
+ causalSpineComplete=true causalSpineIndependentOfRawRing=true retainedShowEpisodes=1 retainedHideEpisodes=2 omittedShowEpisodes=0 omittedHideEpisodes=0 omittedSpineEvents=0
+ FIRST_INSPECTION req=160 trigger=accessibility callbackReceived=598440335 eventTime=598440334 queued=598440338 started=598440342 finished=598440462 handoff=598440462 mainApply=598440499 applied=598440499 authorityAtStart=true visibilityEpochAtRequest=11 visibilityEpochAtApply=11 pendingAtApply=167 classification=HIDDEN_UNKNOWN reason=ROOT_UNAVAILABLE markers=main:1,credential:0,shade:0,occlusion:0 rootUnavailable=true walkTruncated=false truncationReasons=none visited=12 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=109 perWindowRootMs=1 childCalls=11 childMs=0 childMaxMs=0 localMs=2 slowCalls=activeRoot:w_2977,109;root:w_2973,t_1,d_0,1;child:w_2977,i_0,0 rejected=NA followup=CONTINUE_PENDING
+attemptId=3 wakeSource=accessibility wakeCycleStartedAt=598445347 screenOnReceivedAt=598445389 presentationMode=ORB session=1 wake=18
+ firstInspectionRequestId=212 showingInspectionRequestId=212 requestsReceived=24 requestsReplaced=7 inspectionsStarted=17 inspectionsApplied=17 inspectionsRejected=0 staleInspectionCount=0
+ retries=scheduled:3,fired:2,cancelled:1,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+ awaiting=unknownWhileHidden:6,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:4,pendingRejectedAfterUnknown:1,visibleWithdrawalCount:1,retrySuppressedForPendingWork:3,retryBudgetExhaustedWhileAwaiting:0
+ cycleFirstRootShowOp=23 cycleFirstShaderShowOp=23 cycleFirstLiveShowOp=23 firstRootDrawObserved=true firstShaderDrawObserved=true
+ cycleToFirstRootDrawMs=114 cycleToFirstShaderDrawMs=122 cycleToFirstLiveDrawMs=122
+ screenOnToFirstRootDrawMs=72 screenOnToFirstShaderDrawMs=80 screenOnToFirstLiveDrawMs=80 wakeCallbackToFirstRootDrawMs=114 wakeCallbackToFirstShaderDrawMs=122
+ queueMs=2 inspectionTotalMs=69 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=0 mainEntryToDecisionMs=2 showDecisionToAddViewBeginMs=2
+ actualWithdrawalHideOp=24 terminalCleanupHideOp=25 triggerToLocalHideMs=21 triggerToLayerHideSubmitMs=21 triggerToRemoveReturnMs=31 hideDecisionToLocalHideMs=0 localHideToLayerHideSubmitMs=0 layerHideSubmitToRemoveBeginMs=1 removeViewCallMs=9 hideSignalToDecisionMs=21 hideSignalToRemoveReturnMs=31
+ causalSpineComplete=true causalSpineIndependentOfRawRing=true retainedShowEpisodes=1 retainedHideEpisodes=2 omittedShowEpisodes=0 omittedHideEpisodes=0 omittedSpineEvents=0
+ FIRST_INSPECTION req=212 trigger=accessibility callbackReceived=598445347 eventTime=598445337 queued=598445351 started=598445353 finished=598445422 handoff=598445422 mainApply=598445422 applied=598445423 authorityAtStart=true visibilityEpochAtRequest=14 visibilityEpochAtApply=14 pendingAtApply=214 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=22 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=34 perWindowRootMs=22 childCalls=20 childMs=6 childMaxMs=5 localMs=1 slowCalls=activeRoot:w_2977,34;root:w_3018,t_3,d_0,22;child:w_3018,i_0,5 rejected=NA followup=NA
+attemptId=4 wakeSource=wake wakeCycleStartedAt=598447814 screenOnReceivedAt=598447814 presentationMode=ORB session=1 wake=20
+ firstInspectionRequestId=236 showingInspectionRequestId=236 requestsReceived=37 requestsReplaced=19 inspectionsStarted=18 inspectionsApplied=18 inspectionsRejected=0 staleInspectionCount=0
+ retries=scheduled:3,fired:2,cancelled:1,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+ awaiting=unknownWhileHidden:7,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:5,pendingRejectedAfterUnknown:1,visibleWithdrawalCount:1,retrySuppressedForPendingWork:4,retryBudgetExhaustedWhileAwaiting:0
+ cycleFirstRootShowOp=26 cycleFirstShaderShowOp=26 cycleFirstLiveShowOp=26 firstRootDrawObserved=true firstShaderDrawObserved=true
+ cycleToFirstRootDrawMs=212 cycleToFirstShaderDrawMs=229 cycleToFirstLiveDrawMs=229
+ screenOnToFirstRootDrawMs=212 screenOnToFirstShaderDrawMs=229 screenOnToFirstLiveDrawMs=229 wakeCallbackToFirstRootDrawMs=212 wakeCallbackToFirstShaderDrawMs=229
+ queueMs=2 inspectionTotalMs=105 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=9 mainEntryToDecisionMs=2 showDecisionToAddViewBeginMs=2
+ actualWithdrawalHideOp=27 terminalCleanupHideOp=28 triggerToLocalHideMs=174 triggerToLayerHideSubmitMs=174 triggerToRemoveReturnMs=184 hideDecisionToLocalHideMs=1 localHideToLayerHideSubmitMs=0 layerHideSubmitToRemoveBeginMs=1 removeViewCallMs=9 hideSignalToDecisionMs=173 hideSignalToRemoveReturnMs=184
+ causalSpineComplete=true causalSpineIndependentOfRawRing=true retainedShowEpisodes=1 retainedHideEpisodes=2 omittedShowEpisodes=0 omittedHideEpisodes=0 omittedSpineEvents=0
+ FIRST_INSPECTION req=236 trigger=wake callbackReceived=598447814 eventTime=NA(sourceUnavailable) queued=598447841 started=598447843 finished=598447948 handoff=598447948 mainApply=598447957 applied=598447958 authorityAtStart=true visibilityEpochAtRequest=16 visibilityEpochAtApply=16 pendingAtApply=248 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:1,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=20 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=99 perWindowRootMs=0 childCalls=19 childMs=0 childMaxMs=0 localMs=2 slowCalls=activeRoot:w_2977,99;child:w_2977,i_0,0;child:w_2977,i_0,0 rejected=NA followup=NA
+attemptId=5 wakeSource=wake wakeCycleStartedAt=598449990 screenOnReceivedAt=598449990 presentationMode=ORB session=1 wake=22
+ firstInspectionRequestId=273 showingInspectionRequestId=273 requestsReceived=34 requestsReplaced=18 inspectionsStarted=16 inspectionsApplied=16 inspectionsRejected=0 staleInspectionCount=0
+ retries=scheduled:3,fired:2,cancelled:1,pending:0 attachCount=1 detachCount=1 finalState=HIDE_DECIDED
+ awaiting=unknownWhileHidden:4,unknownWhileHiddenEpochChanges:0,pendingPreservedAfterUnknown:2,pendingRejectedAfterUnknown:1,visibleWithdrawalCount:1,retrySuppressedForPendingWork:1,retryBudgetExhaustedWhileAwaiting:0
+ cycleFirstRootShowOp=29 cycleFirstShaderShowOp=29 cycleFirstLiveShowOp=29 firstRootDrawObserved=true firstShaderDrawObserved=true
+ cycleToFirstRootDrawMs=194 cycleToFirstShaderDrawMs=213 cycleToFirstLiveDrawMs=213
+ screenOnToFirstRootDrawMs=194 screenOnToFirstShaderDrawMs=213 screenOnToFirstLiveDrawMs=213 wakeCallbackToFirstRootDrawMs=194 wakeCallbackToFirstShaderDrawMs=213
+ queueMs=1 inspectionTotalMs=76 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=0 mainEntryToDecisionMs=2 showDecisionToAddViewBeginMs=1
+ actualWithdrawalHideOp=30 terminalCleanupHideOp=31 triggerToLocalHideMs=20 triggerToLayerHideSubmitMs=21 triggerToRemoveReturnMs=31 hideDecisionToLocalHideMs=0 localHideToLayerHideSubmitMs=1 layerHideSubmitToRemoveBeginMs=1 removeViewCallMs=9 hideSignalToDecisionMs=20 hideSignalToRemoveReturnMs=31
+ causalSpineComplete=true causalSpineIndependentOfRawRing=true retainedShowEpisodes=1 retainedHideEpisodes=2 omittedShowEpisodes=0 omittedHideEpisodes=0 omittedSpineEvents=0
+ FIRST_INSPECTION req=273 trigger=wake callbackReceived=598449990 eventTime=NA(sourceUnavailable) queued=598450063 started=598450064 finished=598450140 handoff=598450140 mainApply=598450140 applied=598450142 authorityAtStart=true visibilityEpochAtRequest=18 visibilityEpochAtApply=18 pendingAtApply=286 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:1,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=20 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=70 perWindowRootMs=0 childCalls=19 childMs=1 childMaxMs=1 localMs=0 slowCalls=activeRoot:w_2977,70;child:w_2977,i_0,1;child:w_2977,i_0,0 rejected=NA followup=NA
+EPISODES
+ EPISODE attempt=1 showOp=18 attach=7 req=167 decision=598440545 add=598440546/598440572 root=598440597 shader=598440611 currentMaterial=598440611 live=598440611 bootstrapDrawAt=598440598 bootstrapCommit=UNOBSERVED promoted=UNOBSERVED frameCommit=UNOBSERVED withdrawal=19 localHide=598441687 layerHideSubmit=598441687/true removeReturn=598441700
+ SHOWING_INSPECTION req=167 trigger=window callbackReceived=598440498 eventTime=598440446 queued=598440498 started=598440511 finished=598440543 handoff=598440543 mainApply=598440544 applied=598440544 authorityAtStart=true visibilityEpochAtRequest=11 visibilityEpochAtApply=11 pendingAtApply=NA classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=20 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=MISSING_FRESHNESS_EVIDENCE cacheClear=cleared:MISSING_FRESHNESS_EVIDENCE fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=25 perWindowRootMs=0 childCalls=19 childMs=0 childMaxMs=0 localMs=2 slowCalls=activeRoot:w_2977,25;child:w_2977,i_0,0;child:w_2977,i_0,0 rejected=NA followup=NA
+ WITHDRAWAL hideOp=19 attach=7 req=181 attachedBefore=true trigger=598441668 decision=598441687 local=598441687 layerSubmit=598441687/true remove=598441689/598441700 detachFailed=false
+ ACTUAL_WITHDRAWAL_INSPECTION req=181 trigger=window callbackReceived=598441668 eventTime=598441652 queued=598441668 started=598441672 finished=598441680 handoff=598441680 mainApply=598441687 applied=598441687 authorityAtStart=true visibilityEpochAtRequest=11 visibilityEpochAtApply=12 pendingAtApply=NA classification=HIDDEN_UNKNOWN reason=NO_MAIN_MARKER markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=2 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT cacheClear=notRequiredFrameworkManaged fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=5 perWindowRootMs=0 childCalls=1 childMs=0 childMaxMs=0 localMs=0 slowCalls=activeRoot:w_2977,5;child:w_2977,i_0,0 rejected=NA followup=SCHEDULE_FALLBACK
+ RENDER attach=7 showOp=18 clockCallbacks=0 isolatedFramesProduced=95 isolatedFramesPublished=93 isolatedFramesDropped=31 isolatedCompletionGapMaxMs=35 shaderFrames=0 shaderCalls=0 phaseAdvances=0 firstPhase=NA lastPhase=NA firstShaderTraversalAt=NA lastShaderTraversalAt=NA drawGapCount=0 drawGapTotalMs=0 drawGapMaxMs=0 drawInvalidOrder=0 backgroundFrames=0 animationStarts=0 animationStops=0 clockRunning=false liveState=LIVE drawEvidenceMode=cpuSubmissionNotPresentation drawEvidenceOmitted=0 drawObserverNs=0 drawObservedFrames=0 drawUnpairedFrames=0 drawCoalescedCallbacks=0 drawEvidenceBreaks=0 drawEvidenceRejected=0 drawGapCaptureOmitted=0
+ EPISODE attempt=3 showOp=23 attach=9 req=212 decision=598445424 add=598445426/598445439 root=598445461 shader=598445469 currentMaterial=598445469 live=598445469 bootstrapDrawAt=598445461 bootstrapCommit=UNOBSERVED promoted=UNOBSERVED frameCommit=UNOBSERVED withdrawal=24 localHide=598446423 layerHideSubmit=598446423/true removeReturn=598446433
+ SHOWING_INSPECTION req=212 trigger=accessibility callbackReceived=598445347 eventTime=598445337 queued=598445351 started=598445353 finished=598445422 handoff=598445422 mainApply=598445422 applied=598445423 authorityAtStart=true visibilityEpochAtRequest=14 visibilityEpochAtApply=14 pendingAtApply=214 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=22 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=34 perWindowRootMs=22 childCalls=20 childMs=6 childMaxMs=5 localMs=1 slowCalls=activeRoot:w_2977,34;root:w_3018,t_3,d_0,22;child:w_3018,i_0,5 rejected=NA followup=NA
+ WITHDRAWAL hideOp=24 attach=9 req=225 attachedBefore=true trigger=598446402 decision=598446423 local=598446423 layerSubmit=598446423/true remove=598446424/598446433 detachFailed=false
+ ACTUAL_WITHDRAWAL_INSPECTION req=225 trigger=window callbackReceived=598446402 eventTime=598446322 queued=598446404 started=598446405 finished=598446416 handoff=598446416 mainApply=598446423 applied=598446423 authorityAtStart=true visibilityEpochAtRequest=14 visibilityEpochAtApply=15 pendingAtApply=227 classification=HIDDEN_UNKNOWN reason=NO_MAIN_MARKER markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=2 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT cacheClear=notRequiredFrameworkManaged fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=5 perWindowRootMs=0 childCalls=1 childMs=0 childMaxMs=0 localMs=0 slowCalls=activeRoot:w_2977,5;child:w_2977,i_0,0 rejected=NA followup=CONTINUE_PENDING
+ RENDER attach=9 showOp=23 clockCallbacks=0 isolatedFramesProduced=78 isolatedFramesPublished=77 isolatedFramesDropped=31 isolatedCompletionGapMaxMs=41 shaderFrames=0 shaderCalls=0 phaseAdvances=0 firstPhase=NA lastPhase=NA firstShaderTraversalAt=NA lastShaderTraversalAt=NA drawGapCount=0 drawGapTotalMs=0 drawGapMaxMs=0 drawInvalidOrder=0 backgroundFrames=0 animationStarts=0 animationStops=0 clockRunning=false liveState=LIVE drawEvidenceMode=cpuSubmissionNotPresentation drawEvidenceOmitted=0 drawObserverNs=0 drawObservedFrames=0 drawUnpairedFrames=0 drawCoalescedCallbacks=0 drawEvidenceBreaks=0 drawEvidenceRejected=0 drawGapCaptureOmitted=0
+ EPISODE attempt=4 showOp=26 attach=10 req=236 decision=598447959 add=598447961/598447992 root=598448026 shader=598448043 currentMaterial=598448043 live=598448043 bootstrapDrawAt=598448034 bootstrapCommit=UNOBSERVED promoted=UNOBSERVED frameCommit=UNOBSERVED withdrawal=27 localHide=598448849 layerHideSubmit=598448849/true removeReturn=598448859
+ SHOWING_INSPECTION req=236 trigger=wake callbackReceived=598447814 eventTime=NA(sourceUnavailable) queued=598447841 started=598447843 finished=598447948 handoff=598447948 mainApply=598447957 applied=598447958 authorityAtStart=true visibilityEpochAtRequest=16 visibilityEpochAtApply=16 pendingAtApply=248 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:1,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=20 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=99 perWindowRootMs=0 childCalls=19 childMs=0 childMaxMs=0 localMs=2 slowCalls=activeRoot:w_2977,99;child:w_2977,i_0,0;child:w_2977,i_0,0 rejected=NA followup=NA
+ WITHDRAWAL hideOp=27 attach=10 req=261 attachedBefore=true trigger=598448675 decision=598448848 local=598448849 layerSubmit=598448849/true remove=598448850/598448859 detachFailed=false
+ ACTUAL_WITHDRAWAL_INSPECTION req=261 trigger=window callbackReceived=598448675 eventTime=598448674 queued=598448676 started=598448676 finished=598448759 handoff=598448759 mainApply=598448848 applied=598448848 authorityAtStart=true visibilityEpochAtRequest=16 visibilityEpochAtApply=17 pendingAtApply=263 classification=HIDDEN_UNKNOWN reason=ROOT_UNAVAILABLE markers=main:2,credential:0,shade:0,occlusion:0 rootUnavailable=true walkTruncated=false truncationReasons=none visited=21 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT cacheClear=notRequiredFrameworkManaged fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=22 perWindowRootMs=54 childCalls=20 childMs=0 childMaxMs=0 localMs=3 slowCalls=root:w_3023,t_3,d_0,54;activeRoot:w_2977,22;child:w_2977,i_0,0 rejected=NA followup=CONTINUE_PENDING
+ RENDER attach=10 showOp=26 clockCallbacks=0 isolatedFramesProduced=74 isolatedFramesPublished=74 isolatedFramesDropped=17 isolatedCompletionGapMaxMs=46 shaderFrames=0 shaderCalls=0 phaseAdvances=0 firstPhase=NA lastPhase=NA firstShaderTraversalAt=NA lastShaderTraversalAt=NA drawGapCount=0 drawGapTotalMs=0 drawGapMaxMs=0 drawInvalidOrder=0 backgroundFrames=0 animationStarts=0 animationStops=0 clockRunning=false liveState=LIVE drawEvidenceMode=cpuSubmissionNotPresentation drawEvidenceOmitted=0 drawObserverNs=0 drawObservedFrames=0 drawUnpairedFrames=0 drawCoalescedCallbacks=0 drawEvidenceBreaks=0 drawEvidenceRejected=0 drawGapCaptureOmitted=0
+ EPISODE attempt=5 showOp=29 attach=11 req=273 decision=598450142 add=598450143/598450160 root=598450184 shader=598450203 currentMaterial=598450203 live=598450203 bootstrapDrawAt=598450185 bootstrapCommit=UNOBSERVED promoted=UNOBSERVED frameCommit=UNOBSERVED withdrawal=30 localHide=598451035 layerHideSubmit=598451036/true removeReturn=598451046
+ SHOWING_INSPECTION req=273 trigger=wake callbackReceived=598449990 eventTime=NA(sourceUnavailable) queued=598450063 started=598450064 finished=598450140 handoff=598450140 mainApply=598450140 applied=598450142 authorityAtStart=true visibilityEpochAtRequest=18 visibilityEpochAtApply=18 pendingAtApply=286 classification=SHOW_FULL reason=MAIN_CONFIRMED markers=main:1,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=20 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=LIFECYCLE_BOUNDARY cacheClear=cleared:LIFECYCLE_BOUNDARY fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=70 perWindowRootMs=0 childCalls=19 childMs=1 childMaxMs=1 localMs=0 slowCalls=activeRoot:w_2977,70;child:w_2977,i_0,1;child:w_2977,i_0,0 rejected=NA followup=NA
+ WITHDRAWAL hideOp=30 attach=11 req=299 attachedBefore=true trigger=598451015 decision=598451035 local=598451035 layerSubmit=598451036/true remove=598451037/598451046 detachFailed=false
+ ACTUAL_WITHDRAWAL_INSPECTION req=299 trigger=window callbackReceived=598451015 eventTime=598450930 queued=598451015 started=598451017 finished=598451025 handoff=598451025 mainApply=598451035 applied=598451035 authorityAtStart=true visibilityEpochAtRequest=18 visibilityEpochAtApply=19 pendingAtApply=301 classification=HIDDEN_UNKNOWN reason=NO_MAIN_MARKER markers=main:0,credential:0,shade:0,occlusion:0 rootUnavailable=false walkTruncated=false truncationReasons=none visited=2 reader=ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW freshness=FRAMEWORK_EVENT cacheClear=notRequiredFrameworkManaged fallback=NA activeCandidate=2977 returnedRoot=2977 activeAccepted=true activeRootMs=5 perWindowRootMs=0 childCalls=1 childMs=0 childMaxMs=0 localMs=0 slowCalls=activeRoot:w_2977,5;child:w_2977,i_0,0 rejected=NA followup=CONTINUE_PENDING
+ RENDER attach=11 showOp=29 clockCallbacks=0 isolatedFramesProduced=66 isolatedFramesPublished=66 isolatedFramesDropped=27 isolatedCompletionGapMaxMs=42 shaderFrames=0 shaderCalls=0 phaseAdvances=0 firstPhase=NA lastPhase=NA firstShaderTraversalAt=NA lastShaderTraversalAt=NA drawGapCount=0 drawGapTotalMs=0 drawGapMaxMs=0 drawInvalidOrder=0 backgroundFrames=0 animationStarts=0 animationStops=0 clockRunning=false liveState=LIVE drawEvidenceMode=cpuSubmissionNotPresentation drawEvidenceOmitted=0 drawObserverNs=0 drawObservedFrames=0 drawUnpairedFrames=0 drawCoalescedCallbacks=0 drawEvidenceBreaks=0 drawEvidenceRejected=0 drawGapCaptureOmitted=0
+ WITHDRAWAL hideOp=20 attach=7 req=NA attachedBefore=false trigger=598441901 decision=598441906 local=NA layerSubmit=NA/NA remove=NA/NA detachFailed=false
+ HIDE_CAUSE req=NA evidence=MISSING_REQUEST
+ WITHDRAWAL hideOp=25 attach=9 req=NA attachedBefore=false trigger=598446624 decision=598446625 local=NA layerSubmit=NA/NA remove=NA/NA detachFailed=false
+ HIDE_CAUSE req=NA evidence=MISSING_REQUEST
+ WITHDRAWAL hideOp=28 attach=10 req=NA attachedBefore=false trigger=598449066 decision=598449077 local=NA layerSubmit=NA/NA remove=NA/NA detachFailed=false
+ HIDE_CAUSE req=NA evidence=MISSING_REQUEST
+ WITHDRAWAL hideOp=31 attach=11 req=NA attachedBefore=false trigger=598451248 decision=598451266 local=NA layerSubmit=NA/NA remove=NA/NA detachFailed=false
+ HIDE_CAUSE req=NA evidence=MISSING_REQUEST
+DRAW_GAPS
+CAUSAL_SPINES
+ attempt=1 seq=2 up=598440335 stage=WAKE_ATTEMPT reason=begin
+ attempt=1 seq=3 up=598440335 stage=WAKE_CYCLE_STARTED reason=accessibility
+ attempt=1 seq=4 up=598440338 req=160 stage=INSPECTION_QUEUED reason=accessibility triggerReceivedUptimeMs=598440335
+ attempt=1 seq=5 up=598440342 req=160 stage=INSPECTION_STARTED reason=accessibility queueMs=4
+ attempt=1 seq=7 up=598440366 stage=SCREEN_ON_RECEIVED reason=joined:accessibility
+ attempt=1 seq=20 up=598440499 req=160 stage=AWAITING_MAIN_SURFACE reason=ROOT_UNAVAILABLE decision=HIDDEN_UNKNOWN followupAction=CONTINUE_PENDING pendingRequestId=167 visibilityEpochBefore=11 visibilityEpochAfter=11
+ attempt=1 seq=23 up=598440499 req=160 stage=INSPECTION_MAIN_APPLY_STARTED reason=accessibility diagnosticPreparationFinishedAtUptimeMs=598440462 mainHandoffRequestedAtUptimeMs=598440462 mainApplyEnteredAtUptimeMs=598440499 inspectionFinishToHandoffMs=0 handoffToMainEntryMs=37 mainEntryToDecisionMs=0
+ attempt=1 seq=26 up=598440462 req=160 stage=INSPECTION_FINISHED reason=ROOT_UNAVAILABLE triggerReceivedUptimeMs=598440335 inspectionTotalMs=120 windowsReadMs=1 treeScanMs=112 visitedNodeCount=12 rootUnavailable=true walkTruncated=false surfaceClassification=HIDDEN_UNKNOWN surfaceMarkers=main:1,credential:0,shade:0,occlusion:0 abortedStale=false
+ attempt=1 seq=27 up=598440462 req=160 stage=INSPECTION_MAIN_APPLY_POSTED reason=accessibility diagnosticPreparationFinishedAtUptimeMs=598440462 mainHandoffRequestedAtUptimeMs=598440462
+ attempt=1 seq=29 up=598440545 req=167 attach=7 showOp=18 stage=SHOW_FOR_ATTACH reason=loading:window presentationMode=ORB rootWasPrepared=true profileWasDecoded=true
+ attempt=1 seq=37 up=598440546 req=167 attach=7 showOp=18 stage=ADD_VIEW_BEGIN reason=windowManager
+ attempt=1 seq=49 up=598440572 req=167 attach=7 showOp=18 stage=ADD_VIEW_RETURN reason=success
+ attempt=1 seq=51 up=598440597 req=167 attach=7 showOp=18 stage=FIRST_ROOT_DRAW reason=observed
+ attempt=1 seq=52 up=598440598 req=167 attach=7 showOp=18 stage=BOOTSTRAP_DRAW reason=paletteFallbackNotPhysicalPresentation
+ attempt=1 seq=53 up=598440611 req=167 attach=7 showOp=18 stage=FIRST_SHADER_DRAW reason=observed
+ attempt=1 seq=54 up=598440611 req=167 attach=7 showOp=18 stage=FIRST_CURRENT_MATERIAL_DRAW reason=observed
+ attempt=1 seq=55 up=598440611 req=167 attach=7 showOp=18 stage=FIRST_LIVE_DRAW reason=observed
+ attempt=1 seq=164 up=598441687 req=181 attach=7 hideOp=19 stage=HIDE_DECIDED reason=HIDDEN_UNKNOWN:NO_MAIN_MARKER triggerReceivedUptimeMs=598441668 terminalWake=false visibilityEpochBefore=11
+ attempt=1 seq=166 up=598441700 req=181 attach=7 hideOp=19 stage=HIDE_COMPLETED reason=HIDDEN_UNKNOWN:NO_MAIN_MARKER attachedAfter=false
+ attempt=1 seq=175 up=598441687 req=181 attach=7 hideOp=19 stage=LOCAL_HIDE_APPLIED reason=invisible
+ attempt=1 seq=176 up=598441687 req=181 attach=7 hideOp=19 stage=ISOLATED_LAYER_HIDE_SUBMITTED reason=isolatedSurfaceControl
+ attempt=1 seq=177 up=598441689 req=181 attach=7 hideOp=19 stage=REMOVE_VIEW_BEGIN reason=windowManager
+ attempt=1 seq=178 up=598441700 req=181 attach=7 hideOp=19 stage=REMOVE_VIEW_RETURN reason=success
+ attempt=1 seq=226 up=598441906 attach=7 hideOp=20 stage=HIDE_DECIDED reason=systemGate:surfaceRetry triggerReceivedUptimeMs=598441901 terminalWake=true visibilityEpochBefore=12
+ attempt=1 seq=228 up=598441908 attach=7 hideOp=20 stage=HIDE_COMPLETED reason=systemGate:surfaceRetry attachedAfter=false
+EVENTS
+seq=1200 up=598453558 el=606536061 stage=CAPTURE_FROZEN reason=user
+END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
+```
