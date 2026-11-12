@@ -12726,3 +12726,53 @@ the next diagnostic will use a new exact-source tag. No production behavior
 changed.
 
 Physical validation: PENDING — USER ONLY.
+
+## R-APK-DELIVERY-CONTINUATION-05 — full diagnostic handback
+
+Exact source/tag: `1fae161e057476c7fc176a386ce19179e6dc1597` /
+`fluvi-lower-environment-1fae161e0574`. Diagnostic run
+[43319482620](https://github.com/elizerpist/exptv2/actions/runs/43319482620),
+native job `131536088989`, completed FAILURE. Retained artifact
+`13991760363` is 41,402,134 bytes with GitHub digest
+`sha256:7532e56729cd657d68d94bdeb19c05daf4d44a9219f139443d9877f42b6d4dea`.
+The downloaded evidence root is
+`/data/data/com.termux/files/usr/tmp/fluvi-diag-43319482620.at60oY`.
+
+Automatic evidence that passed:
+- terminal observation helper `OK (7 tests)`;
+- independent sleep-admission helper `OK (7 tests)`;
+- lower API35 XML: 47 tests, 0 failures, 0 errors, 0 skipped;
+- lower preflight `CLEAN_NO_RESET` and post-observation PASS;
+- app and Android-test APK checksums matched baseline before and after both
+  declared repetitions (all four `sha256sum --check` exits 0);
+- trace analysis for both repetitions exit 0;
+- repetition 2 real service fixture `OK (1 test)`.
+
+First remaining semantic boundary:
+repetition 1's real runtime chain reached the protected rapid lifecycle and
+failed `KeyguardServiceOverlayInstrumentationTest.awaitLive` at source line
+1314, via `await` line 1538: `rapid-cycle-8 actual live shader/phase output
+timed out; no classifier or callback bypass is permitted`. The test failed
+after 103.412 seconds. It was not a lower screenshot, helper, compiler,
+APK-identity, or Launcher-ANR preflight failure. Its retained capture is
+`1bfae3e6-2dd0-4c50-9271-08a372d2775e`; fixture text SHA-256 is
+`3af3988e0eb2a0fd88da3729c4674e3241cddebbb5134d282ec78df2c4dd7343`,
+probe tar SHA-256 is
+`f835941b6354804d2a0509d633e7e757d8e52fd1cf53c3eee20284d59fd51901`,
+and trace SHA-256 is
+`2a189644d7ccbc083bf8962b977d23f91d47506b70f677617e01c9906ded2380`.
+At timeout the retained boundary had `isolatedProduced=347`,
+`isolatedPublished=342`, `isolatedDropped=1858`, slots
+`inFlight:0,ready:0,compositorOwned:3`, `worker=running:true`,
+`desired=16/40`, `attached=16/40`, `state=LIVE`, while classifier reason was
+`SHOW_DISCREET:MAIN_CONFIRMED`. The next diagnostic repetition was still
+executed as predeclared and passed; it does not erase repetition 1.
+
+The R-05 scope does not authorize a renderer/lifecycle/timeout repair for this
+newly reproduced rapid-cycle output boundary. Normal full delivery and Human
+APK are therefore blocked; no normal workflow was dispatched, no APK is
+claimed, and no physical performance conclusion follows. This is returned for
+reviewer causal direction with complete preserved evidence rather than a
+speculative source change.
+
+Physical validation: PENDING — USER ONLY.
