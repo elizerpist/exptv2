@@ -5,10 +5,14 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ColorSpace
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.hardware.HardwareBuffer
+import android.hardware.SyncFence
 import android.os.Build
 import android.os.SystemClock
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -37,6 +41,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.io.File
+import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -328,7 +333,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     activity,
                     materialTimeSource = KeyguardMaterialTimeSource { _, _ -> controlledTime.get() },
                 ).apply {
-                    layoutParams = FrameLayout.LayoutParams(168, 168)
+                    // Do not let the screenshot crop overlap the status bar:
+                    // that would turn SystemUI clock pixels into a Canvas
+                    // material oracle. The view itself remains 168x168.
+                    layoutParams = FrameLayout.LayoutParams(168, 168, Gravity.CENTER)
                     setScene(KeyguardMaterialScene(profile, full = true, appliedAtNanos = 0L), enabled = true)
                     setBootstrapActive(false)
                     assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED, installPreparedShader(artifact))
@@ -590,9 +598,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         var imageReturnA: Bitmap? = null
         val controlledTime = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
         val submissions = SubmittedFrameTracker()
+        val producerSamples = CalibratedProducerSamples()
         submissions.expect(1L, PHASE_A)
+        producerSamples.expect(1L)
         controlledTime.submit(1L, calibratedMaterialTime(PHASE_A))
         KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
+        KeyguardOrbBufferRendererTestHooks.frameObserver = producerSamples
         KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions
         try {
             instrumentation.runOnMainSync {
@@ -617,6 +628,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             }
             assertTrue("isolated ORB never completed a buffer", waitForIsolatedOutput(instrumentation, window))
             submissions.await(1L)
+            val producerA = producerSamples.await(1L)
+            persistProducerEvidence(activity, "isolated-producer-a", producerA)
             // The ORB is in a separate TYPE_APPLICATION_PANEL, not in the
             // Activity Window. Capture the compositor's actual panel bounds;
             // PixelCopy(activity.window) cannot validate that child surface.
@@ -629,8 +642,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             val publishedA = isolatedPublished(instrumentation, window)
 
             submissions.expect(2L, PHASE_C)
+            producerSamples.expect(2L)
             controlledTime.submit(2L, calibratedMaterialTime(PHASE_C))
             submissions.await(2L)
+            val producerC = producerSamples.await(2L)
+            persistProducerEvidence(activity, "isolated-producer-c", producerC)
             assertTrue("isolated ORB did not publish controlled C", waitForIsolatedOutput(instrumentation, window, publishedA))
             imageC = awaitCompositorCrop(
                 label = "isolated-orb-c",
@@ -641,8 +657,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             val publishedC = isolatedPublished(instrumentation, window)
 
             submissions.expect(3L, PHASE_B)
+            producerSamples.expect(3L)
             controlledTime.submit(3L, calibratedMaterialTime(PHASE_B))
             submissions.await(3L)
+            val producerB = producerSamples.await(3L)
+            persistProducerEvidence(activity, "isolated-producer-b", producerB)
             assertTrue("isolated ORB did not publish controlled B", waitForIsolatedOutput(instrumentation, window, publishedC))
             imageB = awaitCompositorCrop(
                 label = "isolated-orb-b",
@@ -653,8 +672,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             val publishedB = isolatedPublished(instrumentation, window)
 
             submissions.expect(4L, PHASE_A)
+            producerSamples.expect(4L)
             controlledTime.submit(4L, calibratedMaterialTime(PHASE_A))
             submissions.await(4L)
+            val producerReturnA = producerSamples.await(4L)
+            persistProducerEvidence(activity, "isolated-producer-return-a", producerReturnA)
             assertTrue("isolated ORB did not return to controlled A", waitForIsolatedOutput(instrumentation, window, publishedB))
             imageReturnA = awaitCompositorCrop(
                 label = "isolated-orb-return-a",
@@ -669,6 +691,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             val plateau = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageC))
             val positive = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageB))
             val returned = compareMaterialPixels(requireNotNull(imageA), requireNotNull(imageReturnA))
+            val producerPlateau = compareProducerPixels(producerA, producerC)
+            val producerPositive = compareProducerPixels(producerA, producerB)
+            val producerReturned = compareProducerPixels(producerA, producerReturnA)
+            assertEquals("all controlled producer samples must retain one current lease", producerA.frame.lease, producerC.frame.lease)
+            assertEquals("all controlled producer samples must retain one current lease", producerA.frame.lease, producerB.frame.lease)
+            assertEquals("all controlled producer samples must retain one current lease", producerA.frame.lease, producerReturnA.frame.lease)
+            assertTrue("producer A/C must remain within equality tolerance: $producerPlateau", producerPlateau.nearlyEqual())
+            assertTrue("producer A/B must reach the calibrated meaningful-motion threshold: $producerPositive", producerPositive.meaningful())
+            assertTrue("producer A-B-A must return within equality tolerance: $producerReturned", producerReturned.nearlyEqual())
             assertTrue("A/C must remain within compositor equality tolerance: $plateau", plateau.nearlyEqual())
             assertTrue("A/B must reach the calibrated meaningful-motion threshold: $positive", positive.meaningful())
             assertTrue("A-B-A must return within compositor equality tolerance: $returned", returned.nearlyEqual())
@@ -682,6 +713,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             }
         } finally {
             KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
+            KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
             KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver
             imageA?.recycle()
             imageC?.recycle()
@@ -1058,6 +1090,76 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             sampled.get()?.takeIf { it.time === materialTime }?.requestId
     }
 
+    /**
+     * Copies only the four request-tagged producer frames used by the
+     * calibrated A/C/B/A control. The renderer owns the buffer and fence;
+     * this observer waits for completion but never closes either resource.
+     */
+    private class CalibratedProducerSamples : KeyguardOrbBufferFrameObserver {
+        data class Sample(
+            val frame: KeyguardOrbBufferProducerFrame,
+            val pixels: IntArray,
+        )
+
+        private val latches = java.util.concurrent.ConcurrentHashMap<Long, CountDownLatch>()
+        private val samples = java.util.concurrent.ConcurrentHashMap<Long, Sample>()
+        private val failures = java.util.concurrent.ConcurrentHashMap<Long, Throwable>()
+
+        fun expect(requestId: Long) {
+            check(latches.putIfAbsent(requestId, CountDownLatch(1)) == null) {
+                "duplicate producer request=$requestId"
+            }
+        }
+
+        override fun onProduced(
+            frame: KeyguardOrbBufferProducerFrame,
+            buffer: HardwareBuffer,
+            completionFence: SyncFence?,
+        ) {
+            val requestId = frame.testRequestId ?: return
+            val latch = latches[requestId] ?: return
+            if (samples.containsKey(requestId) || failures.containsKey(requestId)) return
+            try {
+                check(completionFence?.await(Duration.ofSeconds(2)) != false) {
+                    "producer completion fence did not signal request=$requestId"
+                }
+                val hardware = checkNotNull(Bitmap.wrapHardwareBuffer(
+                    buffer,
+                    ColorSpace.get(ColorSpace.Named.SRGB),
+                )) { "HardwareBuffer readback returned null request=$requestId" }
+                val software = try {
+                    checkNotNull(hardware.copy(Bitmap.Config.ARGB_8888, false)) {
+                        "HardwareBuffer software copy returned null request=$requestId"
+                    }
+                } finally {
+                    hardware.recycle()
+                }
+                try {
+                    val pixels = IntArray(software.width * software.height)
+                    software.getPixels(pixels, 0, software.width, 0, 0, software.width, software.height)
+                    samples.putIfAbsent(requestId, Sample(frame, pixels))
+                } finally {
+                    software.recycle()
+                }
+            } catch (error: Throwable) {
+                failures.putIfAbsent(requestId, error)
+            } finally {
+                latch.countDown()
+            }
+        }
+
+        fun await(requestId: Long): Sample {
+            val latch = requireNotNull(latches[requestId]) { "unarmed producer request=$requestId" }
+            check(latch.await(8, TimeUnit.SECONDS)) {
+                "producer did not complete request=$requestId"
+            }
+            failures.remove(requestId)?.let { throw AssertionError("producer readback failed request=$requestId", it) }
+            return requireNotNull(samples[requestId]) {
+                "producer completion missing sample request=$requestId"
+            }
+        }
+    }
+
     /** Waits for Main to submit the exact frame identity. It intentionally
      * does not reinterpret submission as physical presentation. */
     private class SubmittedFrameTracker : KeyguardOrbBufferPublicationObserver {
@@ -1299,6 +1401,29 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         fun nearlyEqual(): Boolean = maximumDelta <= 2 && totalDelta <= 2_048L
     }
 
+    private fun compareProducerPixels(
+        first: CalibratedProducerSamples.Sample,
+        second: CalibratedProducerSamples.Sample,
+    ): MaterialPixelComparison {
+        require(first.pixels.size == second.pixels.size)
+        var substantive = 0
+        var totalDelta = 0L
+        var maximum = 0
+        first.pixels.indices.forEach { index ->
+            val a = first.pixels[index]
+            val b = second.pixels[index]
+            val delta = maxOf(
+                kotlin.math.abs((a ushr 16 and 0xff) - (b ushr 16 and 0xff)),
+                kotlin.math.abs((a ushr 8 and 0xff) - (b ushr 8 and 0xff)),
+                kotlin.math.abs((a and 0xff) - (b and 0xff)),
+            )
+            if (delta >= 7) substantive += 1
+            totalDelta += delta
+            maximum = maxOf(maximum, delta)
+        }
+        return MaterialPixelComparison(substantive, totalDelta, maximum)
+    }
+
     /** Uses the same interior and meaningful-motion threshold for A/C/B/A
      * compositor controls. It intentionally ignores transparent corners. */
     private fun compareMaterialPixels(first: Bitmap, second: Bitmap): MaterialPixelComparison {
@@ -1347,6 +1472,32 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val directory = File(activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
         File(directory, "$label.png").outputStream().use {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+    }
+
+    private fun persistProducerEvidence(
+        activity: KeyguardMaterialTestActivity,
+        label: String,
+        sample: CalibratedProducerSamples.Sample,
+    ) {
+        val directory = File(activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
+        val bitmap = Bitmap.createBitmap(
+            sample.pixels,
+            sample.frame.lease.width,
+            sample.frame.lease.height,
+            Bitmap.Config.ARGB_8888,
+        )
+        try {
+            File(directory, "$label.png").outputStream().use {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            File(directory, "$label.txt").writeText(
+                "lease=${sample.frame.lease.attachment}/${sample.frame.lease.generation} " +
+                    "slot=${sample.frame.slotId} use=${sample.frame.useGeneration} " +
+                    "requestId=${sample.frame.testRequestId} phase=${sample.frame.materialTime.phase}\n",
+            )
+        } finally {
+            bitmap.recycle()
         }
     }
 
