@@ -302,6 +302,14 @@ class KeyguardServiceOverlayInstrumentationTest {
                 automation.waitForIdle(500L, initialRemaining)
                 record("FIXTURE_TERMINAL_DISMISS", "afterIdle=true")
                 shell("wm dismiss-keyguard")
+                // The second public dismissal itself begins an asynchronous
+                // SystemUI exit. Wait for its public idle boundary before
+                // considering the unlocked/withdrawn predicate terminal;
+                // otherwise the next synthetic sleep can overlap that exit.
+                val postDismissRemaining = settleDeadline - SystemClock.uptimeMillis()
+                assertTrue("Fixture budget exhausted before terminal dismissal settled", postDismissRemaining >= 500L)
+                automation.waitForIdle(500L, postDismissRemaining)
+                record("FIXTURE_TERMINAL_IDLE", "afterDismiss=true")
                 val terminalRemaining = settleDeadline - SystemClock.uptimeMillis()
                 assertTrue("Fixture budget exhausted before terminal platform state", terminalRemaining > 0L)
                 await("independent reentry terminal unlocked withdrawal", terminalRemaining) {

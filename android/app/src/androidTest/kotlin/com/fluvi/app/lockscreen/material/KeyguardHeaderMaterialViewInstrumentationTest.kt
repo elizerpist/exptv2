@@ -346,6 +346,14 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 view.frame(1L)
             }
             assertTrue("production View never reached a hardware Canvas", waitForPreparedShader(instrumentation, view))
+            // A manual frame() can produce a hardware draw before Android has
+            // laid out this Activity on the display. The compositor control
+            // must not crop the display origin in that interval: that is the
+            // status-bar/background, not the production material View.
+            assertTrue(
+                "production material View never acquired its on-screen bounds",
+                waitForMaterialViewScreenBounds(instrumentation, view),
+            )
             fun capture(
                 phase: Float,
                 label: String,
@@ -663,6 +671,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertEquals(KeyguardCardWindow.Result.ATTACHED,
                     window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
             }
+            assertTrue(
+                "isolated panel ORB never acquired its on-screen bounds",
+                waitForPanelOrbScreenBounds(instrumentation, manager),
+            )
             assertTrue("isolated ORB never completed a buffer", waitForIsolatedOutput(instrumentation, window))
             submissions.await(1L)
             assertTrue(
@@ -1135,6 +1147,43 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         return false
     }
 
+    /** A producer completion can precede WindowManager layout. Keep the
+     * screenshot crop tied to the actual displayed View/panel geometry rather
+     * than accepting the display origin while its location is still 0,0. */
+    private fun waitForMaterialViewScreenBounds(
+        instrumentation: Instrumentation,
+        view: View,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+        while (System.nanoTime() < deadline) {
+            var laidOut = false
+            instrumentation.runOnMainSync {
+                val location = IntArray(2)
+                view.getLocationOnScreen(location)
+                laidOut = view.isAttachedToWindow && view.isShown &&
+                    view.width == 168 && view.height == 168 &&
+                    location[0] > 0 && location[1] > 0
+            }
+            if (laidOut) return true
+            Thread.sleep(24)
+        }
+        return false
+    }
+
+    private fun waitForPanelOrbScreenBounds(
+        instrumentation: Instrumentation,
+        manager: TestPanelWindowManager,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+        while (System.nanoTime() < deadline) {
+            var laidOut = false
+            instrumentation.runOnMainSync { laidOut = manager.hasOrbScreenBounds() }
+            if (laidOut) return true
+            Thread.sleep(24)
+        }
+        return false
+    }
+
     /** Captures the request id from the same immutable test-time sample that
      * the renderer uses to record a frame. Production keeps its monotonic
      * source and returns no test id. */
@@ -1305,6 +1354,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         fun isOrbBootstrapSuppressed(): Boolean = requireNotNull(currentRoot)
             .findViewById<View>(R.id.fluvi_financial_snapshot_orb)
             .visibility == View.INVISIBLE
+
+        fun hasOrbScreenBounds(): Boolean {
+            val root = currentRoot ?: return false
+            val orb = root.findViewById<View>(R.id.fluvi_financial_snapshot_orb)
+            val location = IntArray(2)
+            orb.getLocationOnScreen(location)
+            return root.isAttachedToWindow && orb.width == 168 && orb.height == 168 &&
+                location[0] > 0 && location[1] > 0
+        }
     }
 
     @Test fun productionOffscreenPreparationAcquiresGpuOutput() {
