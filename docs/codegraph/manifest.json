@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "source_head": "04e229c64e560bef9d49972c3413d1115fc36c41",
-  "source_parent": "865d84dcab2d0aa59f159e5e3ed5d321385b5d5c",
-  "source_ref": "fix/orb-v4-latency-lockscreen",
+  "source_head": "0a5eedbd2b3289d9000fdfb2fd9475419b2268c2",
+  "source_parent": "698eaa6451d3944dd90494cdf743b529d640bdfb",
+  "source_ref": "tooling/keyguard-terminal-metadata-provenance",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "e740710b7c92a0aebf98d6ceec7dedac92771585313886c00fbfb9a7dc86ee5e",
+  "index_sha256": "42da17b443563a2ae299d726a5907e7d2f75228fdc7ab8f5accb04878943d93b",
   "document_count": 807,
   "occurrence_count": 568695,
   "defined_symbol_count": 76136,
@@ -147,7 +147,7 @@
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 733
+      "byte_count": 567
     }
   ]
 }

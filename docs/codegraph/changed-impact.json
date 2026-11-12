@@ -1,11 +1,9 @@
 {
   "schema_version": 1,
-  "source_head": "04e229c64e560bef9d49972c3413d1115fc36c41",
-  "base_head": "865d84dcab2d0aa59f159e5e3ed5d321385b5d5c",
+  "source_head": "0a5eedbd2b3289d9000fdfb2fd9475419b2268c2",
+  "base_head": "698eaa6451d3944dd90494cdf743b529d640bdfb",
   "changed_files": [
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
-    "docs/FLUVI_ENGINEERING_JOURNAL.md"
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
