@@ -3860,6 +3860,24 @@ EVENTS
 END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
 ```
 
+## 2026-11-12 — detached ORB prewarm handoff drain after API35 RED
+
+Application correction: `22e5a617` (`fix(keyguard): drain detached ORB prewarm handoff`), parent `ef366946`.
+
+Why: `ef366946` correctly used the actual bounded isolated-renderer owner, but retained its detached `READY_FOR_MAIN` result. A detached frame has no publication target, so it could occupy a fixed-pool handoff slot indefinitely.
+
+Evidence: exact-source workflow [43215481141](https://github.com/elizerpist/exptv2/actions/runs/43215481141) compiled and ran the API35 native suite, then failed before the Human APK job. Its retained [runtime artifact](https://github.com/elizerpist/exptv2/actions/runs/43215481141/artifacts/13944806276) records `rapid-cycle-24` attach `30/84`: produced/published stayed `401/397`, all three slots stayed compositor-owned, and drops rose `1141 -> 2194` over the deadline. This is a pool-progress failure, not evidence of a static shader phase. The prior `04e229c` artifact completed the corresponding cycle after compositor ownership reduced and producer output advanced.
+
+Changed: a detached success still proves that the actual `HardwareBufferRenderer` allocation and slot-local shader initialized, and still emits `MATERIAL_ISOLATED_BACKEND_PREPARED`, but now immediately returns its unauthorised result via the existing fence-safe `dropReady` path. Fixed buffers, renderer instances and slot-local shaders remain resident. No detached frame is published, made visible, or relabeled as the next attachment. The direct instrumentation test now requires zero detached ready, in-flight and compositor-owned slots before first show.
+
+Independent observations: Canvas and isolated compositor crops timed out with a white/off-target crop while the isolated producer sample was valid. That remains a compositor-observation fixture boundary pending the focused rerun; it is not a RuntimeShader-freeze diagnosis. The service fixture timed out only after the slot-progress condition above.
+
+Validation so far: `git diff --check` PASS; clean-source `flutter analyze --no-fatal-infos` PASS; clean-source `scripts/test-fluvi-fast.sh` PASS; local Android Kotlin compilation NOT RUN to completion because Termux ARM/proot cannot start the host AAPT2 daemon. Compatible API35 validation is required.
+
+Rejected hypotheses: no change to shader math, effect selection, per-frame shader construction, visibility/privacy policy, or the Main inspection schedule. The Nothing A142 89 ms Main handoff remains unattributed.
+
+Physical validation: PENDING — USER ONLY.
+
 ## 2026-11-12 — actual isolated ORB preparation candidate (`ef366946`)
 
 **Why.** The frozen `04e229c` phone exports establish a real preparation
