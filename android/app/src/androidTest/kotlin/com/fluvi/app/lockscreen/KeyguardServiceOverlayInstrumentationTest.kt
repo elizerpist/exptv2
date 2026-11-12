@@ -312,11 +312,24 @@ class KeyguardServiceOverlayInstrumentationTest {
                 record("FIXTURE_TERMINAL_IDLE", "afterDismiss=true")
                 val terminalRemaining = settleDeadline - SystemClock.uptimeMillis()
                 assertTrue("Fixture budget exhausted before terminal platform state", terminalRemaining > 0L)
+                var terminalWithdrawal = terminalReentryWithdrawal()
                 await("independent reentry terminal unlocked withdrawal", terminalRemaining) {
-                    !keyguard.isKeyguardLocked && overlaysWithdrawn()
+                    terminalWithdrawal = terminalReentryWithdrawal()
+                    !keyguard.isKeyguardLocked && terminalWithdrawal.locallyWithdrawn
                 }
                 assertFalse("Independent reentry must start unlocked", keyguard.isKeyguardLocked)
-                assertTrue("Settled terminal state must not retain an overlay", overlaysWithdrawn())
+                assertTrue("Settled terminal state must withdraw the service attachment and process root",
+                    terminalWithdrawal.locallyWithdrawn)
+                // This public fixture's next wake needs the app-owned layer
+                // withdrawn, not eventual convergence of UiAutomation's
+                // remote window metadata. API35 can retain a known, already
+                // removed accessibility-window id after removeViewImmediate;
+                // the strict remote-metadata predicate remains required by
+                // every production withdrawal assertion below.
+                record("FIXTURE_TERMINAL_WITHDRAWAL",
+                    "serviceAttached=${terminalWithdrawal.serviceAttached}" +
+                        " processOverlayRootCount=${terminalWithdrawal.processOverlayRootCount}" +
+                        " remoteOverlayIds=${terminalWithdrawal.remoteOverlayIds}")
             }
             val reentry = episode("reattach-after-rapid")
             assertTrue("Warm reentry must advance actual current-renderer output",
@@ -905,6 +918,14 @@ class KeyguardServiceOverlayInstrumentationTest {
     }
 
     private data class Overlay(val id: Int, val bounds: Rect)
+    private data class TerminalReentryWithdrawal(
+        val serviceAttached: Boolean,
+        val processOverlayRootCount: Int,
+        val remoteOverlayIds: List<Int>,
+    ) {
+        val locallyWithdrawn: Boolean
+            get() = !serviceAttached && processOverlayRootCount == 0
+    }
     private data class Episode(val material: Material, val window: Overlay)
 
     private fun recoverFromVisibleOcclusion(previous: Episode): Episode = marked("visible-occlusion-recovery") {
@@ -1092,6 +1113,29 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
         }
         return roots == 0
+    }
+
+    /**
+     * Terminal setup for an independent wake must distinguish removal of the
+     * actual local overlay from stale UiAutomation metadata. It is deliberately
+     * narrower than [overlaysWithdrawn]: callers that validate a production
+     * withdrawal still require remote accessibility-window convergence.
+     */
+    private fun terminalReentryWithdrawal(): TerminalReentryWithdrawal {
+        val remoteOverlayIds = ownOverlays().map { it.id }
+        var attached = true
+        var roots = -1
+        instrumentation.runOnMainSync {
+            val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation()) {
+                "Accessibility service disconnected during terminal fixture"
+            }
+            attached = service.inspectionStateForTest().attached
+            roots = WindowInspector.getGlobalWindowViews().count {
+                (it.layoutParams as? WindowManager.LayoutParams)?.type ==
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+            }
+        }
+        return TerminalReentryWithdrawal(attached, roots, remoteOverlayIds)
     }
 
     private fun awaitLive(label: String, baseline: Material, minimumAdvances: Long, expectedWindowId: Int): Material {
