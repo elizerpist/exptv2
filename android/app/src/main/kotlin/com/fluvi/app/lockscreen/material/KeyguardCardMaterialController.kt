@@ -121,6 +121,9 @@ internal class KeyguardCardMaterialController(
             frameObserver = isolatedOrbFrameObserver,
             publicationObserver = isolatedOrbPublicationObserver,
             materialTimeSource = isolatedOrbMaterialTimeSource,
+            onLayerHideSubmitted = { submission ->
+                onIsolatedLayerHideSubmitted?.invoke(submission)
+            },
         )
     }
     private val isolatedOrbRenderer: KeyguardOrbBufferRenderer
@@ -154,6 +157,10 @@ internal class KeyguardCardMaterialController(
         }
     }
     var onFirstOrbShaderDraw: ((Long) -> Unit)? = null
+    /** Main-only observation of the exact lease whose child-layer withdrawal
+     * was submitted. It cannot change the renderer's visibility decision or
+     * worker/fence ownership. */
+    var onIsolatedLayerHideSubmitted: ((KeyguardOrbLayerHideSubmission) -> Unit)? = null
     /** Functional, per-bootstrap-draw acknowledgement. This must stay
      * separate from the one-shot diagnostic callback below. */
     var onBootstrapGeometryDrawn: ((KeyguardBootstrapFrameToken) -> Unit)? = null

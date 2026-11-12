@@ -622,6 +622,8 @@ internal object KeyguardCardDiagnostics {
         val triggerReceivedAtUptimeMs: Long?,
         val decisionAtUptimeMs: Long,
         var localHideAppliedAtUptimeMs: Long? = null,
+        var isolatedLayerHideSubmittedAtUptimeMs: Long? = null,
+        var isolatedLayerTransactionApplied: Boolean? = null,
         var removeBeginAtUptimeMs: Long? = null,
         var removeReturnAtUptimeMs: Long? = null,
         var attachedBefore: Boolean? = null,
@@ -800,7 +802,7 @@ internal object KeyguardCardDiagnostics {
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
-        "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
+        "ISOLATED_LAYER_HIDE_SUBMITTED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
     private val CAUSAL_SPINE_FIELD_KEYS = setOf(
         "queueMs", "inspectionTotalMs", "windowsReadMs", "treeScanMs", "mainApplyQueueMs",
@@ -874,7 +876,7 @@ internal object KeyguardCardDiagnostics {
         "AWAITING_MAIN_SURFACE" -> "FIRST_AWAITING_MAIN_SURFACE"
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED" ->
             "${event.stage}:${event.showOperationId ?: "none"}"
-        "HIDE_DECIDED", "LOCAL_HIDE_APPLIED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED" ->
+        "HIDE_DECIDED", "LOCAL_HIDE_APPLIED", "ISOLATED_LAYER_HIDE_SUBMITTED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED" ->
             "${event.stage}:${event.hideOperationId ?: "none"}"
         else -> null
     }
@@ -1472,6 +1474,10 @@ internal object KeyguardCardDiagnostics {
                     }
                 }
                 "LOCAL_HIDE_APPLIED" -> hideEpisode()?.localHideAppliedAtUptimeMs = event.uptimeMs
+                "ISOLATED_LAYER_HIDE_SUBMITTED" -> hideEpisode()?.let { hide ->
+                    hide.isolatedLayerHideSubmittedAtUptimeMs = event.uptimeMs
+                    hide.isolatedLayerTransactionApplied = fields["transactionApplied"]?.toBooleanStrictOrNull()
+                }
                 "REMOVE_VIEW_BEGIN" -> hideEpisode()?.removeBeginAtUptimeMs = event.uptimeMs
                 "REMOVE_VIEW_RETURN" -> hideEpisode()?.let {
                     it.removeReturnAtUptimeMs = event.uptimeMs
@@ -1862,7 +1868,7 @@ internal object KeyguardCardDiagnostics {
         appendLine(" cycleToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)} cycleToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.startedUptimeMs)}")
         appendLine(" screenOnToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} screenOnToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.screenOnReceivedAtUptimeMs)} wakeCallbackToFirstRootDrawMs=${delta(firstRoot?.firstRootDrawAtUptimeMs, attempt.startedUptimeMs)} wakeCallbackToFirstShaderDrawMs=${delta(firstShader?.firstShaderDrawAtUptimeMs, attempt.startedUptimeMs)}")
         appendLine(" queueMs=${delta(showing?.startedAtUptimeMs, showing?.queuedAtUptimeMs)} inspectionTotalMs=${delta(showing?.finishedAtUptimeMs, showing?.startedAtUptimeMs)} inspectionFinishToHandoffMs=${delta(showing?.mainHandoffRequestedAtUptimeMs, showing?.finishedAtUptimeMs)} handoffToMainEntryMs=${delta(showing?.mainApplyStartedAtUptimeMs, showing?.mainHandoffRequestedAtUptimeMs)} mainEntryToDecisionMs=${delta(show?.decisionAtUptimeMs, showing?.mainApplyStartedAtUptimeMs)} showDecisionToAddViewBeginMs=${delta(show?.addBeginAtUptimeMs, show?.decisionAtUptimeMs)}")
-        appendLine(" actualWithdrawalHideOp=${withdrawal?.operationId ?: "NA"} terminalCleanupHideOp=${attempt.hides.lastOrNull()?.operationId ?: "NA"} triggerToLocalHideMs=${delta(withdrawal?.localHideAppliedAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} triggerToRemoveReturnMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} hideDecisionToLocalHideMs=${delta(withdrawal?.localHideAppliedAtUptimeMs, withdrawal?.decisionAtUptimeMs)} removeViewCallMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.removeBeginAtUptimeMs)} hideSignalToDecisionMs=${delta(withdrawal?.decisionAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} hideSignalToRemoveReturnMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)}")
+        appendLine(" actualWithdrawalHideOp=${withdrawal?.operationId ?: "NA"} terminalCleanupHideOp=${attempt.hides.lastOrNull()?.operationId ?: "NA"} triggerToLocalHideMs=${delta(withdrawal?.localHideAppliedAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} triggerToLayerHideSubmitMs=${delta(withdrawal?.isolatedLayerHideSubmittedAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} triggerToRemoveReturnMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} hideDecisionToLocalHideMs=${delta(withdrawal?.localHideAppliedAtUptimeMs, withdrawal?.decisionAtUptimeMs)} localHideToLayerHideSubmitMs=${delta(withdrawal?.isolatedLayerHideSubmittedAtUptimeMs, withdrawal?.localHideAppliedAtUptimeMs)} layerHideSubmitToRemoveBeginMs=${delta(withdrawal?.removeBeginAtUptimeMs, withdrawal?.isolatedLayerHideSubmittedAtUptimeMs)} removeViewCallMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.removeBeginAtUptimeMs)} hideSignalToDecisionMs=${delta(withdrawal?.decisionAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} hideSignalToRemoveReturnMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)}")
         appendLine(" causalSpineComplete=${causalSpineComplete(attempt)} causalSpineIndependentOfRawRing=true retainedShowEpisodes=${attempt.shows.size} retainedHideEpisodes=${attempt.hides.size} omittedShowEpisodes=${attempt.omittedShowEpisodes} omittedHideEpisodes=${attempt.omittedHideEpisodes} omittedSpineEvents=${attempt.omittedSpineEvents}")
         append(inspectionCause("FIRST_INSPECTION", firstInspection))
     }
@@ -1886,7 +1892,7 @@ internal object KeyguardCardDiagnostics {
             val withdrawal = actualWithdrawal(attempt, episode)
             withdrawal?.let { pairedHides += it.operationId }
             "a${attempt.id}:show${episode.operationId}" to buildString {
-                appendLine(" EPISODE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} req=${episode.requestId ?: "NA"} decision=${episode.decisionAtUptimeMs} add=${episode.addBeginAtUptimeMs ?: "NA"}/${episode.addReturnAtUptimeMs ?: "NA"} root=${episode.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} shader=${episode.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} currentMaterial=${episode.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} live=${episode.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} bootstrapDrawAt=${episode.bootstrapDrawAtUptimeMs ?: "NO_BOOTSTRAP_DRAW_OBSERVED"} bootstrapCommit=${episode.bootstrapCommitCallbackAtUptimeMs ?: "UNOBSERVED"} promoted=${episode.livePromotedAtUptimeMs ?: "UNOBSERVED"} frameCommit=${episode.frameCommitCallbackAtUptimeMs ?: "UNOBSERVED"} withdrawal=${withdrawal?.operationId ?: "NA"} localHide=${withdrawal?.localHideAppliedAtUptimeMs ?: "NA"} removeReturn=${withdrawal?.removeReturnAtUptimeMs ?: "NA"}")
+                appendLine(" EPISODE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} req=${episode.requestId ?: "NA"} decision=${episode.decisionAtUptimeMs} add=${episode.addBeginAtUptimeMs ?: "NA"}/${episode.addReturnAtUptimeMs ?: "NA"} root=${episode.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} shader=${episode.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} currentMaterial=${episode.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} live=${episode.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} bootstrapDrawAt=${episode.bootstrapDrawAtUptimeMs ?: "NO_BOOTSTRAP_DRAW_OBSERVED"} bootstrapCommit=${episode.bootstrapCommitCallbackAtUptimeMs ?: "UNOBSERVED"} promoted=${episode.livePromotedAtUptimeMs ?: "UNOBSERVED"} frameCommit=${episode.frameCommitCallbackAtUptimeMs ?: "UNOBSERVED"} withdrawal=${withdrawal?.operationId ?: "NA"} localHide=${withdrawal?.localHideAppliedAtUptimeMs ?: "NA"} layerHideSubmit=${withdrawal?.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${withdrawal?.isolatedLayerTransactionApplied ?: "NA"} removeReturn=${withdrawal?.removeReturnAtUptimeMs ?: "NA"}")
                 append(inspectionCause(if (episode == first) "SHOWING_INSPECTION" else "SHOW_CAUSE", episode.cause))
                 if (withdrawal != null) {
                     append(hideRecord(withdrawal))
@@ -1906,7 +1912,7 @@ internal object KeyguardCardDiagnostics {
     }
 
     private fun hideRecord(hide: HideEpisode): String =
-        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
+        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} layerSubmit=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${hide.isolatedLayerTransactionApplied ?: "NA"} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
 
     private fun causalSpineComplete(attempt: TimingAttempt): Boolean {
         fun has(stage: String, show: Long? = null, hide: Long? = null, attach: Long? = null) = attempt.causalSpine.any {

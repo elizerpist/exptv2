@@ -366,11 +366,12 @@ class FluviKeyguardCardService : AccessibilityService() {
                     traceKeyguard(event.removePrefix("KG|"), detail, attachGeneration = attach)
                 }
             },
-            onWindowDiagnostic = { stage, detail, attach, observedAt ->
+            onWindowDiagnostic = { stage, detail, attach, observedAt, fields ->
                 // Window callbacks can occur immediately beside add/remove.
                 // Capture-store mutation is deferred with the immutable
                 // timestamp/owner so it cannot sit in front of that operation.
                 val capturedOperation = activeWindowDiagnosticOperation
+                val capturedFields = fields
                 mainHandler.post {
                     if (stage.startsWith("MATERIAL_") || stage.startsWith("BOOTSTRAP_") || stage == "ADD_VIEW_RETURN") {
                         KeyguardCardDiagnostics.recordColdPreparation(
@@ -389,6 +390,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         attachGeneration = attach,
                         observedUptimeMs = observedAt,
                         operation = capturedOperation,
+                        fields = capturedFields,
                     )
                 }
             },

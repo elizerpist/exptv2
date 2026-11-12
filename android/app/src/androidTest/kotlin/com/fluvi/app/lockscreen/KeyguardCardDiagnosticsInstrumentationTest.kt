@@ -304,6 +304,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             fields = mapOf("attachedBefore" to true))
         KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "invisible", requestId = 150L,
             observedUptimeMs = 331_508_961L, diagnosticContext = attempt, operation = withdrawal)
+        KeyguardCardDiagnostics.captureEvent(context, "ISOLATED_LAYER_HIDE_SUBMITTED", "isolatedSurfaceControl", requestId = 150L,
+            observedUptimeMs = 331_508_962L, diagnosticContext = attempt, operation = withdrawal,
+            fields = mapOf("leaseGeneration" to 88L, "transactionApplied" to true))
         KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_BEGIN", "window", requestId = 150L,
             observedUptimeMs = 331_508_962L, diagnosticContext = attempt, operation = withdrawal)
         KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "success", requestId = 150L,
@@ -321,9 +324,13 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("actualWithdrawalHideOp=${withdrawal.hideOperationId}"))
         assertTrue(report.contains("terminalCleanupHideOp=${cleanup.hideOperationId}"))
         assertTrue(report.contains("triggerToLocalHideMs=168"))
+        assertTrue(report.contains("triggerToLayerHideSubmitMs=169"))
         assertTrue(report.contains("triggerToRemoveReturnMs=179"))
+        assertTrue(report.contains("localHideToLayerHideSubmitMs=1"))
+        assertTrue(report.contains("layerHideSubmitToRemoveBeginMs=0"))
         assertTrue(report.contains("hideDecisionToLocalHideMs=4"))
         assertTrue(report.contains("removeViewCallMs=10"))
+        assertTrue(report.contains("layerSubmit=331508962/true"))
     }
 
     @Test fun retryAccountingRetainsFiredCancelledAndPendingTokens() {

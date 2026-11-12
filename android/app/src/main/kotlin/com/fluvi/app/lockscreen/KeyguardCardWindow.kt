@@ -46,7 +46,8 @@ internal class KeyguardCardWindow(
     /** Window operations are reported after the operation boundary, never by
      * a renderer/onDraw callback. The service adds its captured wake/session
      * identity before storing a diagnostic event. */
-    private val onWindowDiagnostic: (String, String, Long?, Long) -> Unit = { _, _, _, _ -> },
+    private val onWindowDiagnostic: (String, String, Long?, Long, Map<String, Any?>) -> Unit =
+        { _, _, _, _, _ -> },
     private val onFirstRootDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstShaderDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onBootstrapDraw: (KeyguardFirstDrawEvent) -> Unit = {},
@@ -128,7 +129,8 @@ internal class KeyguardCardWindow(
         detail: String,
         generation: Long?,
         observedAtUptimeMs: Long = SystemClock.uptimeMillis(),
-    ) = onWindowDiagnostic(stage, detail, generation, observedAtUptimeMs)
+        fields: Map<String, Any?> = emptyMap(),
+    ) = onWindowDiagnostic(stage, detail, generation, observedAtUptimeMs, fields)
 
     fun isOwnAccessibilityWindow(windowId: Int, displayId: Int): Boolean {
         checkMainThread()
@@ -427,6 +429,21 @@ internal class KeyguardCardWindow(
         ).also { controller ->
             controller.onPreparationStage = { stage, fields ->
                 reportWindowDiagnostic(stage, fields["programKey"]?.toString() ?: "material", null)
+            }
+            controller.onIsolatedLayerHideSubmitted = { submission ->
+                reportWindowDiagnostic(
+                    stage = "ISOLATED_LAYER_HIDE_SUBMITTED",
+                    detail = "isolatedSurfaceControl",
+                    generation = submission.lease.attachment,
+                    observedAtUptimeMs = submission.submittedAtUptimeMs,
+                    fields = mapOf(
+                        "leaseGeneration" to submission.lease.generation,
+                        "transactionApplied" to submission.transactionApplied,
+                        "programKey" to submission.lease.programKey,
+                        "width" to submission.lease.width,
+                        "height" to submission.lease.height,
+                    ),
+                )
             }
             controller.onBootstrapGeometryDrawn = bootstrapGeometry@{ token ->
                 val capturedAttach = firstShaderDrawAttachGeneration ?: return@bootstrapGeometry

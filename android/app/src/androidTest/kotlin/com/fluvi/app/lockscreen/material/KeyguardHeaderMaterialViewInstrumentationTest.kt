@@ -505,6 +505,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val enteredBlockedFrame = CountDownLatch(1)
         val releaseBlockedFrame = CountDownLatch(1)
         val blockNextRender = java.util.concurrent.atomic.AtomicBoolean(false)
+        data class WindowEvent(
+            val stage: String,
+            val attach: Long?,
+            val observedAtUptimeMs: Long,
+            val fields: Map<String, Any?>,
+        )
+        val windowEvents = mutableListOf<WindowEvent>()
         val barrier = KeyguardOrbRenderBarrier {
             // Detached preparation is allowed to render before attachment.
             // Arm only after the test has observed a real current-layer
@@ -532,6 +539,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     onOpen = {}, onToggle = {}, onInteractionStarted = {},
                     onPositionCommitted = { _, _, _, _ -> },
                     onInteractionDiagnostic = { _, _ -> },
+                    onWindowDiagnostic = { stage, _, attach, observedAt, fields ->
+                        windowEvents += WindowEvent(stage, attach, observedAt, fields)
+                    },
                     manager = TestPanelWindowManager(activity),
                     isolatedOrbRenderBarrier = barrier,
                 )
@@ -560,8 +570,24 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             // current negative eligibility decision. It must not join the
             // worker's in-flight HardwareBufferRenderer request.
             instrumentation.runOnMainSync {
+                val attachedBeforeWithdrawal = window.currentAttachGeneration
                 assertTrue("withdrawal waited for renderer", window.hide())
                 assertFalse(window.isAttached)
+                val layerSubmission = windowEvents.singleOrNull {
+                    it.stage == "ISOLATED_LAYER_HIDE_SUBMITTED"
+                }
+                assertTrue("current isolated layer did not submit a hide transaction", layerSubmission != null)
+                assertEquals(attachedBeforeWithdrawal, layerSubmission?.attach)
+                assertEquals(true, layerSubmission?.fields?.get("transactionApplied"))
+                assertTrue(
+                    "layer submission must have an exact nonzero lease generation",
+                    (layerSubmission?.fields?.get("leaseGeneration") as? Long ?: 0L) > 0L,
+                )
+                val localHideIndex = windowEvents.indexOfFirst { it.stage == "LOCAL_HIDE_APPLIED" }
+                val layerHideIndex = windowEvents.indexOfFirst { it.stage == "ISOLATED_LAYER_HIDE_SUBMITTED" }
+                val removeBeginIndex = windowEvents.indexOfFirst { it.stage == "REMOVE_VIEW_BEGIN" }
+                assertTrue("root invisibility must precede child-layer withdrawal", localHideIndex in 0 until layerHideIndex)
+                assertTrue("child-layer withdrawal must precede window removal", layerHideIndex in 0 until removeBeginIndex)
                 // Reattach before releasing the old worker completion. The
                 // old lease is no longer allowed to publish into this root.
                 assertEquals(
@@ -573,6 +599,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             releaseBlockedFrame.countDown()
             assertTrue("new attachment did not obtain its own current output after stale release",
                 waitForIsolatedOutput(instrumentation, window, publishedBeforeHide))
+            instrumentation.runOnMainSync {
+                assertEquals(
+                    "old blocked completion must not withdraw the fresh attachment",
+                    1,
+                    windowEvents.count { it.stage == "ISOLATED_LAYER_HIDE_SUBMITTED" },
+                )
+            }
         } finally {
             releaseBlockedFrame.countDown()
             instrumentation.runOnMainSync {

@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.SystemClock
 import android.view.AttachedSurfaceControl
 import android.view.Choreographer
 import android.view.SurfaceControl
@@ -39,6 +40,17 @@ internal data class KeyguardOrbBufferLease(
     val programKey: String,
     val width: Int,
     val height: Int,
+)
+
+/**
+ * The Main-owned submission boundary for removing an isolated child layer.
+ * This is not a presentation callback and must never be used to release a
+ * producer buffer: the worker still owns that through its fence path.
+ */
+internal data class KeyguardOrbLayerHideSubmission(
+    val lease: KeyguardOrbBufferLease,
+    val submittedAtUptimeMs: Long,
+    val transactionApplied: Boolean,
 )
 
 /** Immutable cross-thread input. RuntimeShader, Paint, RenderNode and every
@@ -226,6 +238,9 @@ internal class KeyguardOrbBufferRenderer(
     private val publicationObserver: KeyguardOrbBufferPublicationObserver =
         NoopKeyguardOrbBufferPublicationObserver,
     private val materialTimeSource: KeyguardOrbMaterialTimeSource = SystemKeyguardOrbMaterialTimeSource,
+    /** Observes only the exact Main transaction submission. It carries no
+     * visibility or buffer-lifetime authority. */
+    private val onLayerHideSubmitted: (KeyguardOrbLayerHideSubmission) -> Unit = {},
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
 ) {
     private var api34: Api34? = null
@@ -570,7 +585,8 @@ internal class KeyguardOrbBufferRenderer(
                 worker.revokePublication(lease)
                 retiringLayers[lease] = child
             }
-            runCatching {
+            val submittedAtUptimeMs = SystemClock.uptimeMillis()
+            val transactionApplied = runCatching {
                 SurfaceControl.Transaction()
                     // SurfaceControl's null-buffer form releases the last
                     // displayed buffer and invokes its release callback.  A
@@ -582,6 +598,12 @@ internal class KeyguardOrbBufferRenderer(
                     .setBuffer(child, null as HardwareBuffer?)
                     .setVisibility(child, false)
                     .apply()
+                true
+            }.getOrDefault(false)
+            lease?.let {
+                onLayerHideSubmitted(
+                    KeyguardOrbLayerHideSubmission(it, submittedAtUptimeMs, transactionApplied),
+                )
             }
             // A transaction-committed callback would only establish that this
             // transaction is ready to present. It is not permission to close
