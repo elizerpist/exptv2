@@ -12666,4 +12666,11 @@ for Human delivery; normal core/Flutter/native prerequisites and the resulting
 profile APK must be completed and downloaded separately. Dashboard profile
 status and physical W-SHOW/W-HIDE/W-LOCK-ANIM remain independent.
 
+Implementation commit: `cf76118a1f4dfd11349f3b779a9907fd60474d71`
+(`test(keyguard): prepare lower compositor environment [skip ci]`). It contains
+only the R-05 host/test/workflow evidence changes and the retained R-03
+test-fixture completion; it does not change shipped production renderer or
+service behavior. The exact source will be immutable-tagged before diagnostic
+dispatch. Current untracked `index.scip` remains outside the candidate.
+
 Physical validation: PENDING — USER ONLY.
