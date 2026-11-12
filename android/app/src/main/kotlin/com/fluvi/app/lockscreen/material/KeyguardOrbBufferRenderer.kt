@@ -18,6 +18,7 @@ import android.view.AttachedSurfaceControl
 import android.view.Choreographer
 import android.view.SurfaceControl
 import android.view.View
+import android.view.ViewTreeObserver
 import androidx.annotation.RequiresApi
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
@@ -304,6 +305,14 @@ internal class KeyguardOrbBufferRenderer(
         private var deferredReady: ReadyFrame? = null
         private var attachListener: View.OnAttachStateChangeListener? = null
         private var layoutListener: View.OnLayoutChangeListener? = null
+        /**
+         * `attach()` can run after WindowManager accepted the root but before
+         * its first usable layout.  The root attachment callback covers the
+         * former race, while this one-shot traversal callback covers the
+         * latter without introducing a timed retry or a second visibility
+         * authority.
+         */
+        private var pendingLayerTraversal: ViewTreeObserver.OnPreDrawListener? = null
         private var disposed = false
         private var framesPublished = 0
         private var failures = 0
@@ -435,17 +444,25 @@ internal class KeyguardOrbBufferRenderer(
         private fun removeAttachmentListeners(value: KeyguardOrbBufferAttachment?) {
             val attach = attachListener
             val layout = layoutListener
+            val traversal = pendingLayerTraversal
             if (value != null) {
                 if (attach != null) value.root.removeOnAttachStateChangeListener(attach)
                 if (layout != null) value.orb.removeOnLayoutChangeListener(layout)
+                if (traversal != null && value.root.viewTreeObserver.isAlive) {
+                    value.root.viewTreeObserver.removeOnPreDrawListener(traversal)
+                }
             }
             attachListener = null
             layoutListener = null
+            pendingLayerTraversal = null
         }
 
         private fun ensureLayer(value: KeyguardOrbBufferAttachment) {
             val spec = desired ?: return
-            if (!value.root.isAttachedToWindow || value.orb.width <= 0 || value.orb.height <= 0) return
+            if (!value.root.isAttachedToWindow || value.orb.width <= 0 || value.orb.height <= 0) {
+                scheduleLayerTraversal(value)
+                return
+            }
             if (spec.lease.attachment != value.attachment) return
             if (spec.lease.width != value.orb.width || spec.lease.height != value.orb.height) {
                 // Dimensions are part of the lease. Do not stretch a stale
@@ -457,7 +474,10 @@ internal class KeyguardOrbBufferRenderer(
             }
             val existing = layer
             if (existing == null) {
-                val parent: AttachedSurfaceControl = value.root.rootSurfaceControl ?: return
+                val parent: AttachedSurfaceControl = value.root.rootSurfaceControl ?: run {
+                    scheduleLayerTraversal(value)
+                    return
+                }
                 val child = SurfaceControl.Builder()
                     .setName("FluviKeyguardStandaloneOrb")
                     .setBufferSize(spec.lease.width, spec.lease.height)
@@ -470,6 +490,7 @@ internal class KeyguardOrbBufferRenderer(
                 val reparent = parent.buildReparentTransaction(child)
                     ?: run {
                         child.release()
+                        scheduleLayerTraversal(value)
                         return
                     }
                 reparent
@@ -509,6 +530,34 @@ internal class KeyguardOrbBufferRenderer(
                     worker.dropReady(frame)
                 }
             }
+        }
+
+        /**
+         * A single next-traversal recheck closes the WindowManager/layout
+         * ordering gap.  It is only armed while this exact Main-owned
+         * attachment remains current; an old callback cannot attach or reveal
+         * a replacement lease.
+         */
+        private fun scheduleLayerTraversal(value: KeyguardOrbBufferAttachment) {
+            if (pendingLayerTraversal != null || !value.root.isAttachedToWindow) return
+            val observer = value.root.viewTreeObserver
+            if (!observer.isAlive) return
+            lateinit var listener: ViewTreeObserver.OnPreDrawListener
+            listener = ViewTreeObserver.OnPreDrawListener {
+                if (value.root.viewTreeObserver.isAlive) {
+                    value.root.viewTreeObserver.removeOnPreDrawListener(listener)
+                }
+                if (pendingLayerTraversal === listener) pendingLayerTraversal = null
+                if (!disposed && attachment?.root === value.root &&
+                    attachment?.attachment == value.attachment &&
+                    desired?.lease?.attachment == value.attachment
+                ) {
+                    ensureLayer(value)
+                }
+                true
+            }
+            pendingLayerTraversal = listener
+            observer.addOnPreDrawListener(listener)
         }
 
         private fun hideLayer() {
