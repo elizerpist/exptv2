@@ -10,6 +10,7 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.ColorSpace
 import android.graphics.Rect
+import android.hardware.display.DisplayManager
 import android.hardware.HardwareBuffer
 import android.hardware.SyncFence
 import android.os.Build
@@ -23,6 +24,7 @@ import android.view.MotionEvent
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.WindowManager
+import android.view.Display
 import android.view.inspector.WindowInspector
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.accessibility.AccessibilityEvent
@@ -74,6 +76,7 @@ class KeyguardServiceOverlayInstrumentationTest {
     private val knownOwnWindowIds = mutableSetOf<Int>()
     private val terminalObservationRetention = TerminalObservationRetention()
     private var nextTerminalObservationId = 0L
+    private var nextSleepAdmissionEpisodeId = 0L
     private var occlusionProbe: OcclusionSuccessorProbe? = null
     private val keyguard get() = context.getSystemService(KeyguardManager::class.java)
     private val power get() = context.getSystemService(PowerManager::class.java)
@@ -1112,9 +1115,11 @@ class KeyguardServiceOverlayInstrumentationTest {
     }
 
     private fun screenOff(synchronizeInput: Boolean = false) {
+        var sleepInputStartedAt = 0L
         if (synchronizeInput) {
             assertTrue("Fixture budget exhausted before independent episode", SystemClock.uptimeMillis() < deadline)
             val downAt = SystemClock.uptimeMillis()
+            sleepInputStartedAt = downAt
             for (action in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
                 val event = KeyEvent(downAt, SystemClock.uptimeMillis(), action, KeyEvent.KEYCODE_SLEEP,
                     0, 0, -1, 0, 0, InputDevice.SOURCE_KEYBOARD)
@@ -1123,8 +1128,31 @@ class KeyguardServiceOverlayInstrumentationTest {
         } else {
             shell("input keyevent KEYCODE_SLEEP")
         }
-        await("screen off", 3_000) { !power.isInteractive }
         if (synchronizeInput) {
+            val budget = IndependentSleepAdmissionBudget(SystemClock.uptimeMillis(), deadline)
+            val episodeId = ++nextSleepAdmissionEpisodeId
+            record("SLEEP_ADMISSION_BUDGET", "episodeId=$episodeId inputStartedAtUptimeMs=$sleepInputStartedAt waitStartedAtUptimeMs=${budget.startedAtUptimeMs} nonInteractiveDeadlineUptimeMs=${budget.nonInteractiveDeadlineUptimeMs} admissionDeadlineUptimeMs=${budget.admissionDeadlineUptimeMs}")
+            awaitUntil("screen off", budget.nonInteractiveDeadlineUptimeMs) { !power.isInteractive }
+            val collector = IndependentSleepAdmissionCollector(
+                uptimeMillis = SystemClock::uptimeMillis,
+                interactive = { power.isInteractive },
+                displayState = { context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)?.state ?: Display.STATE_UNKNOWN },
+                keyguardLocked = { keyguard.isKeyguardLocked },
+            )
+            var observationId = 0L
+            var accepted: IndependentSleepAdmissionObservation? = null
+            var last: IndependentSleepAdmissionObservation? = null
+            while (SystemClock.uptimeMillis() < budget.admissionDeadlineUptimeMs && accepted == null) {
+                val observation = collector.collect(episodeId, ++observationId, budget.admissionDeadlineUptimeMs)
+                last = observation
+                if (observationId <= 8L || observation.accepted) record("SLEEP_ADMISSION_OBSERVATION", observation.evidenceFields())
+                if (observation.accepted) accepted = observation else SystemClock.sleep(minOf(100L, (budget.admissionDeadlineUptimeMs - SystemClock.uptimeMillis()).coerceAtLeast(0L)))
+            }
+            if (accepted == null) {
+                record("SLEEP_ADMISSION_FINAL", last?.evidenceFields() ?: "episodeId=$episodeId noSample=true")
+                throw AssertionError("screen-off completed admission timed out; no classifier or callback bypass is permitted")
+            }
+            record("SLEEP_ADMISSION_ACCEPTED", accepted.evidenceFields())
             // A completed injected SLEEP input and a non-interactive display
             // do not order SystemUI's asynchronous keyguard transition. In
             // run 43242829409, the next synchronized WAKE arrived after the
@@ -1134,7 +1162,10 @@ class KeyguardServiceOverlayInstrumentationTest {
             // KeyguardManager condition that the following wake must satisfy
             // before issuing that next input. The unsynchronised rapid-race
             // scenario deliberately remains unchanged.
-            await("screen-off keyguard admission", 3_000) { keyguard.isKeyguardLocked }
+            // The immutable OFF/locked/non-interactive bracket above is the
+            // complete public admission; it does not authorize later output.
+        } else {
+            await("screen off", 3_000) { !power.isInteractive }
         }
         await("screen-off withdrawal", 4_000) { overlaysWithdrawn() }
     }
@@ -1458,6 +1489,16 @@ class KeyguardServiceOverlayInstrumentationTest {
         while (SystemClock.uptimeMillis() < end) {
             if (condition()) return
             SystemClock.sleep(pollMs)
+        }
+        record("TIMEOUT", "$label reason=${KeyguardCardDiagnostics.lastReason(context)}")
+        recordFailureWindows(label)
+        throw AssertionError("$label timed out; no classifier or callback bypass is permitted")
+    }
+
+    private fun awaitUntil(label: String, absoluteDeadlineUptimeMs: Long, condition: () -> Boolean) {
+        while (SystemClock.uptimeMillis() < absoluteDeadlineUptimeMs) {
+            if (condition()) return
+            SystemClock.sleep(minOf(100L, (absoluteDeadlineUptimeMs - SystemClock.uptimeMillis()).coerceAtLeast(0L)))
         }
         record("TIMEOUT", "$label reason=${KeyguardCardDiagnostics.lastReason(context)}")
         recordFailureWindows(label)

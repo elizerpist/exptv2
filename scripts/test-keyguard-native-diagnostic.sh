@@ -36,7 +36,7 @@ write_manifest() {
   {
     printf 'source_sha=%s\n' "$(git rev-parse HEAD)"
     printf 'execution_mode=%s\n' "$mode"
-    printf 'repetition_model=same-emulator-two-predeclared-service-runs\n'
+    printf 'repetition_model=same-emulator-lower-prelude-plus-service-then-service\n'
     sha256sum "$app_apk" "$test_apk"
     printf 'device_fingerprint='
     adb shell getprop ro.build.fingerprint | tr -d '\r'
@@ -47,26 +47,15 @@ write_manifest() {
   } > "$target/source-apk-device-manifest.txt"
 }
 
-run_helper() {
+run_helper_class() {
+  local class_name=$1 transcript=$2
   local result=0
-  mkdir -p "$helper_dir"
-  write_manifest "$helper_dir"
-
-  if ! timeout -k 2s 30s adb install -r "$app_apk" > "$helper_dir/install-app.txt" 2>&1; then
-    result=1
-  fi
-  if ! timeout -k 2s 30s adb install -r "$test_apk" > "$helper_dir/install-test.txt" 2>&1; then
-    result=1
-  fi
-  if ! timeout -k 2s 10s adb shell am force-stop com.fluvi.app > "$helper_dir/force-stop.txt" 2>&1; then
-    result=1
-  fi
 
   set +e
   timeout -k 5s 120s adb shell am instrument -w -r \
-    -e class com.fluvi.app.lockscreen.TerminalReentryObservationInstrumentationTest \
+    -e class "$class_name" \
     com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \
-    | tee "$helper_dir/instrumentation.txt"
+    | tee "$transcript"
   local pipe_status=("${PIPESTATUS[@]}")
   set -e
   if (( pipe_status[0] != 0 || pipe_status[1] != 0 )); then
@@ -74,9 +63,21 @@ run_helper() {
   fi
   # `am instrument` can return zero for a JUnit failure. Require the exact
   # deterministic control count in the runner transcript too.
-  if ! grep -Eq '^OK \(7 tests\)' "$helper_dir/instrumentation.txt"; then
+  if ! grep -Eq '^OK \(7 tests\)' "$transcript"; then
     result=1
   fi
+  return "$result"
+}
+
+run_helper() {
+  local result=0
+  mkdir -p "$helper_dir"
+  write_manifest "$helper_dir"
+  if ! timeout -k 2s 30s adb install -r "$app_apk" > "$helper_dir/install-app.txt" 2>&1; then result=1; fi
+  if ! timeout -k 2s 30s adb install -r "$test_apk" > "$helper_dir/install-test.txt" 2>&1; then result=1; fi
+  if ! timeout -k 2s 10s adb shell am force-stop com.fluvi.app > "$helper_dir/force-stop.txt" 2>&1; then result=1; fi
+  run_helper_class com.fluvi.app.lockscreen.TerminalReentryObservationInstrumentationTest "$helper_dir/instrumentation.txt" || result=1
+  run_helper_class com.fluvi.app.lockscreen.IndependentSleepAdmissionObservationInstrumentationTest "$helper_dir/instrumentation-sleep-admission.txt" || result=1
   printf 'helper_result=%s\n' "$result" > "$helper_dir/status.txt"
   return "$result"
 }
@@ -109,7 +110,7 @@ for repetition in 1 2; do
   fi
 
   set +e
-  bash scripts/test-keyguard-service-trace.sh
+  if (( repetition == 1 )); then bash scripts/test-keyguard-runtime.sh; else bash scripts/test-keyguard-service-trace.sh; fi
   service_result=$?
   set -e
 
@@ -131,11 +132,11 @@ for repetition in 1 2; do
   # repetition; no third attempt is ever made to obtain a lucky result.
   if [[ -d "$service_evidence" ]]; then
     mv "$service_evidence" "$repetition_dir"
-    printf 'service_result=%s\nanalysis_result=%s\n' "$service_result" "$analysis_result" \
+    printf 'runtime_chain_result=%s\nanalysis_result=%s\n' "$service_result" "$analysis_result" \
       > "$repetition_dir/diagnostic-status.txt"
   else
     mkdir -p "$repetition_dir"
-    printf 'service_result=%s\nanalysis_result=%s\nevidence_directory=MISSING\n' \
+    printf 'runtime_chain_result=%s\nanalysis_result=%s\nevidence_directory=MISSING\n' \
       "$service_result" "$analysis_result" > "$repetition_dir/diagnostic-status.txt"
     aggregate_result=1
   fi

@@ -11798,3 +11798,12 @@ No first-green guarantee and no claim of physical lag resolution.
 PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 ````
+
+## 2026-11-12 — Coding-agent implementation start: R-DELIVERY-SLEEP-ADMISSION-02
+
+- Source preflight began at documentation head `5fa38c11da575b84d69099023a0af4593c62e29f`; the prior runtime evidence remains tied to application/test candidate `b82eb97c2ec98d8f6962365888fd4e428d2cf669`. The remote reviewer entry was fast-forwarded before edits. The unrelated untracked `index.scip` remains untouched.
+- Implemented the specified closed-scope files only: dashboard workflow-consumer expectations now require the approved diagnostic guards; the Human APK boundary extracts the Human job before asserting its three required successful dependencies; the curated fast suite includes that delivery boundary.
+- Added test-only `IndependentSleepAdmissionBudget` and immutable bracketed OFF/non-interactive/locked admission records plus seven deterministic instrumentation controls. The synchronized `screenOff` branch now uses fixed absolute 3s non-interactive and 6s aggregate admission deadlines, while the unsynchronized rapid-race branch and strict withdrawal/wake/output paths are unchanged.
+- Updated the bounded diagnostic helper to run the existing terminal seven and the new sleep-admission seven independently, then use the unchanged full runtime chain for repetition 1 and unchanged service trace for repetition 2. The workflow adds the required three-file cheap Flutter gate before KVM and retains its evidence paths.
+- PASS locally: `git diff --check`; `bash -n scripts/test-keyguard-native-diagnostic.sh scripts/test-keyguard-runtime.sh scripts/test-keyguard-service-trace.sh`; `sh -n -c` for the exact folded POSIX action command; and the prescribed Ubuntu/proot targeted Flutter invocation for the three boundary files (9 tests). Local Android compilation/instrumentation is NOT RUN on the ARM host.
+- Required remote diagnostic/full validation, APK delivery, dashboard result and physical validation remain NOT RUN. `PHYSICAL VALIDATION — PENDING, USER ONLY`.

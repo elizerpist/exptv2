@@ -311,7 +311,7 @@ void main() {
       profileWorkflow,
       contains(
         "run-dashboard-profile:\n"
-        "    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true'\n"
+        "    if: \${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}\n"
         "    needs: [test-core, test-flutter, dashboard-paths]\n"
         "    runs-on: ubuntu-latest",
       ),
@@ -323,7 +323,7 @@ void main() {
       profileWorkflow,
       contains(
         "run-dashboard-profile-baseline:\n"
-        "    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)\n"
+        "    if: \${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}\n"
         "    needs: [test-core, test-flutter]\n"
         "    runs-on: ubuntu-latest",
       ),
