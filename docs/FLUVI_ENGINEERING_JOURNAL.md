@@ -8881,3 +8881,31 @@ No new implementation or runtime validation is claimed. The earlier diagnostic-w
 ### Changed and limitations
 
 Only this journal is appended. The uploaded rule assets, application, tests and workflow are unchanged. This records the assessment and exact next revision requirements; it is not a claim that the new rules or diagnostic pipeline have been implemented. No new native pass or APK is claimed. Physical validation: PENDING — USER ONLY.
+
+
+## 2026-11-12 — Delivered replacement rule assets: base 2.1 and widget addendum 1.2
+
+- User explicitly requests rewriting the two rule assets for re-upload. This is authorized rules work outside the repository; reviewer repository changes remain journal-only.
+- Source attachments were verified unchanged from the complete preceding read: base 2.0 SHA-256 0eba0a5e96358666ee43ea339b2df44e6b2855741d17c31255c1b53b5a324abf; widget 1.1 SHA-256 2bc34beffe6975fab78279329904e45b4e70e9046e72f8ceb3c12418c90a6e6a.
+- Remote HEAD was rechecked at a9201210e44b5c197653ec6b98cba7fe2878728b; no intervening commit. The unchanged application candidate remains 3b4dbba870cda66cbba830b1bcd1ca4183636d91. This task does not reinterpret physical lag or run native validation.
+
+### Delivered files
+
+- FLUVI_PROMPT_WRITER_RULES.md — version 2.1; 49120 UTF-8 bytes; 1439 lines; SHA-256 ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2.
+- FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md — version 1.2; 42107 UTF-8 bytes; 423 lines; SHA-256 c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b.
+
+### Changes and verification
+
+- Added reviewer-filled risk/change/test matrix, complete bounded repair planning and concrete production/fixture state contracts, with exact source, reachable states, protective conditions and test/negative-control evidence.
+- Defined quick, targeted diagnostic and full-delivery validation stages; compatible local/remote execution must actually exist. Missing diagnostic infrastructure requires its own bounded plan, not an invented command or a claim of availability.
+- Defined a pre-full-CI results table, per-run/source failure ledger, all-failure-family review, and return of the first contradictory contract evidence to the reviewer. Routine mechanical fixes within the contract and independent authorized work remain allowed.
+- Preserved final mandatory gates and user-only physical acceptance. Diagnostic selections/repetitions retain every failure and do not authorize Human APK delivery. An unchanged candidate can reuse its exact matching artifacts for defined diagnostic repetitions; changed source/build inputs require a matching rebuild.
+- Clarified that pure EVIDENCE_COLLECTION has only its prescribed experiment, necessary checks and artifacts; it does not acquire an automatic repaired-APK delivery obligation.
+- Widget-specific additions cover synchronous callback ordering, reusable resources versus frame/buffer use, bounded stale/cancel/dispose handling, route/fallback exclusivity and actual episode output. They are required investigations, not a permanent zero-occupancy or renderer prescription.
+- Read the complete generated diffs and checked role/scope consistency. Structural validation PASS: base prompt sections remain exactly 1–21; widget sections remain exactly 1–19; reciprocal version references match 2.1/1.2; journal path and physical-status invariant retained; no trailing whitespace.
+- Both complete replacement Markdown files were successfully saved and made available for download. They are intended to replace the old project uploads. No automatic modification of project settings or attached source assets is claimed.
+- Only this journal is appended in GitHub with [skip ci]; existing workflow configuration is unchanged. Verify exact append, journal-only diff and absence of a source-head workflow run after publication.
+
+### Limits
+
+The rule assets are delivered; the proposed short native diagnostic pipeline is still not implemented. No application, test or workflow source change, new APK, native pass or physical acceptance is claimed. Physical validation: PENDING — USER ONLY.
