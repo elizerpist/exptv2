@@ -1,0 +1,45 @@
+{
+  "task": "FLUVI W-HIDE withdrawal-boundary provenance",
+  "repository_source_head": "b0f51c50e5c516b51329e40b9e5d7035236ee59c",
+  "repository_source_parent": "ec3aab8487aa7f72eabf7ca26009679fdcd0d175",
+  "branch": "fix/orb-v4-latency-lockscreen",
+  "source_delta": [
+    "API35 service fixture waits for the existing terminal unlocked-and-withdrawn predicate within its pre-existing five-second budget",
+    "engineering journal records the SystemUI rapid-reentry synchronization evidence"
+  ],
+  "source_delta_note": "This source delta contains Android instrumentation and documentation only. It does not change the production W-HIDE signal, visibility, renderer, shader, resource, or dashboard path.",
+  "index": {
+    "generator": "scip_dart 1.6.2 via tools/codegraph",
+    "sha256": "59949b6c31c0da21fd0bfb6f02c3aa02bf4c072d24d553ea40077cafcda615d3",
+    "language_documents": { "Dart": 807 },
+    "kotlin_coverage": false,
+    "clean_source_note": "The index source worktree excludes the ignored historical build/ci-dashboard-profile-b6267f8 output, so its Dart document count is one lower than the prior e790 graph."
+  },
+  "dart_queries": {
+    "KeyguardTimingCaptureBridge": { "references": 8, "production": 3, "tests": 5 },
+    "KeyguardTimingCaptureSnapshot": { "references": 12, "production": 12, "tests": 0 },
+    "DebugConsoleDialog": { "references": 5, "production": 3, "tests": 2 }
+  },
+  "native_inventory": {
+    "coverage": "Explicit current-source inventory; not SCIP coverage.",
+    "withdrawal_chain": [
+      "FluviKeyguardCardService ACTION_USER_PRESENT/system exclusion to hideImmediately",
+      "KeyguardCardWindow Main-owned root INVISIBLE, controller stop and removeViewImmediate",
+      "KeyguardCardMaterialController forwards the exact isolated-layer hide submission",
+      "KeyguardOrbBufferRenderer Api34 revokes the exact old lease and submits setBuffer(null)/setVisibility(false)",
+      "KeyguardCardSettings reducer retains ISOLATED_LAYER_HIDE_SUBMITTED separately from deferred cleanup"
+    ],
+    "test_consumers": [
+      "KeyguardHeaderMaterialViewInstrumentationTest blocked-renderer withdrawal integration",
+      "KeyguardCardDiagnosticsInstrumentationTest actual-withdrawal diagnostic reduction",
+      "KeyguardServiceOverlayInstrumentationTest connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles"
+    ],
+    "current_test_delta": "The service fixture synchronizes its next independent reentry to the existing terminal keyguard-and-withdrawal state; it introduces no production behavior."
+  },
+  "verification": {
+    "workflow": "https://github.com/elizerpist/exptv2/actions/runs/43188818984",
+    "status_at_generation": "in_progress",
+    "physical_validation": "PENDING_USER"
+  },
+  "limits": "The graph is Dart reference navigation only. It neither covers Kotlin nor proves SystemUI ordering, SurfaceControl presentation, physical withdrawal, device pacing, or physical acceptance."
+}

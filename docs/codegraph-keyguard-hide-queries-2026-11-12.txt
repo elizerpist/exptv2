@@ -1,0 +1,31 @@
+Exact source: b0f51c50e5c516b51329e40b9e5d7035236ee59c
+Generator: tools/codegraph / scip_dart 1.6.2
+Raw SCIP SHA-256: 59949b6c31c0da21fd0bfb6f02c3aa02bf4c072d24d553ea40077cafcda615d3
+Coverage: 807 Dart documents only. Kotlin is not covered by this SCIP index.
+
+KeyguardTimingCaptureBridge
+definition: lib/core/diagnostics/keyguard_timing_capture_bridge.dart:16
+references: total=8 production=3 tests=5
+consumer files:
+- lib/app/shell/fluvi_app_shell.dart
+- lib/core/debug/debug_console.dart
+- lib/core/debug/debug_floating_button.dart
+- test/core/debug/keyguard_timing_capture_console_test.dart
+- test/core/diagnostics/keyguard_timing_capture_bridge_test.dart
+
+KeyguardTimingCaptureSnapshot
+definition: lib/core/diagnostics/keyguard_timing_capture_bridge.dart:75
+references: total=12 production=12 tests=0
+consumer files:
+- lib/core/debug/debug_console.dart
+- lib/core/diagnostics/keyguard_timing_capture_bridge.dart
+
+DebugConsoleDialog
+definition: lib/core/debug/debug_console.dart:13
+references: total=5 production=3 tests=2
+consumer files:
+- lib/core/debug/debug_console.dart
+- lib/core/debug/debug_floating_button.dart
+- test/core/debug/keyguard_timing_capture_console_test.dart
+
+These query results are reference navigation, not a Kotlin ownership audit or runtime evidence.
