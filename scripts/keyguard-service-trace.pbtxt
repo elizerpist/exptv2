@@ -1,7 +1,10 @@
 # Disposable API35 CI only. No profiler, new clock or tracing service is
 # installed in the human APK. Trace coverage must be checked after recording.
 buffers { size_kb: 65536 fill_policy: RING_BUFFER }
-duration_ms: 120000
+# The owned service fixture has a fixed 30-cycle lifecycle gate. The host
+# watchdog remains 360 seconds; leave trace recording available through that
+# complete bounded scenario and terminate it explicitly after instrumentation.
+duration_ms: 390000
 data_sources {
   config {
     name: "linux.ftrace"
