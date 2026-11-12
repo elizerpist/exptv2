@@ -1,16 +1,17 @@
 {
   "task": "FLUVI W-HIDE withdrawal-boundary provenance",
-  "repository_source_head": "b0f51c50e5c516b51329e40b9e5d7035236ee59c",
-  "repository_source_parent": "ec3aab8487aa7f72eabf7ca26009679fdcd0d175",
+  "repository_source_head": "865d84dcab2d0aa59f159e5e3ed5d321385b5d5c",
+  "repository_source_parent": "b1aea959e2b6011a86dd12cc4ff2c85d370e4558",
   "branch": "fix/orb-v4-latency-lockscreen",
   "source_delta": [
-    "API35 service fixture waits for the existing terminal unlocked-and-withdrawn predicate within its pre-existing five-second budget",
-    "engineering journal records the SystemUI rapid-reentry synchronization evidence"
+    "isolated-layer A/C/B/A compositor test primes the retained bootstrap and samples its reference A only after Main suppresses that bootstrap",
+    "API35 service fixture issues its existing public terminal dismissal after the non-terminal accessibility-idle boundary, within the pre-existing five-second budget",
+    "engineering journal records both test-fixture ordering corrections and their retained CI evidence"
   ],
   "source_delta_note": "This source delta contains Android instrumentation and documentation only. It does not change the production W-HIDE signal, visibility, renderer, shader, resource, or dashboard path.",
   "index": {
     "generator": "scip_dart 1.6.2 via tools/codegraph",
-    "sha256": "59949b6c31c0da21fd0bfb6f02c3aa02bf4c072d24d553ea40077cafcda615d3",
+    "sha256": "0d856f42558b9aba5fa07c70e07961560430547195b61b5bc9089bf2d91c456e",
     "language_documents": { "Dart": 807 },
     "kotlin_coverage": false,
     "clean_source_note": "The index source worktree excludes the ignored historical build/ci-dashboard-profile-b6267f8 output, so its Dart document count is one lower than the prior e790 graph."
@@ -34,7 +35,7 @@
       "KeyguardCardDiagnosticsInstrumentationTest actual-withdrawal diagnostic reduction",
       "KeyguardServiceOverlayInstrumentationTest connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles"
     ],
-    "current_test_delta": "The service fixture synchronizes its next independent reentry to the existing terminal keyguard-and-withdrawal state; it introduces no production behavior."
+    "current_test_delta": "The lower compositor control waits for the retained bootstrap handoff before sampling reference A; the service fixture reissues its existing public terminal dismissal after accessibility-idle before awaiting the terminal state. Neither introduces production behavior."
   },
   "verification": {
     "workflow": "https://github.com/elizerpist/exptv2/actions/runs/43188818984",
