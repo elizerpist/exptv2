@@ -58,7 +58,10 @@ if [[ ! "$trace_pid" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 test_result=0
-timeout -k 5s 110s adb shell am instrument -w -r \
+# The service fixture contains a fixed 30-cycle real overlay lifecycle gate.
+# Keep one hard host bound, sized from the complete scenario rather than
+# weakening its per-boundary instrumentation deadlines.
+timeout -k 5s 360s adb shell am instrument -w -r \
   -e sourceSha "$(git rev-parse HEAD)" \
   -e class com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest \
   com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \

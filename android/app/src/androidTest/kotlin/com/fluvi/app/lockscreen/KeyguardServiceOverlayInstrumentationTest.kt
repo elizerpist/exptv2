@@ -86,7 +86,11 @@ class KeyguardServiceOverlayInstrumentationTest {
             flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
         output = File(context.filesDir, "keyguard-service-probe").apply { mkdirs() }
-        deadline = SystemClock.uptimeMillis() + 80_000L
+        // This is one budget for the whole real-service scenario, including
+        // 30 independently attached/showing/live/withdrawn rapid cycles.
+        // Per-boundary waits below deliberately retain their tighter limits;
+        // this is not a relaxation of any individual failure condition.
+        deadline = SystemClock.uptimeMillis() + SERVICE_SCENARIO_BUDGET_MS
         val resolver = context.contentResolver
         val savedServices = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
         val savedEnabled = Settings.Secure.getString(resolver, Settings.Secure.ACCESSIBILITY_ENABLED)
@@ -285,6 +289,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             assertTrue("Warm reentry must advance actual current-renderer output",
                 reentry.material.actualOutputCount() > warm.material.actualOutputCount())
             unlockAndAssertWithdrawn("final-unlock")
+            exerciseRapidLifecycleCycles(reentry)
             record("RESULT", "OUTPUT_LIVENESS_PASS performanceAndNothingDevice=UNVERIFIED")
         } catch (failure: Throwable) {
             testFailure = failure
@@ -943,11 +948,44 @@ class KeyguardServiceOverlayInstrumentationTest {
             "HardwareBufferRenderer/SurfaceControl", material.activeRenderer)
         assertTrue("Actual accessibility-overlay attachment published no current buffer output",
             material.isolatedPublished > 0L)
+        assertTrue(
+            "Actual isolated renderer exceeded its global three-slot resource cap",
+            material.isolatedInFlight + material.isolatedReady + material.isolatedCompositorOwned <=
+                MAX_ISOLATED_BUFFER_SLOTS,
+        )
         record("EPISODE", "name=$name windowId=${window.id} type=TYPE_ACCESSIBILITY_OVERLAY bounds=${window.bounds}" +
             " shader=${material.shader} phase=${material.phase} isolatedPublished=${material.isolatedPublished}" +
             " state=${material.state} hardware=${material.hardware} renderer=${material.activeRenderer}" +
             " effect=${material.effect} generatedAgslHash=${material.generatedAgslHash}")
         Episode(material, window)
+    }
+
+    /**
+     * Repeats the real service/window path after the calibrated pixel portion
+     * has completed. Each iteration has a fresh accessibility attachment,
+     * requires current-attachment output, then proves both remote metadata
+     * and the owning process root withdrew. No synthetic visibility callback,
+     * renderer allocation, or per-cycle resource allowance is introduced.
+     */
+    private fun exerciseRapidLifecycleCycles(initial: Episode) {
+        var previous = initial
+        val firstOutput = initial.material.actualOutputCount()
+        repeat(RAPID_LIFECYCLE_CYCLES) { index ->
+            val name = "rapid-cycle-${index + 1}"
+            val current = episode(name)
+            assertTrue(
+                "$name must advance output beyond the preceding detached attachment",
+                current.material.actualOutputCount() > previous.material.actualOutputCount(),
+            )
+            unlockAndAssertWithdrawn("$name-unlock")
+            previous = current
+        }
+        record(
+            "RAPID_LIFECYCLE",
+            "cycles=$RAPID_LIFECYCLE_CYCLES firstOutput=$firstOutput " +
+                "finalOutput=${previous.material.actualOutputCount()} " +
+                "globalSlotCap=$MAX_ISOLATED_BUFFER_SLOTS",
+        )
     }
 
     private fun screenOff(synchronizeInput: Boolean = false) {
@@ -1335,6 +1373,9 @@ class KeyguardServiceOverlayInstrumentationTest {
 
     companion object {
         private const val TAG = "FluviServiceProbe"
+        private const val RAPID_LIFECYCLE_CYCLES = 30
+        private const val MAX_ISOLATED_BUFFER_SLOTS = 3L
+        private const val SERVICE_SCENARIO_BUDGET_MS = 330_000L
         private const val PHASE_A = 1.196795f
         private const val PHASE_C = 1.5234617f
         private const val PHASE_B = 3.75f
