@@ -3860,6 +3860,50 @@ EVENTS
 END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1
 ```
 
+## 2026-11-12 — Calibrated compositor-crop boundary: timeout evidence expansion
+
+- Starting application/test source: `b60b295ba2f47d2ccd3031ae2b4ec479c6b9b70c`.
+  This is after the service fixture correction; it does not change the
+  physically tested `04e229c` application baseline or claim a phone-latency
+  result.
+- Current CI evidence: native job `131251221216` in workflow
+  `43236915885` executed the request-book regressions and the real service
+  fixture successfully (`OK (1 test)`, including 30 rapid lifecycle cycles),
+  but failed two lower material tests: `productionAssetCompilesAndDrawsCalibratedHardwareCanvas`
+  and `isolatedOrbPublishesCalibratedCompositorPixels`.
+- The retained archive
+  `keyguard-material-smoke.tar` SHA-256
+  `e16732fb7c2525d22f556b45abde3c128ac635e2c13220d6dc1ae5c64948155a`
+  contains identical 168×168 timeout crops for both failures:
+  SHA-256 `c160cb8bd5a45427be9eb8bdb5435403e910e458677581baa9396f2f5486b8fc`.
+  The isolated producer A sample differs and is retained as
+  `isolated-producer-a.png`, SHA-256
+  `e74545c8e0f3575afe468c7c43faa4606052214e92b2390722dba534956a0869`,
+  identity `lease=1/1 slot=3 use=1 requestId=2 phase=1.196795`.
+- The two failing crops visibly contain the same non-ORB UI fragment. This
+  falsifies neither producer output nor renderer liveness. The current
+  failure boundary is the common UiAutomation screenshot/crop observation;
+  it must not be reported as a frozen HardwareBuffer renderer.
+- Log chronology rejects the simplest host-start explanation: for the Canvas
+  test, ActivityTaskManager reported the target activity displayed at
+  elapsed 150.622s and UiAutomation initialized at 152.998s before the
+  8-second crop loop ended at 161.031s. The panel test has the same pattern
+  (displayed 256.017s, timeout 266.042s). This still does not prove that the
+  selected crop maps to the intended composed layer.
+- Changed in the pending test-only unit: each failing compositor wait now
+  retains, before its assertion, one full screenshot plus exact target
+  geometry (screen/window positions, ViewRoot state, display metrics,
+  rotation, focus), and isolated-frame lease/slot/use/request/phase identity.
+  Passing and performance paths do not allocate these artifacts. No
+  production renderer, shader, eligibility, privacy, or resource ownership
+  behavior changed.
+- Validation before the next CI run: `bash scripts/verify-fluvi-boundaries.sh`
+  PASS; `git diff --check` PASS. Android compilation/instrumentation is
+  PENDING in the supported CI environment. Next action: execute this bounded
+  evidence unit, inspect the persisted full screenshots/metadata, then repair
+  only the proven compositor observation boundary.
+- Physical validation: PENDING — USER ONLY.
+
 ## 2026-11-12 — detached ORB prewarm handoff drain after API35 RED
 
 Application correction: `22e5a617` (`fix(keyguard): drain detached ORB prewarm handoff`), parent `ef366946`.

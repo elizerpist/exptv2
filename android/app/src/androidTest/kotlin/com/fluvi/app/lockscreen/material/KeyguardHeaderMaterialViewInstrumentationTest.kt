@@ -458,6 +458,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     capture = { copyMaterialView(instrumentation, view) },
                     persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
                     accepts = accepts,
+                    onTimeout = {
+                        persistMaterialCompositorTimeout(
+                            activity = activity,
+                            instrumentation = instrumentation,
+                            label = label,
+                            view = view,
+                            phase = phase,
+                        )
+                    },
                 )
             }
 
@@ -788,6 +797,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 capture = { copyPanelOrb(instrumentation, manager) },
                 persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
                 accepts = { hasVisibleMaterial(it) },
+                onTimeout = {
+                    persistPanelCompositorTimeout(
+                        activity = activity,
+                        instrumentation = instrumentation,
+                        label = "isolated-orb-a",
+                        manager = manager,
+                        frame = producerA.frame,
+                    )
+                },
             )
             val publishedA = isolatedPublished(instrumentation, window)
 
@@ -803,6 +821,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 capture = { copyPanelOrb(instrumentation, manager) },
                 persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
                 accepts = { compareMaterialPixels(requireNotNull(imageA), it).nearlyEqual() },
+                onTimeout = {
+                    persistPanelCompositorTimeout(
+                        activity = activity,
+                        instrumentation = instrumentation,
+                        label = "isolated-orb-c",
+                        manager = manager,
+                        frame = producerC.frame,
+                    )
+                },
             )
             val publishedC = isolatedPublished(instrumentation, window)
 
@@ -818,6 +845,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 capture = { copyPanelOrb(instrumentation, manager) },
                 persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
                 accepts = { compareMaterialPixels(requireNotNull(imageA), it).meaningful() },
+                onTimeout = {
+                    persistPanelCompositorTimeout(
+                        activity = activity,
+                        instrumentation = instrumentation,
+                        label = "isolated-orb-b",
+                        manager = manager,
+                        frame = producerB.frame,
+                    )
+                },
             )
             val publishedB = isolatedPublished(instrumentation, window)
 
@@ -833,6 +869,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 capture = { copyPanelOrb(instrumentation, manager) },
                 persist = { evidenceLabel, bitmap -> persistPanelEvidence(activity, evidenceLabel, bitmap) },
                 accepts = { compareMaterialPixels(requireNotNull(imageA), it).nearlyEqual() },
+                onTimeout = {
+                    persistPanelCompositorTimeout(
+                        activity = activity,
+                        instrumentation = instrumentation,
+                        label = "isolated-orb-return-a",
+                        manager = manager,
+                        frame = producerReturnA.frame,
+                    )
+                },
             )
 
             // Persist every crop before asserting, so an oracle failure keeps
@@ -1477,6 +1522,25 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             return root.isAttachedToWindow && orb.width == 168 && orb.height == 168 &&
                 location[0] > 0 && location[1] > 0
         }
+
+        fun compositorGeometry(activity: KeyguardMaterialTestActivity): String {
+            val root = requireNotNull(currentRoot) { "panel root missing" }
+            val orb = root.findViewById<View>(R.id.fluvi_financial_snapshot_orb)
+            val orbScreen = IntArray(2)
+            val orbWindow = IntArray(2)
+            val rootScreen = IntArray(2)
+            orb.getLocationOnScreen(orbScreen)
+            orb.getLocationInWindow(orbWindow)
+            root.getLocationOnScreen(rootScreen)
+            val metrics = activity.resources.displayMetrics
+            return listOf(
+                "activityWindowFocus=${activity.hasWindowFocus()}",
+                "panel=adds:$adds,removes:$removes,lastSize:${lastWidth}x${lastHeight}",
+                "orb=attached:${orb.isAttachedToWindow},shown:${orb.isShown},visibility:${orb.visibility},windowVisibility:${orb.windowVisibility},size:${orb.width}x${orb.height},screen:${orbScreen[0]},${orbScreen[1]},window:${orbWindow[0]},${orbWindow[1]}",
+                "root=attached:${root.isAttachedToWindow},shown:${root.isShown},visibility:${root.visibility},windowVisibility:${root.windowVisibility},size:${root.width}x${root.height},screen:${rootScreen[0]},${rootScreen[1]}",
+                "display=metrics:${metrics.widthPixels}x${metrics.heightPixels},density:${metrics.density},rotation:${orb.display?.rotation}",
+            ).joinToString("\n")
+        }
     }
 
     @Test fun productionOffscreenPreparationAcquiresGpuOutput() {
@@ -1609,6 +1673,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         capture: () -> Bitmap,
         persist: (String, Bitmap) -> Unit,
         accepts: (Bitmap) -> Boolean,
+        onTimeout: () -> Unit,
     ): Bitmap {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
         var last: Bitmap? = null
@@ -1627,10 +1692,106 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
         try {
             last?.let { persist("$label-observation-timeout", it) }
+            onTimeout()
         } finally {
             last?.recycle()
         }
         throw AssertionError("$label compositor crop never met its request-bound predicate")
+    }
+
+    /**
+     * A crop predicate failure is not evidence that the renderer is frozen.
+     * Preserve the exact target geometry, ViewRoot state and one full-display
+     * screenshot before throwing, so a later investigation can distinguish a
+     * bad crop from a missing composed layer without adding work to a passing
+     * or performance run.
+     */
+    private fun persistMaterialCompositorTimeout(
+        activity: KeyguardMaterialTestActivity,
+        instrumentation: Instrumentation,
+        label: String,
+        view: View,
+        phase: Float,
+    ) {
+        persistCompositorTimeout(
+            activity = activity,
+            instrumentation = instrumentation,
+            label = label,
+            target = "hardware-canvas",
+            identity = "phase=$phase",
+            geometry = { materialCompositorGeometry(activity, view) },
+        )
+    }
+
+    private fun persistPanelCompositorTimeout(
+        activity: KeyguardMaterialTestActivity,
+        instrumentation: Instrumentation,
+        label: String,
+        manager: TestPanelWindowManager,
+        frame: KeyguardOrbBufferProducerFrame,
+    ) {
+        persistCompositorTimeout(
+            activity = activity,
+            instrumentation = instrumentation,
+            label = label,
+            target = "isolated-panel",
+            identity = "lease=${frame.lease.attachment}/${frame.lease.generation} " +
+                "slot=${frame.slotId} use=${frame.useGeneration} " +
+                "requestId=${frame.testRequestId} phase=${frame.materialTime.phase}",
+            geometry = { manager.compositorGeometry(activity) },
+        )
+    }
+
+    private fun persistCompositorTimeout(
+        activity: KeyguardMaterialTestActivity,
+        instrumentation: Instrumentation,
+        label: String,
+        target: String,
+        identity: String,
+        geometry: () -> String,
+    ) {
+        val directory = File(activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
+        val details = StringBuilder().apply {
+            appendLine("target=$target")
+            appendLine(identity)
+            appendLine("elapsedRealtimeMs=${SystemClock.elapsedRealtime()}")
+        }
+        runCatching {
+            var measured = "UNOBSERVED:mainGeometryDidNotRun"
+            instrumentation.runOnMainSync { measured = geometry() }
+            details.appendLine(measured)
+        }.onFailure { details.appendLine("geometry=UNOBSERVED:${it.javaClass.simpleName}:${it.message}") }
+        val screen = instrumentation.uiAutomation.takeScreenshot()
+        if (screen == null) {
+            details.appendLine("screenshot=UNOBSERVED:UiAutomationReturnedNull")
+        } else {
+            try {
+                details.appendLine("screenshot=${screen.width}x${screen.height} config=${screen.config}")
+                File(directory, "$label-observation-timeout-screen.png").outputStream().use {
+                    screen.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+            } finally {
+                screen.recycle()
+            }
+        }
+        File(directory, "$label-observation-timeout.txt").writeText(details.toString())
+    }
+
+    private fun materialCompositorGeometry(activity: KeyguardMaterialTestActivity, view: View): String {
+        val viewScreen = IntArray(2)
+        val viewWindow = IntArray(2)
+        val rootScreen = IntArray(2)
+        view.getLocationOnScreen(viewScreen)
+        view.getLocationInWindow(viewWindow)
+        val root = view.rootView
+        root.getLocationOnScreen(rootScreen)
+        val metrics = activity.resources.displayMetrics
+        return listOf(
+            "activityWindowFocus=${activity.hasWindowFocus()}",
+            "view=attached:${view.isAttachedToWindow},shown:${view.isShown},visibility:${view.visibility},windowVisibility:${view.windowVisibility},size:${view.width}x${view.height},screen:${viewScreen[0]},${viewScreen[1]},window:${viewWindow[0]},${viewWindow[1]}",
+            "root=attached:${root.isAttachedToWindow},shown:${root.isShown},visibility:${root.visibility},windowVisibility:${root.windowVisibility},size:${root.width}x${root.height},screen:${rootScreen[0]},${rootScreen[1]}",
+            "display=metrics:${metrics.widthPixels}x${metrics.heightPixels},density:${metrics.density},rotation:${view.display?.rotation}",
+        ).joinToString("\n")
     }
 
     private data class MaterialPixelComparison(
