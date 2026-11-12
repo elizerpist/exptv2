@@ -359,8 +359,15 @@ class KeyguardServiceOverlayInstrumentationTest {
                     // disappearance from the accessibility metadata list.
                     val episodes = report.lineSequence().filter { it.startsWith(" EPISODE ") }.toList()
                     assertTrue("Completed fixture lost all episode evidence", episodes.isNotEmpty())
-                    assertFalse("Completed terminal fixture lacks retained withdrawal evidence", episodes.any {
-                        it.contains(" withdrawal=NA") || it.contains(" removeReturn=NA")
+                    // The bounded reducer may retain a newly opened current
+                    // episode beside completed ones when the capture freezes.
+                    // Each terminal and rapid-cycle withdrawal is asserted at
+                    // its actual window/root boundary above. The final export
+                    // must retain at least one completed actual withdrawal;
+                    // it must not reinterpret a concurrent open episode as a
+                    // failed terminal removal.
+                    assertTrue("Completed terminal fixture lacks retained withdrawal evidence", episodes.any {
+                        !it.contains(" withdrawal=NA") && !it.contains(" removeReturn=NA")
                     })
                 }
                 report.lineSequence().filter { it.startsWith("ATTEMPT ") || it.startsWith(" EPISODE ") ||
