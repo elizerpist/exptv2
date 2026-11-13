@@ -1,9 +1,11 @@
 {
   "schema_version": 1,
-  "source_head": "495fc38b0339c93880ad1f159be9d6e284cc57d0",
-  "base_head": "0a5eedbd2b3289d9000fdfb2fd9475419b2268c2",
+  "source_head": "93161f4ea304a3fb18a7a4dc2336bdab678de4b1",
+  "base_head": "57d091bc23fe1fb12db579014497ff8d706a0552",
   "changed_files": [
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt"
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+    "docs/FLUVI_ENGINEERING_JOURNAL.md"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",

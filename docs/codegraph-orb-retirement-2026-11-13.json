@@ -1,0 +1,1141 @@
+{
+  "schema_version": 1,
+  "task": "R06 revoked-lease publication retirement",
+  "application_source_sha": "93161f4ea304a3fb18a7a4dc2336bdab678de4b1",
+  "application_parent_sha": "57d091bc23fe1fb12db579014497ff8d706a0552",
+  "tooling_base_sha": "4d1ddfa84f5f5d4f8f37cf64068c40a89e5c324c",
+  "tooling_branch": "tooling/orb-retirement-93161f4e",
+  "coverage": {
+    "dart_scip": true,
+    "kotlin_scip": false,
+    "kotlin_inventory": "source navigation only",
+    "runtime_causal_graph": false,
+    "exhaustive_transitive_native_certification": false
+  },
+  "generation": {
+    "source_root": "/workspace/r06-source-93161f4e",
+    "source_tracked_clean_before_index": true,
+    "source_tracked_clean_after_index": true,
+    "scip_dart_version": "1.6.2",
+    "index_bytes": 67531867,
+    "index_sha256": "f0275be7fafea1be6ee35fdeaf684d368096bfe4151937ee3a81b71ebedcb23e",
+    "manifest_sha256": "009500c472e0ea1061ef571254d5049c84d05c57e86770ed6a83ccf8ea069b89",
+    "document_count": 807,
+    "occurrence_count": 568949,
+    "repository_defined_symbol_count": 20252,
+    "verified_shards": 102,
+    "graph_counts": {
+      "symbols": 20252,
+      "refs": 136383,
+      "edges": 42214,
+      "changed-impact": 0
+    }
+  },
+  "tooling_validation": {
+    "tests": "PASS16",
+    "analyze": "PASS no issues",
+    "initial_sandbox_analyze": "Environment cache-write failure; approved rerun outside the sandbox passed without tooling code changes.",
+    "shard_hashes_and_record_counts": "PASS",
+    "queries_source_definitions": "PASS:5 definitions verified at their zero-based SCIP coordinates.",
+    "query_coordinates": "Existing CLI prints zero-based SCIP lines/columns; source_one_based_line records verified editor/GitHub location."
+  },
+  "queries": [
+    {
+      "symbol": "KeyguardTimingCaptureBridge",
+      "definition_file": "lib/core/diagnostics/keyguard_timing_capture_bridge.dart",
+      "query_scip_zero_based_line": 16,
+      "source_one_based_line": 17,
+      "definition_source_verified": true,
+      "references": {
+        "total": 8,
+        "production": 3,
+        "tests": 5
+      }
+    },
+    {
+      "symbol": "KeyguardTimingCaptureSnapshot",
+      "definition_file": "lib/core/diagnostics/keyguard_timing_capture_bridge.dart",
+      "query_scip_zero_based_line": 75,
+      "source_one_based_line": 76,
+      "definition_source_verified": true,
+      "references": {
+        "total": 12,
+        "production": 12,
+        "tests": 0
+      }
+    },
+    {
+      "symbol": "DebugConsoleDialog",
+      "definition_file": "lib/core/debug/debug_console.dart",
+      "query_scip_zero_based_line": 13,
+      "source_one_based_line": 14,
+      "definition_source_verified": true,
+      "references": {
+        "total": 5,
+        "production": 3,
+        "tests": 2
+      }
+    },
+    {
+      "symbol": "FluviDiagnosticBridge",
+      "definition_file": "lib/core/diagnostics/fluvi_diagnostic_bridge.dart",
+      "query_scip_zero_based_line": 10,
+      "source_one_based_line": 11,
+      "definition_source_verified": true,
+      "references": {
+        "total": 2,
+        "production": 1,
+        "tests": 1
+      }
+    },
+    {
+      "symbol": "DashboardKeyguardMaterialBridge",
+      "definition_file": "lib/app/platform/dashboard_keyguard_material_bridge.dart",
+      "query_scip_zero_based_line": 11,
+      "source_one_based_line": 12,
+      "definition_source_verified": true,
+      "references": {
+        "total": 2,
+        "production": 2,
+        "tests": 0
+      }
+    }
+  ],
+  "native_source_files": [
+    {
+      "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+      "sha256": "5b6eb08e97af4600ead26437be6a11c50f560c7da5077895e5833dccd7f7e500",
+      "git_blob": "65f5ffa03282bad72f05dfaef989053a59173c09"
+    },
+    {
+      "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+      "sha256": "2fa3949aa00df5224f4cb22f0ae8972a55690dc761a1fc9db8fee825775132d1",
+      "git_blob": "2e1e12429d4109dbbd58a52eaf6315956a9dcb44"
+    },
+    {
+      "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+      "sha256": "a6ee3555e4a6a8aac637065a4996277e8f12cd0730e9daf994ce9cc0d44107ed",
+      "git_blob": "9aeb6d30b776420deb29db58e310778ab3264905"
+    },
+    {
+      "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+      "sha256": "6b963b7a6af9bdb4904c5629be45bd146d7346a3579b7a6f4574d30d7cce8964",
+      "git_blob": "57471a4a0c4f67f8c52617274a76cef76c50c379"
+    }
+  ],
+  "native_inventory": [
+    {
+      "symbol": "KeyguardOrbBufferRenderer",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 290,
+        "source_line": "internal class KeyguardOrbBufferRenderer(",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L290"
+      },
+      "owner": "Main facade; nested Worker owns buffers",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+          "line": 119,
+          "source_line": "        KeyguardOrbBufferRenderer(",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L119"
+        }
+      ],
+      "contract": "The single production constructor uses named arguments. The new barrier and ownership observer default to hooks captured once when the renderer is constructed.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Api34.ensureLayer",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 539,
+        "source_line": "        private fun ensureLayer(value: KeyguardOrbBufferAttachment) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L539"
+      },
+      "owner": "Main child/grant authority",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 428,
+          "source_line": "                ensureLayer(current)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L428"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 452,
+          "source_line": "            ensureLayer(next)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L452"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 502,
+          "source_line": "                        ensureLayer(value)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L502"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 514,
+          "source_line": "                    ensureLayer(value)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L514"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 539,
+          "source_line": "        private fun ensureLayer(value: KeyguardOrbBufferAttachment) {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L539"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 621,
+          "source_line": "                    ensureLayer(value)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L621"
+        }
+      ],
+      "contract": "Finds or creates the Main-owned child and forwards its exact lease and child to Worker.setAttachment. Measured size changes remain controller-owned.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.setAttachment",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 926,
+        "source_line": "        fun setAttachment(lease: KeyguardOrbBufferLease, child: SurfaceControl) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L926"
+      },
+      "owner": "Main grant mutation; queued Worker attachment bookkeeping",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 598,
+          "source_line": "            worker.setAttachment(spec.lease, requireNotNull(layer))",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L598"
+        }
+      ],
+      "contract": "An active grant with the same lease and identical child is reused. Every displaced grant is deactivated. Repeated layout preserves grant identity without a second renderer or pool.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Api34.hideLayer",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 629,
+        "source_line": "        private fun hideLayer() {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L629"
+      },
+      "owner": "Main visibility and retirement capture",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 419,
+          "source_line": "                if (layerLease != null && layerLease != spec.lease) hideLayer()",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L419"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 425,
+          "source_line": "            if (old != null && old.scene.full && !spec.scene.full) hideLayer()",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L425"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 457,
+          "source_line": "            // attachment/layer. hideLayer() revokes that lease immediately,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L457"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 464,
+          "source_line": "            hideLayer()",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L464"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 629,
+          "source_line": "        private fun hideLayer() {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L629"
+        }
+      ],
+      "contract": "Captures the exact lease and child, revokes that publication and immediately clears and hides the same child. The child is removed only after exact lease drain.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.revokePublication",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 947,
+        "source_line": "        fun revokePublication(lease: KeyguardOrbBufferLease, child: SurfaceControl) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L947"
+      },
+      "owner": "Main synchronous revocation; Worker final buffer-only clear",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 636,
+          "source_line": "                worker.revokePublication(lease, child)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L636"
+        }
+      ],
+      "contract": "Exact lease and child matching prevents cleanup against a replacement. The existing Worker runnable orders the final buffer-null transaction after any accepted steady submission and before drain accounting. Failure uses existing lease-qualified reporting without granting reuse.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.publishSteady",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 1422,
+        "source_line": "        private fun publishSteady(slot: Slot, frame: ReadyFrame) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1422"
+      },
+      "owner": "Worker buffer submission only",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1363,
+          "source_line": "                        publishSteady(slot, ready)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1363"
+        }
+      ],
+      "contract": "Validates the grant, then invokes the captured barrier before apply. The production default is a no-op. It performs no visibility or parenting operation and adds no steady transaction. Accepted A may submit before the queued final A clear.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Api34.publishReady",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 699,
+        "source_line": "        private fun publishReady(frame: ReadyFrame) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L699"
+      },
+      "owner": "Main first/on-draw publication",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 695,
+          "source_line": "                publishReady(frame)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L695"
+        }
+      ],
+      "contract": "The first applyTransactionOnDraw and invalidate route is retained. The actual release closure forwards the exact slot/use identity and captured child identity; buffer and fence ownership are unchanged.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.markFirstPublished",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 1059,
+        "source_line": "        fun markFirstPublished(frame: ReadyFrame, childIdentity: Int) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1059"
+      },
+      "owner": "Worker first-publication bookkeeping",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 744,
+          "source_line": "                    worker.markFirstPublished(frame, System.identityHashCode(child))",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L744"
+        }
+      ],
+      "contract": "The exact READY use becomes PUBLISHED. Existing early receipt replay for the first/on-draw path remains. H2 steady early-receipt behavior is not repaired.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.consumeRelease",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 1090,
+        "source_line": "        private fun consumeRelease(",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1090"
+      },
+      "owner": "Worker exact slot/use receipt owner",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1073,
+          "source_line": "                    consumeRelease(frame.slotId, frame.useGeneration, receipt.value, replayed = true)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1073"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1086,
+          "source_line": "                consumeRelease(slotId, useGeneration, releaseFence, childIdentity, \"first/on-draw\")",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1086"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1090,
+          "source_line": "        private fun consumeRelease(",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1090"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1100,
+          "source_line": "                    consumeRelease(slotId, useGeneration, releaseFence, childIdentity, publicationPath, replayed)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1100"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1441,
+          "source_line": "                        Consumer { releaseFence -> consumeRelease(frame.slotId, frame.useGeneration, releaseFence) },",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1441"
+        }
+      ],
+      "contract": "An actual early READY receipt is retained. A matching PUBLISHED receipt transitions to WAIT_RELEASE_FENCE. Passive scalar evidence tracks publication path, receipt and pending fence; no callback is fabricated.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.awaitFence",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 1472,
+        "source_line": "        private fun awaitFence(",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1472"
+      },
+      "owner": "Existing fence Handler waits; Worker state owner",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1139,
+          "source_line": "            awaitFence(slotId, useGeneration, SlotState.WAIT_RELEASE_FENCE, releaseFence)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1139"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1469,
+          "source_line": "            awaitFence(slot.id, slot.useGeneration, SlotState.WAIT_RENDER_FENCE, fence)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1469"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1472,
+          "source_line": "        private fun awaitFence(",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1472"
+        }
+      ],
+      "contract": "Valid fence waits remain on the existing fence thread. An invalid or absent fence, or a signaled valid fence, returns exact slot/use completion. A timeout never permits reuse.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.finishFence",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 1502,
+        "source_line": "        private fun finishFence(slotId: Long, useGeneration: Long, expected: SlotState) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1502"
+      },
+      "owner": "Worker exact slot/use release completion",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1482,
+          "source_line": "                finishFence(slotId, useGeneration, expected)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1482"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1490,
+          "source_line": "                        handler.post { finishFence(slotId, useGeneration, expected) }",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1490"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1502,
+          "source_line": "        private fun finishFence(slotId: Long, useGeneration: Long, expected: SlotState) {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1502"
+        }
+      ],
+      "contract": "Checks expected state and use identity; logs release-fence-complete before ownership reset or removal, then checks exact lease drain. Disposed resources remain owned until actual completion.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.maybeNotifyLeaseDrained",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 1527,
+        "source_line": "        private fun maybeNotifyLeaseDrained(lease: KeyguardOrbBufferLease, childIdentity: Int? = null) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1527"
+      },
+      "owner": "Worker accounting -> Main removal",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 986,
+          "source_line": "                maybeNotifyLeaseDrained(lease, childIdentity)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L986"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1032,
+          "source_line": "                    maybeNotifyLeaseDrained(lease)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1032"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1519,
+          "source_line": "            completedLease?.let { maybeNotifyLeaseDrained(it, completedChildIdentity) }",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1519"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1520,
+          "source_line": "            retiringLeases.toList().forEach { maybeNotifyLeaseDrained(it) }",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1520"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1527,
+          "source_line": "        private fun maybeNotifyLeaseDrained(lease: KeyguardOrbBufferLease, childIdentity: Int? = null) {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1527"
+        }
+      ],
+      "contract": "Only the absence of remaining non-FREE uses of this exact lease permits its drain callback. A successful clear does not itself establish drain.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Api34.onLeaseDrained",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 668,
+        "source_line": "        private fun onLeaseDrained(lease: KeyguardOrbBufferLease) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L668"
+      },
+      "owner": "Main child reparent/release",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 404,
+          "source_line": "            onLeaseDrained = ::onLeaseDrained,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L404"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1532,
+          "source_line": "                onLeaseDrained(lease)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1532"
+        }
+      ],
+      "contract": "Posts Main removal keyed by the exact immutable lease in retiringLayers. It does not resolve through current B or infer release from transaction commitment.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.observeStarvation",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 1538,
+        "source_line": "        private fun observeStarvation() {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1538"
+      },
+      "owner": "Worker passive existing-callback sample",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1226,
+          "source_line": "            observeStarvation()",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1226"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1538,
+          "source_line": "        private fun observeStarvation() {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1538"
+        }
+      ],
+      "contract": "Observes existing callbacks. The 200ms capacity threshold emits diagnostic evidence only, with no added watchdog, retry or recovery authority.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.observeOwnership",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 1565,
+        "source_line": "        private fun observeOwnership(",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1565"
+      },
+      "owner": "Worker passive immutable three-slot snapshot",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 963,
+          "source_line": "                observeOwnership(\"revocation-processed\", lease = lease, childIdentity = childIdentity,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L963"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 970,
+          "source_line": "                observeOwnership(\"retirement-clear-started\", lease = lease,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L970"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 977,
+          "source_line": "                    observeOwnership(\"retirement-clear-applied\", lease = lease, childIdentity = childIdentity)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L977"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 979,
+          "source_line": "                    observeOwnership(\"retirement-clear-failed\", lease = lease, childIdentity = childIdentity,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L979"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1119,
+          "source_line": "                    observeOwnership(\"release-received\", slot = slot, log = false)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1119"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1125,
+          "source_line": "                observeOwnership(\"early-release-received\", slot = slot,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1125"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1138,
+          "source_line": "            if (!replayed) observeOwnership(\"release-received\", slot = slot, log = slot.retired)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1138"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1433,
+          "source_line": "            observeOwnership(\"steady-accepted\", slot = slot, target = target, log = false)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1433"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1452,
+          "source_line": "                observeOwnership(\"steady-submitted\", slot = slot, target = target, log = false)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1452"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1509,
+          "source_line": "                observeOwnership(\"release-fence-complete\", slot = slot, log = slot.retired)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1509"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1531,
+          "source_line": "                observeOwnership(\"lease-drained\", lease = lease, childIdentity = childIdentity)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1531"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1547,
+          "source_line": "                observeOwnership(\"starvation-entered\", lease = desired?.lease,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1547"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1554,
+          "source_line": "                observeOwnership(\"starvation-ended\", lease = desired?.lease,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1554"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 1565,
+          "source_line": "        private fun observeOwnership(",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1565"
+        }
+      ],
+      "contract": "Samples all slots together on Worker and reads the grant once without claiming an atomic Main snapshot. Production creates no per-frame snapshot collection. Lifecycle and exceptional Log.i records have a 64-record/60s cap and suppression count.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "KeyguardCardMaterialController.reconcileIsolatedOrbTarget",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+        "line": 925,
+        "source_line": "    private fun reconcileIsolatedOrbTarget(rootOverride: View? = null) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L925"
+      },
+      "owner": "Main immutable render spec/lease",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+          "line": 950,
+          "source_line": "        isolatedOrbRenderer.configure(",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L950"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+          "line": 961,
+          "source_line": "            isolatedOrbRenderer.attach(root, orb, attachment)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L961"
+        }
+      ],
+      "contract": "Supplies the exact lease and attachment. Guards for API below 34, failed isolated rendering and legacy routing remain unchanged.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "KeyguardCardMaterialController.onDetached",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+        "line": 460,
+        "source_line": "    fun onDetached(reason: String) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L460"
+      },
+      "owner": "Main controller lifecycle",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+          "line": 484,
+          "source_line": "    fun stop(reason: String) = onDetached(reason)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L484"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+          "line": 318,
+          "source_line": "        materialController?.stop(\"hide\")",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt#L318"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+          "line": 347,
+          "source_line": "        materialController?.stop(\"dispose\")",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt#L347"
+        }
+      ],
+      "contract": "Retires the child before WindowManager root removal. Worker retirement is lease-scoped; replacement desired and attached state remain independent.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "KeyguardCardMaterialController.dispose",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+        "line": 509,
+        "source_line": "    fun dispose() {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L509"
+      },
+      "owner": "Main controller lifecycle",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+          "line": 349,
+          "source_line": "        materialController?.dispose()",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt#L349"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+          "line": 517,
+          "source_line": "            isolatedOrbRenderer.dispose()",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L517"
+        }
+      ],
+      "contract": "Stops and disposes the renderer without Main waiting for Worker or fences.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "KeyguardCardMaterialController.onIsolatedOrbFailure",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+        "line": 1003,
+        "source_line": "    private fun onIsolatedOrbFailure(lease: KeyguardOrbBufferLease, error: Throwable) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L1003"
+      },
+      "owner": "Main existing lease-qualified fallback",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+          "line": 121,
+          "source_line": "            onFailure = ::onIsolatedOrbFailure,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt#L121"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 765,
+          "source_line": "        private fun onWorkerFailure(lease: KeyguardOrbBufferLease, error: Throwable) {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L765"
+        }
+      ],
+      "contract": "Only the current active lease triggers the established View fallback. Final clear failure does not grant new visibility authority.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "KeyguardCardWindow.hide",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+        "line": 302,
+        "source_line": "    fun hide(): Boolean {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt#L302"
+      },
+      "owner": "Main root visibility/lifecycle",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+          "line": 318,
+          "source_line": "        materialController?.stop(\"hide\")",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt#L318"
+        }
+      ],
+      "contract": "Immediate root invisibility precedes controller stop and root removal. Layer-hide diagnostics are observational.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "KeyguardCardWindow.dispose",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+        "line": 337,
+        "source_line": "    fun dispose() {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt#L337"
+      },
+      "owner": "Main final lifecycle",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+          "line": 347,
+          "source_line": "        materialController?.stop(\"dispose\")",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt#L347"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+          "line": 349,
+          "source_line": "        materialController?.dispose()",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt#L349"
+        }
+      ],
+      "contract": "Stop, hide and dispose clear owning window references while Worker resource drainage remains asynchronous.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "KeyguardOrbBufferRendererTestHooks",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 271,
+        "source_line": "internal object KeyguardOrbBufferRendererTestHooks {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L271"
+      },
+      "owner": "Test setup; construction-captured dependencies",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 311,
+          "source_line": "        KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L311"
+        },
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 313,
+          "source_line": "        KeyguardOrbBufferRendererTestHooks.ownershipObserver,",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L313"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 874,
+          "source_line": "        KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L874"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 875,
+          "source_line": "        KeyguardOrbBufferRendererTestHooks.frameObserver = producerSamples",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L875"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 876,
+          "source_line": "        KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L876"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1038,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1038"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1039,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1039"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1040,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1040"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1077,
+          "source_line": "        KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1077"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1078,
+          "source_line": "        KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1078"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1137,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1137"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1138,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1138"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1281,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1281"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1282,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1282"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1283,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.frameObserver = samples",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1283"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1284,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.ownershipObserver = ownership",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1284"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1285,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier = KeyguardOrbSteadyPublicationBarrier { frame ->",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1285"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1434,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1434"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1435,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1435"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1436,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1436"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1437,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier = NoopKeyguardOrbSteadyPublicationBarrier",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1437"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1438,
+          "source_line": "            KeyguardOrbBufferRendererTestHooks.ownershipObserver = NoopKeyguardOrbOwnershipObserver",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1438"
+        }
+      ],
+      "contract": "Production defaults are no-ops. The regression fixture resets globals after initial construction to exercise dependency capture.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "isolatedOrbRevocationDrainsLateSteadyPublication",
+      "definition": {
+        "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+        "line": 729,
+        "source_line": "    @Test fun isolatedOrbRevocationDrainsLateSteadyPublication() {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L729"
+      },
+      "owner": "Instrumentation exact accepted interleaving",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1393,
+          "source_line": "        fun assertRetiredUseDrained(frame: KeyguardOrbBufferProducerFrame, accepted: KeyguardOrbOwnershipEvent) {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1393"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1337,
+          "source_line": "        fun holdSteady(lease: KeyguardOrbBufferLease): OrbSteadyGate {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1337"
+        }
+      ],
+      "contract": "Runs three A-to-B cycles on the same renderer. Main hides A and attaches B while Worker is held; actual exact-use receipt and fence completion must precede lease drain. Requires B-owned A/B/return-A compositor pixels, no B hide and at most three slots.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "isolatedOrbSameLeaseLayoutRetainsAcceptedSteadyGrant",
+      "definition": {
+        "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+        "line": 779,
+        "source_line": "    @Test fun isolatedOrbSameLeaseLayoutRetainsAcceptedSteadyGrant() {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L779"
+      },
+      "owner": "Instrumentation real layout callbacks",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1368,
+          "source_line": "        fun assertMotion(reference: OrbRetirementCapture, suffix: String, lease: KeyguardOrbBufferLease) {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1368"
+        }
+      ],
+      "contract": "Three real relayout pairs preserve dimensions and lease. The accepted grant must equal the submitted current grant, with no hide and continued calibrated motion.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "isolatedOrbDisposeDrainsAcceptedSteadyPublicationWithoutWaitingOnMain",
+      "definition": {
+        "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+        "line": 822,
+        "source_line": "    @Test fun isolatedOrbDisposeDrainsAcceptedSteadyPublicationWithoutWaitingOnMain() {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L822"
+      },
+      "owner": "Instrumentation lifecycle cancellation",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1181,
+          "source_line": "        fun assertStillHeld(operation: String) {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1181"
+        },
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1393,
+          "source_line": "        fun assertRetiredUseDrained(frame: KeyguardOrbBufferProducerFrame, accepted: KeyguardOrbOwnershipEvent) {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1393"
+        }
+      ],
+      "contract": "Main must return while the latch remains held. Releasing it must permit exact-use drain without reopening the child; the fixture observes one add and one remove.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "OrbOwnershipHistory",
+      "definition": {
+        "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+        "line": 1190,
+        "source_line": "    private class OrbOwnershipHistory : KeyguardOrbOwnershipObserver {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1190"
+      },
+      "owner": "Test-owned bounded immutable history",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1264,
+          "source_line": "        val ownership = OrbOwnershipHistory()",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1264"
+        }
+      ],
+      "contract": "Bounds history to 16,384 records and fails on overflow. It matches exact lease, slot and use identities, uses an eight-second event wait and checks one renderer with at most three slots.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "OrbRetirementFixture",
+      "definition": {
+        "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+        "line": 1254,
+        "source_line": "    private inner class OrbRetirementFixture(private val label: String) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1254"
+      },
+      "owner": "Test-owned real window fixture with existing pixel oracles",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+          "line": 1232,
+          "source_line": "    private fun withOrbRetirementFixture(label: String, exercise: (OrbRetirementFixture) -> Unit) {",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt#L1232"
+        }
+      ],
+      "contract": "Reuses the existing producer and compositor calibration. Releases gates, resets hooks and disposes in finally; retains evidence. It introduces no fake platform receipt, production authority or fixture budget change.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.retire",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 991,
+        "source_line": "        fun retire(retiredLease: KeyguardOrbBufferLease?, reason: String) {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L991"
+      },
+      "owner": "Main revokes exact grant; existing Worker control runnable owns retirement",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 466,
+          "source_line": "            worker.retire(retiredLease, reason)",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L466"
+        }
+      ],
+      "contract": "Captured exact-lease retirement clears only matching attached, desired and first-submission state. Retired occupied slots remain owned; free slots stay reusable within the bounded pool. Queued A retirement cannot revoke or stop B.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    },
+    {
+      "symbol": "Worker.dispose",
+      "definition": {
+        "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+        "line": 1038,
+        "source_line": "        fun dispose() {",
+        "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L1038"
+      },
+      "owner": "Worker owns disposal state and slot destruction",
+      "source_observed_references": [
+        {
+          "file": "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+          "line": 473,
+          "source_line": "            worker.dispose()",
+          "url": "https://github.com/elizerpist/exptv2/blob/93161f4ea304a3fb18a7a4dc2336bdab678de4b1/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt#L473"
+        }
+      ],
+      "contract": "Synchronous grant revocation precedes queued disposal. Free slots close on Worker; occupied slots are marked retired and retained. Existing fence and render handlers quit only after all slots drain.",
+      "evidence_kind": "Direct source reading and text-reference navigation only; not an indexed Kotlin call graph.",
+      "reference_match_semantics": "These are source-text matches and may include definitions, comments or helper definitions. They are not automatically semantic callers or runtime edges."
+    }
+  ],
+  "runtime_validation": "PENDING AT GENERATION: exact-source diagnostic run43347794272 is in progress. Graph generation does not establish instrumentation, service recovery, Human APK delivery or physical acceptance.",
+  "baseline_red": "NOT RUN by graph tooling",
+  "physical_validation": "PENDING, USER ONLY",
+  "hypothesis_limits": [
+    "The selected H1 repair addresses a source ordering defect; occurrence in the historical capture remains unproven.",
+    "H2 early steady receipts and H3 pending release fences or deferred first publication remain diagnostic alternatives.",
+    "Dart changed-impact has zero changed indexed symbols because changed production and test files are Kotlin; this does not establish absence of native impact."
+  ],
+  "diagnostic_run_at_generation": {
+    "id": 43347794272,
+    "source_sha": "93161f4ea304a3fb18a7a4dc2336bdab678de4b1",
+    "status": "in progress; not evaluated by graph tooling",
+    "url": "https://github.com/elizerpist/exptv2/actions/runs/43347794272"
+  }
+}

@@ -1,0 +1,110 @@
+Coordinates below retain existing CLI zero-based SCIP line/column values; add1 for editor/GitHub lines.
+
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#
+DEFINITION
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:16
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#`<constructor>`().
+REFERENCES
+total=8 production=3 tests=5
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_floating_button.dart
+test/core/debug/keyguard_timing_capture_console_test.dart
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:1421:38 reference
+lib/core/debug/debug_console.dart:25:8 reference
+lib/core/debug/debug_floating_button.dart:23:8 reference
+TEST REFERENCES
+test/core/debug/keyguard_timing_capture_console_test.dart:52:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:108:21 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:36:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:68:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:78:19 reference
+
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#
+DEFINITION
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:75
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#`<constructor>`().
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#fromMap().
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#unavailable().
+REFERENCES
+total=12 production=12 tests=0
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:55:2 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:39:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:50:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:53:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:56:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:59:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:63:30 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:63:60 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:68:11 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:68:41 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:95:11 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:112:12 reference
+TEST REFERENCES
+
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+DEFINITION
+lib/core/debug/debug_console.dart:13
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().
+REFERENCES
+total=5 production=3 tests=2
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_floating_button.dart
+test/core/debug/keyguard_timing_capture_console_test.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:28:8 reference
+lib/core/debug/debug_console.dart:37:45 reference
+lib/core/debug/debug_floating_button.dart:41:28 reference
+TEST REFERENCES
+test/core/debug/keyguard_timing_capture_console_test.dart:58:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:115:18 reference
+
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`fluvi_diagnostic_bridge.dart`/FluviDiagnosticBridge#
+DEFINITION
+lib/core/diagnostics/fluvi_diagnostic_bridge.dart:10
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`fluvi_diagnostic_bridge.dart`/FluviDiagnosticBridge#
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`fluvi_diagnostic_bridge.dart`/FluviDiagnosticBridge#`<constructor>`().
+REFERENCES
+total=2 production=1 tests=1
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+test/core/diagnostics/fluvi_diagnostic_bridge_test.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:478:32 reference
+TEST REFERENCES
+test/core/diagnostics/fluvi_diagnostic_bridge_test.dart:34:29 reference
+
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#
+DEFINITION
+lib/app/platform/dashboard_keyguard_material_bridge.dart:11
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#`<constructor>`().
+REFERENCES
+total=2 production=2 tests=0
+CONSUMER FILES
+lib/features/dashboard/presentation/core_dashboard.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/presentation/core_dashboard.dart:197:13 reference
+lib/features/dashboard/presentation/core_dashboard.dart:344:30 reference
+TEST REFERENCES
