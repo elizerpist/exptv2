@@ -9854,3 +9854,215 @@ under `/workspace/outputs/r06/baseline-evidence/`. Local candidate logs are unde
 Next authorized gate: immutable candidate tag, exact-SHA native diagnostic,
 all results/artifacts reviewed, then normal delivery only if diagnostic passes.
 No Human APK or phone improvement is claimed at this checkpoint.
+
+
+## 2026-11-13 — R06 implemented; forced regression PASS; second service repetition blocks delivery
+
+**Implementation is committed and tested, but the complete R06 delivery is
+BLOCKED. No repaired Human APK is being handed off.** The exact-source native
+diagnostic failed in service repetition2. Normal delivery was therefore NOT RUN,
+not bypassed. No third repetition, timeout increase, fixture weakening, H2/H3
+repair or additional production change was made after this result. This is the
+supplied R06 §10/§11 forensic return gate, not a request for permission invented
+by a skill.
+
+### Immutable source, run and retained evidence
+
+- Application source: **`93161f4ea304a3fb18a7a4dc2336bdab678de4b1`**, parent
+  `57d091bc23fe1fb12db579014497ff8d706a0552`, branch
+  `fix/orb-v4-latency-lockscreen`, immutable tag
+  `fluvi-orb-retirement-93161f4ea304`. Production/test changes remain restricted
+  to R and T; this later journal-only record is not a new application source.
+- [Diagnostic run43347794272](https://github.com/elizerpist/exptv2/actions/runs/43347794272),
+  [job131631250866](https://github.com/elizerpist/exptv2/actions/runs/43347794272/job/131631250866):
+  **FAIL**, 21m20s. Inputs were `native_diagnostic=true`, `run_nightly=false`,
+  `run_baseline_profile=false`. Run metadata, immutable dispatch ref and actual
+  checkout `git log -1` all identify the application SHA above.
+- [Artifact14004025779](https://github.com/elizerpist/exptv2/actions/runs/43347794272/artifacts/14004025779):
+  `keyguard-native-diagnostic-93161f4ea304a3fb18a7a4dc2336bdab678de4b1-run-43347794272-attempt-1`,
+  **44,247,878 bytes**, downloaded ZIP SHA256
+  `39634a1af7550a9ed961be41a0abb4166d08c48442d9825be5e1ce456585d673`, matching
+  the GitHub artifact digest. GitHub expiry: 2026-11-27T02:11:23Z.
+- Complete artifact, ZIP, run/job metadata, full and failed-job logs, both raw
+  captures and derived reviews are retained at
+  `/workspace/outputs/r06/diagnostic-43347794272/`. Historical run43319482620 and
+  its first-fail/second-pass evidence remain separately retained; this new run
+  does not overwrite or reclassify those failures.
+
+### Gate results
+
+| Gate | Result | Evidence / limit |
+| --- | --- | --- |
+| Local source diff and Flutter/core boundaries | PASS | `git diff --check`, boundary script |
+| Required Flutter boundary files | PASS | 12 tests, locally and remote preflight |
+| Lower-environment helper script | PASS | Existing sticky-failure/overwrite controls |
+| App + androidTest assembly | PASS | VM 2m52s; remote assembly 4m44s |
+| Terminal observation helper | PASS | 7 tests |
+| Sleep admission helper | PASS | 7 tests |
+| Native lower suite | PASS | Original47 + new3 = **50**, zero failures/errors/skips;177.358s |
+| Service repetition1 | PASS | Capture `8d23ee95-a6b9-4376-b28e-d856913d2c8e`, PID2897, all30 cycles |
+| Service repetition2 | **FAIL** | Capture `c6073265-eeab-488b-943f-fe057d27fa9a`, PID3690, rapid-cycle24 output timeout |
+| APK identity before/after both repetitions | PASS | All app/debug and androidTest checksum comparisons unchanged |
+| Per-repetition trace analyses | PASS for parsing only | Both `analysis_result=0`; not proof of output timing or release completion |
+| Complete native diagnostic | **FAIL** | `aggregate_result=FAIL helper=PASS repetitions=2` |
+| Normal core/Flutter/native/Human delivery | **NOT RUN** | Required diagnostic did not pass; jobs skipped by diagnostic mode |
+| Dashboard profile / nightly / historical baseline profile | **NOT RUN** | Diagnostic selection; no success or baseline-equivalence claim |
+| Human profile APK / embedded identity / download link | **BLOCKED / absent** | No debug or androidTest APK substituted |
+| Repair-absent runtime RED | **NOT RUN** | Previously recorded local KVM limitation; no red/green claim |
+| Physical acceptance | **PENDING, USER ONLY** | No phone capture for this repair |
+
+Both captures must be kept distinct. Repetition2 logcat also contains older
+process records: ownership analysis filters PID3690, while repetition1 uses
+PID2897. A passing first repetition does not erase the second failure.
+
+### R1–R5: what the forced tests establish
+
+The independent raw review parsed ownership records and all50 JUnit results,
+recalculated all30 retained R06 PNGs, and inspected the compositor crops.
+
+| Risk | Focused result | Evidence and scope |
+| --- | --- | --- |
+| R1 | PASS for selected forced steady race | Three accepted late A submissions on renderer6, each followed by exact-child final clear, real receipt/fence completion, exact lease drain and fresh B output |
+| R2 | PASS for same-child relayout | Renderer2 lease1/1, held slot1/use3, child215879861 and grant139911063 remain identical and active across three real relayout pairs |
+| R3 | PASS for tested withdrawal/dispose | Main returns while latch held; renderer4 held slot3/use1 drains, final snapshot has no slots/grant; replacement windows remain visible in the three-cycle test |
+| R4 | PASS for observed ownership paths | At most three slots including retired/rendering uses; actual receipt precedes release-fence completion; no clear/commit-as-release |
+| R5 | PASS for focused seam/observations | Constructor-captured hooks, immutable exact identities, no observer-history overflow; production logs identify first/on-draw versus steady, receipt and fence status, with reported suppression |
+
+The forced retirement chain values below are Worker uptime milliseconds under
+a test latch, **not phone latency measurements**:
+
+| Old lease | Held slot/use | Child | Accepted | Main hide | Late submitted | Final clear applied | Real receipt | Fence complete | Lease drained | Replacement |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1/1 | 2/2 | 106136532 | 231442 | 231453 | 231533 | 231534 | 231606 | 231617 | 231618 | 2/3 |
+| 2/3 | 1/10 | 89238707 | 233433 | 233434 | 233526 | 233527 | 233587 | 233616 | 233631 | 3/5 |
+| 3/5 | 2/17 | 167767609 | 235401 | 235406 | 235457 | 235460 | 235472 | 235508 | 235508 | 4/7 |
+
+Every gate records `timedOut=false`. Cycle2 also waits for a separate old
+rendering use's real render-fence path before lease drainage. For each replacement
+and the relayout test, compositor A→B changes15,648 interior pixels with total
+maximum-channel delta761,123; return-A is exact equality. Producer A→B changes
+22,416 full-buffer pixels, total delta1,064,476; return-A is exact equality.
+Existing calibrated thresholds and A/C/B/A controls were not altered.
+
+Coverage limit: WindowManager reattachment returned while Worker was held, but
+the three final-clear observations have `currentGrantLease=null`; the replacement
+child grant was installed during subsequent traversal. Do not claim the test
+observed final clear while an already-installed B grant was current. Captured-child
+source inspection, B-active-at-drain records and subsequent B output cover the
+boundary without inventing that unobserved ordering. Baseline H1 occurrence and
+phone symptom attribution remain unproven.
+
+### Remaining service failure: first/on-draw ownership, not an observed pending fence
+
+At repetition2 `logcat.txt` line59601, uptime821288, the Worker records
+`retirement-clear-applied lease=32/87 child=106089338`: the final null-buffer
+transaction's `apply()` returned successfully. This is submission success, not
+proof that SurfaceFlinger released the buffer.
+
+At line59621, uptime822790, one coherent Worker starvation sample contains:
+
+| Slot/use | Lease | Child | State | Retired | Path | Receipt observed | Fence pending | Early receipt retained |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1/87 | 10/27 | 28955071 | PUBLISHED | true | first/on-draw | false | false | false |
+| 2/207 | 32/87 | 106089338 | PUBLISHED | true | first/on-draw | false | false | false |
+| 3/185 | 33/89 | 76029388 | PUBLISHED | false | first/on-draw | false | false | false |
+
+Desired, attached and current active grant all identify33/89. From uptime823127
+to840776, produced439/published430 remain unchanged for17,649ms while drops rise
+1778→2837; inFlight0/ready0/compositorOwned3, Worker running. At841277 the existing
+fixture fails rapid-cycle24 with `SHOW_DISCREET:MAIN_CONFIRMED` and actual output
+timeout. The unchanged fixture correctly refuses a classifier/callback bypass.
+
+Cleanup clears current33/89 at841348, observes its real receipt at841365, release
+fence completion841425 and lease drain841431. Both old uses10/27 and32/87 remain
+PUBLISHED without Worker-observed receipts in that final snapshot. Thus32/87
+remains owned **20,143ms after its observed final-clear apply**.
+
+This is **not** evidence that all old leases drained before a fresh B stall.
+It is the contract's specified unresolved case: persistent old PUBLISHED uses
+without receipts after a proven final clear leave platform release or deferred
+first/on-draw publication ordering open. The stalled snapshot does not show
+WAIT_RELEASE_FENCE and does not contain a retained steady early receipt; it does
+not support selecting an H2 repair or claiming a pending-fence cause. No additional
+runtime repair was chosen.
+
+Repetition1 also ends its passing30-cycle fixture with an old first/on-draw use,
+slot1/use53 lease3/8, still PUBLISHED without a receipt. Its functional PASS is
+therefore not proof of complete old-lease cleanup.
+
+Production log bounds affected the record: PID2897 has270 admitted records,
+four cap notices and139 subsequently reported suppressed records; PID3690 has240
+admitted records, three cap notices and116 reported suppressed records (27+47+42).
+No admitted clear event for10/27 is available across the capped interval; absence
+cannot establish that its clear failed or did not run. Later immutable snapshots
+positively show its persistent ownership/no observed receipt. Likewise absence
+of an early-receipt log across suppression is not universal absence evidence.
+`starvation-ended detail=retired` only reports loop retirement, not recovery.
+
+### Current evidence hashes
+
+| Evidence | Repetition1 SHA256 | Repetition2 SHA256 |
+| --- | --- | --- |
+| fixture.txt | `edab927774e0176f7005ebdc00c0038ef44bf69950ea11d3a604feba64e39293` | `ba7f16f7f6a1194ffeadbdd0a5deca747c838051f55eb2d8eb76b067347d2596` |
+| probe.tar | `c39fc74c2ec10d223eaa6272c59d54b3c88eda101a9bed0aaeff6bb1b2802b14` | `50084cbe5a5f895acc032b6e78c0f4f4acb88688092e3e40c61b91d7baad7c16` |
+| Perfetto trace | `d44d1637af5f19c41380b059adebe1d095dd7c9fca5d67e6c71674397981be95` | `425ceb79b0a8e2246b8135303afa3e840ac7cca2379e2914ca8f772f83a039db` |
+| logcat.txt | `fcf2d21175c2744bb08f3ef8e912e55ea34238aca674ecad3a3919a1863637bd` | `c1d5336e98f9513a015662fe2148283e6973492bca304c43e2f4e8b46542a883` |
+
+Lower XML SHA256: `f1f5e23d9a36ba73c36b149cfd4fb7f96446069fbe11199ede05bc0b4b9c10d7`.
+Smoke tar SHA256: `85a4cce10256e7aec48bd9544ba1689470e75473755991e7a3347105ca662abe`.
+Revocation ownership SHA256: `3ba848b89155d7b57b2c331a47df723fe226c4934c6e52a86570c8ae169dffd0`.
+Same-lease ownership SHA256: `cbcc7077dd057a824a555b6c2568faa93ede470b8bf02d6f02c7da82b5c804ca`.
+Dispose ownership SHA256: `205af7c81befd3507b9edb569bf442ef11558c47f64538fcd77194ec0f368a65`.
+
+### Final-source graph and delivery status
+
+Separate published tooling commit: **`9cfde9e82b365f55691511f122cf4ee5f6288754`**,
+branch `tooling/orb-retirement-93161f4e`.
+[Graph provenance and native inventory report](https://github.com/elizerpist/exptv2/blob/9cfde9e82b365f55691511f122cf4ee5f6288754/docs/codegraph-orb-retirement-2026-11-13.md).
+Fresh SCIP1.6.2 index from clean exact application source:807 Dart documents,
+20,252 repository symbols,136,383 references,42,214 edges; index SHA256
+`f0275be7fafea1be6ee35fdeaf684d368096bfe4151937ee3a81b71ebedcb23e`.
+All102 shard hashes/counts, five Dart definitions and all123 native inventory
+source locations/four source hashes were verified. Tooling16 tests and analysis
+pass. **Kotlin SCIP coverage=false**; the native inventory is source navigation,
+not a native call graph or runtime causal proof. Historical inventories remain.
+
+Acceptance status update (supersedes the earlier preflight status snapshot):
+R06-01 DONE; R06-R1/R2/R3/R4/R5 DONE for the focused acceptance boundaries and
+coverage limits above; R06-06/07/08/09 DONE (07 explicitly records RED NOT RUN);
+R06-10 BLOCKED by failed diagnostic; R06-11 PARTIAL (commit/tag/push done, normal
+delivery not run); R06-12 BLOCKED (Human APK absent); R06-13/14 DONE;
+R06-15 PARTIAL (physical acceptance user-only). Overall task is not complete.
+
+Reviewer handback: decide the next first/on-draw/platform-release investigation
+from exact32/87 clear/no-receipt evidence and retained10/27 ownership. Preserve
+the successful H1 repair/tests and the failed service result. Do not infer a fix
+from a parse-success trace or repair H2/H3 speculatively. No third run was started.
+
+Phone plan remains pending a subsequently validated Human profile APK: same ORB
+and settings, cold/warm wake,10 lock/unlock cycles and60s visible animation;
+record delay/stall with matching build/capture identity and
+`adb logcat -d -v threadtime -s FluviOrbOwnership:I`.
+Protected dashboard milestone6e962187e90e2a82431b1f91b224d2b52a6e0ba7 and
+W-HOME-ANIM are unchanged. W-SHOW/W-HIDE/W-LOCK-ANIM remain open.
+**PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+
+Supplemental raw-evidence verification for the same R06 result:
+- Repetition1's retained first/on-draw lease3/8 had a logged final clear at335931ms;
+  its sibling steady use received/released at335968–335969ms, while first/on-draw
+  slot1/use53 remained PUBLISHED through586175ms. Functional30-cycle PASS is not
+  a complete ownership-drain certification.
+- Observed fixed60s log windows contain64,64,64,64,14 records for PID2897 and
+  64,64,64,48 for PID3690. Each satisfies the implemented fixed-window cap;
+  this is not a sliding-window rate claim. Suppression totals include cap notices.
+- Both trace parses preserve `ftrace_setup_errors` notice36; parsing success is
+  recorded with that limitation, not treated as compositor/performance success.
+- Identical diagnostic debug app SHA256 across both repetitions:
+  `2b1f7f4c8ff358fdd7af8ae441a62566305471dcc59e33371ad214f28f51cb3f`;
+  androidTest SHA256:
+  `70bb66332408505d193ec634e60bd04591504c843a17a9e0a410aaf87479ef52`.
+  Neither binary is a delivered Human profile APK.
+- Independent derived reports are retained as `SERVICE-FORENSIC-REPORT.md`,
+  `service-forensic-audit.json`, `retirement-audit.json`, and
+  `forced-ordering-review/REVIEW.md` within the diagnostic evidence directory.
