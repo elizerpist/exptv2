@@ -1,0 +1,37 @@
+{
+  "source_sha": "93161f4ea304a3fb18a7a4dc2336bdab678de4b1",
+  "build_location": "VM",
+  "mode": "profile",
+  "purpose": "human_diagnostic",
+  "file": "fluvi_HUMAN_DIAGNOSTIC_93161f4e_VM.apk",
+  "size_bytes": 120131794,
+  "sha256": "7b6cd9f216051559b45f8ea5ae7a78c72ffd59f38422bae4167554c0d5924673",
+  "zip_crc": "PASS",
+  "signature": "PASS v2",
+  "embedded_identity": [
+    {
+      "library": "lib/arm64-v8a/libapp.so",
+      "source_sha_present": true,
+      "human_diagnostic_label_present": true
+    },
+    {
+      "library": "lib/armeabi-v7a/libapp.so",
+      "source_sha_present": true,
+      "human_diagnostic_label_present": true
+    },
+    {
+      "library": "lib/x86_64/libapp.so",
+      "source_sha_present": true,
+      "human_diagnostic_label_present": true
+    }
+  ],
+  "native_diagnostic_markers": [
+    "FluviOrbOwnership",
+    "retirement-clear-applied",
+    "starvation-entered"
+  ],
+  "known_validation_failure": "service repetition 2 rapid-cycle-24; run43347794272",
+  "normal_delivery_workflow": "NOT RUN",
+  "physical_acceptance": "PENDING USER TEST",
+  "verification_note": "Initial lowercase purpose-string probe did not match because the build uses constant enum selection; checked the source-defined HUMAN_DIAGNOSTIC label and exact SHA in all AOT libraries instead."
+}
