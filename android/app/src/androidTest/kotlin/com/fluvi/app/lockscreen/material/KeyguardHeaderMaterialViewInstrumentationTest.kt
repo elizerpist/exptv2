@@ -724,6 +724,129 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
+    /** Holds the already accepted steady publication, not the earlier GPU
+     * request. Main withdraws A and grants B before that exact A use resumes. */
+    @Test fun isolatedOrbRevocationDrainsLateSteadyPublication() {
+        withOrbRetirementFixture("revocation") { fixture ->
+            repeat(3) { cycle ->
+                val before = fixture.capture(PHASE_A, "cycle-$cycle-old-a") { hasVisibleMaterial(it) }
+                try {
+                    val gate = fixture.holdSteady(before.frame.lease)
+                    val held = gate.awaitEntered()
+                    val accepted = fixture.ownership.awaitUse("steady-accepted", held)
+                    var replacementAttachment = 0L
+                    fixture.instrumentation.runOnMainSync {
+                        assertTrue(fixture.window.hide())
+                        assertFalse(fixture.window.isAttached)
+                        fixture.assertHiddenExactlyOnce(held.lease)
+                        assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                            fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                        replacementAttachment = fixture.window.currentAttachGeneration
+                        assertTrue(fixture.window.isAttached)
+                    }
+                    gate.assertStillHeld("Main hide and reattach")
+                    assertTrue("replacement must own a new attachment", replacementAttachment != held.lease.attachment)
+                    gate.release.countDown()
+                    fixture.assertRetiredUseDrained(held, accepted)
+                    val replacementLease = fixture.awaitAttachment(replacementAttachment)
+
+                    val replacementA = fixture.capture(PHASE_A, "cycle-$cycle-new-a") {
+                        compareMaterialPixels(before.bitmap, it).nearlyEqual()
+                    }
+                    try {
+                        assertEquals(replacementAttachment, replacementA.frame.lease.attachment)
+                        assertEquals(replacementLease, replacementA.frame.lease)
+                        assertTrue("replacement output reused old lease", replacementA.frame.lease != held.lease)
+                        fixture.assertMotion(replacementA, "cycle-$cycle-new", replacementA.frame.lease)
+                        fixture.instrumentation.runOnMainSync {
+                            assertTrue("old retirement withdrew B", fixture.window.isAttached)
+                            assertEquals(replacementAttachment, fixture.window.currentAttachGeneration)
+                            assertFalse("old retirement hid B", fixture.hides.any {
+                                it.attachment == replacementAttachment
+                            })
+                        }
+                    } finally {
+                        replacementA.bitmap.recycle()
+                    }
+                    fixture.ownership.assertBoundedSingleRenderer()
+                } finally {
+                    before.bitmap.recycle()
+                }
+            }
+        }
+    }
+
+    @Test fun isolatedOrbSameLeaseLayoutRetainsAcceptedSteadyGrant() {
+        withOrbRetirementFixture("same-lease-layout") { fixture ->
+            val before = fixture.capture(PHASE_A, "layout-before-a") { hasVisibleMaterial(it) }
+            try {
+                val gate = fixture.holdSteady(before.frame.lease)
+                val held = gate.awaitEntered()
+                val accepted = fixture.ownership.awaitUse("steady-accepted", held)
+                fixture.instrumentation.runOnMainSync {
+                    val orb = requireNotNull(fixture.manager.currentRoot)
+                        .findViewById<View>(R.id.fluvi_financial_snapshot_orb)
+                    val left = orb.left
+                    val top = orb.top
+                    val right = orb.right
+                    val bottom = orb.bottom
+                    repeat(3) {
+                        // Real layout callbacks, unchanged dimensions/lease.
+                        orb.layout(left + 1, top, right + 1, bottom)
+                        orb.layout(left, top, right, bottom)
+                    }
+                    assertTrue(fixture.hides.isEmpty())
+                }
+                gate.assertStillHeld("same-child layout")
+                gate.release.countDown()
+                val submitted = fixture.ownership.awaitUse("steady-submitted", held)
+                assertTrue("accepted grant identity missing", accepted.grantIdentity != null)
+                assertEquals(accepted.grantIdentity, submitted.grantIdentity)
+                assertEquals("same-child layout replaced the active grant",
+                    accepted.grantIdentity, submitted.currentGrantIdentity)
+                assertEquals(accepted.childIdentity, submitted.currentGrantChildIdentity)
+                assertEquals(held.lease, submitted.currentGrantLease)
+                assertTrue(submitted.currentGrantActive)
+                fixture.assertMotion(before, "layout-after", held.lease)
+                fixture.instrumentation.runOnMainSync {
+                    assertTrue(fixture.window.isAttached)
+                    assertTrue("same lease was withdrawn during layout", fixture.hides.isEmpty())
+                }
+                fixture.ownership.assertBoundedSingleRenderer()
+            } finally {
+                before.bitmap.recycle()
+            }
+        }
+    }
+
+    @Test fun isolatedOrbDisposeDrainsAcceptedSteadyPublicationWithoutWaitingOnMain() {
+        withOrbRetirementFixture("dispose") { fixture ->
+            val gate = fixture.holdSteady(fixture.initialLease)
+            val held = gate.awaitEntered()
+            val accepted = fixture.ownership.awaitUse("steady-accepted", held)
+            fixture.instrumentation.runOnMainSync {
+                fixture.window.dispose()
+                assertFalse(fixture.window.isAttached)
+                assertEquals(null, fixture.manager.currentRoot)
+                fixture.assertHiddenExactlyOnce(held.lease)
+            }
+            gate.assertStillHeld("Main dispose")
+            gate.release.countDown()
+            fixture.assertRetiredUseDrained(held, accepted)
+            fixture.instrumentation.waitForIdleSync()
+            fixture.instrumentation.runOnMainSync {
+                assertFalse("dispose reopened the window", fixture.window.isAttached)
+                assertEquals(null, fixture.manager.currentRoot)
+                assertEquals(1, fixture.manager.adds)
+                assertEquals(1, fixture.manager.removes)
+                fixture.assertHiddenExactlyOnce(held.lease)
+            }
+            val drained = fixture.ownership.awaitLease("lease-drained", held.lease)
+            assertEquals("disposed child regained publication authority", null, drained.currentGrantLease)
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
     @Test fun isolatedOrbPublishesCalibratedCompositorPixels() {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -1017,6 +1140,311 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 createdWindow?.dispose()
                 activity.finish()
             }
+        }
+    }
+
+    private data class OrbRetirementHide(
+        val attachment: Long?,
+        val generation: Long?,
+        val uptimeMs: Long,
+        val applied: Boolean,
+    )
+
+    private data class OrbRetirementCapture(
+        val frame: KeyguardOrbBufferProducerFrame,
+        val bitmap: Bitmap,
+    )
+
+    private class OrbSteadyGate(val requestId: Long, val lease: KeyguardOrbBufferLease) {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val returned = CountDownLatch(1)
+        val frame = AtomicReference<KeyguardOrbBufferProducerFrame?>()
+        val timedOut = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        fun hold(value: KeyguardOrbBufferProducerFrame) {
+            frame.set(value)
+            entered.countDown()
+            if (!release.await(8, TimeUnit.SECONDS)) timedOut.set(true)
+            returned.countDown()
+        }
+
+        fun awaitEntered(): KeyguardOrbBufferProducerFrame {
+            assertTrue("steady publication never reached armed gate request=$requestId",
+                entered.await(8, TimeUnit.SECONDS))
+            return requireNotNull(frame.get()).also {
+                assertEquals(lease, it.lease)
+                assertEquals(requestId, it.testRequestId)
+            }
+        }
+
+        fun assertStillHeld(operation: String) {
+            assertFalse("$operation exhausted the worker latch budget", timedOut.get())
+            assertEquals("$operation waited for the accepted worker submission", 1L, returned.count)
+            assertEquals("test released the worker before $operation returned", 1L, release.count)
+        }
+    }
+
+    /** Test-owned immutable history. Overflow is a failure, never missing
+     * evidence interpreted as a successful drain or absence of ownership. */
+    private class OrbOwnershipHistory : KeyguardOrbOwnershipObserver {
+        private val records = mutableListOf<KeyguardOrbOwnershipEvent>()
+        private var overflow = false
+
+        @Synchronized override fun onEvent(event: KeyguardOrbOwnershipEvent) {
+            if (records.size < 16_384) records += event else overflow = true
+        }
+
+        @Synchronized fun snapshot(): List<KeyguardOrbOwnershipEvent> = records.toList()
+
+        fun awaitUse(event: String, frame: KeyguardOrbBufferProducerFrame): KeyguardOrbOwnershipEvent =
+            await("$event lease=${frame.lease.attachment}/${frame.lease.generation} slot=${frame.slotId}/${frame.useGeneration}") {
+                it.event == event && it.lease == frame.lease &&
+                    it.slotId == frame.slotId && it.useGeneration == frame.useGeneration
+            }
+
+        fun awaitLease(event: String, lease: KeyguardOrbBufferLease): KeyguardOrbOwnershipEvent =
+            await("$event lease=${lease.attachment}/${lease.generation}") {
+                it.event == event && it.lease == lease
+            }
+
+        private fun await(label: String, accepts: (KeyguardOrbOwnershipEvent) -> Boolean): KeyguardOrbOwnershipEvent {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < deadline) {
+                snapshot().firstOrNull(accepts)?.let { return it }
+                Thread.sleep(24)
+            }
+            throw AssertionError("ownership event missing: $label; last=${snapshot().takeLast(6)}")
+        }
+
+        @Synchronized fun assertBoundedSingleRenderer() {
+            assertFalse("ownership observation history overflowed", overflow)
+            assertTrue("ownership observer did not receive events", records.isNotEmpty())
+            assertEquals("reattach replaced the renderer instead of draining its fixed pool",
+                1, records.map { it.rendererId }.toSet().size)
+            assertTrue("global slot pool exceeded three including retired uses", records.all { it.slots.size <= 3 })
+            assertTrue("duplicate stable slots in one worker snapshot", records.all {
+                it.slots.map { slot -> slot.slotId }.toSet().size == it.slots.size
+            })
+        }
+    }
+
+    private fun withOrbRetirementFixture(label: String, exercise: (OrbRetirementFixture) -> Unit) {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val fixture = OrbRetirementFixture(label)
+        try {
+            fixture.start()
+            exercise(fixture)
+        } finally {
+            fixture.releaseGates()
+            fixture.resetHooks()
+            try {
+                fixture.persistOwnershipEvidence()
+            } finally {
+                fixture.instrumentation.runOnMainSync {
+                    fixture.createdWindow?.dispose()
+                    fixture.activity.finish()
+                }
+            }
+        }
+    }
+
+    /** Reuses the existing real-window and calibrated pixel oracles. This
+     * fixture never supplies a release callback, fence or visibility grant. */
+    private inner class OrbRetirementFixture(private val label: String) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        lateinit var window: KeyguardCardWindow
+        var createdWindow: KeyguardCardWindow? = null
+        lateinit var manager: TestPanelWindowManager
+        lateinit var initialLease: KeyguardOrbBufferLease
+        val ownership = OrbOwnershipHistory()
+        val hides = mutableListOf<OrbRetirementHide>()
+        val settings = KeyguardCardSettings(
+            requested = true,
+            showFinancialDetails = true,
+            presentationMode = KeyguardCardPresentationMode.ORB,
+            animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+            orbPosition = KeyguardCardOrbPosition(.5f, .5f),
+        )
+        private val controlledTime = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
+        private val submissions = SubmittedFrameTracker()
+        private val samples = CalibratedProducerSamples()
+        private val nextGate = AtomicReference<OrbSteadyGate?>()
+        private val gates = mutableListOf<OrbSteadyGate>()
+        private var nextRequest = 0L
+
+        fun start() {
+            KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions
+            KeyguardOrbBufferRendererTestHooks.frameObserver = samples
+            KeyguardOrbBufferRendererTestHooks.ownershipObserver = ownership
+            KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier = KeyguardOrbSteadyPublicationBarrier { frame ->
+                val gate = nextGate.get()
+                if (gate != null && frame.testRequestId == gate.requestId &&
+                    nextGate.compareAndSet(gate, null)
+                ) gate.hold(frame)
+            }
+            val primer = request(PHASE_A)
+            instrumentation.runOnMainSync {
+                window = KeyguardCardWindow(
+                    serviceContext = activity,
+                    onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> },
+                    onWindowDiagnostic = { stage, _, attachment, observedAt, fields ->
+                        if (stage == "ISOLATED_LAYER_HIDE_SUBMITTED") {
+                            hides += OrbRetirementHide(attachment, fields["leaseGeneration"] as? Long,
+                                observedAt, fields["transactionApplied"] == true)
+                        }
+                    },
+                    manager = TestPanelWindowManager(activity).also { manager = it },
+                )
+                createdWindow = window
+                window.prepareRetainedView(settings, calibratedOrbProfile())
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+            }
+            initialLease = submissions.await(primer).lease
+            assertTrue("initial isolated output missing", waitForIsolatedOutput(instrumentation, window))
+            assertTrue("initial panel bounds missing", waitForPanelOrbScreenBounds(instrumentation, manager))
+            assertTrue("initial View bootstrap was not replaced",
+                waitForIsolatedBootstrapReplacement(instrumentation, manager))
+            // The established renderer must retain its captured dependencies;
+            // subsequent global-hook changes cannot redirect that renderer.
+            resetHooks()
+        }
+
+        private fun request(phase: Float): Long {
+            val requestId = ++nextRequest
+            submissions.expect(requestId, phase)
+            controlledTime.submit(requestId, calibratedMaterialTime(phase))
+            return requestId
+        }
+
+        fun awaitAttachment(attachment: Long): KeyguardOrbBufferLease {
+            val frame = submissions.await(request(PHASE_A))
+            assertEquals("new request was submitted by an old attachment", attachment, frame.lease.attachment)
+            assertTrue("replacement panel bounds missing", waitForPanelOrbScreenBounds(instrumentation, manager))
+            assertTrue("replacement View bootstrap was not replaced",
+                waitForIsolatedBootstrapReplacement(instrumentation, manager))
+            return frame.lease
+        }
+
+        fun holdSteady(lease: KeyguardOrbBufferLease): OrbSteadyGate {
+            val requestId = ++nextRequest
+            val gate = OrbSteadyGate(requestId, lease)
+            gates += gate
+            check(nextGate.compareAndSet(null, gate)) { "another steady gate is armed" }
+            submissions.expect(requestId, PHASE_A)
+            controlledTime.submit(requestId, calibratedMaterialTime(PHASE_A))
+            return gate
+        }
+
+        fun capture(phase: Float, suffix: String, accepts: (Bitmap) -> Boolean): OrbRetirementCapture {
+            val requestId = ++nextRequest
+            submissions.expect(requestId, phase)
+            samples.expect(requestId)
+            controlledTime.submit(requestId, calibratedMaterialTime(phase))
+            val submitted = submissions.await(requestId)
+            val produced = samples.await(requestId)
+            assertEquals("producer evidence must identify the submitted frame", produced.frame, submitted)
+            persistProducerEvidence(activity, "r06-$label-$suffix-producer", produced)
+            val bitmap = awaitCompositorCrop(
+                label = "r06-$label-$suffix",
+                capture = { copyPanelOrb(instrumentation, manager) },
+                persist = { evidenceLabel, image -> persistPanelEvidence(activity, evidenceLabel, image) },
+                accepts = accepts,
+                onTimeout = {
+                    persistPanelCompositorTimeout(activity, instrumentation, "r06-$label-$suffix", manager, submitted)
+                },
+            )
+            return OrbRetirementCapture(submitted, bitmap)
+        }
+
+        fun assertMotion(reference: OrbRetirementCapture, suffix: String, lease: KeyguardOrbBufferLease) {
+            val moved = capture(PHASE_B, "$suffix-b") { compareMaterialPixels(reference.bitmap, it).meaningful() }
+            try {
+                assertEquals("motion must belong to the replacement lease", lease, moved.frame.lease)
+                val returned = capture(PHASE_A, "$suffix-return-a") {
+                    compareMaterialPixels(reference.bitmap, it).nearlyEqual()
+                }
+                try {
+                    assertEquals(lease, returned.frame.lease)
+                    assertTrue(compareMaterialPixels(reference.bitmap, moved.bitmap).meaningful())
+                    assertTrue(compareMaterialPixels(reference.bitmap, returned.bitmap).nearlyEqual())
+                } finally {
+                    returned.bitmap.recycle()
+                }
+            } finally {
+                moved.bitmap.recycle()
+            }
+        }
+
+        fun assertHiddenExactlyOnce(lease: KeyguardOrbBufferLease) {
+            val matching = hides.filter { it.attachment == lease.attachment && it.generation == lease.generation }
+            assertEquals("exact Main-owned child was not hidden once", 1, matching.size)
+            assertTrue("Main hide transaction failed", matching.single().applied)
+        }
+
+        fun assertRetiredUseDrained(frame: KeyguardOrbBufferProducerFrame, accepted: KeyguardOrbOwnershipEvent) {
+            val submitted = ownership.awaitUse("steady-submitted", frame)
+            val clearStarted = ownership.awaitLease("retirement-clear-started", frame.lease)
+            val cleared = ownership.awaitLease("retirement-clear-applied", frame.lease)
+            val receipt = ownership.awaitUse("release-received", frame)
+            val completed = ownership.awaitUse("release-fence-complete", frame)
+            val drained = ownership.awaitLease("lease-drained", frame.lease)
+            val records = ownership.snapshot()
+            assertTrue("accepted use was not submitted late", records.indexOf(accepted) < records.indexOf(submitted))
+            assertTrue("final clear did not follow the accepted submission",
+                records.indexOf(submitted) < records.indexOf(clearStarted))
+            assertTrue("held use's real release did not follow the ordered clear",
+                records.indexOf(clearStarted) < records.indexOf(receipt))
+            assertTrue("release fence completed without the matching receipt",
+                records.indexOf(receipt) <= records.indexOf(completed))
+            assertTrue("lease drained before its exact held use completed",
+                records.indexOf(completed) < records.indexOf(drained))
+            assertTrue("accepted child identity missing", accepted.childIdentity != null)
+            assertEquals("retirement cleared a different child", accepted.childIdentity, cleared.childIdentity)
+            val releasedSlot = completed.slots.single { it.slotId == frame.slotId && it.useGeneration == frame.useGeneration }
+            assertEquals(frame.lease, releasedSlot.lease)
+            assertTrue("fence completion lacked a real compositor receipt", releasedSlot.callbackReceived)
+            assertFalse("drained use still has a pending release fence", releasedSlot.fencePending)
+            assertTrue("lease drain left an owned old use", drained.slots.none {
+                it.lease == frame.lease && it.state != "FREE"
+            })
+            instrumentation.runOnMainSync {
+                assertHiddenExactlyOnce(frame.lease)
+                val hide = hides.single { it.attachment == frame.lease.attachment && it.generation == frame.lease.generation }
+                assertTrue("Main did not hide inside the held-publication interval",
+                    accepted.uptimeMs <= hide.uptimeMs && hide.uptimeMs <= submitted.uptimeMs)
+            }
+            gates.forEach { assertFalse("worker latch timed out instead of test release", it.timedOut.get()) }
+        }
+
+        fun releaseGates() {
+            nextGate.set(null)
+            gates.forEach { it.release.countDown() }
+        }
+
+        fun resetHooks() {
+            KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver
+            KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
+            KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier = NoopKeyguardOrbSteadyPublicationBarrier
+            KeyguardOrbBufferRendererTestHooks.ownershipObserver = NoopKeyguardOrbOwnershipObserver
+        }
+
+        fun persistOwnershipEvidence() {
+            val directory = File(activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
+            val details = StringBuilder()
+            instrumentation.runOnMainSync { hides.forEach { details.appendLine("mainHide=$it") } }
+            gates.forEach { details.appendLine("gate request=${it.requestId} frame=${it.frame.get()} timedOut=${it.timedOut.get()}") }
+            ownership.snapshot().forEach { details.appendLine(it) }
+            File(directory, "r06-$label-ownership.txt").writeText(details.toString())
         }
     }
 

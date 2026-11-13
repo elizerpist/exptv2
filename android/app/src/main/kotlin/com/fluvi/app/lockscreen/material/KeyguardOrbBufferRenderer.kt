@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.AttachedSurfaceControl
 import android.view.Choreographer
 import android.view.SurfaceControl
@@ -23,6 +24,7 @@ import android.view.ViewTreeObserver
 import androidx.annotation.RequiresApi
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.Executor
 import java.util.function.Consumer
 import kotlin.math.min
@@ -158,6 +160,62 @@ internal object NoopKeyguardOrbBufferPublicationObserver : KeyguardOrbBufferPubl
     override fun onSubmitted(frame: KeyguardOrbBufferProducerFrame) = Unit
 }
 
+/** Holds an already accepted steady publication only in instrumentation. Main
+ * retains its immediate revocation/visibility authority while this runs. */
+internal fun interface KeyguardOrbSteadyPublicationBarrier {
+    fun afterGrantValidated(frame: KeyguardOrbBufferProducerFrame)
+}
+
+internal object NoopKeyguardOrbSteadyPublicationBarrier : KeyguardOrbSteadyPublicationBarrier {
+    override fun afterGrantValidated(frame: KeyguardOrbBufferProducerFrame) = Unit
+}
+
+internal data class KeyguardOrbOwnershipSlotSnapshot(
+    val slotId: Long,
+    val useGeneration: Long,
+    val lease: KeyguardOrbBufferLease?,
+    val state: String,
+    val retired: Boolean,
+    val childIdentity: Int?,
+    val publicationPath: String?,
+    val callbackReceived: Boolean,
+    val fencePending: Boolean,
+    val earlyReceiptRetained: Boolean,
+)
+
+/** One Worker observation, never a merger of independently sampled Main
+ * diagnostics. The atomic grant is read once; Main can revoke it afterwards.
+ * This immutable copy has no buffer, fence or visibility authority. */
+internal data class KeyguardOrbOwnershipEvent(
+    val event: String,
+    val rendererId: Long,
+    val uptimeMs: Long,
+    val thread: String,
+    val lease: KeyguardOrbBufferLease?,
+    val childIdentity: Int?,
+    val grantIdentity: Int?,
+    val slotId: Long?,
+    val useGeneration: Long?,
+    val desiredLease: KeyguardOrbBufferLease?,
+    val attachedLease: KeyguardOrbBufferLease?,
+    val currentGrantLease: KeyguardOrbBufferLease?,
+    val currentGrantChildIdentity: Int?,
+    val currentGrantIdentity: Int?,
+    val currentGrantActive: Boolean,
+    val slots: List<KeyguardOrbOwnershipSlotSnapshot>,
+    val detail: String,
+)
+
+internal fun interface KeyguardOrbOwnershipObserver {
+    fun onEvent(event: KeyguardOrbOwnershipEvent)
+}
+
+internal object NoopKeyguardOrbOwnershipObserver : KeyguardOrbOwnershipObserver {
+    override fun onEvent(event: KeyguardOrbOwnershipEvent) = Unit
+}
+
+private val nextOrbRendererId = AtomicLong()
+
 /**
  * The isolated producer owns its frame clock.  Instrumentation may inject a
  * deterministic material-time source, but the dependency is captured when a
@@ -215,6 +273,9 @@ internal object KeyguardOrbBufferRendererTestHooks {
     @Volatile var publicationObserver: KeyguardOrbBufferPublicationObserver =
         NoopKeyguardOrbBufferPublicationObserver
     @Volatile var materialTimeSource: KeyguardOrbMaterialTimeSource = SystemKeyguardOrbMaterialTimeSource
+    @Volatile var steadyPublicationBarrier: KeyguardOrbSteadyPublicationBarrier =
+        NoopKeyguardOrbSteadyPublicationBarrier
+    @Volatile var ownershipObserver: KeyguardOrbOwnershipObserver = NoopKeyguardOrbOwnershipObserver
 }
 
 /**
@@ -246,7 +307,12 @@ internal class KeyguardOrbBufferRenderer(
      * remains without a parent layer and is never a visibility grant. */
     private val onDetachedBackendPrepared: (KeyguardOrbBufferLease, Long) -> Unit = { _, _ -> },
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
+    private val steadyPublicationBarrier: KeyguardOrbSteadyPublicationBarrier =
+        KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier,
+    private val ownershipObserver: KeyguardOrbOwnershipObserver =
+        KeyguardOrbBufferRendererTestHooks.ownershipObserver,
 ) {
+    private val rendererId = nextOrbRendererId.incrementAndGet()
     private var api34: Api34? = null
 
     fun isSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
@@ -340,6 +406,9 @@ internal class KeyguardOrbBufferRenderer(
             frameObserver = frameObserver,
             publicationObserver = publicationObserver,
             materialTimeSource = materialTimeSource,
+            steadyPublicationBarrier = steadyPublicationBarrier,
+            ownershipObserver = ownershipObserver,
+            rendererId = rendererId,
         )
 
         fun configure(spec: KeyguardOrbBufferRenderSpec) {
@@ -564,7 +633,7 @@ internal class KeyguardOrbBufferRenderer(
                 // This volatile revocation happens before the Main transaction
                 // so a worker that has just completed a buffer cannot obtain
                 // fresh show/reparent authority from an old lease.
-                worker.revokePublication(lease)
+                worker.revokePublication(lease, child)
                 retiringLayers[lease] = child
             }
             val submittedAtUptimeMs = SystemClock.uptimeMillis()
@@ -643,7 +712,8 @@ internal class KeyguardOrbBufferRenderer(
                         // thread. Fence waiting and slot reuse remain
                         // renderer-thread-owned; Main never waits for a
                         // released buffer.
-                        worker.release(frame.slotId, frame.useGeneration, releaseFence)
+                        worker.release(frame.slotId, frame.useGeneration, releaseFence,
+                            System.identityHashCode(child))
                     }
                     val transaction = SurfaceControl.Transaction()
                         .setBuffer(child, frame.buffer, frame.fence, release)
@@ -671,7 +741,7 @@ internal class KeyguardOrbBufferRenderer(
                     // compositor's wait before the buffer is displayed. The
                     // error/drop path remains responsible for a fence that
                     // was never submitted.
-                    worker.markFirstPublished(frame)
+                    worker.markFirstPublished(frame, System.identityHashCode(child))
                     if (publicationObserver !== NoopKeyguardOrbBufferPublicationObserver) {
                         runCatching { publicationObserver.onSubmitted(frame.producerFrame) }
                     }
@@ -711,6 +781,9 @@ internal class KeyguardOrbBufferRenderer(
         private val frameObserver: KeyguardOrbBufferFrameObserver,
         private val publicationObserver: KeyguardOrbBufferPublicationObserver,
         private val materialTimeSource: KeyguardOrbMaterialTimeSource,
+        private val steadyPublicationBarrier: KeyguardOrbSteadyPublicationBarrier,
+        private val ownershipObserver: KeyguardOrbOwnershipObserver,
+        private val rendererId: Long,
     ) : Choreographer.FrameCallback {
         /**
          * `READY_FOR_MAIN` is deliberately distinct from compositor ownership.
@@ -751,6 +824,12 @@ internal class KeyguardOrbBufferRenderer(
             var retired: Boolean = false,
             var useGeneration: Long = 0L,
             var lease: KeyguardOrbBufferLease? = null,
+            // Passive evidence, reset only when a FREE slot begins a new use.
+            var childIdentity: Int? = null,
+            var publicationPath: String? = null,
+            var callbackReceived: Boolean = false,
+            var fencePending: Boolean = false,
+            var earlyReceiptRetained: Boolean = false,
         )
 
         private data class PublicationTarget(
@@ -799,6 +878,11 @@ internal class KeyguardOrbBufferRenderer(
         @Volatile private var snapshotAttachedGeneration = -1L
         @Volatile private var completionGapMaxMs = 0L
         private var previousCompletionAtUptimeMs = 0L
+        private var starvationStartedAt = 0L
+        private var starvationReported = false
+        private var logWindowStartedAt = 0L
+        private var logRecords = 0
+        private var suppressedRecords = 0L
 
         data class Snapshot(
             val produced: Int,
@@ -825,6 +909,7 @@ internal class KeyguardOrbBufferRenderer(
         fun configure(value: KeyguardOrbBufferRenderSpec) {
             handler.post {
                 if (disposed) return@post
+                if (desired?.lease != value.lease) resetStarvation("lease-changed")
                 desired = value
                 if (!ensureResources(value)) {
                     publishSlotSnapshot()
@@ -842,8 +927,10 @@ internal class KeyguardOrbBufferRenderer(
             // Main grants this exact existing child once. Subsequent worker
             // transactions may only replace its buffer; they never change
             // visibility or parenting.
-            val target = PublicationTarget(lease, child)
-            publicationTarget.install(target)?.takeIf { it.lease != lease }?.active = false
+            val current = publicationTarget.current()
+            if (current == null || !current.active || current.lease != lease || current.child !== child) {
+                publicationTarget.install(PublicationTarget(lease, child))?.active = false
+            }
             handler.post {
                 if (disposed || desired?.lease != lease) return@post
                 if (attachedLease != lease) {
@@ -857,21 +944,46 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
-        fun revokePublication(lease: KeyguardOrbBufferLease) {
+        fun revokePublication(lease: KeyguardOrbBufferLease, child: SurfaceControl) {
             // Make the revocation visible to a renderer callback before its
             // queued control-lane bookkeeping runs.
             val target = publicationTarget.current()
-            if (target?.lease == lease) {
+            if (target?.lease == lease && target.child === child) {
                 target.active = false
                 publicationTarget.revokeExact(target)
             }
+            val revokedAtUptimeMs = SystemClock.uptimeMillis()
+            val childIdentity = System.identityHashCode(child)
             handler.post {
                 retiringLeases += lease
                 if (attachedLease == lease) attachedLease = null
                 slots.filter { it.lease == lease && it.state != SlotState.FREE }.forEach {
                     it.retired = true
                 }
-                maybeNotifyLeaseDrained(lease)
+                observeOwnership("revocation-processed", lease = lease, childIdentity = childIdentity,
+                    detail = "requestedAtUptimeMs=$revokedAtUptimeMs")
+                // A steady submission may already have accepted this exact
+                // child before Main revoked and cleared it. This command is
+                // ordered after that submission on the same Worker Handler.
+                // Never resolve the final clear through the current B grant;
+                // Main alone still owns visibility, parenting and removal.
+                observeOwnership("retirement-clear-started", lease = lease,
+                    childIdentity = childIdentity, log = false)
+                runCatching {
+                    SurfaceControl.Transaction().use { transaction ->
+                        transaction.setBuffer(child, null as HardwareBuffer?).apply()
+                    }
+                }.onSuccess {
+                    observeOwnership("retirement-clear-applied", lease = lease, childIdentity = childIdentity)
+                }.onFailure { error ->
+                    observeOwnership("retirement-clear-failed", lease = lease, childIdentity = childIdentity,
+                        detail = error.javaClass.simpleName)
+                    failures += 1
+                    onFailure(lease, error)
+                }
+                // Neither a successful clear nor its failure changes slot
+                // ownership: only actual release receipts/fences can drain.
+                maybeNotifyLeaseDrained(lease, childIdentity)
                 publishSlotSnapshot()
             }
         }
@@ -895,6 +1007,7 @@ internal class KeyguardOrbBufferRenderer(
                 // no desired work. A queued A-retirement must leave B's
                 // configured/attached loop intact.
                 if (desired == null) {
+                    resetStarvation("retired")
                     running = false
                     if (callbackPosted) choreographer?.removeFrameCallback(this)
                     callbackPosted = false
@@ -927,6 +1040,7 @@ internal class KeyguardOrbBufferRenderer(
             handler.post {
                 disposed = true
                 running = false
+                resetStarvation("disposed")
                 if (callbackPosted) choreographer?.removeFrameCallback(this)
                 callbackPosted = false
                 slots.filter { it.state == SlotState.FREE }.toList().forEach { slot ->
@@ -942,37 +1056,49 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
-        fun markFirstPublished(frame: ReadyFrame) {
+        fun markFirstPublished(frame: ReadyFrame, childIdentity: Int) {
             handler.post {
                 val slot = slots.firstOrNull { it.id == frame.slotId }
                 if (slot == null || slot.useGeneration != frame.useGeneration ||
                     slot.state != SlotState.READY_FOR_MAIN || slot.lease != frame.lease
                 ) return@post
+                slot.childIdentity = childIdentity
+                slot.publicationPath = "first/on-draw"
                 slot.state = SlotState.PUBLISHED
                 firstLeaseAwaitingMain = null
                 firstLeaseSubmitted = frame.lease
                 published += 1
                 earlyReleaseReceipts.take(frame.slotId to frame.useGeneration)?.let { receipt ->
-                    consumeRelease(frame.slotId, frame.useGeneration, receipt.value)
+                    slot.earlyReceiptRetained = false
+                    consumeRelease(frame.slotId, frame.useGeneration, receipt.value, replayed = true)
                 }
                 publishSlotSnapshot()
                 if (running) requestFrame()
             }
         }
 
-        fun release(slotId: Long, useGeneration: Long, releaseFence: SyncFence?) {
+        fun release(slotId: Long, useGeneration: Long, releaseFence: SyncFence?, childIdentity: Int) {
             handler.post {
                 val slot = slots.firstOrNull { it.id == slotId } ?: run {
                     releaseFence?.close()
                     return@post
                 }
-                consumeRelease(slotId, useGeneration, releaseFence)
+                consumeRelease(slotId, useGeneration, releaseFence, childIdentity, "first/on-draw")
             }
         }
 
-        private fun consumeRelease(slotId: Long, useGeneration: Long, releaseFence: SyncFence?) {
+        private fun consumeRelease(
+            slotId: Long,
+            useGeneration: Long,
+            releaseFence: SyncFence?,
+            childIdentity: Int? = null,
+            publicationPath: String? = null,
+            replayed: Boolean = false,
+        ) {
             if (Looper.myLooper() != thread.looper) {
-                handler.post { consumeRelease(slotId, useGeneration, releaseFence) }
+                handler.post {
+                    consumeRelease(slotId, useGeneration, releaseFence, childIdentity, publicationPath, replayed)
+                }
                 return
             }
             val slot = slots.firstOrNull { it.id == slotId }
@@ -983,18 +1109,33 @@ internal class KeyguardOrbBufferRenderer(
                 // acknowledgement runnable reaches the renderer handler.
                 // Retain this exact fence rather than treating READY as FREE.
                 val key = slotId to useGeneration
-                if (!earlyReleaseReceipts.record(key, releaseFence)) {
+                val recorded = earlyReleaseReceipts.record(key, releaseFence)
+                if (recorded) {
+                    if (childIdentity != null) slot.childIdentity = childIdentity
+                    if (publicationPath != null) slot.publicationPath = publicationPath
+                    slot.callbackReceived = true
+                    slot.fencePending = releaseFence?.isValid == true
+                    slot.earlyReceiptRetained = true
+                    observeOwnership("release-received", slot = slot, log = false)
+                } else {
                     // Duplicate callbacks cannot replace the first exact
                     // receipt or consume a later use generation.
                     releaseFence?.close()
                 }
+                observeOwnership("early-release-received", slot = slot,
+                    detail = if (recorded) "retained" else "duplicate")
                 return
             }
             if (slot == null || slot.useGeneration != useGeneration || slot.state != SlotState.PUBLISHED) {
                 releaseFence?.close()
                 return
             }
+            if (childIdentity != null) slot.childIdentity = childIdentity
+            if (publicationPath != null) slot.publicationPath = publicationPath
+            slot.callbackReceived = true
+            slot.fencePending = releaseFence?.isValid == true
             slot.state = SlotState.WAIT_RELEASE_FENCE
+            if (!replayed) observeOwnership("release-received", slot = slot, log = slot.retired)
             awaitFence(slotId, useGeneration, SlotState.WAIT_RELEASE_FENCE, releaseFence)
             publishSlotSnapshot()
         }
@@ -1082,6 +1223,7 @@ internal class KeyguardOrbBufferRenderer(
 
         private fun render(frameTimeNanos: Long) {
             val spec = desired ?: return
+            observeStarvation()
             if (!ensureResources(spec)) return
             // A stale RenderRequest owns only its own slot while its render
             // fence drains. Do not make an otherwise FREE slot unavailable
@@ -1103,6 +1245,11 @@ internal class KeyguardOrbBufferRenderer(
             slot.retired = false
             slot.lease = spec.lease
             slot.useGeneration += 1L
+            slot.childIdentity = null
+            slot.publicationPath = null
+            slot.callbackReceived = false
+            slot.fencePending = false
+            slot.earlyReceiptRetained = false
             val useGeneration = slot.useGeneration
             publishSlotSnapshot()
             try {
@@ -1215,6 +1362,7 @@ internal class KeyguardOrbBufferRenderer(
                     if (firstLeaseSubmitted == spec.lease) {
                         publishSteady(slot, ready)
                     } else if (firstLeaseAwaitingMain != spec.lease) {
+                        slot.publicationPath = "first/on-draw"
                         firstLeaseAwaitingMain = spec.lease
                         onFrameReady(ready)
                     } else {
@@ -1280,7 +1428,11 @@ internal class KeyguardOrbBufferRenderer(
                 dropped += 1
                 return
             }
+            slot.childIdentity = System.identityHashCode(target.child)
+            slot.publicationPath = "steady"
+            observeOwnership("steady-accepted", slot = slot, target = target, log = false)
             runCatching {
+                steadyPublicationBarrier.afterGrantValidated(frame.producerFrame)
                 SurfaceControl.Transaction()
                     .setBuffer(
                         target.child,
@@ -1297,6 +1449,7 @@ internal class KeyguardOrbBufferRenderer(
                 // never for transaction commitment.
                 slot.state = SlotState.PUBLISHED
                 published += 1
+                observeOwnership("steady-submitted", slot = slot, target = target, log = false)
             }.onFailure { error ->
                 discardRenderResult(slot, frame.fence)
                 failures += 1
@@ -1311,6 +1464,7 @@ internal class KeyguardOrbBufferRenderer(
             // A READY frame can be revoked before Main acknowledges it. Its
             // receipt is no longer eligible for a future use of this slot.
             earlyReleaseReceipts.discard(slot.id to slot.useGeneration)?.value?.close()
+            slot.earlyReceiptRetained = false
             slot.state = SlotState.WAIT_RENDER_FENCE
             awaitFence(slot.id, slot.useGeneration, SlotState.WAIT_RENDER_FENCE, fence)
         }
@@ -1321,6 +1475,8 @@ internal class KeyguardOrbBufferRenderer(
             expected: SlotState,
             fence: SyncFence?,
         ) {
+            slots.firstOrNull { it.id == slotId && it.useGeneration == useGeneration }
+                ?.fencePending = fence?.isValid == true
             if (fence?.isValid != true) {
                 fence?.close()
                 finishFence(slotId, useGeneration, expected)
@@ -1347,6 +1503,11 @@ internal class KeyguardOrbBufferRenderer(
             val slot = slots.firstOrNull { it.id == slotId } ?: return
             if (slot.useGeneration != useGeneration || slot.state != expected) return
             val completedLease = slot.lease
+            val completedChildIdentity = slot.childIdentity
+            slot.fencePending = false
+            if (expected == SlotState.WAIT_RELEASE_FENCE) {
+                observeOwnership("release-fence-complete", slot = slot, log = slot.retired)
+            }
             if (disposed) {
                 closeSlot(slot)
                 slots.remove(slot)
@@ -1355,20 +1516,138 @@ internal class KeyguardOrbBufferRenderer(
                 slot.retired = false
                 slot.lease = null
             }
-            completedLease?.let(::maybeNotifyLeaseDrained)
-            retiringLeases.toList().forEach(::maybeNotifyLeaseDrained)
+            completedLease?.let { maybeNotifyLeaseDrained(it, completedChildIdentity) }
+            retiringLeases.toList().forEach { maybeNotifyLeaseDrained(it) }
+            if (slots.any { it.state == SlotState.FREE }) resetStarvation("capacity-released")
             publishSlotSnapshot()
             finishDisposeIfReleased()
             if (running && !disposed) requestFrame()
         }
 
-        private fun maybeNotifyLeaseDrained(lease: KeyguardOrbBufferLease) {
+        private fun maybeNotifyLeaseDrained(lease: KeyguardOrbBufferLease, childIdentity: Int? = null) {
             if (!retiringLeases.contains(lease)) return
             if (slots.none { it.lease == lease && it.state != SlotState.FREE }) {
                 retiringLeases.remove(lease)
+                observeOwnership("lease-drained", lease = lease, childIdentity = childIdentity)
                 onLeaseDrained(lease)
             }
         }
+
+        /** Sample only from the existing frame/control callbacks. The 200ms
+         * threshold is evidence, never a recovery timer or reuse permission. */
+        private fun observeStarvation() {
+            if (slots.size < 3 || slots.any { it.state == SlotState.FREE }) {
+                resetStarvation("capacity-available")
+                return
+            }
+            val now = SystemClock.uptimeMillis()
+            if (starvationStartedAt == 0L) starvationStartedAt = now
+            if (!starvationReported && now - starvationStartedAt >= 200L) {
+                starvationReported = true
+                observeOwnership("starvation-entered", lease = desired?.lease,
+                    detail = "durationMs=${now - starvationStartedAt}")
+            }
+        }
+
+        private fun resetStarvation(reason: String) {
+            if (starvationReported) {
+                observeOwnership("starvation-ended", lease = desired?.lease,
+                    detail = "$reason durationMs=${SystemClock.uptimeMillis() - starvationStartedAt}")
+            }
+            starvationStartedAt = 0L
+            starvationReported = false
+        }
+
+        /** Production builds create no per-frame snapshots or collections.
+         * Lifecycle/exception records share a Worker-owned 64-record/60s cap.
+         * Record 64 announces suppression; the next admitted record reports
+         * the exact accumulated count. No watchdog is added just to log it. */
+        private fun observeOwnership(
+            event: String,
+            slot: Slot? = null,
+            lease: KeyguardOrbBufferLease? = slot?.lease,
+            childIdentity: Int? = slot?.childIdentity,
+            target: PublicationTarget? = null,
+            detail: String = "",
+            log: Boolean = true,
+        ) {
+            val observing = ownershipObserver !== NoopKeyguardOrbOwnershipObserver
+            if (!log && !observing) return
+            val now = SystemClock.uptimeMillis()
+            var writeLog = false
+            var suppressed = 0L
+            if (log) {
+                if (now - logWindowStartedAt >= 60_000L) {
+                    logWindowStartedAt = now
+                    logRecords = 0
+                }
+                if (logRecords < 63) {
+                    logRecords += 1
+                    writeLog = true
+                    suppressed = suppressedRecords
+                    suppressedRecords = 0L
+                } else {
+                    suppressedRecords += 1L
+                    if (logRecords == 63) {
+                        logRecords += 1
+                        Log.i("FluviOrbOwnership", "renderer=$rendererId uptimeMs=$now " +
+                            "thread=${Thread.currentThread().name} event=log-cap-reached " +
+                            "suppressed=$suppressedRecords furtherRecordsCountedUntilNextWindow=true")
+                    }
+                }
+            }
+            if (!writeLog && !observing) return
+            val grant = publicationTarget.current()
+            val grantActive = grant?.active == true
+            val sample = KeyguardOrbOwnershipEvent(
+                event = event,
+                rendererId = rendererId,
+                uptimeMs = now,
+                thread = Thread.currentThread().name,
+                lease = lease,
+                childIdentity = childIdentity,
+                grantIdentity = target?.let(System::identityHashCode),
+                slotId = slot?.id,
+                useGeneration = slot?.useGeneration,
+                desiredLease = desired?.lease,
+                attachedLease = attachedLease,
+                currentGrantLease = grant?.lease,
+                currentGrantChildIdentity = grant?.child?.let(System::identityHashCode),
+                currentGrantIdentity = grant?.let(System::identityHashCode),
+                currentGrantActive = grantActive,
+                slots = java.util.Collections.unmodifiableList(slots.map {
+                    KeyguardOrbOwnershipSlotSnapshot(
+                        slotId = it.id, useGeneration = it.useGeneration, lease = it.lease,
+                        state = it.state.name, retired = it.retired, childIdentity = it.childIdentity,
+                        publicationPath = it.publicationPath, callbackReceived = it.callbackReceived,
+                        fencePending = it.fencePending, earlyReceiptRetained = it.earlyReceiptRetained,
+                    )
+                }),
+                detail = detail,
+            )
+            if (observing) runCatching { ownershipObserver.onEvent(sample) }
+            if (writeLog) {
+                Log.i("FluviOrbOwnership", buildString {
+                    append("renderer=$rendererId uptimeMs=$now thread=${sample.thread} event=$event")
+                    append(" lease=${lease.identity()} child=$childIdentity slot=${slot?.id}/${slot?.useGeneration}")
+                    append(" desired=${sample.desiredLease.identity()} attached=${attachedLease.identity()}")
+                    append(" grant=${sample.currentGrantIdentity}/${sample.currentGrantLease.identity()}")
+                    append(" grantChild=${sample.currentGrantChildIdentity} grantActive=$grantActive")
+                    append(" suppressed=$suppressed detail=$detail slots=[")
+                    sample.slots.forEachIndexed { index, s ->
+                        if (index > 0) append(';')
+                        append("${s.slotId}/${s.useGeneration} lease=${s.lease.identity()} child=${s.childIdentity}")
+                        append(" state=${s.state} retired=${s.retired} path=${s.publicationPath}")
+                        append(" callbackReceived=${s.callbackReceived} fencePending=${s.fencePending}")
+                        append(" earlyReceiptRetained=${s.earlyReceiptRetained}")
+                    }
+                    append(']')
+                })
+            }
+        }
+
+        private fun KeyguardOrbBufferLease?.identity(): String =
+            if (this == null) "none" else "$attachment/$generation"
 
         private fun drawScene(
             canvas: android.graphics.Canvas,

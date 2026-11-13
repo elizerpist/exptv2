@@ -9725,3 +9725,132 @@ Szabályütközés esetén ez a projektutasítás irányadó a feltöltött prom
 - Earlier journal contents remain available in [Git history before this cleanup](https://github.com/elizerpist/exptv2/blob/989258017a28c16591ddab06f8a638768816faad/docs/FLUVI_ENGINEERING_JOURNAL.md).
 - Scope: shared journal only; no application, test, workflow, graph, or APK changes. This maintenance operation makes no new application-validation or physical-acceptance claim.
 - Delivery: journal-only commit with `[skip ci]`; verify the committed diff and associated Actions runs after publication.
+
+
+## 2026-11-13 — R06 implementation acceptance and architecture preflight
+
+Source baseline: `57d091bc23fe1fb12db579014497ff8d706a0552`, branch
+`fix/orb-v4-latency-lockscreen`. Fresh `git fetch origin`, status, branch,
+worktree, ancestry/log and executed-source diff checks confirm a clean checkout
+and journal-only drift since `1fae161e057476c7fc176a386ce19179e6dc1597`.
+The user explicitly resumed the supplied R06 implementation contract after
+pausing it to correct Android APK delivery. APK handoff requires a direct HTTPS
+download, not a local chat-preview link.
+
+Preflight reading was delegated, not represented as one person's exhaustive
+certification: the four journal readers covered every current line 1–9727 in
+consecutive ranges 1–2500, 2501–5000, 5001–7500 and 7501–9727, rereading any
+truncated output. All 237 milestone lines and complete historical rule assets
+v2.1/v1.2 were read. Extracted asset hashes match the journal: base
+`ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2`, addendum
+`c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b`.
+The embedded DEBUGGING_LOOP is included in the final journal reader's coverage.
+Main-branch AGENTS.md and structuring-apps, systematic-debugging, TDD and
+verification-before-completion instructions also inform this work. The newer
+explicit R06 scope and its RED-NOT-RUN allowance take precedence over generic
+skill rules; the supplied concrete architecture is already user-authorized.
+
+### Architecture card
+
+R = `android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt`.
+T = `android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt`.
+Only R, T and this journal change in the application candidate; tooling is a
+separate commit. The existing renderer is the sole buffer lifecycle mechanism.
+Main remains the only writer of visibility, parenting and child removal.
+Worker remains the only slot/use/state owner, with the existing fence Handler
+providing completion to that owner. Atomic exact-object grants communicate
+Main's authority; revocation captures the retiring lease AND child. The new
+Worker operation only submits a null buffer to that captured child after any
+already accepted steady submission. Successful clear does not free ownership.
+No controller/service/shader/Flutter/workflow/fixture-budget changes are allowed.
+
+Observations are immutable, constructor-captured and passive. Production logs
+are bounded lifecycle/exception samples on Worker; test-only accepted/submitted
+samples carry exact lease/child/slot/use identity. Existing callbacks and real
+fences remain the only ownership write path. No second pool, loop, executor,
+watchdog or recovery policy is introduced. R and T already exceed 800 lines:
+they remain cohesive renderer ownership and its platform-instrumentation suite;
+this scope explicitly excludes a cross-file extraction or unrelated refactor.
+
+### Acceptance checklist (source: supplied R06 sections)
+
+| ID | Source | Area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| R06-01 | 2–3 | preflight | current descendant, complete delegated reading, preserve current journal | fetch/status/log/diff and reading coverage | DONE |
+| R06-R1 | 7,12–14 | R/T | late accepted A is followed by final clear of captured A; B unaffected | forced interleaving, 3 repetitions on same renderer | PARTIAL |
+| R06-R2 | 7,14A | R/T | reuse active same lease/child grant, deactivate displaced grant | same-lease relayout while accepted publication held | PARTIAL |
+| R06-R3 | 7,14B–C | R/T | Main never waits; final clear precedes drain accounting; dispose drains without reveal | blocked-steady dispose and exact child events | PARTIAL |
+| R06-R4 | 7,12,14C | R/T | real receipt/fence only; cap3 includes retired uses; old cleanup cannot free B | exact slot/use events and existing controls | PARTIAL |
+| R06-R5 | 7,13–15 | R/T | captured no-op hooks; bounded coherent diagnostic samples without authority | caller audit, focused tests, capture-off controls | PARTIAL |
+| R06-06 | 13 | T | forced ordering observed; actual old use drains and fresh B compositor pixels advance | new tests plus retained failure evidence | PARTIAL |
+| R06-07 | 13,16 | T/evidence | baseline RED only if actual intended ordering executed | compatible-runner attempt or explicit NOT RUN | DONE |
+| R06-08 | 11,15,17 | R/T | no scope/budget/visual/ownership regressions | diff audit, boundary script and three specified Flutter tests | DONE |
+| R06-09 | 17 | build | production and androidTest compile before runtime | local Gradle assembleDebug + assembleDebugAndroidTest | DONE |
+| R06-10 | 17,19 | diagnostic | exact-source new tests + original47 + both7 helpers + both30-cycle reps + trace/identity gates | pinned candidate native_diagnostic dispatch and all artifacts | NOT DONE |
+| R06-11 | 18–19 | Git/delivery | coherent candidate and immutable tag; same-source normal gates after diagnostic PASS | exact headSha/inputs/jobs, preserved failures | NOT DONE |
+| R06-12 | 19–20 | APK | actual Human profile download, embedded full SHA, size/hash and HTTPS link | release asset download, archive/signature/identity checks | NOT DONE |
+| R06-13 | 7,19 | tooling | final-source Dart graph provenance and explicit Kotlin coverage=false inventory | scip_dart + README generator, separate tooling commit | NOT DONE |
+| R06-14 | 5,9–10,20 | evidence/report | both baseline outcomes preserved; H1 occurrence/phone attribution not overclaimed | raw evidence audit and final R1–R5/run matrix | PARTIAL |
+| R06-15 | 4,20–21 | physical | protected dashboard/W-HOME floor; actual phone acceptance remains user-only | unchanged scope; phone test plan and explicit pending status | PARTIAL |
+
+H1 is source-permitted and selected for repair, not proven as the cause of the
+historical capture or phone lag. H2 early steady receipts and H3 pending fences/
+deferred first on-draw publication are observed only, without speculative fixes.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+### Candidate implementation and local verification
+
+Implemented the selected H1 repair in R: retain the active identical lease/child
+grant, deactivate displaced grants, and pass the captured child to exact
+revocation. The existing Worker retirement runnable now clears that child after
+any already accepted steady publication, before drain accounting. Main's immediate
+hide/clear and exact-lease child removal remain unchanged. A failed final clear
+records failure through the existing lease-qualified path; it cannot free a slot.
+
+Added constructor-captured default-no-op post-validation steady barrier and
+immutable Worker ownership observer. Three T tests cover three A→B cycles on the
+same renderer, same-child relayout while accepted output is held, and dispose
+returning while Worker remains held. They require exact slot/use receipt and
+release-fence completion, lease drain, fresh B-owned producer/compositor motion,
+no B hide and the global three-slot bound. Evidence is persisted even on failure.
+Tests were written before the production repair. Runtime RED: **NOT RUN** — this
+VM has neither /dev/kvm nor exposed vmx/svm; the pinned emulator's acceleration
+check exits3. The existing remote workflow has no focused repair-absent test
+selector; no full diagnostic baseline was dispatched solely to manufacture RED.
+This does not establish a red/green demonstration.
+
+`FluviOrbOwnership` records bounded lifecycle/exception evidence (per renderer,
+64 records/60s including the cap notice and counted suppression). All three slot
+states are captured together on Worker, with exact lease/child/use, actual receipt,
+pending fence and retained early-receipt flags. Normal production frames do not
+allocate observer snapshots or log. Starvation after200ms is observed through the
+existing callbacks, without a watchdog or recovery action. Capacity becoming FREE
+is not claimed as actual replacement-output progress. H2 steady early receipts
+are diagnosed but deliberately not replayed; H3 remains open if fences stay pending.
+
+Local checks on the candidate tree:
+- `git diff --check`: PASS.
+- `bash scripts/verify-fluvi-boundaries.sh`: PASS.
+- Three required Flutter boundary files: **12 tests PASS**.
+- `bash scripts/test-keyguard-lower-environment.sh`: PASS, including expected
+  evidence-overwrite refusals and sticky-failure controls.
+- Java17/Flutter3.41.4/API35 build:
+  `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain`:
+  **PASS**, 119 tasks, 2m52s. Existing deprecation/SDK metadata warnings remain;
+  read-only Android metrics storage did not prevent assembly.
+- Two independent changed-source/test reviews found no H1 ownership blocker.
+- Emulator new tests, original47, helper7+7, service30×2, trace/identity gates:
+  **NOT RUN for this candidate yet**. R1–R5 therefore remain PARTIAL.
+
+The historical artifact13991760363 was freshly downloaded and hash-verified.
+Archive7532e56729cd657d68d94bdeb19c05daf4d44a9219f139443d9877f42b6d4dea
+and failed fixture/probe/trace hashes match the supplied contract. Repetition1
+retains37 frozen347/342 output samples over17,535ms with drops805→1858; repetition2
+passes30 cycles. Both parsing exits0 and APK identity checks do not attribute H1.
+Raw artifact, failed job log, both captures and audit.json are retained separately
+under `/workspace/outputs/r06/baseline-evidence/`. Local candidate logs are under
+`/workspace/outputs/r06/local-candidate/`.
+
+Next authorized gate: immutable candidate tag, exact-SHA native diagnostic,
+all results/artifacts reviewed, then normal delivery only if diagnostic passes.
+No Human APK or phone improvement is claimed at this checkpoint.
