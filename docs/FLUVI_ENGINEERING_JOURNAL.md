@@ -12891,3 +12891,256 @@ The authoritative delivery blocker remains diagnostic run `43319482620` on
 failed the protected `rapid-cycle-8` current live-output assertion, while
 repetition 2 passed. Normal delivery remains undispatched and no Human APK is
 claimed. Physical validation: PENDING — USER ONLY.
+
+
+## 2026-11-13 — R06 reviewer: 1fae rapid-cycle starvation, selected publication-retirement repair
+
+User requests actual source/evidence analysis and a corrective coding handoff through Human APK, following the current assets. No new physical capture supplied.
+
+Reviewed executable source 1fae161e057476c7fc176a386ce19179e6dc1597; docs HEAD d9fe24ee08c91e5dd001337aa10f03429b57049a rechecked unchanged. Comparison since 1fae contains only this journal (+187/-0 before R06). Reviewed recent cf76118a/777ad196/1fae test/runner changes and production3b4dbba. Last recorded phone source remains04e229c64e560bef9d49972c3413d1115fc36c41.
+
+Raw artifact13991760363 from run43319482620/job131536088989 was downloaded and independently SHA256 verified: 7532e56729cd657d68d94bdeb19c05daf4d44a9219f139443d9877f42b6d4dea. Inspected both service logs/probe captures, lower XML/status, trace-analysis results and before/after APK checksums. PASS: assembly, terminal7, sleep7, lower47, CLEAN_NO_RESET preflight, post-lower observation, unchanged APK identities, both trace analyses. Service1 FAIL at rapid-cycle-8; service2 PASS all30. No normal delivery run or Human APK.
+
+Failure capture1bfae3e6-2dd0-4c50-9271-08a372d2775e: produced347/published342 do not change through18s; dropped rises805->1858; inFlight0/ready0/compositorOwned3; running=true, desired=attached16/40, current SHOW_DISCREET:MAIN_CONFIRMED. Fixture SHA2563af3988e0eb2a0fd88da3729c4674e3241cddebbb5134d282ec78df2c4dd7343; probe tar f835941b6354804d2a0509d633e7e757d8e52fd1cf53c3eee20284d59fd51901; trace2a189644d7ccbc083bf8962b977d23f91d47506b70f677617e01c9906ded2380.
+compositorOwned is advisory aggregate PUBLISHED+WAIT_RELEASE_FENCE, not proof which lease or fence is retained. Successful second run reaches rapid-cycle-8 with ongoing production; its pass does not invalidate the first result.
+
+Selected H1 (UNPROVEN capture attribution): publishSteady checks an active target, Main revokes and clears that child, then the already-authorized worker submits a late buffer to the now hidden child. Source permits that ordering. Repeated stale last-buffer retention could exhaust the global pool. setAttachment also unnecessarily replaces equal-lease/same-child grants, leaving displaced equal-lease grants active.
+Closed repair: keep Main immediate revocation/clear/hide; pass exact captured child into revokePublication; within its existing worker runnable submit one final null-buffer transaction BEFORE drain notification/accounting can release that child. Worker queue orders this after any running steady publication; later publications observe revocation. Retain identical active grants; deactivate every replaced grant. All buffer reuse/release still depends on actual callbacks/fences. No Main join/new pool/visibility authority.
+This supersedes R05's renderer prohibition only for the attached contract. It is application-side repair plus bounded diagnostics, not another diagnostic-only task.
+
+Alternatives analyzed:
+H2 — synchronous/reentrant release during steady apply could enter earlyReleaseReceipts while READY; markFirstPublished replays those receipts but steady path does not. Callback ordering in failed capture unknown. Observe exact early receipt/use; no separate speculative repair authorized.
+H3 — true unsignalled release fence or deferred first on-draw submission after retirement. Aggregate counters cannot resolve these. Record exact per-slot state/callback/fence/age and first-vs-steady history before attributing residual failure.
+H4 — fixture/observation/setup: repeated fixed output counters with current window checks, clean preflight and identical APKs weigh against the previous setup/identity failures. They do not constitute universal platform/measurement exclusion.
+Failure after verified final clear and old-lease drain would refute H1 as sufficient; next decision belongs to reviewer.
+
+Audit disclosure: all three uploaded rule assets and milestone file read. Current renderer read; relevant controller/callers, instrumentation methods/helpers, workflow/scripts and current journal entries inspected. Full historical 1.9M-character journal was retrieved and searched but NOT entirely reread line by line; complete transitive-source/test certification is not claimed. No matching Kotlin index: available tooling/keyguard-terminal-provenance-clean manifest source495fc38b0339c93880ad1f159be9d6e284cc57d0 is stale Dart. Native inventory/graph notes were inspected as historical navigation only.
+Rules asset hashes match repository embedded blocks: base ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2; widget c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b. Loop asset SHA2565d85bad2c00e4a6ab680b843fe68cb9265dccb7d2af3e6acbe5d9e9528d4c674 is preserved below for agent access.
+
+Reviewer implementation/tests/build: NOT RUN, no app/test/workflow edit. Only this append. Sole workflow triggers inspected: push/pull_request/schedule/workflow_dispatch. Use [skip ci] and verify journal-only additions and no associated workflow run after commit.
+Compact handoff FLUVI_R06_1fae_PROMPT.txt: 7992 Unicode characters; SHA2564c45b38d9ec719686868145ef0fd287b5409c3012cb9cb81fa66b65d15abb267.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+### R06 full reviewer contract
+````text
+1. TITLE / TASK INTENT
+R06 IMPLEMENTATION: repair revoked-lease buffer publication and deliver a Human APK containing the repair AND diagnostics. Reviewer-selected hypothesis H1 below supersedes R05's prohibition on renderer edits. Do not reopen unrelated R03/R05 work or choose a different repair.
+
+2. AUTHORITATIVE APPLICATION STATE
+Repo elizerpist/exptv2; branch fix/orb-v4-latency-lockscreen.
+Executed source: 1fae161e057476c7fc176a386ce19179e6dc1597.
+Reviewed docs HEAD: d9fe24ee08c91e5dd001337aa10f03429b57049a. Its eight commits after 1fae change only the journal. Keep them.
+Last journal-identified phone source: 04e229c64e560bef9d49972c3413d1115fc36c41. No physical result exists for this repair.
+
+3. HARD PREFLIGHT
+Read the complete project instructions, rule assets, docs/FLUVI_ENGINEERING_JOURNAL.md and relevant MILESTONE_COMMITS.md. Asset access: journal at c4babd0ba16eaf743f24f5a23558f3f81df649f4 contains complete FLUVI_RULE_ASSET_BEGIN/END blocks for FLUVI_PROMPT_WRITER_RULES.md v2.1 and FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md v1.2. Current journal R06 includes DEBUGGING_LOOP_VERY_IMPORTANT.txt verbatim. Use git show REF:docs/FLUVI_ENGINEERING_JOURNAL.md. User project instructions take precedence.
+Run git fetch origin; git status --short; git log -10 --oneline; git diff 1fae161e..HEAD --name-status. Preserve concurrent work. Report executable drift that contradicts this plan to the reviewer; documentation descendants are expected.
+Reviewer disclosure: assets and milestone read; current renderer, relevant callers/tests, recent journal entries and raw CI artifacts audited. A fresh complete reading of all 1.9M historical journal characters was NOT completed. Native graph coverage is missing. Do not describe this as exhaustive certification.
+
+4. PHYSICAL USER EVIDENCE
+User reports render/disappearance lag and no new testable build. W-SHOW/W-HIDE/W-LOCK-ANIM remain open. Preserve dashboard milestone 6e962187e90e2a82431b1f91b224d2b52a6e0ba7 and W-HOME-ANIM. Automated recovery does not prove phone latency fixed.
+
+5. DRIVE LOG AUDIT
+No new Drive/phone capture supplied. Raw evidence: run43319482620, job131536088989, artifact13991760363, SHA256 7532e56729cd657d68d94bdeb19c05daf4d44a9219f139443d9877f42b6d4dea. Preserve both repetitions and existing hashes. Capture1: 1bfae3e6-2dd0-4c50-9271-08a372d2775e.
+
+6. COMMIT / AGENT-EVIDENCE AUDIT
+1fae repairs Bash stage-variable initialization; 777ad196 corrects a deadline test datum; cf76118a adds lower preflight. These are not phone-lag fixes. Last production change 3b4dbba avoids duplicate legacy GPU preparation; preserve it.
+Current results: assembly PASS; terminal7 PASS; sleep7 PASS; lower47 PASS; preflight CLEAN_NO_RESET; identical APK checksums PASS; both trace analyses PASS. Service1 FAIL rapid-cycle-8; service2 PASS all30. Normal delivery NOT RUN. Human APK absent.
+
+7. GRAPH PROVENANCE AND IMPACT
+Available tooling/keyguard-terminal-provenance-clean graph indexes Dart at 495fc38b, not current Kotlin. Its native inventory is source navigation, not indexed proof.
+Paths: R=android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt; T=android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt.
+Risk | Symbol/caller | Old -> new | Guard / verification
+R1 | R.publishSteady/hideLayer | late A can follow Main clear -> serialized final A clear | exact captured child; forced interleaving T
+R2 | R.setAttachment/ensureLayer | replaces same grant -> reuse active same lease+child | repeated layout cannot revoke current output; T
+R3 | R.revokePublication/retire/dispose | drain accounting alone -> buffer clear then accounting | Main never joins; old A cannot clear B; T
+R4 | R.consumeRelease/finishFence | ownership unchanged | real callback/fence only; three slots total; existing controls + T
+R5 | R test hooks/diagnostics | missing transition identity -> bounded observations | immutable worker samples; no authority; capture-off controls
+
+8. CURRENT SOURCE FACTS
+publishSteady validates a volatile grant once, then applies setBuffer. hideLayer revokes on Main and immediately clears/hides the child. No worker-ordered final clear exists. setAttachment replaces even the same lease/child grant and leaves the displaced same-lease grant active.
+Worker owns slots; Main owns visibility/parenting. GPU completion executes on the worker Handler. Retiring layers remain alive until exact lease drain. compositorOwned combines PUBLISHED and WAIT_RELEASE_FENCE; it does not identify their owners.
+
+9. PROVEN / UNPROVEN / MISSING
+PROVEN: service1 repeatedly reports produced347/published342 unchanged for18s, dropped increasing to1858, inFlight0/ready0/compositorOwned3, worker running, desired=attached16/40, classifier SHOW_DISCREET:MAIN_CONFIRMED.
+H1 selected: worker accepts A -> Main revokes/clears A -> worker submits late A. The hidden retired child can retain its final buffer; repeated retirement consumes capacity. Source permits this ordering; occurrence in this capture remains UNPROVEN.
+H2 alternative: a reentrant steady release can be recorded while READY; unlike markFirstPublished, publishSteady does not replay early receipts. Actual callback ordering is missing.
+H3 alternative: release fences remain unsignalled, or deferred first on-draw submission outlives retirement. Missing per-slot/fence evidence prevents attribution. H1 repair does not claim to solve these.
+Fixture/identity/setup explanations are weakened by valid attachment checks, repeated stalled counters, clean preflight and identical APKs; not universally excluded.
+
+10. ROOT-CAUSE OR FORENSIC GATE
+Implement H1 now with distinguishing diagnostics. Success requires old leases drain and replacement output progresses under forced ordering plus unchanged service gates. If starvation persists with final clears and old-lease drain proven, H1 is insufficient: return exact evidence for reviewer interpretation. No blind rerun or timeout increase.
+
+11. SCOPE LOCK / NO-TOUCH
+Change R, T, journal; generate separate tooling artifacts. No service/classifier/eligibility, shader, visual, Flutter, workflow or fixture-budget changes. Preserve first-publication on-draw behavior, privacy, OFF/CARD/API<34 fallback and detached prewarm. H2/H3 are diagnostic alternatives, not permission for additional speculative edits.
+
+12. LAYERS / BOUNDS / OWNERSHIP
+Main hides immediately and owns reparent/release. Worker gains only a final BUFFER-NULL transaction for the captured retiring child. Never resolve cleanup against current target B. Never close/reuse a buffer because hide/transaction commit/timeout completed. Keep global cap3 including retired uses; no Main wait, extra executor, or hidden render loop.
+
+13. REQUIRED RED TESTS
+Add T.isolatedOrbRevocationDrainsLateSteadyPublication. Capture a default-no-op test hook once when R is constructed and pass it by named arguments to Worker. Hook runs AFTER successful steady grant validation, BEFORE transaction apply; existing beforeRender barrier is too early.
+Establish live A; arm one worker latch; wait off Main; hide A and attach B on Main while worker stays blocked; release latch. Assert actual A lease drain, B-owned fresh output and compositor motion, no B hide, total slots<=3. Repeat3 times on the same renderer. Always release/reset hooks/dispose in finally. Bound each wait to existing8/12s helper budgets.
+Add repeated same-lease layout and dispose-with-blocked-steady variants. Observe immutable exact lease/slot-use events through a captured no-op test observer; do not fabricate release callbacks or treat aggregate counters as B identity. Baseline must fail the old-lease-drain assertion under this ordering. Report RED as NOT RUN if not executed; never invent it.
+
+14. IMPLEMENTATION CONTRACT
+A. setAttachment: retain current grant when active && same lease && identical child. When replacing, deactivate the displaced exact grant regardless of lease equality. Preserve queued attachment bookkeeping.
+B. hideLayer passes its captured lease AND child to revokePublication. Revoke synchronously as today. In that method's existing worker runnable, BEFORE maybeNotifyLeaseDrained, apply setBuffer(capturedChild,null). This runnable follows any already-running steady submission; later submissions see revocation. Keep immediate Main clear/hide as well. Do not move visibility to Worker.
+C. Preserve retired marking, exact-lease accounting, producer/release fence handling and Main onLeaseDrained removal. A failed final clear retains ownership, records failure and uses existing lease-qualified failure reporting; no forced free, endless retry or fallback that exposes stale content.
+D. Add bounded Log.i tag FluviOrbOwnership in the SAME application: revoke/final-clear outcome, retired release receipt/fence completion, lease drained, early receipt, starvation entry/recovery. Include renderer-instance ID, uptimeMs, thread, lease attachment/generation, child identity, slot/use/state/retired, callback-received and fence-pending distinction. Worker snapshots all three slots together. Do not merge independently sampled Main values into an atomic claim. No normal per-frame logging; cap64 records per60s with suppressed count. A first starvation event after200ms is diagnostic only, never a recovery timeout. Retain existing fallback behavior.
+
+15. PERFORMANCE GATE
+No extra steady transaction; one final buffer-clear per retired child. No waits/readback on production Main, pool expansion, reduced resolution/FPS or sleeps. Log only bounded exceptional/lifecycle events. Existing calibrated producer/Canvas/compositor A/C/B/A and capture-off behavior stay mandatory.
+
+16. IMPLEMENTATION ORDER
+Read and check drift; implement focused regression hook/tests and closed R repair together; audit all changed callers; cheap checks; exact-source diagnostic; inspect all results; normal delivery; download/verify Human APK; graph/report/journal. Continue mechanical corrections within this contract. A semantic contradiction returns to reviewer with evidence, not a request for user permission.
+
+17. VALIDATION
+Existing configured Flutter/proot host:
+git diff --check
+bash scripts/verify-fluvi-boundaries.sh
+flutter test test/boundary/dashboard_interaction_performance_boundary_test.dart test/boundary/human_diagnostic_apk_delivery_boundary_test.dart test/boundary/dashboard_avatar_profile_boundary_test.dart --reporter expanded
+Remote existing fluvi-core.yml compiles app+androidTest before emulator: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon from android/. Verified runner: Ubuntu/Java17/API35/x86_64/pixel_7/KVM/swangle. No local ARM emulator requirement. Existing lower class selection includes T automatically. Require all new tests, original47, both7 helpers, both predeclared service repetitions with30 cycles, trace analysis and APK identity checks PASS. Keep all failures; no third speculative repetition.
+
+18. COMMIT DISCIPLINE
+Coherent candidate [skip ci]; body Why/Evidence/Changed/Validation/Limitations/Physical status. Append journal, preserve failed refs and concurrent entries. No force-push or moving tags. Verify intended diff and unintended runs; docs SHA is not application SHA.
+
+19. PUSH / BUILD / GRAPH REGENERATION
+In Bash after committing:
+candidate_sha=$(git rev-parse HEAD)
+candidate_ref="fluvi-orb-retirement-${candidate_sha:0:12}"
+git tag "$candidate_ref" "$candidate_sha"
+git push origin HEAD:fix/orb-v4-latency-lockscreen "refs/tags/$candidate_ref"
+gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=true -f run_nightly=false -f run_baseline_profile=false
+Follow exact SHA/ref run to completion; download logs/artifacts. After diagnostic PASS automatically dispatch SAME command with native_diagnostic=false. Follow core/Flutter/native/Human gates to actual APK. Diagnostic mode cannot deliver Human. Dashboard profile is separate; report its actual result without changing Human dependencies.
+Use existing tools/codegraph tooling with final clean application SHA: scip_dart index then provenance-checked generate per its README; separate tooling commit. Keep Kotlin coverage=false and add exact-source native symbol/ownership inventory; never relabel Dart graph as native proof.
+
+20. COMPLETION REPORT
+Lead with actual downloaded Human APK URL, full SHA, profile mode, size and SHA256; verify embedded build identity. Give changes, R1-R5 results, every run/job/artifact, both repetitions, all failures, hypothesis evidence/limits, final graph provenance and journal link. Phone plan: same ORB/settings, cold/warm wake,10 lock/unlock cycles,60s visible animation; record delay/stall and matching capture. Include adb logcat -d -v threadtime -s FluviOrbOwnership:I for ownership diagnosis. No physical acceptance claim.
+
+21. DEFINITION OF DONE
+H1 production repair and diagnostics implemented; required final gates pass for delivered source; Human APK downloaded, identified and hashed; graph/report/journal delivered. Commit/push/queued CI/diagnostic PASS alone are not done. Distinguish implementation, validation, APK delivery and physical acceptance. Continue authorized work through APK; preserve precise evidence if genuinely blocked.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
+````
+
+### FLUVI_RULE_ASSET_BEGIN DEBUGGING_LOOP_VERY_IMPORTANT.txt
+The following fenced content is the current uploaded asset, verbatim; it takes precedence over older evidence-only interpretations.
+````text
+A Fluvi projekt diagnosztikai és promptíró reviewere vagy. Feladatod a felhasználói hibajelzés és a forrás elemzése, javítási hipotézis felállítása, konkrét megoldás megtervezése és pontos végrehajtási prompt készítése.
+
+A cél: a feltételezett hibaokot célzottan javító, ellenőrzött, telefonon tesztelhető APK. Csökkentsd a megelőzhető hibákat, a fölösleges buildciklusokat és a javítás nélküli diagnosztikai köröket.
+
+**1. A KÖTELEZŐ BUGFIXCIKLUS**
+
+Felhasználói BUG feedback és console log → aktuális forrás, commitok, journal, tesztek és codegraph elemzése → lehetséges hibaokok értékelése → javítási hipotézis és konkrét megoldási terv → javítást és célzott diagnosztikát előíró prompt → implementáció, tesztek, CI, graph és jelentés → a javítást tartalmazó Human APK → felhasználói fizikai teszt → az eredmény reviewer általi értelmezése.
+
+A hipotézis végleges igazolását nem szabad minden javítás előfeltételévé tenni. A forrással és megfigyelésekkel alátámasztott hipotézis célzott, ellenőrizhető javítása megengedett és elvárt. A következő teszt feladata annak megállapítása, hogy a javítás valóban a fizikai tünet okára hatott-e.
+
+**2. FELELŐSSÉGI HATÁROK**
+
+A kódelemzés, oksági következtetés, hipotézisválasztás, javítási koncepció és refaktortervezés a te feladatod. Ezeket nem delegálhatod a coding agentnek. Nem adhatsz nyitott feladatot: „keresd meg a lag okát”, „válassz megoldást”, „próbálkozz, amíg jó”.
+
+A coding agent a meghatározott tervet implementálja, elvégzi a teszteket és méréseket, frissíti a szükséges graphot és jelentést, majd elkészíti az APK-t. Mechanikus implementációs, fordítási és konfigurációs hibákat a terven belül önállóan javít.
+
+A felhasználó fizikailag tesztel és elfogad. A visszajelzés értelmezése és a következő javítási döntés ismét a te feladatod.
+
+**3. KÖTELEZŐ OLVASÁS ÉS AKTUÁLIS ÁLLAPOT**
+
+Minden coding prompt előtt teljesen olvasd el az aktuális FLUVI_PROMPT_WRITER_RULES és FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM feltöltött asseteket, a docs/FLUVI_ENGINEERING_JOURNAL.md közös naplót és a releváns milestone-bejegyzéseket. Emlékezet nem helyettesíti az olvasást. Hiányzó hozzáférést nevezz meg; olvasást ne állíts ellenőrzés nélkül.
+
+A coding agentet minden promptban explicit utasítsd ugyanezen dokumentumok tanulmányozására, tényleges elérhetőségükkel együtt. Kövesd az assetek technikai és formai előírásait, az angol, 21 részes coding handoff szerkezetet is.
+
+Minden hibavisszajelzésnél auditáld az új commitokat: SHA, üzenet, diff, tesztek, jelentés és CI. Külön azonosítsd a telefonon tesztelt APK alkalmazási SHA-ját, az aktuális alkalmazáskódot és a csak dokumentációs HEAD-et.
+
+Olvasd végig az érintett forrásokat és teszteket; térképezd fel a hívókat, fogyasztókat, közös erőforrásokat és aszinkron határokat. Használd az adott forráshoz tartozó, megfelelő nyelvi lefedettségű codegraphot, kapcsolatait ellenőrizd a forrásban. Hiányos graphot ne tekints teljes lefedettségnek; a graph nem oksági bizonyíték.
+
+**4. HIPOTÉZISEK ÉS BIZONYÍTÉKOK**
+
+Válaszd külön: PROVEN, UNPROVEN, MISSING EVIDENCE. Különítsd el az alkalmazáshibát, fordítási hibát, teszt/fixture-hibát, mérési hibát és infrastruktúrahibát. Egy igazolt részhiba nem bizonyítja automatikusan a teljes telefonos tünet okát.
+
+Több érdemi hibaok esetén mindegyiket elemezd. A hipotézisekhez rögzítsd:
+
+- mely tünetet magyarázzák, és milyen mechanizmussal;
+- mely forrásrészlet, log vagy teszt támogatja őket;
+- milyen ellenbizonyíték vagy bizonytalanság maradt;
+- milyen célzott módosítás kezelné az adott okot;
+- milyen megfigyelés támogatná vagy cáfolná őket a következő buildben.
+
+Válassz indokolt javítási irányt. Ne halmozz egymásra független, találomra választott módosításokat. Az UNPROVEN megjelölés nem tiltja a megalapozott hipotézis javítását.
+
+**5. MINDEN BUGFIXPROMPT TARTALMAZZON MEGOLDÁSI TERVET**
+
+A promptban kötelezően szerepeljen a feltételezett hibaok és az azt kezelő konkrét megoldási terv. Ne csak diagnosztikai feladatot vagy általános célt adj.
+
+Nevezd meg a fájlokat, osztályokat, függvényeket, módosítandó kódrészleteket, a régi és új viselkedést, a végrehajtási sorrendet és az állapotfeltételeket. Adj cserekoncepciót, szükség szerint kódrészletet vagy pszeudokódot. Határozd meg a fallbacket, megszakítást, takarítást és a megőrzendő működést.
+
+A javítással együtt tervezz célzott diagnosztikát: releváns debug console üzeneteket, mérőhelyeket, időalapokat, kérés-/generáció-/lease-azonosítókat és összehasonlítható kimenetet. Rögzítsd, mit kell látnunk siker, változatlan hiba vagy új regresszió esetén.
+
+A diagnosztika legyen korlátos költségű; maga ne okozzon jelentős lagot. Meglévő mérőhelyet használj, ha elegendő. Új mérési keretrendszert csak konkrét, szükséges döntési információ érdekében tervezz.
+
+Alapértelmezésben a BUGFIX eredménye alkalmazásoldali javítást tartalmazó APK. Pusztán új naplózás, tesztsegéd vagy CI-módosítás nem teljesíti az alkalmazáshiba javítását.
+
+**6. ELŐZETES HATÁSVIZSGÁLAT ÉS SCOPE**
+
+Implementációs prompt előtt készíts konkrét táblát: érintett fájl/szimbólum; hívó/fogyasztó; régi és új állapotátmenet; lehetséges regresszió; védőfeltétel; ellenőrző teszt vagy forrásbizonyíték.
+
+Vizsgáld a ténylegesen elérhető kockázatos eseteket: hideg/meleg indulás, cache hit/miss, szinkron/aszinkron callback, siker/hiba/fallback, attach/detach, cancel/dispose, gyors ismétlés, késői régi eredmény, mód- és platformkülönbség. Ellenőrizd a szálakat, ownershipöt, azonosítókat, erőforráskorlátokat és felszabadítást.
+
+Minden szükséges hívó-, típus-, teszt- és konfigurációváltozást együtt tervezz meg. A fixture előfeltételeit is vizsgáld: külön időpontok állapotai nem automatikusan egy megfigyelés; display-off, keyguard-locked, app-withdrawn és globális idle külön fogalmak.
+
+Egy feladatnak legyen körülhatárolt elsődleges célja. Független korábbi tesztfejlesztési elmaradásokat ne csomagolj automatikusan a javításhoz. Minden előírás konkrét kockázatot kezeljen.
+
+Refaktorhoz te adj indoklást, ownership-, lifecycle-, szál- és migrációs tervet. Védd a fizikailag elfogadott működést.
+
+**7. ELLENŐRZÉS ÉS APK-ELŐÁLLÍTÁS**
+
+Adj pontos, az aktuális környezetben végrehajtható parancsokat és elvárt eredményeket. Először a releváns olcsó ellenőrzések, az alkalmazás és az érintett tesztkód fordítása, majd a célzott tesztek fussanak. Ezután következzenek a kötelező teljes szállítási kapuk.
+
+Ne írj elő nem elérhető helyi Android-toolchaint vagy emulátort. Alkalmatlan host esetén ellenőrzött kompatibilis távoli futási útvonalat tervezz.
+
+A checkpoint, commit, push és teljes CI-indítás külön művelet. Ne minden apró hiba a teljes drága láncon kapjon először visszajelzést. A teszt viselkedést és szerződést ellenőrizzen; ne indokolatlanul a forrás szövegalakját.
+
+A diagnosztikai futás nem helyettesíti a végső kapukat. Az átadott APK alkalmazási forrásához legyenek visszaköthetők a végső eredmények. A build tartalmazza a kiválasztott hipotézist kezelő javítást és a szükséges diagnosztikát.
+
+**8. HIBÁK KEZELÉSE ÉS A MEGÁLLÁS SZABÁLYA**
+
+A coding agent ne álljon meg commit, push, elindított CI vagy a terven belül javítható technikai hiba után. A végrehajtható munkát vigye végig az APK-átadásig.
+
+Minden sikertelen futás összes releváns hibáját együtt kell értékelni. Ne csak az első assertion javítása után induljon új teljes build.
+
+Ha az eredmény cáfolja a javítási tervet, vagy új architekturális/működési döntést igényel, az agent őrizze meg az exact source/log/test evidence-et és adja vissza a döntést a reviewernek. A független, már meghatározott munka folytatható. Ez nem automatikus felhasználói engedélykérés; téged kötelez új elemzésre és konkrét tervre.
+
+Ugyanazon hibahatár ismételt bukása új megkülönböztető bizonyíték nélkül kizárja a következő vak teljes CI-futást. Tilos az újrafuttatás-zöldig módszer, hibás minták elhagyása, kötelező kapuk vagy assertionök gyengítése és a tünet indokolatlan timeouttal, sleeppel vagy retryjal elfedése.
+
+**9. ÖNÁLLÓ BIZONYÍTÉKGYŰJTÉS CSAK INDOKOLT KIVÉTEL**
+
+EVIDENCE_COLLECTION feladatot akkor tervezz, ha konkrét hiányzó adat nélkül még felelősen körülhatárolt javítás sem választható. Ne azért, mert a hipotézis még nem teljesen bizonyított.
+
+Nevezd meg a hiányzó döntési információt, a vizsgált hipotéziseket, mérőhelyeket, kontrollokat, korlátos futásszámot, kimenetet és cáfolási feltételeket. Az eredményt te értelmezd.
+
+Az ilyen feladat lezárása nem a bugfix lezárása. Ne alakuljon határozatlan idejű tesztinfrastruktúra-fejlesztéssé.
+
+**10. KÖZÖS NAPLÓ ÉS MÓDOSÍTÁSI JOG**
+
+Közös forrás: docs/FLUVI_ENGINEERING_JOURNAL.md. Naplózd a visszajelzést és a megvizsgált commitokat: SHA, tényleges változás, megfigyelt hiba, evidence-hivatkozás, PASS/FAIL/NOT RUN, hipotézis állapota, következő döntés és fennmaradó korlát.
+
+Rögzítsd külön, ha egy körben nem történt alkalmazásoldali javítás. Teszt- vagy CI-javítást ne mutass be a telefonos tünet javulásaként.
+
+A coding agent minden alkalmazási commitját és eredményét kapcsolja a naplóhoz. Te a repositoryban kizárólag ezt a fájlt módosíthatod, append-only módon, a párhuzamos bejegyzések megőrzésével.
+
+Készíts buildet nem indító naplócommitot: ellenőrizd a workflow-kat, skip-mechanizmust, journal-only diffet és eredményt. A [skip ci] felirat önmagában nem ellenőrzés. Alkalmazás-, teszt- vagy workflow-kódot te nem módosíthatsz. Külön kért projektutasítás vagy szabályzati asset elkészítése megengedett.
+
+**11. ÁTADÁS ÉS A KÖVETKEZŐ KÖR**
+
+APK-javításnál a cél letölthető Human APK, teljes alkalmazási SHA-val, build móddal, hash-sel, tesztjelentéssel és rövid fizikai teszttervvel. A commit vagy queued CI nem teljesítés.
+
+Külön közöld: implementáció, automatikus validáció, APK-átadás, fizikai elfogadás. Külső blokk esetén adj pontos okot, bizonyítékot, megvizsgált alternatívát és konkrét következő lépést. Kihagyott kaput ne nevezz sikernek.
+
+A következő felhasználói visszajelzésnél vizsgáld meg: megvalósult-e a tervezett változás, a várt ponton hatott-e, igazolódott vagy cáfolódott-e a hipotézis, maradt-e másik hibaok. Ne ismételd automatikusan az előző megoldást.
+
+A fizikai hibát csak a felhasználó zárhatja le az adott APK tesztjével. Addig: PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+Garantált elsőre zöld buildet vagy biztos hipotézist ne ígérj. Megalapozott javítási tervet, előzetes hatásvizsgálatot, értelmezhető diagnosztikát és következetes szállítási munkát követelj meg.
+
+Szabályütközés esetén ez a projektutasítás irányadó a feltöltött promptírási assetekkel szemben.
+````
+### FLUVI_RULE_ASSET_END DEBUGGING_LOOP_VERY_IMPORTANT.txt
