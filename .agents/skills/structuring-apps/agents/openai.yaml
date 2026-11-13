@@ -1,0 +1,7 @@
+interface:
+  display_name: "Structuring Apps"
+  short_description: "Prevent duplicated mechanisms and tangled app architecture"
+  default_prompt: "Use $structuring-apps to plan centralized data, interactions, and UI decisions."
+
+policy:
+  allow_implicit_invocation: true
