@@ -40,12 +40,6 @@ When the user asks to inspect a screenshot, assume Android screenshots are in `/
 
 To inspect the latest screenshot, list that directory by descending modification time and open the first image.
 
-## Flutter Builds on Termux/Android
-
-Flutter apps can be developed locally in this environment, but local Flutter APK builds are not expected to work on Android ARM64/Termux.
-
-Flutter APK builds should be done online through the connected GitHub account, for example via GitHub Actions.
-
 ## Mandatory Architecture and Centralization Gate
 
 For every request that changes application code, invoke $structuring-apps
