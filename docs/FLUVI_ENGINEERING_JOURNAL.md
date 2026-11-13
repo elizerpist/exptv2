@@ -10066,3 +10066,49 @@ Supplemental raw-evidence verification for the same R06 result:
 - Independent derived reports are retained as `SERVICE-FORENSIC-REPORT.md`,
   `service-forensic-audit.json`, `retirement-audit.json`, and
   `forced-ordering-review/REVIEW.md` within the diagnostic evidence directory.
+
+
+## 2026-11-13 — User clarifies APK delivery for physical evaluation; VM Human APK delivered
+
+The user explicitly clarified that they are the physical accepter and cannot
+perform physical evaluation without an APK. This newer instruction supersedes
+the earlier diagnostic-PASS-before-delivery prerequisite for this evaluation
+build. The known failed service repetition remains FAIL; it is disclosed rather
+than used to withhold the requested APK. No new renderer/fixture/workflow change
+or speculative H2/H3 fix accompanies this delivery.
+
+- Application source: `93161f4ea304a3fb18a7a4dc2336bdab678de4b1`, built from a
+  separate exact detached checkout with tracked source unchanged. All3,416
+  tracked files independently matched the commit.
+- Existing `scripts/build-human-diagnostic-apk.sh` ran **on the VM**, profile mode,
+  with exact FLUVI_BUILD_COMMIT, human_diagnostic purpose, seeded demo and physical/
+  onscreen diagnostics enabled. Build PASS in173.7s. No GitHub Actions APK build
+  or normal delivery workflow was invoked.
+- File: `fluvi_HUMAN_DIAGNOSTIC_93161f4e_VM.apk`, **120,131,794 bytes**.
+  SHA256: `7b6cd9f216051559b45f8ea5ae7a78c72ffd59f38422bae4167554c0d5924673`.
+- ZIP CRC PASS, APK v2 signature PASS, full source SHA and source-defined
+  HUMAN_DIAGNOSTIC label found in all three AOT libraries (arm64-v8a,
+  armeabi-v7a,x86_64). Native DEX includes FluviOrbOwnership, retirement-clear-applied
+  and starvation-entered markers. The initial lowercase raw-purpose byte probe
+  was inapplicable after AOT constant selection; the source-defined uppercase
+  diagnostic label and exact identity were verified instead. No rebuild was needed.
+- Release upload endpoint uploads.github.com returned401 even for small metadata,
+  while repository/API access worked. Standard GitHub LFS upload authorization,
+  upload and verification succeeded. The unchanged APK is stored on the separate
+  `artifacts/r06-human-93161f4e` branch, artifact commit
+  `d6c046fe6d32a71aecb429f73b288c4c11409497`; application source branches are not
+  populated with the binary. The release body points to the actual file; it is
+  not falsely described as a successfully uploaded Release asset.
+- [Direct APK download](https://media.githubusercontent.com/media/elizerpist/exptv2/artifacts/r06-human-93161f4e/fluvi_HUMAN_DIAGNOSTIC_93161f4e_VM.apk).
+  Anonymous HTTPS download returned200, application/octet-stream, length120131794;
+  the fully downloaded file matches the local APK SHA256 exactly. This is an
+  external download URL, not a local chat preview link.
+- [Human evaluation prerelease](https://github.com/elizerpist/exptv2/releases/tag/fluvi-human-diagnostic-93161f4e-vm-r06)
+  records source, size/hash, known failure and physical test steps.
+
+Validation remains: lower50 and helper7+7 PASS; service1 PASS30; service2 FAIL at
+rapid-cycle24; normal delivery NOT RUN. The remaining first/on-draw receipt issue
+and all prior evidence/limits are preserved. R06-12 is now DONE for the explicitly
+requested physical-evaluation APK; complete automated service validation and
+physical acceptance are still not claimed. User evaluation can now proceed with
+the actual repaired build. PHYSICAL VALIDATION — PENDING, USER ONLY.
