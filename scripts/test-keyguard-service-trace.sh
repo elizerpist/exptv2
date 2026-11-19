@@ -63,11 +63,15 @@ test_result=0
 # weakening its per-boundary instrumentation deadlines.
 timeout -k 5s 360s adb shell am instrument -w -r \
   -e sourceSha "$(git rev-parse HEAD)" \
-  -e class com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest \
+  -e class 'com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest#connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles,com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest#r09RecoveryProductionServiceRendersAcrossRealKeyguardCycles' \
   com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \
   | tee "$evidence_dir/instrumentation.txt" || test_result=$?
 # am instrument may exit 0 on a JUnit failure; require the actual runner result.
-grep -Eq '^OK \(1 test\)' "$evidence_dir/instrumentation.txt" || test_result=1
+grep -Eq '^OK \(2 tests\)' "$evidence_dir/instrumentation.txt" || test_result=1
+for method in connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles r09RecoveryProductionServiceRendersAcrossRealKeyguardCycles; do
+  grep -Fqx "INSTRUMENTATION_STATUS: test=$method" "$evidence_dir/instrumentation.txt" || test_result=1
+done
+if grep -Eq '^INSTRUMENTATION_STATUS_CODE: -3' "$evidence_dir/instrumentation.txt"; then test_result=1; fi
 timeout -k 2s 10s adb shell kill -INT "$trace_pid" || test_result=1
 # API35 SELinux permits SIGINT but denied signull (kill -0) in run
 # 42853507857. Permission denial is NOT process exit: it caused an empty

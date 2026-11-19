@@ -40,12 +40,20 @@ if [[ "$scope" == r09_panel_candidate ]]; then
   methods+=(r09RetiredChildUnlinksAfterOrderedClearWithReleaseHeld
     r09MixedSizeHeldOldUseLeavesCurrentSuccessorCapacity
     r09UnchangedPlacementSkipsRedundantTransactions
-    r09NeutralPrivacyTransitionHasPositivePixels)
+    r09NeutralPrivacyTransitionHasPositivePixels
+    r09WorstGapSurvivesFullExportPressure
+    r09WorstGapSurvivesLightExportPressure
+    firstDirectAndHideCommitEvidenceKeepTheirOriginalOperations)
 fi
 selector=''
 for method in "${methods[@]}"; do
-  selector+="${selector:+,}${class}#${method}"
-  printf '%s#%s\n' "$class" "$method" >> "$evidence/requested-tests.txt"
+  selected_class=$class
+  case "$method" in
+    r09WorstGapSurvivesFullExportPressure|r09WorstGapSurvivesLightExportPressure|firstDirectAndHideCommitEvidenceKeepTheirOriginalOperations)
+      selected_class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest ;;
+  esac
+  selector+="${selector:+,}${selected_class}#${method}"
+  printf '%s#%s\n' "$selected_class" "$method" >> "$evidence/requested-tests.txt"
 done
 device_api=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
 device_abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')

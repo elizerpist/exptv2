@@ -12,6 +12,11 @@ import android.view.ViewTreeObserver
 internal data class KeyguardFirstDrawEvent(
     val attachGeneration: Long,
     val observedAtUptimeMs: Long,
+    val rootWidth: Int = 0,
+    val rootHeight: Int = 0,
+    val targetWidth: Int = 0,
+    val targetHeight: Int = 0,
+    val attachStateAtRegistration: String = "UNOBSERVED",
 )
 
 /**
@@ -30,10 +35,15 @@ internal class KeyguardFirstDrawObservation(
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
     private val nowUptimeMs: () -> Long = SystemClock::uptimeMillis,
     private val postToMain: ((Runnable) -> Unit)? = null,
+    private val onPreDraw: ((KeyguardFirstDrawEvent) -> Unit)? = null,
+    private val targetSize: (() -> Pair<Int, Int>)? = null,
     private val onFirstDraw: (KeyguardFirstDrawEvent) -> Unit,
 ) {
     private var registrationObserver: ViewTreeObserver? = null
     private var listener: ViewTreeObserver.OnDrawListener? = null
+    private var preDrawListener: ViewTreeObserver.OnPreDrawListener? = null
+    private var preDrawFired = false
+    private var attachStateAtRegistration = "UNOBSERVED"
     private var fired = false
     private var cancelled = false
     private var cleanupPosted = false
@@ -48,6 +58,21 @@ internal class KeyguardFirstDrawObservation(
         if (!observer.isAlive) {
             closed = true
             return
+        }
+        if (onPreDraw != null) {
+            attachStateAtRegistration = if (root.isAttachedToWindow) "alreadyAttached" else "pending"
+            val beforeDraw = ViewTreeObserver.OnPreDrawListener {
+                if (!closed && !cancelled && !preDrawFired) {
+                    preDrawFired = true
+                    val size = targetSize?.invoke()
+                    val event = KeyguardFirstDrawEvent(attachGeneration, nowUptimeMs(), root.width, root.height,
+                        size?.first ?: 0, size?.second ?: 0, attachStateAtRegistration)
+                    mainHandler.post { if (!cancelled) onPreDraw.invoke(event) }
+                }
+                true
+            }
+            preDrawListener = beforeDraw
+            observer.addOnPreDrawListener(beforeDraw)
         }
         val registeredListener = object : ViewTreeObserver.OnDrawListener {
             override fun onDraw() {
@@ -99,9 +124,16 @@ internal class KeyguardFirstDrawObservation(
     private fun removeOwnListener() {
         val ownListener = listener ?: return
         val registered = registrationObserver
-        if (registered?.isAlive == true) registered.removeOnDrawListener(ownListener)
+        if (registered?.isAlive == true) {
+            registered.removeOnDrawListener(ownListener)
+            preDrawListener?.let(registered::removeOnPreDrawListener)
+        }
         val current = root.viewTreeObserver
-        if (current !== registered && current.isAlive) current.removeOnDrawListener(ownListener)
+        if (current !== registered && current.isAlive) {
+            current.removeOnDrawListener(ownListener)
+            preDrawListener?.let(current::removeOnPreDrawListener)
+        }
+        preDrawListener = null
         listener = null
         registrationObserver = null
     }

@@ -21,6 +21,7 @@ import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
 import com.fluvi.app.lockscreen.material.KeyguardMaterialDiagnostics
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.lockscreen.material.KeyguardOrbRenderBarrier
+import com.fluvi.app.lockscreen.material.KeyguardOrbRetirementEvent
 import com.fluvi.app.lockscreen.material.NoopKeyguardOrbRenderBarrier
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferFrameObserver
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferPublicationObserver
@@ -48,6 +49,7 @@ internal class KeyguardCardWindow(
      * identity before storing a diagnostic event. */
     private val onWindowDiagnostic: (String, String, Long?, Long, Map<String, Any?>) -> Unit =
         { _, _, _, _, _ -> },
+    private val onFirstRootPreDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstRootDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstShaderDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onBootstrapDraw: (KeyguardFirstDrawEvent) -> Unit = {},
@@ -210,6 +212,10 @@ internal class KeyguardCardWindow(
                 onSuccess = {
                     lifecycle.onAttachSucceeded()
                     attachGeneration += 1L
+                    if (KeyguardCardDiagnostics.wantsEvent("VIEW_ATTACH_STATE")) {
+                        reportWindowDiagnostic("VIEW_ATTACH_STATE",
+                            if (current.isAttachedToWindow) "alreadyAttached" else "pending", attachGeneration)
+                    }
                     appliedPresentation = presentation
                     appliedGeometry = resolvedGeometry
                     firstShaderDrawAttachGeneration = attachGeneration
@@ -299,7 +305,8 @@ internal class KeyguardCardWindow(
 
     /** Terminal hide: stop local visibility first and never restore a drag
      * preview before removeViewImmediate. Normal CANCEL still restores. */
-    fun hide(onIsolatedLayerHideCommitted: ((Long) -> Unit)? = null): Boolean {
+    fun hide(onIsolatedLayerHideCommitted: ((Long) -> Unit)? = null,
+             onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null): Boolean {
         checkMainThread()
         val current = root ?: return false
         if (lifecycle.isAttached()) {
@@ -315,7 +322,7 @@ internal class KeyguardCardWindow(
         firstShaderDrawAttachGeneration = null
         current.cancelInteraction("detach", restorePosition = false)
         clearDragFrame()
-        materialController?.stop("hide", onIsolatedLayerHideCommitted)
+        materialController?.stop("hide", onIsolatedLayerHideCommitted, onRetirementEvent)
         if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
         reportWindowDiagnostic("REMOVE_VIEW_BEGIN", "windowManager", attachGeneration)
         val removed = runCatching { manager.removeViewImmediate(current) }
@@ -735,6 +742,14 @@ internal class KeyguardCardWindow(
         observation = KeyguardFirstDrawObservation(
             root = current,
             attachGeneration = capturedAttach,
+            onPreDraw = if (KeyguardCardDiagnostics.wantsEvent("FIRST_ROOT_PREDRAW")) { event ->
+                if (firstRootDrawObservation === observation && lifecycle.isAttached() &&
+                    root === current && attachGeneration == event.attachGeneration) onFirstRootPreDraw(event)
+            } else null,
+            targetSize = {
+                val target = current.findViewById<View>(R.id.fluvi_financial_snapshot_orb)
+                (target?.width ?: 0) to (target?.height ?: 0)
+            },
             onFirstDraw = rootDraw@{ event ->
                 if (firstRootDrawObservation !== observation) return@rootDraw
                 // Clear our own reference before publishing. A late callback

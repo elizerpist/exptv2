@@ -697,7 +697,14 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             val hideA = KeyguardCardDiagnostics.newHideOperation(owner, 11L, null, 200L)
             emit("SHOW_FOR_ATTACH", 110L, showA)
             emit("ADD_VIEW_RETURN", 120L, showA)
+            emit("POST_ADD_SETUP_COMPLETE", 122L, showA)
+            emit("VIEW_ATTACH_STATE", 123L, showA)
+            emit("FIRST_ROOT_PREDRAW", 124L, showA, mapOf("r09RootSize" to "1080x2400",
+                "r09TargetSize" to "168x168", "r09AttachState" to "alreadyAttached"))
+            emit("USER_PRESENT_RECEIVED", 199L, hideA)
             // Same original operation, deliberately reduced out of order.
+            emit("R09_RETIREMENT", 214L, hideA, mapOf("r09Stage" to "final-clear-committed",
+                "r09Lease" to "11/7", "r09Child" to 12345, "r09Slot" to "UNOBSERVED", "r09Use" to "UNOBSERVED"))
             emit("ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", 215L, hideA)
             emit("HIDE_DECIDED", 201L, hideA)
             emit("LOCAL_HIDE_BEGIN", 202L, hideA, mapOf("attachedBefore" to true))
@@ -708,6 +715,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 "isolatedFirstIdentity" to "first/direct:attach:11,generation:7,slot:2,use:9,child:12345",
                 "isolatedFirstReady" to "ready:130,post:131,main:132,applyBegin:133,applyEnd:134",
                 "isolatedFirstCommit" to "receipt:UNOBSERVED,main:UNOBSERVED,bootstrapRetired:UNOBSERVED",
+                "r09FirstFrames" to "workerAck:135:2/9,steadyApply:140:3/10",
             ))
             val showB = KeyguardCardDiagnostics.newShowOperation(owner, 12L, null)
             val hideB = KeyguardCardDiagnostics.newHideOperation(owner, 12L, null, 300L)
@@ -734,16 +742,23 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 mapOf("transactionApplied" to true, "applyReturnedAtUptimeMs" to 354L))
             emit("REMOVE_VIEW_RETURN", 360L, hideC)
             val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertTrue(frozen.lineSequence().any { it.startsWith(" EPISODE ") &&
+                it.contains("attach=11 ") && it.contains("postAdd=122 ") &&
+                    it.contains("preDraw=124 ") && it.contains("targetSize=168x168 ") })
+            assertTrue(frozen.contains("firstExclusionSignal=USER_PRESENT_RECEIVED@199"))
             val renders = frozen.lineSequence().filter { it.startsWith(" RENDER ") }.toList()
             // C intentionally has a show but no summary; the exporter still
             // emits its empty RENDER record rather than dropping the episode.
             assertEquals(3, renders.size)
             assertTrue(renders.single { it.contains("attach=11 ") }.contains("isolatedFirstIdentity=first/direct:attach:11"))
             assertTrue(renders.single { it.contains("attach=11 ") }.contains("receipt:UNOBSERVED"))
+            assertTrue(renders.single { it.contains("attach=11 ") }.contains("r09FirstFrames=workerAck:135:2/9,steadyApply:140:3/10"))
             assertTrue(renders.single { it.contains("attach=12 ") }.contains("bootstrapRetired:237"))
             val withdrawals = frozen.lineSequence().filter { it.startsWith(" WITHDRAWAL ") }.toList()
             assertTrue(withdrawals.single { it.contains("hideOp=${hideA.hideOperationId} ") }
                 .contains("layerApplyReturn=204 layerCommit=215"))
+            assertTrue(withdrawals.single { it.contains("hideOp=${hideA.hideOperationId} ") }
+                .contains("final-clear-committed@214:11/7:12345"))
             assertTrue(withdrawals.single { it.contains("hideOp=${hideB.hideOperationId} ") }
                 .contains("layerApplyReturn=304 layerCommit=315"))
             assertTrue(withdrawals.single { it.contains("hideOp=${hideC.hideOperationId} ") }
@@ -874,6 +889,47 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("drawEvidenceRejected=3"))
         assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32 * 1024)
         assertTrue(report.lineSequence().filter { it.startsWith(" RENDER ") }.none { it.contains("end=") })
+    }
+
+    @Test fun r09WorstGapSurvivesFullExportPressure() = r09WorstGapSurvivesExportPressure("FULL")
+    @Test fun r09WorstGapSurvivesLightExportPressure() = r09WorstGapSurvivesExportPressure("LIGHT")
+
+    private fun r09WorstGapSurvivesExportPressure(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r09-gap-$mode", "profile", mode)
+        repeat(4) { index ->
+            val attach = index + 1L
+            val at = 10_000L * attach
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 909L, attach, "wake", at))
+            val show = KeyguardCardDiagnostics.newShowOperation(owner, attach, null)
+            val hide = KeyguardCardDiagnostics.newHideOperation(owner, attach, null, at + 50)
+            fun emit(stage: String, time: Long, operation: KeyguardDiagnosticOperation, fields: Map<String, Any?> = emptyMap()) {
+                KeyguardCardDiagnostics.captureEvent(context, stage, "r09-gap-fixture", observedUptimeMs = time,
+                    diagnosticContext = owner, operation = operation, fields = fields)
+            }
+            emit("SHOW_FOR_ATTACH", at + 1, show)
+            emit("ADD_VIEW_RETURN", at + 2, show)
+            emit("HIDE_DECIDED", at + 51, hide)
+            emit("LOCAL_HIDE_BEGIN", at + 52, hide, mapOf("attachedBefore" to true))
+            emit("LOCAL_HIDE_APPLIED", at + 53, hide)
+            emit("REMOVE_VIEW_RETURN", at + 54, hide)
+            val worst = when (index) { 3 -> 177_000_000L; 2 -> 118_000_000L; else -> 20_000_000L }
+            val orb = (0..2).joinToString("\n") { sample ->
+                "gapNs=${worst - sample} attach=$attach sample=$sample " + "x=1 ".repeat(260)
+            }
+            val background = (0..2).joinToString("\n") { sample ->
+                "gapNs=${1_000_000L - sample} attach=$attach sample=$sample " + "x=1 ".repeat(260)
+            }
+            emit("ATTACHMENT_RENDER_SUMMARY", at + 55, hide,
+                mapOf("drawEvidenceMode" to mode, "orbDrawGaps" to orb, "backgroundDrawGaps" to background,
+                    "r08Route" to "PRESSURE_VIEW", "drawGapCount" to 3))
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val gaps = report.lineSequence().filter { it.startsWith(" DRAW_GAP ") }.toList()
+        assertTrue("largest final attachment gap must survive: $gaps", gaps.isNotEmpty())
+        assertTrue(gaps.first().contains("attempt=4 ") && gaps.first().contains("gapNs=177000000 "))
+        if (gaps.size > 1) assertTrue(gaps[1].contains("attempt=3 ") && gaps[1].contains("gapNs=118000000 "))
+        assertTrue(report.contains("omittedDrawGapRecordIds="))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32 * 1024)
     }
 
     @Test fun drawEvidenceOwnerChangesAcrossCapturesWithoutAnInterveningFrame() {

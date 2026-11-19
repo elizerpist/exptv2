@@ -112,6 +112,8 @@ internal class KeyguardCardMaterialController(
     private var attachmentIsolatedProducedStart = 0
     private var attachmentIsolatedPublishedStart = 0
     private var attachmentIsolatedDroppedStart = 0
+    private var attachmentPositionSubmittedStart = 0
+    private var attachmentPositionSuppressedStart = 0
     private var profile: KeyguardMaterialProfile? = null
     private var mode = KeyguardCardAnimationMode.ORB_ONLY
     private var presentationMode = KeyguardCardPresentationMode.CARD
@@ -179,6 +181,8 @@ internal class KeyguardCardMaterialController(
     private var isolatedTransitionStartedNanos = 0L
     private var isolatedOrbPausedTime: KeyguardMaterialTime? = null
     private var activeOrbLease: KeyguardOrbBufferLease? = null
+    private var restrictiveTransitionActive = false
+    private var restrictiveReconcilePending = false
     private var currentFirstPublication: KeyguardOrbFirstPublicationToken? = null
     private var firstHandoffToken: KeyguardOrbFirstPublicationToken? = null
     private var firstHandoffCaptureOwner: Any? = null
@@ -196,6 +200,7 @@ internal class KeyguardCardMaterialController(
             frameObserver = isolatedOrbFrameObserver,
             publicationObserver = isolatedOrbPublicationObserver,
             materialTimeSource = isolatedOrbMaterialTimeSource,
+            timingOwner = drawEvidenceOwner,
             onLayerHideSubmitted = { submission ->
                 onIsolatedLayerHideSubmitted?.invoke(submission)
             },
@@ -341,6 +346,10 @@ internal class KeyguardCardMaterialController(
             reconcileClock()
             return
         }
+        val restrictiveTransition = appliedConfiguration?.full == true && !isFull
+        if (restrictiveTransition) restrictiveTransitionActive = true
+        var coherentRestrictedView = false
+        try {
         appliedConfiguration = configuration
         updateCount += 1
         val sceneAppliedAtNanos = System.nanoTime()
@@ -437,6 +446,15 @@ internal class KeyguardCardMaterialController(
         // retained View supplies the same palette-correct bootstrap.  It is
         // not a commit dependency for the isolated route.
         orb.setBootstrapActive(needsBootstrap || isolatedOrbEffective)
+        if (restrictiveTransition && attached && presentationMode == KeyguardCardPresentationMode.ORB) {
+            // The selected scene and static input are already neutral. Keep
+            // it visible before any deferred callback can configure another
+            // child; a pressure View stays on its permitted animated route.
+            orb.setBootstrapActive(!recoveryView && canAnimate)
+            orb.visibility = View.VISIBLE
+            orb.invalidate()
+        }
+        coherentRestrictedView = true
         if (attached && isolatedOrbEffective &&
             (activeOrbLease == null || activeOrbLease?.visualKey != sceneVisualKey)
         ) {
@@ -461,6 +479,29 @@ internal class KeyguardCardMaterialController(
         )
         reconcileIsolatedOrbTarget()
         reconcileClock(canAnimate)
+        } finally {
+            if (restrictiveTransition) {
+                restrictiveTransitionActive = false
+                val pending = restrictiveReconcilePending
+                restrictiveReconcilePending = false
+                if (coherentRestrictedView && pending) {
+                    reconcileIsolatedOrbTarget()
+                    reconcileClock()
+                } else if (!coherentRestrictedView) {
+                    // An exception must not resurrect the previous full scene.
+                    currentFirstPublication = null
+                    activeOrbLease = null
+                    if (isolatedOrbRendererDelegate.isInitialized()) {
+                        runCatching { isolatedOrbRenderer.retire("privacy-transition-failure") }
+                    }
+                    runCatching { orb.setStaticBitmap(null); orb.setScene(null, enabled = false) }
+                    if (attached && presentationMode == KeyguardCardPresentationMode.ORB) {
+                        orb.visibility = View.VISIBLE
+                        orb.invalidate()
+                    }
+                }
+            }
+        }
     }
 
     /** True means the caller must register its frame-commit observation before
@@ -508,6 +549,8 @@ internal class KeyguardCardMaterialController(
             attachmentIsolatedProducedStart = buffer?.framesProduced ?: 0
             attachmentIsolatedPublishedStart = buffer?.framesPublished ?: 0
             attachmentIsolatedDroppedStart = buffer?.framesDropped ?: 0
+            attachmentPositionSubmittedStart = buffer?.positionSubmissions ?: 0
+            attachmentPositionSuppressedStart = buffer?.positionSuppressions ?: 0
             currentFirstPublication = null
             firstHandoffToken = null
             firstHandoffCaptureOwner = null
@@ -568,7 +611,8 @@ internal class KeyguardCardMaterialController(
         reconcileClock()
     }
 
-    fun onDetached(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null) {
+    fun onDetached(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null,
+                   onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null) {
         if (attached && isolatedOrbRendererDelegate.isInitialized()) {
             val owner = drawEvidenceOwner()
             if (owner != null) {
@@ -592,7 +636,7 @@ internal class KeyguardCardMaterialController(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
             isolatedOrbRendererDelegate.isInitialized()
         ) {
-            isolatedOrbRenderer.retire(reason, onLayerHideCommitted)
+            isolatedOrbRenderer.retire(reason, onLayerHideCommitted, onRetirementEvent)
         }
         // The child SurfaceControl is retired before WindowManager removes its
         // parent. Restore the View for a later legacy/fallback attachment.
@@ -605,8 +649,9 @@ internal class KeyguardCardMaterialController(
         background.endAttachmentDrawEvidence()
     }
 
-    fun stop(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null) =
-        onDetached(reason, onLayerHideCommitted)
+    fun stop(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null,
+             onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null) =
+        onDetached(reason, onLayerHideCommitted, onRetirementEvent)
 
     /** Snapshot only at an attachment boundary, after visibility work. No
      * percentile sorting or material-key construction on the draw path. */
@@ -628,6 +673,9 @@ internal class KeyguardCardMaterialController(
         isolatedFramesPublished = (buffer?.framesPublished ?: 0) - attachmentIsolatedPublishedStart,
         isolatedFramesDropped = (buffer?.framesDropped ?: 0) - attachmentIsolatedDroppedStart,
         isolatedCompletionGapMaxMs = buffer?.completionGapMaxMs ?: 0L,
+        positionSubmissions = buffer?.let { it.positionSubmissions - attachmentPositionSubmittedStart } ?: 0,
+        positionSuppressions = buffer?.let { it.positionSuppressions - attachmentPositionSuppressedStart } ?: 0,
+        firstWork = (withdrawalWorkerSnapshot ?: buffer)?.firstWork?.takeIf { it.captureOwner === drawEvidenceOwner() },
         isolatedFirstHandoff = firstHandoff?.takeIf {
             firstHandoffCaptureOwner != null && firstHandoffCaptureOwner === drawEvidenceOwner()
         },
@@ -748,6 +796,7 @@ internal class KeyguardCardMaterialController(
     }
 
     private fun reconcileClock(forceCanAnimate: Boolean? = null) {
+        if (restrictiveTransitionActive) { restrictiveReconcilePending = true; return }
         val canAnimate = forceCanAnimate ?: (profile != null && mode != KeyguardCardAnimationMode.OFF && animationsAllowed)
         // A genuinely static Header scene is rendered once; the selected
         // visual mode alone must not leave a 60 Hz callback running.
@@ -1078,6 +1127,7 @@ internal class KeyguardCardMaterialController(
      * to make a hidden root visible.
      */
     private fun reconcileIsolatedOrbTarget(rootOverride: View? = null) {
+        if (restrictiveTransitionActive) { restrictiveReconcilePending = true; return }
         if (!isolatedOrbEffective ||
             Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE
         ) return
@@ -1319,6 +1369,9 @@ internal data class KeyguardAttachmentRenderSummary(
     val orbGaps: KeyguardDrawGapEvidence.Snapshot, val backgroundGaps: KeyguardDrawGapEvidence.Snapshot,
     val isolatedFramesProduced: Int, val isolatedFramesPublished: Int, val isolatedFramesDropped: Int,
     val isolatedCompletionGapMaxMs: Long,
+    val positionSubmissions: Int,
+    val positionSuppressions: Int,
+    val firstWork: KeyguardOrbFirstWorkSnapshot?,
     val isolatedFirstHandoff: KeyguardIsolatedFirstHandoffSnapshot?,
     val recovery: KeyguardOrbRecoveryEpisode? = null,
     val effectiveRoute: String = "UNAVAILABLE",

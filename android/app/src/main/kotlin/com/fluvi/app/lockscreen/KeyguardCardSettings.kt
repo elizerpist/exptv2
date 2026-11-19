@@ -601,6 +601,11 @@ internal object KeyguardCardDiagnostics {
         val decisionAtUptimeMs: Long,
         var addBeginAtUptimeMs: Long? = null,
         var addReturnAtUptimeMs: Long? = null,
+        var postAddSetupAtUptimeMs: Long? = null,
+        var attachStateAtObservation: String? = null,
+        var firstPreDrawAtUptimeMs: Long? = null,
+        var preDrawRootSize: String? = null,
+        var preDrawTargetSize: String? = null,
         var firstRootDrawAtUptimeMs: Long? = null,
         var firstShaderDrawAtUptimeMs: Long? = null,
         var firstCurrentMaterialDrawAtUptimeMs: Long? = null,
@@ -631,7 +636,14 @@ internal object KeyguardCardDiagnostics {
         var attachedBefore: Boolean? = null,
         var detachFailed: Boolean = false,
         var cause: InspectionTimeline? = null,
+        val retirementEvents: ArrayDeque<RetirementMilestone> = ArrayDeque(),
+        var retirementEventsOmitted: Int = 0,
     )
+
+    private data class RetirementMilestone(
+        val stage: String, val at: Long, val lease: String, val child: String, val slot: String, val use: String,
+    )
+    private data class PendingRetirement(val operationId: Long, val attachment: Long?, val milestone: RetirementMilestone)
 
     private data class InspectionTimeline(
         val requestId: Long,
@@ -691,6 +703,8 @@ internal object KeyguardCardDiagnostics {
         var presentationMode: String = "NA",
         var wakeSource: String = "NA",
         var screenOnReceivedAtUptimeMs: Long? = null,
+        var firstExclusionSignalAtUptimeMs: Long? = null,
+        var firstExclusionSignalSource: String? = null,
         var firstInspectionRequestId: Long? = null,
         var showingInspectionRequestId: Long? = null,
         var requestsReceived: Int = 0,
@@ -719,6 +733,7 @@ internal object KeyguardCardDiagnostics {
         /** At most one receipt per bounded hide operation can arrive before
          * its decision is reduced. This is scoped to this capture/attempt. */
         val pendingHideCommits: ArrayDeque<PendingHideCommit> = ArrayDeque(),
+        val pendingRetirements: ArrayDeque<PendingRetirement> = ArrayDeque(),
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         /** This compact causal spine is independent of the raw event ring.
          * A later hidden-state storm cannot evict an earlier wake/attach/hide
@@ -803,13 +818,13 @@ internal object KeyguardCardDiagnostics {
     )
 
     private val TRANSITION_STAGES = setOf(
-        "SCREEN_ON_RECEIVED", "WAKE_CYCLE_STARTED", "WORKER_OCCUPIED_AT_WAKE", "INSPECTION_QUEUED", "INSPECTION_COALESCED",
+        "SCREEN_ON_RECEIVED", "SCREEN_OFF_RECEIVED", "USER_PRESENT_RECEIVED", "WAKE_CYCLE_STARTED", "WORKER_OCCUPIED_AT_WAKE", "INSPECTION_QUEUED", "INSPECTION_COALESCED",
         "INSPECTION_STARTED", "INSPECTION_FINISHED", "INSPECTION_MAIN_APPLY_POSTED", "INSPECTION_MAIN_APPLY_STARTED", "INSPECTION_APPLIED",
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
-        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
+        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
-        "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
+        "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
     private val CAUSAL_SPINE_FIELD_KEYS = setOf(
         "queueMs", "inspectionTotalMs", "windowsReadMs", "treeScanMs", "mainApplyQueueMs",
@@ -832,6 +847,7 @@ internal object KeyguardCardDiagnostics {
         "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
         "isolatedCompletionGapMaxMs",
         "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit",
+        "r09Placement", "r09FirstWork", "r09FirstFrames",
         "r08Route", "r08Origin", "r08Times", "r08Anchor", "r08Transition",
         "r08Slot0", "r08Slot1", "r08Slot2", "r08Worker", "r08Grant", "r08Progress",
         "shaderFrames", "shaderCalls", "phaseAdvances", "firstPhase", "lastPhase",
@@ -888,7 +904,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_MAIN_APPLY_POSTED" -> "FIRST_MAIN_RESULT_POSTED"
         "INSPECTION_MAIN_APPLY_STARTED" -> "FIRST_MAIN_APPLY_STARTED"
         "AWAITING_MAIN_SURFACE" -> "FIRST_AWAITING_MAIN_SURFACE"
-        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED" ->
+        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED" ->
             "${event.stage}:${event.showOperationId ?: "none"}"
         "HIDE_DECIDED", "LOCAL_HIDE_APPLIED", "ISOLATED_LAYER_HIDE_SUBMITTED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED" ->
             "${event.stage}:${event.hideOperationId ?: "none"}"
@@ -1438,6 +1454,22 @@ internal object KeyguardCardDiagnostics {
                     attempt.attachCount += 1
                     attempt.finalState = "ATTACHED"
                 }
+                "POST_ADD_SETUP_COMPLETE" -> showEpisode()?.let { if (it.postAddSetupAtUptimeMs == null) it.postAddSetupAtUptimeMs = event.uptimeMs }
+                "VIEW_ATTACH_STATE" -> showEpisode()?.let { if (it.attachStateAtObservation == null) it.attachStateAtObservation = reason }
+                "FIRST_ROOT_PREDRAW" -> showEpisode()?.let {
+                    if (it.firstPreDrawAtUptimeMs == null) {
+                        it.firstPreDrawAtUptimeMs = event.uptimeMs
+                        it.preDrawRootSize = fields["r09RootSize"]
+                        it.preDrawTargetSize = fields["r09TargetSize"]
+                        if (it.attachStateAtObservation == null) it.attachStateAtObservation = fields["r09AttachState"]
+                    }
+                }
+                "SCREEN_OFF_RECEIVED", "USER_PRESENT_RECEIVED" -> {
+                    if (attempt.firstExclusionSignalAtUptimeMs == null || event.uptimeMs < attempt.firstExclusionSignalAtUptimeMs!!) {
+                        attempt.firstExclusionSignalAtUptimeMs = event.uptimeMs
+                        attempt.firstExclusionSignalSource = event.stage
+                    }
+                }
                 "FIRST_ROOT_DRAW" -> showEpisode()?.let { if (it.firstRootDrawAtUptimeMs == null) it.firstRootDrawAtUptimeMs = event.uptimeMs }
                 "FIRST_SHADER_DRAW" -> showEpisode()?.let { if (it.firstShaderDrawAtUptimeMs == null) it.firstShaderDrawAtUptimeMs = event.uptimeMs }
                 "FIRST_CURRENT_MATERIAL_DRAW" -> showEpisode()?.let { if (it.firstCurrentMaterialDrawAtUptimeMs == null) it.firstCurrentMaterialDrawAtUptimeMs = event.uptimeMs }
@@ -1481,6 +1513,14 @@ internal object KeyguardCardDiagnostics {
                             created.isolatedLayerCommitReceivedAtUptimeMs = pending.receivedAtUptimeMs
                             attempt.pendingHideCommits.remove(pending)
                         }
+                        val pendingRetirements = attempt.pendingRetirements.filter {
+                            it.operationId == operationId && it.attachment == event.attachGeneration
+                        }
+                        pendingRetirements.forEach { pending ->
+                            if (created.retirementEvents.size < 12) created.retirementEvents.addLast(pending.milestone)
+                            else created.retirementEventsOmitted += 1
+                            attempt.pendingRetirements.remove(pending)
+                        }
                         attempt.hides.addLast(created)
                     }
                     inspectionTimeline()
@@ -1514,6 +1554,19 @@ internal object KeyguardCardDiagnostics {
                         }) {
                         if (attempt.pendingHideCommits.size >= 9) attempt.pendingHideCommits.removeFirst()
                         attempt.pendingHideCommits.addLast(PendingHideCommit(operationId, event.attachGeneration, event.uptimeMs))
+                    }
+                }
+                "R09_RETIREMENT" -> event.hideOperationId?.let { operationId ->
+                    val milestone = RetirementMilestone(fields["r09Stage"] ?: "UNOBSERVED", event.uptimeMs,
+                        fields["r09Lease"] ?: "UNOBSERVED", fields["r09Child"] ?: "UNOBSERVED",
+                        fields["r09Slot"] ?: "UNOBSERVED", fields["r09Use"] ?: "UNOBSERVED")
+                    val existing = hideEpisode()
+                    if (existing != null) {
+                        if (existing.retirementEvents.size < 12) existing.retirementEvents.addLast(milestone)
+                        else existing.retirementEventsOmitted += 1
+                    } else {
+                        if (attempt.pendingRetirements.size >= 108) attempt.pendingRetirements.removeFirst()
+                        attempt.pendingRetirements.addLast(PendingRetirement(operationId, event.attachGeneration, milestone))
                     }
                 }
                 "REMOVE_VIEW_BEGIN" -> hideEpisode()?.removeBeginAtUptimeMs = event.uptimeMs
@@ -1786,31 +1839,37 @@ internal object KeyguardCardDiagnostics {
                 episodeBlocks.getValue(attempt).getOrNull(index)?.let { (id, text) -> select(id, text, attempt.id) }
             }
         }
-        // Gap attribution is optional evidence, never a prerequisite for the
-        // retained show's/withdrawal's causal block or its completeness.
-        // Admit the worst orb gap from each episode before later samples.
-        // Balance episodes across attempts so a busy cold attempt cannot
-        // consume all optional evidence before the warm wakes are visited.
-        val gapBlocks = mutableListOf<List<Pair<String, String>>>()
+        // Preserve the largest measured detailed gap first, then one worst
+        // gap from each remaining attachment before lesser samples. Parsing
+        // occurs here on the diagnostic consumer, never in a draw callback.
+        data class GapCandidate(val id: String, val text: String, val gapNs: Long)
+        val gapBlocks = mutableListOf<List<GapCandidate>>()
         repeat(attemptsForCausalEvidence.maxOfOrNull { it.shows.size } ?: 0) { episodeIndex ->
             attemptsForCausalEvidence.forEach { attempt ->
                 val episode = attempt.shows.getOrNull(episodeIndex) ?: return@forEach
                 val episodeId = "a${attempt.id}:show${episode.operationId}"
-                val records = mutableListOf<Pair<String, String>>()
+                val records = mutableListOf<GapCandidate>()
                 DRAW_GAP_KEYS.forEach { key ->
                     val surface = if (key == "orbDrawGaps") "orb" else "background"
                     episode.renderSummary[key]?.lineSequence()?.filter(String::isNotBlank)?.forEachIndexed { index, line ->
                         val id = "$episodeId:drawGap:$surface:$index"
                         if (episodeId !in selected) omittedRecords += id
-                        else records += id to " DRAW_GAP attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} surface=$surface sample=$index $line\n"
+                        else {
+                            val duration = line.substringAfter("gapNs=", "").substringBefore(' ').toLongOrNull()
+                                ?: Long.MIN_VALUE
+                            records += GapCandidate(id,
+                                " DRAW_GAP attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} surface=$surface sample=$index $line\n",
+                                duration)
+                        }
                     }
                 }
-                gapBlocks += records
+                gapBlocks += records.sortedByDescending { it.gapNs }
             }
         }
-        repeat(gapBlocks.maxOfOrNull { it.size } ?: 0) { sampleIndex ->
-            gapBlocks.forEach { records ->
-                records.getOrNull(sampleIndex)?.let { (id, text) -> select(id, text) }
+        val rankedGapBlocks = gapBlocks.sortedByDescending { it.firstOrNull()?.gapNs ?: Long.MIN_VALUE }
+        repeat(rankedGapBlocks.maxOfOrNull { it.size } ?: 0) { sampleIndex ->
+            rankedGapBlocks.forEach { records ->
+                records.getOrNull(sampleIndex)?.let { select(it.id, it.text) }
             }
         }
         // Original milestone rows are optional because the complete episode
@@ -1900,6 +1959,7 @@ internal object KeyguardCardDiagnostics {
         val showing = show?.cause
         val firstInspection = attempt.firstInspectionRequestId?.let(attempt.inspections::get)
         appendLine("attemptId=${attempt.id} wakeSource=${attempt.wakeSource} wakeCycleStartedAt=${attempt.startedUptimeMs} screenOnReceivedAt=${attempt.screenOnReceivedAtUptimeMs ?: "NA"} presentationMode=${attempt.presentationMode} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
+        appendLine(" firstExclusionSignal=${attempt.firstExclusionSignalSource ?: "UNOBSERVED"}@${attempt.firstExclusionSignalAtUptimeMs ?: "UNOBSERVED"}")
         appendLine(" firstInspectionRequestId=${attempt.firstInspectionRequestId ?: "NA"} showingInspectionRequestId=${show?.requestId ?: "NA"} requestsReceived=${attempt.requestsReceived} requestsReplaced=${attempt.requestsReplaced} inspectionsStarted=${attempt.inspectionsStarted} inspectionsApplied=${attempt.inspectionsApplied} inspectionsRejected=${attempt.inspectionsRejected} staleInspectionCount=${attempt.staleInspectionCount}")
         appendLine(" retries=scheduled:${attempt.retryScheduledCount},fired:${attempt.retryFiredCount},cancelled:${attempt.retryCancelledCount},pending:${(attempt.retryScheduledCount - attempt.retryFiredCount - attempt.retryCancelledCount).coerceAtLeast(0)} attachCount=${attempt.attachCount} detachCount=${attempt.detachCount} finalState=${attempt.finalState}")
         appendLine(" awaiting=unknownWhileHidden:${attempt.unknownWhileHiddenCount},unknownWhileHiddenEpochChanges:${attempt.unknownWhileHiddenEpochChanges},pendingPreservedAfterUnknown:${attempt.pendingPreservedAfterUnknown},pendingRejectedAfterUnknown:${attempt.pendingRejectedAfterUnknown},visibleWithdrawalCount:${attempt.visibleWithdrawalCount},retrySuppressedForPendingWork:${attempt.retrySuppressedForPendingWork},retryBudgetExhaustedWhileAwaiting:${attempt.retryBudgetExhaustedWhileAwaiting}")
@@ -1931,7 +1991,7 @@ internal object KeyguardCardDiagnostics {
             val withdrawal = actualWithdrawal(attempt, episode)
             withdrawal?.let { pairedHides += it.operationId }
             "a${attempt.id}:show${episode.operationId}" to buildString {
-                appendLine(" EPISODE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} req=${episode.requestId ?: "NA"} decision=${episode.decisionAtUptimeMs} add=${episode.addBeginAtUptimeMs ?: "NA"}/${episode.addReturnAtUptimeMs ?: "NA"} root=${episode.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} shader=${episode.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} currentMaterial=${episode.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} live=${episode.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} bootstrapDrawAt=${episode.bootstrapDrawAtUptimeMs ?: "NO_BOOTSTRAP_DRAW_OBSERVED"} bootstrapCommit=${episode.bootstrapCommitCallbackAtUptimeMs ?: "UNOBSERVED"} promoted=${episode.livePromotedAtUptimeMs ?: "UNOBSERVED"} frameCommit=${episode.frameCommitCallbackAtUptimeMs ?: "UNOBSERVED"} withdrawal=${withdrawal?.operationId ?: "NA"} localHide=${withdrawal?.localHideAppliedAtUptimeMs ?: "NA"} layerHideSubmit=${withdrawal?.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${withdrawal?.isolatedLayerTransactionApplied ?: "NA"} removeReturn=${withdrawal?.removeReturnAtUptimeMs ?: "NA"}")
+                appendLine(" EPISODE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} req=${episode.requestId ?: "NA"} decision=${episode.decisionAtUptimeMs} add=${episode.addBeginAtUptimeMs ?: "NA"}/${episode.addReturnAtUptimeMs ?: "NA"} postAdd=${episode.postAddSetupAtUptimeMs ?: "UNOBSERVED"} attachState=${episode.attachStateAtObservation ?: "UNOBSERVED"} preDraw=${episode.firstPreDrawAtUptimeMs ?: "UNOBSERVED"} rootSize=${episode.preDrawRootSize ?: "UNOBSERVED"} targetSize=${episode.preDrawTargetSize ?: "UNOBSERVED"} root=${episode.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} shader=${episode.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} currentMaterial=${episode.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} live=${episode.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} bootstrapDrawAt=${episode.bootstrapDrawAtUptimeMs ?: "NO_BOOTSTRAP_DRAW_OBSERVED"} bootstrapCommit=${episode.bootstrapCommitCallbackAtUptimeMs ?: "UNOBSERVED"} promoted=${episode.livePromotedAtUptimeMs ?: "UNOBSERVED"} frameCommit=${episode.frameCommitCallbackAtUptimeMs ?: "UNOBSERVED"} withdrawal=${withdrawal?.operationId ?: "NA"} localHide=${withdrawal?.localHideAppliedAtUptimeMs ?: "NA"} layerHideSubmit=${withdrawal?.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${withdrawal?.isolatedLayerTransactionApplied ?: "NA"} removeReturn=${withdrawal?.removeReturnAtUptimeMs ?: "NA"}")
                 append(inspectionCause(if (episode == first) "SHOWING_INSPECTION" else "SHOW_CAUSE", episode.cause))
                 if (withdrawal != null) {
                     append(hideRecord(withdrawal))
@@ -1951,7 +2011,7 @@ internal object KeyguardCardDiagnostics {
     }
 
     private fun hideRecord(hide: HideEpisode): String =
-        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} layerSubmit=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${hide.isolatedLayerTransactionApplied ?: "NA"} layerApplyReturn=${hide.isolatedLayerApplyReturnedAtUptimeMs ?: "UNOBSERVED"} layerCommit=${hide.isolatedLayerCommitReceivedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
+        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} layerSubmit=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${hide.isolatedLayerTransactionApplied ?: "NA"} layerApplyReturn=${hide.isolatedLayerApplyReturnedAtUptimeMs ?: "UNOBSERVED"} layerCommit=${hide.isolatedLayerCommitReceivedAtUptimeMs ?: "UNOBSERVED"} r09Retire=${hide.retirementEvents.joinToString("|") { "${it.stage}@${it.at}:${it.lease}:${it.child}:${it.slot}/${it.use}" }.ifBlank { "UNOBSERVED" }} r09RetireOmitted=${hide.retirementEventsOmitted} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
 
     private fun causalSpineComplete(attempt: TimingAttempt): Boolean {
         fun has(stage: String, show: Long? = null, hide: Long? = null, attach: Long? = null) = attempt.causalSpine.any {

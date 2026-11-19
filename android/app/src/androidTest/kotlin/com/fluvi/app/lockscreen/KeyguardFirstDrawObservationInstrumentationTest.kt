@@ -178,6 +178,7 @@ class KeyguardFirstDrawObservationInstrumentationTest {
         try {
             val published = AtomicInteger()
             val event = AtomicReference<KeyguardFirstDrawEvent>()
+            val preDraw = AtomicReference<KeyguardFirstDrawEvent>()
             val posted = CountDownLatch(1)
             val pending = mutableListOf<Runnable>()
             lateinit var observation: KeyguardFirstDrawObservation
@@ -186,6 +187,7 @@ class KeyguardFirstDrawObservationInstrumentationTest {
                     root = fixture.root,
                     attachGeneration = 5L,
                     nowUptimeMs = { 321L },
+                    onPreDraw = { preDraw.set(it) },
                     postToMain = { runnable ->
                         synchronized(pending) { pending += runnable }
                         posted.countDown()
@@ -204,6 +206,9 @@ class KeyguardFirstDrawObservationInstrumentationTest {
             assertEquals(1, published.get())
             assertEquals(5L, requireNotNull(event.get()).attachGeneration)
             assertEquals(321L, requireNotNull(event.get()).observedAtUptimeMs)
+            assertEquals(321L, requireNotNull(preDraw.get()).observedAtUptimeMs)
+            assertTrue(requireNotNull(preDraw.get()).rootWidth > 0)
+            assertTrue(requireNotNull(preDraw.get()).rootHeight > 0)
 
             fixture.instrumentation.runOnMainSync { fixture.root.invalidate() }
             fixture.instrumentation.waitForIdleSync()

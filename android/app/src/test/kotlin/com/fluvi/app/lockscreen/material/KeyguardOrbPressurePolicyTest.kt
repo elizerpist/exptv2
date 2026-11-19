@@ -58,11 +58,37 @@ class KeyguardOrbPressurePolicyTest {
 
     @Test fun incompatibleRetiredSizeIsNotRecoveryWhileCompatibleCurrentWorkExists() {
         repeat(4) { assertNull(sample(100L + it * 30, oldOwned = 1,
-            wrongSizeOld = true, currentCompatible = true)) }
+            wrongSizeOld = true, currentCompatible = true, currentInFlight = true)) }
         assertNull(sample(300, oldOwned = 1, wrongSizeOld = true))
         assertNull(sample(325, oldOwned = 1, wrongSizeOld = true))
         assertEquals(KeyguardOrbPressureReason.WRONG_SIZE_OLD,
             sample(350, oldOwned = 1, wrongSizeOld = true))
+    }
+
+    @Test fun oldWrongSizeDoesNotCausePressureWhenTwoFreeSlotsCanBeRebuilt() {
+        // One genuinely owned old buffer leaves two independently replaceable
+        // FREE slots. Time and repeated opportunities must not turn capacity
+        // into WRONG_SIZE_OLD merely because that old buffer is still held.
+        repeat(5) { n ->
+            assertNull("free slots remain productive despite an old-size use",
+                sample(100L + n * 30, oldOwned = 1, free = 2,
+                    wrongSizeOld = true, currentCompatible = false))
+        }
+    }
+
+    @Test fun oldWrongSizeDoesNotCausePressureWhenPoolHasUnallocatedCapacity() {
+        repeat(5) { n ->
+            assertNull("unallocated slots remain productive despite an old-size use",
+                policy.observe(grant, true, 1, 0, 1, 0, false,
+                    true, false, 0, 100L + n * 30, true))
+        }
+    }
+
+    @Test fun onePublishedCurrentFrameDoesNotProveThereIsSuccessorCapacity() {
+        assertNull(sample(100, oldOwned = 1, wrongSizeOld = true, currentCompatible = true))
+        assertNull(sample(130, oldOwned = 1, wrongSizeOld = true, currentCompatible = true))
+        assertEquals(KeyguardOrbPressureReason.WRONG_SIZE_OLD,
+            sample(160, oldOwned = 1, wrongSizeOld = true, currentCompatible = true))
     }
 
     @Test fun cancellationAndClaimHaveExactlyOneWinnerEvenWhenConcurrent() {

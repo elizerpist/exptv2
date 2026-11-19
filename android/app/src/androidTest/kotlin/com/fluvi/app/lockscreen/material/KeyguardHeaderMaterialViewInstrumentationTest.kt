@@ -976,6 +976,232 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
+    @Test fun r09RetiredChildUnlinksAfterOrderedClearWithReleaseHeld() {
+        val gate = RealReleaseGate()
+        withOrbRetirementFixture("r09-retire-held-receipt", gate) { fixture ->
+            val first = fixture.awaitFirstToken(fixture.initialLease.attachment)
+            gate.heldLease = first.lease
+            gate.allowContinuous = true
+            val blocked = fixture.holdSteady(first.lease)
+            val steady = blocked.awaitEntered()
+            val accepted = fixture.ownership.awaitUse("steady-accepted", steady)
+            val nextRequest = fixture.prepareFirst(PHASE_A)
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                assertFalse(fixture.window.isAttached)
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            blocked.assertStillHeld("hide and replacement show")
+            blocked.release.countDown()
+            val submitted = fixture.ownership.awaitUse("steady-submitted", steady)
+            val cleared = fixture.ownership.awaitLease("retirement-clear-applied", first.lease)
+            assertEquals(accepted.childIdentity, cleared.childIdentity)
+            assertTrue(fixture.ownership.snapshot().indexOf(submitted) < fixture.ownership.snapshot().indexOf(cleared))
+            gate.awaitActualReceipt(steady)
+            val committed = gate.awaitRetirement(first.lease, "final-clear-committed")
+            val unlinked = gate.awaitRetirement(first.lease, "child-unlinked")
+            assertEquals(System.identityHashCode(first.child), committed.child)
+            assertEquals(committed.child, unlinked.child)
+            assertTrue("unlink preceded the exact final-clear receipt", unlinked.at >= committed.at)
+            assertTrue("old genuine receipt escaped before the unlink check", gate.heldCount() >= 1)
+            val replacement = fixture.submitted(nextRequest)
+            assertTrue(replacement.lease.attachment != first.lease.attachment)
+            val reference = fixture.capture(PHASE_A, "replacement-a", ::hasVisibleMaterial)
+            try { fixture.assertMotion(reference, "replacement", replacement.lease) }
+            finally { reference.bitmap.recycle() }
+            gate.releaseAll()
+            fixture.ownership.awaitUse("release-received", steady)
+            fixture.ownership.awaitUse("release-fence-complete", steady)
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun r09MixedSizeHeldOldUseLeavesCurrentSuccessorCapacity() {
+        val gate = RealReleaseGate()
+        withOrbRetirementFixture("r09-mixed-size-held", gate) { fixture ->
+            val old = fixture.awaitFirstToken(fixture.initialLease.attachment)
+            gate.heldLease = old.lease
+            fixture.instrumentation.runOnMainSync { assertTrue(fixture.window.hide()) }
+            gate.awaitActualReceipt(KeyguardOrbBufferProducerFrame(old.lease, old.slotId, old.useGeneration,
+                0L, calibratedMaterialTime(PHASE_A)))
+            gate.allowContinuous = true
+            val request = fixture.prepareFirst(PHASE_A)
+            fixture.instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            val current = fixture.submitted(request)
+            val token = fixture.awaitFirstToken(current.lease.attachment)
+            lateinit var orb: KeyguardHeaderMaterialView
+            fixture.instrumentation.runOnMainSync {
+                orb = requireNotNull(fixture.manager.currentRoot).findViewById(R.id.fluvi_financial_snapshot_orb)
+                orb.layout(orb.left, orb.top, orb.right + 4, orb.bottom + 4)
+            }
+            val resized = fixture.awaitReplacementToken(token)
+            assertEquals(token.lease.width + 4, resized.lease.width)
+            val first = fixture.capture(PHASE_A, "resized-a", ::hasVisibleMaterial)
+            try {
+                assertEquals(resized.lease, first.frame.lease)
+                fixture.assertMotion(first, "resized", resized.lease)
+            } finally { first.bitmap.recycle() }
+            assertTrue("old use must remain held during current-size output", gate.heldCount() >= 1)
+            fixture.instrumentation.runOnMainSync {
+                orb.layout(orb.left, orb.top, orb.right - 4, orb.bottom - 4)
+            }
+            val reversed = fixture.awaitReplacementToken(resized)
+            assertEquals(token.lease.width, reversed.lease.width)
+            val returned = fixture.capture(PHASE_A, "reverse-a", ::hasVisibleMaterial)
+            try {
+                assertEquals(reversed.lease, returned.frame.lease)
+                fixture.assertMotion(returned, "reverse", reversed.lease)
+            } finally { returned.bitmap.recycle() }
+            assertTrue(gate.heldCount() >= 1)
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun r09UnchangedPlacementSkipsRedundantTransactions() {
+        val gate = RealReleaseGate().apply { releaseAll() }
+        withOrbRetirementFixture("r09-placement", gate) { fixture ->
+            val initial = fixture.awaitFirstToken(fixture.initialLease.attachment)
+            val first = gate.placements.filter { it.lease == initial.lease }
+            assertTrue("the real initial child placement was not observed", first.any { it.submitted })
+            val before = first.count { it.submitted }
+            fixture.instrumentation.runOnMainSync {
+                val orb = requireNotNull(fixture.manager.currentRoot)
+                    .findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                // Change layout coordinates while compensating translation so
+                // the actual surface position remains identical.
+                orb.translationX = -1f
+                orb.layout(orb.left + 1, orb.top, orb.right + 1, orb.bottom)
+            }
+            val unchanged = gate.placements.filter { it.lease == initial.lease }
+            assertTrue("unchanged reconciliation was not exercised", unchanged.any { !it.submitted })
+            assertEquals(before, unchanged.count { it.submitted })
+            fixture.instrumentation.runOnMainSync {
+                val orb = requireNotNull(fixture.manager.currentRoot)
+                    .findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                orb.layout(orb.left + 1, orb.top, orb.right + 1, orb.bottom)
+            }
+            assertEquals(before + 1, gate.placements.count { it.lease == initial.lease && it.submitted })
+            val image = fixture.capture(PHASE_A, "after-move", ::hasVisibleMaterial)
+            try { fixture.assertMotion(image, "after-move", initial.lease) }
+            finally { image.bitmap.recycle() }
+            val request = fixture.prepareFirst(PHASE_A)
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            val replacement = fixture.submitted(request)
+            assertTrue(replacement.lease.attachment != initial.lease.attachment)
+            assertTrue(gate.placements.any { it.lease == replacement.lease && it.submitted && it.child != System.identityHashCode(initial.child) })
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun r09NeutralPrivacyTransitionHasPositivePixels() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        for ((label, background) in listOf("white" to android.graphics.Color.WHITE, "black" to android.graphics.Color.BLACK)) {
+            // A separately mounted neutral bootstrap and a background-only
+            // image calibrate the actual compositor, not a checksum or a
+            // screenshot chosen after seeing the transition.
+            val activity = instrumentation.startActivitySync(
+                Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            ) as KeyguardMaterialTestActivity
+            lateinit var referenceView: KeyguardHeaderMaterialView
+            lateinit var neutral: Bitmap
+            lateinit var empty: Bitmap
+            try {
+                instrumentation.runOnMainSync {
+                    referenceView = KeyguardHeaderMaterialView(activity).apply {
+                        shape = KeyguardHeaderMaterialView.Shape.ORB
+                        layoutParams = FrameLayout.LayoutParams(168, 168, Gravity.CENTER)
+                        setScene(KeyguardMaterialScene(calibratedOrbProfile().neutralized(), false, System.nanoTime()), true)
+                        setBootstrapActive(true)
+                    }
+                    activity.setContentView(FrameLayout(activity).apply {
+                        setBackgroundColor(background)
+                        addView(referenceView)
+                    })
+                }
+                assertTrue("independent neutral reference never drew", waitForBootstrap(instrumentation, referenceView))
+                neutral = copyMaterialView(instrumentation, referenceView)
+                persistPanelEvidence(activity, "r09-neutral-reference-$label", neutral)
+                instrumentation.runOnMainSync { referenceView.visibility = View.INVISIBLE }
+                instrumentation.waitForIdleSync()
+                empty = copyMaterialView(instrumentation, referenceView)
+                persistPanelEvidence(activity, "r09-empty-reference-$label", empty)
+            } finally { instrumentation.runOnMainSync { activity.finish() } }
+            val white = Bitmap.createBitmap(168, 168, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.WHITE) }
+            try {
+                assertTrue("neutral reference is indistinguishable from empty $label", compareMaterialPixels(neutral, empty).meaningful())
+                assertFalse("archived all-white sample accepted as neutral", compareMaterialPixels(neutral, white).nearlyEqual())
+                val gate = RealReleaseGate().apply { releaseAll() }
+                withOrbRetirementFixture("r09-neutral-$label", gate) { fixture ->
+                    val old = fixture.awaitFirstToken(fixture.initialLease.attachment)
+                    fixture.instrumentation.runOnMainSync {
+                        fixture.activity.findViewById<View>(android.R.id.content).setBackgroundColor(background)
+                    }
+                    val full = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                    try {
+                        persistPanelEvidence(fixture.activity, "r09-full-reference-$label", full)
+                        assertTrue("full and neutral references are not distinguishable", compareMaterialPixels(full, neutral).meaningful())
+                        lateinit var orb: KeyguardHeaderMaterialView
+                        var priorDraws = 0
+                        fixture.holdReady(old.lease.attachment)
+                        fixture.instrumentation.runOnMainSync {
+                            orb = requireNotNull(fixture.manager.currentRoot)
+                                .findViewById(R.id.fluvi_financial_snapshot_orb)
+                            priorDraws = orb.diagnostics().bootstrapDrawCount
+                            val result = fixture.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                                fixture.settings.copy(showFinancialDetails = false))
+                            assertTrue(result == KeyguardCardWindow.Result.REDACTED || result == KeyguardCardWindow.Result.CONTENT_UPDATED)
+                        }
+                        val ready = fixture.awaitReady(old.lease.attachment)
+                        assertEquals(calibratedOrbProfile().neutralized().visualKey, ready.frame.lease.visualKey)
+                        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+                        var drewNeutral = false
+                        while (System.nanoTime() < deadline && !drewNeutral) {
+                            fixture.instrumentation.runOnMainSync { drewNeutral = orb.diagnostics().bootstrapDrawCount > priorDraws }
+                            if (!drewNeutral) Thread.sleep(24)
+                        }
+                        assertTrue("current neutral bootstrap did not draw", drewNeutral)
+                        val samples = mutableListOf<Bitmap>()
+                        val times = mutableListOf<Long>()
+                        try {
+                            repeat(6) { index ->
+                                times += SystemClock.uptimeMillis()
+                                val sample = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                                samples += sample
+                                persistPanelEvidence(fixture.activity, "r09-neutral-$label-$index", sample)
+                                Thread.sleep(16)
+                            }
+                            File(fixture.activity.filesDir, "keyguard-material-smoke/r09-neutral-$label-times.txt")
+                                .writeText(times.joinToString("\n"))
+                            samples.forEach { sample ->
+                                assertTrue("neutral interior differs from independently rendered reference $label",
+                                    compareMaterialPixels(neutral, sample).nearlyEqual())
+                                assertTrue("background-only or old full pixels were accepted $label",
+                                    compareMaterialPixels(sample, empty).meaningful() && compareMaterialPixels(sample, full).meaningful())
+                                val corners = listOf(0 to 0, 167 to 0, 0 to 167, 167 to 167)
+                                assertTrue("transparent orb surroundings differ from background $label",
+                                    corners.all { (x, y) -> sample.getPixel(x, y) == empty.getPixel(x, y) })
+                            }
+                        } finally { samples.forEach(Bitmap::recycle) }
+                        fixture.deliverReady(old.lease.attachment)
+                    } finally { full.recycle() }
+                }
+            } finally { neutral.recycle(); empty.recycle(); white.recycle() }
+        }
+        // Exercise the existing held-real-receipt/stale-ticket path separately;
+        // it cannot substitute for the calibrated neutral control above.
+        stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges()
+    }
+
     @Test fun stalePressureCannotSwitchReplacement() {
         val gate = RealReleaseGate().apply { delayTickets = true }
         withOrbRetirementFixture("r08-stale-ticket", gate) { fixture ->
@@ -2090,13 +2316,35 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private val opened = java.util.concurrent.atomic.AtomicBoolean(false)
         @Volatile var allowContinuous = false
         @Volatile var delayTickets = false
+        @Volatile var heldLease: KeyguardOrbBufferLease? = null
+        data class RetirementBoundary(val lease: KeyguardOrbBufferLease, val child: Int, val event: String, val at: Long)
+        private val retirements = java.util.concurrent.CopyOnWriteArrayList<RetirementBoundary>()
+        data class PlacementBoundary(val lease: KeyguardOrbBufferLease, val child: Int, val submitted: Boolean)
+        val placements = java.util.concurrent.CopyOnWriteArrayList<PlacementBoundary>()
+
+        override fun onPlacement(lease: KeyguardOrbBufferLease, childIdentity: Int, submitted: Boolean) {
+            placements += PlacementBoundary(lease, childIdentity, submitted)
+        }
+
+        override fun onRetirementEvent(lease: KeyguardOrbBufferLease, childIdentity: Int, event: String, uptimeMs: Long) {
+            retirements += RetirementBoundary(lease, childIdentity, event, uptimeMs)
+        }
+
+        fun awaitRetirement(lease: KeyguardOrbBufferLease, event: String): RetirementBoundary {
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < end) {
+                retirements.firstOrNull { it.lease == lease && it.event == event }?.let { return it }
+                Thread.sleep(24)
+            }
+            throw AssertionError("missing actual retirement boundary $event for $lease; observed=$retirements")
+        }
 
         override fun allowRender(lease: KeyguardOrbBufferLease): Boolean =
             allowContinuous || lease.attachment <= 0L || firstRender.add(lease)
 
         override fun dispatchRelease(lease: KeyguardOrbBufferLease, slotId: Long, use: Long,
                                      fence: android.hardware.SyncFence?, deliver: () -> Unit) {
-            if (opened.get()) { deliver(); return }
+            if (opened.get() || (heldLease != null && heldLease != lease)) { deliver(); return }
             val receipt = Receipt(lease, slotId, use, deliver)
             held.add(receipt)
             if (opened.get() && held.remove(receipt)) deliver()

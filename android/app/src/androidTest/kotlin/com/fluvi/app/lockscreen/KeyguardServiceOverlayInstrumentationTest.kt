@@ -86,21 +86,11 @@ class KeyguardServiceOverlayInstrumentationTest {
     private val component get() = ComponentName(context, FluviKeyguardCardService::class.java).flattenToString()
 
     @Test fun connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles() {
-        // The host contract selects this one JUnit method. Run the two named
-        // lanes independently so a strict-isolated failure cannot suppress
-        // recovery evidence (or vice versa); preserve the original host
-        // deadline and the strict lane's existing thirty-cycle budget.
-        val recoveryFailure = runCatching { runRecoveryServiceScenario() }.exceptionOrNull()
-        evidence.setLength(0)
-        knownOwnWindowIds.clear()
-        val strictFailure = runCatching { runStrictServiceScenario() }.exceptionOrNull()
-        if (recoveryFailure != null || strictFailure != null) {
-            val failure = AssertionError("Independent lanes: recovery=${if (recoveryFailure == null) "PASS" else "FAIL"}, " +
-                "strictIsolated=${if (strictFailure == null) "PASS" else "FAIL"}")
-            recoveryFailure?.let(failure::addSuppressed)
-            strictFailure?.let(failure::addSuppressed)
-            throw failure
-        }
+        runStrictServiceScenario()
+    }
+
+    @Test fun r09RecoveryProductionServiceRendersAcrossRealKeyguardCycles() {
+        runRecoveryServiceScenario()
     }
 
     private fun runStrictServiceScenario() {

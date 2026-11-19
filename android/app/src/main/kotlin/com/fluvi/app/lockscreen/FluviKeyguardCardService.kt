@@ -18,6 +18,7 @@ import com.fluvi.app.MainActivity
 import com.fluvi.app.runtime.FluviFinancialCardPresenter
 import com.fluvi.app.runtime.FluviLockScreenCardContent
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
+import com.fluvi.app.lockscreen.material.KeyguardOrbRetirementEvent
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.lockscreen.material.KeyguardOrbOwnershipSlotSnapshot
@@ -312,12 +313,16 @@ class FluviKeyguardCardService : AccessibilityService() {
             val receivedAt = SystemClock.uptimeMillis()
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
+                    val owner = currentDiagnosticAttempt
                     hideImmediately("screenOff", triggerReceivedUptimeMs = receivedAt)
-                    traceKeyguard("SCREEN_OFF_RECEIVED", "broadcast", observedUptimeMs = receivedAt, fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true))
+                    if (owner != null) traceKeyguard("SCREEN_OFF_RECEIVED", "broadcast", observedUptimeMs = receivedAt,
+                        diagnosticContext = owner, fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true))
                 }
                 Intent.ACTION_USER_PRESENT -> {
+                    val owner = currentDiagnosticAttempt
                     hideImmediately("userPresent", triggerReceivedUptimeMs = receivedAt)
-                    traceKeyguard("USER_PRESENT_RECEIVED", "broadcast", observedUptimeMs = receivedAt, fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true))
+                    if (owner != null) traceKeyguard("USER_PRESENT_RECEIVED", "broadcast", observedUptimeMs = receivedAt,
+                        diagnosticContext = owner, fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true))
                 }
                 Intent.ACTION_SCREEN_ON -> beginOrJoinWakeCycle("wake", receivedAt)
             }
@@ -395,6 +400,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     )
                 }
             },
+            onFirstRootPreDraw = ::recordFirstRootPreDraw,
             onFirstRootDraw = ::recordFirstRootDraw,
             onFirstShaderDraw = ::recordFirstShaderDraw,
             onBootstrapDraw = ::recordBootstrapDraw,
@@ -2163,7 +2169,23 @@ class FluviKeyguardCardService : AccessibilityService() {
                             operation = hideOperation,
                         )
                     } else null
-                overlay.hide(onLayerHideCommitted)
+                val onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? =
+                    if (wasAttachedBefore && hideOperation.context?.captureId != null &&
+                        KeyguardCardDiagnostics.wantsEvent("R09_RETIREMENT")
+                    ) { event ->
+                        traceKeyguard("R09_RETIREMENT", event.reason,
+                            observedUptimeMs = event.observedAtUptimeMs,
+                            attachGeneration = hideOperation.attachGeneration,
+                            operation = hideOperation,
+                            deferredFields = { mapOf(
+                                "r09Stage" to event.stage,
+                                "r09Lease" to "${event.lease.attachment}/${event.lease.generation}",
+                                "r09Child" to event.childIdentity,
+                                "r09Slot" to (event.slotId ?: "UNOBSERVED"),
+                                "r09Use" to (event.useGeneration ?: "UNOBSERVED"),
+                            ) })
+                    } else null
+                overlay.hide(onLayerHideCommitted, onRetirementEvent)
             } finally {
                 activeWindowDiagnosticOperation = null
             }
@@ -2181,6 +2203,13 @@ class FluviKeyguardCardService : AccessibilityService() {
                         "isolatedFramesPublished" to summary.isolatedFramesPublished,
                         "isolatedFramesDropped" to summary.isolatedFramesDropped,
                         "isolatedCompletionGapMaxMs" to summary.isolatedCompletionGapMaxMs,
+                        "r09Placement" to "submitted:${summary.positionSubmissions},suppressed:${summary.positionSuppressions}",
+                        "r09FirstWork" to (summary.firstWork?.let {
+                            "attach:${it.attachment},gen:${it.generation},request:${it.requestedAt},start:${it.startedAt ?: "UNOBSERVED"},result:${it.resultAt ?: "UNOBSERVED"},status:${it.resultStatus ?: "UNOBSERVED"}"
+                        } ?: "UNOBSERVED"),
+                        "r09FirstFrames" to (summary.firstWork?.let {
+                            "workerAck:${it.firstAt ?: "UNOBSERVED"}:${it.firstSlot ?: "UNOBSERVED"}/${it.firstUse ?: "UNOBSERVED"},steadyApply:${it.secondAt ?: "UNOBSERVED"}:${it.secondSlot ?: "UNOBSERVED"}/${it.secondUse ?: "UNOBSERVED"}"
+                        } ?: "UNOBSERVED"),
                         "isolatedFirstIdentity" to (summary.isolatedFirstHandoff?.let {
                             "first/direct:attach:${it.attachment},generation:${it.generation},slot:${it.slotId},use:${it.useGeneration},child:${it.childIdentity}"
                         } ?: "UNOBSERVED"),
@@ -2325,6 +2354,17 @@ class FluviKeyguardCardService : AccessibilityService() {
     /** Both callbacks arrive after their draw stacks have unwound. The event
      * still carries its original attach id, so a wake A callback cannot write
      * timing into wake B after a fast lock/unlock/reattach sequence. */
+    private fun recordFirstRootPreDraw(event: KeyguardFirstDrawEvent) {
+        val owner = firstDrawOwner ?: return
+        if (!owner.accepts(event, session.get(), wakeEpoch, overlayAttachGeneration)) return
+        traceKeyguard("FIRST_ROOT_PREDRAW", "observed", attachGeneration = event.attachGeneration,
+            observedUptimeMs = event.observedAtUptimeMs, operation = owner.diagnosticOperation,
+            deferredFields = { mapOf("r09RootSize" to "${event.rootWidth}x${event.rootHeight}",
+                "r09TargetSize" to if (event.targetWidth > 0 && event.targetHeight > 0)
+                    "${event.targetWidth}x${event.targetHeight}" else "UNOBSERVED",
+                "r09AttachState" to event.attachStateAtRegistration) })
+    }
+
     private fun recordFirstRootDraw(event: KeyguardFirstDrawEvent) {
         val owner = firstDrawOwner ?: return
         if (!owner.accepts(event, session.get(), wakeEpoch, overlayAttachGeneration)) return
