@@ -72,7 +72,7 @@ emulator evidence, not a diagnosis of the phone. The trace has 36
 ## Local checks
 
 - `git diff --check`, `bash scripts/verify-fluvi-boundaries.sh`, `bash scripts/test-keyguard-lower-environment.sh`, `python3 scripts/test-keyguard-r09-panel-harness.py` and the R10 fake cold-harness controls: PASS.
-- Specified Flutter boundaries: 12/12 PASS. `flutter analyze --no-fatal-infos`: PASS with 20 informational notices. `bash scripts/test-fluvi-fast.sh --reporter expanded`: 1037 + 3 + 4 PASS.
+- Specified Flutter boundaries: 12/12 PASS. `flutter analyze --no-fatal-infos`: PASS with 20 informational notices. `bash scripts/test-fluvi-fast.sh --reporter expanded`: 1037 + 3 + 4 PASS. These checks were rerun on documentation-only descendant `3f8dd8e934004552b3365590b365e05bda56af2a`; the application, scripts and tests are identical to `8a91bf2d79f25780bb420c1a4d14abe846eac333`. The fast suite's main run took 2m09s, and analysis took 27.1s. [Final logs](https://media.githubusercontent.com/media/elizerpist/exptv2/109a78128dcc2a1d114aed17581257df9ed75d6b/r10-flutter-final-8a91bf2d79f2.zip), ZIP SHA-256 `1d0985b82e4801a3009c5f5f66c585ca365ea70f397618034501c57435e09f89`.
 - `:app:assembleDebug :app:assembleDebugAndroidTest :fluvi-core:testDebugUnitTest :app:testDebugUnitTest`: coherent-source retry PASS. Independently rerun app JVM tests: 154/154 PASS; core 150/150 PASS.
 - Baseline-compatible real-controller Robolectric RED on R09 was reproduced and candidate passed; two additional production-shaped FULL/LIGHT export controls passed. These JVM controls do not establish compositor pixels.
 - Initial concurrent Android compilation failed with unresolved `previousValid` because the test compiled after the field was added while the main task had compiled the earlier source. Log retained; coherent-source recompilation passed. No device test result is inferred from that build error.
@@ -184,7 +184,9 @@ match the local file, ZIP integrity passed, and v2 signer SHA-256 is
 The full SHA and HUMAN_DIAGNOSTIC purpose occur in arm64-v8a, armeabi-v7a and
 x86_64 AOT libraries; `R10_COMPACT`, `R10_ROOT_ATTACH_DISPATCH`,
 `fluvi-r10-render` and `r10Cold0` occur in DEX. The APK remains REVIEW ONLY
-until the corrected privacy/compositor gate is resolved.
+until the corrected privacy/compositor gate is resolved. The profile APK's
+format, source identity and signing were verified; this specific profile APK
+has not been installed or physically accepted on a device.
 
 The corrected cold and panel evidence archives were also preserved outside
 the expiring CI artifact store on immutable LFS commit
