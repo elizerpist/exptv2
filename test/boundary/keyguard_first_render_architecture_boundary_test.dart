@@ -3,6 +3,39 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('R12 standalone surface has one platform queue and no extra window', () {
+    final directory = Directory(
+      'android/app/src/main/kotlin/com/fluvi/app/lockscreen/material',
+    );
+    final presenter = File('${directory.path}/KeyguardOrbSurfacePresenter.kt');
+    final worker = File('${directory.path}/KeyguardOrbSurfaceWorker.kt');
+    expect(presenter.existsSync(), isTrue, reason: 'R12 presenter is required');
+    expect(worker.existsSync(), isTrue, reason: 'R12 worker is required');
+    final presenterSource = presenter.readAsStringSync();
+    final workerSource = worker.readAsStringSync();
+    expect(presenterSource, contains('SurfaceView'));
+    expect(presenterSource, contains('SurfaceHolder.Callback2'));
+    expect(workerSource, contains('lockHardwareCanvas'));
+    for (final source in [presenterSource, workerSource]) {
+      expect(source, isNot(contains('SurfaceControl.Builder(')));
+      expect(source, isNot(contains('HardwareBufferRenderer')));
+      expect(source, isNot(contains('setZOrderOnTop')));
+      expect(source, isNot(contains('TYPE_ACCESSIBILITY_OVERLAY')));
+    }
+  });
+
+  test('R12 diagnostic routes retain the legacy comparison path', () {
+    final root = Directory('android/app/src/main/kotlin/com/fluvi/app/lockscreen');
+    final source = root.listSync(recursive: true).whereType<File>()
+        .where((file) => file.path.endsWith('.kt'))
+        .map((file) => file.readAsStringSync()).join('\n');
+    for (final mode in ['SURFACE_LIVE', 'SURFACE_STATIC', 'LEGACY_R11']) {
+      expect(source.contains(mode), isTrue, reason: 'R12 must expose $mode');
+    }
+    expect(File('${root.path}/material/KeyguardOrbBufferRenderer.kt').existsSync(), isTrue,
+        reason: 'the R11 legacy comparison remains available');
+  });
+
   test('the keyguard keeps one owner for child surfaces and window admission', () {
     final root = Directory('android/app/src/main/kotlin/com/fluvi/app/lockscreen');
     expect(root.existsSync(), isTrue);

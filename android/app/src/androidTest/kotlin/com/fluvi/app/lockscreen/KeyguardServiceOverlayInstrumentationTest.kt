@@ -93,6 +93,148 @@ class KeyguardServiceOverlayInstrumentationTest {
         runRecoveryServiceScenario()
     }
 
+    /** Real-service negative control for R12: B is requested under the same
+     * authority while A's complete NO_MAIN_MARKER answer is held before Main
+     * applies it. This probe changes only the test observation, never grants
+     * visibility; B must reacquire the genuine system tree. */
+    @Test fun r12DetachedNegativeCanReadOneSuccessorBeforeOrderedApply() {
+        assertEquals("R12 fixture requires API 35", 35, Build.VERSION.SDK_INT)
+        automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        output = File(context.filesDir, "keyguard-service-probe/r12-admission").apply { mkdirs() }
+        deadline = SystemClock.uptimeMillis() + 90_000L
+        val resolver = context.contentResolver
+        val savedServices = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        val savedEnabled = Settings.Secure.getString(resolver, Settings.Secure.ACCESSIBILITY_ENABLED)
+        val savedLockDisabled = shell("locksettings get-disabled").trim()
+        val savedSettings = snapshotPreferences("fluvi_native_keyguard_card")
+        val savedMaterial = snapshotPreferences("fluvi_keyguard_header_material")
+        val applyEntered = java.util.concurrent.CountDownLatch(1)
+        val releaseApply = java.util.concurrent.CountDownLatch(1)
+        val successorStarted = java.util.concurrent.CountDownLatch(1)
+        val selected = java.util.concurrent.atomic.AtomicReference<KeyguardCardInspectionRequest?>()
+        val successor = java.util.concurrent.atomic.AtomicReference<KeyguardCardInspectionRequest?>()
+        val probeFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        var service: FluviKeyguardCardService? = null
+        var captureStarted = false
+        var testFailure: Throwable? = null
+        val probe = object : KeyguardInspectionProbeForTest {
+            override fun started(request: KeyguardCardInspectionRequest) {
+                if (request.id == successor.get()?.id) successorStarted.countDown()
+            }
+
+            override fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> {
+                if (selected.get() != null || actual.none { it.packageName == "com.android.systemui" }) return actual
+                val owner = service ?: return actual
+                instrumentation.runOnMainSync {
+                    runCatching {
+                        val state = owner.inspectionStateForTest()
+                        if (state.attached || !state.authority.matches(request) || state.pending != null) return@runCatching
+                        val method = FluviKeyguardCardService::class.java.getDeclaredMethod(
+                            "scheduleEvaluation", String::class.java, java.lang.Long::class.java,
+                            java.lang.Long::class.java, KeyguardWindowFreshness::class.java,
+                            KeyguardCardInspectionRequest::class.java,
+                        ).apply { isAccessible = true }
+                        method.invoke(owner, "r12-admission-successor", null, SystemClock.uptimeMillis(),
+                            KeyguardWindowFreshness.FRAMEWORK_EVENT, null)
+                        val next = owner.inspectionStateForTest().pending ?: return@runCatching
+                        if (state.authority.matches(next) && selected.compareAndSet(null, request)) {
+                            successor.set(next)
+                        }
+                    }.onFailure { probeFailure.compareAndSet(null, it) }
+                }
+                if (selected.get()?.id != request.id) return actual
+                // Preserve window/type/layer/exclusion data while removing
+                // only SystemUI markers for this test-owned negative A.
+                return actual.map { window ->
+                    if (window.packageName == "com.android.systemui") window.copy(visibleViewIds = emptySet()) else window
+                }
+            }
+
+            override fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+                if (selected.get()?.id != request.id) return
+                runCatching {
+                    check(decision == KeyguardCardVisibility.HIDDEN_UNKNOWN) { "A did not reach HIDDEN_UNKNOWN" }
+                    check(service?.inspectionStateForTest()?.attached == false) { "A was not detached" }
+                    applyEntered.countDown()
+                    check(releaseApply.await(10, TimeUnit.SECONDS)) { "held Main apply was not released" }
+                }.onFailure { probeFailure.compareAndSet(null, it); applyEntered.countDown() }
+            }
+        }
+        try {
+            assertFalse("fixture requires a fresh service", FluviKeyguardCardServiceRegistry.connected)
+            assertFalse("fixture requires an insecure test device", keyguard.isDeviceSecure)
+            assertTrue(savedLockDisabled == "true" || savedLockDisabled == "false")
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, withoutOurService(savedServices))
+            await("previous service disconnected", 8_000) { !FluviKeyguardCardServiceRegistry.connected }
+            shell("input keyevent KEYCODE_WAKEUP")
+            shell("wm dismiss-keyguard")
+            await("initial unlocked state", 5_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+            shell("locksettings set-disabled false")
+            instrumentation.runOnMainSync {
+                FluviKeyguardCardSettings.update(context, mapOf("requested" to true,
+                    "showFinancialDetails" to true, "presentationMode" to "orb", "animationMode" to "orbOnly"))
+                val epoch = maxOf(SystemClock.elapsedRealtimeNanos(), (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
+                assertTrue(FluviKeyguardMaterialStore.publish(context, materialProfile(), epoch))
+            }
+            val capture = KeyguardCardDiagnostics.startCapture(context,
+                InstrumentationRegistry.getArguments().getString("sourceSha") ?: "source-unprovided", "debug", "FULL")
+            captureStarted = true
+            captureId = capture["captureId"].toString()
+            val services = withoutOurService(savedServices).split(':').filter { it.isNotBlank() } + component
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, services.joinToString(":"))
+            setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
+            await("actual service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
+            service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
+            service!!.inspectionProbeForTest = probe
+            screenOff(synchronizeInput = true)
+            shell("input keyevent KEYCODE_WAKEUP")
+            assertTrue("fixture never reached A's actual Main application", applyEntered.await(20, TimeUnit.SECONDS))
+            probeFailure.get()?.let { throw AssertionError("R12 admission fixture invalid", it) }
+            assertTrue("no same-authority successor was queued", successor.get() != null)
+            val readAheadObserved = successorStarted.await(4, TimeUnit.SECONDS)
+            releaseApply.countDown()
+            assertTrue("the queued successor must eventually enter its real reader", successorStarted.await(10, TimeUnit.SECONDS))
+            probeFailure.get()?.let { throw AssertionError("R12 held-apply probe failed", it) }
+            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"].toString()
+            File(output, "capture.txt").writeText(report)
+            val a = checkNotNull(selected.get())
+            record("R12_ADMISSION_ORDER", "a=${a.id} b=${successor.get()?.id} bStartedBeforeAApply=$readAheadObserved")
+            assertTrue("fixture A must be complete NO_MAIN_MARKER, not unavailable/truncated",
+                report.lineSequence().any { it.contains("req=${a.id}") && it.contains("NO_MAIN_MARKER") })
+            assertTrue("compatible B did not start before the held ordered A application", readAheadObserved)
+        } catch (error: Throwable) {
+            testFailure = error
+            throw error
+        } finally {
+            releaseApply.countDown()
+            service?.inspectionProbeForTest = null
+            if (captureStarted) runCatching {
+                if (!File(output, "capture.txt").exists()) File(output, "capture.txt").writeText(
+                    KeyguardCardDiagnostics.freezeCapture(context)["report"].toString())
+            }
+            val cleanup = runCatching {
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, withoutOurService(savedServices))
+                await("R12 fixture service disconnected", 5_000) { !FluviKeyguardCardServiceRegistry.connected }
+                restorePreferences(savedSettings)
+                restorePreferences(savedMaterial)
+                shell("input keyevent KEYCODE_WAKEUP")
+                shell("wm dismiss-keyguard")
+                if (savedLockDisabled == "true" || savedLockDisabled == "false") shell("locksettings set-disabled $savedLockDisabled")
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
+                setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
+            }
+            record("R12_ADMISSION_CLEANUP", if (cleanup.isSuccess) "status=PASS" else "status=FAIL")
+            File(output, "fixture.txt").writeText(evidence.toString())
+            cleanup.exceptionOrNull()?.let { error ->
+                if (testFailure != null) testFailure!!.addSuppressed(error)
+                else throw AssertionError("R12 fixture cleanup failed", error)
+            }
+        }
+    }
+
     /** One process-cold service admission plus one later wake. The host owns
      * the two fresh-process repetitions and the system trace. All images are
      * fixed-count observations of the actual accessibility window; no image

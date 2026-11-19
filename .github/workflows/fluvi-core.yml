@@ -37,6 +37,7 @@ on:
           - r11_cold_baseline
           - r11_cold_candidate
           - r11_panel_candidate
+          - r12_contract
 
 permissions:
   contents: read
@@ -269,7 +270,7 @@ jobs:
           # /usr/bin/sh. Keep this as one POSIX command so its conditional and
           # aggregate status are owned by one shell invocation.
           script: >-
-            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
+            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_contract ]; then bash scripts/test-keyguard-r12-admission-baseline.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
 
       - name: Analyze bounded production overlay trace
         if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && hashFiles('android/keyguard-service-evidence/fluvi-keyguard-service.perfetto-trace') != '' }}
@@ -309,6 +310,7 @@ jobs:
             android/keyguard-r09-panel/**
             android/keyguard-r10-cold/**
             android/keyguard-r11-cold/**
+            android/keyguard-r12-admission-baseline/**
             android/keyguard-draw-probe.log
             android/keyguard-material-smoke.tar
             android/keyguard-material-smoke-pull.log
