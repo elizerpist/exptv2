@@ -100,3 +100,10 @@ The existing R11 phone capture showed wake-callback-to-CPU-live markers 297/103/
 **Automated validation:** scoped jobs failed closed as described; no overall PASS.  
 **APK delivery:** verified REVIEW ONLY direct bytes above.  
 **Physical acceptance:** PENDING — USER ONLY.
+
+## Earlier local red and corrected checks
+
+- The pre-implementation `keyguard_first_render_architecture_boundary_test.dart` run had 2 expected source-absence failures (`R12 presenter is required` and `R12 must expose SURFACE_LIVE`) and 2 passes. This is an architecture RED, not an API35 runtime result. The subsequent targeted Flutter suite passed 12/12 after implementation.
+- The first render-mode Flutter run had 3 layout-overflow failures. The next run had one copy/freeze interaction failure because the control was off screen. The console layout and test interaction were corrected; the later targeted run passed 12/12. Original logs: `render-mode-flutter.log`, `render-mode-flutter-corrected.log`, and `continuation-integrated-flutter.log` under `/workspace/outputs/r12/preflight/`.
+- `r12-surface-diagnostics-compile.log` initially had 1/52 JVM failures: `KeyguardOrbSurfaceMetricsTest` compared an `Int` literal with a `Long` result. The assertion literals were corrected; later app JVM suite passed 174/174. The separate first `fluvi-core` failure and writable-directory rerun are recorded above.
+- The final APK probe first searched optimized AOT bytes for the lower-case input `human_diagnostic` and failed; source maps this to the exported `HUMAN_DIAGNOSTIC` marker. All three ABIs were then checked for the full source SHA and the actual exported marker, matching the previously verified Human build. No executable change was made to hide that failed probe.
