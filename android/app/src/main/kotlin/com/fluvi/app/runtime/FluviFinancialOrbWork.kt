@@ -19,6 +19,8 @@ internal object FluviFinancialOrbWork {
         var paintCpuNs = 0L
         var paintMaxWallNs = 0L
         var paintMaxCpuNs = 0L
+        var firstPaintStartUptimeMs: Long? = null
+        var lastPaintEndUptimeMs: Long? = null
         var attachment: Long? = null
         var routeCode = -1
         var endUptimeMs = 0L
@@ -56,10 +58,12 @@ internal object FluviFinancialOrbWork {
         val scope = current() ?: return block()
         val start = System.nanoTime()
         val cpu = Debug.threadCpuTimeNanos()
+        if (scope.paints == 0L) scope.firstPaintStartUptimeMs = SystemClock.uptimeMillis()
         scope.paints++
         try {
             return block().also { scope.paintCompletions++ }
         } finally {
+            scope.lastPaintEndUptimeMs = SystemClock.uptimeMillis()
             val wall = (System.nanoTime() - start).coerceAtLeast(0L)
             val thread = (Debug.threadCpuTimeNanos() - cpu).coerceAtLeast(0L)
             scope.paintWallNs += wall

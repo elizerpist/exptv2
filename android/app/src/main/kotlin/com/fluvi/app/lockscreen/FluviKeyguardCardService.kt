@@ -2262,6 +2262,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                                 "r13PaintWallNs" to scope.paintWallNs, "r13PaintCpuNs" to scope.paintCpuNs,
                                 "r13PaintMaxWallNs" to scope.paintMaxWallNs,
                                 "r13PaintMaxCpuNs" to scope.paintMaxCpuNs,
+                                "r13PaintStart" to scope.firstPaintStartUptimeMs,
+                                "r13PaintEnd" to scope.lastPaintEndUptimeMs,
                                 "r13Route" to scope.routeCode,
                             ) },
                         )
