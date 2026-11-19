@@ -93,6 +93,225 @@ class KeyguardServiceOverlayInstrumentationTest {
         runRecoveryServiceScenario()
     }
 
+    /** One process-cold service admission plus one later wake. The host owns
+     * the two fresh-process repetitions and the system trace. All images are
+     * fixed-count observations of the actual accessibility window; no image
+     * grants visibility or supplies a production release. */
+    @Test fun r10ColdFirstAndWarmServiceObservation() {
+        assertEquals("R10 service experiment requires API 35", 35, Build.VERSION.SDK_INT)
+        automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        output = File(context.filesDir, "keyguard-service-probe/r10-cold").apply { mkdirs() }
+        deadline = SystemClock.uptimeMillis() + 180_000L
+        val resolver = context.contentResolver
+        val savedServices = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        val savedEnabled = Settings.Secure.getString(resolver, Settings.Secure.ACCESSIBILITY_ENABLED)
+        val savedLockDisabled = shell("locksettings get-disabled").trim()
+        val savedSettings = snapshotPreferences("fluvi_native_keyguard_card")
+        val savedMaterial = snapshotPreferences("fluvi_keyguard_header_material")
+        val producer = ProducerPixelProbe()
+        val controlled = ControlledMaterialTimeSource(materialTime(PHASE_A))
+        var captureStarted = false
+        var failure: Throwable? = null
+        data class Shot(val start: Long, val end: Long, val windowId: Int?, val crop: File?)
+        fun observedOverlay(): Overlay? = synchronized(knownOwnWindowIds) {
+            val overlays = ownOverlays()
+            check(overlays.size <= 1) { "duplicate Fluvi accessibility overlays" }
+            overlays.singleOrNull()
+        }
+
+        fun sampleWake(label: String): Pair<Overlay, List<Shot>> = marked("r10-$label") {
+            val shots = mutableListOf<Shot>()
+            val samplerFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+            val started = java.util.concurrent.CountDownLatch(1)
+            val sampler = Thread({
+                try {
+                    started.countDown()
+                    repeat(24) { index ->
+                        val begin = SystemClock.uptimeMillis()
+                        val before = observedOverlay()
+                        val screen = automation.takeScreenshot()
+                        val after = observedOverlay()
+                        val end = SystemClock.uptimeMillis()
+                        var cropFile: File? = null
+                        if (screen != null) {
+                            try {
+                                File(output, "$label-screen-${index.toString().padStart(2, '0')}.png")
+                                    .outputStream().use { screen.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                                if (before != null && after != null && before.id == after.id &&
+                                    before.bounds == after.bounds && before.bounds.width() == 168 &&
+                                    before.bounds.height() == 168 && before.bounds.left >= 0 && before.bounds.top >= 0 &&
+                                    before.bounds.right <= screen.width && before.bounds.bottom <= screen.height
+                                ) {
+                                    val crop = Bitmap.createBitmap(screen, before.bounds.left, before.bounds.top, 168, 168)
+                                    try {
+                                        cropFile = File(output, "$label-crop-${index.toString().padStart(2, '0')}.png")
+                                        cropFile!!.outputStream().use { crop.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                                    } finally { crop.recycle() }
+                                }
+                            } finally { screen.recycle() }
+                        }
+                        shots.add(Shot(begin, end, before?.id?.takeIf { it == after?.id }, cropFile))
+                        SystemClock.sleep(32)
+                    }
+                } catch (error: Throwable) { samplerFailure.set(error) }
+            }, "r10-screen-observer")
+            sampler.start()
+            check(started.await(5, TimeUnit.SECONDS)) { "screenshot observer did not start" }
+            val wakeAt = SystemClock.uptimeMillis()
+            record("R10_WAKE_INPUT", "name=$label at=$wakeAt")
+            var window: Overlay? = null
+            try {
+                shell("input keyevent KEYCODE_WAKEUP")
+                await("$label public locked wake", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
+                await("$label actual accessibility attachment", 18_000, pollMs = 100) {
+                    window = observedOverlay()
+                    window != null
+                }
+            } finally {
+                sampler.join(35_000)
+                if (sampler.isAlive) sampler.interrupt()
+                File(output, "$label-samples.txt").writeText(shots.mapIndexed { index, shot ->
+                    "sample=$index start=${shot.start} end=${shot.end} window=${shot.windowId ?: "UNOBSERVED"} crop=${shot.crop?.name ?: "UNOBSERVED"}"
+                }.joinToString("\n", postfix = "\n"))
+            }
+            check(!sampler.isAlive) { "bounded screenshot observer did not finish" }
+            samplerFailure.get()?.let { throw AssertionError("screenshot observer failed", it) }
+            val capturedWindow = checkNotNull(window)
+            record("R10_SAMPLING", "name=$label wake=$wakeAt samples=${shots.size} durationMs=${shots.lastOrNull()?.end?.minus(shots.firstOrNull()?.start ?: wakeAt) ?: -1} window=${capturedWindow.id} bounds=${capturedWindow.bounds}")
+            capturedWindow to shots
+        }
+
+        try {
+            assertFalse("fresh process already has a connected service", FluviKeyguardCardServiceRegistry.connected)
+            assertFalse("secure device cannot be used as the disposable fixture", keyguard.isDeviceSecure)
+            assertTrue(savedLockDisabled == "true" || savedLockDisabled == "false")
+            assertEquals(168, context.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size))
+            instrumentation.runOnMainSync {
+                record("R10_INITIAL_ROOTS", "processRoots=${WindowInspector.getGlobalWindowViews().size}")
+            }
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, withoutOurService(savedServices))
+            await("previous service disconnected", 8_000) { !FluviKeyguardCardServiceRegistry.connected }
+            shell("input keyevent KEYCODE_WAKEUP")
+            shell("wm dismiss-keyguard")
+            await("initial unlocked state", 5_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+            shell("locksettings set-disabled false")
+            instrumentation.runOnMainSync {
+                FluviKeyguardCardSettings.update(context, mapOf("requested" to true, "showFinancialDetails" to true,
+                    "presentationMode" to "orb", "animationMode" to "orbOnly"))
+                val epoch = maxOf(SystemClock.elapsedRealtimeNanos(), (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
+                assertTrue(FluviKeyguardMaterialStore.publish(context, materialProfile(), epoch))
+            }
+            KeyguardOrbBufferRendererTestHooks.frameObserver = producer
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = producer
+            KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlled
+            val startedCapture = KeyguardCardDiagnostics.startCapture(context,
+                InstrumentationRegistry.getArguments().getString("sourceSha") ?: "source-unprovided", "debug", "FULL")
+            captureStarted = true
+            captureId = startedCapture["captureId"].toString()
+            record("R10_PROCESS", "pid=${android.os.Process.myPid()} source=${InstrumentationRegistry.getArguments().getString("sourceSha")} mode=FULL effect=dualTide portal=true fixedPhase=true")
+            val services = withoutOurService(savedServices).split(':').filter { it.isNotBlank() } + component
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, services.joinToString(":"))
+            setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
+            await("actual service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
+            await("successful detached preparation", 18_000, pollMs = 200) {
+                val report = KeyguardCardDiagnostics.captureSnapshot(context)["report"].toString()
+                Regex("MATERIAL_ISOLATED_BACKEND_PREPARED=[0-9]+").containsMatchIn(report)
+            }
+            val beforeWake = snapshot("r10-before-first-wake")
+            assertEquals("preparation must not publish a positive frame", 0L, beforeWake.isolatedPublished)
+            assertEquals("preparation must precede the first attach", 0L, beforeWake.attachment)
+            screenOff(synchronizeInput = true)
+            val (coldWindow, coldShots) = sampleWake("cold")
+            val cold = snapshot("r10-first-window")
+            assertEquals("cold experiment must own attachment 1", 1L, cold.attachment)
+            val live = awaitLive("r10-first-current", cold, 2, coldWindow.id)
+            assertEquals("cold source must use the intended isolated route", "ISOLATED", live.route)
+            val lease = producer.awaitCurrentLease()
+            assertEquals(1L, lease.attachment)
+            val requestA = producer.arm(lease, PHASE_A)
+            controlled.submit(requestA.requestId, materialTime(PHASE_A))
+            val firstReference = producer.await(requestA)
+            producer.awaitSubmitted(requestA)
+            producer.persist(output, "r10-reference-a-producer", firstReference)
+            val expectedA = Bitmap.createBitmap(firstReference.pixels, lease.width, lease.height, Bitmap.Config.ARGB_8888)
+            try {
+                val referenceA = awaitOrb(coldWindow, "r10-reference-a-compositor.png") { compareOrbPixels(expectedA, it).nearlyEqual() }
+                try {
+                    fun classify(label: String, shots: List<Shot>, window: Overlay): Boolean {
+                        var lastNegative: Long? = null
+                        var firstPositive: Long? = null
+                        shots.forEach { shot ->
+                            val crop = shot.crop?.takeIf { shot.windowId == window.id }
+                            val bitmap = crop?.let { android.graphics.BitmapFactory.decodeFile(it.absolutePath) }
+                            val matches = try { bitmap != null && compareOrbPixels(referenceA, bitmap).nearlyEqual() }
+                                finally { bitmap?.recycle() }
+                            if (matches && firstPositive == null) firstPositive = shot.end
+                            else if (!matches && firstPositive == null) lastNegative = shot.start
+                        }
+                        record("R10_FIRST_CORRECT", "name=$label window=${window.id} lastNegative=${lastNegative ?: "UNOBSERVED"} firstPositive=${firstPositive ?: "UNOBSERVED"} source=boundedCompositorSamples")
+                        return firstPositive != null
+                    }
+                    val coldCorrect = classify("cold", coldShots, coldWindow)
+                    val successorResult = runCatching {
+                        val requestB = producer.arm(lease, PHASE_B)
+                        controlled.submit(requestB.requestId, materialTime(PHASE_B))
+                        val successor = producer.await(requestB)
+                        producer.awaitSubmitted(requestB)
+                        producer.persist(output, "r10-reference-b-producer", successor)
+                        assertTrue("phase B producer must differ from A", producer.compare(firstReference, successor).meaningful())
+                        val expectedB = Bitmap.createBitmap(successor.pixels, lease.width, lease.height, Bitmap.Config.ARGB_8888)
+                        try {
+                            val imageB = awaitOrb(coldWindow, "r10-reference-b-compositor.png") { compareOrbPixels(expectedB, it).nearlyEqual() }
+                            try { assertTrue("composited successor must differ from first", compareOrbPixels(referenceA, imageB).meaningful()) }
+                            finally { imageB.recycle() }
+                        } finally { expectedB.recycle() }
+                    }
+                    successorResult.exceptionOrNull()?.let { record("R10_SUCCESSOR_FAILURE", "${it.javaClass.simpleName}:${it.message}") }
+                    unlockAndAssertWithdrawn("r10-cold-unlock")
+                    controlled.submit(-1L, materialTime(PHASE_A))
+                    screenOff(synchronizeInput = true)
+                    val (warmWindow, warmShots) = sampleWake("warm")
+                    val warm = snapshot("r10-warm-window")
+                    awaitLive("r10-warm-current", warm, 2, warmWindow.id)
+                    val warmCorrect = classify("warm", warmShots, warmWindow)
+                    unlockAndAssertWithdrawn("r10-warm-unlock")
+                    assertTrue("cold has no sampled first correct compositor image", coldCorrect)
+                    assertTrue("warm has no sampled first correct compositor image", warmCorrect)
+                    successorResult.getOrThrow()
+                } finally { referenceA.recycle() }
+            } finally { expectedA.recycle() }
+            record("RESULT", "R10_COLD_OBSERVATION_PASS phonePhysical=UNOBSERVED")
+        } catch (error: Throwable) {
+            failure = error
+            record("RESULT", "FAIL ${error.javaClass.simpleName}:${error.message}")
+            throw error
+        } finally {
+            KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver
+            KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
+            if (captureStarted) runCatching {
+                File(output, "capture.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"].toString())
+            }.onFailure { if (failure == null) failure = it }
+            runCatching {
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, withoutOurService(savedServices))
+                val end = SystemClock.uptimeMillis() + 5_000L
+                while (FluviKeyguardCardServiceRegistry.connected && SystemClock.uptimeMillis() < end) SystemClock.sleep(50)
+                restorePreferences(savedSettings)
+                restorePreferences(savedMaterial)
+                shell("input keyevent KEYCODE_WAKEUP")
+                shell("wm dismiss-keyguard")
+                if (savedLockDisabled == "true" || savedLockDisabled == "false") shell("locksettings set-disabled $savedLockDisabled")
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
+                setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
+            }.onFailure { if (failure == null) failure = it }
+            File(output, "fixture.txt").writeText(evidence.toString())
+            if (failure != null && failure !is AssertionError) throw AssertionError("R10 service observation failed", failure)
+        }
+    }
+
     private fun runStrictServiceScenario() {
         assertEquals("This fixture is pinned to API 35", 35, Build.VERSION.SDK_INT)
         // This must be the FIRST UiAutomation request. The default flags

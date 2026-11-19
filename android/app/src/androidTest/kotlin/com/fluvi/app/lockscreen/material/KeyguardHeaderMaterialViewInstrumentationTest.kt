@@ -57,6 +57,34 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
+    /** Baseline-compatible observation of the controller's actual render
+     * input: detached preparation is not evidence of a previously displayed
+     * layer. This is separate from the attached compositor control. */
+    @Test fun r10PreparedOnlySceneCannotSeedVisibleBlend() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        var controller: KeyguardCardMaterialController? = null
+        try {
+            instrumentation.runOnMainSync {
+                val orb = KeyguardHeaderMaterialView(activity)
+                controller = KeyguardCardMaterialController(orb, KeyguardHeaderMaterialView(activity), View(activity))
+                val profile = calibratedOrbProfile()
+                controller!!.prepare(profile, KeyguardCardAnimationMode.ORB_ONLY, KeyguardCardPresentationMode.ORB, true)
+                controller!!.update(profile, KeyguardCardAnimationMode.ORB_ONLY,
+                    KeyguardCardPresentationMode.ORB, true, null)
+                val previous = KeyguardCardMaterialController::class.java
+                    .getDeclaredField("latestOrbPreviousScene").apply { isAccessible = true }.get(controller)
+                assertEquals("a preparation-only scene must not be a visible previous layer", null, previous)
+            }
+        } finally {
+            instrumentation.runOnMainSync { controller?.dispose(); activity.finish() }
+        }
+    }
+
     @Test fun retainedPreparationWarmsActualIsolatedBackendBeforeFirstShow() {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
