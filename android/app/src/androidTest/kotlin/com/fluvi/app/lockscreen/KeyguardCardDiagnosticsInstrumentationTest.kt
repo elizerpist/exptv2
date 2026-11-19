@@ -663,7 +663,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertEquals(5, episodes.size)
         assertTrue(episodes.single { it.contains("req=30100 ") }.contains("shader=NO_DRAW_OBSERVED"))
         assertTrue(report.contains("truncationReasons=NULL_CHILD"))
-        assertTrue(report.contains("shaderFrames=11 shaderCalls=13"))
+        assertTrue(report.lineSequence().any {
+            it.startsWith(" RENDER ") && it.contains("shaderFrames=11") && it.contains("shaderCalls=13")
+        })
         assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
         }
     }
@@ -722,7 +724,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             emit("REMOVE_VIEW_RETURN", 360L, hideC)
             val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
             val renders = frozen.lineSequence().filter { it.startsWith(" RENDER ") }.toList()
-            assertEquals(2, renders.size)
+            // C intentionally has a show but no summary; the exporter still
+            // emits its empty RENDER record rather than dropping the episode.
+            assertEquals(3, renders.size)
             assertTrue(renders.single { it.contains("attach=11 ") }.contains("isolatedFirstIdentity=first/direct:attach:11"))
             assertTrue(renders.single { it.contains("attach=11 ") }.contains("receipt:UNOBSERVED"))
             assertTrue(renders.single { it.contains("attach=12 ") }.contains("bootstrapRetired:237"))

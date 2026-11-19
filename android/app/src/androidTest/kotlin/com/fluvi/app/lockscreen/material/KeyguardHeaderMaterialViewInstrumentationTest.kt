@@ -956,10 +956,20 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 if (!drewBootstrap) Thread.sleep(24)
             }
             assertTrue("invalid fixture: no actual bootstrap draw with a usable root surface", drewBootstrap)
-            bootstrap = copyPanelOrb(instrumentation, manager)
-            persistPanelEvidence(activity, "r07-first-bootstrap", requireNotNull(bootstrap))
-            assertTrue("invalid fixture: bootstrap and live reference are not distinguishable",
-                compareMaterialPixels(requireNotNull(bootstrap), requireNotNull(reference)).meaningful())
+            var previousBootstrap: Bitmap? = null
+            try {
+                bootstrap = awaitCompositorCrop("r07-first-bootstrap", { copyPanelOrb(instrumentation, manager) },
+                    { label, bitmap -> persistPanelEvidence(activity, label, bitmap) }, { candidate ->
+                        val eligible = hasVisibleMaterial(candidate) &&
+                            compareMaterialPixels(candidate, requireNotNull(reference)).meaningful()
+                        val stable = eligible && previousBootstrap?.let {
+                            compareMaterialPixels(it, candidate).nearlyEqual()
+                        } == true
+                        previousBootstrap?.recycle()
+                        previousBootstrap = if (eligible) candidate.copy(Bitmap.Config.ARGB_8888, false) else null
+                        stable
+                    }, {})
+            } finally { previousBootstrap?.recycle() }
             instrumentation.runOnMainSync {
                 val root = requireNotNull(gatedRoot)
                 gate = ViewTreeObserver.OnPreDrawListener { withheld.countDown(); false }
@@ -1015,8 +1025,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
     @Test fun isolatedOrbFirstDirectRetiresAcrossThreeSameRendererReplacements() {
         withOrbRetirementFixture("first-direct-replacement") { fixture ->
+            // Calibrate the accepted A image while the initial attachment is
+            // already showing A. A merely nonempty crop after the preceding
+            // B request can still be B, even after the next A submission.
+            val canonicalA = fixture.capture(PHASE_A, "canonical-a") { hasVisibleMaterial(it) }
+            try {
             repeat(3) { cycle ->
-                val reference = fixture.capture(PHASE_A, "first-$cycle-reference") { hasVisibleMaterial(it) }
+                val reference = fixture.capture(PHASE_A, "first-$cycle-reference") {
+                    compareMaterialPixels(canonicalA.bitmap, it).nearlyEqual()
+                }
                 try {
                     var attachmentA = 0L
                     fixture.instrumentation.runOnMainSync {
@@ -1096,6 +1113,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     fixture.ownership.assertBoundedSingleRenderer()
                 } finally { reference.bitmap.recycle() }
             }
+            } finally { canonicalA.bitmap.recycle() }
         }
     }
 
@@ -1759,6 +1777,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private val deferredAttachment = java.util.concurrent.atomic.AtomicLong(-1L)
         private val submittedFirst = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbFirstPublicationToken>()
         private val deferredCommits = java.util.concurrent.ConcurrentHashMap<Long, DeferredFirstCommit>()
+        private val firstCommitEvidence = java.util.concurrent.CopyOnWriteArrayList<String>()
         private val readyAttachment = java.util.concurrent.atomic.AtomicLong(-1L)
         private val deferredReady = java.util.concurrent.ConcurrentHashMap<Long, DeferredReadyFrame>()
         private val failBeforeAttachment = java.util.concurrent.atomic.AtomicLong(-1L)
@@ -1791,6 +1810,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 }
                 override fun dispatchCommit(token: KeyguardOrbFirstPublicationToken, receivedAtUptimeMs: Long, deliver: () -> Unit) {
                     if (deferredAttachment.get() == token.lease.attachment) {
+                        firstCommitEvidence += "receipt attachment=${token.lease.attachment} generation=${token.lease.generation} " +
+                            "child=${System.identityHashCode(token.child)} slot=${token.slotId} use=${token.useGeneration} uptimeMs=$receivedAtUptimeMs"
                         check(deferredCommits.putIfAbsent(token.lease.attachment,
                             DeferredFirstCommit(token, receivedAtUptimeMs, deliver)) == null)
                     } else deliver()
@@ -1917,7 +1938,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         fun deliverDeferredCommit(attachment: Long) {
             val pending = requireNotNull(deferredCommits.remove(attachment))
             deferredAttachment.compareAndSet(attachment, -1L)
-            instrumentation.runOnMainSync { pending.delivery() }
+            instrumentation.runOnMainSync {
+                val token = pending.token
+                firstCommitEvidence += "delivery attachment=${token.lease.attachment} generation=${token.lease.generation} " +
+                    "child=${System.identityHashCode(token.child)} slot=${token.slotId} use=${token.useGeneration} uptimeMs=${SystemClock.uptimeMillis()}"
+                pending.delivery()
+            }
         }
 
         fun awaitAttachment(attachment: Long): KeyguardOrbBufferLease {
@@ -2040,10 +2066,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 instrumentation.runOnMainSync { pending.delivery() }
             }
             deferredReady.clear()
-            deferredCommits.values.toList().forEach { pending ->
-                instrumentation.runOnMainSync { pending.delivery() }
-            }
-            deferredCommits.clear()
+            deferredCommits.keys.toList().forEach(::deliverDeferredCommit)
         }
 
         fun resetHooks() {
@@ -2062,6 +2085,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             gates.forEach { details.appendLine("gate request=${it.requestId} frame=${it.frame.get()} timedOut=${it.timedOut.get()}") }
             firstSteadyGates.forEach { details.appendLine("firstSteady attachment=${it.attachment} frame=${it.frame.get()} timedOut=${it.timedOut.get()}") }
             submittedFirst.forEach { token -> details.appendLine("firstSubmitted attachment=${token.lease.attachment} token=$token") }
+            firstCommitEvidence.forEach { details.appendLine("firstCommit $it") }
             deferredCommits.forEach { (attachment, pending) -> details.appendLine("firstCommit attachment=$attachment token=${pending.token} received=${pending.receivedAtUptimeMs}") }
             ownership.snapshot().forEach { details.appendLine(it) }
             File(directory, "r06-$label-ownership.txt").writeText(details.toString())
