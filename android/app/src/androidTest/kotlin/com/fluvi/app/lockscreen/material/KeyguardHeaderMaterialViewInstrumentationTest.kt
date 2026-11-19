@@ -86,6 +86,49 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
+    @Test fun r10DetachedNoopHidePreservesExplicitPendingPreparation() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val readerEntered = CountDownLatch(1)
+        val releaseReader = CountDownLatch(1)
+        val prepared = CountDownLatch(1)
+        val store = KeyguardShaderArtifactStore(activity, KeyguardShaderArtifactReader { context, effect, portal ->
+            readerEntered.countDown()
+            check(releaseReader.await(18, TimeUnit.SECONDS)) { "artifact fixture gate timed out" }
+            AndroidKeyguardShaderArtifactReader.load(context, effect, portal)
+        })
+        var controller: KeyguardCardMaterialController? = null
+        try {
+            instrumentation.runOnMainSync {
+                controller = KeyguardCardMaterialController(KeyguardHeaderMaterialView(activity),
+                    KeyguardHeaderMaterialView(activity), View(activity), artifacts = store)
+                controller!!.onPreparationStage = { stage, fields ->
+                    if (stage == "MATERIAL_ISOLATED_BACKEND_PREPARED" && fields["leaseAttachment"] == 0L) {
+                        prepared.countDown()
+                    }
+                }
+                controller!!.prepare(calibratedOrbProfile(), KeyguardCardAnimationMode.ORB_ONLY,
+                    KeyguardCardPresentationMode.ORB, true)
+            }
+            assertTrue("real artifact load did not reach the async fixture gate", readerEntered.await(8, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync { controller!!.stop("hide") }
+            releaseReader.countDown()
+            assertTrue("already-detached hide revoked the explicitly requested prime", prepared.await(18, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync {
+                val diagnostics = controller!!.diagnostics()
+                assertTrue("the actual detached producer did not complete", diagnostics.isolatedFramesProduced >= 1)
+                assertEquals("detached preparation must not publish", 0, diagnostics.isolatedFramesPublished)
+            }
+        } finally {
+            releaseReader.countDown()
+            instrumentation.runOnMainSync { controller?.dispose(); activity.finish() }
+        }
+    }
+
     @Test fun r10AuthorizedFirstShowDoesNotStartAnotherDetachedRender() {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
         val instrumentation = InstrumentationRegistry.getInstrumentation()

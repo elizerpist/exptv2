@@ -668,6 +668,12 @@ internal class KeyguardCardMaterialController(
 
     fun onDetached(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null,
                    onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null) {
+        // The service can deliver an idempotent hidden-state signal while an
+        // explicitly requested detached prime is still loading its artifact.
+        // No attachment was withdrawn and no new preparation is requested:
+        // keep that one valid async intent. A real withdrawal, pending show,
+        // replacement or disposal still invalidates it below.
+        if (!attached && !authorizedShowPending && reason == "hide") return
         detachedPrimeArmed = false
         authorizedShowPending = false
         submittedVisibleScene = null

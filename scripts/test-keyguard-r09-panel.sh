@@ -47,6 +47,7 @@ if [[ "$scope" == r09_panel_candidate || "$scope" == r10_panel_candidate ]]; the
 fi
 if [[ "$scope" == r10_panel_candidate ]]; then
   methods+=(r10PreparedOnlySceneCannotSeedVisibleBlend
+    r10DetachedNoopHidePreservesExplicitPendingPreparation
     r10AuthorizedFirstShowDoesNotStartAnotherDetachedRender
     r10UnsubmittedDetachedWorkYieldsToAuthorizedAttach
     r10ColdRootReportsActualAttachAndLayoutForEachObservation
