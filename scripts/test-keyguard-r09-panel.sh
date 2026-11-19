@@ -11,7 +11,7 @@ case "$scope" in
     target="$root/r09-baseline"
     expected=4464cd0f5fe7abf8eab1e8b876063bdbbf37350a
     ;;
-  r09_panel_candidate|r10_panel_candidate)
+  r09_panel_candidate|r10_panel_candidate|r11_panel_candidate)
     target="$root"
     expected=${GITHUB_SHA:?candidate dispatch must supply GITHUB_SHA}
     ;;
@@ -36,7 +36,7 @@ methods=(
 )
 # Candidate-only controls are deliberately separate from the unmodified R08
 # baseline. Add the registered R09 methods here with their implementation.
-if [[ "$scope" == r09_panel_candidate || "$scope" == r10_panel_candidate ]]; then
+if [[ "$scope" == r09_panel_candidate || "$scope" == r10_panel_candidate || "$scope" == r11_panel_candidate ]]; then
   methods+=(r09RetiredChildUnlinksAfterOrderedClearWithReleaseHeld
     r09MixedSizeHeldOldUseLeavesCurrentSuccessorCapacity
     r09UnchangedPlacementSkipsRedundantTransactions
@@ -45,7 +45,7 @@ if [[ "$scope" == r09_panel_candidate || "$scope" == r10_panel_candidate ]]; the
     r09WorstGapSurvivesLightExportPressure
     firstDirectAndHideCommitEvidenceKeepTheirOriginalOperations)
 fi
-if [[ "$scope" == r10_panel_candidate ]]; then
+if [[ "$scope" == r10_panel_candidate || "$scope" == r11_panel_candidate ]]; then
   methods+=(r10PreparedOnlySceneCannotSeedVisibleBlend
     r10DetachedNoopHidePreservesExplicitPendingPreparation
     r10AuthorizedFirstShowDoesNotStartAnotherDetachedRender
@@ -54,6 +54,11 @@ if [[ "$scope" == r10_panel_candidate ]]; then
     r10VisiblePaletteChangeKeepsBlendButPrivacyChangeDoesNot
     r10CompactColdAndWorstGapSurviveFullPressure
     r10CompactColdAndWorstGapSurviveLightPressure)
+fi
+if [[ "$scope" == r11_panel_candidate ]]; then
+  methods+=(r11PositiveReadyBeforeGrantSurvivesEarlyNudge
+    isolatedOrbReadyFrameCannotSubmitAfterItsAttachmentIsRetired
+    isolatedOrbPreApplyFailureAndPostTransferObserverFailureHaveDifferentOwnership)
 fi
 selector=''
 for method in "${methods[@]}"; do

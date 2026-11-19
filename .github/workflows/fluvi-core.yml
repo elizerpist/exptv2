@@ -34,6 +34,9 @@ on:
           - r10_cold_baseline
           - r10_cold_candidate
           - r10_panel_candidate
+          - r11_cold_baseline
+          - r11_cold_candidate
+          - r11_panel_candidate
 
 permissions:
   contents: read
@@ -188,6 +191,13 @@ jobs:
           ref: 1dddbf6f6fbe4b17ec0fdcb033848c8996721529
           path: r10-baseline
 
+      - name: Checkout exact R10 application for the R11 cold experiment
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r11_cold_baseline' }}
+        uses: actions/checkout@v5
+        with:
+          ref: 8a91bf2d79f25780bb420c1a4d14abe846eac333
+          path: r11-baseline
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -211,6 +221,15 @@ jobs:
           cp android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt r10-baseline/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
           git -C r10-baseline diff --exit-code 1dddbf6f6fbe4b17ec0fdcb033848c8996721529 -- android/app/src/main lib pubspec.yaml pubspec.lock
           cd r10-baseline
+          flutter pub get
+
+      - name: Prepare R10 cold baseline with observation-only instrumentation
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r11_cold_baseline' }}
+        run: |
+          cp android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt r11-baseline/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
+          cp android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt r11-baseline/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
+          git -C r11-baseline diff --exit-code 8a91bf2d79f25780bb420c1a4d14abe846eac333 -- android/app/src/main lib pubspec.yaml pubspec.lock
+          cd r11-baseline
           flutter pub get
 
       - name: Check affected delivery boundary contracts
@@ -245,12 +264,12 @@ jobs:
             -no-snapshot -noaudio -no-boot-anim -camera-back none
             -partition-size 4096
           pre-emulator-launch-script: >-
-            if [ "$FLUVI_R09_SCOPE" = r09_panel_baseline ]; then cd r09-baseline || exit 1; elif [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ]; then cd r10-baseline || exit 1; fi; cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+            if [ "$FLUVI_R09_SCOPE" = r09_panel_baseline ]; then cd r09-baseline || exit 1; elif [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ]; then cd r10-baseline || exit 1; elif [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ]; then cd r11-baseline || exit 1; fi; cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
           # android-emulator-runner executes each physical input line through
           # /usr/bin/sh. Keep this as one POSIX command so its conditional and
           # aggregate status are owned by one shell invocation.
           script: >-
-            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
+            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
 
       - name: Analyze bounded production overlay trace
         if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && hashFiles('android/keyguard-service-evidence/fluvi-keyguard-service.perfetto-trace') != '' }}
@@ -289,6 +308,7 @@ jobs:
             android/keyguard-native-diagnostic/**
             android/keyguard-r09-panel/**
             android/keyguard-r10-cold/**
+            android/keyguard-r11-cold/**
             android/keyguard-draw-probe.log
             android/keyguard-material-smoke.tar
             android/keyguard-material-smoke-pull.log

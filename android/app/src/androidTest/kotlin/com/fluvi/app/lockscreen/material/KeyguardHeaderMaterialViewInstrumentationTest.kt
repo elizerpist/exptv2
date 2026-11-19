@@ -58,6 +58,98 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
+    /** Real positive producer output may precede the first usable child.
+     * Drain the ordinary Main nudge before creating a real panel; the exact
+     * existing READY use must survive, then transfer to that panel once. */
+    @Test fun r11PositiveReadyBeforeGrantSurvivesEarlyNudge() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val first = AtomicReference<KeyguardOrbBufferProducerFrame?>()
+        val produced = CountDownLatch(1)
+        val submitted = CountDownLatch(1)
+        val transferred = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbBufferProducerFrame>()
+        val detachedCallbacks = AtomicInteger()
+        val failure = AtomicReference<Throwable?>()
+        lateinit var renderer: KeyguardOrbBufferRenderer
+        var createdRenderer: KeyguardOrbBufferRenderer? = null
+        lateinit var manager: TestPanelWindowManager
+        var root: FrameLayout? = null
+        var added = false
+        try {
+            val profile = calibratedOrbProfile()
+            val artifact = AndroidKeyguardShaderArtifactReader.load(activity, profile.effectId, profile.usesPortal)
+            val lease = KeyguardOrbBufferLease(1, 1, profile.visualKey, artifact.programKey, 168, 168)
+            instrumentation.runOnMainSync {
+                manager = TestPanelWindowManager(activity)
+                renderer = KeyguardOrbBufferRenderer(
+                    onFirstPublished = { _, _ -> }, onFirstCommitReceived = { _, _, _ -> },
+                    onFirstCommitted = { }, onFailure = { _, error -> failure.set(error) },
+                    onSizeChanged = { failure.set(AssertionError("unexpected size replacement")) },
+                    frameObserver = object : KeyguardOrbBufferFrameObserver {
+                        override fun onProduced(frame: KeyguardOrbBufferProducerFrame, buffer: HardwareBuffer, completionFence: SyncFence?) {
+                            if (frame.lease == lease && first.compareAndSet(null, frame)) produced.countDown()
+                        }
+                    },
+                    publicationObserver = KeyguardOrbBufferPublicationObserver { frame ->
+                        if (frame == first.get()) { transferred += frame; submitted.countDown() }
+                    },
+                    onDetachedBackendPrepared = { _, _ -> detachedCallbacks.incrementAndGet() },
+                )
+                createdRenderer = renderer
+                renderer.configure(KeyguardOrbBufferRenderSpec(lease, artifact,
+                    KeyguardMaterialScene(profile, full = true, appliedAtNanos = System.nanoTime())))
+            }
+            assertTrue("positive producer result was never reached", produced.await(12, TimeUnit.SECONDS))
+            // The observer runs within Worker's result callback, just before
+            // onFrameReady. A following Worker marker proves that the nudge
+            // has actually been posted before the Main queue barrier below.
+            val apiField = KeyguardOrbBufferRenderer::class.java.getDeclaredField("api34").apply { isAccessible = true }
+            val api = requireNotNull(apiField.get(renderer))
+            val workerField = api.javaClass.getDeclaredField("worker").apply { isAccessible = true }
+            val worker = requireNotNull(workerField.get(api))
+            val post = worker.javaClass.getDeclaredMethod("post", Runnable::class.java).apply { isAccessible = true }
+            val workerMarker = CountDownLatch(1)
+            post.invoke(worker, Runnable { workerMarker.countDown() })
+            assertTrue("Worker did not finish posting its first nudge", workerMarker.await(8, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync { }
+            val earlyDetached = detachedCallbacks.get()
+            val earlyReady = renderer.snapshot().ready
+            instrumentation.runOnMainSync {
+                val panel = FrameLayout(activity)
+                val orb = View(activity).apply { id = R.id.fluvi_financial_snapshot_orb }
+                panel.addView(orb, FrameLayout.LayoutParams(168, 168, Gravity.CENTER))
+                root = panel
+                manager.addView(panel, WindowManager.LayoutParams(500, 500).apply { gravity = Gravity.CENTER })
+                added = true
+                renderer.attach(panel, orb, 1)
+            }
+            assertTrue("invalid fixture: real panel never obtained the expected geometry",
+                waitForPanelOrbScreenBounds(instrumentation, manager))
+            instrumentation.runOnMainSync {
+                assertTrue("invalid fixture: real panel has no root surface",
+                    requireNotNull(root).isAttachedToWindow && requireNotNull(root).rootSurfaceControl != null)
+            }
+            val panelSample = copyPanelOrb(instrumentation, manager)
+            try { persistPanelEvidence(activity, "r11-ready-before-grant-panel", panelSample) }
+            finally { panelSample.recycle() }
+            assertEquals("positive lease was incorrectly classified as detached", 0, earlyDetached)
+            assertEquals("the exact positive READY use was lost before a legal grant", 1, earlyReady)
+            assertTrue("original READY use was not submitted on the real child", submitted.await(12, TimeUnit.SECONDS))
+            assertEquals(listOf(first.get()), transferred.toList())
+            assertEquals(null, failure.get())
+        } finally {
+            instrumentation.runOnMainSync {
+                createdRenderer?.dispose()
+                if (added) manager.removeViewImmediate(requireNotNull(root))
+                activity.finish()
+            }
+        }
+    }
+
     /** Baseline-compatible observation of the controller's actual render
      * input: detached preparation is not evidence of a previously displayed
      * layer. This is separate from the attached compositor control. */
@@ -1091,11 +1183,17 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 persistPanelEvidence(fixture.activity, "r08-isolated-reference-a", isolatedReference)
                 assertTrue("first-direct reference has no visible material", hasVisibleMaterial(isolatedReference))
                 val transitionSamples = mutableListOf<Bitmap>()
+                val transitionTimes = mutableListOf<String>()
                 try {
                     fun captureTransition() {
+                        val before = SystemClock.uptimeMillis()
                         val bitmap = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                        val after = SystemClock.uptimeMillis()
                         transitionSamples += bitmap
                         persistPanelEvidence(fixture.activity, "r08-recovery-transition-${transitionSamples.lastIndex}", bitmap)
+                        var bounds: Rect? = null
+                        fixture.instrumentation.runOnMainSync { bounds = fixture.manager.currentOrbBounds() }
+                        transitionTimes += "sample=${transitionSamples.lastIndex} before=$before after=$after bounds=$bounds expected=visible-current"
                     }
                     captureTransition()
                     fixture.instrumentation.runOnMainSync { receipts.deliverTicket(c.lease.attachment) }
@@ -1103,6 +1201,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                         captureTransition()
                         Thread.sleep(16)
                     }
+                    File(fixture.activity.filesDir, "keyguard-material-smoke/r11-recovery-transition-times.txt")
+                        .writeText(transitionTimes.joinToString("\n", postfix = "\n"))
                     assertTrue("sampled handoff included an empty orb crop", transitionSamples.all(::hasVisibleMaterial))
                 } finally {
                     transitionSamples.forEach(Bitmap::recycle)
@@ -1412,9 +1512,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 val fullReference = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
                 try {
                     val color = fullReference.getPixel(marker[0] + 12, marker[1] + 12)
+                    persistPanelEvidence(activity, "r11-neutral-reference-fiducial-$label", fullReference)
+                    File(activity.filesDir, "keyguard-material-smoke/r11-neutral-fiducial-$label.txt").writeText(
+                        "uptime=${SystemClock.uptimeMillis()} marker=${marker.toList()} color=$color " +
+                            "screen=${fullReference.width}x${fullReference.height} expected=magenta source=UiAutomation\n")
                     assertTrue("external reference fiducial was not presented",
                         (color ushr 16 and 255) > 180 && (color ushr 8 and 255) < 100 && (color and 255) > 180)
-                    persistPanelEvidence(activity, "r10-neutral-reference-fiducial-$label", fullReference)
                 } finally { fullReference.recycle() }
                 neutral = awaitCompositorCrop("r10-neutral-calibration-$label",
                     { copyMaterialView(instrumentation, referenceView) },
@@ -1595,13 +1698,21 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 }
                 fun recordSafeStrip(label: String) {
                     val samples = mutableListOf<Bitmap>()
+                    val times = mutableListOf<String>()
                     try {
                         repeat(6) { index ->
+                            val before = SystemClock.uptimeMillis()
                             val sample = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                            val after = SystemClock.uptimeMillis()
                             samples += sample
                             persistPanelEvidence(fixture.activity, "$label-$index", sample)
+                            var bounds: Rect? = null
+                            fixture.instrumentation.runOnMainSync { bounds = fixture.manager.currentOrbBounds() }
+                            times += "sample=$index before=$before after=$after bounds=$bounds size=${sample.width}x${sample.height} expected=safe-neutral"
                             Thread.sleep(16)
                         }
+                        File(fixture.activity.filesDir, "keyguard-material-smoke/$label-times.txt")
+                            .writeText(times.joinToString("\n", postfix = "\n"))
                         assertTrue("$label contained a blank or prior full-detail orb", samples.all(::safeNeutral))
                     } finally { samples.forEach(Bitmap::recycle) }
                 }
@@ -2712,6 +2823,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
 
         fun heldCount(): Int = held.size
+
+        fun heldSummary(): List<String> = held.map {
+            "lease=${it.lease.attachment}/${it.lease.generation} slot=${it.slot} use=${it.use} receipt=held"
+        }
         fun releaseAll() {
             allowContinuous = true
             opened.set(true)
@@ -3043,7 +3158,18 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             submissions.expect(requestId, phase)
             samples.expect(requestId)
             controlledTime.submit(requestId, calibratedMaterialTime(phase))
-            val submitted = submissions.await(requestId)
+            val submitted = try { submissions.await(requestId) } catch (error: Throwable) {
+                var diagnostics: KeyguardMaterialDiagnostics? = null
+                instrumentation.runOnMainSync { diagnostics = window.materialDiagnostics() }
+                val directory = File(activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
+                File(directory, "r11-$label-$suffix-request-failure.txt").writeText(
+                    "uptime=${SystemClock.uptimeMillis()} request=$requestId phase=$phase " +
+                        "route=${diagnostics?.effectiveRoute ?: "UNOBSERVED"} " +
+                        "held=${(recoveryHook as? RealReleaseGate)?.heldSummary() ?: emptyList<String>()}\n" +
+                        "latestWorkerSnapshot=${ownership.snapshot().lastOrNull() ?: "UNOBSERVED"}\n" +
+                        "failure=${error.javaClass.simpleName}:${error.message}\n")
+                throw error
+            }
             val produced = samples.await(requestId)
             assertEquals("producer evidence must identify the submitted frame", produced.frame, submitted)
             persistProducerEvidence(activity, "r06-$label-$suffix-producer", produced)
