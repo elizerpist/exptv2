@@ -1397,6 +1397,7 @@ internal object KeyguardCardDiagnostics {
                     "HOLDER_CHANGED" -> { keep("changed", sample.uptimeMs.toString()); keep("size", sample.fields["r12Detail"]) }
                     "POSTER" -> { keep("poster", sample.fields["r12Detail"]); keep("posterAt", sample.uptimeMs.toString()) }
                     "FIRST_POST" -> keep("firstPost", sample.uptimeMs.toString())
+                    "FIRST_POST_MAIN_DELIVERY" -> keep("firstPostMain", sample.uptimeMs.toString())
                     "GUARD_RETIRED" -> keep("guardRetired", sample.uptimeMs.toString())
                     "HOLDER_DESTROYED" -> { keep("destroyed", sample.uptimeMs.toString()); keep("destroyDetail", sample.fields["r12Detail"]) }
                     "REVOKED" -> keep("revoked", sample.uptimeMs.toString())
@@ -2233,7 +2234,7 @@ internal object KeyguardCardDiagnostics {
     private fun r12SurfaceRecord(attempt: TimingAttempt, episode: ShowEpisode): String = buildString {
         val evidence = episode.r12Evidence
         fun value(key: String) = evidence[key] ?: "UNOBSERVED"
-        appendLine(" R12_SURFACE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "UNOBSERVED"} route=${value("route")} privacy=${value("privacy")} generation=${value("generation")} created=${value("created")} changed=${value("changed")}/${value("size")} poster=${value("poster")}@${value("posterAt")} firstPost=${value("firstPost")} guardRetired=${value("guardRetired")} revoked=${value("revoked")} destroyed=${value("destroyed")} destroyDetail=${value("destroyDetail")} degraded=${value("degraded")} latest=${value("latestGeneration")}/${value("latestPrivacy")}/${value("latestStage")}@${value("latestAt")} pendingOmitted=${attempt.pendingR12Omitted} physical=UNOBSERVED")
+        appendLine(" R12_SURFACE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "UNOBSERVED"} route=${value("route")} privacy=${value("privacy")} generation=${value("generation")} created=${value("created")} changed=${value("changed")}/${value("size")} poster=${value("poster")}@${value("posterAt")} firstPost=${value("firstPost")} firstPostMainDelivery=${value("firstPostMain")} guardRetired=${value("guardRetired")} revoked=${value("revoked")} destroyed=${value("destroyed")} destroyDetail=${value("destroyDetail")} degraded=${value("degraded")} latest=${value("latestGeneration")}/${value("latestPrivacy")}/${value("latestStage")}@${value("latestAt")} pendingOmitted=${attempt.pendingR12Omitted} physical=UNOBSERVED")
         episode.r12MetricSnapshot?.let { metrics ->
             appendLine(" R12_CADENCE attempt=${attempt.id} showOp=${episode.operationId} clock=System.nanoTime cpu=threadCPU coherent=${metrics.coherent} submissions=${metrics.submissions} firstPost=${metrics.firstPostUptimeMs ?: "UNOBSERVED"} distinct=${metrics.firstDistinctUptimeMs ?: "UNOBSERVED"} lastPost=${metrics.lastPostUptimeMs ?: "UNOBSERVED"} retainedGaps=${metrics.retainedGaps} p95GapNs=${metrics.p95GapNs ?: "UNOBSERVED"} worstGapNs=${metrics.worstGapNs ?: "UNOBSERVED"} over50ms=${metrics.gapsOver50Ms} maxLockWallCpuNs=${metrics.maxLockWallNs}/${metrics.maxLockCpuNs} maxDrawWallCpuNs=${metrics.maxDrawWallNs}/${metrics.maxDrawCpuNs} maxPostWallCpuNs=${metrics.maxPostWallNs}/${metrics.maxPostCpuNs} presentation=UNOBSERVED")
         }

@@ -162,7 +162,10 @@ internal class KeyguardOrbSurfacePresenter(
 
     private fun firstPosted(target: KeyguardOrbSurfaceTarget, at: Long) {
         if (!isCurrent(target)) return
-        observe(target, "FIRST_POST", "producerNotPhysicalPresentation")
+        // The worker's successful post and delivery to this Main callback
+        // are different observations. Preserve both original uptime values.
+        observe(target, "FIRST_POST", "producerNotPhysicalPresentation", at)
+        observe(target, "FIRST_POST_MAIN_DELIVERY", "mainCallbackNotPhysicalPresentation")
         onFirstPosted(target.attachment, at)
         val heldGuard = guard ?: return
         val child = surface ?: return
@@ -205,9 +208,10 @@ internal class KeyguardOrbSurfacePresenter(
         onFailure(reason)
     }
 
-    private fun observe(target: KeyguardOrbSurfaceTarget, stage: String, detail: String) {
+    private fun observe(target: KeyguardOrbSurfaceTarget, stage: String, detail: String,
+                        observedAtUptimeMs: Long = SystemClock.uptimeMillis()) {
         if (isCaptureActive()) target.reporter?.invoke(KeyguardOrbSurfaceObservation(target.attachment, target.generation,
-            stage, SystemClock.uptimeMillis(), detail, target.full, target.metrics))
+            stage, observedAtUptimeMs, detail, target.full, target.metrics))
     }
 
     private fun checkMain() = check(Looper.myLooper() == Looper.getMainLooper())

@@ -7,11 +7,15 @@ import android.app.UiAutomation
 import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.Display
+import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
@@ -108,10 +112,17 @@ class KeyguardR12ServiceTimingInstrumentationTest {
             repeat(4) { index ->
                 val name = if (index == 0) "cold" else "warm$index"
                 try {
-                    shell("input keyevent KEYCODE_SLEEP")
-                    await("$name screen off", 8_000) { !power.isInteractive }
+                    synchronizedKey(KeyEvent.KEYCODE_SLEEP)
+                    await("$name completed sleep admission", 8_000) {
+                        val display = context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+                        !power.isInteractive && display?.state == Display.STATE_OFF && keyguard.isKeyguardLocked
+                    }
+                    await("$name previous service window withdrawn", 5_000) { sample().first?.visible != true }
                     val wake = SystemClock.uptimeMillis()
-                    shell("input keyevent KEYCODE_WAKEUP")
+                    synchronizedKey(KeyEvent.KEYCODE_WAKEUP)
+                    await("$name public wake eligibility", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
+                    automation.waitForIdle(500L, 5_000L)
+                    check(power.isInteractive && keyguard.isKeyguardLocked) { "$name public wake lost eligibility after input idle" }
                     await("$name actual locked service window", 20_000) {
                         val state = sample().first
                         power.isInteractive && keyguard.isKeyguardLocked && state?.visible == true && state.effective == mode
@@ -146,7 +157,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                     }
                 } catch (error: Throwable) {
                     failures += "$name:${error.javaClass.simpleName}:${error.message}"
-                    record("FAILURE", failures.last())
+                    record("FAILURE", "${failures.last()} interactive=${power.isInteractive} locked=${keyguard.isKeyguardLocked} route=${sample().first}")
                 } finally {
                     runCatching {
                         val hide = SystemClock.uptimeMillis()
@@ -181,6 +192,13 @@ class KeyguardR12ServiceTimingInstrumentationTest {
 
     private fun record(stage: String, detail: String) { evidence.appendLine("$stage up=${SystemClock.uptimeMillis()} $detail") }
     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command)).bufferedReader().use { it.readText() }
+    private fun synchronizedKey(keyCode: Int) {
+        val downAt = SystemClock.uptimeMillis()
+        for (action in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+            val event = KeyEvent(downAt, SystemClock.uptimeMillis(), action, keyCode, 0, 0, -1, 0, 0, InputDevice.SOURCE_KEYBOARD)
+            check(automation.injectInputEvent(event, true)) { "synchronized key $keyCode was rejected" }
+        }
+    }
     private fun setSecure(key: String, value: String?) {
         automation.adoptShellPermissionIdentity(Manifest.permission.WRITE_SECURE_SETTINGS)
         try { check(Settings.Secure.putString(context.contentResolver, key, value)) } finally { automation.dropShellPermissionIdentity() }
