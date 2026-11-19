@@ -136,4 +136,48 @@ void main() {
       expect(clipboard, startsWith('FLUVI_KEYGUARD_TIMING_CAPTURE_V1'));
     },
   );
+
+  testWidgets('renderer choice acknowledges the next hidden boundary', (
+    tester,
+  ) async {
+    String? sent;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          if (call.method == 'getKeyguardOrbRenderMode') {
+            return <String, Object?>{
+              'available': true,
+              'configured': 'SURFACE_LIVE',
+              'effective': 'SURFACE_LIVE',
+              'pendingBoundary': false,
+            };
+          }
+          if (call.method == 'setKeyguardOrbRenderMode') {
+            sent = (call.arguments as Map)['mode'] as String?;
+            return <String, Object?>{
+              'available': true,
+              'configured': sent,
+              'effective': 'SURFACE_LIVE',
+              'pendingBoundary': true,
+            };
+          }
+          return response('IDLE', '');
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('debug-console-orb-surface-static')),
+    );
+    await tester.pumpAndSettle();
+    expect(sent, 'SURFACE_STATIC');
+    expect(find.textContaining('következő elrejtés'), findsOneWidget);
+  });
 }

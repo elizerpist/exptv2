@@ -69,6 +69,10 @@ import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
 import com.fluvi.app.lockscreen.FluviKeyguardCardSettings
 import com.fluvi.app.lockscreen.FluviKeyguardCardService
 import com.fluvi.app.lockscreen.KeyguardCardDiagnostics
+import com.fluvi.app.lockscreen.FluviKeyguardCardServiceRegistry
+import com.fluvi.app.lockscreen.KeyguardOrbRenderMode
+import com.fluvi.app.lockscreen.KeyguardOrbRenderModeStatus
+import com.fluvi.app.lockscreen.KeyguardOrbRenderModeStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
@@ -359,6 +363,29 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
+                if (call.method == "getKeyguardOrbRenderMode" || call.method == "setKeyguardOrbRenderMode") {
+                    scope.launch(Dispatchers.Main.immediate) {
+                        if (!KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext)) {
+                            result.success(mapOf("available" to false))
+                            return@launch
+                        }
+                        val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
+                        if (call.method == "setKeyguardOrbRenderMode") {
+                            val value = (call.arguments as? Map<*, *>)?.get("mode") as? String
+                            val mode = KeyguardOrbRenderMode.entries.firstOrNull { it.name == value }
+                            if (mode == null) {
+                                result.error("validation", "Ismeretlen orb megjelenítési mód.", null)
+                                return@launch
+                            }
+                            KeyguardOrbRenderModeStore.write(applicationContext, mode)
+                            service?.onOrbRenderModeChanged()
+                        }
+                        val configured = KeyguardOrbRenderModeStore.read(applicationContext)
+                        result.success((service?.renderModeStatus()
+                            ?: KeyguardOrbRenderModeStatus(configured, configured, visible = false)).toMap())
+                    }
+                    return@setMethodCallHandler
+                }
                 if (call.method in setOf("startKeyguardDiagnosticCapture", "getKeyguardDiagnosticCapture", "freezeKeyguardDiagnosticCapture", "clearKeyguardDiagnosticCapture")) {
                     // FIFO capture barriers/export may wait for the reducer;
                     // they must never occupy Android's visibility/UI owner.

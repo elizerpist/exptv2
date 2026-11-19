@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import com.fluvi.app.runtime.FluviLockScreenCardConfiguration
 import com.fluvi.app.runtime.FluviRuntimeCoordinator
+import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -546,6 +547,7 @@ internal object KeyguardCardDiagnostics {
         val stage: String,
         val reason: String,
         var fields: Map<String, String>,
+        val surfaceMetrics: KeyguardOrbSurfaceMetrics? = null,
         var firstUptimeMs: Long = uptimeMs,
         var lastUptimeMs: Long = uptimeMs,
         var count: Int = 1,
@@ -625,6 +627,14 @@ internal object KeyguardCardDiagnostics {
         /** First lease evidence is capture/show-owned even before hide. */
         var r11Lease: String? = null,
         var r11Evidence: Map<String, String> = emptyMap(),
+        var r12Evidence: Map<String, String> = emptyMap(),
+        var r12Metrics: KeyguardOrbSurfaceMetrics? = null,
+        var r12MetricSnapshot: KeyguardOrbSurfaceMetrics.Snapshot? = null,
+        var r12LatestMetrics: KeyguardOrbSurfaceMetrics? = null,
+        var r12LatestMetricSnapshot: KeyguardOrbSurfaceMetrics.Snapshot? = null,
+        var r12Configured: String? = null,
+        var r12Privacy: String? = null,
+        var r12DisplayHz: String? = null,
     )
 
     private data class HideEpisode(
@@ -700,6 +710,11 @@ internal object KeyguardCardDiagnostics {
         var visitedNodeCount: Long? = null,
         var rejectionReason: String? = null,
         var followupAction: String? = null,
+        var readAheadReason: String? = null,
+        var readAheadPending: String? = null,
+        var readAheadReserved: String? = null,
+        var readAheadRevision: String? = null,
+        var readAheadPriorApplyQueued: String? = null,
     )
 
     private data class TimingAttempt(
@@ -743,6 +758,8 @@ internal object KeyguardCardDiagnostics {
         val pendingRetirements: ArrayDeque<PendingRetirement> = ArrayDeque(),
         val pendingR11: ArrayDeque<TimingEvent> = ArrayDeque(),
         var pendingR11Omitted: Int = 0,
+        val pendingR12: ArrayDeque<TimingEvent> = ArrayDeque(),
+        var pendingR12Omitted: Int = 0,
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         /** This compact causal spine is independent of the raw event ring.
          * A later hidden-state storm cannot evict an earlier wake/attach/hide
@@ -832,7 +849,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -958,6 +975,7 @@ internal object KeyguardCardDiagnostics {
                 "presentationMode" to settings.presentationMode.name,
                 "animationMode" to settings.animationMode.wireValue,
                 "privacyMode" to if (settings.showFinancialDetails) "full" else "discreet",
+                "r12ConfiguredRoute" to KeyguardOrbRenderModeStore.read(context).name,
                 "notificationTimeoutMs" to "0",
             ),
             captureMode = captureMode,
@@ -1136,6 +1154,7 @@ internal object KeyguardCardDiagnostics {
         operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, Any?> = emptyMap(),
         deferredFields: (() -> Map<String, Any?>)? = null,
+        surfaceMetrics: KeyguardOrbSurfaceMetrics? = null,
     ) {
         val producerStartedAtNs = SystemClock.elapsedRealtimeNanos()
         val token = ingress ?: return
@@ -1169,6 +1188,7 @@ internal object KeyguardCardDiagnostics {
             diagnosticContext = diagnosticContext,
             operation = operation,
             fields = capturedFields,
+            surfaceMetrics = surfaceMetrics,
         )
         // Captures are durably checkpointed at explicit lifecycle boundaries
         // (start/freeze/expiry).  Building a full export snapshot here would
@@ -1197,6 +1217,7 @@ internal object KeyguardCardDiagnostics {
         diagnosticContext: KeyguardDiagnosticContext? = null,
         operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, String> = emptyMap(),
+        surfaceMetrics: KeyguardOrbSurfaceMetrics? = null,
     ) {
         // A completion that belonged to a capture cleared/restarted by the
         // user must not be relabelled as attempt 1 of the new capture merely
@@ -1223,6 +1244,7 @@ internal object KeyguardCardDiagnostics {
             stage = stage,
             reason = reason,
             fields = fields,
+            surfaceMetrics = surfaceMetrics,
         )
         val retainRawEvent = active.captureMode == KeyguardDiagnosticCaptureMode.FULL || stage in TRANSITION_STAGES
         if (retainRawEvent) {
@@ -1350,7 +1372,46 @@ internal object KeyguardCardDiagnostics {
                 }
                 show.r11Evidence = values
             }
+            fun reduceSurface(show: ShowEpisode, sample: TimingEvent) {
+                val generation = sample.fields["r12Generation"] ?: return
+                val values = show.r12Evidence.toMutableMap()
+                if ("generation" !in values) values["generation"] = generation
+                if (values["generation"] != generation) {
+                    if (values["latestGeneration"] != generation) show.r12LatestMetrics = sample.surfaceMetrics
+                    values["latestGeneration"] = generation
+                    values["latestStage"] = sample.reason
+                    values["latestAt"] = sample.uptimeMs.toString()
+                    values["latestDetail"] = sample.fields["r12Detail"] ?: "UNOBSERVED"
+                    values["latestPrivacy"] = sample.fields["r12Privacy"] ?: "UNOBSERVED"
+                    show.r12Evidence = values
+                    return
+                }
+                if (show.r12Metrics == null && sample.surfaceMetrics != null) show.r12Metrics = sample.surfaceMetrics
+                if ("privacy" !in values) sample.fields["r12Privacy"]?.let { values["privacy"] = it }
+                fun keep(key: String, value: String?) {
+                    if (value != null && key !in values) values[key] = value
+                }
+                when (sample.reason) {
+                    "ROUTE_SELECTED" -> keep("route", sample.fields["r12Detail"])
+                    "HOLDER_CREATED" -> keep("created", sample.uptimeMs.toString())
+                    "HOLDER_CHANGED" -> { keep("changed", sample.uptimeMs.toString()); keep("size", sample.fields["r12Detail"]) }
+                    "POSTER" -> { keep("poster", sample.fields["r12Detail"]); keep("posterAt", sample.uptimeMs.toString()) }
+                    "FIRST_POST" -> keep("firstPost", sample.uptimeMs.toString())
+                    "GUARD_RETIRED" -> keep("guardRetired", sample.uptimeMs.toString())
+                    "HOLDER_DESTROYED" -> { keep("destroyed", sample.uptimeMs.toString()); keep("destroyDetail", sample.fields["r12Detail"]) }
+                    "REVOKED" -> keep("revoked", sample.uptimeMs.toString())
+                    "DEGRADED" -> { keep("degraded", sample.fields["r12Detail"]); keep("degradedAt", sample.uptimeMs.toString()) }
+                }
+                show.r12Evidence = values
+            }
             when (stage) {
+                "R12_ADMISSION" -> inspectionTimeline()?.let {
+                    it.readAheadReason = reason
+                    it.readAheadPending = fields["r12Pending"]
+                    it.readAheadReserved = fields["r12Reserved"]
+                    it.readAheadRevision = fields["r12FreshnessRevision"]
+                    it.readAheadPriorApplyQueued = fields["r12PriorApplyQueued"]
+                }
                 "SCREEN_ON_RECEIVED" -> if (attempt.screenOnReceivedAtUptimeMs == null) attempt.screenOnReceivedAtUptimeMs = event.uptimeMs
                 "INSPECTION_QUEUED" -> {
                     attempt.requestsReceived += 1
@@ -1503,10 +1564,20 @@ internal object KeyguardCardDiagnostics {
                     }
                     val created = showEpisode()
                     if (created != null) {
+                        created.r12Configured = fields["r12Configured"]
+                        created.r12Privacy = fields["r12Privacy"]
+                        created.r12DisplayHz = fields["r12DisplayHz"]
+                        if (fields["r12Effective"] == "LEGACY_R11" && created.r12Evidence.isEmpty()) {
+                            created.r12Evidence = mapOf("route" to "LEGACY_R11", "generation" to "UNOBSERVED")
+                        }
                         val buffered = attempt.pendingR11.filter {
                             it.showOperationId == operationId && it.attachGeneration == event.attachGeneration
                         }
                         buffered.forEach { sample -> reduceFirstOffer(created, sample); attempt.pendingR11.remove(sample) }
+                        val surface = attempt.pendingR12.filter {
+                            it.showOperationId == operationId && it.attachGeneration == event.attachGeneration
+                        }
+                        surface.forEach { sample -> reduceSurface(created, sample); attempt.pendingR12.remove(sample) }
                     }
                     attempt.showingInspectionRequestId = event.requestId
                     attempt.finalState = "SHOW_DECIDED"
@@ -1533,6 +1604,14 @@ internal object KeyguardCardDiagnostics {
                     else if (event.showOperationId != null) {
                         if (attempt.pendingR11.size < 16) attempt.pendingR11.addLast(event)
                         else attempt.pendingR11Omitted += 1
+                    }
+                }
+                "R12_SURFACE" -> {
+                    val show = showEpisode()
+                    if (show != null) reduceSurface(show, event)
+                    else if (event.showOperationId != null) {
+                        if (attempt.pendingR12.size < 16) attempt.pendingR12.addLast(event)
+                        else attempt.pendingR12Omitted += 1
                     }
                 }
                 "FIRST_ROOT_PREDRAW" -> showEpisode()?.let {
@@ -1734,10 +1813,11 @@ internal object KeyguardCardDiagnostics {
     )
 
     private fun copyAttempt(attempt: TimingAttempt): TimingAttempt = attempt.copy(
-        shows = ArrayDeque(attempt.shows.map { it.copy(cause = it.cause?.copy(), renderSummary = it.renderSummary.toMap(), r11Evidence = it.r11Evidence.toMap()) }),
+        shows = ArrayDeque(attempt.shows.map { it.copy(cause = it.cause?.copy(), renderSummary = it.renderSummary.toMap(), r11Evidence = it.r11Evidence.toMap(), r12Evidence = it.r12Evidence.toMap(), r12MetricSnapshot = it.r12Metrics?.snapshot() ?: it.r12MetricSnapshot, r12Metrics = null, r12LatestMetricSnapshot = it.r12LatestMetrics?.snapshot() ?: it.r12LatestMetricSnapshot, r12LatestMetrics = null) }),
         hides = ArrayDeque(attempt.hides.map { it.copy(cause = it.cause?.copy()) }),
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
         pendingR11 = ArrayDeque(attempt.pendingR11.map { it.copy(fields = it.fields.toMap()) }),
+        pendingR12 = ArrayDeque(attempt.pendingR12.map { it.copy(fields = it.fields.toMap()) }),
         inspections = LinkedHashMap(attempt.inspections.mapValues { (_, timeline) -> timeline.copy() }),
         causalSpine = ArrayDeque(attempt.causalSpine.map { it.copy(fields = it.fields.toMap()) }),
     )
@@ -1914,6 +1994,13 @@ internal object KeyguardCardDiagnostics {
             val first = attempt.shows.firstOrNull()
             val cold = first?.renderSummary
             val offer = first?.r11Evidence ?: emptyMap()
+            val surfaceShows = attempt.shows.filter { it.r12Evidence.isNotEmpty() }
+            val prioritizedSurfaces = listOfNotNull(surfaceShows.firstOrNull(), surfaceShows.lastOrNull(),
+                surfaceShows.maxByOrNull { it.r12MetricSnapshot?.worstGapNs ?: Long.MIN_VALUE }).distinctBy { it.operationId }
+            prioritizedSurfaces.forEach { episode ->
+                select("a${attempt.id}:r12Surface${episode.operationId}", r12SurfaceRecord(attempt, episode), attempt.id)
+            }
+            val surfaceRoute = first?.r12Evidence?.get("route")?.startsWith("SURFACE_") == true
             fun v(key: String) = offer[key] ?: "UNOBSERVED"
             val offerAt = offer["offer"]?.toLongOrNull()
             val grantAt = offer["grant"]?.toLongOrNull()
@@ -1928,7 +2015,7 @@ internal object KeyguardCardDiagnostics {
             val steadyAt = offer["steady"]?.toLongOrNull()
             val directToSteady = if (applyAt != null && steadyAt != null && steadyAt >= applyAt)
                 steadyAt - applyAt else null
-            select("a${attempt.id}:r11First", buildString {
+            if (!surfaceRoute) select("a${attempt.id}:r11First", buildString {
                 append(" R11_FIRST attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"}")
                 append(" lease=${first?.r11Lease ?: "UNOBSERVED"} renderer=${v("renderer")} child=${v("child")} grantId=${v("grantId")}")
                 append(" first=${v("slot")}/${v("use")} ready=${v("ready")} offer=${v("offer")} grant=${v("grant")} nudge=${v("nudge")}")
@@ -1940,7 +2027,9 @@ internal object KeyguardCardDiagnostics {
                 append(" disposition=${v("disposition")}/${v("dispositionAt")}/${v("dispositionReason")} pendingOmitted=${attempt.pendingR11Omitted}")
                 appendLine()
             }, attempt.id)
-            select("a${attempt.id}:compact", buildString {
+            if (surfaceRoute) {
+                select("a${attempt.id}:compact", " R12_WINDOW attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"} attach=${first?.attachGeneration ?: "UNOBSERVED"} req=${first?.requestId ?: "UNOBSERVED"} configured=${first?.r12Configured ?: "UNOBSERVED"} privacy=${first?.r12Privacy ?: "UNOBSERVED"} displayHz=${first?.r12DisplayHz ?: "UNOBSERVED"} decision=${first?.decisionAtUptimeMs ?: "UNOBSERVED"} add=${first?.addBeginAtUptimeMs ?: "UNOBSERVED"}/${first?.addReturnAtUptimeMs ?: "UNOBSERVED"} layout=${first?.r10LayoutAt ?: "UNOBSERVED"} root=${first?.firstRootDrawAtUptimeMs ?: "UNOBSERVED"}\n", attempt.id)
+            } else select("a${attempt.id}:compact", buildString {
                 append(" R10_COMPACT attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"}")
                 append(" attach=${first?.attachGeneration ?: "UNOBSERVED"} req=${first?.requestId ?: "UNOBSERVED"}")
                 append(" decision=${first?.decisionAtUptimeMs ?: "UNOBSERVED"} add=${first?.addBeginAtUptimeMs ?: "UNOBSERVED"}/${first?.addReturnAtUptimeMs ?: "UNOBSERVED"}")
@@ -2110,6 +2199,7 @@ internal object KeyguardCardDiagnostics {
         append(" authorityAtStart=${cause.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${cause.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${cause.visibilityEpochAtApply ?: "NA"} pendingAtApply=${cause.pendingRequestIdAtApply ?: "NA"}")
         append(" classification=${cause.surfaceClassification ?: "NA"} reason=${cause.surfaceReason ?: "NA"} markers=${cause.surfaceMarkers ?: "NA"} rootUnavailable=${cause.rootUnavailable ?: "NA"} walkTruncated=${cause.walkTruncated ?: "NA"} truncationReasons=${cause.walkTruncationReasons ?: "UNOBSERVED"} visited=${cause.visitedNodeCount ?: "NA"}")
         append(" reader=${cause.readerStrategy ?: "NA"} freshness=${cause.freshnessPolicy ?: "NA"} cacheClear=${cause.cacheClearResult ?: "NA"} fallback=${cause.fallbackReason ?: "NA"}")
+        append(" readAhead=${cause.readAheadReason ?: "UNOBSERVED"}:${cause.readAheadPending ?: "UNOBSERVED"}/${cause.readAheadReserved ?: "UNOBSERVED"}:rev${cause.readAheadRevision ?: "UNOBSERVED"}:applyQueued${cause.readAheadPriorApplyQueued ?: "UNOBSERVED"}")
         append(" activeCandidate=${cause.activeCandidateWindowId ?: "NA"} returnedRoot=${cause.returnedRootWindowId ?: "NA"} activeAccepted=${cause.activeRootAccepted ?: "NA"} activeRootMs=${cause.activeRootTotalMs ?: "NA"} perWindowRootMs=${cause.perWindowRootTotalMs ?: "NA"} childCalls=${cause.childAcquisitionCount ?: "NA"} childMs=${cause.childAcquisitionTotalMs ?: "NA"} childMaxMs=${cause.childAcquisitionMaxMs ?: "NA"} localMs=${cause.localProcessingMs ?: "NA"}")
         appendLine(" slowCalls=${cause.slowWindowCalls ?: "NA"} rejected=${cause.rejectionReason ?: "NA"} followup=${cause.followupAction ?: "NA"}")
     }
@@ -2138,6 +2228,18 @@ internal object KeyguardCardDiagnostics {
                 (hideRecord(hide) + inspectionCause("HIDE_CAUSE", hide.cause))
         }
         return records
+    }
+
+    private fun r12SurfaceRecord(attempt: TimingAttempt, episode: ShowEpisode): String = buildString {
+        val evidence = episode.r12Evidence
+        fun value(key: String) = evidence[key] ?: "UNOBSERVED"
+        appendLine(" R12_SURFACE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "UNOBSERVED"} route=${value("route")} privacy=${value("privacy")} generation=${value("generation")} created=${value("created")} changed=${value("changed")}/${value("size")} poster=${value("poster")}@${value("posterAt")} firstPost=${value("firstPost")} guardRetired=${value("guardRetired")} revoked=${value("revoked")} destroyed=${value("destroyed")} destroyDetail=${value("destroyDetail")} degraded=${value("degraded")} latest=${value("latestGeneration")}/${value("latestPrivacy")}/${value("latestStage")}@${value("latestAt")} pendingOmitted=${attempt.pendingR12Omitted} physical=UNOBSERVED")
+        episode.r12MetricSnapshot?.let { metrics ->
+            appendLine(" R12_CADENCE attempt=${attempt.id} showOp=${episode.operationId} clock=System.nanoTime cpu=threadCPU coherent=${metrics.coherent} submissions=${metrics.submissions} firstPost=${metrics.firstPostUptimeMs ?: "UNOBSERVED"} distinct=${metrics.firstDistinctUptimeMs ?: "UNOBSERVED"} lastPost=${metrics.lastPostUptimeMs ?: "UNOBSERVED"} retainedGaps=${metrics.retainedGaps} p95GapNs=${metrics.p95GapNs ?: "UNOBSERVED"} worstGapNs=${metrics.worstGapNs ?: "UNOBSERVED"} over50ms=${metrics.gapsOver50Ms} maxLockWallCpuNs=${metrics.maxLockWallNs}/${metrics.maxLockCpuNs} maxDrawWallCpuNs=${metrics.maxDrawWallNs}/${metrics.maxDrawCpuNs} maxPostWallCpuNs=${metrics.maxPostWallNs}/${metrics.maxPostCpuNs} presentation=UNOBSERVED")
+        }
+        episode.r12LatestMetricSnapshot?.let { metrics ->
+            appendLine(" R12_CADENCE_LATEST attempt=${attempt.id} showOp=${episode.operationId} generation=${value("latestGeneration")} coherent=${metrics.coherent} submissions=${metrics.submissions} firstPost=${metrics.firstPostUptimeMs ?: "UNOBSERVED"} distinct=${metrics.firstDistinctUptimeMs ?: "UNOBSERVED"} lastPost=${metrics.lastPostUptimeMs ?: "UNOBSERVED"} worstGapNs=${metrics.worstGapNs ?: "UNOBSERVED"} presentation=UNOBSERVED")
+        }
     }
 
     private fun hideRecord(hide: HideEpisode): String =

@@ -34,6 +34,10 @@ internal class KeyguardInspectionFreshness {
         return Ticket(current, revision, required)
     }
 
+    /** A revision is an ordering token, never a cached surface decision. */
+    @Synchronized fun revisionFor(current: KeyguardInspectionAuthority): Long? =
+        revision.takeIf { authority == current }
+
     @Synchronized fun boundaryEstablished(ticket: Ticket) {
         // A late clear cannot consume a newer contradiction, nor a boundary
         // belonging to another wake/attachment/session.

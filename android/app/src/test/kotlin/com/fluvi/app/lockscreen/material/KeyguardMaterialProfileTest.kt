@@ -73,6 +73,28 @@ class KeyguardMaterialProfileTest {
         assertEquals(value.commonSettings.toList(), neutral.commonSettings.toList())
     }
 
+    @Test fun `surface snapshot cannot change when any publisher array mutates`() {
+        val input = requireNotNull(KeyguardMaterialProfile.fromMap(profile()))
+        val snapshot = input.copyForSurface()
+        val visualKey = snapshot.visualKey
+        val color = snapshot.colors[0]
+        val stop = snapshot.stops[0]
+        val common = snapshot.commonSettings[0]
+        val background = snapshot.background.settings[0]
+        val interior = snapshot.interior.settings[0]
+        input.colors[0] = 0
+        input.stops[0] = .9f
+        input.commonSettings[0] = 9f
+        input.background.settings[0] = 8f
+        input.interior.settings[0] = 7f
+        assertEquals(color, snapshot.colors[0])
+        assertEquals(stop, snapshot.stops[0], 0f)
+        assertEquals(common, snapshot.commonSettings[0], 0f)
+        assertEquals(background, snapshot.background.settings[0], 0f)
+        assertEquals(interior, snapshot.interior.settings[0], 0f)
+        assertEquals(visualKey, snapshot.visualKey)
+    }
+
     @Test fun `scene time preserves phase speed without a finite loop`() {
         val value = requireNotNull(KeyguardMaterialProfile.fromMap(profile(speed = .25)))
         val scene = KeyguardMaterialScene(value, full = true, appliedAtNanos = 1_000_000_000L)
@@ -86,6 +108,23 @@ class KeyguardMaterialProfileTest {
         val after = scene.timeAt(9_001_000_000_000L)
         assertEquals(0.25f, after.phase - before.phase, .0001f)
         assertEquals(1f, after.elapsedSeconds - before.elapsedSeconds, .0001f)
+    }
+
+    @Test fun `surface frame time reuses storage with the canonical scene clock`() {
+        val scene = KeyguardMaterialScene(
+            requireNotNull(KeyguardMaterialProfile.fromMap(profile(speed = .25))),
+            full = true,
+            appliedAtNanos = 9_000_000_000_000L,
+        )
+        val reusable = KeyguardOrbSurfaceFrameTime()
+        for (nanos in listOf(8_999_000_000_000L, 9_000_000_000_000L, 9_001_000_000_000L)) {
+            scene.timeAtInto(nanos, reusable)
+            val expected = scene.timeAt(nanos)
+            assertEquals(expected.elapsedSeconds, reusable.elapsedSeconds, 0f)
+            assertEquals(expected.phase, reusable.phase, 0f)
+            assertEquals(expected.backgroundPhase, reusable.backgroundPhase, 0f)
+            assertEquals(expected.interiorPhase, reusable.interiorPhase, 0f)
+        }
     }
 
     @Test fun `isolated renderer time seam preserves the injected calibrated phase`() {

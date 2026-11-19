@@ -54,6 +54,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   bool _loadingPush = false;
   bool _pushCopied = false;
   KeyguardTimingCaptureSnapshot? _keyguardSnapshot;
+  KeyguardOrbRenderModeStatus? _keyguardRenderMode;
   bool _loadingKeyguard = false;
   bool _copyingKeyguard = false;
   bool _keyguardCopied = false;
@@ -279,6 +280,25 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     try {
       final snapshot = await bridge.get();
       if (mounted) setState(() => _keyguardSnapshot = snapshot);
+      final mode = await bridge.getRenderMode();
+      if (mounted) setState(() => _keyguardRenderMode = mode);
+    } on Object catch (error) {
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _loadingKeyguard = false);
+    }
+  }
+
+  Future<void> _setKeyguardRenderMode(KeyguardOrbRenderMode mode) async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _loadingKeyguard) return;
+    setState(() {
+      _loadingKeyguard = true;
+      _keyguardError = null;
+    });
+    try {
+      final status = await bridge.setRenderMode(mode);
+      if (mounted) setState(() => _keyguardRenderMode = status);
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
     } finally {
@@ -915,123 +935,172 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
               'kiszorított: ${snapshot.eventsEvicted} · részletesen nem tárolt: ${snapshot.diagnosticDroppedRecords}';
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-          child: Text(
-            'Indítsd el a rögzítést, zárd le és ébreszd fel a telefont, majd oldd fel. Ismételd meg háromszor, térj vissza ide, és másold a riportot.',
-            key: const ValueKey('debug-console-keyguard-help'),
-            style: const TextStyle(
-              color: Color(0xFFBAC2DE),
-              fontSize: 10.5,
-              height: 1.35,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              ChoiceChip(
-                key: const ValueKey('debug-console-keyguard-light'),
-                label: const Text('LIGHT'),
-                selected: _keyguardCaptureMode == KeyguardTimingCaptureMode.light,
-                onSelected: _loadingKeyguard
-                    ? null
-                    : (_) => setState(
-                        () => _keyguardCaptureMode =
-                            KeyguardTimingCaptureMode.light,
-                      ),
-              ),
-              ChoiceChip(
-                key: const ValueKey('debug-console-keyguard-full'),
-                label: const Text('FULL'),
-                selected: _keyguardCaptureMode == KeyguardTimingCaptureMode.full,
-                onSelected: _loadingKeyguard
-                    ? null
-                    : (_) => setState(
-                        () => _keyguardCaptureMode =
-                            KeyguardTimingCaptureMode.full,
-                      ),
-              ),
-              OutlinedButton.icon(
-                key: const ValueKey('debug-console-keyguard-start'),
-                onPressed: _loadingKeyguard || unavailable
-                    ? null
-                    : _startKeyguardCapture,
-                icon: const Icon(Icons.fiber_manual_record, size: 15),
-                label: const Text('Rögzítés indítása'),
-              ),
-              OutlinedButton.icon(
-                key: const ValueKey('debug-console-keyguard-freeze'),
-                onPressed: _loadingKeyguard || snapshot?.recording != true
-                    ? null
-                    : _freezeKeyguardCapture,
-                icon: const Icon(Icons.stop_circle_outlined, size: 15),
-                label: const Text('Leállítás'),
-              ),
-              OutlinedButton.icon(
-                key: const ValueKey('debug-console-keyguard-copy'),
-                onPressed:
-                    _copyingKeyguard ||
-                        unavailable ||
-                        (snapshot != null &&
-                            !snapshot.recording &&
-                            snapshot.report.isEmpty)
-                    ? null
-                    : _copyKeyguardCapture,
-                icon: Icon(
-                  _copyingKeyguard
-                      ? Icons.hourglass_top
-                      : _keyguardCopied
-                      ? Icons.check
-                      : Icons.copy_outlined,
-                  size: 15,
+        Flexible(
+          flex: 2,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                  child: Text(
+                    'Indítsd el a rögzítést, zárd le és ébreszd fel a telefont, majd oldd fel. Ismételd meg háromszor, térj vissza ide, és másold a riportot.',
+                    key: const ValueKey('debug-console-keyguard-help'),
+                    style: const TextStyle(
+                      color: Color(0xFFBAC2DE),
+                      fontSize: 10.5,
+                      height: 1.35,
+                    ),
+                  ),
                 ),
-                label: Text(_copyingKeyguard ? 'Másolás…' : 'Riport másolása'),
-              ),
-              OutlinedButton.icon(
-                key: const ValueKey('debug-console-keyguard-refresh'),
-                onPressed: _loadingKeyguard ? null : _refreshKeyguard,
-                icon: const Icon(Icons.refresh, size: 15),
-                label: const Text('Frissítés'),
-              ),
-              TextButton(
-                key: const ValueKey('debug-console-keyguard-clear'),
-                onPressed: _loadingKeyguard || unavailable
-                    ? null
-                    : _clearKeyguardCapture,
-                child: const Text('Törlés'),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 7),
-          child: SelectableText(
-            unsupported
-                ? 'A zárképernyő-időzítés rögzítése csak Androidon érhető el.'
-                : (snapshot?.message ?? status),
-            key: const ValueKey('debug-console-keyguard-status'),
-            style: TextStyle(
-              color: unavailable
-                  ? const Color(0xFFF9E2AF)
-                  : const Color(0xFF94A3B8),
-              fontSize: 10.5,
-              height: 1.35,
+                if (_keyguardRenderMode?.available == true)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        for (final mode in KeyguardOrbRenderMode.values)
+                          ChoiceChip(
+                            key: ValueKey(
+                              'debug-console-orb-${switch (mode) {
+                                KeyguardOrbRenderMode.surfaceLive => 'surface-live',
+                                KeyguardOrbRenderMode.surfaceStatic => 'surface-static',
+                                KeyguardOrbRenderMode.legacyR11 => 'legacy-r11',
+                              }}',
+                            ),
+                            label: Text(mode.wireValue),
+                            selected: _keyguardRenderMode?.configured == mode,
+                            onSelected: _loadingKeyguard
+                                ? null
+                                : (_) => _setKeyguardRenderMode(mode),
+                          ),
+                        Text(
+                          'Aktív: ${_keyguardRenderMode!.effective.wireValue}'
+                          '${_keyguardRenderMode!.pendingBoundary ? ' · a következő elrejtés után vált' : ''}',
+                        ),
+                      ],
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      ChoiceChip(
+                        key: const ValueKey('debug-console-keyguard-light'),
+                        label: const Text('LIGHT'),
+                        selected:
+                            _keyguardCaptureMode ==
+                            KeyguardTimingCaptureMode.light,
+                        onSelected: _loadingKeyguard
+                            ? null
+                            : (_) => setState(
+                                () => _keyguardCaptureMode =
+                                    KeyguardTimingCaptureMode.light,
+                              ),
+                      ),
+                      ChoiceChip(
+                        key: const ValueKey('debug-console-keyguard-full'),
+                        label: const Text('FULL'),
+                        selected:
+                            _keyguardCaptureMode ==
+                            KeyguardTimingCaptureMode.full,
+                        onSelected: _loadingKeyguard
+                            ? null
+                            : (_) => setState(
+                                () => _keyguardCaptureMode =
+                                    KeyguardTimingCaptureMode.full,
+                              ),
+                      ),
+                      OutlinedButton.icon(
+                        key: const ValueKey('debug-console-keyguard-start'),
+                        onPressed: _loadingKeyguard || unavailable
+                            ? null
+                            : _startKeyguardCapture,
+                        icon: const Icon(Icons.fiber_manual_record, size: 15),
+                        label: const Text('Rögzítés indítása'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const ValueKey('debug-console-keyguard-freeze'),
+                        onPressed:
+                            _loadingKeyguard || snapshot?.recording != true
+                            ? null
+                            : _freezeKeyguardCapture,
+                        icon: const Icon(Icons.stop_circle_outlined, size: 15),
+                        label: const Text('Leállítás'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const ValueKey('debug-console-keyguard-copy'),
+                        onPressed:
+                            _copyingKeyguard ||
+                                unavailable ||
+                                (snapshot != null &&
+                                    !snapshot.recording &&
+                                    snapshot.report.isEmpty)
+                            ? null
+                            : _copyKeyguardCapture,
+                        icon: Icon(
+                          _copyingKeyguard
+                              ? Icons.hourglass_top
+                              : _keyguardCopied
+                              ? Icons.check
+                              : Icons.copy_outlined,
+                          size: 15,
+                        ),
+                        label: Text(
+                          _copyingKeyguard ? 'Másolás…' : 'Riport másolása',
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        key: const ValueKey('debug-console-keyguard-refresh'),
+                        onPressed: _loadingKeyguard ? null : _refreshKeyguard,
+                        icon: const Icon(Icons.refresh, size: 15),
+                        label: const Text('Frissítés'),
+                      ),
+                      TextButton(
+                        key: const ValueKey('debug-console-keyguard-clear'),
+                        onPressed: _loadingKeyguard || unavailable
+                            ? null
+                            : _clearKeyguardCapture,
+                        child: const Text('Törlés'),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 7),
+                  child: SelectableText(
+                    unsupported
+                        ? 'A zárképernyő-időzítés rögzítése csak Androidon érhető el.'
+                        : (snapshot?.message ?? status),
+                    key: const ValueKey('debug-console-keyguard-status'),
+                    style: TextStyle(
+                      color: unavailable
+                          ? const Color(0xFFF9E2AF)
+                          : const Color(0xFF94A3B8),
+                      fontSize: 10.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+                if (_keyguardError case final String error)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+                    child: Text(
+                      error,
+                      key: const ValueKey('debug-console-keyguard-error'),
+                      style: const TextStyle(
+                        color: Color(0xFFF87171),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
-        if (_keyguardError case final String error)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-            child: Text(
-              error,
-              key: const ValueKey('debug-console-keyguard-error'),
-              style: const TextStyle(color: Color(0xFFF87171), fontSize: 11),
-            ),
-          ),
         const Divider(height: 1, color: Color(0xFF313244)),
         Expanded(
           child: snapshot?.report.isNotEmpty == true

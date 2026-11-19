@@ -10,6 +10,50 @@ enum KeyguardTimingCaptureMode {
   final String wireValue;
 }
 
+enum KeyguardOrbRenderMode {
+  surfaceLive('SURFACE_LIVE'),
+  surfaceStatic('SURFACE_STATIC'),
+  legacyR11('LEGACY_R11');
+
+  const KeyguardOrbRenderMode(this.wireValue);
+  final String wireValue;
+
+  static KeyguardOrbRenderMode fromWire(Object? value) => values.firstWhere(
+    (mode) => mode.wireValue == value,
+    orElse: () => surfaceLive,
+  );
+}
+
+@immutable
+class KeyguardOrbRenderModeStatus {
+  const KeyguardOrbRenderModeStatus({
+    required this.available,
+    required this.configured,
+    required this.effective,
+    required this.pendingBoundary,
+  });
+
+  factory KeyguardOrbRenderModeStatus.fromMap(Map<Object?, Object?> map) =>
+      KeyguardOrbRenderModeStatus(
+        available:
+            map['available'] == true &&
+            KeyguardOrbRenderMode.values.any(
+              (mode) => mode.wireValue == map['configured'],
+            ) &&
+            KeyguardOrbRenderMode.values.any(
+              (mode) => mode.wireValue == map['effective'],
+            ),
+        configured: KeyguardOrbRenderMode.fromWire(map['configured']),
+        effective: KeyguardOrbRenderMode.fromWire(map['effective']),
+        pendingBoundary: map['pendingBoundary'] == true,
+      );
+
+  final bool available;
+  final KeyguardOrbRenderMode configured;
+  final KeyguardOrbRenderMode effective;
+  final bool pendingBoundary;
+}
+
 /// Small read/control bridge for the Android-owned keyguard timing capture.
 /// It deliberately has no dependency on lock-screen-card repositories, so a
 /// debug refresh can never trigger a financial preview, surface inspection or
@@ -39,14 +83,11 @@ class KeyguardTimingCaptureBridge {
 
   Future<KeyguardTimingCaptureSnapshot> start({
     KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
-  }) => _invoke(
-    'startKeyguardDiagnosticCapture',
-    <String, Object?>{
-      'build': buildCommit,
-      'buildMode': buildMode,
-      'captureMode': mode.wireValue,
-    },
-  );
+  }) => _invoke('startKeyguardDiagnosticCapture', <String, Object?>{
+    'build': buildCommit,
+    'buildMode': buildMode,
+    'captureMode': mode.wireValue,
+  });
 
   Future<KeyguardTimingCaptureSnapshot> freeze() =>
       _invoke('freezeKeyguardDiagnosticCapture');
@@ -56,6 +97,36 @@ class KeyguardTimingCaptureBridge {
 
   Future<KeyguardTimingCaptureSnapshot> clear() =>
       _invoke('clearKeyguardDiagnosticCapture');
+
+  Future<KeyguardOrbRenderModeStatus> getRenderMode() =>
+      _invokeRenderMode('getKeyguardOrbRenderMode');
+
+  Future<KeyguardOrbRenderModeStatus> setRenderMode(
+    KeyguardOrbRenderMode mode,
+  ) => _invokeRenderMode('setKeyguardOrbRenderMode', <String, Object?>{
+    'mode': mode.wireValue,
+  });
+
+  Future<KeyguardOrbRenderModeStatus> _invokeRenderMode(
+    String method, [
+    Map<String, Object?>? arguments,
+  ]) async {
+    if (!_isAndroid()) {
+      return const KeyguardOrbRenderModeStatus(
+        available: false,
+        configured: KeyguardOrbRenderMode.surfaceLive,
+        effective: KeyguardOrbRenderMode.surfaceLive,
+        pendingBoundary: false,
+      );
+    }
+    final raw = await _channel.invokeMapMethod<Object?, Object?>(
+      method,
+      arguments,
+    );
+    return KeyguardOrbRenderModeStatus.fromMap(
+      raw ?? const <Object?, Object?>{},
+    );
+  }
 
   Future<KeyguardTimingCaptureSnapshot> _invoke(
     String method, [

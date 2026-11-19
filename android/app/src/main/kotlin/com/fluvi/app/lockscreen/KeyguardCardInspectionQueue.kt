@@ -138,6 +138,10 @@ internal class KeyguardWakeCycleOwner {
 internal class KeyguardCardInspectionQueue {
     private var active: KeyguardCardInspectionRequest? = null
     private var pending: KeyguardCardInspectionRequest? = null
+    // Only a completed detached negative may leave its ordered Main apply
+    // behind the physical reader. The reserved successor remains separately
+    // attributable to that decision even if a newer request is coalesced.
+    private var preceding: KeyguardCardInspectionRequest? = null
 
     /** @return true only when the caller must start a worker immediately. */
     fun offer(request: KeyguardCardInspectionRequest): Boolean {
@@ -161,7 +165,7 @@ internal class KeyguardCardInspectionQueue {
 
     /** Completes [request] and returns exactly one coalesced successor. */
     fun complete(request: KeyguardCardInspectionRequest): KeyguardCardInspectionRequest? {
-        if (active != request) return null
+        if (active != request || preceding != null) return null
         val next = pending
         pending = null
         active = next
@@ -175,11 +179,97 @@ internal class KeyguardCardInspectionQueue {
     fun activeRequest(): KeyguardCardInspectionRequest? = active
     fun pendingRequest(): KeyguardCardInspectionRequest? = pending
 
+    /** Called under the service queue lock only after the completed answer is
+     * proven eligible. The predicate checks immutable authority and freshness;
+     * it must not call Android or perform work that can block. */
+    fun reserveSuccessor(
+        completed: KeyguardCardInspectionRequest,
+        compatible: (KeyguardCardInspectionRequest) -> Boolean,
+    ): KeyguardCardInspectionRequest? {
+        if (preceding != null || active != completed) return null
+        val next = pending ?: return null
+        if (!compatible(next)) return null
+        preceding = completed
+        active = next
+        pending = null
+        return next
+    }
+
+    fun successorForPreceding(request: KeyguardCardInspectionRequest): KeyguardCardInspectionRequest? =
+        active.takeIf { preceding == request }
+
+    fun finishPreceding(request: KeyguardCardInspectionRequest): Boolean {
+        if (preceding != request) return false
+        preceding = null
+        return true
+    }
+
     /** Applying UNKNOWN has not released active yet. That completed cause is
      * not future work capable of replacing its fallback observation. */
     fun hasCurrentWork(authority: KeyguardInspectionAuthority, excludingId: Long? = null): Boolean =
-        (active?.let { it.id != excludingId && authority.matches(it) } == true) ||
+        (preceding?.let { it.id != excludingId && authority.matches(it) } == true) ||
+            (active?.let { it.id != excludingId && authority.matches(it) } == true) ||
             (pending?.let { it.id != excludingId && authority.matches(it) } == true)
+}
+
+/** Main publishes this immutable snapshot before visibility or relevant
+ * preference changes. It permits a read only; the normal Main gate remains
+ * the sole owner of any disclosure. */
+internal data class KeyguardReadAheadSnapshot(
+    val authority: KeyguardInspectionAuthority,
+    val freshnessRevision: Long,
+    val stateRevision: Long,
+    val detached: Boolean,
+    val showInProgress: Boolean,
+    val surfaceState: KeyguardSurfacePresentationState,
+)
+
+internal data class KeyguardReadAheadNegative(
+    val decision: KeyguardCardVisibility,
+    val reason: KeyguardSurfaceReason,
+    val rootUnavailable: Boolean,
+    val walkTruncated: Boolean,
+    val abortedStale: Boolean,
+    val freshnessRevision: Long?,
+)
+
+internal object KeyguardReadAheadPolicy {
+    fun permits(
+        snapshot: KeyguardReadAheadSnapshot,
+        negative: KeyguardReadAheadNegative,
+        first: KeyguardCardInspectionRequest,
+        successor: KeyguardCardInspectionRequest,
+        currentFreshnessRevision: Long,
+        outstandingFreshness: KeyguardWindowFreshness,
+    ): Boolean = rejection(snapshot, negative, first, successor, currentFreshnessRevision, outstandingFreshness) == "eligible"
+
+    fun rejection(
+        snapshot: KeyguardReadAheadSnapshot,
+        negative: KeyguardReadAheadNegative,
+        first: KeyguardCardInspectionRequest,
+        successor: KeyguardCardInspectionRequest,
+        currentFreshnessRevision: Long,
+        outstandingFreshness: KeyguardWindowFreshness,
+    ): String {
+        if (!snapshot.detached || snapshot.showInProgress) return "notDetachedOrShowing"
+        if (snapshot.surfaceState != KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE &&
+            snapshot.surfaceState != KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE) return "surfaceState"
+        if (!snapshot.authority.matches(first) || !snapshot.authority.matches(successor) || first.id == successor.id) return "authority"
+        if (snapshot.freshnessRevision != currentFreshnessRevision || snapshot.freshnessRevision != negative.freshnessRevision) return "freshnessRevision"
+        if (successor.windowFreshness.requiresCacheClear || outstandingFreshness.requiresCacheClear) return "freshnessRequired"
+        if (negative.abortedStale) return "stale"
+        if (negative.rootUnavailable) return "rootUnavailable"
+        if (negative.walkTruncated) return "walkTruncated"
+        if (negative.decision != KeyguardCardVisibility.HIDDEN_UNKNOWN || negative.reason != KeyguardSurfaceReason.NO_MAIN_MARKER) return "classification"
+        val transition = KeyguardAwaitingSurfacePolicy.onUnknown(
+            current = snapshot.surfaceState,
+            overlayAttached = false,
+            hasCompatiblePendingRequest = true,
+            retryAvailable = false,
+        )
+        return if (!transition.withdrawVisibleOverlay && !transition.invalidatesVisibleAuthority &&
+            transition.followup == KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING) "eligible" else "policy"
+    }
 }
 
 /** Fast hide is intentionally based only on immediately knowable terminal

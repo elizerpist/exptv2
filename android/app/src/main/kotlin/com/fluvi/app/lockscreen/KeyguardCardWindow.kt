@@ -29,6 +29,8 @@ import com.fluvi.app.lockscreen.material.KeyguardOrbBufferRendererTestHooks
 import com.fluvi.app.lockscreen.material.KeyguardOrbMaterialTimeSource
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
 import com.fluvi.app.lockscreen.material.KeyguardOrbFirstOfferObservation
+import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceObservation
+import com.fluvi.app.lockscreen.material.KeyguardOrbSurfacePresenter
 
 /** Main-thread owner of one, and only one, accessibility overlay root. Drag
  * changes only call updateViewLayout; they never remove/re-add this root,
@@ -54,6 +56,8 @@ internal class KeyguardCardWindow(
      * observational and cannot grant attachment or change visibility. */
     private val armColdRootDiagnostic: (Long) -> ((String, Long, Map<String, Any?>) -> Unit)? = { null },
     private val armFirstOfferDiagnostic: (Long) -> ((KeyguardOrbFirstOfferObservation) -> Unit)? = { null },
+    private val armSurfaceDiagnostic: (Long) -> ((KeyguardOrbSurfaceObservation) -> Unit)? = { null },
+    private val onSurfaceFailure: (String) -> Unit = {},
     private val onFirstRootPreDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstRootDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstShaderDraw: (KeyguardFirstDrawEvent) -> Unit = {},
@@ -87,6 +91,14 @@ internal class KeyguardCardWindow(
     private var accessibilityWindowId: Int? = null
     private var attachGeneration = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var surfaceAnimationObserverRegistered = false
+    private val surfaceAnimationObserver = object : android.database.ContentObserver(mainHandler) {
+        override fun onChange(selfChange: Boolean) {
+            val allowed = android.provider.Settings.Global.getFloat(serviceContext.contentResolver,
+                android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+            surfacePresenter?.setMotionAllowed(allowed)
+        }
+    }
     private var firstRootDrawObservation: KeyguardFirstDrawObservation? = null
     private var coldRootObservation: KeyguardColdRootObservation? = null
     private var firstFrameCommitObservation: KeyguardFrameCommitObservation? = null
@@ -95,6 +107,10 @@ internal class KeyguardCardWindow(
     private var acceptedBootstrapToken: KeyguardBootstrapFrameToken? = null
     private var firstShaderDrawAttachGeneration: Long? = null
     private var materialController: KeyguardCardMaterialController? = null
+    private var surfacePresenter: KeyguardOrbSurfacePresenter? = null
+    private var surfaceDiagnostic: ((KeyguardOrbSurfaceObservation) -> Unit)? = null
+    private var attachedConfiguredMode = KeyguardOrbRenderMode.SURFACE_LIVE
+    private var effectiveRenderMode = KeyguardOrbRenderMode.LEGACY_R11
     private var materialProfile: KeyguardMaterialProfile? = null
     private var materialSettings = KeyguardCardSettings()
     /** Legacy position migration reads and writes SharedPreferences. It is
@@ -126,8 +142,85 @@ internal class KeyguardCardWindow(
     val hasPreparedRoot: Boolean get() = root != null
     val currentAttachGeneration: Long get() = attachGeneration
     fun attachmentRenderSummary() = materialController?.attachmentRenderSummary()
+    fun displayRefreshRate(): Float? = root?.display?.refreshRate
+
+    fun renderModeStatus(): KeyguardOrbRenderModeStatus = KeyguardOrbRenderModeStatus(
+        configured = KeyguardOrbRenderModeStore.read(serviceContext),
+        effective = effectiveRenderMode,
+        visible = lifecycle.isAttached(),
+        attachedSelection = attachedConfiguredMode,
+    )
+
+    private fun usesSurface(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?,
+                            selection: KeyguardOrbRenderMode): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            settings.presentationMode == KeyguardCardPresentationMode.ORB &&
+            settings.animationMode == KeyguardCardAnimationMode.ORB_ONLY &&
+            profile?.animated == true && selection != KeyguardOrbRenderMode.LEGACY_R11 &&
+            android.provider.Settings.Global.getFloat(serviceContext.contentResolver,
+                android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+
+    private fun selectRenderRoute(current: KeyguardCardInteractionLayout, settings: KeyguardCardSettings,
+                                  selection: KeyguardOrbRenderMode): Boolean {
+        val previous = effectiveRenderMode
+        val hadOwner = surfacePresenter != null || materialController != null
+        val orb = current.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+        if (usesSurface(settings, materialProfile, selection)) {
+            materialController?.let {
+                it.dispose()
+                materialController = null
+                val background = current.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_keyguard_material_background)
+                for (view in listOf(orb, background)) {
+                    view.onRendererStateChanged = null
+                    view.onFirstShaderDraw = null
+                    view.onCurrentShaderDraw = null
+                    view.onPreparedProgramPromoted = null
+                    view.onBootstrapGeometryDrawn = null
+                    view.onFirstBootstrapDraw = null
+                    view.setScene(null, enabled = false)
+                }
+            }
+            if (surfacePresenter == null) surfacePresenter = KeyguardOrbSurfacePresenter(
+                context = serviceContext,
+                root = current,
+                onFirstPosted = { attachment, _ ->
+                    if (lifecycle.isAttached() && root === current && attachGeneration == attachment) {
+                        migrateCardPositionAfterFirstRootDraw(current, attachment)
+                    }
+                },
+                onFailure = onSurfaceFailure,
+                isCaptureActive = { KeyguardCardDiagnostics.wantsEvent("R12_SURFACE") },
+            )
+            if (!surfaceAnimationObserverRegistered) {
+                surfaceAnimationObserverRegistered = runCatching {
+                    serviceContext.contentResolver.registerContentObserver(
+                        android.provider.Settings.Global.getUriFor(android.provider.Settings.Global.ANIMATOR_DURATION_SCALE),
+                        false, surfaceAnimationObserver,
+                    )
+                }.isSuccess
+            }
+            orb.visibility = View.GONE
+            effectiveRenderMode = selection
+        } else {
+            val switching = surfacePresenter != null || materialController == null
+            surfacePresenter?.dispose()
+            surfacePresenter = null
+            if (surfaceAnimationObserverRegistered) {
+                runCatching { serviceContext.contentResolver.unregisterContentObserver(surfaceAnimationObserver) }
+                surfaceAnimationObserverRegistered = false
+            }
+            ensureLegacyController(current)
+            if (switching) orb.visibility = View.VISIBLE
+            effectiveRenderMode = KeyguardOrbRenderMode.LEGACY_R11
+        }
+        return !hadOwner || previous != effectiveRenderMode
+    }
+
+    private fun surfaceSize(): Int = serviceContext.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
 
     internal fun presentationConfigurationApplicationsForTest(): Int = presentationConfigurationApplyCount
+    internal fun surfaceForTest() = surfacePresenter?.surfaceForTest()
+    internal fun surfaceMetricsForTest() = surfacePresenter?.metricsForTest()
 
     /** Timestamp at the operation boundary; delivery is deliberately allowed
      * to be deferred by the service so capture bookkeeping never precedes a
@@ -163,6 +256,7 @@ internal class KeyguardCardWindow(
         materialProfile = profile
         val current = root ?: createRoot().also { root = it }
         configurePresentation(current, settings.presentationMode)
+        selectRenderRoute(current, settings, KeyguardOrbRenderModeStore.read(serviceContext))
         // Begin immutable source/metadata loading while detached. A later
         // authorized attach may install the prepared program without first
         // opening assets from Canvas.onDraw.
@@ -172,6 +266,7 @@ internal class KeyguardCardWindow(
             settings.presentationMode,
             isFull = settings.showFinancialDetails,
         )
+        surfacePresenter?.prepare(profile, surfaceSize(), surfaceSize(), settings.showFinancialDetails)
         current.visibility = View.VISIBLE
     }
 
@@ -181,6 +276,11 @@ internal class KeyguardCardWindow(
         materialSettings = settings
         val current = root ?: createRoot().also { root = it }
         val pendingAttach = !lifecycle.isAttached()
+        if (pendingAttach) attachedConfiguredMode = KeyguardOrbRenderModeStore.read(serviceContext)
+        val routeChanged = selectRenderRoute(current, settings, attachedConfiguredMode)
+        if (pendingAttach && surfacePresenter != null) {
+            surfaceDiagnostic = armSurfaceDiagnostic(attachGeneration + 1L)
+        }
         if (pendingAttach) materialController?.beginAuthorizedShow()
         try {
         if (modeChanged) {
@@ -189,6 +289,12 @@ internal class KeyguardCardWindow(
         }
         val presentationConfigurationChanged = configurePresentation(current, settings.presentationMode)
         val resolvedGeometry = dragPreview ?: geometry(settings, current)
+
+        // Revoke the old full target before any other in-place disclosure
+        // mutation; the presenter installs the permitted neutral guard.
+        if (!pendingAttach && appliedPresentation?.full == true && !presentation.full && surfacePresenter != null) {
+            updateMaterialForPresentation(presentation)
+        }
 
         if (!lifecycle.isAttached()) {
             // A terminal hide makes the retained root locally invisible before
@@ -255,6 +361,12 @@ internal class KeyguardCardWindow(
                     Result.ATTACHED
                 },
                 onFailure = {
+                    // A SurfaceView may already have been authorized while
+                    // the retained root was detached. Failed addView must
+                    // revoke that exact target rather than leaving pending
+                    // preparation or holder work alive without a window.
+                    surfacePresenter?.detached()
+                    surfaceDiagnostic = null
                     coldRootObservation?.cancel()
                     coldRootObservation = null
                     bootstrapToken?.let { token ->
@@ -283,10 +395,11 @@ internal class KeyguardCardWindow(
         val contentChanged = appliedPresentation?.visualKey != presentation.visualKey
         val geometryChanged = appliedGeometry != resolvedGeometry
         if (lifecycle.renderOperation(contentChanged, geometryChanged) == KeyguardCardWindowLifecycle.Operation.NONE) {
+            if (routeChanged || presentationConfigurationChanged && surfacePresenter != null) updateMaterialForPresentation(presentation)
             // A no-op surface confirmation must not strand a bootstrap whose
             // pre-attach observer raced the actual View attachment.
             observeBootstrapBeforeNextDraw()
-            return if (presentationConfigurationChanged) Result.LAYOUT_UPDATED else Result.NO_OP
+            return if (presentationConfigurationChanged || routeChanged) Result.LAYOUT_UPDATED else Result.NO_OP
         }
         if (contentChanged) apply(current, presentation, force = false, mode = settings.presentationMode)
         if (geometryChanged && !updateLayout(current, resolvedGeometry)) return Result.FAILED
@@ -315,11 +428,13 @@ internal class KeyguardCardWindow(
             current.cancelInteraction("presentationChanged")
             onInteractionDiagnostic("KG|PRESENTATION_CHANGED", settings.presentationMode.wireValue)
         }
-        configurePresentation(current, settings.presentationMode)
+        val presentationConfigurationChanged = configurePresentation(current, settings.presentationMode)
+        val routeChanged = selectRenderRoute(current, settings, if (lifecycle.isAttached()) attachedConfiguredMode
+            else KeyguardOrbRenderModeStore.read(serviceContext))
         val presentation = appliedPresentation ?: return
         val next = geometry(settings, current)
         if (lifecycle.isAttached() && dragPreview == null && appliedGeometry != next) updateLayout(current, next)
-        if (modeChanged) updateMaterialForPresentation(presentation)
+        if (modeChanged || presentationConfigurationChanged || routeChanged) updateMaterialForPresentation(presentation)
     }
 
     /** Terminal hide: stop local visibility first and never restore a drag
@@ -328,12 +443,15 @@ internal class KeyguardCardWindow(
              onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null): Boolean {
         checkMainThread()
         val current = root ?: return false
-        coldRootObservation?.cancel()
-        coldRootObservation = null
+        // Revoke the worker first, then change the root's visibility before
+        // any child-destruction callback can wait for an entered holder call.
+        surfacePresenter?.revokeCurrent(hideChild = false)
         if (lifecycle.isAttached()) {
             current.visibility = View.INVISIBLE
             reportWindowDiagnostic("LOCAL_HIDE_APPLIED", "invisible", attachGeneration)
         }
+        coldRootObservation?.cancel()
+        coldRootObservation = null
         firstRootDrawObservation?.cancel()
         firstRootDrawObservation = null
         firstFrameCommitObservation?.cancel()
@@ -354,6 +472,8 @@ internal class KeyguardCardWindow(
             appliedGeometry = null
             accessibilityWindowId = null
         } else lifecycle.onUpdateFailed(stillAttached = true)
+        surfacePresenter?.detached()
+        surfaceDiagnostic = null
         if (removed.isSuccess) {
             reportWindowDiagnostic("REMOVE_VIEW_RETURN", "success", attachGeneration)
         } else {
@@ -377,8 +497,14 @@ internal class KeyguardCardWindow(
         materialController?.stop("dispose")
         hide()
         materialController?.dispose()
+        surfacePresenter?.dispose()
+        if (surfaceAnimationObserverRegistered) {
+            runCatching { serviceContext.contentResolver.unregisterContentObserver(surfaceAnimationObserver) }
+            surfaceAnimationObserverRegistered = false
+        }
         root = null
         materialController = null
+        surfacePresenter = null
         appliedPresentationConfiguration = null
     }
 
@@ -386,12 +512,17 @@ internal class KeyguardCardWindow(
         checkMainThread()
         materialProfile = profile
         materialSettings = settings
+        root?.let { current ->
+            selectRenderRoute(current, settings, if (lifecycle.isAttached()) attachedConfiguredMode
+                else KeyguardOrbRenderModeStore.read(serviceContext))
+        }
         materialController?.prepare(
             profile,
             settings.animationMode,
             settings.presentationMode,
             isFull = settings.showFinancialDetails,
         )
+        surfacePresenter?.prepare(profile, surfaceSize(), surfaceSize(), settings.showFinancialDetails)
         appliedPresentation?.let {
             updateMaterialForPresentation(it)
             observeBootstrapBeforeNextDraw()
@@ -445,6 +576,11 @@ internal class KeyguardCardWindow(
 
             override fun onInteractionFinished() = Unit
         }
+        return created
+    }
+
+    private fun ensureLegacyController(created: KeyguardCardInteractionLayout) {
+        if (materialController != null) return
         materialController = KeyguardCardMaterialController(
             orb = created.findViewById(R.id.fluvi_financial_snapshot_orb),
             background = created.findViewById(R.id.fluvi_keyguard_material_background),
@@ -550,7 +686,6 @@ internal class KeyguardCardWindow(
                 }
             }
         }
-        return created
     }
 
     private fun apply(
@@ -771,7 +906,7 @@ internal class KeyguardCardWindow(
             } else null,
             targetSize = {
                 val target = current.findViewById<View>(R.id.fluvi_financial_snapshot_orb)
-                (target?.width ?: 0) to (target?.height ?: 0)
+                surfacePresenter?.targetSize() ?: ((target?.width ?: 0) to (target?.height ?: 0))
             },
             onFirstDraw = rootDraw@{ event ->
                 if (firstRootDrawObservation !== observation) return@rootDraw
@@ -784,7 +919,7 @@ internal class KeyguardCardWindow(
                 // Static/no-animation presentations have no later live
                 // shader draw. Animated bootstrap waits until that live draw
                 // so preference I/O cannot delay frame commitment/promotion.
-                if (materialController?.requiresBootstrapForNextAttach() != true) {
+                if (surfacePresenter == null && materialController?.requiresBootstrapForNextAttach() != true) {
                     migrateCardPositionAfterFirstRootDraw(current, event.attachGeneration)
                 }
             },
@@ -875,6 +1010,16 @@ internal class KeyguardCardWindow(
     }
 
     private fun updateMaterialForPresentation(presentation: FluviFinancialCardPresentation) {
+        val presenter = surfacePresenter
+        val profile = materialProfile
+        if (presenter != null && profile != null) {
+            val attachment = if (lifecycle.isAttached()) attachGeneration else attachGeneration + 1L
+            val size = surfaceSize()
+            presenter.show(attachment, profile, presentation.full,
+                live = effectiveRenderMode == KeyguardOrbRenderMode.SURFACE_LIVE,
+                width = size, height = size, reporter = surfaceDiagnostic)
+            return
+        }
         materialController?.update(
             profile = materialProfile,
             animationMode = materialSettings.animationMode,

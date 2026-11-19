@@ -86,4 +86,39 @@ void main() {
     expect(snapshot.available, isFalse);
     expect(snapshot.message, contains('Androidon'));
   });
+
+  test('route selection reports the pending hidden boundary', () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return <String, Object?>{
+            'available': true,
+            'configured': 'SURFACE_STATIC',
+            'effective': 'SURFACE_LIVE',
+            'pendingBoundary': true,
+          };
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: channel,
+      isAndroid: () => true,
+    );
+
+    final status = await bridge.setRenderMode(
+      KeyguardOrbRenderMode.surfaceStatic,
+    );
+    expect(calls.single.method, 'setKeyguardOrbRenderMode');
+    expect((calls.single.arguments as Map)['mode'], 'SURFACE_STATIC');
+    expect(status.configured, KeyguardOrbRenderMode.surfaceStatic);
+    expect(status.effective, KeyguardOrbRenderMode.surfaceLive);
+    expect(status.pendingBoundary, isTrue);
+  });
+
+  test('route controls remain unavailable off Android', () async {
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: channel,
+      isAndroid: () => false,
+    );
+    expect((await bridge.getRenderMode()).available, isFalse);
+  });
 }

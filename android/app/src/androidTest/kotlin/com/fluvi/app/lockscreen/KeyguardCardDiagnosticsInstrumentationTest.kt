@@ -2,6 +2,7 @@ package com.fluvi.app.lockscreen
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -22,6 +23,55 @@ class KeyguardCardDiagnosticsInstrumentationTest {
 
     @After fun clearAfter() {
         KeyguardCardDiagnostics.clearCapture(context)
+    }
+
+    @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInLight() = r12SurfaceEvidence("LIGHT")
+    @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInFull() = r12SurfaceEvidence("FULL")
+
+    private fun r12SurfaceEvidence(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r12-$mode", "profile", mode)
+        val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9, 3, "wake", 100))
+        val first = KeyguardCardDiagnostics.newShowOperation(attempt, 1, 7)
+        val metrics = KeyguardOrbSurfaceMetrics()
+        KeyguardCardDiagnostics.captureEvent(context, "R12_ADMISSION", "eligible", requestId = 7,
+            diagnosticContext = attempt, observedUptimeMs = 99, fields = mapOf("r12Pending" to 8,
+                "r12Reserved" to 8, "r12FreshnessRevision" to 4, "r12PriorApplyQueued" to 102))
+        fun emit(operation: KeyguardDiagnosticOperation, reason: String, generation: Long, at: Long, detail: String) {
+            KeyguardCardDiagnostics.captureEvent(context, "R12_SURFACE", reason, observedUptimeMs = at,
+                attachGeneration = operation.attachGeneration, operation = operation,
+                fields = mapOf("r12Generation" to generation, "r12Detail" to detail),
+                surfaceMetrics = if (operation == first) metrics else null)
+        }
+        // The real worker can reach the reducer before the show decision.
+        emit(first, "ROUTE_SELECTED", 11, 101, "SURFACE_LIVE")
+        emit(first, "HOLDER_CREATED", 11, 103, "callback")
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", observedUptimeMs = 100, operation = first)
+        emit(first, "HOLDER_CHANGED", 11, 104, "168x168")
+        emit(first, "POSTER", 11, 105, "hit")
+        emit(first, "FIRST_POST", 11, 110, "producerNotPhysicalPresentation")
+        metrics.record(110, 110_000_000, false, 1, 2, 3, 4, 5, 6)
+        metrics.record(126, 126_000_000, true, 2, 3, 4, 5, 6, 7)
+        val second = KeyguardCardDiagnostics.newShowOperation(attempt, 2, 8)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", observedUptimeMs = 200, operation = second)
+        emit(second, "ROUTE_SELECTED", 12, 201, "SURFACE_STATIC")
+        emit(first, "HOLDER_DESTROYED", 11, 220, "drainMs:2")
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val firstLine = report.lineSequence().first { it.startsWith(" R12_SURFACE ") && it.contains("showOp=${first.showOperationId}") }
+        val secondLine = report.lineSequence().first { it.startsWith(" R12_SURFACE ") && it.contains("showOp=${second.showOperationId}") }
+        assertTrue(firstLine.contains("route=SURFACE_LIVE"))
+        assertTrue(firstLine.contains("generation=11"))
+        assertTrue(firstLine.contains("firstPost=110"))
+        assertTrue(firstLine.contains("destroyed=220"))
+        assertTrue(secondLine.contains("route=SURFACE_STATIC"))
+        assertTrue(secondLine.contains("firstPost=UNOBSERVED"))
+        val cadence = report.lineSequence().first { it.startsWith(" R12_CADENCE ") && it.contains("showOp=${first.showOperationId}") }
+        assertTrue(cadence.contains("submissions=2"))
+        assertTrue(cadence.contains("distinct=126"))
+        assertTrue(cadence.contains("presentation=UNOBSERVED"))
+        assertTrue(report.contains("readAhead=eligible:8/8:rev4:applyQueued102"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        emit(first, "FIRST_POST", 11, 999, "late")
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
     }
 
     @Test fun threeWakeAttemptsRemainInOneFrozenReport() {

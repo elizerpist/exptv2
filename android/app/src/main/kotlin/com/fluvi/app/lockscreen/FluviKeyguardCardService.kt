@@ -31,7 +31,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -64,6 +66,27 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     internal fun requestSystemCheckForTest() { requestSystemCheck("blockedReaderRegression") }
+
+    internal fun renderModeStatus(): KeyguardOrbRenderModeStatus {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val configured = KeyguardOrbRenderModeStore.read(applicationContext)
+        return if (::overlay.isInitialized) overlay.renderModeStatus()
+        else KeyguardOrbRenderModeStatus(configured, configured, visible = false)
+    }
+
+    /** Bounded test observation of the current authorized target. The
+     * service and the Window remain the only owners of display authority. */
+    internal fun surfaceMetricsForInstrumentation() =
+        if (::overlay.isInitialized) overlay.surfaceMetricsForTest() else null
+
+    /** A selector changes no active presentation. Detached preparation may
+     * use the new choice before the next independently authorized show. */
+    internal fun onOrbRenderModeChanged() {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (::overlay.isInitialized && !overlay.isAttached) {
+            overlay.prepareRetainedView(lastSettings ?: FluviKeyguardCardSettings.read(applicationContext), lastMaterialProfile)
+        }
+    }
     private var nextSystemGateId = 0L
     private val systemGateExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
         Thread(task, "Fluvi-system-gate")
@@ -91,6 +114,11 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val financialScope = CoroutineScope(serviceJob + financialDispatcher)
     private val queueLock = Any()
     private val inspectionQueue = KeyguardCardInspectionQueue()
+    // Published only by Main, guarded by the same lock as reservation. The
+    // reader may consume this immutable snapshot but cannot change a View.
+    private var readAheadStateRevision = 0L
+    private var readAheadShowInProgress = false
+    private var readAheadSnapshot: KeyguardReadAheadSnapshot? = null
     private val nextInspectionId = AtomicLong(0L)
     private var contentJob: Job? = null
     private var coreObservation: Job? = null
@@ -171,12 +199,53 @@ class FluviKeyguardCardService : AccessibilityService() {
             interactionEpoch = interactionEpoch.get(),
             attachGeneration = overlayAttachGeneration,
         )
-        inspectionFreshness.publish(current)
-        inspectionAuthority = current
+        synchronized(queueLock) {
+            if (inspectionAuthority != current) readAheadStateRevision += 1L
+            inspectionFreshness.publish(current)
+            inspectionAuthority = current
+            publishReadAheadSnapshotLocked()
+        }
         if (renewSystemWork) systemSampler.renewPending { old ->
             old.copy(id = ++nextSystemGateId, authority = current, queuedAt = SystemClock.uptimeMillis())
         }
     }
+
+    /** Main owns the sampled fields. Lock ordering is queue then freshness;
+     * neither lock is held across a Binder call or a Main handoff. */
+    private fun publishReadAheadSnapshotLocked() {
+        val freshness = inspectionFreshness.revisionFor(inspectionAuthority)
+        readAheadSnapshot = freshness?.let {
+            KeyguardReadAheadSnapshot(
+                authority = inspectionAuthority,
+                freshnessRevision = it,
+                stateRevision = readAheadStateRevision,
+                detached = ::overlay.isInitialized && !overlay.isAttached,
+                showInProgress = readAheadShowInProgress,
+                surfaceState = surfacePresentationState,
+            )
+        }
+    }
+
+    private fun publishReadAheadState(invalidate: Boolean = false) {
+        synchronized(queueLock) {
+            if (invalidate) readAheadStateRevision += 1L
+            publishReadAheadSnapshotLocked()
+        }
+    }
+
+    private fun setReadAheadShowInProgress(value: Boolean) {
+        synchronized(queueLock) {
+            readAheadStateRevision += 1L
+            readAheadShowInProgress = value
+            publishReadAheadSnapshotLocked()
+        }
+    }
+
+    private fun readAheadStillCurrent(snapshot: KeyguardReadAheadSnapshot): Boolean =
+        synchronized(queueLock) {
+            readAheadSnapshot == snapshot && inspectionAuthority == snapshot.authority &&
+                inspectionFreshness.revisionFor(snapshot.authority) == snapshot.freshnessRevision
+        }
 
     private fun authorityIsCurrent(request: KeyguardCardInspectionRequest): Boolean =
         inspectionAuthority.matches(request)
@@ -453,6 +522,33 @@ class FluviKeyguardCardService : AccessibilityService() {
                     }
                 }
             },
+            armSurfaceDiagnostic = { attach ->
+                val operation = activeWindowDiagnosticOperation
+                val owner = KeyguardCardDiagnostics.drawEvidenceOwner()
+                if (operation?.context?.captureId == null || owner == null) null
+                else { observation ->
+                    if (KeyguardCardDiagnostics.drawEvidenceOwner() === owner) {
+                        KeyguardCardDiagnostics.captureEvent(
+                            context = this,
+                            stage = "R12_SURFACE",
+                            reason = observation.stage,
+                            serviceSession = operation.context.serviceSession,
+                            wakeEpoch = operation.context.originWakeEpoch,
+                            attachGeneration = attach,
+                            observedUptimeMs = observation.observedAtUptimeMs,
+                            operation = operation,
+                            surfaceMetrics = observation.metrics,
+                            deferredFields = { mapOf(
+                                "r12Attachment" to observation.attachment,
+                                "r12Generation" to observation.generation,
+                                "r12Detail" to observation.detail,
+                                "r12Privacy" to if (observation.full) "full" else "discreet",
+                            ) },
+                        )
+                    }
+                }
+            },
+            onSurfaceFailure = { reason -> hideImmediately("r12SurfaceFailure:$reason") },
             onFirstRootPreDraw = ::recordFirstRootPreDraw,
             onFirstRootDraw = ::recordFirstRootDraw,
             onFirstShaderDraw = ::recordFirstShaderDraw,
@@ -472,6 +568,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         registerRuntimeSignals()
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "ROOT_PREPARE_START")
         overlay.prepareRetainedView(settings, profile)
+        publishReadAheadState()
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "ROOT_PREPARE_END")
         KeyguardCardDiagnostics.record(this, "KG|SERVICE_CONNECTED", "connected", false)
         traceKeyguard("SERVICE_CONNECTED", "connected")
@@ -555,6 +652,8 @@ class FluviKeyguardCardService : AccessibilityService() {
      * durable source of truth. */
     internal fun onSettingsChangedFromApplication(settings: KeyguardCardSettings) {
         mainHandler.post {
+            publishReadAheadState(invalidate = true)
+            try {
             val previous = lastSettings
             lastSettings = settings
             if (!settings.requested) {
@@ -574,6 +673,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 overlay.updateMaterial(lastMaterialProfile, settings)
                 scheduleEvaluation("settings")
             }
+            } finally {
+                publishReadAheadState(invalidate = true)
+            }
         }
     }
 
@@ -582,8 +684,13 @@ class FluviKeyguardCardService : AccessibilityService() {
      * financial resolve, material reload or focus-generation change. */
     internal fun onLayoutChangedFromApplication(settings: KeyguardCardSettings) {
         mainHandler.post {
+            publishReadAheadState(invalidate = true)
+            try {
             lastSettings = settings
             if (::overlay.isInitialized) overlay.updateLayoutSettings(settings)
+            } finally {
+                publishReadAheadState(invalidate = true)
+            }
         }
     }
 
@@ -602,6 +709,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         orb: KeyguardCardOrbPosition,
         expectedLayoutRevision: Long,
     ) {
+        publishReadAheadState(invalidate = true)
+        try {
         val settings = FluviKeyguardCardSettings.patchLayout(
             applicationContext,
             mapOf(
@@ -618,10 +727,15 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (settings.layoutRevision != expectedLayoutRevision + 1L) {
             overlay.updateLayoutSettings(settings)
         }
+        } finally {
+            publishReadAheadState(invalidate = true)
+        }
     }
 
     internal fun onFinancialFocusChangedFromApplication() {
         mainHandler.post {
+            publishReadAheadState(invalidate = true)
+            try {
             showEvent = false
             invalidateFullContent()
             // A focus change may make a visible amount misleading. Redact in
@@ -630,6 +744,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 applyPresentation(FluviFinancialCardPresenter.loading(), "focusChanged")
             }
             scheduleEvaluation("focusChanged")
+            } finally {
+                publishReadAheadState(invalidate = true)
+            }
         }
     }
 
@@ -946,7 +1063,6 @@ class FluviKeyguardCardService : AccessibilityService() {
             triggerReceivedUptimeMs = triggerReceivedUptimeMs,
         )
         if (request.trigger != "surfaceRetry") cancelWakeRetry("supersededBy:${request.trigger}")
-        inspectionFreshness.require(authority, request.windowFreshness)
         wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.let {
             if (it.inspectionQueuedAt == null) it.inspectionQueuedAt = now
             request.eventTimeUptimeMs?.takeIf { eventTime -> eventTime <= now }?.let { eventTime ->
@@ -954,6 +1070,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
         }
         val queueOffer = synchronized(queueLock) {
+            inspectionFreshness.require(authority, request.windowFreshness)
+            publishReadAheadSnapshotLocked()
             val replacedPending = inspectionQueue.pendingRequest()?.id
             val startsWorker = inspectionQueue.offer(request)
             if (inspectionQueue.pendingRequest() != null) {
@@ -979,91 +1097,186 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (queueOffer.first) inspectionScope.launch { processInspectionQueue(request) }
     }
 
+    private data class CompletedInspection(
+        val request: KeyguardCardInspectionRequest,
+        val result: Inspection,
+        val startedAt: Long,
+        val finishedAt: Long,
+    )
+
+    private data class InspectionHandoff(
+        val diagnosticPreparationFinishedAt: Long,
+        val requestedAt: Long,
+        val requestedAtNs: Long,
+    )
+
+    private data class ReadAheadDecision(
+        val snapshot: KeyguardReadAheadSnapshot?,
+        val successor: KeyguardCardInspectionRequest?,
+        val pendingId: Long?,
+        val reason: String,
+    )
+
+    private fun readInspection(request: KeyguardCardInspectionRequest): CompletedInspection {
+        val concurrent = activeInspectionCount.incrementAndGet()
+        recordMaximum(maximumConcurrentInspections, concurrent)
+        val started = SystemClock.uptimeMillis()
+        val result = try {
+            inspectionProbeForTest?.started(request)
+            traceKeyguard("INSPECTION_STARTED", request.trigger, request, observedUptimeMs = started,
+                fields = mapOf("queueMs" to (started - request.queuedAtUptimeMs),
+                    "queuedAtUptimeMs" to request.queuedAtUptimeMs,
+                    "authorityCurrentAtStart" to authorityIsCurrent(request)))
+            inspectSurface(request)
+        } finally { activeInspectionCount.decrementAndGet() }
+        return CompletedInspection(request, result, started, SystemClock.uptimeMillis())
+    }
+
+    private fun newInspectionHandoff(): InspectionHandoff {
+        val prepared = SystemClock.uptimeMillis()
+        return InspectionHandoff(prepared, SystemClock.uptimeMillis(), System.nanoTime())
+    }
+
+    /** Main is still the only authority to accept an answer or mutate Views.
+     * A stale speculative pair triggers normal reconciliation, never SHOW. */
+    private fun applyCompletedInspection(
+        read: CompletedInspection,
+        handoff: InspectionHandoff,
+        readAhead: KeyguardReadAheadSnapshot? = null,
+        reservedSuccessor: KeyguardCardInspectionRequest? = null,
+    ): Boolean {
+        val entered = SystemClock.uptimeMillis()
+        val enteredNs = System.nanoTime()
+        val request = read.request
+        inspectionProbeForTest?.beforeApply(request, read.result.decision)
+        val reservationMatches = reservedSuccessor == null || synchronized(queueLock) {
+            inspectionQueue.successorForPreceding(request) == reservedSuccessor
+        }
+        if (readAhead != null && (!reservationMatches || !readAheadStillCurrent(readAhead))) {
+            traceKeyguard("INSPECTION_REJECTED", "readAheadAuthorityChanged", request,
+                fields = mapOf("rejectionReason" to "readAheadAuthorityChanged"))
+            preservePendingReconciliation("readAheadAuthorityChanged", requirePending = false)
+            return false
+        }
+        applyInspection(
+            inspection = read.result,
+            request = request,
+            inspectionStartedAt = read.startedAt,
+            inspectionFinishedAt = read.finishedAt,
+            diagnosticPreparationFinishedAt = handoff.diagnosticPreparationFinishedAt,
+            mainHandoffRequestedAt = handoff.requestedAt,
+            mainApplyEnteredAt = entered,
+            mainHandoffRequestedAtNs = handoff.requestedAtNs,
+            mainApplyEnteredAtNs = enteredNs,
+        )
+        inspectionProbeForTest?.afterApply(request, read.result.decision)
+        return true
+    }
+
+    private fun traceCompletedInspection(read: CompletedInspection, handoff: InspectionHandoff?) {
+        traceInspectionResult(read.request, read.result, read.startedAt, read.finishedAt)
+        if (handoff != null) traceKeyguard("INSPECTION_MAIN_APPLY_POSTED", read.request.trigger,
+            read.request, observedUptimeMs = handoff.requestedAt,
+            fields = mapOf("inspectionFinishedAtUptimeMs" to read.finishedAt,
+                "diagnosticPreparationFinishedAtUptimeMs" to handoff.diagnosticPreparationFinishedAt,
+                "mainHandoffRequestedAtUptimeMs" to handoff.requestedAt))
+    }
+
+    private fun traceAbortedInspection(read: CompletedInspection) {
+        mainHandler.post {
+            if (::overlay.isInitialized && overlay.isAttached) requestSystemCheck("abortedInspection:${read.request.id}")
+        }
+        traceCompletedInspection(read, null)
+        traceKeyguard("INSPECTION_REJECTED", "abortedStale", read.request,
+            observedUptimeMs = read.finishedAt, fields = mapOf("rejectionReason" to "abortedStale"))
+    }
+
+    private fun traceReadAhead(read: CompletedInspection, decision: ReadAheadDecision, handoff: InspectionHandoff) {
+        if (!KeyguardCardDiagnostics.wantsEvent("R12_ADMISSION")) return
+        traceKeyguard("R12_ADMISSION", decision.reason, read.request, observedUptimeMs = read.finishedAt,
+            deferredFields = { mapOf(
+                "r12Pending" to (decision.pendingId ?: "UNOBSERVED"),
+                "r12Reserved" to (decision.successor?.id ?: "UNOBSERVED"),
+                "r12FreshnessRevision" to (decision.snapshot?.freshnessRevision ?: "UNOBSERVED"),
+                "r12PriorApplyQueued" to handoff.requestedAt,
+            ) })
+    }
+
     private suspend fun processInspectionQueue(first: KeyguardCardInspectionRequest) {
         var request: KeyguardCardInspectionRequest? = first
         while (request != null) {
             val active = request
-            val concurrent = activeInspectionCount.incrementAndGet()
-            recordMaximum(maximumConcurrentInspections, concurrent)
-            val startedAt = SystemClock.uptimeMillis()
-            inspectionProbeForTest?.started(active)
-            traceKeyguard(
-                "INSPECTION_STARTED",
-                active.trigger,
-                active,
-                observedUptimeMs = startedAt,
-                fields = mapOf(
-                    "queueMs" to (startedAt - active.queuedAtUptimeMs),
-                    "queuedAtUptimeMs" to active.queuedAtUptimeMs,
-                    "authorityCurrentAtStart" to authorityIsCurrent(active),
-                ),
-            )
-            val result = inspectSurface(active)
-            val finishedAt = SystemClock.uptimeMillis()
-            activeInspectionCount.decrementAndGet()
-            if (result.abortedStale) {
-                mainHandler.post {
-                    if (::overlay.isInitialized && overlay.isAttached) {
-                        requestSystemCheck("abortedInspection:${active.id}")
-                    }
-                }
-                // No main-thread delivery is necessary for a result which has
-                // already lost authority.  Releasing this slot here lets the
-                // one latest valid request begin immediately instead of
-                // waiting behind a guaranteed stale rejection.
+            val read = readInspection(active)
+            if (read.result.abortedStale) {
                 val next = synchronized(queueLock) { inspectionQueue.complete(active) }
-                traceInspectionResult(active, result, startedAt, finishedAt)
-                traceKeyguard(
-                    "INSPECTION_REJECTED",
-                    "abortedStale",
-                    active,
-                    observedUptimeMs = finishedAt,
-                    fields = mapOf("rejectionReason" to "abortedStale"),
-                )
+                traceAbortedInspection(read)
                 request = next
-            } else {
-                // Full diagnostic reduction is deliberately outside this
-                // handoff.  Nothing may run between the requested timestamp
-                // and Dispatchers.Main so the resulting interval is honest.
-                val diagnosticPreparationFinishedAt = SystemClock.uptimeMillis()
-                val mainHandoffRequestedAt = SystemClock.uptimeMillis()
-                val mainHandoffRequestedAtNs = System.nanoTime()
-                withContext(Dispatchers.Main.immediate) {
-                    val mainApplyEnteredAt = SystemClock.uptimeMillis()
-                    val mainApplyEnteredAtNs = System.nanoTime()
-                    inspectionProbeForTest?.beforeApply(active, result.decision)
-                    applyInspection(
-                        inspection = result,
-                        request = active,
-                        inspectionStartedAt = startedAt,
-                        inspectionFinishedAt = finishedAt,
-                        diagnosticPreparationFinishedAt = diagnosticPreparationFinishedAt,
-                        mainHandoffRequestedAt = mainHandoffRequestedAt,
-                        mainApplyEnteredAt = mainApplyEnteredAt,
-                        mainHandoffRequestedAtNs = mainHandoffRequestedAtNs,
-                        mainApplyEnteredAtNs = mainApplyEnteredAtNs,
-                    )
-                    inspectionProbeForTest?.afterApply(active, result.decision)
-                }
-                // The visibility operation has completed, so release the
-                // serial reader slot. Capture reduction has its own bounded
-                // consumer; this loop only enqueues references and proceeds
-                // to the next acquisition without waiting for that consumer.
-                val next = synchronized(queueLock) { inspectionQueue.complete(active) }
-                traceInspectionResult(active, result, startedAt, finishedAt)
-                traceKeyguard(
-                    "INSPECTION_MAIN_APPLY_POSTED",
-                    active.trigger,
-                    active,
-                    observedUptimeMs = mainHandoffRequestedAt,
-                    fields = mapOf(
-                        "inspectionFinishedAtUptimeMs" to finishedAt,
-                        "diagnosticPreparationFinishedAtUptimeMs" to diagnosticPreparationFinishedAt,
-                        "mainHandoffRequestedAtUptimeMs" to mainHandoffRequestedAt,
-                    ),
-                )
-                request = next
+                continue
             }
+            val decision = synchronized(queueLock) {
+                val snapshot = readAheadSnapshot
+                val freshness = snapshot?.let { inspectionFreshness.beforeRead(active) }
+                val negative = KeyguardReadAheadNegative(read.result.decision, read.result.surfaceReason,
+                    read.result.rootUnavailable, read.result.walkTruncated, read.result.abortedStale,
+                    read.result.freshnessRevision)
+                val pending = inspectionQueue.pendingRequest()
+                val reason = when {
+                    pending == null -> "noPending"
+                    snapshot == null -> "snapshotUnavailable"
+                    freshness == null -> "authority"
+                    else -> KeyguardReadAheadPolicy.rejection(snapshot, negative, active, pending,
+                        freshness.revision, freshness.reason)
+                }
+                val successor = if (reason != "eligible" || snapshot == null || freshness == null) null else
+                    inspectionQueue.reserveSuccessor(active) { candidate ->
+                        KeyguardReadAheadPolicy.permits(snapshot, negative, active, candidate,
+                            freshness.revision, freshness.reason)
+                    }
+                ReadAheadDecision(snapshot, successor, pending?.id,
+                    if (reason == "eligible" && successor == null) "reservationLost" else reason)
+            }
+            val handoff = newInspectionHandoff()
+            if (decision.successor == null || decision.snapshot == null) {
+                withContext(Dispatchers.Main.immediate) { applyCompletedInspection(read, handoff) }
+                request = synchronized(queueLock) { inspectionQueue.complete(active) }
+                traceCompletedInspection(read, handoff)
+                traceReadAhead(read, decision, handoff)
+                continue
+            }
+
+            // Only B may use the one physical reader while A waits for its
+            // ordered Main apply. C remains a single coalesced pending item.
+            val snapshot = decision.snapshot
+            val successor = decision.successor
+            val next = coroutineScope {
+                val earlierApply = async(Dispatchers.Main) {
+                    applyCompletedInspection(read, handoff, snapshot, successor)
+                }
+                val successorRead: CompletedInspection
+                val earlierAccepted = try {
+                    successorRead = readInspection(successor)
+                    earlierApply.await()
+                } finally {
+                    synchronized(queueLock) { inspectionQueue.finishPreceding(active) }
+                }
+                traceCompletedInspection(read, handoff)
+                traceReadAhead(read, decision, handoff)
+                if (successorRead.result.abortedStale) {
+                    traceAbortedInspection(successorRead)
+                } else if (!earlierAccepted) {
+                    traceCompletedInspection(successorRead, null)
+                    traceKeyguard("INSPECTION_REJECTED", "readAheadPredecessorRejected", successor,
+                        fields = mapOf("rejectionReason" to "readAheadPredecessorRejected"))
+                } else {
+                    val nextHandoff = newInspectionHandoff()
+                    withContext(Dispatchers.Main.immediate) {
+                        applyCompletedInspection(successorRead, nextHandoff, snapshot)
+                    }
+                    traceCompletedInspection(successorRead, nextHandoff)
+                }
+                synchronized(queueLock) { inspectionQueue.complete(successor) }
+            }
+            request = next
         }
     }
 
@@ -1144,6 +1357,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val treeScanMs: Long? = null,
         val windowTiming: KeyguardWindowSnapshotReader.Timing = KeyguardWindowSnapshotReader.Timing(),
         val abortedStale: Boolean = false,
+        val freshnessRevision: Long? = null,
     )
 
     /** A missing Budget category is a user-visible configuration state, not a
@@ -1168,6 +1382,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val visitedNodeCount: Int,
         val timing: KeyguardWindowSnapshotReader.Timing = KeyguardWindowSnapshotReader.Timing(),
         val abortedStale: Boolean = false,
+        val freshnessRevision: Long? = null,
     )
 
     /** Technical-only operation timing. It measures API call duration, not
@@ -1260,6 +1475,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 treeScanMs = read.treeScanMs,
                 windowTiming = read.timing,
                 abortedStale = true,
+                freshnessRevision = read.freshnessRevision,
             )
         }
         val classification = KeyguardSurfaceClassifier.classifyDetailed(
@@ -1281,6 +1497,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             windowsReadMs = read.windowsReadMs,
             treeScanMs = read.treeScanMs,
             windowTiming = read.timing,
+            freshnessRevision = read.freshnessRevision,
         )
     }
 
@@ -1332,6 +1549,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             visitedNodeCount = result.visitedNodeCount,
             timing = result.timing,
             abortedStale = result.abortedStale,
+            freshnessRevision = freshness?.revision,
         )
     }
 
@@ -1640,7 +1858,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "surfaceMarkers" to inspection.surfaceMarkers,
                 "systemStateAvailable" to signals.systemStateAvailable,
                 "visibilityEpochAtApply" to visibilityEpoch.get(),
-                "pendingRequestIdAtApply" to (synchronized(queueLock) { inspectionQueue.pendingRequest()?.id } ?: "NA"),
+                "pendingRequestIdAtApply" to (synchronized(queueLock) {
+                    (inspectionQueue.successorForPreceding(request) ?: inspectionQueue.pendingRequest())?.id
+                } ?: "NA"),
             ),
         )
         } finally {
@@ -1705,7 +1925,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         decision: KeyguardCardVisibility,
     ) {
         val compatiblePending = synchronized(queueLock) {
-            inspectionQueue.pendingRequest()?.takeIf(inspectionAuthority::matches)
+            (inspectionQueue.successorForPreceding(request) ?: inspectionQueue.pendingRequest())
+                ?.takeIf(inspectionAuthority::matches)
         }
         val hadCompatiblePending = compatiblePending != null
         // This is only the timer budget. Eligibility is sampled when the
@@ -1761,7 +1982,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (transition.withdrawVisibleOverlay) {
             // Withdrawal changed authority. Record the obligation under the
             // new authority even when the retry budget is exhausted.
-            inspectionFreshness.require(inspectionAuthority, successorFreshness)
+            synchronized(queueLock) {
+                inspectionFreshness.require(inspectionAuthority, successorFreshness)
+                publishReadAheadSnapshotLocked()
+            }
             when (transition.followup) {
                 KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING -> {
                     // The queued request was captured under the withdrawn
@@ -1797,7 +2021,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         // request has the same authority and can run as soon as this active
         // request completes. The active cause itself never counts as future
         // work here.
-        inspectionFreshness.require(inspectionAuthority, successorFreshness)
+        synchronized(queueLock) {
+            inspectionFreshness.require(inspectionAuthority, successorFreshness)
+            publishReadAheadSnapshotLocked()
+        }
         when (transition.followup) {
             KeyguardUnknownSurfaceFollowup.CONTINUE_PENDING -> traceKeyguard(
                 "RETRY_SUPPRESSED_FOR_PENDING",
@@ -2021,9 +2248,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         } else null
         val showDecisionAt = SystemClock.uptimeMillis()
         activeWindowDiagnosticOperation = showOperation
+        setReadAheadShowInProgress(true)
         val result = try {
             overlay.showOrUpdate(presentation, settings)
         } finally {
+            setReadAheadShowInProgress(false)
             activeWindowDiagnosticOperation = null
         }
         // The operation ID is allocated before attachment, but all capture
@@ -2041,6 +2270,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                     "presentationMode" to settings.presentationMode.name,
                     "rootWasPrepared" to overlay.hasPreparedRoot,
                     "profileWasDecoded" to (lastMaterialProfile != null),
+                    "r12Configured" to overlay.renderModeStatus().configured.name,
+                    "r12Effective" to overlay.renderModeStatus().effective.name,
+                    "r12Privacy" to if (presentation.full) "full" else "discreet",
+                    "r12DisplayHz" to (overlay.displayRefreshRate() ?: "UNOBSERVED"),
                 ),
             )
             val material = overlay.materialDiagnostics()
@@ -2164,6 +2397,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         diagnosticContext: KeyguardDiagnosticContext? = currentDiagnosticAttempt,
         causingInspectionRequestId: Long? = null,
     ) {
+        publishReadAheadState(invalidate = true)
         val wasAttachedBefore = ::overlay.isInitialized && overlay.isAttached
         // Also revoke checks created since an already-idempotent terminal
         // cleanup. This does not wait for their platform calls to return.
@@ -2211,6 +2445,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         } else {
             KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE
         }
+        publishReadAheadState()
         appliedDecision = KeyguardCardVisibility.HIDDEN_UNKNOWN
         showEvent = false
         val dragWasActive = ::overlay.isInitialized && overlay.isDragActive
@@ -2254,6 +2489,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 activeWindowDiagnosticOperation = null
             }
             removeReturnedAt = SystemClock.uptimeMillis()
+            publishReadAheadState()
             if (wasAttachedBefore && KeyguardCardDiagnostics.wantsEvent("ATTACHMENT_RENDER_SUMMARY")) {
                 val summary = overlay.attachmentRenderSummary()
                 if (summary != null) traceKeyguard(

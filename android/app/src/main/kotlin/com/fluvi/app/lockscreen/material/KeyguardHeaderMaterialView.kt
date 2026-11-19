@@ -127,17 +127,29 @@ internal data class KeyguardMaterialScene(
     val appliedAtNanos: Long,
 ) {
     val visualKey = "${profile.visualKey}|$full"
+    private fun deltaSeconds(frameNanos: Long): Double =
+        max(0L, frameNanos - appliedAtNanos).toDouble() / 1_000_000_000.0
+
     fun timeAt(frameNanos: Long): KeyguardMaterialTime {
         // Keep the subtraction and division in Long/Double.  Converting the
         // absolute monotonic timestamp to Float first freezes animation after
         // sufficiently long uptime.
-        val delta = (max(0L, frameNanos - appliedAtNanos).toDouble() / 1_000_000_000.0)
+        val delta = deltaSeconds(frameNanos)
         return KeyguardMaterialTime(
             elapsedSeconds = (profile.elapsedSeconds.toDouble() + delta).toFloat(),
             phase = (profile.phase.toDouble() + delta * profile.phaseSpeed).toFloat(),
             backgroundPhase = (profile.background.phase.toDouble() + delta * profile.background.phaseSpeed).toFloat(),
             interiorPhase = (profile.interior.phase.toDouble() + delta * profile.interior.phaseSpeed).toFloat(),
         )
+    }
+
+    /** Same monotonic clock as timeAt, with worker-owned reusable output. */
+    fun timeAtInto(frameNanos: Long, output: KeyguardOrbSurfaceFrameTime) {
+        val delta = deltaSeconds(frameNanos)
+        output.elapsedSeconds = (profile.elapsedSeconds.toDouble() + delta).toFloat()
+        output.phase = (profile.phase.toDouble() + delta * profile.phaseSpeed).toFloat()
+        output.backgroundPhase = (profile.background.phase.toDouble() + delta * profile.background.phaseSpeed).toFloat()
+        output.interiorPhase = (profile.interior.phase.toDouble() + delta * profile.interior.phaseSpeed).toFloat()
     }
 
     fun anchoredAt(time: KeyguardMaterialTime, nowNanos: Long) = KeyguardMaterialScene(
@@ -673,8 +685,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         val submitStart = if (measuringShader) System.nanoTime() else 0L
         when (shape) {
             Shape.ORB -> {
-                val radius = min(width, height) / 2f
-                canvas.drawCircle(width / 2f, height / 2f, radius, paint)
+                drawKeyguardOrbCircle(canvas, paint, width, height)
             }
             Shape.CARD_BACKGROUND -> canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), dp(22f), dp(22f), paint)
         }
@@ -794,6 +805,14 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     private fun drawStaticHeaderGradient(canvas: Canvas, profile: KeyguardMaterialProfile) {
         drawGaps.samplingOff()
+        if (shape == Shape.ORB) {
+            configureKeyguardStaticOrbPaint(paint, profile, width, height)
+            paint.alpha = (profile.opacity * 255).toInt().coerceIn(0, 255)
+            drawKeyguardOrbCircle(canvas, paint, width, height)
+            paint.shader = null
+            paint.alpha = 255
+            return
+        }
         val count = min(profile.colors.size, profile.stops.size)
         if (count < 2) {
             paint.color = profile.colors.firstOrNull() ?: Color.rgb(101, 116, 137)
@@ -953,19 +972,23 @@ internal class KeyguardHeaderShader(
         runtimeShader = RuntimeShader(artifact.source)
     }
 
-    fun configure(profile: KeyguardMaterialProfile, width: Int, height: Int, time: KeyguardMaterialTime) {
+    fun configure(profile: KeyguardMaterialProfile, width: Int, height: Int, time: KeyguardMaterialTime) =
+        configure(profile, width, height, time.elapsedSeconds, time.phase, time.backgroundPhase, time.interiorPhase)
+
+    fun configure(profile: KeyguardMaterialProfile, width: Int, height: Int,
+                  elapsedSeconds: Float, phase: Float, backgroundPhase: Float, interiorPhase: Float) {
         val nextSize = (width.toLong() shl 32) or (height.toLong() and 0xffffffffL)
         if (profileKey != profile.visualKey || sizeKey != nextSize) {
             profileKey = profile.visualKey
             sizeKey = nextSize
             writeStatic(profile, width, height)
         }
-        runtimeShader.setFloatUniform("uElapsed", time.elapsedSeconds)
-        runtimeShader.setFloatUniform("uPhase", time.phase)
-        runtimeShader.setFloatUniform("uBackgroundPhase", time.backgroundPhase)
-        runtimeShader.setFloatUniform("uInteriorPhase", time.interiorPhase)
+        runtimeShader.setFloatUniform("uElapsed", elapsedSeconds)
+        runtimeShader.setFloatUniform("uPhase", phase)
+        runtimeShader.setFloatUniform("uBackgroundPhase", backgroundPhase)
+        runtimeShader.setFloatUniform("uInteriorPhase", interiorPhase)
         if (profile.effectId == "deepDrift") {
-            deepDrift.advance(time.elapsedSeconds, profile.commonSettings)
+            deepDrift.advance(elapsedSeconds, profile.commonSettings)
             for (index in 0 until 15) uniform4("uDeepBlob$index", deepDrift.blobs, index * 4)
             for (index in 0 until 3) uniform4("uDeepLayer$index", deepDrift.layers, index * 4)
         }

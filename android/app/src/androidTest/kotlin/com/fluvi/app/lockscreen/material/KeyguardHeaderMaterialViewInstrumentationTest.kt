@@ -2,6 +2,7 @@ package com.fluvi.app.lockscreen.material
 
 import android.app.Instrumentation
 import android.content.Intent
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -46,6 +47,8 @@ import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -58,6 +61,246 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
+    private var priorRoute: String? = null
+    private var priorRoutePresent = false
+
+    @Before fun selectLegacyForExistingPanelControls() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs = context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", Context.MODE_PRIVATE)
+        priorRoutePresent = prefs.contains("mode")
+        priorRoute = prefs.getString("mode", null)
+        check(prefs.edit().putString("mode", "LEGACY_R11").commit())
+    }
+
+    @After fun restoreDiagnosticRoute() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs = context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", Context.MODE_PRIVATE)
+        val edit = prefs.edit()
+        if (priorRoutePresent) edit.putString("mode", priorRoute) else edit.remove("mode")
+        check(edit.commit())
+    }
+
+    /** Producer-only positive/negative control. A real View screenshot is the
+     * independent reference; this does not claim SurfaceView composition or
+     * replace the separately required service/privacy screen samples. */
+    @Test fun r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val profile = calibratedOrbProfile()
+        val controlled = AtomicReference(calibratedMaterialTime(PHASE_A))
+        val activity = instrumentation.startActivitySync(
+            Intent(context, KeyguardMaterialTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val thread = android.os.HandlerThread("r12-poster-control").apply { start() }
+        val handler = android.os.Handler(thread.looper)
+        val references = mutableListOf<Bitmap>()
+        val posters = java.util.concurrent.CopyOnWriteArrayList<Bitmap>()
+        val failure = AtomicReference<Throwable?>()
+        lateinit var view: KeyguardHeaderMaterialView
+        try {
+            val artifact = AndroidKeyguardShaderArtifactReader.load(context, profile.effectId, profile.usesPortal)
+            instrumentation.runOnMainSync {
+                view = KeyguardHeaderMaterialView(activity,
+                    materialTimeSource = KeyguardMaterialTimeSource { _, _ -> controlled.get() }).apply {
+                    layoutParams = FrameLayout.LayoutParams(168, 168, Gravity.CENTER)
+                    setScene(KeyguardMaterialScene(profile, true, 0L), enabled = true)
+                    setBootstrapActive(false)
+                    assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED, installPreparedShader(artifact))
+                }
+                activity.setContentView(FrameLayout(activity).apply { addView(view) })
+                view.frame(1L)
+            }
+            assertTrue("reference hardware Canvas was not ready", waitForPreparedShader(instrumentation, view))
+            assertTrue("reference bounds were not established", waitForMaterialViewScreenBounds(instrumentation, view))
+            val phases = listOf(PHASE_A, PHASE_C, PHASE_B, PHASE_A)
+            phases.forEachIndexed { index, phase ->
+                var before = 0
+                instrumentation.runOnMainSync {
+                    before = view.diagnostics().shaderDrawCount
+                    controlled.set(calibratedMaterialTime(phase))
+                    view.frame(System.nanoTime())
+                }
+                assertTrue("reference phase $index did not draw", waitForShaderDraw(instrumentation, view, before))
+                val reference = awaitCompositorCrop("r12-reference-$index", { copyMaterialView(instrumentation, view) },
+                    { label, bitmap -> persistPanelEvidence(activity, label, bitmap) },
+                    { candidate -> if (index == 0) hasVisibleMaterial(candidate) else if (index == 2)
+                        compareMaterialPixels(references[0], candidate).meaningful() else
+                        compareMaterialPixels(references[0], candidate).nearlyEqual() }, {})
+                references += reference
+            }
+            val ready = CountDownLatch(1)
+            handler.post {
+                try {
+                    val painter = KeyguardOrbSurfacePainter(context, profile.copyForSurface(), 168, 168)
+                    phases.forEach { phase ->
+                        val hardware = painter.makePoster(calibratedMaterialTime(phase))
+                        try { posters += checkNotNull(hardware.copy(Bitmap.Config.ARGB_8888, false)) }
+                        finally { hardware.recycle() }
+                    }
+                } catch (error: Throwable) { failure.set(error) }
+                finally { ready.countDown() }
+            }
+            assertTrue("worker picture control did not finish", ready.await(30, TimeUnit.SECONDS))
+            failure.get()?.let { throw AssertionError("worker picture preparation failed", it) }
+            assertEquals(4, posters.size)
+            posters.forEachIndexed { index, bitmap -> persistPanelEvidence(activity, "r12-poster-$index", bitmap) }
+            assertTrue("reference A/C plateau was not calibrated", compareMaterialPixels(references[0], references[1]).nearlyEqual())
+            assertTrue("reference A/B positive control was not calibrated", compareMaterialPixels(references[0], references[2]).meaningful())
+            assertTrue("reference return-A was not calibrated", compareMaterialPixels(references[0], references[3]).nearlyEqual())
+            posters.forEachIndexed { index, bitmap ->
+                assertEquals("poster exterior must be transparent", 0, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
+                assertTrue("poster interior must be opaque", android.graphics.Color.alpha(bitmap.getPixel(84, 84)) >= 240)
+                assertTrue("poster $index differs from canonical reference: ${compareMaterialPixels(references[index], bitmap)}",
+                    compareMaterialPixels(references[index], bitmap).nearlyEqual())
+            }
+        } finally {
+            references.forEach(Bitmap::recycle)
+            posters.forEach(Bitmap::recycle)
+            thread.quitSafely()
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
+    /** Real WindowManager panel and screen-composited reference. This is a
+     * panel control, not the separate production AccessibilityService gate. */
+    @Test fun r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", Context.MODE_PRIVATE)
+            .edit().putString("mode", "SURFACE_STATIC").commit()
+        KeyguardCardDiagnostics.startCapture(context, "r12-panel-control", "debug", "FULL")
+        val activity = instrumentation.startActivitySync(
+            Intent(context, KeyguardMaterialTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val profile = calibratedOrbProfile()
+        val time = KeyguardMaterialTime(profile.elapsedSeconds, profile.phase, profile.background.phase, profile.interior.phase)
+        val events = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbSurfaceObservation>()
+        val failure = AtomicReference<String?>()
+        lateinit var manager: TestPanelWindowManager
+        lateinit var window: KeyguardCardWindow
+        var createdWindow: KeyguardCardWindow? = null
+        lateinit var referenceView: KeyguardHeaderMaterialView
+        var fullReference: Bitmap? = null
+        var neutralReference: Bitmap? = null
+        var fullCrop: Bitmap? = null
+        var neutralCrop: Bitmap? = null
+        var gate: ViewTreeObserver.OnPreDrawListener? = null
+        var gateObserver: ViewTreeObserver? = null
+        try {
+            val artifact = AndroidKeyguardShaderArtifactReader.load(context, profile.effectId, profile.usesPortal)
+            instrumentation.runOnMainSync {
+                referenceView = KeyguardHeaderMaterialView(activity,
+                    materialTimeSource = KeyguardMaterialTimeSource { _, _ -> time }).apply {
+                    layoutParams = FrameLayout.LayoutParams(168, 168, Gravity.CENTER)
+                    setScene(KeyguardMaterialScene(profile, true, 0L), enabled = true)
+                    setBootstrapActive(false)
+                    assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED, installPreparedShader(artifact))
+                }
+                activity.setContentView(FrameLayout(activity).apply {
+                    setBackgroundColor(android.graphics.Color.WHITE)
+                    addView(referenceView)
+                })
+                referenceView.frame(1L)
+            }
+            assertTrue(waitForPreparedShader(instrumentation, referenceView))
+            assertTrue(waitForMaterialViewScreenBounds(instrumentation, referenceView))
+            fullReference = awaitCompositorCrop("r12-panel-full-reference", { copyMaterialView(instrumentation, referenceView) },
+                { label, bitmap -> persistPanelEvidence(activity, label, bitmap) }, { hasVisibleMaterial(it) }, {})
+            var before = 0
+            instrumentation.runOnMainSync {
+                before = referenceView.diagnostics().shaderDrawCount
+                referenceView.setScene(KeyguardMaterialScene(profile.neutralized(), false, 0L), enabled = true)
+                referenceView.frame(System.nanoTime())
+            }
+            assertTrue(waitForShaderDraw(instrumentation, referenceView, before))
+            neutralReference = awaitCompositorCrop("r12-panel-neutral-reference", { copyMaterialView(instrumentation, referenceView) },
+                { label, bitmap -> persistPanelEvidence(activity, label, bitmap) },
+                { hasVisibleMaterial(it) && compareMaterialPixels(requireNotNull(fullReference), it).meaningful() }, {})
+            assertTrue("neutral and full reference controls must differ",
+                compareMaterialPixels(requireNotNull(fullReference), requireNotNull(neutralReference)).meaningful())
+            val settings = KeyguardCardSettings(requested = true, showFinancialDetails = true,
+                presentationMode = KeyguardCardPresentationMode.ORB, animationMode = KeyguardCardAnimationMode.ORB_ONLY)
+            instrumentation.runOnMainSync {
+                activity.setContentView(FrameLayout(activity).apply { setBackgroundColor(android.graphics.Color.WHITE) })
+                manager = TestPanelWindowManager(activity)
+                window = KeyguardCardWindow(activity, onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> }, onInteractionDiagnostic = { _, _ -> },
+                    armSurfaceDiagnostic = { _ -> { event -> events += event } },
+                    onSurfaceFailure = { failure.set(it) }, manager = manager).also { createdWindow = it }
+                window.prepareRetainedView(settings, profile)
+                assertEquals(KeyguardCardWindow.Result.ATTACHED, window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+            }
+            fun await(label: String, predicate: () -> Boolean) {
+                val deadline = SystemClock.uptimeMillis() + 25_000L
+                while (SystemClock.uptimeMillis() < deadline && !predicate()) {
+                    failure.get()?.let { throw AssertionError("$label failed: $it") }
+                    SystemClock.sleep(25)
+                }
+                assertTrue("$label was not reached", predicate())
+            }
+            fun crop(): Bitmap {
+                lateinit var bounds: Rect
+                instrumentation.runOnMainSync {
+                    val target = checkNotNull(window.surfaceForTest())
+                    check(target.isAttachedToWindow && target.holder.surface.isValid)
+                    val location = IntArray(2)
+                    target.getLocationOnScreen(location)
+                    bounds = Rect(location[0], location[1], location[0] + target.width, location[1] + target.height)
+                }
+                assertEquals(168, bounds.width())
+                assertEquals(168, bounds.height())
+                val screen = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+                try {
+                    check(bounds.left >= 0 && bounds.top >= 0 && bounds.right <= screen.width && bounds.bottom <= screen.height)
+                    return Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
+                } finally { screen.recycle() }
+            }
+            await("first static post") { events.any { it.stage == "FIRST_POST" } }
+            fullCrop = awaitCompositorCrop("r12-panel-full", ::crop,
+                { label, bitmap -> persistPanelEvidence(activity, label, bitmap) },
+                { compareMaterialPixels(requireNotNull(fullReference), it).nearlyEqual() }, {})
+            val withheld = AtomicInteger()
+            instrumentation.runOnMainSync {
+                val panel = checkNotNull(manager.currentRoot)
+                gate = ViewTreeObserver.OnPreDrawListener { withheld.incrementAndGet(); false }
+                gateObserver = panel.viewTreeObserver
+                gateObserver!!.addOnPreDrawListener(requireNotNull(gate))
+                panel.invalidate()
+            }
+            await("withheld root traversal") { withheld.get() > 0 }
+            val stillVisible = crop()
+            try {
+                persistPanelEvidence(activity, "r12-panel-static-withheld", stillVisible)
+                assertTrue(compareMaterialPixels(requireNotNull(fullReference), stillVisible).nearlyEqual())
+            } finally { stillVisible.recycle() }
+            instrumentation.runOnMainSync {
+                gate?.let { listener -> gateObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener) }
+                gate = null
+                manager.currentRoot?.invalidate()
+                window.showOrUpdate(FluviFinancialCardPresenter.discreet(), settings.copy(showFinancialDetails = false))
+            }
+            await("neutral target producer confirmation") { events.any { it.stage == "GUARD_RETIRED" } }
+            neutralCrop = awaitCompositorCrop("r12-panel-neutral", ::crop,
+                { label, bitmap -> persistPanelEvidence(activity, label, bitmap) },
+                { compareMaterialPixels(requireNotNull(neutralReference), it).nearlyEqual() }, {})
+            assertTrue("neutral target must differ from the full scene",
+                compareMaterialPixels(requireNotNull(fullCrop), requireNotNull(neutralCrop)).meaningful())
+            instrumentation.runOnMainSync {
+                assertTrue(window.hide())
+                assertFalse(window.isAttached)
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                gate?.let { listener -> gateObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener) }
+                createdWindow?.dispose()
+                activity.finish()
+            }
+            KeyguardCardDiagnostics.clearCapture(context)
+            fullReference?.recycle(); neutralReference?.recycle(); fullCrop?.recycle(); neutralCrop?.recycle()
+        }
+    }
     @Test fun r11OfferBeforeGrantTransfersInsideGrantWithNudgeHeld() = exerciseR11FirstOfferOrder(true)
     @Test fun r11GrantBeforeOfferTransfersViaOrdinaryNudge() = exerciseR11FirstOfferOrder(false)
 
