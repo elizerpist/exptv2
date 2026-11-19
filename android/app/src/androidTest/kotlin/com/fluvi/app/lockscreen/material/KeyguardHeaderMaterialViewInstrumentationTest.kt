@@ -872,7 +872,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val commits = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbFirstPublicationToken>()
         val firstCommit = CountDownLatch(1)
         val barrier = KeyguardOrbRenderBarrier { lease ->
-            if (lease.attachment > 0 && holdFirst.compareAndSet(true, false)) {
+            if (lease.attachment > 0 && lease.attachment == targetAttach.get() &&
+                holdFirst.compareAndSet(true, false)
+            ) {
                 firstEntered.countDown()
                 check(releaseFirst.await(8, TimeUnit.SECONDS)) { "first render gate timed out" }
             }
@@ -923,17 +925,18 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             reference = awaitCompositorCrop("r07-first-positive", { copyPanelOrb(instrumentation, manager) },
                 { label, bitmap -> persistPanelEvidence(activity, label, bitmap) }, { hasVisibleMaterial(it) }, {})
 
-            holdFirst.set(true)
-            holdSteady.set(true)
-            submissions.expect(2L, PHASE_A)
-            samples.expect(2L)
-            controlled.submit(2L, calibratedMaterialTime(PHASE_A))
             var bootstrapCountBefore = 0
             instrumentation.runOnMainSync {
                 assertTrue(window.hide())
+                targetAttach.set(window.currentAttachGeneration + 1L)
+                holdFirst.set(true)
+                holdSteady.set(true)
+                submissions.expect(2L, PHASE_A, targetAttach.get())
+                samples.expect(2L, targetAttach.get())
+                controlled.submit(2L, calibratedMaterialTime(PHASE_A))
                 assertEquals(KeyguardCardWindow.Result.ATTACHED,
                     window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
-                targetAttach.set(window.currentAttachGeneration)
+                assertEquals("fixture gated the wrong attachment", targetAttach.get(), window.currentAttachGeneration)
                 val root = requireNotNull(manager.currentRoot)
                 gatedRoot = root
                 bootstrapCountBefore = root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
@@ -1045,6 +1048,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     fixture.instrumentation.runOnMainSync {
                         assertTrue("A withdrawal must return while Worker is held", fixture.window.hide())
                         fixture.assertHiddenExactlyOnce(first.lease)
+                        fixture.assertNormalHideOrder(first.lease)
                         assertEquals(1L, held.returned.count)
                         assertEquals(KeyguardCardWindow.Result.ATTACHED,
                             fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
@@ -1737,6 +1741,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         lateinit var initialLease: KeyguardOrbBufferLease
         val ownership = OrbOwnershipHistory()
         val hides = mutableListOf<OrbRetirementHide>()
+        val windowBoundaries = mutableListOf<Triple<Long?, String, Int?>>()
         val settings = KeyguardCardSettings(
             requested = true,
             showFinancialDetails = true,
@@ -1809,6 +1814,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     onPositionCommitted = { _, _, _, _ -> },
                     onInteractionDiagnostic = { _, _ -> },
                     onWindowDiagnostic = { stage, _, attachment, observedAt, fields ->
+                        if (stage == "LOCAL_HIDE_APPLIED" || stage == "ISOLATED_LAYER_HIDE_SUBMITTED" ||
+                            stage == "REMOVE_VIEW_BEGIN" || stage == "REMOVE_VIEW_RETURN"
+                        ) windowBoundaries += Triple(attachment, stage, manager.currentRoot?.visibility)
                         if (stage == "ISOLATED_LAYER_HIDE_SUBMITTED") {
                             hides += OrbRetirementHide(attachment, fields["leaseGeneration"] as? Long,
                                 observedAt, fields["transactionApplied"] == true)
@@ -1975,6 +1983,17 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             val matching = hides.filter { it.attachment == lease.attachment && it.generation == lease.generation }
             assertEquals("exact Main-owned child was not hidden once", 1, matching.size)
             assertTrue("Main hide transaction failed", matching.single().applied)
+        }
+
+        fun assertNormalHideOrder(lease: KeyguardOrbBufferLease) {
+            val events = windowBoundaries.filter { it.first == lease.attachment }
+            val local = events.indexOfFirst { it.second == "LOCAL_HIDE_APPLIED" }
+            val child = events.indexOfFirst { it.second == "ISOLATED_LAYER_HIDE_SUBMITTED" }
+            val removeBegin = events.indexOfFirst { it.second == "REMOVE_VIEW_BEGIN" }
+            val removeReturn = events.indexOfFirst { it.second == "REMOVE_VIEW_RETURN" }
+            assertTrue("root/child/remove boundaries out of order: $events",
+                local >= 0 && local < child && child < removeBegin && removeBegin < removeReturn)
+            assertEquals("root was visible when its child hide was submitted", View.INVISIBLE, events[child].third)
         }
 
         fun assertRetiredUseDrained(frame: KeyguardOrbBufferProducerFrame, accepted: KeyguardOrbOwnershipEvent) {
@@ -2414,11 +2433,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private val latches = java.util.concurrent.ConcurrentHashMap<Long, CountDownLatch>()
         private val samples = java.util.concurrent.ConcurrentHashMap<Long, Sample>()
         private val failures = java.util.concurrent.ConcurrentHashMap<Long, Throwable>()
+        private val expectedAttachments = java.util.concurrent.ConcurrentHashMap<Long, Long>()
 
-        fun expect(requestId: Long) {
+        fun expect(requestId: Long, attachment: Long? = null) {
             check(latches.putIfAbsent(requestId, CountDownLatch(1)) == null) {
                 "duplicate producer request=$requestId"
             }
+            if (attachment != null) expectedAttachments[requestId] = attachment
         }
 
         override fun onProduced(
@@ -2427,6 +2448,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             completionFence: SyncFence?,
         ) {
             val requestId = frame.testRequestId ?: return
+            if (expectedAttachments[requestId]?.let { it != frame.lease.attachment } == true) return
             val latch = latches[requestId] ?: return
             if (samples.containsKey(requestId) || failures.containsKey(requestId)) return
             try {
@@ -2476,14 +2498,17 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private val expectedPhases = java.util.concurrent.ConcurrentHashMap<Long, Float>()
         private val latches = java.util.concurrent.ConcurrentHashMap<Long, CountDownLatch>()
         private val submitted = java.util.concurrent.ConcurrentHashMap<Long, KeyguardOrbBufferProducerFrame>()
+        private val expectedAttachments = java.util.concurrent.ConcurrentHashMap<Long, Long>()
 
-        fun expect(requestId: Long, phase: Float) {
+        fun expect(requestId: Long, phase: Float, attachment: Long? = null) {
             check(expectedPhases.putIfAbsent(requestId, phase) == null) { "duplicate request=$requestId" }
             check(latches.putIfAbsent(requestId, CountDownLatch(1)) == null) { "duplicate latch=$requestId" }
+            if (attachment != null) expectedAttachments[requestId] = attachment
         }
 
         override fun onSubmitted(frame: KeyguardOrbBufferProducerFrame) {
             val requestId = frame.testRequestId ?: return
+            if (expectedAttachments[requestId]?.let { it != frame.lease.attachment } == true) return
             val expectedPhase = expectedPhases[requestId] ?: return
             if (kotlin.math.abs(expectedPhase - frame.materialTime.phase) > .0001f) return
             if (submitted.putIfAbsent(requestId, frame) == null) latches[requestId]?.countDown()
