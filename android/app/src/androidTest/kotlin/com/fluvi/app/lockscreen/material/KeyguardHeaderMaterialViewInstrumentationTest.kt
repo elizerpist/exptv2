@@ -1069,10 +1069,29 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 }
                 val neutralTicket = gate.awaitTicket(c.lease.attachment, fullTicket.lease.generation)
                 assertEquals(calibratedOrbProfile().neutralized().visualKey, neutralTicket.lease.visualKey)
+                fun safeNeutral(candidate: Bitmap): Boolean {
+                    if (!hasVisibleMaterial(candidate)) return false
+                    val reference = Bitmap.createScaledBitmap(fullCrop, candidate.width, candidate.height, true)
+                    return try { compareMaterialPixels(reference, candidate).meaningful() }
+                    finally { if (reference !== fullCrop) reference.recycle() }
+                }
+                fun recordSafeStrip(label: String) {
+                    val samples = mutableListOf<Bitmap>()
+                    try {
+                        repeat(6) { index ->
+                            val sample = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                            samples += sample
+                            persistPanelEvidence(fixture.activity, "$label-$index", sample)
+                            Thread.sleep(16)
+                        }
+                        assertTrue("$label contained a blank or prior full-detail orb", samples.all(::safeNeutral))
+                    } finally { samples.forEach(Bitmap::recycle) }
+                }
+                recordSafeStrip("r08-neutral-transition")
                 val neutralCrop = awaitCompositorCrop("r08-neutral-before-stale-ticket",
                     capture = { copyPanelOrb(fixture.instrumentation, fixture.manager) },
                     persist = { label, bitmap -> persistPanelEvidence(fixture.activity, label, bitmap) },
-                    accepts = { compareMaterialPixels(fullCrop, it).meaningful() },
+                    accepts = ::safeNeutral,
                     onTimeout = { persistPanelCompositorTimeout(fixture.activity, fixture.instrumentation,
                         "r08-neutral-timeout", fixture.manager, c) })
                 try {
@@ -1104,10 +1123,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                         Thread.sleep(24)
                     }
                     assertEquals("PRESSURE_VIEW", route)
+                    recordSafeStrip("r08-neutral-recovery-transition")
                     val after = awaitCompositorCrop("r08-neutral-recovery",
                         capture = { copyPanelOrb(fixture.instrumentation, fixture.manager) },
                         persist = { label, bitmap -> persistPanelEvidence(fixture.activity, label, bitmap) },
-                        accepts = { compareMaterialPixels(fullCrop, it).meaningful() },
+                        accepts = ::safeNeutral,
                         onTimeout = { persistPanelCompositorTimeout(fixture.activity, fixture.instrumentation,
                             "r08-neutral-recovery-timeout", fixture.manager, c) })
                     after.recycle()

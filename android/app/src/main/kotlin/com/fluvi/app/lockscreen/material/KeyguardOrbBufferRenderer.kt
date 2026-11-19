@@ -1673,8 +1673,14 @@ internal class KeyguardOrbBufferRenderer(
                 return
             }
             val target = publicationTarget.current()
-            if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook && target?.active == true &&
-                target.lease == spec.lease && !recoveryHook.allowRender(spec.lease)) return
+            if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook && spec.lease.attachment > 0L) {
+                // A configured positive lease may render before Main installs
+                // its grant. The test's one-use setup must not let that
+                // pre-grant render bypass its first-use counter. The gate is
+                // inactive in the production no-hook path.
+                if (target?.active != true || target.lease != spec.lease) return
+                if (!recoveryHook.allowRender(spec.lease)) return
+            }
             val slot = slots[index]
             prepareSlotShaders(slot, spec)
             val currentShader = slot.shader ?: return
