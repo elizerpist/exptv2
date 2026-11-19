@@ -53,4 +53,6 @@ out=pathlib.Path('../build/app/reports/androidTests/connected');out.mkdir(parent
  assert '4464cd0f' in (e/'manifest.txt').read_text() and (e/'screen-after.png').read_bytes()==b'PNG'
  for extra in [{'FAKE_OMIT':'1'},{'FAKE_SKIP':'1'},{'FAKE_BASE_SHA':'wrong'},{'FLUVI_R09_SCOPE':'full'}]:
   a=run(extra);assert a.returncode!=0,(extra,a.stdout,a.stderr)
+ (target/'build/app/outputs/apk/debug/app-debug.apk').unlink()
+ a=run({});assert a.returncode!=0,'missing APK must fail closed'
  print('PASS fake-device baseline runner: exact source, six executed tests, omitted/skipped/mismatched/invalid scope fail closed, evidence retained')

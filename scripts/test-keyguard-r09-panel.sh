@@ -59,7 +59,8 @@ device_abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')
 [[ "$device_api" == 35 && "$device_abi" == x86_64 ]] || { printf 'Expected API35/x86_64, got %s/%s\n' "$device_api" "$device_abi" >> "$evidence/status.txt"; exit 1; }
 app="$target/build/app/outputs/apk/debug/app-debug.apk"
 test_apk="$target/build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
-test -s "$app" && test -s "$test_apk"
+test -s "$app"
+test -s "$test_apk"
 sha256sum "$app" "$test_apk" > "$evidence/apks-before.sha256"
 result=0
 preflight=0

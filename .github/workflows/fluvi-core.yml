@@ -189,6 +189,11 @@ jobs:
 
       - uses: ./.github/actions/setup-fluvi-flutter
 
+      - name: Prepare exact R08 Flutter checkout
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r09_panel_baseline' }}
+        working-directory: r09-baseline
+        run: flutter pub get
+
       - name: Check affected delivery boundary contracts
         run: flutter test test/boundary/dashboard_interaction_performance_boundary_test.dart test/boundary/human_diagnostic_apk_delivery_boundary_test.dart test/boundary/dashboard_avatar_profile_boundary_test.dart --reporter expanded
 
