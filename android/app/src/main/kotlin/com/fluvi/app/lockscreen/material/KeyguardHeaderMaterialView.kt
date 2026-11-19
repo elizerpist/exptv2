@@ -301,6 +301,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     fun setStaticBitmap(value: Bitmap?) {
+        if (value != null) com.fluvi.app.runtime.FluviFinancialOrbWork.legacyBind()
         if (fallbackBitmap === value) return
         fallbackBitmap = value
         if (!materialEnabled) invalidate()

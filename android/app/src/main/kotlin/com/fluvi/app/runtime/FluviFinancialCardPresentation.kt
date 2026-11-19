@@ -16,14 +16,21 @@ internal data class FluviFinancialCardPresentation(
     val event: String?,
     val eventLabel: String?,
     val contentDescription: String,
-    val orb: Bitmap,
+    private val eagerOrb: Bitmap,
     val showToggle: Boolean,
     val toggleLabel: String,
     val full: Boolean,
     /** Stable rendered-input identity. Bitmap allocation identity is not a
      * visual change and must never trigger an accessibility-window update. */
     val visualKey: String,
-)
+) {
+    init { FluviFinancialOrbWork.construction() }
+    val orb: Bitmap
+        get() {
+            FluviFinancialOrbWork.demand()
+            return eagerOrb
+        }
+}
 
 internal object FluviFinancialCardPresenter {
     private val neutral = FluviLockScreenCardContent(
@@ -43,7 +50,7 @@ internal object FluviFinancialCardPresenter {
         event = null,
         eventLabel = null,
         contentDescription = "Fluvi · Pénzügyi pillanatkép",
-        orb = neutral.orbBitmap(),
+        eagerOrb = neutral.orbBitmap(),
         showToggle = false,
         toggleLabel = "",
         full = false,
@@ -57,7 +64,7 @@ internal object FluviFinancialCardPresenter {
         event = null,
         eventLabel = null,
         contentDescription = "Fluvi pénzügyi pillanatkép",
-        orb = neutral.orbBitmap(),
+        eagerOrb = neutral.orbBitmap(),
         showToggle = false,
         toggleLabel = "",
         full = true,
@@ -82,7 +89,7 @@ internal object FluviFinancialCardPresenter {
         event = null,
         eventLabel = null,
         contentDescription = "Fluvi pénzügyi pillanatkép: a kártya fókusza hiányos",
-        orb = neutral.orbBitmap(),
+        eagerOrb = neutral.orbBitmap(),
         showToggle = false,
         toggleLabel = "",
         full = true,
@@ -98,7 +105,7 @@ internal object FluviFinancialCardPresenter {
             event = if (eventIsPrimary) null else content.event,
             eventLabel = if (eventIsPrimary) null else content.eventLabel,
             contentDescription = content.focus,
-            orb = content.orbBitmap(),
+            eagerOrb = content.orbBitmap(),
             showToggle = content.event != null,
             toggleLabel = if (eventIsPrimary) "Fő érték" else "Utolsó tétel",
             full = true,

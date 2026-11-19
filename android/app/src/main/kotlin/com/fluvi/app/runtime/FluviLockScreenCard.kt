@@ -564,11 +564,13 @@ internal object FluviFinancialOrbPaintTestHook {
     @Volatile var onPaint: (() -> Unit)? = null
 }
 
-internal fun FluviLockScreenCardContent.orbBitmap(): Bitmap = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888).also { bitmap ->
-    FluviFinancialOrbPaintTestHook.onPaint?.invoke()
-    val canvas = Canvas(bitmap)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        shader = LinearGradient(0f, 0f, 96f, 96f, accentColor, Color.rgb(111, 178, 233), Shader.TileMode.CLAMP)
+internal fun FluviLockScreenCardContent.orbBitmap(): Bitmap = FluviFinancialOrbWork.paint {
+    Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888).also { bitmap ->
+        FluviFinancialOrbPaintTestHook.onPaint?.invoke()
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, 0f, 96f, 96f, accentColor, Color.rgb(111, 178, 233), Shader.TileMode.CLAMP)
+        }
+        canvas.drawCircle(48f, 48f, 47f, paint)
     }
-    canvas.drawCircle(48f, 48f, 47f, paint)
 }

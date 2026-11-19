@@ -741,7 +741,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             // A focus change may make a visible amount misleading. Redact in
             // place when possible; do not bounce the overlay root.
             if (overlay.isAttached && appliedDecision == KeyguardCardVisibility.SHOW_FULL) {
-                applyPresentation(FluviFinancialCardPresenter.loading(), "focusChanged")
+                applyPresentation({ FluviFinancialCardPresenter.loading() }, "focusChanged")
             }
             scheduleEvaluation("focusChanged")
             } finally {
@@ -1811,7 +1811,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 stopFinancialObservation()
                 showEvent = false
                 applyPresentation(
-                    FluviFinancialCardPresenter.discreet(),
+                    { FluviFinancialCardPresenter.discreet() },
                     "discreet:${request.trigger}",
                     diagnosticContext = request.diagnosticContext,
                     causingInspectionRequestId = request.id,
@@ -2056,11 +2056,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             activeFocusGeneration = focusGeneration
         }
         terminalContentFailure?.takeIf { it.first == focusGeneration }?.let { (_, code) ->
-            applyPresentation(FluviFinancialCardPresenter.unavailable(code), "invalidFocus:$trigger", diagnosticContext, causingInspectionRequestId)
+            applyPresentation({ FluviFinancialCardPresenter.unavailable(code) }, "invalidFocus:$trigger", diagnosticContext, causingInspectionRequestId)
             return
         }
         transientContentFailure?.takeIf { it.first == focusGeneration }?.let { (_, code) ->
-            applyPresentation(FluviFinancialCardPresenter.unavailable(code), "contentUnavailable:$trigger", diagnosticContext, causingInspectionRequestId)
+            applyPresentation({ FluviFinancialCardPresenter.unavailable(code) }, "contentUnavailable:$trigger", diagnosticContext, causingInspectionRequestId)
             return
         }
         val cached = renderedFullContent
@@ -2070,11 +2070,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             resolveInFlightForFocus = resolvingFocusGeneration == focusGeneration,
         )
         if (cached != null && !focusChanged) {
-            applyPresentation(FluviFinancialCardPresenter.full(cached, showEvent), "cached:$trigger", diagnosticContext, causingInspectionRequestId)
+            applyPresentation({ FluviFinancialCardPresenter.full(cached, showEvent) }, "cached:$trigger", diagnosticContext, causingInspectionRequestId)
         } else if (plan.publishLoading) {
             // First full render only. Repeated same-surface inspection keeps
             // the current amount or existing loading presentation untouched.
-            applyPresentation(FluviFinancialCardPresenter.loading(), "loading:$trigger", diagnosticContext, causingInspectionRequestId)
+            applyPresentation({ FluviFinancialCardPresenter.loading() }, "loading:$trigger", diagnosticContext, causingInspectionRequestId)
         }
         beginFinancialObservation(
             expectedSession,
@@ -2172,7 +2172,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         if (stillCurrent && outcome is FullContentResolveResult.InvalidFocus) {
                             terminalContentFailure = focusGeneration to outcome.diagnosticCode
                             applyPresentation(
-                                FluviFinancialCardPresenter.unavailable(outcome.diagnosticCode),
+                                { FluviFinancialCardPresenter.unavailable(outcome.diagnosticCode) },
                                 "invalidFocus:${outcome.diagnosticCode}",
                                 diagnosticContext,
                                 causingInspectionRequestId,
@@ -2180,7 +2180,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         } else if (stillCurrent && outcome is FullContentResolveResult.Failure) {
                             transientContentFailure = focusGeneration to outcome.diagnosticCode
                             applyPresentation(
-                                FluviFinancialCardPresenter.unavailable(outcome.diagnosticCode),
+                                { FluviFinancialCardPresenter.unavailable(outcome.diagnosticCode) },
                                 "contentUnavailable:${outcome.diagnosticCode}",
                                 diagnosticContext,
                                 causingInspectionRequestId,
@@ -2197,7 +2197,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         activeFocusGeneration = focusGeneration
                         terminalContentFailure = null
                         transientContentFailure = null
-                        applyPresentation(FluviFinancialCardPresenter.full(content, showEvent), "content", diagnosticContext, causingInspectionRequestId)
+                        applyPresentation({ FluviFinancialCardPresenter.full(content, showEvent) }, "content", diagnosticContext, causingInspectionRequestId)
                         KeyguardCardDiagnostics.record(this@FluviKeyguardCardService, "KG|CONTENT_APPLIED", "full", overlay.isAttached)
                     }
                 } finally {
@@ -2227,12 +2227,57 @@ class FluviKeyguardCardService : AccessibilityService() {
         FullContentResolveResult.Failure("queryFailure")
     }
 
-    private fun applyPresentation(
-        presentation: com.fluvi.app.runtime.FluviFinancialCardPresentation,
+    private inline fun applyPresentation(
+        presentationFactory: () -> com.fluvi.app.runtime.FluviFinancialCardPresentation,
         reason: String,
         diagnosticContext: KeyguardDiagnosticContext? = currentDiagnosticAttempt,
         causingInspectionRequestId: Long? = null,
     ) {
+        val owner = if (diagnosticContext?.captureId != null) KeyguardCardDiagnostics.drawEvidenceOwner() else null
+        val scope = owner?.let { com.fluvi.app.runtime.FluviFinancialOrbWork.begin() }
+        var operation: KeyguardDiagnosticOperation? = null
+        try {
+            operation = applyResolvedPresentation(presentationFactory(), reason, diagnosticContext,
+                causingInspectionRequestId, scope)
+        } finally {
+            if (scope != null) {
+                if (!scope.completed) scope.finish(false, false, returned = false)
+                com.fluvi.app.runtime.FluviFinancialOrbWork.end(scope)
+                if (owner === KeyguardCardDiagnostics.drawEvidenceOwner()) {
+                    // Fields are converted to strings by the diagnostic worker.
+                    // A capture rotation cannot attach this scope to the new owner.
+                    runCatching {
+                        KeyguardCardDiagnostics.captureEvent(
+                            context = this, stage = "R13_FINANCIAL", reason = "scoped",
+                            requestId = causingInspectionRequestId, diagnosticContext = diagnosticContext,
+                            operation = operation, attachGeneration = scope.attachment,
+                            observedUptimeMs = scope.endUptimeMs,
+                            deferredFields = { mapOf(
+                                "r13Start" to scope.startUptimeMs, "r13End" to scope.endUptimeMs,
+                                "r13WallNs" to scope.wallNs, "r13CpuNs" to scope.cpuNs,
+                                "r13Construct" to scope.constructions, "r13Demand" to scope.demands,
+                                "r13Paint" to scope.paints, "r13PaintDone" to scope.paintCompletions,
+                                "r13Bind" to scope.legacyBinds, "r13Noop" to scope.noOp,
+                                "r13Returned" to scope.resultReturned, "r13Success" to scope.successful,
+                                "r13PaintWallNs" to scope.paintWallNs, "r13PaintCpuNs" to scope.paintCpuNs,
+                                "r13PaintMaxWallNs" to scope.paintMaxWallNs,
+                                "r13PaintMaxCpuNs" to scope.paintMaxCpuNs,
+                                "r13Route" to scope.routeCode,
+                            ) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun applyResolvedPresentation(
+        presentation: com.fluvi.app.runtime.FluviFinancialCardPresentation,
+        reason: String,
+        diagnosticContext: KeyguardDiagnosticContext?,
+        causingInspectionRequestId: Long?,
+        scope: com.fluvi.app.runtime.FluviFinancialOrbWork.Scope?,
+    ): KeyguardDiagnosticOperation? {
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext).also { lastSettings = it }
         // `showOrUpdate` applies material only after a real content/layout
         // mutation (or attach). A repeated MAIN_CONFIRMED must not push the
@@ -2254,6 +2299,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         } finally {
             setReadAheadShowInProgress(false)
             activeWindowDiagnosticOperation = null
+        }
+        scope?.let {
+            it.attachment = showOperation?.attachGeneration ?: overlay.currentAttachGeneration
+            it.routeCode = overlay.effectiveRouteForFinancialDiagnostics()
+            it.finish(result == KeyguardCardWindow.Result.NO_OP, result != KeyguardCardWindow.Result.FAILED)
         }
         // The operation ID is allocated before attachment, but all capture
         // processing follows WindowManager.addView/showOrUpdate.
@@ -2344,13 +2394,14 @@ class FluviKeyguardCardService : AccessibilityService() {
                 )
             }
         }
+        return showOperation
     }
 
     private fun toggleView() {
         if (appliedDecision != KeyguardCardVisibility.SHOW_FULL) return
         val content = renderedFullContent ?: return
         showEvent = !showEvent
-        applyPresentation(FluviFinancialCardPresenter.full(content, showEvent), "toggle")
+        applyPresentation({ FluviFinancialCardPresenter.full(content, showEvent) }, "toggle")
     }
 
     private fun openFocusedFluvi() {
@@ -2907,7 +2958,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         showEvent = false
         appliedDecision = KeyguardCardVisibility.SHOW_DISCREET
         if (::overlay.isInitialized && overlay.isAttached) {
-            applyPresentation(FluviFinancialCardPresenter.discreet(), "redact:$reason")
+            applyPresentation({ FluviFinancialCardPresenter.discreet() }, "redact:$reason")
         }
         stopFinancialObservation()
     }

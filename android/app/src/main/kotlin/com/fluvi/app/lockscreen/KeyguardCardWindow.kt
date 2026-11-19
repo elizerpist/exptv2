@@ -219,6 +219,7 @@ internal class KeyguardCardWindow(
     private fun surfaceSize(): Int = serviceContext.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
 
     internal fun presentationConfigurationApplicationsForTest(): Int = presentationConfigurationApplyCount
+    internal fun effectiveRouteForFinancialDiagnostics(): Int = effectiveRenderMode.ordinal
     internal fun surfaceForTest() = surfacePresenter?.surfaceForTest()
     internal fun surfaceMetricsForTest() = surfacePresenter?.metricsForTest()
 
