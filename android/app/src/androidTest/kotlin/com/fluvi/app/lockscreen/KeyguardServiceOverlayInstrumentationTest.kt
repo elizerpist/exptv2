@@ -117,6 +117,11 @@ class KeyguardServiceOverlayInstrumentationTest {
         val selected = java.util.concurrent.atomic.AtomicReference<KeyguardCardInspectionRequest?>()
         val successor = java.util.concurrent.atomic.AtomicReference<KeyguardCardInspectionRequest?>()
         val probeFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val snapshotsWithoutSystemUi = java.util.concurrent.atomic.AtomicInteger()
+        val snapshotsAlreadyAttached = java.util.concurrent.atomic.AtomicInteger()
+        val snapshotsStale = java.util.concurrent.atomic.AtomicInteger()
+        val successorFreshnessRequired = java.util.concurrent.atomic.AtomicInteger()
+        val candidatesWithPending = java.util.concurrent.atomic.AtomicInteger()
         var service: FluviKeyguardCardService? = null
         var captureStarted = false
         var testFailure: Throwable? = null
@@ -126,12 +131,18 @@ class KeyguardServiceOverlayInstrumentationTest {
             }
 
             override fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> {
-                if (selected.get() != null || actual.none { it.packageName == "com.android.systemui" }) return actual
+                if (selected.get() != null) return actual
+                if (actual.none { it.packageName == "com.android.systemui" }) {
+                    snapshotsWithoutSystemUi.incrementAndGet()
+                    return actual
+                }
                 val owner = service ?: return actual
                 instrumentation.runOnMainSync {
                     runCatching {
                         val state = owner.inspectionStateForTest()
-                        if (state.attached || !state.authority.matches(request) || state.pending != null) return@runCatching
+                        if (state.attached) { snapshotsAlreadyAttached.incrementAndGet(); return@runCatching }
+                        if (!state.authority.matches(request)) { snapshotsStale.incrementAndGet(); return@runCatching }
+                        if (state.pending != null) candidatesWithPending.incrementAndGet()
                         val method = FluviKeyguardCardService::class.java.getDeclaredMethod(
                             "scheduleEvaluation", String::class.java, java.lang.Long::class.java,
                             java.lang.Long::class.java, KeyguardWindowFreshness::class.java,
@@ -140,6 +151,10 @@ class KeyguardServiceOverlayInstrumentationTest {
                         method.invoke(owner, "r12-admission-successor", null, SystemClock.uptimeMillis(),
                             KeyguardWindowFreshness.FRAMEWORK_EVENT, null)
                         val next = owner.inspectionStateForTest().pending ?: return@runCatching
+                        if (next.windowFreshness.requiresCacheClear) {
+                            successorFreshnessRequired.incrementAndGet()
+                            return@runCatching
+                        }
                         if (state.authority.matches(next) && selected.compareAndSet(null, request)) {
                             successor.set(next)
                         }
@@ -157,7 +172,20 @@ class KeyguardServiceOverlayInstrumentationTest {
                 if (selected.get()?.id != request.id) return
                 runCatching {
                     check(decision == KeyguardCardVisibility.HIDDEN_UNKNOWN) { "A did not reach HIDDEN_UNKNOWN" }
-                    check(service?.inspectionStateForTest()?.attached == false) { "A was not detached" }
+                    val owner = checkNotNull(service)
+                    val state = owner.inspectionStateForTest()
+                    check(!state.attached) { "A was not detached" }
+                    val queue = FluviKeyguardCardService::class.java.getDeclaredField("inspectionQueue")
+                        .apply { isAccessible = true }.get(owner) as KeyguardCardInspectionQueue
+                    val queueLock = FluviKeyguardCardService::class.java.getDeclaredField("queueLock")
+                        .apply { isAccessible = true }.get(owner)!!
+                    val expectedSuccessor = checkNotNull(successor.get())
+                    check(synchronized(queueLock) {
+                        queue.pendingRequest()?.id == expectedSuccessor.id ||
+                            queue.activeRequest()?.id == expectedSuccessor.id
+                    }) {
+                        "queued B was superseded before A reached ordered application"
+                    }
                     applyEntered.countDown()
                     check(releaseApply.await(10, TimeUnit.SECONDS)) { "held Main apply was not released" }
                 }.onFailure { probeFailure.compareAndSet(null, it); applyEntered.countDown() }
@@ -191,8 +219,9 @@ class KeyguardServiceOverlayInstrumentationTest {
             service!!.inspectionProbeForTest = probe
             screenOff(synchronizeInput = true)
             shell("input keyevent KEYCODE_WAKEUP")
-            assertTrue("fixture never reached A's actual Main application", applyEntered.await(20, TimeUnit.SECONDS))
+            val reached = applyEntered.await(20, TimeUnit.SECONDS)
             probeFailure.get()?.let { throw AssertionError("R12 admission fixture invalid", it) }
+            assertTrue("fixture never reached A's actual Main application", reached)
             assertTrue("no same-authority successor was queued", successor.get() != null)
             val readAheadObserved = successorStarted.await(4, TimeUnit.SECONDS)
             releaseApply.countDown()
@@ -227,6 +256,10 @@ class KeyguardServiceOverlayInstrumentationTest {
                 setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
             }
             record("R12_ADMISSION_CLEANUP", if (cleanup.isSuccess) "status=PASS" else "status=FAIL")
+            record("R12_ADMISSION_FIXTURE", "noSystemUi=${snapshotsWithoutSystemUi.get()} " +
+                "attached=${snapshotsAlreadyAttached.get()} stale=${snapshotsStale.get()} " +
+                "alreadyPending=${candidatesWithPending.get()} freshnessRequired=${successorFreshnessRequired.get()} " +
+                "selected=${selected.get()?.id ?: "none"} failure=${probeFailure.get()?.javaClass?.simpleName ?: "none"}")
             File(output, "fixture.txt").writeText(evidence.toString())
             cleanup.exceptionOrNull()?.let { error ->
                 if (testFailure != null) testFailure!!.addSuppressed(error)
