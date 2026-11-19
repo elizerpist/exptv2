@@ -1,25 +1,13 @@
 {
   "schema_version": 1,
-  "source_head": "7a1ec21b55aeaf69ef56c2b49dcc5114d7271b60",
-  "base_head": "c3b313b8cc27197a3a60110abed9cae9f1194666",
+  "source_head": "8a91bf2d79f25780bb420c1a4d14abe846eac333",
+  "base_head": "7a1ec21b55aeaf69ef56c2b49dcc5114d7271b60",
   "changed_files": [
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstDrawObservationInstrumentationTest.kt",
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardFirstDrawObservation.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
-    "scripts/test-fluvi-fast.sh",
-    "scripts/test-keyguard-r09-panel.sh",
-    "test/boundary/keyguard_first_render_architecture_boundary_test.dart"
+    "scripts/test-keyguard-r09-panel.sh"
   ],
-  "candidate_changed_symbols": [
-    "scip-dart pub fluvi 0.1.0+1 test/boundary/`keyguard_first_render_architecture_boundary_test.dart`/main()."
-  ],
+  "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
   "direct_reference_consumers": [],
   "affected_test_locations": [],
