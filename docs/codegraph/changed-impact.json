@@ -1,10 +1,24 @@
 {
   "schema_version": 1,
-  "source_head": "4464cd0f5fe7abf8eab1e8b876063bdbbf37350a",
-  "base_head": "70439d6ab7b7cdd49863683d2364c42b3bb74257",
+  "source_head": "1dddbf6f6fbe4b17ec0fdcb033848c8996721529",
+  "base_head": "d0ed8339655a249f3935dfb7ed7c995997882146",
   "changed_files": [
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstDrawObservationInstrumentationTest.kt",
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt",
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardFirstDrawObservation.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbPlacementCacheTest.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbPressurePolicyTest.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbRetirementBarrierTest.kt",
+    "docs/FLUVI_ENGINEERING_JOURNAL.md",
+    "scripts/test-keyguard-r09-panel.sh",
+    "scripts/test-keyguard-service-trace.sh"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
