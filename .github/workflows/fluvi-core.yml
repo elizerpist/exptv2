@@ -178,6 +178,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Fetch exact R11 application for the R12 baseline control
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' }}
+        run: git fetch --no-tags --depth=1 origin 1d19624751169e3af0270b151378cdfcdf1a1129
+
       - name: Checkout exact R08 baseline for the focused panel
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r09_panel_baseline' }}
         uses: actions/checkout@v5
