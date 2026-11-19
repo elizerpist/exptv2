@@ -93,6 +93,17 @@ if [[ "$scope" == r12_contract ]]; then
     > "$financial_dir/instrumentation.txt" 2>&1 || financial_rc=$?
   printf '%s\n' "$financial_rc" > "$financial_dir/command-exit.txt"
   timeout -k 2s 20s adb logcat -b all -d -v monotonic > "$financial_dir/logcat.txt" 2>&1 || true
+  if ! timeout -k 2s 20s adb exec-out run-as com.fluvi.app tar -cf - files/r13-financial-pixels \
+      > "$financial_dir/pixels.tar" 2> "$financial_dir/pixels.stderr"; then
+    echo 'independent bitmap pixel archive unavailable' > "$financial_dir/pixels-status.txt"
+  else
+    mkdir -p "$financial_dir/pixels"
+    if tar -xf "$financial_dir/pixels.tar" -C "$financial_dir/pixels"; then
+      sha256sum "$financial_dir/pixels.tar" > "$financial_dir/pixels.sha256"
+    else
+      echo 'independent bitmap pixel archive invalid' > "$financial_dir/pixels-status.txt"
+    fi
+  fi
   if [[ "$financial_rc" -eq 0 ]] && grep -Eq '^OK \(3 tests\)' "$financial_dir/instrumentation.txt"; then
     echo 'R13_T1=PASS (3 Android tests)' > "$financial_dir/status.txt"
   else

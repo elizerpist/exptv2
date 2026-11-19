@@ -98,13 +98,32 @@ class KeyguardFinancialOrbDemandInstrumentationTest {
                 assertTrue(presentation.showToggle)
                 assertTrue(presentation.full)
                 assertTrue(presentation.visualKey.contains(color.toString()))
-                assertPixels(reference(color), presentation.orb)
+                val expected = reference(color)
+                val actual = presentation.orb
+                savePixels("full-${color.toUInt()}-event-$event-reference", expected)
+                savePixels("full-${color.toUInt()}-event-$event-actual", actual)
+                assertPixels(expected, actual)
             }
         }
         val neutral = Color.rgb(70, 105, 157)
-        assertPixels(reference(neutral), FluviFinancialCardPresenter.loading().orb)
-        assertPixels(reference(neutral), FluviFinancialCardPresenter.unavailable("missingCategory").orb)
-        assertPixels(reference(neutral), FluviFinancialCardPresenter.discreet().orb)
+        for ((label, presentation) in listOf("loading" to FluviFinancialCardPresenter.loading(),
+                "unavailable" to FluviFinancialCardPresenter.unavailable("missingCategory"),
+                "discreet" to FluviFinancialCardPresenter.discreet())) {
+            val expected = reference(neutral)
+            val actual = presentation.orb
+            savePixels("$label-reference", expected)
+            savePixels("$label-actual", actual)
+            assertPixels(expected, actual)
+        }
+    }
+
+    private fun savePixels(label: String, bitmap: Bitmap) {
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = java.io.File(context.filesDir, "r13-financial-pixels")
+        check(directory.isDirectory || directory.mkdirs())
+        java.io.File(directory, "$label.png").outputStream().use {
+            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+        }
     }
 
     private fun reference(color: Int): Bitmap {
