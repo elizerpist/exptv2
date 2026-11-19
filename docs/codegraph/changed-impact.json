@@ -1,11 +1,19 @@
 {
   "schema_version": 1,
-  "source_head": "8a91bf2d79f25780bb420c1a4d14abe846eac333",
-  "base_head": "7a1ec21b55aeaf69ef56c2b49dcc5114d7271b60",
+  "source_head": "1d19624751169e3af0270b151378cdfcdf1a1129",
+  "base_head": "d87c7ba330c0d38cd4a0611ebf0dae92e262b5b0",
   "changed_files": [
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
-    "scripts/test-keyguard-r09-panel.sh"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbFirstOffer.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbFirstOfferTest.kt",
+    "scripts/test-keyguard-r09-panel.sh",
+    "scripts/test-keyguard-r11-cold.sh"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
