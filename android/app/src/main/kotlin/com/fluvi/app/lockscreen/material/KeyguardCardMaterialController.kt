@@ -5,6 +5,7 @@ import android.os.Build
 import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.View
 import com.fluvi.app.R
@@ -20,6 +21,20 @@ import java.util.IdentityHashMap
 internal data class KeyguardBootstrapFrameToken(
     val bootstrapGeneration: Long,
     val visualKey: String,
+)
+
+/** A bounded, attachment-owned observation. It is never visibility or buffer
+ * release authority and contains no scene, buffer, fence or child object. */
+internal data class KeyguardIsolatedFirstHandoffSnapshot(
+    val attachment: Long,
+    val generation: Long,
+    val slotId: Long,
+    val useGeneration: Long,
+    val childIdentity: Int,
+    val times: KeyguardOrbFirstPublicationTimes,
+    val commitReceiptAtUptimeMs: Long? = null,
+    val commitMainAtUptimeMs: Long? = null,
+    val bootstrapRetiredAtUptimeMs: Long? = null,
 )
 
 /** Owns scene application and one Choreographer clock for both retained
@@ -115,9 +130,15 @@ internal class KeyguardCardMaterialController(
     private var isolatedTransitionStartedNanos = 0L
     private var isolatedOrbPausedTime: KeyguardMaterialTime? = null
     private var activeOrbLease: KeyguardOrbBufferLease? = null
+    private var currentFirstPublication: KeyguardOrbFirstPublicationToken? = null
+    private var firstHandoffToken: KeyguardOrbFirstPublicationToken? = null
+    private var firstHandoffCaptureOwner: Any? = null
+    private var firstHandoff: KeyguardIsolatedFirstHandoffSnapshot? = null
     private val isolatedOrbRendererDelegate = lazy {
         KeyguardOrbBufferRenderer(
             onFirstPublished = ::onIsolatedOrbFirstPublished,
+            onFirstCommitReceived = ::onIsolatedOrbFirstCommitReceived,
+            onFirstCommitted = ::onIsolatedOrbFirstCommitted,
             onFailure = ::onIsolatedOrbFailure,
             onSizeChanged = ::onIsolatedOrbSizeChanged,
             barrier = isolatedOrbRenderBarrier,
@@ -347,12 +368,27 @@ internal class KeyguardCardMaterialController(
             bootstrapCommitReceived = false
             bootstrapVisualKey = null
         }
+        // View setup can synchronously notify the controller (for example
+        // when a prepared program is promoted). Publish only the currently
+        // permitted scene before any such notification can reconcile a new
+        // child, especially after full-to-discreet retirement.
+        latestOrbScene = isolatedScene
+        latestOrbPreviousScene = isolatedPrevious
+        latestOrbPreviousArtifact = if (isolatedPrevious != null) oldIsolatedArtifact else null
+        isolatedTransitionStartedNanos = if (isolatedPrevious != null) sceneAppliedAtNanos else 0L
         orb.setStaticBitmap(staticOrb)
         orb.setScene(scene, enabled = canAnimate)
         // While the buffer producer obtains its first completed frame the
         // retained View supplies the same palette-correct bootstrap.  It is
         // not a commit dependency for the isolated route.
         orb.setBootstrapActive(needsBootstrap || isolatedOrbRequested)
+        if (attached && isolatedOrbRequested && !isolatedOrbFailed &&
+            (activeOrbLease == null || activeOrbLease?.visualKey != sceneVisualKey)
+        ) {
+            // The View has already accepted the currently permitted scene.
+            // In particular, a privacy downgrade cannot restore old colour.
+            orb.visibility = View.VISIBLE
+        }
         val backgroundVisible = selectedBackgroundVisible
         background.setScene(scene, enabled = canAnimate && backgroundVisible)
         background.setBootstrapActive(needsBootstrap && backgroundVisible)
@@ -361,10 +397,6 @@ internal class KeyguardCardMaterialController(
         // appearance. The readability veil only belongs above an animated
         // material background.
         backgroundVeil.visibility = if (backgroundVisible) View.VISIBLE else View.GONE
-        latestOrbScene = isolatedScene
-        latestOrbPreviousScene = isolatedPrevious
-        latestOrbPreviousArtifact = if (isolatedPrevious != null) oldIsolatedArtifact else null
-        isolatedTransitionStartedNanos = if (isolatedPrevious != null) sceneAppliedAtNanos else 0L
         prepareSelectedPrograms(
             profile,
             animationMode,
@@ -411,6 +443,10 @@ internal class KeyguardCardMaterialController(
             attachmentIsolatedProducedStart = buffer?.framesProduced ?: 0
             attachmentIsolatedPublishedStart = buffer?.framesPublished ?: 0
             attachmentIsolatedDroppedStart = buffer?.framesDropped ?: 0
+            currentFirstPublication = null
+            firstHandoffToken = null
+            firstHandoffCaptureOwner = null
+            firstHandoff = null
         }
         attached = true
         activeAttachment = attachment
@@ -457,7 +493,7 @@ internal class KeyguardCardMaterialController(
         reconcileClock()
     }
 
-    fun onDetached(reason: String) {
+    fun onDetached(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null) {
         if (isolatedOrbRequested) {
             isolatedOrbPausedTime = latestOrbScene?.timeAt(System.nanoTime())
         }
@@ -465,10 +501,12 @@ internal class KeyguardCardMaterialController(
         activeAttachment = 0L
         attachedRoot = null
         activeOrbLease = null
+        currentFirstPublication = null
+        firstHandoffToken = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
             isolatedOrbRendererDelegate.isInitialized()
         ) {
-            isolatedOrbRenderer.retire(reason)
+            isolatedOrbRenderer.retire(reason, onLayerHideCommitted)
         }
         // The child SurfaceControl is retired before WindowManager removes its
         // parent. Restore the View for a later legacy/fallback attachment.
@@ -481,7 +519,8 @@ internal class KeyguardCardMaterialController(
         background.endAttachmentDrawEvidence()
     }
 
-    fun stop(reason: String) = onDetached(reason)
+    fun stop(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null) =
+        onDetached(reason, onLayerHideCommitted)
 
     /** Snapshot only at an attachment boundary, after visibility work. No
      * percentile sorting or material-key construction on the draw path. */
@@ -503,6 +542,9 @@ internal class KeyguardCardMaterialController(
         isolatedFramesPublished = (buffer?.framesPublished ?: 0) - attachmentIsolatedPublishedStart,
         isolatedFramesDropped = (buffer?.framesDropped ?: 0) - attachmentIsolatedDroppedStart,
         isolatedCompletionGapMaxMs = buffer?.completionGapMaxMs ?: 0L,
+        isolatedFirstHandoff = firstHandoff?.takeIf {
+            firstHandoffCaptureOwner != null && firstHandoffCaptureOwner === drawEvidenceOwner()
+        },
     )
     }
 
@@ -947,6 +989,13 @@ internal class KeyguardCardMaterialController(
             height = height,
         )
         activeOrbLease = lease
+        if (attached && previous != null && previous != lease) {
+            // The current View scene is already selected. It is a static
+            // bootstrap only; the new child stays the sole animated owner.
+            currentFirstPublication = null
+            orb.setBootstrapActive(true)
+            orb.visibility = View.VISIBLE
+        }
         isolatedOrbRenderer.configure(
             KeyguardOrbBufferRenderSpec(
                 lease = lease,
@@ -962,30 +1011,53 @@ internal class KeyguardCardMaterialController(
         }
     }
 
-    private fun onIsolatedOrbFirstPublished(lease: KeyguardOrbBufferLease, observedAtUptimeMs: Long) {
+    private fun onIsolatedOrbFirstPublished(token: KeyguardOrbFirstPublicationToken, times: KeyguardOrbFirstPublicationTimes) {
+        val lease = token.lease
         if (!attached || isolatedOrbFailed || activeOrbLease != lease ||
             activeAttachment != lease.attachment || attachedRoot?.isAttachedToWindow != true
         ) return
-        // Unlike the legacy View route, this producer has no View bootstrap
-        // commit to wait for.  This exact completed buffer transaction is its
-        // first authorized live output.  A later scene update can legitimately
-        // establish a new bootstrap, but the old View token must not strand an
-        // already-publishing current layer in BOOTSTRAP.
+        currentFirstPublication = token
+        val captureOwner = drawEvidenceOwner()
+        if (firstHandoff == null && captureOwner != null) {
+            firstHandoffCaptureOwner = captureOwner
+            firstHandoffToken = token
+            firstHandoff = KeyguardIsolatedFirstHandoffSnapshot(
+                lease.attachment, lease.generation, token.slotId, token.useGeneration,
+                System.identityHashCode(token.child), times,
+            )
+        }
+        // Compatibility first-output marker is the direct CPU submission.
+        // The static View remains until this exact transaction commits.
         coldPresentationState = ColdPresentationState.LIVE
         bootstrapVisualKey = null
         bootstrapCommitReceived = false
-        // The buffer layer exactly occupies the ORB child. Leaving the View
-        // visible would create two animated producers underneath one root.
-        // The placeholder remains only until a real completed buffer is
-        // published; it is never a lifecycle/commit gate for this route.
-        orb.setBootstrapActive(false)
-        orb.visibility = View.INVISIBLE
         exercisedVisualKey = lease.visualKey
-        onFirstOrbShaderDraw?.invoke(observedAtUptimeMs)
+        onFirstOrbShaderDraw?.invoke(times.applyEndAtUptimeMs)
         onPreparationStage?.invoke(
             "MATERIAL_BUFFER_FIRST_OUTPUT",
             mapOf("programKey" to lease.programKey, "surface" to "orb"),
         )
+    }
+
+    private fun onIsolatedOrbFirstCommitReceived(token: KeyguardOrbFirstPublicationToken, receiptAt: Long, mainAt: Long) {
+        if (firstHandoffToken !== token || firstHandoffCaptureOwner == null ||
+            firstHandoffCaptureOwner !== drawEvidenceOwner()
+        ) return
+        firstHandoff = firstHandoff?.copy(commitReceiptAtUptimeMs = receiptAt, commitMainAtUptimeMs = mainAt)
+    }
+
+    private fun onIsolatedOrbFirstCommitted(token: KeyguardOrbFirstPublicationToken) {
+        val lease = token.lease
+        if (!attached || !isolatedOrbRequested || isolatedOrbFailed || activeOrbLease != lease ||
+            activeAttachment != lease.attachment || attachedRoot?.isAttachedToWindow != true ||
+            currentFirstPublication !== token || !isolatedOrbRenderer.ownsFirstPublication(token)
+        ) return
+        currentFirstPublication = null
+        orb.setBootstrapActive(false)
+        orb.visibility = View.INVISIBLE
+        if (firstHandoffToken === token && firstHandoffCaptureOwner != null &&
+            firstHandoffCaptureOwner === drawEvidenceOwner()
+        ) firstHandoff = firstHandoff?.copy(bootstrapRetiredAtUptimeMs = SystemClock.uptimeMillis())
     }
 
     /** Main-only response to an attached View layout change. The old child
@@ -996,13 +1068,13 @@ internal class KeyguardCardMaterialController(
         val current = activeOrbLease
         val (width, height) = warmupDimensions(orb)
         if (current != null && current.width == width && current.height == height) return
-        activeOrbLease = null
         reconcileIsolatedOrbTarget(attachedRoot)
     }
 
     private fun onIsolatedOrbFailure(lease: KeyguardOrbBufferLease, error: Throwable) {
         if (activeOrbLease != lease) return
         isolatedOrbFailed = true
+        currentFirstPublication = null
         isolatedOrbFailedVisualKey = lease.visualKey
         detachedIsolatedBackendSelected = false
         // A permanent bootstrap would turn a transient platform/output error
@@ -1069,6 +1141,7 @@ internal data class KeyguardAttachmentRenderSummary(
     val orbGaps: KeyguardDrawGapEvidence.Snapshot, val backgroundGaps: KeyguardDrawGapEvidence.Snapshot,
     val isolatedFramesProduced: Int, val isolatedFramesPublished: Int, val isolatedFramesDropped: Int,
     val isolatedCompletionGapMaxMs: Long,
+    val isolatedFirstHandoff: KeyguardIsolatedFirstHandoffSnapshot?,
 )
 
 internal data class KeyguardMaterialDiagnostics(

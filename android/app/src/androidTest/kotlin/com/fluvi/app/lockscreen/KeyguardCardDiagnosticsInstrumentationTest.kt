@@ -558,8 +558,10 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
     }
 
-    @Test fun lightPressureRetainsEverySelectedEpisodeCauseAndFitsTheWholeUtf8Budget() {
-        KeyguardCardDiagnostics.startCapture(context, "episode-pressure-sha", "profile", "LIGHT")
+    @Test fun lightAndFullPressureRetainEverySelectedEpisodeCauseAndFitTheWholeUtf8Budget() {
+        for (mode in listOf("LIGHT", "FULL")) {
+        KeyguardCardDiagnostics.clearCapture(context)
+        KeyguardCardDiagnostics.startCapture(context, "episode-pressure-sha", "profile", mode)
         val showRequests = mutableListOf<Long>()
         val withdrawalRequests = mutableListOf<Long>()
         repeat(4) { wake ->
@@ -606,6 +608,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 emit("REMOVE_VIEW_RETURN", request + 1, at + 96, operation = hide)
                 emit("ATTACHMENT_RENDER_SUMMARY", request + 1, at + 97,
                     mapOf("clockCallbacks" to 12, "shaderFrames" to if (episode == 0) 11 else 0,
+                        "isolatedFirstIdentity" to "first/direct:attach=$attach,generation=123456,slot=3,use=123456,child=123456789",
+                        "isolatedFirstReady" to "ready=653328111,post=653328112,main=653328113,applyBegin=653328114,applyEnd=653328115",
+                        "isolatedFirstCommit" to "receipt=653328116,main=653328117,bootstrapRetired=653328118",
                         "shaderCalls" to if (episode == 0) 13 else 0, "phaseAdvances" to 10,
                         "drawGapCount" to 10, "drawGapMaxMs" to 22, "clockRunning" to false,
                         "drawEvidenceMode" to "LIGHT", "drawEvidenceOmitted" to 7,
@@ -624,7 +629,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         val frozen = KeyguardCardDiagnostics.freezeCapture(context)
         val report = frozen["report"] as String
         val bytes = report.toByteArray(Charsets.UTF_8).size
-        android.util.Log.i("FluviExportBudget", "LIGHT retainedEpisodes=5 events=${frozen["eventsRecorded"]} UTF8Bytes=$bytes")
+        android.util.Log.i("FluviExportBudget", "$mode retainedEpisodes=5 events=${frozen["eventsRecorded"]} UTF8Bytes=$bytes")
         assertTrue((frozen["eventsRecorded"] as Long) >= 1_507L)
         assertTrue("complete export was $bytes bytes", bytes <= 32 * 1024)
         assertTrue(report.contains("exportBytes=$bytes\n"))
@@ -641,6 +646,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.lineSequence().filter { it.startsWith(" RENDER ") }.all {
             !it.contains("orbDrawGaps=") && !it.contains("backgroundDrawGaps=")
         })
+        assertEquals(5, report.lineSequence().count { it.startsWith(" RENDER ") &&
+            it.contains("isolatedFirstIdentity=") && it.contains("isolatedFirstReady=") &&
+            it.contains("isolatedFirstCommit=") })
         showRequests.forEach { request ->
             assertTrue("missing showing cause $request", report.lineSequence().any {
                 (it.startsWith(" SHOWING_INSPECTION ") || it.startsWith(" SHOW_CAUSE ")) && it.contains("req=$request ") && it.contains("finished=") && it.contains("freshness=FRAMEWORK_EVENT")
@@ -657,6 +665,84 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("truncationReasons=NULL_CHILD"))
         assertTrue(report.contains("shaderFrames=11 shaderCalls=13"))
         assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+        }
+    }
+
+    /** The reducer may see the commit before the delayed HIDE_DECIDED record.
+     * Keep it on the original capture/attempt/hide owner, including after B
+     * attaches, and never let a late A callback enter a new frozen capture. */
+    @Test fun firstDirectAndHideCommitEvidenceKeepTheirOriginalOperations() {
+        for (mode in listOf("LIGHT", "FULL")) {
+            KeyguardCardDiagnostics.clearCapture(context)
+            KeyguardCardDiagnostics.startCapture(context, "r07-$mode", "profile", mode)
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 123L, 4L, "wake", 100L))
+            fun emit(stage: String, at: Long, operation: KeyguardDiagnosticOperation, fields: Map<String, Any?> = emptyMap()) {
+                KeyguardCardDiagnostics.captureEvent(context, stage, "r07-fixture", observedUptimeMs = at,
+                    diagnosticContext = owner, operation = operation, fields = fields)
+            }
+            val showA = KeyguardCardDiagnostics.newShowOperation(owner, 11L, null)
+            val hideA = KeyguardCardDiagnostics.newHideOperation(owner, 11L, null, 200L)
+            emit("SHOW_FOR_ATTACH", 110L, showA)
+            emit("ADD_VIEW_RETURN", 120L, showA)
+            // Same original operation, deliberately reduced out of order.
+            emit("ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", 215L, hideA)
+            emit("HIDE_DECIDED", 201L, hideA)
+            emit("LOCAL_HIDE_BEGIN", 202L, hideA, mapOf("attachedBefore" to true))
+            emit("ISOLATED_LAYER_HIDE_SUBMITTED", 203L, hideA,
+                mapOf("transactionApplied" to true, "applyReturnedAtUptimeMs" to 204L))
+            emit("REMOVE_VIEW_RETURN", 210L, hideA)
+            emit("ATTACHMENT_RENDER_SUMMARY", 211L, hideA, mapOf(
+                "isolatedFirstIdentity" to "first/direct:attach:11,generation:7,slot:2,use:9,child:12345",
+                "isolatedFirstReady" to "ready:130,post:131,main:132,applyBegin:133,applyEnd:134",
+                "isolatedFirstCommit" to "receipt:UNOBSERVED,main:UNOBSERVED,bootstrapRetired:UNOBSERVED",
+            ))
+            val showB = KeyguardCardDiagnostics.newShowOperation(owner, 12L, null)
+            val hideB = KeyguardCardDiagnostics.newHideOperation(owner, 12L, null, 300L)
+            emit("SHOW_FOR_ATTACH", 220L, showB)
+            emit("ADD_VIEW_RETURN", 221L, showB)
+            emit("HIDE_DECIDED", 301L, hideB)
+            emit("LOCAL_HIDE_BEGIN", 302L, hideB, mapOf("attachedBefore" to true))
+            emit("ISOLATED_LAYER_HIDE_SUBMITTED", 303L, hideB,
+                mapOf("transactionApplied" to true, "applyReturnedAtUptimeMs" to 304L))
+            emit("REMOVE_VIEW_RETURN", 310L, hideB)
+            emit("ATTACHMENT_RENDER_SUMMARY", 311L, hideB, mapOf(
+                "isolatedFirstIdentity" to "first/direct:attach:12,generation:8,slot:3,use:10,child:67890",
+                "isolatedFirstReady" to "ready:230,post:231,main:232,applyBegin:233,applyEnd:234",
+                "isolatedFirstCommit" to "receipt:235,main:236,bootstrapRetired:237",
+            ))
+            // B is already gone, but this is still B's actual commit receipt.
+            emit("ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", 315L, hideB)
+            val showC = KeyguardCardDiagnostics.newShowOperation(owner, 13L, null)
+            val hideC = KeyguardCardDiagnostics.newHideOperation(owner, 13L, null, 350L)
+            emit("SHOW_FOR_ATTACH", 320L, showC)
+            emit("HIDE_DECIDED", 351L, hideC)
+            emit("LOCAL_HIDE_BEGIN", 352L, hideC, mapOf("attachedBefore" to true))
+            emit("ISOLATED_LAYER_HIDE_SUBMITTED", 353L, hideC,
+                mapOf("transactionApplied" to true, "applyReturnedAtUptimeMs" to 354L))
+            emit("REMOVE_VIEW_RETURN", 360L, hideC)
+            val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            val renders = frozen.lineSequence().filter { it.startsWith(" RENDER ") }.toList()
+            assertEquals(2, renders.size)
+            assertTrue(renders.single { it.contains("attach=11 ") }.contains("isolatedFirstIdentity=first/direct:attach:11"))
+            assertTrue(renders.single { it.contains("attach=11 ") }.contains("receipt:UNOBSERVED"))
+            assertTrue(renders.single { it.contains("attach=12 ") }.contains("bootstrapRetired:237"))
+            val withdrawals = frozen.lineSequence().filter { it.startsWith(" WITHDRAWAL ") }.toList()
+            assertTrue(withdrawals.single { it.contains("hideOp=${hideA.hideOperationId} ") }
+                .contains("layerApplyReturn=204 layerCommit=215"))
+            assertTrue(withdrawals.single { it.contains("hideOp=${hideB.hideOperationId} ") }
+                .contains("layerApplyReturn=304 layerCommit=315"))
+            assertTrue(withdrawals.single { it.contains("hideOp=${hideC.hideOperationId} ") }
+                .contains("layerApplyReturn=354 layerCommit=UNOBSERVED"))
+            assertTrue(frozen.toByteArray(Charsets.UTF_8).size <= 32 * 1024)
+            assertTrue(frozen.contains("omittedCriticalRecordIds=none"))
+            emit("ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", 400L, hideA)
+            assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+            KeyguardCardDiagnostics.startCapture(context, "new-$mode", "profile", mode)
+            KeyguardCardDiagnostics.beginLockAttempt(context, 124L, 5L, "wake", 500L)
+            emit("ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", 501L, hideA)
+            val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertFalse(next.contains("layerCommit=501"))
+        }
     }
 
     @Test fun oneCompleteEpisodeCannotConcealAMissingSecondOperationBoundary() {

@@ -299,7 +299,7 @@ internal class KeyguardCardWindow(
 
     /** Terminal hide: stop local visibility first and never restore a drag
      * preview before removeViewImmediate. Normal CANCEL still restores. */
-    fun hide(): Boolean {
+    fun hide(onIsolatedLayerHideCommitted: ((Long) -> Unit)? = null): Boolean {
         checkMainThread()
         val current = root ?: return false
         if (lifecycle.isAttached()) {
@@ -315,7 +315,7 @@ internal class KeyguardCardWindow(
         firstShaderDrawAttachGeneration = null
         current.cancelInteraction("detach", restorePosition = false)
         clearDragFrame()
-        materialController?.stop("hide")
+        materialController?.stop("hide", onIsolatedLayerHideCommitted)
         if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
         reportWindowDiagnostic("REMOVE_VIEW_BEGIN", "windowManager", attachGeneration)
         val removed = runCatching { manager.removeViewImmediate(current) }
@@ -444,6 +444,7 @@ internal class KeyguardCardWindow(
                     fields = mapOf(
                         "leaseGeneration" to submission.lease.generation,
                         "transactionApplied" to submission.transactionApplied,
+                        "applyReturnedAtUptimeMs" to (submission.applyReturnedAtUptimeMs ?: "UNOBSERVED"),
                         "programKey" to submission.lease.programKey,
                         "width" to submission.lease.width,
                         "height" to submission.lease.height,

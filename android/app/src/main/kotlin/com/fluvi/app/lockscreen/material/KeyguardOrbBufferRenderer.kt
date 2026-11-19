@@ -44,6 +44,34 @@ internal data class KeyguardOrbBufferLease(
     val height: Int,
 )
 
+/** Main-owned first submission identity. The child is compared by object
+ * identity, never by the logging hash; no buffer or fence is retained here. */
+internal class KeyguardOrbFirstPublicationToken(
+    val lease: KeyguardOrbBufferLease,
+    val slotId: Long,
+    val useGeneration: Long,
+    val child: SurfaceControl,
+)
+
+internal data class KeyguardOrbFirstPublicationTimes(
+    val readyAtUptimeMs: Long,
+    val postedAtUptimeMs: Long,
+    val mainEntryAtUptimeMs: Long,
+    val applyBeginAtUptimeMs: Long,
+    val applyEndAtUptimeMs: Long,
+)
+
+/** Instrumentation may defer delivery of real boundaries or inject an
+ * exception. Production captures the no-op instance at construction. */
+internal interface KeyguardOrbFirstPublicationTestHook {
+    fun dispatchReady(frame: KeyguardOrbBufferProducerFrame, deliver: () -> Unit) = deliver()
+    fun beforeApply(token: KeyguardOrbFirstPublicationToken) = Unit
+    fun afterSubmitted(token: KeyguardOrbFirstPublicationToken) = Unit
+    fun dispatchCommit(token: KeyguardOrbFirstPublicationToken, receivedAtUptimeMs: Long, deliver: () -> Unit) = deliver()
+}
+
+internal object NoopKeyguardOrbFirstPublicationTestHook : KeyguardOrbFirstPublicationTestHook
+
 /**
  * The Main-owned submission boundary for removing an isolated child layer.
  * This is not a presentation callback and must never be used to release a
@@ -53,6 +81,7 @@ internal data class KeyguardOrbLayerHideSubmission(
     val lease: KeyguardOrbBufferLease,
     val submittedAtUptimeMs: Long,
     val transactionApplied: Boolean,
+    val applyReturnedAtUptimeMs: Long?,
 )
 
 /** Immutable cross-thread input. RuntimeShader, Paint, RenderNode and every
@@ -276,6 +305,7 @@ internal object KeyguardOrbBufferRendererTestHooks {
     @Volatile var steadyPublicationBarrier: KeyguardOrbSteadyPublicationBarrier =
         NoopKeyguardOrbSteadyPublicationBarrier
     @Volatile var ownershipObserver: KeyguardOrbOwnershipObserver = NoopKeyguardOrbOwnershipObserver
+    @Volatile var firstPublicationHook: KeyguardOrbFirstPublicationTestHook = NoopKeyguardOrbFirstPublicationTestHook
 }
 
 /**
@@ -288,7 +318,9 @@ internal object KeyguardOrbBufferRendererTestHooks {
  * overlay's root surface and is retired before that root is removed.
  */
 internal class KeyguardOrbBufferRenderer(
-    private val onFirstPublished: (KeyguardOrbBufferLease, Long) -> Unit,
+    private val onFirstPublished: (KeyguardOrbFirstPublicationToken, KeyguardOrbFirstPublicationTimes) -> Unit,
+    private val onFirstCommitReceived: (KeyguardOrbFirstPublicationToken, Long, Long) -> Unit,
+    private val onFirstCommitted: (KeyguardOrbFirstPublicationToken) -> Unit,
     private val onFailure: (KeyguardOrbBufferLease, Throwable) -> Unit,
     /** Called on Main when the View's measured buffer target differs from the
      * immutable lease. The controller creates a new generation; this class
@@ -311,6 +343,8 @@ internal class KeyguardOrbBufferRenderer(
         KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier,
     private val ownershipObserver: KeyguardOrbOwnershipObserver =
         KeyguardOrbBufferRendererTestHooks.ownershipObserver,
+    private val firstPublicationHook: KeyguardOrbFirstPublicationTestHook =
+        KeyguardOrbBufferRendererTestHooks.firstPublicationHook,
 ) {
     private val rendererId = nextOrbRendererId.incrementAndGet()
     private var api34: Api34? = null
@@ -331,10 +365,10 @@ internal class KeyguardOrbBufferRenderer(
 
     /** Hides and unparents synchronously on Main before the caller removes its
      * WindowManager root.  Worker cleanup is intentionally asynchronous. */
-    fun retire(reason: String) {
+    fun retire(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null) {
         if (!isSupported()) return
         requireMainThread()
-        api34?.retire(reason)
+        api34?.retire(reason, onLayerHideCommitted)
     }
 
     fun dispose() {
@@ -364,6 +398,12 @@ internal class KeyguardOrbBufferRenderer(
             completionGapMaxMs = 0L,
         )
 
+    fun ownsFirstPublication(token: KeyguardOrbFirstPublicationToken): Boolean {
+        if (!isSupported()) return false
+        requireMainThread()
+        return api34?.ownsFirstPublication(token) == true
+    }
+
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun delegate(): Api34 = api34 ?: Api34().also { api34 = it }
 
@@ -385,6 +425,7 @@ internal class KeyguardOrbBufferRenderer(
          * not that signal. */
         private val retiringLayers = mutableMapOf<KeyguardOrbBufferLease, SurfaceControl>()
         private var firstPublishedLease: KeyguardOrbBufferLease? = null
+        private var firstPublishedToken: KeyguardOrbFirstPublicationToken? = null
         private var attachListener: View.OnAttachStateChangeListener? = null
         private var layoutListener: View.OnLayoutChangeListener? = null
         /**
@@ -452,7 +493,7 @@ internal class KeyguardOrbBufferRenderer(
             ensureLayer(next)
         }
 
-        fun retire(reason: String) {
+        fun retire(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null) {
             // Capture the exact lease while Main still owns the old
             // attachment/layer. hideLayer() revokes that lease immediately,
             // and a replacement may install its own publication target before
@@ -461,7 +502,7 @@ internal class KeyguardOrbBufferRenderer(
             val oldAttachment = attachment
             removeAttachmentListeners(oldAttachment)
             attachment = null
-            hideLayer()
+            hideLayer(onLayerHideCommitted)
             firstPublishedLease = null
             worker.retire(retiredLease, reason)
         }
@@ -494,6 +535,11 @@ internal class KeyguardOrbBufferRenderer(
                 completionGapMaxMs = workerSnapshot.completionGapMaxMs,
             )
         }
+
+        fun ownsFirstPublication(token: KeyguardOrbFirstPublicationToken): Boolean =
+            !disposed && firstPublishedToken === token && layer === token.child &&
+                layerLease == token.lease && desired?.lease == token.lease &&
+                attachment?.attachment == token.lease.attachment && attachment?.root?.isAttachedToWindow == true
 
         private fun installAttachmentListeners(value: KeyguardOrbBufferAttachment) {
             val attach = object : View.OnAttachStateChangeListener {
@@ -588,6 +634,7 @@ internal class KeyguardOrbBufferRenderer(
                 layer = child
                 layerLease = spec.lease
                 firstPublishedLease = null
+                firstPublishedToken = null
             } else {
                 val location = IntArray(2)
                 value.orb.getLocationInSurface(location)
@@ -626,7 +673,7 @@ internal class KeyguardOrbBufferRenderer(
             observer.addOnPreDrawListener(listener)
         }
 
-        private fun hideLayer() {
+        private fun hideLayer(onCommitted: ((Long) -> Unit)? = null) {
             val child = layer ?: return
             val lease = layerLease
             if (lease != null) {
@@ -637,8 +684,11 @@ internal class KeyguardOrbBufferRenderer(
                 retiringLayers[lease] = child
             }
             val submittedAtUptimeMs = SystemClock.uptimeMillis()
+            var applyReturnedAtUptimeMs: Long? = null
             val transactionApplied = runCatching {
-                SurfaceControl.Transaction()
+                val transaction = SurfaceControl.Transaction()
+                try {
+                    transaction
                     // SurfaceControl's null-buffer form releases the last
                     // displayed buffer and invokes its release callback.  A
                     // visibility transaction alone may leave that
@@ -648,19 +698,41 @@ internal class KeyguardOrbBufferRenderer(
                     // to retire the worker-owned HardwareBuffer safely.
                     .setBuffer(child, null as HardwareBuffer?)
                     .setVisibility(child, false)
-                    .apply()
+                    if (onCommitted != null) {
+                        // Listener registration and later diagnostic delivery
+                        // are observational; neither can suppress the hide.
+                        runCatching {
+                            val receiptAt = AtomicLong(0L)
+                            val executor = Executor { command ->
+                                receiptAt.compareAndSet(0L, SystemClock.uptimeMillis())
+                                mainHandler.post(command)
+                            }
+                            transaction.addTransactionCommittedListener(executor) {
+                                runCatching { onCommitted(receiptAt.get()) }
+                                    .onFailure { Log.w("FluviOrbFirstHandoff", "hide commit observation failed", it) }
+                            }
+                        }.onFailure { Log.w("FluviOrbFirstHandoff", "hide commit listener registration failed", it) }
+                    }
+                    transaction.apply()
+                    applyReturnedAtUptimeMs = SystemClock.uptimeMillis()
+                } finally {
+                    runCatching { transaction.close() }
+                }
                 true
             }.getOrDefault(false)
             lease?.let {
-                onLayerHideSubmitted(
-                    KeyguardOrbLayerHideSubmission(it, submittedAtUptimeMs, transactionApplied),
-                )
+                runCatching {
+                    onLayerHideSubmitted(KeyguardOrbLayerHideSubmission(
+                        it, submittedAtUptimeMs, transactionApplied, applyReturnedAtUptimeMs,
+                    ))
+                }.onFailure { error -> Log.w("FluviOrbFirstHandoff", "hide submission observation failed", error) }
             }
             // A transaction-committed callback would only establish that this
             // transaction is ready to present. It is not permission to close
             // a HardwareBuffer or this child. onLeaseDrained performs the
             // eventual reparent/release after actual producer/release fences.
             firstPublishedLease = null
+            firstPublishedToken = null
             layer = null
             layerLease = null
         }
@@ -677,6 +749,7 @@ internal class KeyguardOrbBufferRenderer(
         }
 
         private fun onFrameReady(frame: ReadyFrame) {
+            val postedAt = SystemClock.uptimeMillis()
             mainHandler.post publish@{
                 if (!disposed && attachment == null && desired?.lease == frame.lease) {
                     // This completion has allocated the actual fixed pool,
@@ -692,11 +765,22 @@ internal class KeyguardOrbBufferRenderer(
                     worker.dropReady(frame)
                     return@publish
                 }
-                publishReady(frame)
+                val enteredAt = SystemClock.uptimeMillis()
+                if (firstPublicationHook === NoopKeyguardOrbFirstPublicationTestHook) {
+                    publishReady(frame, postedAt, enteredAt)
+                } else {
+                    runCatching {
+                        firstPublicationHook.dispatchReady(frame.producerFrame) { publishReady(frame, postedAt, enteredAt) }
+                    }.onFailure { error ->
+                        // A test dispatcher can throw after it has delivered
+                        // the runnable. It cannot decide buffer ownership.
+                        Log.w("FluviOrbFirstHandoff", "ready test dispatcher failed", error)
+                    }
+                }
             }
         }
 
-        private fun publishReady(frame: ReadyFrame) {
+        private fun publishReady(frame: ReadyFrame, postedAt: Long, enteredAt: Long) {
             val active = attachment
             val child = layer
             if (disposed || active == null || child == null ||
@@ -706,60 +790,72 @@ internal class KeyguardOrbBufferRenderer(
                 worker.dropReady(frame)
                 return
             }
-            runCatching {
-                    val release = Consumer<SyncFence> { releaseFence ->
-                        // The compositor callback can arrive on an arbitrary
-                        // thread. Fence waiting and slot reuse remain
-                        // renderer-thread-owned; Main never waits for a
-                        // released buffer.
-                        worker.release(frame.slotId, frame.useGeneration, releaseFence,
-                            System.identityHashCode(child))
-                    }
-                    val transaction = SurfaceControl.Transaction()
-                        .setBuffer(child, frame.buffer, frame.fence, release)
-                        .setVisibility(child, true)
-                    val firstCurrentPublication = firstPublishedLease != frame.lease
-                    if (firstCurrentPublication) {
-                        // The first live buffer replaces the View bootstrap.
-                        // Merge exactly this one transaction with an explicit
-                        // root traversal so the old View content cannot win a
-                        // later unsynchronised parent-buffer submission.
-                        // Continuous buffer updates below remain independent
-                        // of ViewRoot traversal and Main invalidation.
-                        val merged = active.root.rootSurfaceControl
-                            ?.applyTransactionOnDraw(transaction) == true
-                        if (merged) {
-                            active.root.invalidate()
-                        } else {
-                            transaction.apply()
+            val token = KeyguardOrbFirstPublicationToken(frame.lease, frame.slotId, frame.useGeneration, child)
+            val childIdentity = System.identityHashCode(child)
+            val slotId = frame.slotId
+            val useGeneration = frame.useGeneration
+            val receiptAt = AtomicLong(0L)
+            var transaction: SurfaceControl.Transaction? = null
+            var applyStarted = false
+            var applyEnd = 0L
+            var applyBegin = 0L
+            try {
+                transaction = SurfaceControl.Transaction()
+                firstPublicationHook.beforeApply(token)
+                val release = Consumer<SyncFence> { fence -> worker.release(slotId, useGeneration, fence, childIdentity) }
+                val executor = Executor { command ->
+                    receiptAt.compareAndSet(0L, SystemClock.uptimeMillis())
+                    mainHandler.post(command)
+                }
+                transaction.setBuffer(child, frame.buffer, frame.fence, release)
+                    .setVisibility(child, true)
+                    .addTransactionCommittedListener(executor) {
+                        val received = receiptAt.get()
+                        val mainAt = SystemClock.uptimeMillis()
+                        runCatching { onFirstCommitReceived(token, received, mainAt) }
+                            .onFailure { Log.w("FluviOrbFirstHandoff", "first commit observation failed", it) }
+                        val deliver = {
+                            if (ownsFirstPublication(token)) {
+                                runCatching { onFirstCommitted(token) }
+                                    .onFailure { Log.w("FluviOrbFirstHandoff", "first commit delivery failed", it) }
+                            }
                         }
-                    } else {
-                        transaction.apply()
+                        runCatching { firstPublicationHook.dispatchCommit(token, received, deliver) }
+                            .onFailure { Log.w("FluviOrbFirstHandoff", "first commit test hook failed", it) }
                     }
-                    // A successful setBuffer transaction takes ownership of
-                    // its acquire fence. Closing it here can invalidate the
-                    // compositor's wait before the buffer is displayed. The
-                    // error/drop path remains responsible for a fence that
-                    // was never submitted.
-                    worker.markFirstPublished(frame, System.identityHashCode(child))
-                    if (publicationObserver !== NoopKeyguardOrbBufferPublicationObserver) {
-                        runCatching { publicationObserver.onSubmitted(frame.producerFrame) }
-                    }
-                    if (firstCurrentPublication) {
-                        firstPublishedLease = frame.lease
-                        framesPublished += 1
-                        // This reports queue/submission ownership only. It is
-                        // not a physical presentation or release-fence event.
-                        onFirstPublished(frame.lease, android.os.SystemClock.uptimeMillis())
-                    }
-            }.onFailure { error ->
-                // A failed first transaction did not submit this producer
-                // fence. dropReady keeps it owned until its render work is
-                // actually safe, rather than closing/reusing early.
-                worker.dropReady(frame)
+                applyBegin = SystemClock.uptimeMillis()
+                applyStarted = true
+                transaction.apply()
+                applyEnd = SystemClock.uptimeMillis()
+            } catch (error: Throwable) {
+                if (!applyStarted) {
+                    worker.dropReady(frame)
+                } else {
+                    // A throwing apply does not prove that ownership remained
+                    // local. Keep the exact use until a real receipt/fence.
+                    worker.markFirstPublished(frame, childIdentity, "first/apply-unknown")
+                }
                 failures += 1
                 onFailure(frame.lease, error)
+                return
+            } finally {
+                runCatching { transaction?.close() }
             }
+            // Main orders this acknowledgement before a following hide can
+            // queue retirement. A fast real release is replayed by Worker.
+            firstPublishedLease = frame.lease
+            firstPublishedToken = token
+            framesPublished += 1
+            worker.markFirstPublished(frame, childIdentity)
+            val times = KeyguardOrbFirstPublicationTimes(frame.readyAtUptimeMs, postedAt, enteredAt, applyBegin, applyEnd)
+            runCatching { onFirstPublished(token, times) }
+                .onFailure { Log.w("FluviOrbFirstHandoff", "first output observer failed after transfer", it) }
+            if (publicationObserver !== NoopKeyguardOrbBufferPublicationObserver) {
+                runCatching { publicationObserver.onSubmitted(frame.producerFrame) }
+                    .onFailure { Log.w("FluviOrbFirstHandoff", "submission observer failed after transfer", it) }
+            }
+            runCatching { firstPublicationHook.afterSubmitted(token) }
+                .onFailure { Log.w("FluviOrbFirstHandoff", "first test observer failed after transfer", it) }
         }
 
         private fun onWorkerFailure(lease: KeyguardOrbBufferLease, error: Throwable) {
@@ -1056,18 +1152,19 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
-        fun markFirstPublished(frame: ReadyFrame, childIdentity: Int) {
+        fun markFirstPublished(frame: ReadyFrame, childIdentity: Int, path: String = "first/direct") {
             handler.post {
                 val slot = slots.firstOrNull { it.id == frame.slotId }
                 if (slot == null || slot.useGeneration != frame.useGeneration ||
                     slot.state != SlotState.READY_FOR_MAIN || slot.lease != frame.lease
                 ) return@post
                 slot.childIdentity = childIdentity
-                slot.publicationPath = "first/on-draw"
+                slot.publicationPath = path
                 slot.state = SlotState.PUBLISHED
                 firstLeaseAwaitingMain = null
                 firstLeaseSubmitted = frame.lease
                 published += 1
+                observeOwnership("first-submitted", slot = slot, log = false)
                 earlyReleaseReceipts.take(frame.slotId to frame.useGeneration)?.let { receipt ->
                     slot.earlyReceiptRetained = false
                     consumeRelease(frame.slotId, frame.useGeneration, receipt.value, replayed = true)
@@ -1083,7 +1180,11 @@ internal class KeyguardOrbBufferRenderer(
                     releaseFence?.close()
                     return@post
                 }
-                consumeRelease(slotId, useGeneration, releaseFence, childIdentity, "first/on-draw")
+                // The real receipt may precede Main's acknowledgement, or
+                // apply may have thrown after transfer. Preserve the path
+                // selected by that acknowledgement rather than inventing a
+                // successful direct return in the release callback.
+                consumeRelease(slotId, useGeneration, releaseFence, childIdentity)
             }
         }
 
@@ -1113,6 +1214,7 @@ internal class KeyguardOrbBufferRenderer(
                 if (recorded) {
                     if (childIdentity != null) slot.childIdentity = childIdentity
                     if (publicationPath != null) slot.publicationPath = publicationPath
+                    else if (slot.publicationPath == "first/ready") slot.publicationPath = "first/release-before-ack"
                     slot.callbackReceived = true
                     slot.fencePending = releaseFence?.isValid == true
                     slot.earlyReceiptRetained = true
@@ -1358,11 +1460,12 @@ internal class KeyguardOrbBufferRenderer(
                         producerFrame = producerFrame,
                         buffer = slot.buffer,
                         fence = result.fence,
+                        readyAtUptimeMs = completedAt,
                     )
                     if (firstLeaseSubmitted == spec.lease) {
                         publishSteady(slot, ready)
                     } else if (firstLeaseAwaitingMain != spec.lease) {
-                        slot.publicationPath = "first/on-draw"
+                        slot.publicationPath = "first/ready"
                         firstLeaseAwaitingMain = spec.lease
                         onFrameReady(ready)
                     } else {
@@ -1707,5 +1810,6 @@ internal class KeyguardOrbBufferRenderer(
         val useGeneration: Long = producerFrame.useGeneration,
         val buffer: HardwareBuffer,
         val fence: SyncFence?,
+        val readyAtUptimeMs: Long,
     )
 }

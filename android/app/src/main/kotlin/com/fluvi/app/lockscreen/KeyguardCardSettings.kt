@@ -624,6 +624,8 @@ internal object KeyguardCardDiagnostics {
         var localHideAppliedAtUptimeMs: Long? = null,
         var isolatedLayerHideSubmittedAtUptimeMs: Long? = null,
         var isolatedLayerTransactionApplied: Boolean? = null,
+        var isolatedLayerApplyReturnedAtUptimeMs: Long? = null,
+        var isolatedLayerCommitReceivedAtUptimeMs: Long? = null,
         var removeBeginAtUptimeMs: Long? = null,
         var removeReturnAtUptimeMs: Long? = null,
         var attachedBefore: Boolean? = null,
@@ -714,6 +716,9 @@ internal object KeyguardCardDiagnostics {
         var omittedSpineEvents: Int = 0,
         val shows: ArrayDeque<ShowEpisode> = ArrayDeque(),
         val hides: ArrayDeque<HideEpisode> = ArrayDeque(),
+        /** At most one receipt per bounded hide operation can arrive before
+         * its decision is reduced. This is scoped to this capture/attempt. */
+        val pendingHideCommits: ArrayDeque<PendingHideCommit> = ArrayDeque(),
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         /** This compact causal spine is independent of the raw event ring.
          * A later hidden-state storm cannot evict an earlier wake/attach/hide
@@ -721,6 +726,8 @@ internal object KeyguardCardDiagnostics {
         val causalSpine: ArrayDeque<CausalSpineEvent> = ArrayDeque(),
         var finalState: String = "INCOMPLETE",
     )
+
+    private data class PendingHideCommit(val operationId: Long, val attachment: Long?, val receivedAtUptimeMs: Long)
 
     private data class CausalSpineEvent(
         val semanticKey: String,
@@ -802,7 +809,7 @@ internal object KeyguardCardDiagnostics {
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
-        "ISOLATED_LAYER_HIDE_SUBMITTED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
+        "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
     private val CAUSAL_SPINE_FIELD_KEYS = setOf(
         "queueMs", "inspectionTotalMs", "windowsReadMs", "treeScanMs", "mainApplyQueueMs",
@@ -824,6 +831,7 @@ internal object KeyguardCardDiagnostics {
     private val RENDER_SUMMARY_KEYS = setOf(
         "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
         "isolatedCompletionGapMaxMs",
+        "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit",
         "shaderFrames", "shaderCalls", "phaseAdvances", "firstPhase", "lastPhase",
         "drawGapCount", "drawGapTotalMs", "drawGapMaxMs", "animationStarts", "animationStops",
         "clockRunning", "liveState", "backgroundFrames", "firstShaderTraversalAt", "lastShaderTraversalAt", "drawInvalidOrder",
@@ -1457,16 +1465,21 @@ internal object KeyguardCardDiagnostics {
                             attempt.hides.remove(discard)
                             attempt.omittedHideEpisodes += 1
                         }
-                        attempt.hides.addLast(
-                            HideEpisode(
+                        val created = HideEpisode(
                                 operationId = operationId,
                                 requestId = event.requestId,
                                 attachGeneration = event.attachGeneration,
                                 triggerReceivedAtUptimeMs = event.triggerReceivedUptimeMs,
                                 decisionAtUptimeMs = event.uptimeMs,
                                 cause = inspectionTimeline(),
-                            ),
-                        )
+                            )
+                        attempt.pendingHideCommits.firstOrNull {
+                            it.operationId == operationId && it.attachment == event.attachGeneration
+                        }?.let { pending ->
+                            created.isolatedLayerCommitReceivedAtUptimeMs = pending.receivedAtUptimeMs
+                            attempt.pendingHideCommits.remove(pending)
+                        }
+                        attempt.hides.addLast(created)
                     }
                     inspectionTimeline()
                     attempt.finalState = "HIDE_DECIDED"
@@ -1486,6 +1499,20 @@ internal object KeyguardCardDiagnostics {
                 "ISOLATED_LAYER_HIDE_SUBMITTED" -> hideEpisode()?.let { hide ->
                     hide.isolatedLayerHideSubmittedAtUptimeMs = event.uptimeMs
                     hide.isolatedLayerTransactionApplied = fields["transactionApplied"]?.toBooleanStrictOrNull()
+                    hide.isolatedLayerApplyReturnedAtUptimeMs = fields["applyReturnedAtUptimeMs"]?.toLongOrNull()
+                }
+                "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED" -> event.hideOperationId?.let { operationId ->
+                    val existing = hideEpisode()
+                    if (existing != null) {
+                        if (existing.isolatedLayerCommitReceivedAtUptimeMs == null) {
+                            existing.isolatedLayerCommitReceivedAtUptimeMs = event.uptimeMs
+                        }
+                    } else if (attempt.pendingHideCommits.none {
+                            it.operationId == operationId && it.attachment == event.attachGeneration
+                        }) {
+                        if (attempt.pendingHideCommits.size >= 9) attempt.pendingHideCommits.removeFirst()
+                        attempt.pendingHideCommits.addLast(PendingHideCommit(operationId, event.attachGeneration, event.uptimeMs))
+                    }
                 }
                 "REMOVE_VIEW_BEGIN" -> hideEpisode()?.removeBeginAtUptimeMs = event.uptimeMs
                 "REMOVE_VIEW_RETURN" -> hideEpisode()?.let {
@@ -1575,6 +1602,7 @@ internal object KeyguardCardDiagnostics {
     private fun copyAttempt(attempt: TimingAttempt): TimingAttempt = attempt.copy(
         shows = ArrayDeque(attempt.shows.map { it.copy(cause = it.cause?.copy(), renderSummary = it.renderSummary.toMap()) }),
         hides = ArrayDeque(attempt.hides.map { it.copy(cause = it.cause?.copy()) }),
+        pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
         inspections = LinkedHashMap(attempt.inspections.mapValues { (_, timeline) -> timeline.copy() }),
         causalSpine = ArrayDeque(attempt.causalSpine.map { it.copy(fields = it.fields.toMap()) }),
     )
@@ -1921,7 +1949,7 @@ internal object KeyguardCardDiagnostics {
     }
 
     private fun hideRecord(hide: HideEpisode): String =
-        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} layerSubmit=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${hide.isolatedLayerTransactionApplied ?: "NA"} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
+        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} layerSubmit=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${hide.isolatedLayerTransactionApplied ?: "NA"} layerApplyReturn=${hide.isolatedLayerApplyReturnedAtUptimeMs ?: "UNOBSERVED"} layerCommit=${hide.isolatedLayerCommitReceivedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
 
     private fun causalSpineComplete(attempt: TimingAttempt): Boolean {
         fun has(stage: String, show: Long? = null, hide: Long? = null, attach: Long? = null) = attempt.causalSpine.any {

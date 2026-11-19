@@ -847,6 +847,454 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
+    /** The root has already drawn its bootstrap and owns a real surface. A
+     * subsequent pre-draw is then withheld without blocking Main; no steady
+     * publication may stand in for the exact first buffer being sampled. */
+    @Test fun isolatedOrbFirstDirectAppearsWhileNextRootDrawIsWithheld() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val holdFirst = java.util.concurrent.atomic.AtomicBoolean(false)
+        val firstEntered = CountDownLatch(1)
+        val releaseFirst = CountDownLatch(1)
+        val holdSteady = java.util.concurrent.atomic.AtomicBoolean(false)
+        val steadyEntered = CountDownLatch(1)
+        val releaseSteady = CountDownLatch(1)
+        val targetAttach = java.util.concurrent.atomic.AtomicLong(0L)
+        val withheld = CountDownLatch(1)
+        val submissions = SubmittedFrameTracker()
+        val samples = CalibratedProducerSamples()
+        val controlled = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
+        val firstIdentities = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbFirstPublicationToken>()
+        val commits = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbFirstPublicationToken>()
+        val firstCommit = CountDownLatch(1)
+        val barrier = KeyguardOrbRenderBarrier { lease ->
+            if (lease.attachment > 0 && holdFirst.compareAndSet(true, false)) {
+                firstEntered.countDown()
+                check(releaseFirst.await(8, TimeUnit.SECONDS)) { "first render gate timed out" }
+            }
+        }
+        KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlled
+        KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions
+        KeyguardOrbBufferRendererTestHooks.frameObserver = samples
+        KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier = KeyguardOrbSteadyPublicationBarrier { frame ->
+            if (frame.lease.attachment == targetAttach.get() && holdSteady.compareAndSet(true, false)) {
+                steadyEntered.countDown()
+                check(releaseSteady.await(8, TimeUnit.SECONDS)) { "steady publication gate timed out" }
+            }
+        }
+        KeyguardOrbBufferRendererTestHooks.firstPublicationHook = object : KeyguardOrbFirstPublicationTestHook {
+            override fun afterSubmitted(token: KeyguardOrbFirstPublicationToken) { firstIdentities += token }
+            override fun dispatchCommit(token: KeyguardOrbFirstPublicationToken, receivedAtUptimeMs: Long, deliver: () -> Unit) {
+                commits += token
+                if (token.lease.attachment == targetAttach.get()) firstCommit.countDown()
+                deliver()
+            }
+        }
+        lateinit var window: KeyguardCardWindow
+        lateinit var manager: TestPanelWindowManager
+        var createdWindow: KeyguardCardWindow? = null
+        var reference: Bitmap? = null
+        var bootstrap: Bitmap? = null
+        var gatedRoot: View? = null
+        var gate: ViewTreeObserver.OnPreDrawListener? = null
+        val settings = KeyguardCardSettings(requested = true, showFinancialDetails = true,
+            presentationMode = KeyguardCardPresentationMode.ORB, animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+            orbPosition = KeyguardCardOrbPosition(.5f, .5f))
+        try {
+            submissions.expect(1L, PHASE_A)
+            controlled.submit(1L, calibratedMaterialTime(PHASE_A))
+            instrumentation.runOnMainSync {
+                manager = TestPanelWindowManager(activity)
+                window = KeyguardCardWindow(serviceContext = activity, onOpen = {}, onToggle = {},
+                    onInteractionStarted = {}, onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> }, manager = manager, isolatedOrbRenderBarrier = barrier)
+                createdWindow = window
+                window.prepareRetainedView(settings, calibratedOrbProfile())
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+            }
+            submissions.await(1L)
+            assertTrue("positive control did not replace bootstrap", waitForIsolatedBootstrapReplacement(instrumentation, manager))
+            assertTrue("positive control bounds missing", waitForPanelOrbScreenBounds(instrumentation, manager))
+            reference = awaitCompositorCrop("r07-first-positive", { copyPanelOrb(instrumentation, manager) },
+                { label, bitmap -> persistPanelEvidence(activity, label, bitmap) }, { hasVisibleMaterial(it) }, {})
+
+            holdFirst.set(true)
+            holdSteady.set(true)
+            submissions.expect(2L, PHASE_A)
+            samples.expect(2L)
+            controlled.submit(2L, calibratedMaterialTime(PHASE_A))
+            var bootstrapCountBefore = 0
+            instrumentation.runOnMainSync {
+                assertTrue(window.hide())
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+                targetAttach.set(window.currentAttachGeneration)
+                val root = requireNotNull(manager.currentRoot)
+                gatedRoot = root
+                bootstrapCountBefore = root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                    .diagnostics().bootstrapDrawCount
+            }
+            assertTrue("attached first render did not reach the real Worker barrier", firstEntered.await(8, TimeUnit.SECONDS))
+            assertTrue("withheld fixture never acquired valid panel bounds", waitForPanelOrbScreenBounds(instrumentation, manager))
+            val drawDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            var drewBootstrap = false
+            while (!drewBootstrap && System.nanoTime() < drawDeadline) {
+                instrumentation.runOnMainSync {
+                    val root = requireNotNull(gatedRoot)
+                    val orb = root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                    drewBootstrap = root.isAttachedToWindow && root.rootSurfaceControl != null &&
+                        orb.diagnostics().bootstrapDrawCount > bootstrapCountBefore
+                }
+                if (!drewBootstrap) Thread.sleep(24)
+            }
+            assertTrue("invalid fixture: no actual bootstrap draw with a usable root surface", drewBootstrap)
+            bootstrap = copyPanelOrb(instrumentation, manager)
+            persistPanelEvidence(activity, "r07-first-bootstrap", requireNotNull(bootstrap))
+            assertTrue("invalid fixture: bootstrap and live reference are not distinguishable",
+                compareMaterialPixels(requireNotNull(bootstrap), requireNotNull(reference)).meaningful())
+            instrumentation.runOnMainSync {
+                val root = requireNotNull(gatedRoot)
+                gate = ViewTreeObserver.OnPreDrawListener { withheld.countDown(); false }
+                root.viewTreeObserver.addOnPreDrawListener(requireNotNull(gate))
+                root.invalidate()
+            }
+            assertTrue("fixture did not actually withhold a subsequent root draw", withheld.await(8, TimeUnit.SECONDS))
+            releaseFirst.countDown()
+            val first = submissions.await(2L)
+            val produced = samples.await(2L)
+            assertEquals(first, produced.frame)
+            assertEquals("transparent producer corner was filled", 0, produced.pixels.first() ushr 24)
+            assertTrue("no real first transaction commit receipt", firstCommit.await(8, TimeUnit.SECONDS))
+            assertTrue("the first steady publication was not held", steadyEntered.await(8, TimeUnit.SECONDS))
+            val token = firstIdentities.single { it.lease == first.lease }
+            assertEquals(first.slotId, token.slotId)
+            assertEquals(first.useGeneration, token.useGeneration)
+            assertTrue("commit must identify the exact first child/token", commits.any { it === token })
+            assertEquals(1L, releaseSteady.count)
+            var referenceObserved = false
+            repeat(12) { index ->
+                val sample = copyPanelOrb(instrumentation, manager)
+                try {
+                    persistPanelEvidence(activity, "r07-first-strip-${index.toString().padStart(2, '0')}", sample)
+                    if (compareMaterialPixels(requireNotNull(reference), sample).nearlyEqual()) referenceObserved = true
+                } finally { sample.recycle() }
+                Thread.sleep(32)
+            }
+            assertTrue("first direct buffer did not reach the compositor with root draw withheld", referenceObserved)
+            assertEquals("steady frame was released before first-phase sampling", 1L, releaseSteady.count)
+        } finally {
+            releaseFirst.countDown()
+            releaseSteady.countDown()
+            instrumentation.runOnMainSync {
+                val root = gatedRoot
+                val listener = gate
+                if (root != null && listener != null && root.viewTreeObserver.isAlive) {
+                    root.viewTreeObserver.removeOnPreDrawListener(listener)
+                    root.invalidate()
+                }
+                createdWindow?.dispose()
+                activity.finish()
+            }
+            KeyguardOrbBufferRendererTestHooks.firstPublicationHook = NoopKeyguardOrbFirstPublicationTestHook
+            KeyguardOrbBufferRendererTestHooks.materialTimeSource = SystemKeyguardOrbMaterialTimeSource
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver
+            KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
+            KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier = NoopKeyguardOrbSteadyPublicationBarrier
+            reference?.recycle()
+            bootstrap?.recycle()
+        }
+    }
+
+    @Test fun isolatedOrbFirstDirectRetiresAcrossThreeSameRendererReplacements() {
+        withOrbRetirementFixture("first-direct-replacement") { fixture ->
+            repeat(3) { cycle ->
+                val reference = fixture.capture(PHASE_A, "first-$cycle-reference") { hasVisibleMaterial(it) }
+                try {
+                    var attachmentA = 0L
+                    fixture.instrumentation.runOnMainSync {
+                        assertTrue(fixture.window.hide())
+                        attachmentA = fixture.window.currentAttachGeneration + 1L
+                    }
+                    val held = fixture.holdFirstCommitAndSteady(attachmentA)
+                    val requestA = fixture.prepareFirst(PHASE_A)
+                    fixture.instrumentation.runOnMainSync {
+                        assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                            fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                        assertEquals(attachmentA, fixture.window.currentAttachGeneration)
+                    }
+                    val first = fixture.submitted(requestA)
+                    val token = fixture.awaitFirstToken(attachmentA)
+                    assertEquals(first.lease, token.lease)
+                    assertEquals(first.slotId, token.slotId)
+                    assertEquals(first.useGeneration, token.useGeneration)
+                    assertTrue("first steady A did not reach the real Worker boundary", held.entered.await(8, TimeUnit.SECONDS))
+                    val commit = fixture.awaitDeferredCommit(attachmentA)
+                    assertTrue("commit did not retain the exact A token", commit.token === token)
+                    assertTrue("first A never reached the expected compositor crop", waitForPanelOrbScreenBounds(fixture.instrumentation, fixture.manager))
+                    val firstA = awaitCompositorCrop("r07-first-$cycle-a", { copyPanelOrb(fixture.instrumentation, fixture.manager) },
+                        { label, bitmap -> persistPanelEvidence(fixture.activity, label, bitmap) },
+                        { compareMaterialPixels(reference.bitmap, it).nearlyEqual() }, {})
+                    firstA.recycle()
+                    var attachmentB = 0L
+                    val requestB = fixture.prepareFirst(PHASE_B)
+                    fixture.instrumentation.runOnMainSync {
+                        assertTrue("A withdrawal must return while Worker is held", fixture.window.hide())
+                        fixture.assertHiddenExactlyOnce(first.lease)
+                        assertEquals(1L, held.returned.count)
+                        assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                            fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                        attachmentB = fixture.window.currentAttachGeneration
+                        assertTrue(attachmentB != attachmentA)
+                        assertFalse("B must begin with its own placeholder", fixture.manager.isOrbBootstrapSuppressed())
+                    }
+                    // Consume the real but stale A commit only after B owns
+                    // the retained root. It cannot hide B's bootstrap.
+                    fixture.deliverDeferredCommit(attachmentA)
+                    fixture.instrumentation.runOnMainSync {
+                        assertTrue(fixture.window.isAttached)
+                        assertEquals(attachmentB, fixture.window.currentAttachGeneration)
+                        assertFalse("stale A commit suppressed B's placeholder", fixture.manager.isOrbBootstrapSuppressed())
+                    }
+                    assertEquals("Main waited for the held steady use", 1L, held.returned.count)
+                    held.release.countDown()
+                    val receipt = fixture.ownership.awaitUse("release-received", first)
+                    val fence = fixture.ownership.awaitUse("release-fence-complete", first)
+                    val drain = fixture.ownership.awaitLease("lease-drained", first.lease)
+                    assertEquals(System.identityHashCode(token.child), receipt.childIdentity)
+                    assertTrue("actual first-use receipt missing", receipt.slots.any {
+                        it.slotId == first.slotId && it.useGeneration == first.useGeneration && it.callbackReceived
+                    })
+                    assertTrue("old first use still owned after drain", drain.slots.none {
+                        it.lease == first.lease && it.state != "FREE"
+                    })
+                    val history = fixture.ownership.snapshot()
+                    assertTrue(history.indexOf(receipt) <= history.indexOf(fence))
+                    assertTrue(history.indexOf(fence) < history.indexOf(drain))
+                    assertFalse("first steady gate timed out", held.timedOut.get())
+                    val firstB = fixture.submitted(requestB)
+                    assertEquals(attachmentB, firstB.lease.attachment)
+                    val moved = fixture.capture(PHASE_B, "first-$cycle-b") {
+                        compareMaterialPixels(reference.bitmap, it).meaningful()
+                    }
+                    try {
+                        assertEquals(attachmentB, moved.frame.lease.attachment)
+                        fixture.instrumentation.runOnMainSync {
+                            assertTrue(fixture.window.isAttached)
+                            assertEquals(attachmentB, fixture.window.currentAttachGeneration)
+                            assertFalse("old A hide affected B", fixture.hides.any { it.attachment == attachmentB })
+                        }
+                    } finally { moved.bitmap.recycle() }
+                    fixture.ownership.assertBoundedSingleRenderer()
+                } finally { reference.bitmap.recycle() }
+            }
+        }
+    }
+
+    @Test fun isolatedOrbFirstDirectDisposeDoesNotWaitForWorkerOrOldCommit() {
+        withOrbRetirementFixture("first-direct-dispose") { fixture ->
+            var attachment = 0L
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                attachment = fixture.window.currentAttachGeneration + 1L
+            }
+            val gate = fixture.holdFirstCommitAndSteady(attachment)
+            val request = fixture.prepareFirst(PHASE_A)
+            fixture.instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            val first = fixture.submitted(request)
+            val token = fixture.awaitFirstToken(attachment)
+            assertTrue(gate.entered.await(8, TimeUnit.SECONDS))
+            assertTrue(fixture.awaitDeferredCommit(attachment).token === token)
+            fixture.instrumentation.runOnMainSync {
+                fixture.window.dispose()
+                assertFalse(fixture.window.isAttached)
+                assertEquals(null, fixture.manager.currentRoot)
+                assertEquals(1L, gate.returned.count)
+            }
+            fixture.deliverDeferredCommit(attachment)
+            gate.release.countDown()
+            fixture.ownership.awaitUse("release-received", first)
+            fixture.ownership.awaitUse("release-fence-complete", first)
+            val drained = fixture.ownership.awaitLease("lease-drained", first.lease)
+            assertTrue(drained.slots.none { it.lease == first.lease && it.state != "FREE" })
+            assertFalse(gate.timedOut.get())
+            fixture.instrumentation.runOnMainSync {
+                assertFalse(fixture.window.isAttached)
+                assertEquals(null, fixture.manager.currentRoot)
+            }
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun isolatedOrbReadyFrameCannotSubmitAfterItsAttachmentIsRetired() {
+        withOrbRetirementFixture("first-stale-ready") { fixture ->
+            var attachmentA = 0L
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                attachmentA = fixture.window.currentAttachGeneration + 1L
+            }
+            fixture.holdReady(attachmentA)
+            val requestA = fixture.prepareFirst(PHASE_A)
+            fixture.instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            val pending = fixture.awaitReady(attachmentA)
+            assertEquals(attachmentA, pending.frame.lease.attachment)
+            assertFalse("held READY frame has already been submitted", fixture.hasSubmitted(requestA))
+            var attachmentB = 0L
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                attachmentB = fixture.window.currentAttachGeneration
+            }
+            fixture.deliverReady(attachmentA)
+            assertFalse("retired A's ready runnable submitted a buffer", fixture.hasSubmitted(requestA))
+            val drained = fixture.ownership.awaitLease("lease-drained", pending.frame.lease)
+            assertTrue(drained.slots.none { it.lease == pending.frame.lease && it.state != "FREE" })
+            val replacement = fixture.awaitAttachment(attachmentB)
+            assertEquals(attachmentB, replacement.attachment)
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.isAttached)
+                assertEquals(attachmentB, fixture.window.currentAttachGeneration)
+                assertFalse(fixture.hides.any { it.attachment == attachmentB })
+            }
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun isolatedOrbPreApplyFailureAndPostTransferObserverFailureHaveDifferentOwnership() {
+        withOrbRetirementFixture("first-pre-apply-failure") { fixture ->
+            var attachment = 0L
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                attachment = fixture.window.currentAttachGeneration + 1L
+            }
+            fixture.failBeforeApply(attachment)
+            val request = fixture.prepareFirst(PHASE_A)
+            fixture.instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            val attempted = fixture.awaitAttemptedFirst(attachment)
+            val drained = fixture.ownership.awaitLease("lease-drained", attempted.lease)
+            assertFalse("failure before apply transferred a frame", fixture.hasSubmitted(request))
+            assertTrue(drained.slots.none { it.lease == attempted.lease && it.state != "FREE" })
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.isAttached)
+                assertFalse("failed isolated route remained selected",
+                    fixture.window.materialDiagnostics()?.activeRenderer == "HardwareBufferRenderer/SurfaceControl")
+            }
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+        withOrbRetirementFixture("first-post-transfer-failure") { fixture ->
+            var attachment = 0L
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                attachment = fixture.window.currentAttachGeneration + 1L
+            }
+            fixture.failAfterTransfer(attachment)
+            val request = fixture.prepareFirst(PHASE_A)
+            fixture.instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            val first = fixture.submitted(request)
+            fixture.awaitFirstToken(attachment)
+            val published = fixture.ownership.awaitUse("first-submitted", first)
+            assertTrue("transferred first use was not PUBLISHED", published.slots.any {
+                it.slotId == first.slotId && it.useGeneration == first.useGeneration && it.state == "PUBLISHED"
+            })
+            fixture.instrumentation.runOnMainSync { assertTrue(fixture.window.hide()) }
+            fixture.ownership.awaitUse("release-received", first)
+            fixture.ownership.awaitUse("release-fence-complete", first)
+            val drained = fixture.ownership.awaitLease("lease-drained", first.lease)
+            assertTrue(drained.slots.none { it.lease == first.lease && it.state != "FREE" })
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun isolatedOrbStaleFirstCommitCannotUndoSameRootPrivacyOrSizeReplacement() {
+        withOrbRetirementFixture("first-privacy-size") { fixture ->
+            var attachment = 0L
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                attachment = fixture.window.currentAttachGeneration + 1L
+            }
+            val fullGate = fixture.holdFirstCommitAndSteady(attachment)
+            val fullRequest = fixture.prepareFirst(PHASE_A)
+            fixture.instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            val full = fixture.submitted(fullRequest)
+            val fullToken = fixture.awaitFirstToken(attachment)
+            assertEquals(full.lease, fullToken.lease)
+            assertTrue(fullGate.entered.await(8, TimeUnit.SECONDS))
+            assertTrue(fixture.awaitDeferredCommit(attachment).token === fullToken)
+            lateinit var retainedRoot: View
+            fixture.instrumentation.runOnMainSync {
+                retainedRoot = requireNotNull(fixture.manager.currentRoot)
+                val result = fixture.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                    fixture.settings.copy(showFinancialDetails = false))
+                assertTrue("privacy downgrade did not update the retained root",
+                    result == KeyguardCardWindow.Result.REDACTED || result == KeyguardCardWindow.Result.CONTENT_UPDATED)
+                val orb = retainedRoot.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                assertTrue("discreet replacement requires a static safe bootstrap", orb.isBootstrapActive())
+                assertEquals(View.VISIBLE, orb.visibility)
+            }
+            fixture.deliverDeferredCommit(attachment)
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(retainedRoot === fixture.manager.currentRoot)
+                val orb = retainedRoot.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                assertTrue("old full commit suppressed the neutral bootstrap", orb.isBootstrapActive())
+                assertEquals(View.VISIBLE, orb.visibility)
+            }
+            // The next generation has the same retained root and attachment.
+            // Hold its real commit while a size change revokes that lease too.
+            val neutralGate = fixture.holdFirstCommitAndSteady(attachment)
+            fullGate.release.countDown()
+            val neutralToken = fixture.awaitReplacementToken(fullToken)
+            assertEquals(attachment, neutralToken.lease.attachment)
+            assertEquals(calibratedOrbProfile().neutralized().visualKey, neutralToken.lease.visualKey)
+            assertTrue(neutralGate.entered.await(8, TimeUnit.SECONDS))
+            assertTrue(fixture.awaitDeferredCommit(attachment).token === neutralToken)
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(retainedRoot === fixture.manager.currentRoot)
+                assertEquals(attachment, fixture.window.currentAttachGeneration)
+                val orb = retainedRoot.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                orb.layout(orb.left, orb.top, orb.right + 4, orb.bottom + 4)
+            }
+            fixture.instrumentation.runOnMainSync { }
+            fixture.deliverDeferredCommit(attachment)
+            fixture.instrumentation.runOnMainSync {
+                val orb = retainedRoot.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                assertTrue("old size commit suppressed replacement bootstrap", orb.isBootstrapActive())
+                assertEquals(View.VISIBLE, orb.visibility)
+            }
+            neutralGate.release.countDown()
+            fixture.ownership.awaitUse("release-received", full)
+            fixture.ownership.awaitUse("release-fence-complete", full)
+            fixture.ownership.awaitLease("lease-drained", full.lease)
+            val resized = fixture.awaitReplacementToken(neutralToken)
+            assertEquals(attachment, resized.lease.attachment)
+            assertEquals(neutralToken.lease.visualKey, resized.lease.visualKey)
+            assertTrue("size change did not produce a new buffer geometry",
+                resized.lease.width != neutralToken.lease.width || resized.lease.height != neutralToken.lease.height)
+            assertFalse(fullGate.timedOut.get())
+            assertFalse(neutralGate.timedOut.get())
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
     @Test fun isolatedOrbPublishesCalibratedCompositorPixels() {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -1185,6 +1633,32 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
+    private class FirstSteadyGate(val attachment: Long) {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val returned = CountDownLatch(1)
+        val frame = AtomicReference<KeyguardOrbBufferProducerFrame?>()
+        val timedOut = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        fun hold(value: KeyguardOrbBufferProducerFrame) {
+            frame.set(value)
+            entered.countDown()
+            if (!release.await(8, TimeUnit.SECONDS)) timedOut.set(true)
+            returned.countDown()
+        }
+    }
+
+    private data class DeferredFirstCommit(
+        val token: KeyguardOrbFirstPublicationToken,
+        val receivedAtUptimeMs: Long,
+        val delivery: () -> Unit,
+    )
+
+    private data class DeferredReadyFrame(
+        val frame: KeyguardOrbBufferProducerFrame,
+        val delivery: () -> Unit,
+    )
+
     /** Test-owned immutable history. Overflow is a failure, never missing
      * evidence interpreted as a successful drain or absence of ownership. */
     private class OrbOwnershipHistory : KeyguardOrbOwnershipObserver {
@@ -1275,6 +1749,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private val samples = CalibratedProducerSamples()
         private val nextGate = AtomicReference<OrbSteadyGate?>()
         private val gates = mutableListOf<OrbSteadyGate>()
+        private val firstSteadyGate = AtomicReference<FirstSteadyGate?>()
+        private val firstSteadyGates = mutableListOf<FirstSteadyGate>()
+        private val deferredAttachment = java.util.concurrent.atomic.AtomicLong(-1L)
+        private val submittedFirst = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbFirstPublicationToken>()
+        private val deferredCommits = java.util.concurrent.ConcurrentHashMap<Long, DeferredFirstCommit>()
+        private val readyAttachment = java.util.concurrent.atomic.AtomicLong(-1L)
+        private val deferredReady = java.util.concurrent.ConcurrentHashMap<Long, DeferredReadyFrame>()
+        private val failBeforeAttachment = java.util.concurrent.atomic.AtomicLong(-1L)
+        private val failAfterAttachment = java.util.concurrent.atomic.AtomicLong(-1L)
+        private val attemptedFirst = java.util.concurrent.ConcurrentHashMap<Long, KeyguardOrbFirstPublicationToken>()
         private var nextRequest = 0L
 
         fun start() {
@@ -1282,7 +1766,36 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions
             KeyguardOrbBufferRendererTestHooks.frameObserver = samples
             KeyguardOrbBufferRendererTestHooks.ownershipObserver = ownership
+            KeyguardOrbBufferRendererTestHooks.firstPublicationHook = object : KeyguardOrbFirstPublicationTestHook {
+                override fun dispatchReady(frame: KeyguardOrbBufferProducerFrame, deliver: () -> Unit) {
+                    if (readyAttachment.get() == frame.lease.attachment) {
+                        check(deferredReady.putIfAbsent(frame.lease.attachment, DeferredReadyFrame(frame, deliver)) == null)
+                    } else deliver()
+                }
+                override fun beforeApply(token: KeyguardOrbFirstPublicationToken) {
+                    attemptedFirst[token.lease.attachment] = token
+                    if (failBeforeAttachment.compareAndSet(token.lease.attachment, -1L)) {
+                        throw IllegalStateException("injected-before-apply")
+                    }
+                }
+                override fun afterSubmitted(token: KeyguardOrbFirstPublicationToken) {
+                    submittedFirst += token
+                    if (failAfterAttachment.compareAndSet(token.lease.attachment, -1L)) {
+                        throw IllegalStateException("injected-after-transfer")
+                    }
+                }
+                override fun dispatchCommit(token: KeyguardOrbFirstPublicationToken, receivedAtUptimeMs: Long, deliver: () -> Unit) {
+                    if (deferredAttachment.get() == token.lease.attachment) {
+                        check(deferredCommits.putIfAbsent(token.lease.attachment,
+                            DeferredFirstCommit(token, receivedAtUptimeMs, deliver)) == null)
+                    } else deliver()
+                }
+            }
             KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier = KeyguardOrbSteadyPublicationBarrier { frame ->
+                val first = firstSteadyGate.get()
+                if (first != null && frame.lease.attachment == first.attachment &&
+                    firstSteadyGate.compareAndSet(first, null)
+                ) first.hold(frame)
                 val gate = nextGate.get()
                 if (gate != null && frame.testRequestId == gate.requestId &&
                     nextGate.compareAndSet(gate, null)
@@ -1323,6 +1836,80 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             submissions.expect(requestId, phase)
             controlledTime.submit(requestId, calibratedMaterialTime(phase))
             return requestId
+        }
+
+        fun prepareFirst(phase: Float): Long = request(phase)
+        fun submitted(requestId: Long): KeyguardOrbBufferProducerFrame = submissions.await(requestId)
+        fun hasSubmitted(requestId: Long): Boolean = submissions.hasSubmitted(requestId)
+        fun holdReady(attachment: Long) { readyAttachment.set(attachment) }
+        fun failBeforeApply(attachment: Long) { failBeforeAttachment.set(attachment) }
+        fun failAfterTransfer(attachment: Long) { failAfterAttachment.set(attachment) }
+
+        fun awaitReady(attachment: Long): DeferredReadyFrame {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < deadline) {
+                deferredReady[attachment]?.let { return it }
+                Thread.sleep(24)
+            }
+            throw AssertionError("first ready handoff missing for attachment=$attachment")
+        }
+
+        fun deliverReady(attachment: Long) {
+            val pending = requireNotNull(deferredReady.remove(attachment))
+            readyAttachment.set(-1L)
+            instrumentation.runOnMainSync { pending.delivery() }
+        }
+
+        fun awaitAttemptedFirst(attachment: Long): KeyguardOrbFirstPublicationToken {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < deadline) {
+                attemptedFirst[attachment]?.let { return it }
+                Thread.sleep(24)
+            }
+            throw AssertionError("first apply attempt missing for attachment=$attachment")
+        }
+
+        fun holdFirstCommitAndSteady(attachment: Long): FirstSteadyGate {
+            deferredAttachment.set(attachment)
+            val gate = FirstSteadyGate(attachment)
+            firstSteadyGates += gate
+            check(firstSteadyGate.compareAndSet(null, gate))
+            return gate
+        }
+
+        fun awaitFirstToken(attachment: Long): KeyguardOrbFirstPublicationToken {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < deadline) {
+                submittedFirst.firstOrNull { it.lease.attachment == attachment }?.let { return it }
+                Thread.sleep(24)
+            }
+            throw AssertionError("first submission missing for attachment=$attachment")
+        }
+
+        fun awaitReplacementToken(old: KeyguardOrbFirstPublicationToken): KeyguardOrbFirstPublicationToken {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < deadline) {
+                submittedFirst.firstOrNull { it.lease.attachment == old.lease.attachment &&
+                    it.lease.generation > old.lease.generation }
+                    ?.let { return it }
+                Thread.sleep(24)
+            }
+            throw AssertionError("same-attachment replacement lease missing after ${old.lease}")
+        }
+
+        fun awaitDeferredCommit(attachment: Long): DeferredFirstCommit {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < deadline) {
+                deferredCommits[attachment]?.let { return it }
+                Thread.sleep(24)
+            }
+            throw AssertionError("real first commit was not delivered to the test dispatcher attach=$attachment")
+        }
+
+        fun deliverDeferredCommit(attachment: Long) {
+            val pending = requireNotNull(deferredCommits.remove(attachment))
+            deferredAttachment.compareAndSet(attachment, -1L)
+            instrumentation.runOnMainSync { pending.delivery() }
         }
 
         fun awaitAttachment(attachment: Long): KeyguardOrbBufferLease {
@@ -1428,6 +2015,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         fun releaseGates() {
             nextGate.set(null)
             gates.forEach { it.release.countDown() }
+            firstSteadyGate.set(null)
+            firstSteadyGates.forEach { it.release.countDown() }
+            deferredReady.values.toList().forEach { pending ->
+                instrumentation.runOnMainSync { pending.delivery() }
+            }
+            deferredReady.clear()
+            deferredCommits.values.toList().forEach { pending ->
+                instrumentation.runOnMainSync { pending.delivery() }
+            }
+            deferredCommits.clear()
         }
 
         fun resetHooks() {
@@ -1436,6 +2033,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
             KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier = NoopKeyguardOrbSteadyPublicationBarrier
             KeyguardOrbBufferRendererTestHooks.ownershipObserver = NoopKeyguardOrbOwnershipObserver
+            KeyguardOrbBufferRendererTestHooks.firstPublicationHook = NoopKeyguardOrbFirstPublicationTestHook
         }
 
         fun persistOwnershipEvidence() {
@@ -1443,6 +2041,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             val details = StringBuilder()
             instrumentation.runOnMainSync { hides.forEach { details.appendLine("mainHide=$it") } }
             gates.forEach { details.appendLine("gate request=${it.requestId} frame=${it.frame.get()} timedOut=${it.timedOut.get()}") }
+            firstSteadyGates.forEach { details.appendLine("firstSteady attachment=${it.attachment} frame=${it.frame.get()} timedOut=${it.timedOut.get()}") }
+            submittedFirst.forEach { token -> details.appendLine("firstSubmitted attachment=${token.lease.attachment} token=$token") }
+            deferredCommits.forEach { (attachment, pending) -> details.appendLine("firstCommit attachment=$attachment token=${pending.token} received=${pending.receivedAtUptimeMs}") }
             ownership.snapshot().forEach { details.appendLine(it) }
             File(directory, "r06-$label-ownership.txt").writeText(details.toString())
         }

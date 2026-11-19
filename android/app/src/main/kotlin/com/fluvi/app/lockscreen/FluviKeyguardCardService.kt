@@ -2145,7 +2145,20 @@ class FluviKeyguardCardService : AccessibilityService() {
             localHideBeginAt = SystemClock.uptimeMillis()
             activeWindowDiagnosticOperation = hideOperation
             val removed = try {
-                overlay.hide()
+                val onLayerHideCommitted: ((Long) -> Unit)? =
+                    if (wasAttachedBefore && hideOperation.context?.captureId != null &&
+                        KeyguardCardDiagnostics.wantsEvent("ISOLATED_LAYER_HIDE_COMMIT_RECEIVED")
+                    ) { receivedAt ->
+                        // This closure is bound to the original operation;
+                        // never recover ownership from a later active hide.
+                        traceKeyguard(
+                            "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "transactionCommitNotPhysicalRemoval",
+                            observedUptimeMs = receivedAt,
+                            attachGeneration = hideOperation.attachGeneration,
+                            operation = hideOperation,
+                        )
+                    } else null
+                overlay.hide(onLayerHideCommitted)
             } finally {
                 activeWindowDiagnosticOperation = null
             }
@@ -2163,6 +2176,15 @@ class FluviKeyguardCardService : AccessibilityService() {
                         "isolatedFramesPublished" to summary.isolatedFramesPublished,
                         "isolatedFramesDropped" to summary.isolatedFramesDropped,
                         "isolatedCompletionGapMaxMs" to summary.isolatedCompletionGapMaxMs,
+                        "isolatedFirstIdentity" to (summary.isolatedFirstHandoff?.let {
+                            "first/direct:attach:${it.attachment},generation:${it.generation},slot:${it.slotId},use:${it.useGeneration},child:${it.childIdentity}"
+                        } ?: "UNOBSERVED"),
+                        "isolatedFirstReady" to (summary.isolatedFirstHandoff?.times?.let {
+                            "ready:${it.readyAtUptimeMs},post:${it.postedAtUptimeMs},main:${it.mainEntryAtUptimeMs},applyBegin:${it.applyBeginAtUptimeMs},applyEnd:${it.applyEndAtUptimeMs}"
+                        } ?: "UNOBSERVED"),
+                        "isolatedFirstCommit" to (summary.isolatedFirstHandoff?.let {
+                            "receipt:${it.commitReceiptAtUptimeMs ?: "UNOBSERVED"},main:${it.commitMainAtUptimeMs ?: "UNOBSERVED"},bootstrapRetired:${it.bootstrapRetiredAtUptimeMs ?: "UNOBSERVED"}"
+                        } ?: "UNOBSERVED"),
                         "shaderFrames" to summary.orb.frames,
                         "shaderCalls" to summary.shaderCalls,
                         "phaseAdvances" to summary.phaseAdvances,
