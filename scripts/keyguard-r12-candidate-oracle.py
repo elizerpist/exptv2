@@ -23,7 +23,12 @@ def verify(raw: str, fixture: str, capture: str, source: str, mode: str, run_id:
     except (ValueError, AttributeError):
         errors.append("uuid_invalid")
     method = "fourRealWakeCyclesUseRequestedRoute"
-    if raw.count("INSTRUMENTATION_STATUS: test=" + method) != 1 or not re.search(r"(?m)^OK \(1 test\)\s*$", raw):
+    if (raw.count("INSTRUMENTATION_STATUS: test=" + method) != 2 or
+            "INSTRUMENTATION_STATUS: numtests=1" not in raw or
+            "INSTRUMENTATION_STATUS_CODE: 1" not in raw or
+            "INSTRUMENTATION_STATUS_CODE: 0" not in raw or
+            "INSTRUMENTATION_CODE: -1" not in raw or
+            not re.search(r"(?m)^OK \(1 test\)\s*$", raw)):
         errors.append("instrumentation_not_exact_success")
     if re.search(r"FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[1234]|Exception|timed out", raw, re.I):
         errors.append("instrumentation_failure_or_skip")

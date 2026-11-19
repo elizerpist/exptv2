@@ -11,7 +11,11 @@ spec.loader.exec_module(oracle)
 source = "a" * 40
 run_id = "12345678-1234-4234-8234-123456789abc"
 capture_id = "87654321-4321-4321-8321-cba987654321"
-raw = "INSTRUMENTATION_STATUS: test=fourRealWakeCyclesUseRequestedRoute\nOK (1 test)\n"
+raw = ("INSTRUMENTATION_STATUS: numtests=1\n"
+       "INSTRUMENTATION_STATUS: test=fourRealWakeCyclesUseRequestedRoute\n"
+       "INSTRUMENTATION_STATUS_CODE: 1\n"
+       "INSTRUMENTATION_STATUS: test=fourRealWakeCyclesUseRequestedRoute\n"
+       "INSTRUMENTATION_STATUS_CODE: 0\nOK (1 test)\nINSTRUMENTATION_CODE: -1\n")
 fixture = f"PROCESS up=1 source={source} run={run_id} capture={capture_id} mode=SURFACE_LIVE pid=1234\n"
 for index, name in enumerate(("cold", "warm1", "warm2", "warm3")):
     base = 100 + index * 100

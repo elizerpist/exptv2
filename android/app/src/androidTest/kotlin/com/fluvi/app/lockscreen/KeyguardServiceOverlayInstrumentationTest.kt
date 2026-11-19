@@ -355,6 +355,10 @@ class KeyguardServiceOverlayInstrumentationTest {
                 assertTrue("each original system sample eligible for ${req.id}", observed.all { it.eligible })
             }
             assertEquals("one physical reader maximum", 1, maximumReaders.get())
+            val allReaders = (FluviKeyguardCardService::class.java.getDeclaredField("maximumConcurrentInspections")
+                .apply { isAccessible = true }.get(checkNotNull(service)) as java.util.concurrent.atomic.AtomicInteger).get()
+            trace("ALL_READERS", "maximum=$allReaders")
+            assertEquals("all real service inspections must retain one physical reader", 1, allReaders)
             assertEquals("both reads completed", 0, readerCount.get())
             specimenValidated = true
             trace("ORDER", "a=${a.id} b=${b.id} bStartedBeforeARelease=$readAheadObserved maximumReaders=${maximumReaders.get()} specimen=VALID")
@@ -368,11 +372,13 @@ class KeyguardServiceOverlayInstrumentationTest {
             releaseApply.countDown()
             service?.inspectionProbeForTest = null
             service?.systemStateReaderOverride = null
-            if (captureStarted && aRow == null && selected.get() != null) {
-                val until = SystemClock.uptimeMillis() + 2_000L
-                while (SystemClock.uptimeMillis() < until && aRow == null) {
-                    aRow = runCatching { r12ReadExactInspection(captureId, checkNotNull(selected.get())) }.getOrNull()
-                    if (aRow == null) Thread.sleep(30)
+            if (captureStarted && selected.get() != null) {
+                if (aRow == null) {
+                    val until = SystemClock.uptimeMillis() + 2_000L
+                    while (SystemClock.uptimeMillis() < until && aRow == null) {
+                        aRow = runCatching { r12ReadExactInspection(captureId, checkNotNull(selected.get())) }.getOrNull()
+                        if (aRow == null) Thread.sleep(30)
+                    }
                 }
                 trace("A_FINAL_EVIDENCE", "req=${selected.get()?.id} reason=${aRow?.get("reason") ?: "EVIDENCE_MISSING"}")
                 aRow?.let { row -> File(output, "a-exact-partial.txt").writeText(row.entries.joinToString(" ") { "${it.key}=${it.value}" } + "\n") }
