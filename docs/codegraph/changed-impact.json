@@ -1,11 +1,15 @@
 {
   "schema_version": 1,
-  "source_head": "93161f4ea304a3fb18a7a4dc2336bdab678de4b1",
-  "base_head": "57d091bc23fe1fb12db579014497ff8d706a0552",
+  "source_head": "5d970225e27a889c251e40a6f5354b3f710070b5",
+  "base_head": "d8e2451cd069dc68ad88caa7c972da6efa04e496",
   "changed_files": [
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
-    "docs/FLUVI_ENGINEERING_JOURNAL.md"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
