@@ -559,7 +559,13 @@ internal object FluviLockScreenCardCoordinator {
         get() = if (this == FluviLockScreenCardConfiguration.Direction.expense) LedgerDirection.expense else LedgerDirection.income
 }
 
+/** A test may observe an actual fallback paint without changing its pixels or ownership. */
+internal object FluviFinancialOrbPaintTestHook {
+    @Volatile var onPaint: (() -> Unit)? = null
+}
+
 internal fun FluviLockScreenCardContent.orbBitmap(): Bitmap = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888).also { bitmap ->
+    FluviFinancialOrbPaintTestHook.onPaint?.invoke()
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = LinearGradient(0f, 0f, 96f, 96f, accentColor, Color.rgb(111, 178, 233), Shader.TileMode.CLAMP)

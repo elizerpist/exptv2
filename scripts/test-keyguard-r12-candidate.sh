@@ -80,6 +80,25 @@ run_id=$(cat /proc/sys/kernel/random/uuid)
 printf 'run_uuid=%s\n' "$run_id" >> "$evidence/manifest.txt"
 result=0
 if [[ "$scope" == r12_contract ]]; then
+  # Run the actual Android Bitmap controls independently. Preserve the raw
+  # runner transcript even on the reference's expected behavioral failure.
+  financial_dir="$evidence/financial-orb-demand"
+  mkdir -p "$financial_dir"
+  adb shell pm list instrumentation > "$financial_dir/registered-runner.txt" 2>&1
+  adb shell am force-stop com.fluvi.app > "$financial_dir/force-stop.txt" 2>&1
+  financial_rc=0
+  timeout -k 5s 260s adb shell am instrument -w -r \
+    -e class com.fluvi.app.lockscreen.KeyguardFinancialOrbDemandInstrumentationTest \
+    com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \
+    > "$financial_dir/instrumentation.txt" 2>&1 || financial_rc=$?
+  printf '%s\n' "$financial_rc" > "$financial_dir/command-exit.txt"
+  timeout -k 2s 20s adb logcat -b all -d -v monotonic > "$financial_dir/logcat.txt" 2>&1 || true
+  if [[ "$financial_rc" -eq 0 ]] && grep -Eq '^OK \(3 tests\)' "$financial_dir/instrumentation.txt"; then
+    echo 'R13_T1=PASS (3 Android tests)' > "$financial_dir/status.txt"
+  else
+    echo 'R13_T1=FAIL_OR_INCOMPLETE; inspect raw assertion and actual paint count' > "$financial_dir/status.txt"
+    result=1
+  fi
   run_test poster 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases' "$run_id" SURFACE_LIVE || result=1
   run_test static_panel 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel' "$run_id" SURFACE_STATIC || result=1
   run_test diagnostic_light 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r12SurfaceEvidenceRetainsItsShowOwnerInLight' "$run_id" SURFACE_LIVE || result=1
