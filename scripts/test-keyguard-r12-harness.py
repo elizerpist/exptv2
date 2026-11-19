@@ -4,6 +4,9 @@ import importlib.util
 import sys
 sys.dont_write_bytecode = True
 import io
+import os
+import shutil
+import subprocess
 from pathlib import Path
 import tarfile
 import tempfile
@@ -109,7 +112,25 @@ for name, transform in [
 
 candidate=specimen('candidate')
 candidate[2]=candidate[2].replace('bStartedBeforeARelease=true','bStartedBeforeARelease=false')
-rejects('candidate serial order',candidate)
+rejects('candidate serial flag',candidate)
+# A fabricated candidate whose B start occurs only after releasing A is
+# rejected even when its claimed read-ahead flag remains true.
+candidate=specimen('candidate')
+lines=candidate[2].splitlines()
+begin=next(i for i,line in enumerate(lines) if 'stage=READER_START' in line and 'role=B' in line)
+end=next(i for i,line in enumerate(lines) if 'stage=SYSTEM_SAMPLE' in line and 'role=B' in line and 'ordinal=2' in line)
+chunk=lines[begin:begin+1] + lines[end-2:end+1]
+for line in chunk:
+    lines.remove(line)
+release=next(i for i,line in enumerate(lines) if 'stage=A_RELEASE_SIGNAL' in line)
+lines[release+1:release+1]=chunk
+import re
+candidate[2]='\n'.join(re.sub(r'(?<=seq=)\d+',str(i),line) for i,line in enumerate(lines,1))+'\n'
+rejects('candidate B only starts after release',candidate)
+# The correct reason in another request cannot supply the target A's evidence.
+wrong=specimen('baseline')
+wrong[3]=wrong[3].replace('reason=NO_MAIN_MARKER','reason=NO_WINDOWS',1).replace('reason=MAIN_CONFIRMED','reason=NO_MAIN_MARKER',1)
+rejects('reason from a different request',wrong)
 
 with tempfile.TemporaryDirectory() as d:
     archive=Path(d)/'fixture.tar'
@@ -127,6 +148,43 @@ with tempfile.TemporaryDirectory() as d:
     except tarfile.TarError: pass
     else: raise AssertionError('bad tar accepted')
 
+# Exercise the actual shell's source checks without starting a device.
+with tempfile.TemporaryDirectory() as d:
+    temp=Path(d)
+    root=temp/'repo'
+    (root/'scripts').mkdir(parents=True)
+    bindir=temp/'bin'; bindir.mkdir()
+    for name in ('test-keyguard-r12-admission-baseline.sh','test-keyguard-r12-admission-candidate.sh'):
+        shutil.copy(path.with_name(name),root/'scripts'/name)
+    git=bindir/'git'
+    git.write_text("""#!/usr/bin/env bash
+case "$*" in
+  'rev-parse --show-toplevel') printf '%s\\n' "$FAKE_ROOT" ;;
+  'rev-parse HEAD'|*'rev-parse HEAD') printf '%s\\n' "$FAKE_SHA" ;;
+  *'status --porcelain'*) printf ' M dirty.kt\\n' ;;
+  *) exit 3 ;;
+esac
+""")
+    git.chmod(0o755)
+    env=dict(os.environ, PATH=str(bindir)+':'+os.environ['PATH'], FAKE_ROOT=str(root), FAKE_SHA=CANDIDATE,
+             FLUVI_R12_EXPECTED_APP_SHA=CANDIDATE)
+    dirty=subprocess.run(['bash',str(root/'scripts/test-keyguard-r12-admission-candidate.sh')],env=env,text=True,capture_output=True)
+    assert dirty.returncode != 0 and 'not clean' in dirty.stderr, (dirty.returncode,dirty.stderr)
+    wrongenv=dict(env,FLUVI_R12_EXPECTED_APP_SHA='0'*40)
+    wrong=subprocess.run(['bash',str(root/'scripts/test-keyguard-r12-admission-candidate.sh')],env=wrongenv,text=True,capture_output=True)
+    assert wrong.returncode != 0 and 'identity mismatch' in wrong.stderr
+    stock=subprocess.run(['bash',str(root/'scripts/test-keyguard-r12-admission-baseline.sh')],env=env,text=True,capture_output=True)
+    assert stock.returncode != 0 and 'not the stock' in stock.stderr
+
+workflow=path.parent.parent/'.github/workflows/fluvi-core.yml'
+if workflow.exists():
+    text=workflow.read_text()
+    for scope in ('r12_admission_baseline','r12_contract','r12_legacy','r12_static','r12_live'):
+        assert '          - '+scope+'\n' in text, scope
+    assert 'FLUVI_R12_APP_DIR="$PWD/r12-stock" bash scripts/test-keyguard-r12-admission-baseline.sh' in text
+    assert "inputs.native_scope == 'r12_admission_baseline'" in text
+    assert "inputs.native_scope == 'r12_contract' }}\n        run: git fetch" not in text
+
 old=Path('/workspace/outputs/r12/preflight/baseline-run-3-artifact.zip')
 if old.exists():
     with zipfile.ZipFile(old) as z:
@@ -134,4 +192,4 @@ if old.exists():
         data[1]=z.read('android/keyguard-r12-admission-baseline/instrumentation.txt').decode()
         data[2]=z.read('android/keyguard-r12-admission-baseline/probe/files/keyguard-service-probe/r12-admission/fixture.txt').decode()
         rejects('actual 44613950007 failure',data)
-print('PASS exact stock/candidate positive controls; 26 correlated failure, source, runner, cleanup and TAR controls')
+print('PASS exact stock/candidate positive controls; correlated request, ordering, source, runner, cleanup and TAR negatives')
