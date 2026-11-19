@@ -23,6 +23,7 @@ import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.lockscreen.material.KeyguardOrbOwnershipSlotSnapshot
 import com.fluvi.app.lockscreen.material.KeyguardOrbColdWorkSnapshot
+import com.fluvi.app.lockscreen.material.KeyguardOrbFirstOfferObservation
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
@@ -408,6 +409,47 @@ class FluviKeyguardCardService : AccessibilityService() {
                     mainHandler.post {
                         traceKeyguard(stage, "r10ColdRoot", observedUptimeMs = at,
                             attachGeneration = attach, operation = owner, fields = fields)
+                    }
+                }
+            },
+            armFirstOfferDiagnostic = { attach ->
+                val operation = activeWindowDiagnosticOperation
+                val captureOwner = KeyguardCardDiagnostics.drawEvidenceOwner()
+                if (operation?.context?.captureId == null || captureOwner == null) null
+                else { observation: KeyguardOrbFirstOfferObservation ->
+                    // Retain the original capture and show operation. A late
+                    // Worker/commit callback cannot be relabelled by a new
+                    // attachment or capture, and formatting stays on reducer.
+                    if (KeyguardCardDiagnostics.drawEvidenceOwner() === captureOwner) {
+                        KeyguardCardDiagnostics.captureEvent(
+                            context = this,
+                            stage = "R11_FIRST",
+                            reason = observation.stage,
+                            serviceSession = operation.context.serviceSession,
+                            wakeEpoch = operation.context.originWakeEpoch,
+                            attachGeneration = attach,
+                            observedUptimeMs = observation.at,
+                            operation = operation,
+                            deferredFields = { mapOf(
+                                "r11Renderer" to observation.renderer,
+                                "r11Attachment" to observation.lease.attachment,
+                                "r11Generation" to observation.lease.generation,
+                                "r11Slot" to observation.slot,
+                                "r11Use" to observation.use,
+                                "r11Ready" to observation.readyAt,
+                                "r11Offer" to observation.offeredAt,
+                                "r11Grant" to observation.grantAt,
+                                "r11Child" to observation.childId,
+                                "r11GrantId" to observation.grantId,
+                                "r11Origin" to observation.origin,
+                                "r11Detail" to observation.detail,
+                                "r11ExtraAt" to observation.extraAt,
+                                "r11ShaderHit" to observation.shaderHit,
+                                "r11ShaderConstructed" to observation.shaderConstructed,
+                                "r11ShaderWallNs" to observation.shaderWallNs,
+                                "r11ShaderCpuNs" to observation.shaderCpuNs,
+                            ) },
+                        )
                     }
                 }
             },

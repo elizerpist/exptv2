@@ -28,6 +28,7 @@ import com.fluvi.app.lockscreen.material.KeyguardOrbBufferPublicationObserver
 import com.fluvi.app.lockscreen.material.KeyguardOrbBufferRendererTestHooks
 import com.fluvi.app.lockscreen.material.KeyguardOrbMaterialTimeSource
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
+import com.fluvi.app.lockscreen.material.KeyguardOrbFirstOfferObservation
 
 /** Main-thread owner of one, and only one, accessibility overlay root. Drag
  * changes only call updateViewLayout; they never remove/re-add this root,
@@ -52,6 +53,7 @@ internal class KeyguardCardWindow(
     /** Captures the original show operation before add; returned callback is
      * observational and cannot grant attachment or change visibility. */
     private val armColdRootDiagnostic: (Long) -> ((String, Long, Map<String, Any?>) -> Unit)? = { null },
+    private val armFirstOfferDiagnostic: (Long) -> ((KeyguardOrbFirstOfferObservation) -> Unit)? = { null },
     private val onFirstRootPreDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstRootDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstShaderDraw: (KeyguardFirstDrawEvent) -> Unit = {},
@@ -199,6 +201,7 @@ internal class KeyguardCardWindow(
             // complete before WindowManager.addView and cannot tax first draw.
             updateMaterialForPresentation(presentation)
             val nextAttach = attachGeneration + 1L
+            materialController?.bindFirstOfferReporter(armFirstOfferDiagnostic(nextAttach))
             coldRootObservation?.cancel()
             coldRootObservation = armColdRootDiagnostic(nextAttach)?.let { publish ->
                 KeyguardColdRootObservation(current, publish).also { it.start() }

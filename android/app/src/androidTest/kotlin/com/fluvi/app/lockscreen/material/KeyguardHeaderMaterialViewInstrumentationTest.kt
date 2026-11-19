@@ -58,6 +58,266 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class KeyguardHeaderMaterialViewInstrumentationTest {
+    @Test fun r11OfferBeforeGrantTransfersInsideGrantWithNudgeHeld() = exerciseR11FirstOfferOrder(true)
+    @Test fun r11GrantBeforeOfferTransfersViaOrdinaryNudge() = exerciseR11FirstOfferOrder(false)
+
+    @Test fun r11PrivacyChangeWithIdenticalVisualStillGetsFreshLease() {
+        withOrbRetirementFixture("r11-identical-privacy") { fixture ->
+            val initial = fixture.awaitFirstToken(fixture.initialLease.attachment)
+            val neutralProfile = calibratedOrbProfile().neutralized()
+            fixture.instrumentation.runOnMainSync {
+                fixture.window.updateMaterial(neutralProfile, fixture.settings)
+            }
+            val fullNeutral = fixture.awaitReplacementToken(initial)
+            fixture.instrumentation.runOnMainSync {
+                fixture.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                    fixture.settings.copy(showFinancialDetails = false))
+            }
+            val discreet = fixture.awaitReplacementToken(fullNeutral)
+            assertEquals(fullNeutral.lease.visualKey, discreet.lease.visualKey)
+            fixture.instrumentation.runOnMainSync {
+                fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings)
+            }
+            val fullAgain = fixture.awaitReplacementToken(discreet)
+            assertEquals(discreet.lease.attachment, fullAgain.lease.attachment)
+            assertEquals(discreet.lease.visualKey, fullAgain.lease.visualKey)
+            assertTrue("privacy change reused the previous first-offer lifetime",
+                fullAgain.lease.generation > discreet.lease.generation)
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun r11PendingPositiveRetiredBeforeGrantCannotSubmitIntoReplacement() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val controlled = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
+        val submissions = SubmittedFrameTracker()
+        val ownership = OrbOwnershipHistory()
+        val held = AtomicReference<(() -> Unit)?>()
+        val heldSignal = CountDownLatch(1)
+        val firstOutput = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbFirstPublicationToken>()
+        lateinit var renderer: KeyguardOrbBufferRenderer
+        var createdRenderer: KeyguardOrbBufferRenderer? = null
+        lateinit var manager: TestPanelWindowManager
+        var root: FrameLayout? = null
+        var added = false
+        try {
+            val profile = calibratedOrbProfile()
+            val artifact = AndroidKeyguardShaderArtifactReader.load(activity, profile.effectId, profile.usesPortal)
+            val a = KeyguardOrbBufferLease(1, 1, profile.visualKey, artifact.programKey, 168, 168)
+            val b = a.copy(attachment = 2, generation = 2)
+            controlled.submit(1, calibratedMaterialTime(PHASE_A))
+            submissions.expect(1, PHASE_A, 1)
+            instrumentation.runOnMainSync {
+                manager = TestPanelWindowManager(activity)
+                renderer = KeyguardOrbBufferRenderer(
+                    onFirstPublished = { token, _ -> firstOutput += token },
+                    onFirstCommitReceived = { _, _, _ -> }, onFirstCommitted = { },
+                    onFailure = { _, failure -> throw AssertionError("renderer failure", failure) },
+                    onSizeChanged = { throw AssertionError("unexpected size replacement") },
+                    publicationObserver = submissions, ownershipObserver = ownership,
+                    materialTimeSource = controlled,
+                    firstNudgeHook = KeyguardOrbFirstNudgeTestHook { lease, post ->
+                        if (lease == a) { check(held.compareAndSet(null, post)); heldSignal.countDown() }
+                        else post()
+                    },
+                    recoveryHook = NoopKeyguardOrbRecoveryTestHook,
+                )
+                createdRenderer = renderer
+                renderer.configure(KeyguardOrbBufferRenderSpec(a, artifact,
+                    KeyguardMaterialScene(profile, true, System.nanoTime())))
+            }
+            assertTrue("A was not actually offered before grant", heldSignal.await(12, TimeUnit.SECONDS))
+            controlled.submit(2, calibratedMaterialTime(PHASE_B))
+            submissions.expect(2, PHASE_B, 2)
+            lateinit var orb: View
+            instrumentation.runOnMainSync {
+                renderer.retire("hide-before-child")
+                renderer.configure(KeyguardOrbBufferRenderSpec(b, artifact,
+                    KeyguardMaterialScene(profile, true, System.nanoTime())))
+                val panel = FrameLayout(activity).apply { setBackgroundColor(android.graphics.Color.WHITE) }
+                orb = View(activity).apply { id = R.id.fluvi_financial_snapshot_orb }
+                panel.addView(orb, FrameLayout.LayoutParams(168, 168, Gravity.CENTER))
+                root = panel
+                manager.addView(panel, WindowManager.LayoutParams(500, 500).apply { gravity = Gravity.CENTER })
+                added = true
+            }
+            assertTrue(waitForPanelOrbScreenBounds(instrumentation, manager))
+            instrumentation.runOnMainSync { renderer.attach(requireNotNull(root), orb, 2) }
+            val current = submissions.await(2)
+            assertEquals(b, current.lease)
+            checkNotNull(held.get()).invoke()
+            instrumentation.runOnMainSync { }
+            assertFalse("revoked A submitted after B's grant", submissions.hasSubmitted(1))
+            assertTrue(firstOutput.all { it.lease == b })
+            val drained = ownership.awaitLease("lease-drained", a)
+            assertTrue(drained.slots.none { it.lease == a && it.state != "FREE" })
+            ownership.assertBoundedSingleRenderer()
+        } finally {
+            held.get()?.invoke()
+            instrumentation.runOnMainSync {
+                createdRenderer?.dispose()
+                if (added) manager.removeViewImmediate(requireNotNull(root))
+                activity.finish()
+            }
+        }
+    }
+
+    /** Both orders use an actual renderer, GPU buffer and real panel child.
+     * The nudge gate stores only a scheduling continuation and never blocks
+     * Main. A real first steady buffer is held while A pixels are sampled. */
+    private fun exerciseR11FirstOfferOrder(offerFirst: Boolean) {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val produced = CalibratedProducerSamples()
+        val submissions = SubmittedFrameTracker()
+        val controlled = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
+        val enteredRender = CountDownLatch(1)
+        val releaseRender = CountDownLatch(1)
+        val enteredSteady = CountDownLatch(1)
+        val releaseSteady = CountDownLatch(1)
+        val nudgeHeld = CountDownLatch(1)
+        val committed = CountDownLatch(1)
+        val heldNudge = AtomicReference<(() -> Unit)?>()
+        val outputCount = AtomicInteger()
+        val observations = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbFirstOfferObservation>()
+        val error = AtomicReference<Throwable?>()
+        lateinit var renderer: KeyguardOrbBufferRenderer
+        var createdRenderer: KeyguardOrbBufferRenderer? = null
+        lateinit var manager: TestPanelWindowManager
+        var root: FrameLayout? = null
+        var added = false
+        try {
+            val profile = calibratedOrbProfile()
+            val artifact = AndroidKeyguardShaderArtifactReader.load(activity, profile.effectId, profile.usesPortal)
+            val lease = KeyguardOrbBufferLease(1, 1, profile.visualKey, artifact.programKey, 168, 168)
+            produced.expect(1, 1)
+            submissions.expect(1, PHASE_A, 1)
+            controlled.submit(1, calibratedMaterialTime(PHASE_A))
+            val renderGate = KeyguardOrbRenderBarrier { current ->
+                if (!offerFirst && current == lease) {
+                    enteredRender.countDown()
+                    check(releaseRender.await(8, TimeUnit.SECONDS)) { "R11 grant-first render gate timed out" }
+                }
+            }
+            val nudgeGate = KeyguardOrbFirstNudgeTestHook { current, post ->
+                if (offerFirst && current == lease) {
+                    check(heldNudge.compareAndSet(null, post))
+                    nudgeHeld.countDown()
+                } else post()
+            }
+            val firstSteady = java.util.concurrent.atomic.AtomicBoolean(true)
+            instrumentation.runOnMainSync {
+                manager = TestPanelWindowManager(activity)
+                renderer = KeyguardOrbBufferRenderer(
+                    onFirstPublished = { token, _ -> if (token.lease == lease) outputCount.incrementAndGet() },
+                    onFirstCommitReceived = { token, _, _ -> if (token.lease == lease) committed.countDown() }, onFirstCommitted = { },
+                    onFailure = { _, failure -> error.set(failure) },
+                    onSizeChanged = { error.set(AssertionError("unexpected size replacement")) },
+                    barrier = renderGate, frameObserver = produced, publicationObserver = submissions,
+                    materialTimeSource = controlled,
+                    firstOfferReporter = { { observation ->
+                        observations += observation
+                        if (offerFirst && observation.stage == "applyEnd") {
+                            throw IllegalStateException("injected-r11-observer-after-transfer")
+                        }
+                    } },
+                    steadyPublicationBarrier = KeyguardOrbSteadyPublicationBarrier { frame ->
+                        if (frame.lease == lease && firstSteady.compareAndSet(true, false)) {
+                            enteredSteady.countDown()
+                            check(releaseSteady.await(8, TimeUnit.SECONDS)) { "R11 steady fixture gate timed out" }
+                        }
+                    },
+                    firstNudgeHook = nudgeGate,
+                    recoveryHook = NoopKeyguardOrbRecoveryTestHook,
+                )
+                createdRenderer = renderer
+                renderer.configure(KeyguardOrbBufferRenderSpec(lease, artifact,
+                    KeyguardMaterialScene(profile, full = true, appliedAtNanos = System.nanoTime())))
+            }
+            if (offerFirst) {
+                assertTrue("first positive nudge was not held", nudgeHeld.await(12, TimeUnit.SECONDS))
+            } else {
+                assertTrue("first producer did not reach the pre-submit gate", enteredRender.await(12, TimeUnit.SECONDS))
+            }
+            lateinit var orb: View
+            instrumentation.runOnMainSync {
+                val panel = FrameLayout(activity).apply { setBackgroundColor(android.graphics.Color.WHITE) }
+                orb = View(activity).apply { id = R.id.fluvi_financial_snapshot_orb }
+                panel.addView(orb, FrameLayout.LayoutParams(168, 168, Gravity.CENTER))
+                root = panel
+                manager.addView(panel, WindowManager.LayoutParams(500, 500).apply { gravity = Gravity.CENTER })
+                added = true
+            }
+            assertTrue("invalid fixture: no real panel geometry", waitForPanelOrbScreenBounds(instrumentation, manager))
+            instrumentation.runOnMainSync {
+                val panel = requireNotNull(root)
+                assertTrue("invalid fixture: root surface missing", panel.rootSurfaceControl != null)
+                renderer.attach(panel, orb, 1)
+                if (offerFirst) assertEquals("grant returned before consuming the waiting use", 1, outputCount.get())
+                else assertEquals("grant manufactured a frame before producer completion", 0, outputCount.get())
+            }
+            if (offerFirst) {
+                checkNotNull(heldNudge.get()).invoke()
+                instrumentation.runOnMainSync { }
+            } else releaseRender.countDown()
+            val first = submissions.await(1)
+            val firstPixels = produced.await(1)
+            assertEquals(first, firstPixels.frame)
+            assertEquals("the first use was transferred twice", 1, outputCount.get())
+            assertTrue("first direct transaction did not commit", committed.await(8, TimeUnit.SECONDS))
+            assertTrue("real first steady use did not reach its gate", enteredSteady.await(8, TimeUnit.SECONDS))
+            assertEquals("transparent first-buffer corner was filled", 0, firstPixels.pixels.first() ushr 24)
+            val referenceA = Bitmap.createBitmap(firstPixels.pixels, 168, 168, Bitmap.Config.ARGB_8888)
+            try {
+                assertTrue("first producer reference contains no material", hasVisibleMaterial(referenceA))
+                val image = awaitCompositorCrop("r11-first-${if (offerFirst) "grant" else "nudge"}",
+                    { copyPanelOrb(instrumentation, manager) },
+                    { label, bitmap -> persistPanelEvidence(activity, label, bitmap) },
+                    { candidate -> compareMaterialPixels(referenceA, candidate).nearlyEqual() }, {})
+                image.recycle()
+            } finally { referenceA.recycle() }
+            produced.expect(2, 1)
+            submissions.expect(2, PHASE_B, 1)
+            controlled.submit(2, calibratedMaterialTime(PHASE_B))
+            releaseSteady.countDown()
+            val successor = submissions.await(2)
+            val successorPixels = produced.await(2)
+            assertEquals(successor, successorPixels.frame)
+            assertTrue("first and successor must be genuinely distinct", compareProducerPixels(firstPixels, successorPixels).meaningful())
+            val referenceB = Bitmap.createBitmap(successorPixels.pixels, 168, 168, Bitmap.Config.ARGB_8888)
+            try {
+                val image = awaitCompositorCrop("r11-successor-${if (offerFirst) "grant" else "nudge"}",
+                    { copyPanelOrb(instrumentation, manager) },
+                    { label, bitmap -> persistPanelEvidence(activity, label, bitmap) },
+                    { candidate -> compareMaterialPixels(referenceB, candidate).nearlyEqual() }, {})
+                image.recycle()
+            } finally { referenceB.recycle() }
+            assertEquals(null, error.get())
+            assertTrue("claim came from the wrong caller", observations.any {
+                it.stage == "claim" && it.slot == first.slotId && it.use == first.useGeneration &&
+                    it.origin == if (offerFirst) "grant" else "nudge"
+            })
+        } finally {
+            releaseRender.countDown()
+            releaseSteady.countDown()
+            heldNudge.get()?.invoke()
+            instrumentation.runOnMainSync {
+                createdRenderer?.dispose()
+                if (added) manager.removeViewImmediate(requireNotNull(root))
+                activity.finish()
+            }
+        }
+    }
+
     /** Real positive producer output may precede the first usable child.
      * Drain the ordinary Main nudge before creating a real panel; the exact
      * existing READY use must survive, then transfer to that panel once. */
@@ -98,6 +358,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                         if (frame == first.get()) { transferred += frame; submitted.countDown() }
                     },
                     onDetachedBackendPrepared = { _, _ -> detachedCallbacks.incrementAndGet() },
+                    recoveryHook = NoopKeyguardOrbRecoveryTestHook,
                 )
                 createdRenderer = renderer
                 renderer.configure(KeyguardOrbBufferRenderSpec(lease, artifact,

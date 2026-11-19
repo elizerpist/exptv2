@@ -57,6 +57,12 @@ if [[ "$scope" == r10_panel_candidate || "$scope" == r11_panel_candidate ]]; the
 fi
 if [[ "$scope" == r11_panel_candidate ]]; then
   methods+=(r11PositiveReadyBeforeGrantSurvivesEarlyNudge
+    r11OfferBeforeGrantTransfersInsideGrantWithNudgeHeld
+    r11GrantBeforeOfferTransfersViaOrdinaryNudge
+    r11PendingPositiveRetiredBeforeGrantCannotSubmitIntoReplacement
+    r11PrivacyChangeWithIdenticalVisualStillGetsFreshLease
+    r11FirstOfferSurvivesVisibleFreezeAndPressureFull
+    r11FirstOfferSurvivesVisibleFreezeAndPressureLight
     isolatedOrbReadyFrameCannotSubmitAfterItsAttachmentIsRetired
     isolatedOrbPreApplyFailureAndPostTransferObserverFailureHaveDifferentOwnership)
 fi
@@ -66,7 +72,7 @@ for method in "${methods[@]}"; do
   case "$method" in
     r10ColdRootReportsActualAttachAndLayoutForEachObservation)
       selected_class=com.fluvi.app.lockscreen.KeyguardFirstDrawObservationInstrumentationTest ;;
-    r09WorstGapSurvivesFullExportPressure|r09WorstGapSurvivesLightExportPressure|firstDirectAndHideCommitEvidenceKeepTheirOriginalOperations|r10CompactColdAndWorstGapSurviveFullPressure|r10CompactColdAndWorstGapSurviveLightPressure)
+    r09WorstGapSurvivesFullExportPressure|r09WorstGapSurvivesLightExportPressure|firstDirectAndHideCommitEvidenceKeepTheirOriginalOperations|r10CompactColdAndWorstGapSurviveFullPressure|r10CompactColdAndWorstGapSurviveLightPressure|r11FirstOfferSurvivesVisibleFreezeAndPressureFull|r11FirstOfferSurvivesVisibleFreezeAndPressureLight)
       selected_class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest ;;
   esac
   selector+="${selector:+,}${selected_class}#${method}"

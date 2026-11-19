@@ -622,6 +622,9 @@ internal object KeyguardCardDiagnostics {
          * ledger. Later INSPECTION_FINISHED records complete this same object. */
         var cause: InspectionTimeline? = null,
         var renderSummary: Map<String, String> = emptyMap(),
+        /** First lease evidence is capture/show-owned even before hide. */
+        var r11Lease: String? = null,
+        var r11Evidence: Map<String, String> = emptyMap(),
     )
 
     private data class HideEpisode(
@@ -738,6 +741,8 @@ internal object KeyguardCardDiagnostics {
          * its decision is reduced. This is scoped to this capture/attempt. */
         val pendingHideCommits: ArrayDeque<PendingHideCommit> = ArrayDeque(),
         val pendingRetirements: ArrayDeque<PendingRetirement> = ArrayDeque(),
+        val pendingR11: ArrayDeque<TimingEvent> = ArrayDeque(),
+        var pendingR11Omitted: Int = 0,
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         /** This compact causal spine is independent of the raw event ring.
          * A later hidden-state storm cannot evict an earlier wake/attach/hide
@@ -827,7 +832,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -1301,6 +1306,50 @@ internal object KeyguardCardDiagnostics {
                     it.operationId == operationId && it.attachGeneration == event.attachGeneration
                 }
             }
+            fun reduceFirstOffer(show: ShowEpisode, sample: TimingEvent) {
+                val f = sample.fields
+                val lease = "${f["r11Attachment"] ?: return}/${f["r11Generation"] ?: return}"
+                if (show.r11Lease == null) show.r11Lease = lease
+                if (show.r11Lease != lease) return
+                val values = show.r11Evidence.toMutableMap()
+                fun keep(key: String, value: String?) {
+                    if (value != null && key !in values) values[key] = value
+                }
+                keep("renderer", f["r11Renderer"])
+                keep("child", f["r11Child"])
+                keep("grantId", f["r11GrantId"])
+                keep("ready", f["r11Ready"])
+                keep("offer", f["r11Offer"])
+                keep("grant", f["r11Grant"])
+                if (sample.reason != "steady") {
+                    keep("slot", f["r11Slot"])
+                    keep("use", f["r11Use"])
+                }
+                when (sample.reason) {
+                    "offer" -> {
+                        keep("shader0Hit", f["r11ShaderHit"])
+                        keep("shader0Constructed", f["r11ShaderConstructed"])
+                        keep("shader0WallNs", f["r11ShaderWallNs"])
+                        keep("shader0CpuNs", f["r11ShaderCpuNs"])
+                    }
+                    "nudge" -> keep("nudge", sample.uptimeMs.toString())
+                    "claim" -> { keep("claim", sample.uptimeMs.toString()); keep("origin", f["r11Origin"]) }
+                    "applyBegin" -> keep("applyBegin", sample.uptimeMs.toString())
+                    "applyEnd" -> { keep("applyEnd", sample.uptimeMs.toString()); keep("disposition", "submitted") }
+                    "commit" -> { keep("commitMain", sample.uptimeMs.toString()); keep("commitReceipt", f["r11ExtraAt"]) }
+                    "ack" -> keep("ack", sample.uptimeMs.toString())
+                    "steady" -> {
+                        keep("steady", sample.uptimeMs.toString()); keep("steadySlot", f["r11Slot"]); keep("steadyUse", f["r11Use"])
+                        keep("shader1Hit", f["r11ShaderHit"]); keep("shader1Constructed", f["r11ShaderConstructed"])
+                        keep("shader1WallNs", f["r11ShaderWallNs"]); keep("shader1CpuNs", f["r11ShaderCpuNs"])
+                    }
+                    "drop", "revoke", "ambiguous" -> {
+                        keep("disposition", sample.reason); keep("dispositionAt", sample.uptimeMs.toString())
+                        keep("dispositionReason", f["r11Detail"])
+                    }
+                }
+                show.r11Evidence = values
+            }
             when (stage) {
                 "SCREEN_ON_RECEIVED" -> if (attempt.screenOnReceivedAtUptimeMs == null) attempt.screenOnReceivedAtUptimeMs = event.uptimeMs
                 "INSPECTION_QUEUED" -> {
@@ -1452,6 +1501,13 @@ internal object KeyguardCardDiagnostics {
                             ),
                         )
                     }
+                    val created = showEpisode()
+                    if (created != null) {
+                        val buffered = attempt.pendingR11.filter {
+                            it.showOperationId == operationId && it.attachGeneration == event.attachGeneration
+                        }
+                        buffered.forEach { sample -> reduceFirstOffer(created, sample); attempt.pendingR11.remove(sample) }
+                    }
                     attempt.showingInspectionRequestId = event.requestId
                     attempt.finalState = "SHOW_DECIDED"
                 }
@@ -1471,6 +1527,14 @@ internal object KeyguardCardDiagnostics {
                     if (it.r10LayoutAt == null) { it.r10LayoutAt = event.uptimeMs; it.r10LayoutSize = fields["r10RootSize"] }
                 }
                 "R10_MAIN_ASYNC_READY" -> showEpisode()?.let { if (it.r10MainAsyncAt == null) it.r10MainAsyncAt = event.uptimeMs }
+                "R11_FIRST" -> {
+                    val show = showEpisode()
+                    if (show != null) reduceFirstOffer(show, event)
+                    else if (event.showOperationId != null) {
+                        if (attempt.pendingR11.size < 16) attempt.pendingR11.addLast(event)
+                        else attempt.pendingR11Omitted += 1
+                    }
+                }
                 "FIRST_ROOT_PREDRAW" -> showEpisode()?.let {
                     if (it.firstPreDrawAtUptimeMs == null) {
                         it.firstPreDrawAtUptimeMs = event.uptimeMs
@@ -1670,9 +1734,10 @@ internal object KeyguardCardDiagnostics {
     )
 
     private fun copyAttempt(attempt: TimingAttempt): TimingAttempt = attempt.copy(
-        shows = ArrayDeque(attempt.shows.map { it.copy(cause = it.cause?.copy(), renderSummary = it.renderSummary.toMap()) }),
+        shows = ArrayDeque(attempt.shows.map { it.copy(cause = it.cause?.copy(), renderSummary = it.renderSummary.toMap(), r11Evidence = it.r11Evidence.toMap()) }),
         hides = ArrayDeque(attempt.hides.map { it.copy(cause = it.cause?.copy()) }),
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
+        pendingR11 = ArrayDeque(attempt.pendingR11.map { it.copy(fields = it.fields.toMap()) }),
         inspections = LinkedHashMap(attempt.inspections.mapValues { (_, timeline) -> timeline.copy() }),
         causalSpine = ArrayDeque(attempt.causalSpine.map { it.copy(fields = it.fields.toMap()) }),
     )
@@ -1848,6 +1913,33 @@ internal object KeyguardCardDiagnostics {
         attemptsForCausalEvidence.forEach { attempt ->
             val first = attempt.shows.firstOrNull()
             val cold = first?.renderSummary
+            val offer = first?.r11Evidence ?: emptyMap()
+            fun v(key: String) = offer[key] ?: "UNOBSERVED"
+            val offerAt = offer["offer"]?.toLongOrNull()
+            val grantAt = offer["grant"]?.toLongOrNull()
+            val applyBegin = offer["applyBegin"]?.toLongOrNull()
+            val applyAt = offer["applyEnd"]?.toLongOrNull()
+            val revokedAt = offer["dispositionAt"]?.toLongOrNull()
+            val bothReady = if (offerAt != null && grantAt != null) maxOf(offerAt, grantAt) else null
+            val bothToApplyBegin = if (bothReady != null && applyBegin != null && applyBegin >= bothReady &&
+                (revokedAt == null || revokedAt >= bothReady)) applyBegin - bothReady else null
+            val bothToApplyEnd = if (bothReady != null && applyAt != null && applyAt >= bothReady &&
+                (revokedAt == null || revokedAt >= bothReady)) applyAt - bothReady else null
+            val steadyAt = offer["steady"]?.toLongOrNull()
+            val directToSteady = if (applyAt != null && steadyAt != null && steadyAt >= applyAt)
+                steadyAt - applyAt else null
+            select("a${attempt.id}:r11First", buildString {
+                append(" R11_FIRST attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"}")
+                append(" lease=${first?.r11Lease ?: "UNOBSERVED"} renderer=${v("renderer")} child=${v("child")} grantId=${v("grantId")}")
+                append(" first=${v("slot")}/${v("use")} ready=${v("ready")} offer=${v("offer")} grant=${v("grant")} nudge=${v("nudge")}")
+                append(" claim=${v("claim")}/${v("origin")} apply=${v("applyBegin")}/${v("applyEnd")} bothReadyToApplyBeginMs=${bothToApplyBegin ?: "UNOBSERVED"} bothReadyToApplyEndMs=${bothToApplyEnd ?: "UNOBSERVED"}")
+                append(" commitReceipt=${v("commitReceipt")} commitMain=${v("commitMain")} ack=${v("ack")}")
+                append(" successor=${v("steadySlot")}/${v("steadyUse")}@${v("steady")} directToSuccessorMs=${directToSteady ?: "UNOBSERVED"}")
+                append(" shader0=${v("shader0Hit")}/${v("shader0Constructed")}/${v("shader0WallNs")}/${v("shader0CpuNs")}")
+                append(" shader1=${v("shader1Hit")}/${v("shader1Constructed")}/${v("shader1WallNs")}/${v("shader1CpuNs")}")
+                append(" disposition=${v("disposition")}/${v("dispositionAt")}/${v("dispositionReason")} pendingOmitted=${attempt.pendingR11Omitted}")
+                appendLine()
+            }, attempt.id)
             select("a${attempt.id}:compact", buildString {
                 append(" R10_COMPACT attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"}")
                 append(" attach=${first?.attachGeneration ?: "UNOBSERVED"} req=${first?.requestId ?: "UNOBSERVED"}")
@@ -1862,8 +1954,10 @@ internal object KeyguardCardDiagnostics {
                 appendLine()
             }, attempt.id)
             attempt.hides.forEach { hide ->
+                val route = attempt.shows.firstOrNull { it.attachGeneration == hide.attachGeneration }
+                    ?.renderSummary?.get("r08Route") ?: "UNOBSERVED"
                 select("a${attempt.id}:compactHide${hide.operationId}",
-                    " R10_COMPACT_HIDE attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} attachedBefore=${hide.attachedBefore ?: "UNOBSERVED"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "UNOBSERVED"} layer=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeReturnAtUptimeMs ?: "UNOBSERVED"}\n", attempt.id)
+                    " R10_COMPACT_HIDE attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} attachedBefore=${hide.attachedBefore ?: "UNOBSERVED"} event=${hide.cause?.eventTimeUptimeMs ?: "UNOBSERVED"} callback=${hide.triggerReceivedAtUptimeMs ?: "UNOBSERVED"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "UNOBSERVED"} layer=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeReturnAtUptimeMs ?: "UNOBSERVED"} route=$route\n", attempt.id)
             }
         }
         attemptsForCausalEvidence.forEach { attempt ->

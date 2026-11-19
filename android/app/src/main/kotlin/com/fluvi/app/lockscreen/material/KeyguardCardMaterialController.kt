@@ -191,12 +191,14 @@ internal class KeyguardCardMaterialController(
     private var isolatedTransitionStartedNanos = 0L
     private var isolatedOrbPausedTime: KeyguardMaterialTime? = null
     private var activeOrbLease: KeyguardOrbBufferLease? = null
+    private var activeOrbLeaseFull: Boolean? = null
     private var restrictiveTransitionActive = false
     private var restrictiveReconcilePending = false
     private var currentFirstPublication: KeyguardOrbFirstPublicationToken? = null
     private var firstHandoffToken: KeyguardOrbFirstPublicationToken? = null
     private var firstHandoffCaptureOwner: Any? = null
     private var firstHandoff: KeyguardIsolatedFirstHandoffSnapshot? = null
+    private var firstOfferReporter: ((KeyguardOrbFirstOfferObservation) -> Unit)? = null
     private val isolatedOrbRendererDelegate = lazy {
         KeyguardOrbBufferRenderer(
             onFirstPublished = ::onIsolatedOrbFirstPublished,
@@ -211,6 +213,7 @@ internal class KeyguardCardMaterialController(
             publicationObserver = isolatedOrbPublicationObserver,
             materialTimeSource = isolatedOrbMaterialTimeSource,
             timingOwner = drawEvidenceOwner,
+            firstOfferReporter = { firstOfferReporter },
             onLayerHideSubmitted = { submission ->
                 onIsolatedLayerHideSubmitted?.invoke(submission)
             },
@@ -444,6 +447,7 @@ internal class KeyguardCardMaterialController(
             // asynchronous artifact/layout callback can observe the neutral
             // scene. The View bootstrap is immediately privacy-effective.
             activeOrbLease = null
+            activeOrbLeaseFull = null
             isolatedOrbRenderer.retire("privacy-tightening")
         }
         if (!isolatedOrbRequested) {
@@ -451,6 +455,7 @@ internal class KeyguardCardMaterialController(
             isolatedOrbFailed = false
             isolatedOrbFailedVisualKey = null
             activeOrbLease = null
+            activeOrbLeaseFull = null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
                 isolatedOrbRendererDelegate.isInitialized()
             ) {
@@ -541,6 +546,7 @@ internal class KeyguardCardMaterialController(
                     // An exception must not resurrect the previous full scene.
                     currentFirstPublication = null
                     activeOrbLease = null
+                    activeOrbLeaseFull = null
                     if (isolatedOrbRendererDelegate.isInitialized()) {
                         runCatching { isolatedOrbRenderer.retire("privacy-transition-failure") }
                     }
@@ -674,6 +680,7 @@ internal class KeyguardCardMaterialController(
         // keep that one valid async intent. A real withdrawal, pending show,
         // replacement or disposal still invalidates it below.
         if (!attached && !authorizedShowPending && reason == "hide") return
+        firstOfferReporter = null
         detachedPrimeArmed = false
         authorizedShowPending = false
         submittedVisibleScene = null
@@ -699,6 +706,7 @@ internal class KeyguardCardMaterialController(
         activeAttachment = 0L
         attachedRoot = null
         activeOrbLease = null
+        activeOrbLeaseFull = null
         currentFirstPublication = null
         firstHandoffToken = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
@@ -805,6 +813,12 @@ internal class KeyguardCardMaterialController(
         authorizedShowPending = true
         detachedPrimeArmed = false
         if (isolatedOrbRendererDelegate.isInitialized()) isolatedOrbRenderer.beginAuthorizedShow()
+    }
+
+    /** Called before addView while the service still owns the exact show
+     * operation; every first-offer token snapshots this observer. */
+    fun bindFirstOfferReporter(reporter: ((KeyguardOrbFirstOfferObservation) -> Unit)?) {
+        firstOfferReporter = reporter
     }
 
     fun endAuthorizedShow() {
@@ -1229,6 +1243,7 @@ internal class KeyguardCardMaterialController(
         val attachment = if (attached) activeAttachment else 0L
         val previous = activeOrbLease
         val lease = if (previous != null && previous.attachment == attachment &&
+            activeOrbLeaseFull == scene.full &&
             previous.visualKey == scene.profile.visualKey &&
             previous.programKey == artifact.programKey &&
             previous.width == width && previous.height == height
@@ -1241,6 +1256,7 @@ internal class KeyguardCardMaterialController(
             height = height,
         )
         activeOrbLease = lease
+        activeOrbLeaseFull = scene.full
         if (attached && previous != null && previous != lease) {
             // The current View scene is already selected. It is a static
             // bootstrap only; the new child stays the sole animated owner.
@@ -1387,6 +1403,7 @@ internal class KeyguardCardMaterialController(
         pressureRetryAfterAttachment = activeAttachment
         detachedIsolatedBackendSelected = false
         activeOrbLease = null
+        activeOrbLeaseFull = null
         currentFirstPublication = null
         coldPresentationState = ColdPresentationState.LIVE
         bootstrapVisualKey = null

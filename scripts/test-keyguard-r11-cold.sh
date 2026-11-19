@@ -21,6 +21,10 @@ if [[ "$overlay" == none ]]; then
 else
   git -C "$target" diff --name-only -- | grep -Fx 'android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt' > /dev/null
   git -C "$target" diff --name-only -- | grep -Fx 'android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt' > /dev/null
+  unexpected=$(git -C "$target" diff --name-only -- | grep -v -F -x \
+    -e 'android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt' \
+    -e 'android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt' || true)
+  [[ -z "$unexpected" ]] || { printf 'unexpected baseline overlay: %s\n' "$unexpected" >&2; exit 1; }
 fi
 evidence="$root/android/keyguard-r11-cold"
 [[ ! -e "$evidence" ]] || { echo 'refusing to overwrite cold evidence' >&2; exit 1; }
@@ -176,6 +180,9 @@ if [[ "$scope" == r11_cold_baseline ]]; then
   else
     printf 'RED_NOT_ESTABLISHED command_exit=%s\n' "$red_rc" > "$evidence/baseline-red.status"
   fi
+  # Keep the original panel sample even when the RED assertion failed.
+  timeout -k 2s 20s adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-material-smoke \
+    > "$evidence/baseline-red-material.tar" 2> "$evidence/baseline-red-material.stderr" || result=1
 fi
 # Preserve trace processor/coverage even if either correctness assertion failed.
 if curl --fail --location --silent --show-error --retry 2 https://get.perfetto.dev/trace_processor -o "$evidence/trace_processor"; then

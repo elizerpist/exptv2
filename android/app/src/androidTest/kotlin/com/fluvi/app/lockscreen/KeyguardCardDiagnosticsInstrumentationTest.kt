@@ -897,6 +897,61 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r10CompactColdAndWorstGapSurviveFullPressure() = r10CompactColdAndWorstGap("FULL")
     @Test fun r10CompactColdAndWorstGapSurviveLightPressure() = r10CompactColdAndWorstGap("LIGHT")
 
+    @Test fun r11FirstOfferSurvivesVisibleFreezeAndPressureFull() = r11FirstOfferSurvivesVisibleFreezeAndPressure("FULL")
+    @Test fun r11FirstOfferSurvivesVisibleFreezeAndPressureLight() = r11FirstOfferSurvivesVisibleFreezeAndPressure("LIGHT")
+
+    private fun r11FirstOfferSurvivesVisibleFreezeAndPressure(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r11-visible-$mode", "profile", mode)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 1111L, 1L, "wake", 100L))
+        val show = KeyguardCardDiagnostics.newShowOperation(owner, 1L, null)
+        val identity = mapOf("r11Renderer" to 7, "r11Attachment" to 1, "r11Generation" to 9,
+            "r11Slot" to 2, "r11Use" to 4, "r11Ready" to 105, "r11Offer" to 110)
+        fun emit(reason: String, at: Long, fields: Map<String, Any?> = emptyMap()) {
+            KeyguardCardDiagnostics.captureEvent(context, "R11_FIRST", reason, observedUptimeMs = at,
+                diagnosticContext = owner, operation = show, fields = identity + fields)
+        }
+        // A synchronous grant callback can precede SHOW's reduction.
+        emit("offer", 110, mapOf("r11ShaderHit" to false, "r11ShaderConstructed" to true,
+            "r11ShaderWallNs" to 8000, "r11ShaderCpuNs" to 5000))
+        emit("grant", 120, mapOf("r11Grant" to 120, "r11Child" to 77, "r11GrantId" to 88))
+        emit("claim", 121, mapOf("r11Origin" to "grant"))
+        emit("applyBegin", 123)
+        emit("applyEnd", 125)
+        emit("commit", 129, mapOf("r11ExtraAt" to 128))
+        emit("ack", 130)
+        emit("steady", 150, mapOf("r11Slot" to 3, "r11Use" to 2, "r11ShaderHit" to true,
+            "r11ShaderConstructed" to false, "r11ShaderWallNs" to 100, "r11ShaderCpuNs" to 50))
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "main", operation = show,
+            observedUptimeMs = 101)
+        repeat(550) { index ->
+            KeyguardCardDiagnostics.captureEvent(context, "R11_FIXTURE_NOISE", "é".repeat(80),
+                observedUptimeMs = 200L + index, diagnosticContext = owner, fields = mapOf("n" to index))
+            if (index % 100 == 99) KeyguardCardDiagnostics.captureSnapshot(context)
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val line = report.lineSequence().first { it.startsWith(" R11_FIRST ") }
+        assertTrue(line.contains("lease=1/9") && line.contains("first=2/4"))
+        assertTrue(line.contains("claim=121/grant") && line.contains("bothReadyToApplyBeginMs=3") &&
+            line.contains("bothReadyToApplyEndMs=5"))
+        assertTrue(line.contains("commitReceipt=128") && line.contains("ack=130"))
+        assertTrue(line.contains("successor=3/2@150") && line.contains("directToSuccessorMs=25"))
+        assertTrue(line.contains("shader0=false/true/8000/5000") && line.contains("shader1=true/false/100/50"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32 * 1024)
+
+        // A late old callback must not acquire the new capture's owner.
+        KeyguardCardDiagnostics.startCapture(context, "r11-new-$mode", "profile", mode)
+        val next = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 1112L, 2L, "wake", 500L))
+        val nextShow = KeyguardCardDiagnostics.newShowOperation(next, 2L, null)
+        KeyguardCardDiagnostics.captureEvent(context, "R11_FIRST", "commit", operation = show,
+            observedUptimeMs = 501, fields = identity)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "main", operation = nextShow,
+            observedUptimeMs = 502)
+        val nextReport = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val nextLine = nextReport.lineSequence().first { it.startsWith(" R11_FIRST ") }
+        assertTrue(nextLine.contains("lease=UNOBSERVED") && nextLine.contains("commitReceipt=UNOBSERVED"))
+        assertFalse(nextLine.contains("lease=1/9"))
+    }
+
     private fun r10CompactColdAndWorstGap(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r10-export-$mode", "profile", mode)
         val hideIds = mutableListOf<Long>()
