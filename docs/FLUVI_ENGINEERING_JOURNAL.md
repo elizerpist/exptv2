@@ -11004,3 +11004,235 @@ The exact corrected Human profile APK is [REVIEW ONLY — direct HTTPS bytes](ht
 Status: **implementation coded, device verification incomplete**; **automation FAIL** at cold screenshot completion and five independent panel controls; **APK verified and downloadable for review only**; **physical acceptance PENDING — USER ONLY**. The reviewer must choose the next privacy/compositor and unperturbed measurement step. No new speculative repair or phone-install request is made from these failed gates.
 
 Final local Flutter checks were repeated on documentation-only descendant `3f8dd8e934004552b3365590b365e05bda56af2a`, with unchanged application, scripts and tests relative to executable `8a91bf2d79f25780bb420c1a4d14abe846eac333`: boundary tests 12/12, analysis with 20 informational notices, and fast tests 1037 + 3 + 4 all passed. The [recorded logs](https://media.githubusercontent.com/media/elizerpist/exptv2/109a78128dcc2a1d114aed17581257df9ed75d6b/r10-flutter-final-8a91bf2d79f2.zip) have ZIP SHA-256 `1d0985b82e4801a3009c5f5f66c585ca365ea70f397618034501c57435e09f89`. The profile APK has not been installed on a device; its source identity, format, downloadable bytes and signature were verified as documented.
+
+## 2026-11-19 — R10 physical rejection and R11 first authorized buffer handoff
+
+Nothing A142 / API 35 / profile, application 8a91bf2d79f25780bb420c1a4d14abe846eac333. User said “Semmi sem javult.” This supersedes the previous pending physical status for R10. R10 does not close W-SHOW, W-HIDE or W-LOCK-ANIM. Source, graph 44bc9b1cca84fb2bd09f4c953382d6cedd9cf2ee, docs-only HEAD 366d6141d09c47b9b49d90b0fd203b328d59bf88 and capture 043bef94-0fa4-4bad-8b4c-4d1e8cc3809e are distinct. No physical launcher verdict.
+
+In the retained first wake, screen-on→SHOW 453 ms, screen-on→first direct submit 788 ms, direct→first steady submit 227 ms. READY→Main was 259 ms with root attach/layout overlapping that wait. The phone lacks the exact legal child-grant timestamp. Measured initial R09→R10 screen-on→first live 1433→788 ms; the two cold observations are unpaired. An exact positive first use may be dropped when normal delivery precedes the child or wait for a normal message when the child is already eligible. Selected H1: let either the valid grant or the normal message consume one pending current first frame, preserving privacy, identity and real fences. The 217 ms child walk, 135 ms second-slot shader scope, fallback pacing and delayed withdrawals remain separately tracked in the handoff. Do not repeat R10's preparation change as a new repair.
+
+R10 implementation present; targeted lower tests PASS; cold 44566440642 FAIL, panel 44566440872 FAIL 16/21, full and normal delivery NOT RUN, verified evaluation APK delivered; physical performance REJECTED. R11 handoff issued. R11 application implementation, validation and APK NOT RUN by reviewer. R11 PHYSICAL VALIDATION — PENDING, USER ONLY.
+Standalone handoff file SHA-256 c2eb41b9a7a49621f255f4dfabe9d984086aca61e2b6be1ceb2fae7831707483. Extract text strictly between the two standalone delimiter lines; the final newline is part of the file.
+
+FLUVI_R11_HANDOFF_BEGIN
+1. TITLE / TASK INTENT
+
+R11 IMPLEMENTATION — publish the first current lockscreen ORB buffer at the first legal opportunity. The user physically rejected R10. Deliver a Human profile APK containing both this production repair and the measurements that can falsify it. The primary target is W-SHOW, from the first authorized current buffer to the first correct image and the beginning of actual motion. Observe continuing animation and withdrawal as separate outcomes. The reviewer owns diagnosis and repair selection.
+
+2. AUTHORITATIVE APPLICATION STATE
+
+Repository elizerpist/exptv2, branch fix/orb-v4-latency-lockscreen. Phone and latest reviewed application 8a91bf2d79f25780bb420c1a4d14abe846eac333, parent 7a1ec21b55aeaf69ef56c2b49dcc5114d7271b60, tag fluvi-r10-orb-first-8a91bf2d79f2. R10 profile APK 120213714 bytes, SHA-256 9eb2e6c175e14a54d151dbbf5bc88ddd4f4364e78de69a3e8084e26c7cf5b8e9. Latest inspected branch tip 366d6141d09c47b9b49d90b0fd203b328d59bf88, parent 3f8dd8e934004552b3365590b365e05bda56af2a. Both are journal/report-only. This handoff is a separate journal-only descendant. Preserve concurrent work and resolve intervening application changes explicitly.
+
+3. HARD PREFLIGHT
+
+Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries using the versions and access paths supplied in this handoff. Explicitly report missing material. The prompt writer owns diagnosis, causal interpretation, the repair concept and any refactor decision. Implement only the specified technical contract or execute only the specified evidence-collection experiment; do not select a new root cause or repair strategy. If source, logs or tests contradict the plan, preserve and report exact evidence and return the affected decision to the reviewer. Continue independent authorized work. Follow the supplied risk-to-test matrix and the verified focused-validation route. Record every relevant failure and every diagnostic repetition. Start full delivery only after the specified entry conditions; diagnostic selection does not satisfy full required gates. Do not repeat a rejected repair without new evidence and a reviewer decision. Resolve the exact physically tested application source separately from documentation-only HEAD commits. Preserve the dashboard contracts and verify the specified native lockscreen and launcher-widget boundaries.
+
+Read DEBUGGING_LOOP_VERY_IMPORTANT.txt fully too. Current project uploads and SHA-256:
+project_sources/02-FLUVI_PROMPT_WRITER_RULES-1-.md (v2.1) ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2
+project_sources/01-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md (v1.2) c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b
+project_sources/03-DEBUGGING_LOOP_VERY_IMPORTANT.txt 5d85bad2c00e4a6ab680b843fe68cb9265dccb7d2af3e6acbe5d9e9528d4c674
+On the implementation VM, their three complete named FLUVI_RULE_ASSET_BEGIN/END blocks are in 161f63675121302432be2026898bed07b23d7ded:docs/FLUVI_ENGINEERING_JOURNAL.md. The loop block has a heading prefix and Markdown fence. Read the live journal separately, root MILESTONE_COMMITS.md, docs/R10_FIRST_RENDER_VALIDATION_2026-11-19.md and the R09/R08 handbacks. Protected physical dashboard floor 6e962187e90e2a82431b1f91b224d2b52a6e0ba7.
+
+    git fetch origin
+    git status --short --branch
+    git worktree list
+    git log -9 --format='%H %P %s' origin/fix/orb-v4-latency-lockscreen
+    git diff --name-status 8a91bf2d79f25780bb420c1a4d14abe846eac333..origin/fix/orb-v4-latency-lockscreen
+    git show 161f63675121302432be2026898bed07b23d7ded:docs/FLUVI_ENGINEERING_JOURNAL.md
+    git show 44bc9b1cca84fb2bd09f4c953382d6cedd9cf2ee:docs/codegraph-r10-final-orb-first-render-2026-11-19.md
+
+4. PHYSICAL USER EVIDENCE
+
+User: “Semmi sem javult.” Nothing A142, Android 35, profile, ORB/orbOnly/full, foreground/background off, keyguard requested, service connected, notificationTimeoutMs=0. FULL/FROZEN capture 043bef94-0fa4-4bad-8b4c-4d1e8cc3809e, process 24411-f5fb1ca3, session 1, 24,808 ms, 2026-11-19 17:56:57.798 +0100. First service attachment and three later retained attempts. Times below are uptime ms unless labelled otherwise.
+
+First attempt 1, show 2, request 10, attachment 1, lease 1/2, child 3589483. Times in the middle column omit the common 112843 prefix.
+Boundary                                                Times                Delta
+Wake-cycle callback → screen-on                         8231→8373            142 ms
+Screen-on → SHOW decision                               8373→8826            453 ms
+SHOW → add begin → add return                           8826→8833→8886       7 + 53 ms
+Add return → Worker first READY / offer posted           8886→8900            14 ms
+READY → async Main probe / root attach dispatch          8900→8935 / 8944     35 / 44 ms
+READY → root first layout / preDraw / draw               8900→9076/9078/9085  176 / 178 / 185 ms
+READY → ordinary Main first-buffer entry                8900→9159            259 ms
+Direct apply begin/end → commit receipt                 9160/9161→9170       1 ms apply + 9 ms
+Direct → first steady apply                             9161→9388            227 ms
+Screen-on → direct / first steady                       8373→9161/9388       788 / 1,015 ms
+
+First slot 1/use 2 shader scope 0 ms at ms resolution. Second slot 2/use 1: ack of first at 9189, next recorded frame entry 9246, resources 9246–9247, prepareSlotShaders 9247–9382 (135 ms wall), result 9387, steady apply 9388. Both showed passes=1, prev=false, primed=true. That field is a renderer-wide key. It does not establish prior slot-local readiness or 135 ms of shader CPU. Prewarming preceded capture, so absent cold tuples do not prove zero detached jobs.
+
+First inspection req1 took 234 ms, ended ROOT_UNAVAILABLE with one main marker. The later showing inspection req10 took 296 ms, of which 217 ms over 32 child accesses, max 77 ms. Wake callback→SHOW was 595 ms. In attempt 6 the active-root call took 157 out of 171 ms with negligible recorded child time.
+
+Attempt | Cycle→first live | Screen-on→first live | Actual hide op | Callback→local / remove return
+1 | 930 ms | 788 ms | 3 | 48 / 72 ms
+4 | 349 ms | 267 ms | 12 | 37 / 54 ms
+5 | 260 ms | 112 ms | 15 | 21 / 42 ms
+6 | 219 ms | 219 ms | 18 | 33 / 44 ms
+
+Attempt 4 submitted one isolated first frame then entered PRESSURE_VIEW with NO_SUCCESSOR. Two retired slots in leases 3/4 and 2/3 were PUBLISHED without receipts in its snapshot. The third was current. The first lease in attempt 1 actually drained. Attempts 5/6 show the View route. Attempt 4 View max gap 98 ms. Attempt 5 exported one 120.775 ms gap, with 0.184 ms thread CPU in the sampled draw and 0.033 ms Canvas-submit scope. There was about 61.2 ms from previous draw end to callback entry and 58.9 ms from callback exit to traversal start. No identified owned work accounts for that full gap. On actual hide 3, event→callback was 202 ms, event→local hide 250 ms, event→remove return 274 ms. The corresponding actual hide 12 values were 112, 149 and 166 ms. Later detached cleanup operations 4/13/16/19 are separate.
+
+R09, phone source 1dddbf6f6fbe4b17ec0fdcb033848c8996721529: screen-on→first live 1433 ms, first worker request→result 1236 ms, addReturn→root 1231 ms, READY→Main 19 ms, direct→steady 73 ms. In R10 the corresponding values were 788, 12, 199, 259 and 227 ms. These are individual unpaired cold observations with different trigger and scheduling conditions. They do not establish a stable speedup. Physical wake/unlock origin, first physical pixels and physical removal are UNOBSERVED by the app on both captures on the Nothing A142. The user rejected R10.
+
+5. DRIVE LOG AUDIT
+
+Exact capture-ID search returned no Drive match. The older November 10 general timing document is historical. Use the user-pasted R10 export and the measurements above. A byte-identical original file, its SHA-256, and its Drive modification time were unavailable to the reviewer. exportBytes=31509 is an exporter field. 1499 recorded, 275 retained, 1220 evicted, 4 coalesced, last persisted seq 1. Retained summaries 1,4,5,6. Verbose 5/6 incomplete, critical verbose a5:show14/a6:show17/a5:hide16/a6:hide19 omitted, one draw gap exported and eight omitted. Compact rows survive. No evidence for attempts 2/3 here. Diagnostic producer max 43.728 ms is capture-wide and its overlap is unknown. Preserve subsequent original exports and their hashes if available.
+
+6. COMMIT / AGENT-EVIDENCE AUDIT
+
+c3b313b8cc27197a3a60110abed9cae9f1194666 pinned the R10 cold harness. 7a1ec21b55aeaf69ef56c2b49dcc5114d7271b60 bounded detached demand, prevented a preparation-only scene from seeding a visible previous layer and added cold/retention evidence. Corrected 8a91bf2d preserved an armed explicit prime across a no-op detached hide and added a delayed-artifact reproduction. R10 lower gates passed: assembly, JVM app 154/core 150, 12 specified Flutter boundary tests and fast Flutter suite.
+
+Corrected API35 cold run 44566440642 (job 135709363166, artifact 14552273362) failed twice. Two cold processes reached an authorized live submit, but the 24-screen observer failed before calibrated images, warm controls and matched withdrawal. PID 2426 screen→live 3047 ms, PID 2623 1764 ms. Original traces show Main first traversal continued ~315 and ~531 ms after first layout. First live was ~23 and ~11 ms after that traversal ended, respectively. Exact lease-specific READY/grant times missing in those exports. Keep the 36 trace setup notices per trace. Screenshot load and the emulator preclude transferring the numbers to the Nothing phone.
+
+Panel 44566440872 (job 135709363646, artifact 14553072106) passed 16/21. (1) First privacy-transition crop was all white. (2) External neutral reference fiducial unavailable; the failing screenshot was not saved. (3) Empty pressure-motion crop. (4) Held-release case timed out waiting for frame 4. (5) Mixed-size case timed out at frame 4. No positive proof of correct intermediate privacy pixels or observed leak. No silent substitution of later successful images. Full native, strict full-service repetitions, normal Human and dashboard-profile gates NOT RUN. Actual R10 profile APK was a review-only build; user physically tested and rejected it. Raw archives on 70ea7b473ce9d4926185cb859a3b1d4455f4a889, cold ZIP SHA-256 5fd618ea4b06e708861dbb34593e080a4590e705d982d304b15c8e587aeb6a21; panel ZIP 9d5cafe0124849325ed358ecfadc3e869baaabd392624a8d273fcaaece0361e8. The old r10_cold_baseline selector points to R09. R11 needs the physically rejected R10 baseline.
+
+7. GRAPH PROVENANCE AND IMPACT
+
+Tooling commit 44bc9b1cca84fb2bd09f4c953382d6cedd9cf2ee. Read docs/codegraph/manifest.json, docs/codegraph-r10-final-orb-first-render-2026-11-19.md and docs/codegraph-r10-final-orb-first-render-queries-2026-11-19.txt. Matching application SHA 8a91bf2d. SCIP-Dart 1.6.2, manifest SHA-256 8861fa8edf92084d44c5889b9880cf47bf0cf8e7d2edfa3f193c60ade0ca7282, index SHA-256 d2dead5900c63d2afd8cf3ac13f0d86b63d02beaec7c6b3fc7346908517ef19b. The class and constructor of KeyguardTimingCaptureBridge have three production and five test references. Kotlin is outside this index. Native paths below start at android/app/src/main/kotlin/com/fluvi/app/lockscreen/. Renderer/controller/material View are under material/. Tests are in corresponding test or androidTest trees. Line numbers apply to the phone SHA.
+
+Risk | Exact owner and consumer | Old → new behavior | Guard and proof
+R1 | KeyguardOrbBufferRenderer.kt, Worker.render → Api34.onFrameReady:1123 → ensureLayer:870 | first frame depended on one normal Main message; the grant callback can now take the waiting use | exact current lease and child, one transfer; T1/T2
+R2 | KeyguardCardMaterialController.kt, reconcileIsolatedOrbTarget:1217, onAttached:569, onDetached:669 → Api34.configure/attach/retire | genuine detached prime and pending-positive result can both lack a child → distinguish by existing demand/lease lifetime | consistent synchronous cached-artifact and asynchronous paths, no authorization from READY; T1/T3
+R3 | Api34.hideLayer/retire/dispose → Worker.dropReady:1849 / markFirstPublished:1733 | first use can remain READY while its root is becoming eligible → real revoke discards the exact unpublished use once | no late close after transfer, no forced reuse, no pool expansion; T3/T4
+R4 | Api34.publishReady:1155 → controller.onIsolatedOrbFirstPublished:1267 and first commit | earlier call can re-enter controller from layout → publish only after complete identity/grant installation | token-scoped bootstrap retirement, delayed callback invalidation; T2/T4/T5
+R5 | FluviKeyguardCardService.kt → KeyguardCardSettings.kt formatReport:1753, data snapshots in renderer/controller | first offer, grant and delivery evidence also available before withdrawal | bounded snapshots tied to original owner and clock, compact budget plus worst gap; T6
+R6 | KeyguardServiceOverlayInstrumentationTest.kt:100/125 and scripts/test-keyguard-r10-cold.sh | full PNG sampling obstructed timing and later phases → separate timed and calibrated visual observations | real service, fresh process, immutable sample list, fail-closed oracle; T7
+R7 | KeyguardHeaderMaterialViewInstrumentationTest.kt:1233/1274/1415 and registered panel methods | preserve original failed samples/owners before assertion | existing privacy/blank/held-successor requirements retain independent verdicts; T5/T7
+R8 | KeyguardWindowSnapshotReader, FluviKeyguardCardService.applyInspection, visibility policy, fallback/launcher/dashboard | accidental earlier disclosure or unrelated regression | credential, withdrawn, discreet, API/route, protected Flutter gates; T3/T5 and full validation
+
+8. CURRENT SOURCE FACTS
+
+KeyguardCardWindow.show starts authorized show at :182. manager.addView:217 succeeds before controller.onAttached:242. reconcileIsolatedOrbTarget creates the positive activeOrbLease and calls renderer.configure before renderer.attach. The latter requires actual root attachment. Worker can produce before a legal child exists. Api34.onFrameReady always posts a regular Main Handler message. Its detached-prepared branch checks attachment==null and matching desired lease; it does not distinguish a positive result waiting for the not-yet-attached root. publishReady drops on missing layer or invalid identity. The phone trace shows a delayed successful delivery. An early dropped positive is separately possible from source.
+
+Api34.ensureLayer obtains actual rootSurfaceControl and correct size, creates and reparents the hidden child, applies position, then calls worker.setAttachment:958. This installs the exact grant synchronously before posting Worker control work. A child becoming eligible inside layout can therefore miss the first waiting frame until a separate Main dispatch. Worker already has a single READY/RENDERING gate and firstLeaseAwaitingMain. publishReady handles direct first setBuffer/visibility, first receipt, release fence and ack. publishSteady handles later buffer-only replacements. These paths have different ownership rights.
+
+Worker.render:2074 selects the first compatible FREE slot. prepareSlotShaders:2312 constructs a slot-local KeyguardHeaderShader on program mismatch. KeyguardHeaderMaterialView.kt:905 owns that class; its constructor creates RuntimeShader. The primed flag near :2112 compares renderer-wide keys. Keep independent mutable shader instances and measure actual local misses. No shader construction change in this revision.
+
+9. PROVEN / UNPROVEN / MISSING EVIDENCE
+
+PROVEN: first positive result was ready before the observed Android root attach dispatch; the ordinary Main message ran much later. The code has an order-dependent first delivery. Repeated routine tests can miss it because an installed recoveryHook prevents pre-grant production. The user saw no improvement with R10. First motion, inspection, fallback and withdrawal delays are documented in section 4.
+UNPROVEN: how much of 259 ms is recoverable; whether the particular successful phone attempt ever discarded a positive result; second-slot CPU compilation time; accessibility IPC/cache cause; attribution for later View gaps; true unlock signal age. The two emulator traces support testing the handoff, without isolating the phone's cause.
+MISSING EVIDENCE: first legal exact child/grant timestamp, later-of-offer/grant→apply, first two correct physical images, physical unlock/removal, omitted later verbose records and positive privacy-transition proof.
+
+10. ROOT-CAUSE OR FORENSIC GATE
+
+Selected H1. Delivery via a separate Main task can postpone a prepared first frame past the legal grant, while delivery before that grant can discard a valid current use. Repair those two orderings as one production contract. Prediction: when the offer precedes its grant, that exact buffer transfers from the grant callback. When the grant precedes READY, the ordinary Main wake consumes the exact use. Each frame has one terminal disposition. Earlier lifecycle events still revoke it.
+
+Falsification: a matched R10 baseline with negligible post-eligibility delay leaves little recoverable time. If R11 shortens the measured handoff while correct first pixels and first distinct motion remain as late, H1 only accounts for an internal delay. If only a timestamp moves, report it plainly. Do not claim the phone is fixed from a passing order test.
+
+Other registered hypotheses: H2 pre-admission latency (453 ms after SCREEN_ON; 217 ms in request 10 child accesses; 157 ms active-root access elsewhere). The 6750d2b strategy regressed physically and 92afad1 restored batching. Keep freshness, complete-tree requirement, cache and authorization. H3 first successor shader/scheduling cost, measured 135 ms wall in a 227 ms interval. Measure real per-slot hit, constructor invocation and wall/thread CPU. H4 two outstanding older leases can exhaust compatible capacity, triggering PRESSURE_VIEW and subsequent View gaps. H5 framework event age plus application decision/handoff and final composition can all affect withdrawal. Measure actual withdrawal rather than detached cleanup. Each has its own causal test and stays open independently.
+
+11. SCOPE LOCK / NO-TOUCH
+
+One runtime change, confined to first positive isolated ORB publication. Add the bounded observations, baseline/candidate fixtures and delivery support described below. Keep API 34+ ORB/orbOnly eligibility, normal pressure View, card, neutral/privacy, pool size three, actual fences, clock, palette, touch, focus and geometry contracts. No new surface/window/renderer thread, speculative successor draw, global async/front-of-queue priority, prefetch flag, new timeout to force a slot free or broader keyguard privilege. The normal message remains a wake mechanism. An active traversal cannot be preempted by a higher-priority Handler.
+
+12. LAYERS / BOUNDS / OWNERSHIP
+
+Eligibility and privacy belong to the existing service/controller on Main. The window owns its real accessibility-overlay root. Api34 on Main owns hidden reparent, position, first setBuffer+visibility and revoke. The Worker owns a successful READY use with acquire fence until the handoff decides its disposition. A pending offer refers to this existing use. It has no new right to show a layer. Valid grant requires exact renderer, current authorized positive lease and attachment, actual root, current mode/privacy/route, exact child, successful placement, correct dimensions and active publication target. Use object identity in control flow, hashes only in diagnostics. A missing root parent or null reparent transaction must preserve the existing guarded retry on the actual attach/layout/preDraw events, with bootstrap and privacy behavior intact. Observe grant when all these prerequisites hold. First layout alone is an insufficient proxy. Android API reference: https://developer.android.com/reference/android/view/AttachedSurfaceControl#buildReparentTransaction(android.view.SurfaceControl)
+
+13. REQUIRED RED TESTS
+
+T1 READY before grant, both orderings of message delivery. Drive real positive configuration before the child is usable. Record the original producer use A. First let ordinary delivery run early, then enable the legitimate equal-size child: A must survive and submit once, without a detached-prepared notification. Separately hold only the ordinary first-delivery nudge until after actual grant establishment. A must issue its direct transaction inside the grant callback before releasing the nudge; the nudge cannot transfer/drop it again. Baseline RED is an actual dropped use or a grant that returns while the offered use is still waiting for the held nudge. Do not hold the OS Main thread to prove this. Keep recoveryHook at its exact Noop in the pre-grant test: Worker.render:2080 enforces a grant before rendering if any non-noop recoveryHook is installed. The existing multi-purpose fixture installs that hook. Use passive producer/offer observation and a test-only nudge gate that leaves production ownership logic intact.
+T2 Grant first, asynchronous result, duplicate true layout/nudge, duplicate/delayed test continuation. Prove once-only transfer and original commit/ack identity; current phase A then a genuinely distinct successor B. Retain the API35 held-next-root nonblank first/direct test on an already-visible parent. Test the real first fresh window independently.
+T3 Hide/dispose while waiting, early hide with no child, retire immediately after grant, rapid A→B with late A ready/commit, same-root full→discreet and size replacement, route revoke/pressure, add failure and renewed visibility. Current B can present when eligible; stale A has zero transfer and no credit. Lease 0 explicit prewarm still drains and handles both cache-hit and delayed artifact; preserve R10's no-op detached hide correction. Check no release/close twice.
+T4 Before-apply injected error → one fence-safe discard; ambiguous throwing apply → existing conservative possibly-published handling; observer/test hook throws after delivery → never drop an already transferred fence; genuine release before worker ack remains replayable. Exercise held old releases with new lease, cancellation of hooks and bounded dispose. Assert at most three slots and one first undecided use. Cover pure deterministic interleavings plus actual Android buffer transactions.
+T5 A/C/B/A producer and independently calibrated compositor controls, correct 168x168 geometry, transparent edges, meaningful different current phases. Verify correct positive neutral/discreet image, absence of stale full detail, no white/empty first sample discarded. Keep unrelated held/pressure cases separately graded. Prior all-white sample means the privacy gate is open.
+T6 Existing LIGHT/FULL maximum export pressure; freeze while visible and after hide, start a new capture during pending callbacks, unobserved points and dropped verbose records. Original compact tuple and worst gap must survive within existing byte limit or be explicitly accounted for. Disabled diagnostics cannot gate publishing or hiding.
+T7 Test host fake controls for mismatched SHA or APK pair, reused process, absent trace, missing method/skipped, invalid bounds, failed screenshot, initially blank crop, sampler failure and cleanup. Preserve complete run and try all independent valid phases. No test obtains PASS by treating an unavailable observation as a negative or by waiting for later correct samples.
+
+14. IMPLEMENTATION CONTRACT
+
+A. In Api34.configure bind a revocable first-offer token to the current positive immutable worker spec and existing authorized show lifetime before worker.configure can run. Reuse it across compatible repeated configure on the same lifetime. Pass that token into the exact producer request/completion. A completion must never obtain its identity by looking up the latest demand. On real replacement, privacy/geometry change, renderer-route revoke, real hide, root detach or dispose invalidate the old token immediately on Main even if layer==null. Preserve authority through the legitimate interval after addView returns and before actual root attach. Lease 0 uses its existing detached preparation and fence-safe discard lane exclusively. Missing Api34.attachment alone must never label a positive use as detached.
+
+B. One existing first READY use can be offered. Use one atomic state transition per ownership handoff with exact token, lease, slot/use, acquire fence and production offer timestamp. State model: open/empty → pending(A) → claimed(A) → settled, or open/pending→revoked. If revoke wins before offer, producer drops its unpublished A once. If offer wins then revoke wins before claim, revocation takes A for discard. A posted stale notification contains only its token or scheduling identity; it cannot close a captured fence independently. While a test continuation is deferred after claim, retain its revocable once-only disposition until it either truly submits or discards. Use a normal coalesced notification with a lost-wakeup-safe recheck or remove the exact stale callback on revoke; keep pending messages/frames bounded. Check post failure as an actual failed handoff/disposition. No new Main/Worker joins, fence waits on Main, busy loop, frame copies or additional pool occupancy. Do not store a SurfaceControl/View on a background thread as new UI authority.
+
+C. Two callers, one Main-only consume function. (1) After Worker offers A it schedules the ordinary Main wake. (2) At the tail of a successful ensureLayer, after worker.setAttachment installs the live exact target and before returning from this callback, attempt the same consume. No READY → return; no legal child yet and token still current → keep pending; revoked token → settle using its exact invalidation path. When both are available, claim once and validate active root, layer, child, route, lease and dimensions again at actual dispatch. Invoke the existing firstPublicationHook through both paths, including held/delayed continuations, and preserve the exact first/direct transaction in publishReady. On genuine hide/reconfigure purge any never-published pending or hook-held use exactly once even if another layout never occurs. Do not fire the hook again via a second grant/nudge. An already-published use must never reach dropReady; its mismatch fallback can close the handed fence. An ambiguous apply retains conservative ownership until real feedback. Successful direct send still orders worker.markFirstPublished before a later retire; bootstrap retires only on the exact first commit. The steady Worker path and receipt/retirement barrier keep their behavior.
+
+D. A grant may be issued during controller/renderer re-entry on a synchronous artifact cache hit. Install all existing controller token/scene/attach state first. Do not consume using the prior configuration on same-root size/privacy changes. The call must honor restrictive transitions, View fallback and true hide. Read-only observation cannot issue a grant. Repeated unchanged placement must not trigger a second position transaction or second direct apply. Proof of success is actual transfer of the same A under both event orders and correct pixels, not a call to a standalone mock state machine.
+
+E. Add bounded operation-correlated Debug Console evidence in the same APK. Capture original capture/session/showOp, attach/generation, renderer, slot/use, grant/child identity, READY, atomic offer, regular nudge entry, grant installed, claim origin, actual apply begin/end, receipt, worker ack, first distinct steady submit, and exact disposition/reason for drop/revoke/ambiguous apply. Define bothReady = max(offerAt,actualValidGrantAt) only for the same non-revoked identity. Export bothReady→apply and direct→successor, distinguish missing and losing callbacks; preserve semantics of R10's original timestamps. Use monotonic uptime for joined endpoints, System.nanoTime and Debug.threadCpuTimeNanos for short shader scopes. On only the first two current uses record the actual per-slot program-key hit before construction, whether constructor ran, and wall/CPU around prepareSlotShaders. Do not change prewarm policy.
+     Use existing bounded capture-owner and snapshot flow in renderer/controller/service, plus KeyguardCardSettings.formatReport compact admission. Add matched event/callback/local-hide/remove and route to compact actual withdrawal when known, especially when verbose rows are omitted. Make correct original pending/settled evidence available on freeze while visible without needing a hide, IO on Main, blocking a Worker, or attaching later results to a newer capture. Prefer compact codes/omitting duplicate verbose text over exceeding the UTF-8 limit. Preserve worst gap and original omission accounting. No per-frame console formatting or logs. Measured pixels belong in external test/phone evidence only.
+
+15. PERFORMANCE GATE
+
+Separate the deterministic mechanism, timing-only endpoint and correct pixel outcome. Record baseline and candidate cold screen-on→SHOW, add return→actual valid child, offer→grant or grant→offer, bothReady→actual direct apply, screen-on→direct, direct→distinct steady use, first correct compositor sample and first distinct successor where measured. Also report warm samples individually, upper/lower bounds or UNOBSERVED, actual framework-event/callback→local hide/remove, measured animation gaps by current route, memory (slots, handles, pending uses), and producer overhead. The first cold episode and worst gap stay in the report. Distinct content must be qualified by the same current identity and meaningful phase/image difference. Calibrate against known positive and wrong images; a static bootstrap/onDraw/transaction commit is insufficient. No phone FPS claim from two emulated frames. Compare within the same environment and measurement protocol. If the mechanism advances but visuals are inconclusive, keep these as separate verdicts. Record W-HOME-ANIM coverage as non-target.
+
+16. IMPLEMENTATION ORDER
+
+Archive R10 and pin identities. Add baseline-compatible observation/orchestration and force the two first-delivery orders. Implement token binding, invalidation and the two Main consumption sites as one coherent production change. Add owner-aware diagnostics, RED/green and image tests, correct the cold fixture as specified below, compile early, run the independent scoped device jobs. Complete the exact-source build, graph and report. If a new cause or policy choice is required return the decision to the reviewer and finish independent authorized work.
+
+17. VALIDATION
+
+Known build environment: project VM with Flutter 3.41.4/Dart 3.11.1, Java 17 and Android build tools. Verify versions. Known device route: GitHub API35 x86_64 KVM runner for fluvi-core.yml, 1080×2400/420 dpi. No local emulator requirement. Run in the clean candidate checkout:
+
+    git diff --check
+    bash scripts/verify-fluvi-boundaries.sh
+    bash scripts/test-keyguard-lower-environment.sh
+    python3 scripts/test-keyguard-r09-panel-harness.py
+    python3 scripts/test-keyguard-r10-cold-harness.py
+    flutter test test/boundary/dashboard_interaction_performance_boundary_test.dart test/boundary/human_diagnostic_apk_delivery_boundary_test.dart test/boundary/dashboard_avatar_profile_boundary_test.dart --reporter expanded
+    (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :fluvi-core:testDebugUnitTest :app:testDebugUnitTest --no-daemon --max-workers=3 --console=plain)
+    flutter analyze --no-fatal-infos
+    bash scripts/test-fluvi-fast.sh --reporter expanded
+
+Expected outcomes: registered baseline methods demonstrably hit the intended ordering; candidate compiles and behavioral assertions pass. Record actual pass/fail/skip counts. A method missing on baseline is not a RED. Extend existing fixed workflow_dispatch choices and shell/Python host checks with r11_cold_baseline (literal 8a91bf2d79f25780bb420c1a4d14abe846eac333), r11_cold_candidate, r11_panel_candidate; preserve existing scope mappings and full delivery. The focused panel includes the 21 R10 method contracts plus the applicable R11 cases and the existing isolatedOrbReadyFrameCannotSubmitAfterItsAttachmentIsRetired, isolatedOrbPreApplyFailureAndPostTransferObserverFailureHaveDifferentOwnership and isolatedOrbStaleFirstCommitCannotUndoSameRootPrivacyOrSizeReplacement cases. Register each with the correct class. Preserve the exact tested application, harness, both APK hashes, immutable ref, executed methods and non-skipped XML. Allowlist actual test overlays for the R10 baseline. For stock R10 preserve identity; if a passive grant/offer timestamp requires app-side observation, verify and print its precise observation-only diff, identify its separate binary as instrumented, and retain a pristine control. Never backport new handoff logic to a baseline.
+
+Timing protocol: two fresh independent service processes per source. Each starts before first authorized attach, no earlier positive frame, same ORB/mode/palette, one cold wake and actual withdrawal, followed by one warm wake and withdrawal. Prove actual service instance, display/keyguard state, root ownership and readiness from their original observations. Use existing bounded owner observations/Perfetto with clock correlation and trace health. No screenshot sampler, PNG compression, controlled phase hold or high-rate accessibility enumeration in the timing intervals. Capture Main/Worker/RenderThread scheduling, traversal/relayout, app trace and available graphics/system producers. Distinguish confirmed owner events and unattributed spans. Measure direct and first distinct steady use; a fallback has a different owner and endpoint. The two source measurements have identical fixture steps. Preserve both complete histories even if a phase fails.
+
+Pixel protocol: one separate, fresh visual-control process per source, on the same disposable API35 environment, with both cold and warm cases. Use the actual accessibility-overlay window. Resolve the independent controlled A/B reference as in the existing producer oracle, allowing meaningful different images. Use a fixed bounded strip (at most six samples per transition, one in flight, existing per-phase deadline). Store the small independent ROI plus pre/post window identity, bounds, background, timestamp before/after sampling. Move encoding and disk writes off the sampling path, preserve failed originals within the fixed budget, and stop/join the sampler before reading its mutable result list. Unstable/absent bounds, missing window or screenshot = UNKNOWN, never a last negative. A verified valid wrong crop = NEGATIVE. Record the last valid negative and first positive, or state an unbounded/inconclusive first-pixel interval. Preserve and classify every white/empty/stale/transition sample and first genuinely distinct successor. The separated timing-only run supplies precise app times, not a surrogate for missing pixels. Continue valid withdrawal/warm/cleanup after a measurement failure and retain the failure. Full/native selection must continue to check the original R10 cold and warm visual contract wherever that original method is selected. Route it to the corrected bounded visual helpers. No arbitrary sleep/timeout extension or dropping the warm phase to pass.
+
+For the three old panel image failures, save the external reference fiducial (even if absent), full failing screen or original bounded ROI, source, window bounds, sample time and expected positive/negative before assertions. Keep first transition crop distinct from subsequent good crops. For the two frame-4 failures record actual requested frame ID, route, exact held uses/receipts and successor capacity before the existing assertion. The pressure View's correct image may pass its own case only; leave an unmet strict isolated-successor contract failed. If new evidence shows a real neutral-content regression or a target never reached, return the exact case to the reviewer. No changes to privacy semantics or release rules to obtain green results.
+
+Run the cheap host/compile/behavior gates first. The focused cold and panel suites are independent. Once their correctness/ordering/current-image, privacy, strict successor, fixture and no-regression conditions pass on the delivered source, dispatch the full native/service gate with its two independent service repetitions and the required 30-cycle coverage. After full success run the ordinary delivery workflow, including required dashboard and Human job. One bounded set for the fixed experiment; no repeated identical full run to get green. A mechanical correction inside this contract must have an identifiable diff/new evidence and new source-qualified results. Keep T1–T7 and R1–R8 statuses and complete every independent artifact even on failure.
+
+18. COMMIT DISCIPLINE
+
+Keep the observation harness, application changes, tests, separate tooling and report distinguishable. Every substantive commit body records prior observed behavior, selected hypothesis, old/new owner and sequence, safety/lifecycle/performance risks, actual method results/SHAs and remaining limits. Preserve concurrent changes and use immutable tags. Append exact source, evidence and all run outcomes to docs/FLUVI_ENGINEERING_JOURNAL.md. Intentional skip for staging/docs/tooling must be verified. A later fixture correction never retroactively changes the original failure.
+
+19. PUSH / BUILD / GRAPH REGENERATION
+
+Use the authenticated build VM. Make an immutable baseline harness tag and a candidate tag, both on verified committed source. The r11 selectors below are the new fixed selectors from section 17. Set variables to the actual tag, SHA, matched run IDs and fresh evidence dirs. Monitor to completion.
+
+    candidate_sha=$(git rev-parse HEAD)
+    candidate_ref="fluvi-r11-orb-first-${candidate_sha:0:12}"
+    git tag "$candidate_ref" "$candidate_sha"
+    git push origin HEAD:fix/orb-v4-latency-lockscreen "refs/tags/$candidate_ref"
+    gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$harness_ref" -f native_diagnostic=true -f native_scope=r11_cold_baseline
+    gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=true -f native_scope=r11_cold_candidate
+    gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=true -f native_scope=r11_panel_candidate
+    gh run list -R elizerpist/exptv2 --workflow fluvi-core.yml --commit "$candidate_sha" --event workflow_dispatch --json databaseId,headSha,headBranch,status,conclusion,url
+    gh run watch "$run_id" -R elizerpist/exptv2 --exit-status
+    gh run view "$run_id" -R elizerpist/exptv2 --json headSha,conclusion,jobs,url
+    gh run download "$run_id" -R elizerpist/exptv2 --dir "$unique_evidence_dir"
+
+After the scoped entry conditions:
+    gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=true -f native_scope=full -f run_nightly=false -f run_baseline_profile=false
+After this full native/service gate passes:
+    gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=false -f run_nightly=false -f run_baseline_profile=false
+
+Produce an actual Human profile APK containing the repair and updated debug console. If normal delivery is blocked, build an explicitly REVIEW ONLY evaluation copy independently on the proven VM. Continue graph/report/artifact work. No phone-install recommendation while the privacy/compositor gates remain open.
+    test "$(git rev-parse HEAD)" = "$candidate_sha"
+    test -z "$(git status --porcelain --untracked-files=no)"
+    FLUVI_BUILD_COMMIT="$candidate_sha" bash scripts/build-human-diagnostic-apk.sh
+    apk=build/app/outputs/flutter-apk/app-profile.apk
+    test -s "$apk"
+    unzip -tq "$apk"
+    wc -c < "$apk"
+    sha256sum "$apk"
+Use Android build-tools apksigner verify --print-certs. Expected signer SHA-256 faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. Verify profile mode/purpose, full app source identity and R11 DEX markers. Publish through Release or the established separate LFS artifact branch, independently re-download the real HTTPS bytes and verify size/hash/ZIP/signature.
+
+Regenerate the graph from a clean pinned source checkout and separate tooling checkout based on 44bc9b1cca84fb2bd09f4c953382d6cedd9cf2ee. Check actual flutter pub get and tracked cleanliness. With real absolute paths:
+    (cd "$source_dir" && dart pub global run scip_dart ./)
+    (cd "$tooling_dir/tools/codegraph" && dart pub get && dart analyze && dart test)
+    (cd "$tooling_dir/tools/codegraph" && dart run bin/fluvi_codegraph.dart generate --index "$source_dir/index.scip" --graph "$tooling_dir/docs/codegraph" --source-root "$source_dir" --source-head "$candidate_sha" --source-ref "$candidate_sha")
+    (cd "$tooling_dir/tools/codegraph" && dart run bin/fluvi_codegraph.dart query --graph "$tooling_dir/docs/codegraph" --symbol KeyguardTimingCaptureBridge)
+Verify index, manifest and shard hashes. Publish immutable tooling identity, real queries, and Kotlin source/definition/caller/test inventory covering offer, grant, revoke, direct and steady publication, shader-scope and diagnostic consumers.
+
+20. COMPLETION REPORT
+
+Lead with APK URL, full app SHA, mode, size, SHA-256, signer, deployability. Link immutable test/source/harness/graph/journal SHAs, job and artifact URLs, raw traces, valid/invalid calibrated images and failures. Give R1–R8 and T1–T7 with PASS/FAIL/NOT RUN and source identity; classify all compile/product/fixture/oracle/measurement/infra failures. Report which execution order was reached, which caller submitted the exact use, its first actual image, first distinct successor, cold/warm stage timings, subsequent pressure motion and withdrawal. Record pre/post eligibility separately. Give W-SHOW/W-HIDE/W-LOCK-ANIM/W-HOME-ANIM baseline/candidate, physical and automatic status with sample counts.
+
+Only once cleared for installation, give a brief Hungarian test card: confirm candidate marker on the Nothing A142, same ORB/orbOnly/full palette, start FULL before a fresh service's first authorized wake, perform that wake and three warm lock/wake/unlock cycles, freeze immediately. Ask when the correct ORB first appeared, whether it paused before moving, whether continuing motion stuttered, and whether it lingered/flashed on unlock. No repeat R10 test, ADB, or manual build from the user.
+
+21. DEFINITION OF DONE
+
+Report implementation, exact-source automated validation, verified downloadable profile APK, and physical acceptance separately. A packaged candidate with a failed visual gate remains a review-only build. Provide the exact blocker and preserved evidence if an external service prevents a step. Finish every independent authorized part. A selective PASS for the handoff or an earlier CPU marker cannot establish user-visible improvement. R10 was physically rejected. R11 PHYSICAL VALIDATION — PENDING, USER ONLY until the user accepts the exact candidate.
+FLUVI_R11_HANDOFF_END
