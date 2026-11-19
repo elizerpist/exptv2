@@ -42,6 +42,9 @@ import com.fluvi.app.lockscreen.material.NoopKeyguardOrbBufferFrameObserver
 import com.fluvi.app.lockscreen.material.NoopKeyguardOrbBufferPublicationObserver
 import com.fluvi.app.lockscreen.material.SystemKeyguardOrbMaterialTimeSource
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
+import com.fluvi.app.lockscreen.material.KeyguardOrbBufferLease
+import com.fluvi.app.lockscreen.material.KeyguardOrbRecoveryTestHook
+import com.fluvi.app.lockscreen.material.NoopKeyguardOrbRecoveryTestHook
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -83,6 +86,24 @@ class KeyguardServiceOverlayInstrumentationTest {
     private val component get() = ComponentName(context, FluviKeyguardCardService::class.java).flattenToString()
 
     @Test fun connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles() {
+        // The host contract selects this one JUnit method. Run the two named
+        // lanes independently so a strict-isolated failure cannot suppress
+        // recovery evidence (or vice versa); preserve the original host
+        // deadline and the strict lane's existing thirty-cycle budget.
+        val recoveryFailure = runCatching { runRecoveryServiceScenario() }.exceptionOrNull()
+        evidence.setLength(0)
+        knownOwnWindowIds.clear()
+        val strictFailure = runCatching { runStrictServiceScenario() }.exceptionOrNull()
+        if (recoveryFailure != null || strictFailure != null) {
+            val failure = AssertionError("Independent lanes: recovery=${if (recoveryFailure == null) "PASS" else "FAIL"}, " +
+                "strictIsolated=${if (strictFailure == null) "PASS" else "FAIL"}")
+            recoveryFailure?.let(failure::addSuppressed)
+            strictFailure?.let(failure::addSuppressed)
+            throw failure
+        }
+    }
+
+    private fun runStrictServiceScenario() {
         assertEquals("This fixture is pinned to API 35", 35, Build.VERSION.SDK_INT)
         // This must be the FIRST UiAutomation request. The default flags
         // suppress the very accessibility service this test needs to exercise.
@@ -287,6 +308,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                 screenOff()
                 shell("input keyevent KEYCODE_WAKEUP")
                 await("rapid display wake", 3_000) { power.isInteractive }
+                record("FIXTURE_RAPID_DISMISS", "uptimeMs=${SystemClock.uptimeMillis()}")
                 shell("wm dismiss-keyguard")
                 await("rapid unlock", 3_000) { !keyguard.isKeyguardLocked }
                 await("rapid terminal withdrawal", 5_000) { overlaysWithdrawn() }
@@ -299,8 +321,7 @@ class KeyguardServiceOverlayInstrumentationTest {
                 val settleDeadline = minOf(deadline, SystemClock.uptimeMillis() + 5_000L)
                 val initialRemaining = settleDeadline - SystemClock.uptimeMillis()
                 assertTrue("Fixture budget exhausted before platform settling", initialRemaining >= 500L)
-                record("FIXTURE_TERMINAL_DISMISS", "globalIdle=notRequired")
-                shell("wm dismiss-keyguard")
+                record("FIXTURE_TERMINAL_OBSERVE", "readOnly=true globalIdle=notRequired")
                 val terminalRemaining = settleDeadline - SystemClock.uptimeMillis()
                 assertTrue("Fixture budget exhausted before terminal platform state", terminalRemaining > 0L)
                 var acceptedObservation: TerminalReentryObservation? = null
@@ -418,6 +439,164 @@ class KeyguardServiceOverlayInstrumentationTest {
         }
     }
 
+    /** A separate actual-service lane; it never fabricates a compositor
+     * release and cannot make the isolated-only thirty-cycle result green. */
+    private fun runRecoveryServiceScenario() {
+        assertEquals("This fixture is pinned to API 35", 35, Build.VERSION.SDK_INT)
+        automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        output = File(context.filesDir, "keyguard-service-probe/r08-recovery").apply { mkdirs() }
+        deadline = SystemClock.uptimeMillis() + 45_000L
+        val resolver = context.contentResolver
+        val savedServices = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        val savedEnabled = Settings.Secure.getString(resolver, Settings.Secure.ACCESSIBILITY_ENABLED)
+        val savedLockDisabled = shell("locksettings get-disabled").trim()
+        val savedSettings = snapshotPreferences("fluvi_native_keyguard_card")
+        val savedMaterial = snapshotPreferences("fluvi_keyguard_header_material")
+        val gate = ServiceReleaseGate()
+        KeyguardOrbBufferRendererTestHooks.recoveryHook = gate
+        KeyguardOrbBufferRendererTestHooks.publicationObserver = gate
+        var captureStarted = false
+        var failure: Throwable? = null
+        try {
+            assertFalse("Secure credentials require a different fixture", keyguard.isDeviceSecure)
+            assertTrue(savedLockDisabled == "true" || savedLockDisabled == "false")
+            assertEquals(168, context.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size))
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, withoutOurService(savedServices))
+            await("recovery previous service disconnected", 8_000) { !FluviKeyguardCardServiceRegistry.connected }
+            shell("input keyevent KEYCODE_WAKEUP")
+            shell("wm dismiss-keyguard")
+            await("recovery initial unlocked", 5_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+            shell("locksettings set-disabled false")
+            instrumentation.runOnMainSync {
+                FluviKeyguardCardSettings.update(context, mapOf("requested" to true,
+                    "showFinancialDetails" to true, "presentationMode" to "orb", "animationMode" to "orbOnly"))
+                val epoch = maxOf(SystemClock.elapsedRealtimeNanos(),
+                    (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
+                assertTrue(FluviKeyguardMaterialStore.publish(context, materialProfile(), epoch))
+            }
+            val capture = KeyguardCardDiagnostics.startCapture(context,
+                InstrumentationRegistry.getArguments().getString("sourceSha") ?: "instrumentation-source-unprovided",
+                "debug", "LIGHT")
+            captureStarted = true
+            captureId = capture["captureId"].toString()
+            val services = withoutOurService(savedServices).split(':').filter { it.isNotBlank() } + component
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, services.joinToString(":"))
+            setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
+            await("recovery actual Android service", 10_000) { FluviKeyguardCardServiceRegistry.connected }
+
+            fun wake(name: String): Pair<Overlay, KeyguardOrbBufferProducerFrame> {
+                screenOff(synchronizeInput = true)
+                wakeForIndependentEpisode(name)
+                val window = awaitOverlay(name)
+                var frame: KeyguardOrbBufferProducerFrame? = null
+                await("$name actual first buffer", 8_000) {
+                    val sample = snapshot("$name-first")
+                    frame = gate.submitted(sample.attachment)
+                    frame != null && sample.attachment > 0
+                }
+                return window to requireNotNull(frame)
+            }
+            val (_, a) = wake("r08-held-a")
+            unlockAndAssertWithdrawn("r08-held-a-unlock")
+            gate.awaitReceipt(a)
+            val (_, b) = wake("r08-held-b")
+            unlockAndAssertWithdrawn("r08-held-b-unlock")
+            gate.awaitReceipt(b)
+            val (window, c) = wake("r08-current-c")
+            var baseline = snapshot("r08-before-recovery")
+            await("r08 actual pressure takeover", 8_000) {
+                baseline = snapshot("r08-await-recovery")
+                baseline.route == "PRESSURE_VIEW" && baseline.attachment == c.lease.attachment &&
+                    baseline.recoveryGeneration == c.lease.generation
+            }
+            assertEquals(168, window.bounds.width())
+            assertEquals(168, window.bounds.height())
+            assertTrue("real old receipts must still be held", gate.heldCount() >= 2)
+            SystemClock.sleep(600)
+            val middle = snapshot("r08-recovery-window-1")
+            SystemClock.sleep(600)
+            val last = snapshot("r08-recovery-window-2")
+            assertEquals(window.id, requireOverlay().id)
+            assertEquals("PRESSURE_VIEW", last.route)
+            assertEquals(baseline.attachment, last.attachment)
+            assertTrue(middle.episodeShader - baseline.episodeShader >= 3 &&
+                middle.episodePhase - baseline.episodePhase >= 2)
+            assertTrue(last.episodeShader - middle.episodeShader >= 3 &&
+                last.episodePhase - middle.episodePhase >= 2)
+            assertTrue(gate.heldCount() >= 2)
+            val image = awaitOrb(window, "r08-recovery-current.png") { hasColoredMaterial(it) }
+            image.recycle()
+            record("R08_RECOVERY_RESULT", "PASS attachment=${last.attachment} generation=${last.recoveryGeneration}" +
+                " heldReceipts=${gate.heldCount()} window1Draws=${middle.episodeShader - baseline.episodeShader}" +
+                " window2Draws=${last.episodeShader - middle.episodeShader}")
+            unlockAndAssertWithdrawn("r08-current-c-unlock")
+        } catch (error: Throwable) {
+            failure = error
+            record("R08_RECOVERY_RESULT", "FAIL ${error.javaClass.simpleName}:${error.message}")
+            throw error
+        } finally {
+            gate.releaseAll()
+            KeyguardOrbBufferRendererTestHooks.recoveryHook = NoopKeyguardOrbRecoveryTestHook
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = NoopKeyguardOrbBufferPublicationObserver
+            var cleanupFailure: Throwable? = null
+            if (captureStarted) runCatching {
+                File(output, "capture.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"].toString())
+            }.onFailure { cleanupFailure = it; record("EXPORT_FAILED", it.toString()) }
+            runCatching {
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, withoutOurService(savedServices))
+                val end = SystemClock.uptimeMillis() + 5_000L
+                while (FluviKeyguardCardServiceRegistry.connected && SystemClock.uptimeMillis() < end) SystemClock.sleep(50)
+                assertFalse("Service must stop before restoration", FluviKeyguardCardServiceRegistry.connected)
+                restorePreferences(savedSettings)
+                restorePreferences(savedMaterial)
+                shell("input keyevent KEYCODE_WAKEUP")
+                shell("wm dismiss-keyguard")
+                if (savedLockDisabled == "true" || savedLockDisabled == "false") shell("locksettings set-disabled $savedLockDisabled")
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
+                setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
+            }.onFailure { cleanupFailure = it; record("RESTORE_FAILED", it.toString()) }
+            File(output, "fixture.txt").writeText(evidence.toString())
+            cleanupFailure?.let { if (failure == null) throw AssertionError("Recovery fixture cleanup failed", it) }
+        }
+    }
+
+    private class ServiceReleaseGate : KeyguardOrbRecoveryTestHook, KeyguardOrbBufferPublicationObserver {
+        private data class Receipt(val lease: KeyguardOrbBufferLease, val slot: Long, val use: Long,
+                                   val deliver: () -> Unit)
+        private val rendered = java.util.concurrent.ConcurrentHashMap.newKeySet<KeyguardOrbBufferLease>()
+        private val frames = java.util.concurrent.ConcurrentLinkedQueue<KeyguardOrbBufferProducerFrame>()
+        private val held = java.util.concurrent.ConcurrentLinkedQueue<Receipt>()
+        private val opened = java.util.concurrent.atomic.AtomicBoolean(false)
+        override fun allowRender(lease: KeyguardOrbBufferLease): Boolean =
+            lease.attachment <= 0L || rendered.add(lease)
+        override fun onSubmitted(frame: KeyguardOrbBufferProducerFrame) { frames.add(frame) }
+        override fun dispatchRelease(lease: KeyguardOrbBufferLease, slotId: Long, use: Long,
+                                     fence: SyncFence?, deliver: () -> Unit) {
+            if (opened.get()) { deliver(); return }
+            val receipt = Receipt(lease, slotId, use, deliver)
+            held.add(receipt)
+            if (opened.get() && held.remove(receipt)) deliver()
+        }
+        fun submitted(attachment: Long): KeyguardOrbBufferProducerFrame? =
+            frames.firstOrNull { it.lease.attachment == attachment }
+        fun heldCount(): Int = held.size
+        fun awaitReceipt(frame: KeyguardOrbBufferProducerFrame) {
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < end) {
+                if (held.any { it.lease == frame.lease && it.slot == frame.slotId && it.use == frame.useGeneration }) return
+                SystemClock.sleep(24)
+            }
+            throw AssertionError("Real platform receipt not observed for ${frame.lease} slot=${frame.slotId}/${frame.useGeneration}")
+        }
+        fun releaseAll() {
+            opened.set(true)
+            while (true) (held.poll() ?: break).deliver()
+        }
+    }
+
     private data class Material(
         /** Legacy View-owned actual shader draw count. */
         val shader: Long,
@@ -439,13 +618,26 @@ class KeyguardServiceOverlayInstrumentationTest {
         val state: String,
         val hardware: Boolean,
         val activeRenderer: String?,
+        val route: String?,
+        val attachment: Long,
+        val recoveryGeneration: Long,
+        val episodeShader: Long,
+        val episodePhase: Long,
         val effect: String?,
         val generatedAgslHash: String?,
     ) {
         /** The isolated path must not borrow old View counters to pass its
          * output assertion.  The legacy route retains its established proof. */
-        fun actualOutputCount(): Long = if (isolatedPublished > 0L) isolatedPublished else shader
-        fun actualProgressCount(): Long = if (isolatedPublished > 0L) isolatedPublished else phase
+        fun actualOutputCount(): Long = when (route) {
+            "ISOLATED" -> isolatedPublished
+            "PRESSURE_VIEW" -> episodeShader
+            else -> shader
+        }
+        fun actualProgressCount(): Long = when (route) {
+            "ISOLATED" -> isolatedPublished
+            "PRESSURE_VIEW" -> episodePhase
+            else -> phase
+        }
     }
 
     /**
@@ -1231,8 +1423,21 @@ class KeyguardServiceOverlayInstrumentationTest {
                 0, 0, -1, 0, 0, InputDevice.SOURCE_KEYBOARD)
             assertTrue("Synchronized wake input was rejected", automation.injectInputEvent(event, true))
         }
-        await("$name keyguard eligible device gates", 5_000) {
-            power.isInteractive && keyguard.isKeyguardLocked
+        val transitions = mutableListOf<String>()
+        var previousPair: Pair<Boolean, Boolean>? = null
+        var omittedTransitions = 0
+        try {
+            await("$name keyguard eligible device gates", 5_000) {
+                val pair = power.isInteractive to keyguard.isKeyguardLocked
+                if (pair != previousPair) {
+                    if (transitions.size < 24) transitions += "${SystemClock.uptimeMillis()}:${pair.first}/${pair.second}"
+                    else omittedTransitions++
+                    previousPair = pair
+                }
+                pair.first && pair.second
+            }
+        } finally {
+            record("FIXTURE_WAKE_GATE_PAIRS", "name=$name interactive/locked=${transitions.joinToString(",")} omitted=$omittedTransitions")
         }
         val settleDeadline = minOf(deadline, SystemClock.uptimeMillis() + 5_000L)
         val remaining = settleDeadline - SystemClock.uptimeMillis()
@@ -1311,12 +1516,23 @@ class KeyguardServiceOverlayInstrumentationTest {
 
     private fun awaitLive(label: String, baseline: Material, minimumAdvances: Long, expectedWindowId: Int): Material {
         var latest = baseline
+        var routeBaseline = baseline
         await("$label actual live shader/phase output", 18_000, pollMs = 500) {
             assertEquals("LIVE output must belong to the current attachment", expectedWindowId, requireOverlay().id)
             latest = snapshot(label)
+            if (latest.attachment != routeBaseline.attachment || latest.route != routeBaseline.route ||
+                latest.recoveryGeneration != routeBaseline.recoveryGeneration
+            ) {
+                if (routeBaseline.route == "ISOLATED" && latest.route == "PRESSURE_VIEW") {
+                    assertEquals("Pressure transfer changed attachment", routeBaseline.attachment, latest.attachment)
+                    assertTrue("Pressure route lacks a claimed generation", latest.recoveryGeneration > 0L)
+                }
+                routeBaseline = latest
+                return@await false
+            }
             val advanced = latest.state == "LIVE" && latest.hardware &&
-                latest.actualOutputCount() > baseline.actualOutputCount() &&
-                latest.actualProgressCount() >= baseline.actualProgressCount() + minimumAdvances
+                latest.actualOutputCount() > routeBaseline.actualOutputCount() &&
+                latest.actualProgressCount() >= routeBaseline.actualProgressCount() + minimumAdvances
             if (advanced) assertEquals("Attachment must still own the sampled LIVE output", expectedWindowId, requireOverlay().id)
             advanced
         }
@@ -1364,6 +1580,11 @@ class KeyguardServiceOverlayInstrumentationTest {
                     state = values["coldPresentationState"].toString(),
                     hardware = values["hardwareAccelerated"] == true,
                     activeRenderer = values["activeRenderer"] as? String,
+                    route = values["r08EffectiveRoute"] as? String,
+                    attachment = (values["r08Attachment"] as? Number)?.toLong() ?: 0L,
+                    recoveryGeneration = (values["r08RecoveryGeneration"] as? Number)?.toLong() ?: 0L,
+                    episodeShader = (values["r08AttachmentShaderTraversals"] as? Number)?.toLong() ?: 0L,
+                    episodePhase = (values["r08AttachmentPhaseAdvances"] as? Number)?.toLong() ?: 0L,
                     effect = values["effectId"] as? String,
                     generatedAgslHash = values["generatedAgslHash"] as? String,
                 )
@@ -1379,6 +1600,7 @@ class KeyguardServiceOverlayInstrumentationTest {
             "desired:${material.isolatedWorkerDesiredAttachment}/${material.isolatedWorkerDesiredGeneration}," +
             "attached:${material.isolatedWorkerAttachedAttachment}/${material.isolatedWorkerAttachedGeneration}" +
             " renderer=${material.activeRenderer}" +
+            " route=${material.route} attachment=${material.attachment} recovery=${material.recoveryGeneration}" +
             " state=${material.state}")
         return material
     }

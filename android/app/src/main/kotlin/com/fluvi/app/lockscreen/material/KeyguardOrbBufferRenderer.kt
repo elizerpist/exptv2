@@ -25,6 +25,7 @@ import androidx.annotation.RequiresApi
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.Executor
 import java.util.function.Consumer
 import kotlin.math.min
@@ -72,6 +73,16 @@ internal interface KeyguardOrbFirstPublicationTestHook {
 
 internal object NoopKeyguardOrbFirstPublicationTestHook : KeyguardOrbFirstPublicationTestHook
 
+/** Instrumentation may defer only a real platform receipt or a real offered
+ * ticket. Production never installs this hook. It must not block a thread. */
+internal interface KeyguardOrbRecoveryTestHook {
+    fun allowRender(lease: KeyguardOrbBufferLease): Boolean = true
+    fun dispatchRelease(lease: KeyguardOrbBufferLease, slotId: Long, use: Long,
+                        fence: SyncFence?, deliver: () -> Unit) = deliver()
+    fun dispatchTicket(ticket: KeyguardOrbPressureTicket, deliver: () -> Unit) = deliver()
+}
+internal object NoopKeyguardOrbRecoveryTestHook : KeyguardOrbRecoveryTestHook
+
 /**
  * The Main-owned submission boundary for removing an isolated child layer.
  * This is not a presentation callback and must never be used to release a
@@ -117,6 +128,14 @@ internal data class KeyguardOrbBufferRendererSnapshot(
     val workerAttachedGeneration: Long,
     /** Worker completion cadence, not display/compositor presentation. */
     val completionGapMaxMs: Long,
+    val workerSampleAtUptimeMs: Long,
+    val workerSampleSequence: Long,
+    val workerBlockReason: Int,
+    val workerGrantAttachment: Long,
+    val workerGrantGeneration: Long,
+    val workerGrantIdentity: Int,
+    val workerGrantActive: Boolean,
+    val workerLastCompletionAtUptimeMs: Long,
 )
 
 private data class KeyguardOrbBufferAttachment(
@@ -277,6 +296,86 @@ internal class KeyguardOrbPublicationGrantStore<T : Any> {
     fun revokeCurrent(): T? = value.getAndSet(null)
 }
 
+internal enum class KeyguardOrbPressureReason { ALL_OLD_UNRELEASED, NO_SUCCESSOR, WRONG_SIZE_OLD }
+
+/** A pending offer can be consumed once or cancelled once, never both. */
+internal class KeyguardOrbPressureClaim {
+    private val state = AtomicInteger(0)
+    fun claim(): Boolean = state.compareAndSet(0, 1)
+    fun cancel(): Boolean = state.compareAndSet(0, 2)
+    fun isPending(): Boolean = state.get() == 0
+    fun isClaimed(): Boolean = state.get() == 1
+}
+
+/** A single bounded Worker observation. Object identity of grant/child is
+ * authority; numeric identities in [slots] are diagnostic only. */
+internal class KeyguardOrbPressureTicket(
+    val rendererId: Long,
+    val lease: KeyguardOrbBufferLease,
+    val sceneKey: String,
+    val sceneFull: Boolean,
+    val effectId: String,
+    val usesPortal: Boolean,
+    val child: SurfaceControl,
+    internal val grant: Any,
+    val reason: KeyguardOrbPressureReason,
+    val startedAt: Long,
+    val offeredAt: Long,
+    val opportunities: Int,
+    val slots: List<KeyguardOrbOwnershipSlotSnapshot>,
+) {
+    internal val claim = KeyguardOrbPressureClaim()
+}
+
+/** Worker-owned transient filter. Arguments are one coherent observation of
+ * the actual pool. It conveys no permission to reuse a slot. */
+internal class KeyguardOrbPressurePolicy {
+    private var grant: Any? = null
+    private var reason: KeyguardOrbPressureReason? = null
+    private var progress = 0
+    var startedAt = 0L
+        private set
+    var opportunities = 0
+        private set
+
+    fun reset() {
+        grant = null
+        reason = null
+        startedAt = 0L
+        opportunities = 0
+    }
+
+    fun observe(
+        grant: Any?, eligible: Boolean, slotCount: Int, oldUnreleased: Int,
+        oldOwned: Int, free: Int, currentInFlight: Boolean, wrongSizeOld: Boolean,
+        currentCompatible: Boolean, progress: Int, now: Long, opportunity: Boolean,
+    ): KeyguardOrbPressureReason? {
+        val candidate = when {
+            !eligible || grant == null -> null
+            slotCount == 3 && oldUnreleased == 3 -> KeyguardOrbPressureReason.ALL_OLD_UNRELEASED
+            free == 0 && oldOwned >= 2 && !currentInFlight -> KeyguardOrbPressureReason.NO_SUCCESSOR
+            wrongSizeOld && !currentCompatible -> KeyguardOrbPressureReason.WRONG_SIZE_OLD
+            else -> null
+        }
+        if (candidate == null) {
+            reset()
+            return null
+        }
+        if (this.grant !== grant || reason != candidate || this.progress != progress) {
+            this.grant = grant
+            reason = candidate
+            this.progress = progress
+            startedAt = now
+            opportunities = 0
+        }
+        if (opportunity && opportunities < Int.MAX_VALUE) opportunities++
+        return candidate.takeIf {
+            it == KeyguardOrbPressureReason.ALL_OLD_UNRELEASED ||
+                (opportunities >= 3 && now - startedAt >= 50L)
+        }
+    }
+}
+
 /** Presence is distinct from the nullable platform fence carried by a
  * release receipt. A receipt is consumed exactly once by its slot/use key. */
 internal data class KeyguardOrbReleaseReceipt<T>(val value: T?)
@@ -306,6 +405,7 @@ internal object KeyguardOrbBufferRendererTestHooks {
         NoopKeyguardOrbSteadyPublicationBarrier
     @Volatile var ownershipObserver: KeyguardOrbOwnershipObserver = NoopKeyguardOrbOwnershipObserver
     @Volatile var firstPublicationHook: KeyguardOrbFirstPublicationTestHook = NoopKeyguardOrbFirstPublicationTestHook
+    @Volatile var recoveryHook: KeyguardOrbRecoveryTestHook = NoopKeyguardOrbRecoveryTestHook
 }
 
 /**
@@ -322,6 +422,8 @@ internal class KeyguardOrbBufferRenderer(
     private val onFirstCommitReceived: (KeyguardOrbFirstPublicationToken, Long, Long) -> Unit,
     private val onFirstCommitted: (KeyguardOrbFirstPublicationToken) -> Unit,
     private val onFailure: (KeyguardOrbBufferLease, Throwable) -> Unit,
+    private val onPressure: (KeyguardOrbPressureTicket) -> Unit = {},
+    private val onCapacityRestored: (KeyguardOrbPressureTicket, Long) -> Unit = { _, _ -> },
     /** Called on Main when the View's measured buffer target differs from the
      * immutable lease. The controller creates a new generation; this class
      * never stretches a completed buffer. */
@@ -345,6 +447,7 @@ internal class KeyguardOrbBufferRenderer(
         KeyguardOrbBufferRendererTestHooks.ownershipObserver,
     private val firstPublicationHook: KeyguardOrbFirstPublicationTestHook =
         KeyguardOrbBufferRendererTestHooks.firstPublicationHook,
+    private val recoveryHook: KeyguardOrbRecoveryTestHook = KeyguardOrbBufferRendererTestHooks.recoveryHook,
 ) {
     private val rendererId = nextOrbRendererId.incrementAndGet()
     private var api34: Api34? = null
@@ -396,12 +499,35 @@ internal class KeyguardOrbBufferRenderer(
             workerAttachedAttachment = -1L,
             workerAttachedGeneration = -1L,
             completionGapMaxMs = 0L,
+            workerSampleAtUptimeMs = 0L,
+            workerSampleSequence = 0L,
+            workerBlockReason = 0,
+            workerGrantAttachment = -1L,
+            workerGrantGeneration = -1L,
+            workerGrantIdentity = 0,
+            workerGrantActive = false,
+            workerLastCompletionAtUptimeMs = 0L,
         )
 
     fun ownsFirstPublication(token: KeyguardOrbFirstPublicationToken): Boolean {
         if (!isSupported()) return false
         requireMainThread()
         return api34?.ownsFirstPublication(token) == true
+    }
+
+    /** Main verifies its root and scene before claiming; this checks the
+     * renderer's exact live child/grant and races cancellation atomically. */
+    fun claimPressure(ticket: KeyguardOrbPressureTicket): Boolean {
+        if (!isSupported()) return false
+        requireMainThread()
+        return api34?.claimPressure(ticket) == true
+    }
+
+    /** Queue only after Main has retired the accepted exact layer. */
+    fun acceptPressure(ticket: KeyguardOrbPressureTicket) {
+        if (!isSupported()) return
+        requireMainThread()
+        api34?.acceptPressure(ticket)
     }
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
@@ -443,14 +569,46 @@ internal class KeyguardOrbBufferRenderer(
             onFrameReady = ::onFrameReady,
             onFailure = ::onWorkerFailure,
             onLeaseDrained = ::onLeaseDrained,
+            onPressure = { ticket -> mainHandler.post {
+                if (recoveryHook === NoopKeyguardOrbRecoveryTestHook) deliverPressure(ticket)
+                else recoveryHook.dispatchTicket(ticket) { deliverPressure(ticket) }
+            } },
+            onCapacityRestored = { ticket, observedAt ->
+                mainHandler.post { if (!disposed) onCapacityRestored(ticket, observedAt) }
+            },
             barrier = barrier,
             frameObserver = frameObserver,
             publicationObserver = publicationObserver,
             materialTimeSource = materialTimeSource,
             steadyPublicationBarrier = steadyPublicationBarrier,
             ownershipObserver = ownershipObserver,
+            recoveryHook = recoveryHook,
             rendererId = rendererId,
         )
+
+        private fun deliverPressure(ticket: KeyguardOrbPressureTicket) {
+            if (disposed || desired?.lease != ticket.lease || desired?.scene?.visualKey != ticket.sceneKey ||
+                layerLease != ticket.lease || layer !== ticket.child || !ticket.child.isValid ||
+                attachment?.attachment != ticket.lease.attachment ||
+                attachment?.root?.isAttachedToWindow != true
+            ) {
+                ticket.claim.cancel()
+                return
+            }
+            onPressure(ticket)
+        }
+
+        fun claimPressure(ticket: KeyguardOrbPressureTicket): Boolean {
+            if (disposed || ticket.rendererId != rendererId || desired?.lease != ticket.lease ||
+                desired?.scene?.visualKey != ticket.sceneKey || layerLease != ticket.lease ||
+                layer !== ticket.child || !ticket.child.isValid ||
+                attachment?.attachment != ticket.lease.attachment ||
+                attachment?.root?.isAttachedToWindow != true
+            ) return false
+            return worker.claimPressure(ticket)
+        }
+
+        fun acceptPressure(ticket: KeyguardOrbPressureTicket) = worker.acceptPressure(ticket)
 
         fun configure(spec: KeyguardOrbBufferRenderSpec) {
             if (disposed) return
@@ -533,6 +691,14 @@ internal class KeyguardOrbBufferRenderer(
                 workerAttachedAttachment = workerSnapshot.attachedAttachment,
                 workerAttachedGeneration = workerSnapshot.attachedGeneration,
                 completionGapMaxMs = workerSnapshot.completionGapMaxMs,
+                workerSampleAtUptimeMs = workerSnapshot.sampleAt,
+                workerSampleSequence = workerSnapshot.sampleSequence,
+                workerBlockReason = workerSnapshot.blockReason,
+                workerGrantAttachment = workerSnapshot.grantAttachment,
+                workerGrantGeneration = workerSnapshot.grantGeneration,
+                workerGrantIdentity = workerSnapshot.grantIdentity,
+                workerGrantActive = workerSnapshot.grantActive,
+                workerLastCompletionAtUptimeMs = workerSnapshot.lastCompletionAt,
             )
         }
 
@@ -802,7 +968,8 @@ internal class KeyguardOrbBufferRenderer(
             try {
                 transaction = SurfaceControl.Transaction()
                 firstPublicationHook.beforeApply(token)
-                val release = Consumer<SyncFence> { fence -> worker.release(slotId, useGeneration, fence, childIdentity) }
+                val lease = frame.lease
+                val release = Consumer<SyncFence> { fence -> worker.release(lease, slotId, useGeneration, fence, childIdentity) }
                 val executor = Executor { command ->
                     receiptAt.compareAndSet(0L, SystemClock.uptimeMillis())
                     mainHandler.post(command)
@@ -873,12 +1040,15 @@ internal class KeyguardOrbBufferRenderer(
         private val onFrameReady: (ReadyFrame) -> Unit,
         private val onFailure: (KeyguardOrbBufferLease, Throwable) -> Unit,
         private val onLeaseDrained: (KeyguardOrbBufferLease) -> Unit,
+        private val onPressure: (KeyguardOrbPressureTicket) -> Unit,
+        private val onCapacityRestored: (KeyguardOrbPressureTicket, Long) -> Unit,
         private val barrier: KeyguardOrbRenderBarrier,
         private val frameObserver: KeyguardOrbBufferFrameObserver,
         private val publicationObserver: KeyguardOrbBufferPublicationObserver,
         private val materialTimeSource: KeyguardOrbMaterialTimeSource,
         private val steadyPublicationBarrier: KeyguardOrbSteadyPublicationBarrier,
         private val ownershipObserver: KeyguardOrbOwnershipObserver,
+        private val recoveryHook: KeyguardOrbRecoveryTestHook,
         private val rendererId: Long,
     ) : Choreographer.FrameCallback {
         /**
@@ -960,6 +1130,10 @@ internal class KeyguardOrbBufferRenderer(
         private var nextSlotId = 0L
         private var running = false
         private var disposed = false
+        private val pressurePolicy = KeyguardOrbPressurePolicy()
+        private var lastPressureFrameNanos = Long.MIN_VALUE
+        private var offeredPressure: KeyguardOrbPressureTicket? = null
+        private var restoringPressure: KeyguardOrbPressureTicket? = null
         @Volatile private var produced = 0
         @Volatile private var published = 0
         @Volatile private var dropped = 0
@@ -973,6 +1147,17 @@ internal class KeyguardOrbBufferRenderer(
         @Volatile private var snapshotAttachedAttachment = -1L
         @Volatile private var snapshotAttachedGeneration = -1L
         @Volatile private var completionGapMaxMs = 0L
+        @Volatile private var snapshotAt = 0L
+        @Volatile private var snapshotSequence = 0L
+        /** 0 unknown, 1 no grant, 2 awaiting Main, 3 no free,
+         * 4 incompatible size, 5 active work/capacity. */
+        @Volatile private var snapshotBlockReason = 0
+        @Volatile private var snapshotGrantAttachment = -1L
+        @Volatile private var snapshotGrantGeneration = -1L
+        @Volatile private var snapshotGrantIdentity = 0
+        @Volatile private var snapshotGrantActive = false
+        @Volatile private var snapshotLastCompletionAt = 0L
+        private var currentBlockReason = 0
         private var previousCompletionAtUptimeMs = 0L
         private var starvationStartedAt = 0L
         private var starvationReported = false
@@ -994,6 +1179,14 @@ internal class KeyguardOrbBufferRenderer(
             val attachedAttachment: Long,
             val attachedGeneration: Long,
             val completionGapMaxMs: Long,
+            val sampleAt: Long,
+            val sampleSequence: Long,
+            val blockReason: Int,
+            val grantAttachment: Long,
+            val grantGeneration: Long,
+            val grantIdentity: Int,
+            val grantActive: Boolean,
+            val lastCompletionAt: Long,
         )
 
         init {
@@ -1005,10 +1198,22 @@ internal class KeyguardOrbBufferRenderer(
         fun configure(value: KeyguardOrbBufferRenderSpec) {
             handler.post {
                 if (disposed) return@post
-                if (desired?.lease != value.lease) resetStarvation("lease-changed")
+                if (desired?.lease != value.lease || desired?.scene?.visualKey != value.scene.visualKey) {
+                    if (desired?.lease != value.lease) resetStarvation("lease-changed")
+                    resetPressure()
+                }
                 desired = value
+                // Layer setup may synchronously install a grant before this
+                // configure command reaches Worker. Reconcile either order.
+                val grant = publicationTarget.current()
+                if (grant?.active == true && grant.lease == value.lease && value.lease.attachment > 0) {
+                    attachedLease = value.lease
+                    running = true
+                    evaluatePressure(value, false)
+                }
                 if (!ensureResources(value)) {
                     publishSlotSnapshot()
+                    if (running) requestFrame()
                     return@post
                 }
                 // Detached preparation renders one real frame into a
@@ -1035,6 +1240,7 @@ internal class KeyguardOrbBufferRenderer(
                 }
                 attachedLease = lease
                 running = true
+                desired?.let { evaluatePressure(it, false) }
                 requestFrame()
                 publishSlotSnapshot()
             }
@@ -1051,6 +1257,7 @@ internal class KeyguardOrbBufferRenderer(
             val revokedAtUptimeMs = SystemClock.uptimeMillis()
             val childIdentity = System.identityHashCode(child)
             handler.post {
+                if (desired?.lease == lease || offeredPressure?.lease == lease) resetPressure()
                 retiringLeases += lease
                 if (attachedLease == lease) attachedLease = null
                 slots.filter { it.lease == lease && it.state != SlotState.FREE }.forEach {
@@ -1095,6 +1302,7 @@ internal class KeyguardOrbBufferRenderer(
                 publicationTarget.revokeExact(target)
             }
             handler.post {
+                if (desired?.lease == retiredLease || offeredPressure?.lease == retiredLease) resetPressure()
                 if (attachedLease == retiredLease) attachedLease = null
                 if (desired?.lease == retiredLease) desired = null
                 if (firstLeaseSubmitted == retiredLease) firstLeaseSubmitted = null
@@ -1134,6 +1342,8 @@ internal class KeyguardOrbBufferRenderer(
         fun dispose() {
             publicationTarget.revokeCurrent()?.active = false
             handler.post {
+                resetPressure()
+                restoringPressure = null
                 disposed = true
                 running = false
                 resetStarvation("disposed")
@@ -1164,6 +1374,7 @@ internal class KeyguardOrbBufferRenderer(
                 firstLeaseAwaitingMain = null
                 firstLeaseSubmitted = frame.lease
                 published += 1
+                resetPressure()
                 observeOwnership("first-submitted", slot = slot, log = false)
                 earlyReleaseReceipts.take(frame.slotId to frame.useGeneration)?.let { receipt ->
                     slot.earlyReceiptRetained = false
@@ -1174,7 +1385,25 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
-        fun release(slotId: Long, useGeneration: Long, releaseFence: SyncFence?, childIdentity: Int) {
+        fun release(lease: KeyguardOrbBufferLease, slotId: Long, useGeneration: Long,
+                    releaseFence: SyncFence?, childIdentity: Int, postAlways: Boolean = true) {
+            if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook) {
+                recoveryHook.dispatchRelease(lease, slotId, useGeneration, releaseFence) {
+                    releaseActual(slotId, useGeneration, releaseFence, childIdentity, postAlways)
+                }
+                return
+            }
+            releaseActual(slotId, useGeneration, releaseFence, childIdentity, postAlways)
+        }
+
+        private fun releaseActual(slotId: Long, useGeneration: Long, releaseFence: SyncFence?,
+                                  childIdentity: Int, postAlways: Boolean) {
+            // Preserve the steady path's original direct Worker receipt; a
+            // first publication still posts its acknowledgement as before.
+            if (!postAlways && Looper.myLooper() == thread.looper) {
+                consumeRelease(slotId, useGeneration, releaseFence, childIdentity)
+                return
+            }
             handler.post {
                 val slot = slots.firstOrNull { it.id == slotId } ?: run {
                     releaseFence?.close()
@@ -1219,6 +1448,7 @@ internal class KeyguardOrbBufferRenderer(
                     slot.fencePending = releaseFence?.isValid == true
                     slot.earlyReceiptRetained = true
                     observeOwnership("release-received", slot = slot, log = false)
+                    desired?.let { evaluatePressure(it, false) }
                 } else {
                     // Duplicate callbacks cannot replace the first exact
                     // receipt or consume a later use generation.
@@ -1238,6 +1468,7 @@ internal class KeyguardOrbBufferRenderer(
             slot.fencePending = releaseFence?.isValid == true
             slot.state = SlotState.WAIT_RELEASE_FENCE
             if (!replayed) observeOwnership("release-received", slot = slot, log = slot.retired)
+            desired?.let { evaluatePressure(it, false) }
             awaitFence(slotId, useGeneration, SlotState.WAIT_RELEASE_FENCE, releaseFence)
             publishSlotSnapshot()
         }
@@ -1256,15 +1487,23 @@ internal class KeyguardOrbBufferRenderer(
         }
 
         fun snapshot(): Snapshot {
-            // Snapshot is advisory diagnostics. It must not block Main behind
-            // rendering; worker-published volatile scalars deliberately avoid
-            // exposing the mutable slot list across thread ownership.
-            return Snapshot(
-                produced, published, dropped, failures, snapshotInFlight, snapshotReady,
-                snapshotCompositorOwned, snapshotRunning, snapshotDesiredAttachment,
-                snapshotDesiredGeneration, snapshotAttachedAttachment, snapshotAttachedGeneration,
-                completionGapMaxMs,
-            )
+            // Bounded seqlock read, never a Main/Worker join. A contended
+            // sample is explicitly unavailable, never guessed from a mix.
+            repeat(3) {
+                val before = snapshotSequence
+                if (before % 2L == 0L) {
+                    val value = Snapshot(produced, published, dropped, failures,
+                        snapshotInFlight, snapshotReady, snapshotCompositorOwned,
+                        snapshotRunning, snapshotDesiredAttachment, snapshotDesiredGeneration,
+                        snapshotAttachedAttachment, snapshotAttachedGeneration,
+                        completionGapMaxMs, snapshotAt, before, snapshotBlockReason,
+                        snapshotGrantAttachment, snapshotGrantGeneration, snapshotGrantIdentity,
+                        snapshotGrantActive, snapshotLastCompletionAt)
+                    if (before == snapshotSequence) return value
+                }
+            }
+            return Snapshot(produced, published, dropped, failures, 0, 0, 0, false,
+                -1, -1, -1, -1, completionGapMaxMs, 0, 0, 0, -1, -1, 0, false, 0)
         }
 
         override fun doFrame(frameTimeNanos: Long) {
@@ -1272,6 +1511,96 @@ internal class KeyguardOrbBufferRenderer(
             if (disposed) return
             render(frameTimeNanos)
             if (running) requestFrame()
+        }
+
+        fun claimPressure(ticket: KeyguardOrbPressureTicket): Boolean {
+            val grant = publicationTarget.current()
+            return grant === ticket.grant && grant?.active == true &&
+                grant.lease == ticket.lease && grant.child === ticket.child && ticket.claim.claim()
+        }
+
+        fun acceptPressure(ticket: KeyguardOrbPressureTicket) {
+            handler.post {
+                if (disposed || !ticket.claim.isClaimed()) return@post
+                if (offeredPressure === ticket) offeredPressure = null
+                restoringPressure = ticket
+                notifyCapacityIfDrained()
+            }
+        }
+
+        private fun notifyCapacityIfDrained() {
+            val ticket = restoringPressure ?: return
+            if (slots.any { it.state != SlotState.FREE }) return
+            restoringPressure = null
+            onCapacityRestored(ticket, SystemClock.uptimeMillis())
+        }
+
+        private fun resetPressure() {
+            pressurePolicy.reset()
+            lastPressureFrameNanos = Long.MIN_VALUE
+            val offer = offeredPressure ?: return
+            if (offer.claim.cancel() || !offer.claim.isClaimed()) offeredPressure = null
+        }
+
+        /** No allocations on ordinary frame opportunities. The snapshot is
+         * constructed once, only when a qualifying transition is offered. */
+        private fun evaluatePressure(spec: KeyguardOrbBufferRenderSpec, opportunity: Boolean) {
+            val grant = publicationTarget.current()
+            val eligible = running && !disposed && attachedLease == spec.lease &&
+                spec.lease.attachment > 0 && grant?.active == true && grant.lease == spec.lease
+            var oldUnreleased = 0
+            var oldOwned = 0
+            var free = 0
+            var currentInFlight = false
+            var currentCompatible = false
+            var wrongSizeOld = false
+            for (slot in slots) {
+                if (slot.state == SlotState.FREE) { free++; continue }
+                val retiredOld = slot.retired && slot.lease != spec.lease
+                if (retiredOld) {
+                    if (slot.state == SlotState.PUBLISHED && !slot.callbackReceived) oldUnreleased++
+                    if (slot.state == SlotState.PUBLISHED || slot.state == SlotState.WAIT_RELEASE_FENCE) oldOwned++
+                    if (slot.buffer.width != spec.lease.width || slot.buffer.height != spec.lease.height) wrongSizeOld = true
+                } else if (slot.lease == spec.lease) {
+                    if (slot.state == SlotState.RENDERING || slot.state == SlotState.READY_FOR_MAIN) currentInFlight = true
+                    if (slot.buffer.width == spec.lease.width && slot.buffer.height == spec.lease.height) currentCompatible = true
+                }
+            }
+            val now = SystemClock.uptimeMillis()
+            val blockReason = when {
+                !eligible -> 1
+                slots.any { it.lease == spec.lease && it.state == SlotState.READY_FOR_MAIN } -> 2
+                wrongSizeOld -> 4
+                free == 0 -> 3
+                else -> 5
+            }
+            if (currentBlockReason != blockReason) {
+                currentBlockReason = blockReason
+                publishSlotSnapshot()
+            }
+            val reason = pressurePolicy.observe(grant, eligible, slots.size, oldUnreleased, oldOwned, free,
+                currentInFlight, wrongSizeOld, currentCompatible, published, now, opportunity)
+            if (reason == null) {
+                val offer = offeredPressure
+                if (offer != null && (offer.claim.cancel() || !offer.claim.isClaimed())) offeredPressure = null
+                return
+            }
+            if (offeredPressure?.claim?.isPending() == false && offeredPressure?.claim?.isClaimed() == false) {
+                offeredPressure = null
+            }
+            if (offeredPressure != null || grant == null) return
+            val ticket = KeyguardOrbPressureTicket(rendererId, spec.lease, spec.scene.visualKey,
+                spec.scene.full, spec.scene.profile.effectId, spec.scene.profile.usesPortal,
+                grant.child, grant, reason,
+                pressurePolicy.startedAt, now, pressurePolicy.opportunities, slots.map { slot ->
+                    KeyguardOrbOwnershipSlotSnapshot(slot.id, slot.useGeneration, slot.lease,
+                        slot.state.name, slot.retired, slot.childIdentity, slot.publicationPath,
+                        slot.callbackReceived, slot.fencePending, slot.earlyReceiptRetained)
+                })
+            offeredPressure = ticket
+            observeOwnership("pressure-offered", lease = spec.lease, target = grant,
+                detail = "reason=$reason start=${pressurePolicy.startedAt} opportunities=${pressurePolicy.opportunities}")
+            onPressure(ticket)
         }
 
         private fun requestFrame() {
@@ -1326,6 +1655,9 @@ internal class KeyguardOrbBufferRenderer(
         private fun render(frameTimeNanos: Long) {
             val spec = desired ?: return
             observeStarvation()
+            val distinctOpportunity = frameTimeNanos > lastPressureFrameNanos
+            if (distinctOpportunity) lastPressureFrameNanos = frameTimeNanos
+            evaluatePressure(spec, distinctOpportunity)
             if (!ensureResources(spec)) return
             // A stale RenderRequest owns only its own slot while its render
             // fence drains. Do not make an otherwise FREE slot unavailable
@@ -1340,6 +1672,9 @@ internal class KeyguardOrbBufferRenderer(
                 dropped += 1
                 return
             }
+            val target = publicationTarget.current()
+            if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook && target?.active == true &&
+                target.lease == spec.lease && !recoveryHook.allowRender(spec.lease)) return
             val slot = slots[index]
             prepareSlotShaders(slot, spec)
             val currentShader = slot.shader ?: return
@@ -1534,6 +1869,10 @@ internal class KeyguardOrbBufferRenderer(
             slot.childIdentity = System.identityHashCode(target.child)
             slot.publicationPath = "steady"
             observeOwnership("steady-accepted", slot = slot, target = target, log = false)
+            val submittedLease = frame.lease
+            val submittedSlot = frame.slotId
+            val submittedUse = frame.useGeneration
+            val childIdentity = System.identityHashCode(target.child)
             runCatching {
                 steadyPublicationBarrier.afterGrantValidated(frame.producerFrame)
                 SurfaceControl.Transaction()
@@ -1541,7 +1880,8 @@ internal class KeyguardOrbBufferRenderer(
                         target.child,
                         frame.buffer,
                         frame.fence,
-                        Consumer { releaseFence -> consumeRelease(frame.slotId, frame.useGeneration, releaseFence) },
+                        Consumer { releaseFence -> release(submittedLease, submittedSlot, submittedUse,
+                            releaseFence, childIdentity, postAlways = false) },
                     )
                     .apply()
                 if (publicationObserver !== NoopKeyguardOrbBufferPublicationObserver) {
@@ -1552,6 +1892,7 @@ internal class KeyguardOrbBufferRenderer(
                 // never for transaction commitment.
                 slot.state = SlotState.PUBLISHED
                 published += 1
+                resetPressure()
                 observeOwnership("steady-submitted", slot = slot, target = target, log = false)
             }.onFailure { error ->
                 discardRenderResult(slot, frame.fence)
@@ -1622,6 +1963,8 @@ internal class KeyguardOrbBufferRenderer(
             completedLease?.let { maybeNotifyLeaseDrained(it, completedChildIdentity) }
             retiringLeases.toList().forEach { maybeNotifyLeaseDrained(it) }
             if (slots.any { it.state == SlotState.FREE }) resetStarvation("capacity-released")
+            desired?.let { evaluatePressure(it, false) }
+            notifyCapacityIfDrained()
             publishSlotSnapshot()
             finishDisposeIfReleased()
             if (running && !disposed) requestFrame()
@@ -1783,6 +2126,7 @@ internal class KeyguardOrbBufferRenderer(
         /** Called only on the renderer handler. Main samples these volatile
          * scalars without joining the renderer or inspecting mutable slots. */
         private fun publishSlotSnapshot() {
+            snapshotSequence++ // odd: publication in progress
             snapshotInFlight = slots.count {
                 it.state == SlotState.RENDERING || it.state == SlotState.WAIT_RENDER_FENCE
             }
@@ -1795,6 +2139,15 @@ internal class KeyguardOrbBufferRenderer(
             snapshotDesiredGeneration = desired?.lease?.generation ?: -1L
             snapshotAttachedAttachment = attachedLease?.attachment ?: -1L
             snapshotAttachedGeneration = attachedLease?.generation ?: -1L
+            val grant = publicationTarget.current()
+            snapshotGrantAttachment = grant?.lease?.attachment ?: -1L
+            snapshotGrantGeneration = grant?.lease?.generation ?: -1L
+            snapshotGrantIdentity = grant?.let(System::identityHashCode) ?: 0
+            snapshotGrantActive = grant?.active == true
+            snapshotLastCompletionAt = previousCompletionAtUptimeMs
+            snapshotBlockReason = currentBlockReason
+            snapshotAt = SystemClock.uptimeMillis()
+            snapshotSequence++ // even: coherent sample available
         }
     }
 

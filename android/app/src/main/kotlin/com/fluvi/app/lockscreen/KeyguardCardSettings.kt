@@ -832,6 +832,8 @@ internal object KeyguardCardDiagnostics {
         "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
         "isolatedCompletionGapMaxMs",
         "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit",
+        "r08Route", "r08Origin", "r08Times", "r08Anchor", "r08Transition",
+        "r08Slot0", "r08Slot1", "r08Slot2", "r08Worker", "r08Grant", "r08Progress",
         "shaderFrames", "shaderCalls", "phaseAdvances", "firstPhase", "lastPhase",
         "drawGapCount", "drawGapTotalMs", "drawGapMaxMs", "animationStarts", "animationStops",
         "clockRunning", "liveState", "backgroundFrames", "firstShaderTraversalAt", "lastShaderTraversalAt", "drawInvalidOrder",

@@ -20,6 +20,7 @@ import com.fluvi.app.runtime.FluviLockScreenCardContent
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
+import com.fluvi.app.lockscreen.material.KeyguardOrbOwnershipSlotSnapshot
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
@@ -2081,6 +2082,10 @@ class FluviKeyguardCardService : AccessibilityService() {
     /** Main-thread terminal path. It makes the retained root locally invisible
      * and removes it before cancelling database/diagnostic work. A late Binder
      * answer can only fail its captured authority checks afterwards. */
+    private fun recoverySlot(slot: KeyguardOrbOwnershipSlotSnapshot?): String = slot?.let {
+        "slot:${it.slotId},use:${it.useGeneration},lease:${it.lease?.attachment ?: "NA"}/${it.lease?.generation ?: "NA"},state:${it.state},retired:${it.retired},receipt:${it.callbackReceived},fence:${it.fencePending}"
+    } ?: "UNOBSERVED"
+
     private fun hideImmediately(
         reason: String,
         terminalWake: Boolean = true,
@@ -2184,6 +2189,32 @@ class FluviKeyguardCardService : AccessibilityService() {
                         } ?: "UNOBSERVED"),
                         "isolatedFirstCommit" to (summary.isolatedFirstHandoff?.let {
                             "receipt:${it.commitReceiptAtUptimeMs ?: "UNOBSERVED"},main:${it.commitMainAtUptimeMs ?: "UNOBSERVED"},bootstrapRetired:${it.bootstrapRetiredAtUptimeMs ?: "UNOBSERVED"}"
+                        } ?: "UNOBSERVED"),
+                        "r08Route" to summary.effectiveRoute,
+                        "r08Origin" to (summary.recovery?.let {
+                            "${if (it.inherited) "inherited" else "entered"}:renderer:${it.rendererId},attach:${it.originAttachment},gen:${it.originGeneration},child:${it.childId},grant:${it.grantId},cause:${it.reason}"
+                        } ?: "UNOBSERVED"),
+                        "r08Times" to (summary.recovery?.let {
+                            "start:${it.startedAt},offer:${it.offeredAt},claim:${it.claimedAt ?: "UNOBSERVED"},draw:${it.firstViewDrawAt ?: "UNOBSERVED"},restore:${it.restoredAt ?: "UNOBSERVED"},n:${it.opportunities}"
+                        } ?: "UNOBSERVED"),
+                        "r08Anchor" to (summary.recovery?.anchor?.let {
+                            "elapsed:${it.elapsedSeconds},phase:${it.phase},background:${it.backgroundPhase},interior:${it.interiorPhase}"
+                        } ?: "UNOBSERVED"),
+                        "r08Transition" to (summary.recovery?.transitionPreserved ?: "UNOBSERVED"),
+                        "r08Slot0" to recoverySlot(summary.recovery?.slots?.getOrNull(0)),
+                        "r08Slot1" to recoverySlot(summary.recovery?.slots?.getOrNull(1)),
+                        "r08Slot2" to recoverySlot(summary.recovery?.slots?.getOrNull(2)),
+                        "r08Worker" to (summary.worker?.takeIf { it.workerSampleAtUptimeMs > 0L }?.let {
+                            val reason = when (it.workerBlockReason) {
+                                1 -> "notEligible"; 2 -> "readyMain"; 3 -> "noFree"; 4 -> "wrongSize"; 5 -> "active"; else -> "unknown"
+                            }
+                            "seq:${it.workerSampleSequence},age:${(summary.observedAt - it.workerSampleAtUptimeMs).coerceAtLeast(0L)},desired:${it.workerDesiredAttachment}/${it.workerDesiredGeneration},attached:${it.workerAttachedAttachment}/${it.workerAttachedGeneration},reason:$reason"
+                        } ?: "UNOBSERVED"),
+                        "r08Grant" to (summary.worker?.takeIf { it.workerSampleAtUptimeMs > 0L }?.let {
+                            "id:${it.workerGrantIdentity},lease:${it.workerGrantAttachment}/${it.workerGrantGeneration},active:${it.workerGrantActive},running:${it.workerRunning}"
+                        } ?: "UNOBSERVED"),
+                        "r08Progress" to (summary.worker?.takeIf { it.workerSampleAtUptimeMs > 0L }?.let {
+                            "completedAt:${it.workerLastCompletionAtUptimeMs.takeIf { value -> value > 0L } ?: "UNOBSERVED"},inFlight:${it.inFlight},ready:${it.ready},owned:${it.compositorOwned}"
                         } ?: "UNOBSERVED"),
                         "shaderFrames" to summary.orb.frames,
                         "shaderCalls" to summary.shaderCalls,
@@ -2447,6 +2478,13 @@ class FluviKeyguardCardService : AccessibilityService() {
             "rendererBackend" to values?.activeRenderer,
             "requestedRenderer" to values?.requestedRenderer,
             "activeRenderer" to values?.activeRenderer,
+            "r08EffectiveRoute" to values?.effectiveRoute,
+            "r08Attachment" to (values?.attachment ?: 0L),
+            "r08RecoveryGeneration" to (values?.recoveryGeneration ?: 0L),
+            "r08RecoveryRestoredAt" to values?.recoveryRestoredAt,
+            "r08AttachmentShaderCalls" to (values?.attachmentShaderCalls ?: 0),
+            "r08AttachmentShaderTraversals" to (values?.attachmentShaderTraversals ?: 0L),
+            "r08AttachmentPhaseAdvances" to (values?.attachmentPhaseAdvances ?: 0),
             "hardwareAccelerated" to (values?.hardwareAccelerated ?: false),
             "shaderCreationCount" to (values?.shaderCreationCount ?: 0),
             "shaderPreparationRequests" to (values?.preparationRequests ?: 0),

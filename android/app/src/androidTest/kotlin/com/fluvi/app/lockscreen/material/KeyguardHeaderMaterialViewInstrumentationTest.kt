@@ -776,6 +776,383 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
+    @Test fun oldUsesPreventSuccessorButCurrentOrbKeepsMoving() {
+        com.fluvi.app.lockscreen.KeyguardCardDiagnostics.clearCapture(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+        )
+        val receipts = RealReleaseGate().apply { delayTickets = true }
+        withOrbRetirementFixture("r08-held-receipts", receipts) { fixture ->
+            fun diagnostics(): KeyguardMaterialDiagnostics {
+                var value: KeyguardMaterialDiagnostics? = null
+                fixture.instrumentation.runOnMainSync { value = fixture.window.materialDiagnostics() }
+                return requireNotNull(value)
+            }
+            fun showFirst(): KeyguardOrbBufferProducerFrame {
+                val request = fixture.prepareFirst(PHASE_A)
+                var attach = 0L
+                fixture.instrumentation.runOnMainSync {
+                    assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                        fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                    attach = fixture.window.currentAttachGeneration
+                }
+                return fixture.submitted(request).also { assertEquals(attach, it.lease.attachment) }
+            }
+            fun hide() {
+                var stoppedFrames = 0L
+                fixture.instrumentation.runOnMainSync {
+                    assertTrue("actual root hide must return while receipts are held", fixture.window.hide())
+                    assertFalse(fixture.window.isAttached)
+                    val summary = requireNotNull(fixture.window.attachmentRenderSummary())
+                    assertFalse("hidden View clock remained active", summary.clockRunning)
+                    stoppedFrames = summary.orb.frames
+                }
+                Thread.sleep(120)
+                fixture.instrumentation.runOnMainSync {
+                    assertEquals("a hidden View must not keep drawing", stoppedFrames,
+                        requireNotNull(fixture.window.attachmentRenderSummary()).orb.frames)
+                }
+            }
+
+            val first = fixture.awaitFirstToken(fixture.initialLease.attachment)
+            val a = KeyguardOrbBufferProducerFrame(first.lease, first.slotId, first.useGeneration,
+                0L, calibratedMaterialTime(PHASE_A))
+            hide()
+            receipts.awaitActualReceipt(a)
+            val b = showFirst()
+            hide()
+            receipts.awaitActualReceipt(b)
+            val c = showFirst()
+            val pressure = fixture.ownership.awaitLease("pressure-offered", c.lease)
+            assertTrue("the offered snapshot must contain the two real retired uses", pressure.slots.count {
+                it.retired && (it.lease == a.lease || it.lease == b.lease) &&
+                    it.state == "PUBLISHED" && !it.callbackReceived
+            } >= 2)
+            assertTrue("real release receipts must remain withheld during recovery", receipts.heldCount() >= 2)
+            receipts.awaitTicket(c.lease.attachment)
+            assertTrue("recovery panel has no measured bounds", waitForPanelOrbScreenBounds(fixture.instrumentation, fixture.manager))
+            assertTrue("first-direct commit must already have retired C's bootstrap",
+                waitForIsolatedBootstrapReplacement(fixture.instrumentation, fixture.manager))
+            val isolatedReference = copyPanelOrb(fixture.instrumentation, fixture.manager)
+            try {
+                persistPanelEvidence(fixture.activity, "r08-isolated-reference-a", isolatedReference)
+                assertTrue("first-direct reference has no visible material", hasVisibleMaterial(isolatedReference))
+                val transitionSamples = mutableListOf<Bitmap>()
+                try {
+                    fun captureTransition() {
+                        val bitmap = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                        transitionSamples += bitmap
+                        persistPanelEvidence(fixture.activity, "r08-recovery-transition-${transitionSamples.lastIndex}", bitmap)
+                    }
+                    captureTransition()
+                    fixture.instrumentation.runOnMainSync { receipts.deliverTicket(c.lease.attachment) }
+                    repeat(6) {
+                        captureTransition()
+                        Thread.sleep(16)
+                    }
+                    assertTrue("sampled handoff included an empty orb crop", transitionSamples.all(::hasVisibleMaterial))
+                } finally {
+                    transitionSamples.forEach(Bitmap::recycle)
+                }
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+                while (diagnostics().effectiveRoute != "PRESSURE_VIEW" && System.nanoTime() < deadline) Thread.sleep(24)
+                assertEquals("current authorized attachment did not take the recovery route", "PRESSURE_VIEW", diagnostics().effectiveRoute)
+                val afterSwitch = fixture.ownership.awaitLease("revocation-processed", c.lease)
+                assertTrue("the same old uses must remain quarantined after takeover", listOf(a, b).all { old ->
+                    afterSwitch.slots.any { it.lease == old.lease && it.slotId == old.slotId &&
+                        it.useGeneration == old.useGeneration && it.retired && it.state == "PUBLISHED" &&
+                        !it.callbackReceived && !it.fencePending }
+                })
+                val before = diagnostics()
+                Thread.sleep(600)
+                val middle = diagnostics()
+                Thread.sleep(600)
+                val after = diagnostics()
+                assertTrue("first window lacks real View shader traversals", middle.attachmentShaderTraversals - before.attachmentShaderTraversals >= 3)
+                assertTrue("first window lacks View phase advances", middle.attachmentPhaseAdvances - before.attachmentPhaseAdvances >= 2)
+                assertTrue("second window lacks real View shader traversals", after.attachmentShaderTraversals - middle.attachmentShaderTraversals >= 3)
+                assertTrue("second window lacks View phase advances", after.attachmentPhaseAdvances - middle.attachmentPhaseAdvances >= 2)
+                assertTrue("old receipts were released before motion was measured", receipts.heldCount() >= 2)
+                // Independent two-second visible hold: no screenshots or
+                // per-frame polling while measuring these two adjacent intervals.
+                val holdStart = SystemClock.uptimeMillis()
+                val hold0 = diagnostics()
+                Thread.sleep(1_000)
+                val hold1 = diagnostics()
+                val holdMid = SystemClock.uptimeMillis()
+                Thread.sleep(1_000)
+                val hold2 = diagnostics()
+                val holdEnd = SystemClock.uptimeMillis()
+                val firstSecond = hold1.attachmentShaderTraversals - hold0.attachmentShaderTraversals
+                val secondSecond = hold2.attachmentShaderTraversals - hold1.attachmentShaderTraversals
+                android.util.Log.i("FluviR08Motion", "firstMs=${holdMid - holdStart} firstDraws=$firstSecond " +
+                    "secondMs=${holdEnd - holdMid} secondDraws=$secondSecond " +
+                    "phase1=${hold1.attachmentPhaseAdvances - hold0.attachmentPhaseAdvances} " +
+                    "phase2=${hold2.attachmentPhaseAdvances - hold1.attachmentPhaseAdvances}")
+                assertTrue("two-second recovery hold plateaued", firstSecond >= 3 && secondSecond >= 3 &&
+                    hold1.attachmentPhaseAdvances - hold0.attachmentPhaseAdvances >= 2 &&
+                    hold2.attachmentPhaseAdvances - hold1.attachmentPhaseAdvances >= 2)
+                val crop = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                try {
+                    persistPanelEvidence(fixture.activity, "r08-held-recovery-moving", crop)
+                    assertTrue("recovery crop lacks visible material", hasVisibleMaterial(crop))
+                }
+                finally { crop.recycle() }
+                // Reuse the calibrated A/C/B/A compositor oracle on the actual
+                // recovery View and the same retained window, with a fixed phase
+                // source installed only for this test segment.
+                lateinit var recoveryView: KeyguardHeaderMaterialView
+                val controlled = AtomicReference(calibratedMaterialTime(PHASE_A))
+                fixture.instrumentation.runOnMainSync {
+                    recoveryView = requireNotNull(fixture.manager.currentRoot)
+                        .findViewById(R.id.fluvi_financial_snapshot_orb)
+                    recoveryView.setMaterialTimeSourceForTest(KeyguardMaterialTimeSource { _, _ -> controlled.get() })
+                }
+                val images = mutableListOf<Bitmap>()
+                try {
+                    fun sample(phase: Float, label: String, accepts: (Bitmap) -> Boolean): Bitmap {
+                        var beforeDraw = 0
+                        fixture.instrumentation.runOnMainSync {
+                            assertEquals(c.lease.attachment, fixture.window.currentAttachGeneration)
+                            beforeDraw = recoveryView.diagnostics().shaderDrawCount
+                            controlled.set(calibratedMaterialTime(phase))
+                            recoveryView.frame(System.nanoTime())
+                        }
+                        assertTrue("recovery View did not submit controlled $label",
+                            waitForShaderDraw(fixture.instrumentation, recoveryView, beforeDraw))
+                        return awaitCompositorCrop(label,
+                            capture = { copyPanelOrb(fixture.instrumentation, fixture.manager) },
+                            persist = { evidenceLabel, image -> persistPanelEvidence(fixture.activity, evidenceLabel, image) },
+                            accepts = accepts,
+                            onTimeout = { persistPanelCompositorTimeout(fixture.activity, fixture.instrumentation,
+                                label, fixture.manager, c) },
+                        ).also(images::add)
+                    }
+                    val aImage = sample(PHASE_A, "r08-recovery-a") {
+                        hasVisibleMaterial(it) && compareMaterialPixels(isolatedReference, it).nearlyEqual()
+                    }
+                    val cImage = sample(PHASE_C, "r08-recovery-c") { compareMaterialPixels(aImage, it).nearlyEqual() }
+                    val bImage = sample(PHASE_B, "r08-recovery-b") { compareMaterialPixels(aImage, it).meaningful() }
+                    val returnImage = sample(PHASE_A, "r08-recovery-return-a") { compareMaterialPixels(aImage, it).nearlyEqual() }
+                    assertTrue(compareMaterialPixels(aImage, cImage).nearlyEqual())
+                    assertTrue(compareMaterialPixels(aImage, bImage).meaningful())
+                    assertTrue(compareMaterialPixels(aImage, returnImage).nearlyEqual())
+                    assertTrue("pixel control released old receipts", receipts.heldCount() >= 2)
+                } finally {
+                    fixture.instrumentation.runOnMainSync {
+                        recoveryView.setMaterialTimeSourceForTest(SystemKeyguardMaterialTimeSource)
+                    }
+                    images.forEach(Bitmap::recycle)
+                }
+                hide()
+                // The same controller must keep a working View route on fresh
+                // authorized attachments while the old platform receipts remain
+                // withheld. Each hide still returns on Main independently.
+                repeat(3) { cycle ->
+                    fixture.instrumentation.runOnMainSync {
+                        assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                            fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                    }
+                    assertEquals("PRESSURE_VIEW", diagnostics().effectiveRoute)
+                    val start = diagnostics()
+                    Thread.sleep(600)
+                    val current = diagnostics()
+                    assertTrue("recovery episode $cycle did not draw", current.attachmentShaderTraversals - start.attachmentShaderTraversals >= 3)
+                    assertTrue("recovery episode $cycle did not move", current.attachmentPhaseAdvances - start.attachmentPhaseAdvances >= 2)
+                    assertTrue("real receipts escaped before episode $cycle completed", receipts.heldCount() >= 2)
+                    if (cycle == 2) {
+                        receipts.releaseAll()
+                        val restoredDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+                        while (diagnostics().recoveryRestoredAt == null && System.nanoTime() < restoredDeadline) Thread.sleep(24)
+                        assertTrue("actual receipt/fence drain was not observed", diagnostics().recoveryRestoredAt != null)
+                        assertEquals("drain cannot change a running recovery episode", "PRESSURE_VIEW", diagnostics().effectiveRoute)
+                    }
+                    hide()
+                }
+                val next = showFirst()
+                assertEquals("a later eligible attachment may use the drained pool", "ISOLATED", diagnostics().effectiveRoute)
+                assertTrue("new attachment reused the old lease", next.lease != c.lease)
+                fixture.ownership.assertBoundedSingleRenderer()
+            } finally { isolatedReference.recycle() }
+        }
+    }
+
+    @Test fun stalePressureCannotSwitchReplacement() {
+        val gate = RealReleaseGate().apply { delayTickets = true }
+        withOrbRetirementFixture("r08-stale-ticket", gate) { fixture ->
+            fun show(): Pair<Long, Long> {
+                val request = fixture.prepareFirst(PHASE_A)
+                var attachment = 0L
+                fixture.instrumentation.runOnMainSync {
+                    assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                        fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                    attachment = fixture.window.currentAttachGeneration
+                }
+                return request to attachment
+            }
+            fun hide() = fixture.instrumentation.runOnMainSync { assertTrue(fixture.window.hide()) }
+            fun route(): String {
+                var value = ""
+                fixture.instrumentation.runOnMainSync { value = requireNotNull(fixture.window.materialDiagnostics()).effectiveRoute }
+                return value
+            }
+            val a = fixture.awaitFirstToken(fixture.initialLease.attachment)
+            hide()
+            gate.awaitActualReceipt(KeyguardOrbBufferProducerFrame(a.lease, a.slotId, a.useGeneration,
+                0L, calibratedMaterialTime(PHASE_A)))
+            val (bRequest, _) = show()
+            val b = fixture.submitted(bRequest)
+            hide()
+            gate.awaitActualReceipt(b)
+            val (cRequest, cAttachment) = show()
+            val c = fixture.submitted(cRequest)
+            val oldTicket = gate.awaitTicket(cAttachment)
+            assertEquals(c.lease, oldTicket.lease)
+            hide()
+            val (_, dAttachment) = show()
+            val replacement = gate.awaitTicket(dAttachment)
+            assertEquals(KeyguardOrbPressureReason.ALL_OLD_UNRELEASED, replacement.reason)
+            fixture.instrumentation.runOnMainSync { gate.deliverTicket(cAttachment) }
+            assertEquals("late A ticket must not switch or reveal replacement", "ISOLATED", route())
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.isAttached)
+                assertEquals(dAttachment, fixture.window.currentAttachGeneration)
+                gate.deliverTicket(dAttachment)
+            }
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (route() != "PRESSURE_VIEW" && System.nanoTime() < end) Thread.sleep(24)
+            assertEquals("the current ticket should be accepted independently", "PRESSURE_VIEW", route())
+            var before: KeyguardMaterialDiagnostics? = null
+            var after: KeyguardMaterialDiagnostics? = null
+            fixture.instrumentation.runOnMainSync { before = fixture.window.materialDiagnostics() }
+            Thread.sleep(600)
+            fixture.instrumentation.runOnMainSync { after = fixture.window.materialDiagnostics() }
+            assertTrue("replacement without any first isolated frame must draw a live View",
+                requireNotNull(after).attachmentShaderTraversals - requireNotNull(before).attachmentShaderTraversals >= 3)
+            assertTrue("replacement without any first isolated frame must advance phase",
+                requireNotNull(after).attachmentPhaseAdvances - requireNotNull(before).attachmentPhaseAdvances >= 2)
+            assertTrue("the original real receipts must still be withheld", gate.heldCount() >= 2)
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges() {
+        val gate = RealReleaseGate().apply { delayTickets = true }
+        withOrbRetirementFixture("r08-stale-privacy-size", gate) { fixture ->
+            fun show(): KeyguardOrbBufferProducerFrame {
+                val request = fixture.prepareFirst(PHASE_A)
+                fixture.instrumentation.runOnMainSync {
+                    assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                        fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                }
+                return fixture.submitted(request)
+            }
+            fun hide() = fixture.instrumentation.runOnMainSync { assertTrue(fixture.window.hide()) }
+            val a = fixture.awaitFirstToken(fixture.initialLease.attachment)
+            hide()
+            gate.awaitActualReceipt(KeyguardOrbBufferProducerFrame(a.lease, a.slotId, a.useGeneration,
+                0L, calibratedMaterialTime(PHASE_A)))
+            val b = show()
+            hide()
+            gate.awaitActualReceipt(b)
+            val c = show()
+            val fullTicket = gate.awaitTicket(c.lease.attachment)
+            assertTrue(waitForIsolatedBootstrapReplacement(fixture.instrumentation, fixture.manager))
+            val fullCrop = copyPanelOrb(fixture.instrumentation, fixture.manager)
+            try {
+                persistPanelEvidence(fixture.activity, "r08-full-before-redaction", fullCrop)
+                lateinit var root: View
+                fixture.instrumentation.runOnMainSync {
+                    root = requireNotNull(fixture.manager.currentRoot)
+                    val result = fixture.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                        fixture.settings.copy(showFinancialDetails = false))
+                    assertTrue(result == KeyguardCardWindow.Result.REDACTED || result == KeyguardCardWindow.Result.CONTENT_UPDATED)
+                }
+                val neutralTicket = gate.awaitTicket(c.lease.attachment, fullTicket.lease.generation)
+                assertEquals(calibratedOrbProfile().neutralized().visualKey, neutralTicket.lease.visualKey)
+                val neutralCrop = awaitCompositorCrop("r08-neutral-before-stale-ticket",
+                    capture = { copyPanelOrb(fixture.instrumentation, fixture.manager) },
+                    persist = { label, bitmap -> persistPanelEvidence(fixture.activity, label, bitmap) },
+                    accepts = { compareMaterialPixels(fullCrop, it).meaningful() },
+                    onTimeout = { persistPanelCompositorTimeout(fixture.activity, fixture.instrumentation,
+                        "r08-neutral-timeout", fixture.manager, c) })
+                try {
+                    fixture.instrumentation.runOnMainSync {
+                        gate.deliverTicket(fullTicket)
+                        assertTrue(root === fixture.manager.currentRoot)
+                        val orb = root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                        assertTrue("old full ticket must not hide neutral bootstrap", orb.isBootstrapActive())
+                        assertEquals(View.VISIBLE, orb.visibility)
+                        assertEquals("ISOLATED", requireNotNull(fixture.window.materialDiagnostics()).effectiveRoute)
+                        orb.layout(orb.left, orb.top, orb.right + 4, orb.bottom + 4)
+                    }
+                    val resizedTicket = gate.awaitTicket(c.lease.attachment, neutralTicket.lease.generation)
+                    assertEquals(neutralTicket.lease.visualKey, resizedTicket.lease.visualKey)
+                    assertTrue(resizedTicket.lease.width != neutralTicket.lease.width ||
+                        resizedTicket.lease.height != neutralTicket.lease.height)
+                    fixture.instrumentation.runOnMainSync {
+                        gate.deliverTicket(neutralTicket)
+                        val orb = root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                        assertTrue("old size ticket must not hide the permitted bootstrap", orb.isBootstrapActive())
+                        assertEquals("ISOLATED", requireNotNull(fixture.window.materialDiagnostics()).effectiveRoute)
+                        gate.deliverTicket(resizedTicket)
+                    }
+                    val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+                    var route = ""
+                    while (System.nanoTime() < end) {
+                        fixture.instrumentation.runOnMainSync { route = requireNotNull(fixture.window.materialDiagnostics()).effectiveRoute }
+                        if (route == "PRESSURE_VIEW") break
+                        Thread.sleep(24)
+                    }
+                    assertEquals("PRESSURE_VIEW", route)
+                    val after = awaitCompositorCrop("r08-neutral-recovery",
+                        capture = { copyPanelOrb(fixture.instrumentation, fixture.manager) },
+                        persist = { label, bitmap -> persistPanelEvidence(fixture.activity, label, bitmap) },
+                        accepts = { compareMaterialPixels(fullCrop, it).meaningful() },
+                        onTimeout = { persistPanelCompositorTimeout(fixture.activity, fixture.instrumentation,
+                            "r08-neutral-recovery-timeout", fixture.manager, c) })
+                    after.recycle()
+                    assertTrue("old receipts were delivered during privacy test", gate.heldCount() >= 2)
+                } finally { neutralCrop.recycle() }
+            } finally { fullCrop.recycle() }
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun restoredCapacityCancelsUnclaimedPressureTicket() {
+        val gate = RealReleaseGate().apply { delayTickets = true }
+        withOrbRetirementFixture("r08-ticket-cancel-capacity", gate) { fixture ->
+            val (current, ticket) = fixture.twoHeldUsesAndCurrentTicket(gate)
+            gate.releaseAll()
+            val request = fixture.prepareFirst(PHASE_B)
+            val resumed = fixture.submitted(request)
+            assertEquals(current.lease, resumed.lease)
+            fixture.ownership.awaitUse("steady-submitted", resumed)
+            fixture.instrumentation.runOnMainSync {
+                gate.deliverTicket(ticket)
+                assertTrue(fixture.window.isAttached)
+                assertEquals("release and fresh output must cancel an unclaimed offer",
+                    "ISOLATED", requireNotNull(fixture.window.materialDiagnostics()).effectiveRoute)
+                assertEquals(current.lease.attachment, fixture.window.currentAttachGeneration)
+            }
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun disposedWindowCannotBeRevivedByDelayedPressureTicket() {
+        val gate = RealReleaseGate().apply { delayTickets = true }
+        withOrbRetirementFixture("r08-ticket-dispose", gate) { fixture ->
+            val (_, ticket) = fixture.twoHeldUsesAndCurrentTicket(gate)
+            fixture.instrumentation.runOnMainSync {
+                fixture.window.dispose()
+                gate.deliverTicket(ticket)
+                assertFalse("old pressure ticket revived a disposed window", fixture.window.isAttached)
+                assertEquals(null, fixture.manager.currentRoot)
+            }
+            assertTrue("the test must still hold actual old receipts", gate.heldCount() >= 2)
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
     @Test fun isolatedOrbSameLeaseLayoutRetainsAcceptedSteadyGrant() {
         withOrbRetirementFixture("same-lease-layout") { fixture ->
             val before = fixture.capture(PHASE_A, "layout-before-a") { hasVisibleMaterial(it) }
@@ -1681,6 +2058,80 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val delivery: () -> Unit,
     )
 
+    /** Holds delivery of actual platform receipts without blocking their
+     * callback thread. No test manufactures a release or a fence. */
+    private class RealReleaseGate : KeyguardOrbRecoveryTestHook {
+        private data class Receipt(val lease: KeyguardOrbBufferLease, val slot: Long, val use: Long,
+                                   val delivery: () -> Unit)
+        private data class Offered(val ticket: KeyguardOrbPressureTicket, val delivery: () -> Unit)
+        private val firstRender = java.util.concurrent.ConcurrentHashMap.newKeySet<KeyguardOrbBufferLease>()
+        private val held = java.util.concurrent.ConcurrentLinkedQueue<Receipt>()
+        private val tickets = java.util.concurrent.ConcurrentLinkedQueue<Offered>()
+        private val opened = java.util.concurrent.atomic.AtomicBoolean(false)
+        @Volatile var allowContinuous = false
+        @Volatile var delayTickets = false
+
+        override fun allowRender(lease: KeyguardOrbBufferLease): Boolean =
+            allowContinuous || lease.attachment <= 0L || firstRender.add(lease)
+
+        override fun dispatchRelease(lease: KeyguardOrbBufferLease, slotId: Long, use: Long,
+                                     fence: android.hardware.SyncFence?, deliver: () -> Unit) {
+            if (opened.get()) { deliver(); return }
+            val receipt = Receipt(lease, slotId, use, deliver)
+            held.add(receipt)
+            if (opened.get() && held.remove(receipt)) deliver()
+        }
+
+        override fun dispatchTicket(ticket: KeyguardOrbPressureTicket, deliver: () -> Unit) {
+            if (!delayTickets) { deliver(); return }
+            tickets.add(Offered(ticket, deliver))
+        }
+
+        fun awaitTicket(attachment: Long, afterGeneration: Long = -1L): KeyguardOrbPressureTicket {
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < end) {
+                tickets.firstOrNull { it.ticket.lease.attachment == attachment &&
+                    it.ticket.lease.generation > afterGeneration }?.let { return it.ticket }
+                Thread.sleep(24)
+            }
+            throw AssertionError("no actual pressure offer for attachment=$attachment")
+        }
+
+        fun deliverTicket(attachment: Long) {
+            val offered = tickets.firstOrNull { it.ticket.lease.attachment == attachment }
+                ?: throw AssertionError("missing held pressure offer attachment=$attachment")
+            check(tickets.remove(offered))
+            offered.delivery()
+        }
+
+        fun deliverTicket(ticket: KeyguardOrbPressureTicket) {
+            val offered = tickets.firstOrNull { it.ticket === ticket }
+                ?: throw AssertionError("missing held exact pressure offer ${ticket.lease}")
+            check(tickets.remove(offered))
+            offered.delivery()
+        }
+
+        fun awaitActualReceipt(frame: KeyguardOrbBufferProducerFrame) {
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            while (System.nanoTime() < end) {
+                if (held.any { it.lease == frame.lease && it.slot == frame.slotId && it.use == frame.useGeneration }) return
+                Thread.sleep(24)
+            }
+            throw AssertionError("No real platform receipt arrived for ${frame.lease} ${frame.slotId}/${frame.useGeneration}; not a withheld-receipt RED")
+        }
+
+        fun heldCount(): Int = held.size
+        fun releaseAll() {
+            allowContinuous = true
+            opened.set(true)
+            while (true) (held.poll() ?: break).delivery()
+        }
+        fun releaseTickets() {
+            delayTickets = false
+            while (true) (tickets.poll() ?: break).delivery()
+        }
+    }
+
     /** Test-owned immutable history. Overflow is a failure, never missing
      * evidence interpreted as a successful drain or absence of ownership. */
     private class OrbOwnershipHistory : KeyguardOrbOwnershipObserver {
@@ -1725,9 +2176,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
-    private fun withOrbRetirementFixture(label: String, exercise: (OrbRetirementFixture) -> Unit) {
+    private fun withOrbRetirementFixture(
+        label: String,
+        recoveryHook: KeyguardOrbRecoveryTestHook = NoopKeyguardOrbRecoveryTestHook,
+        exercise: (OrbRetirementFixture) -> Unit,
+    ) {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-        val fixture = OrbRetirementFixture(label)
+        val fixture = OrbRetirementFixture(label, recoveryHook)
         try {
             fixture.start()
             exercise(fixture)
@@ -1747,7 +2202,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
     /** Reuses the existing real-window and calibrated pixel oracles. This
      * fixture never supplies a release callback, fence or visibility grant. */
-    private inner class OrbRetirementFixture(private val label: String) {
+    private inner class OrbRetirementFixture(
+        private val label: String,
+        private val recoveryHook: KeyguardOrbRecoveryTestHook,
+    ) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(
             Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
@@ -1786,6 +2244,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private var nextRequest = 0L
 
         fun start() {
+            KeyguardOrbBufferRendererTestHooks.recoveryHook = recoveryHook
             KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
             KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions
             KeyguardOrbBufferRendererTestHooks.frameObserver = samples
@@ -1913,6 +2372,29 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 Thread.sleep(24)
             }
             throw AssertionError("first submission missing for attachment=$attachment")
+        }
+
+        fun twoHeldUsesAndCurrentTicket(gate: RealReleaseGate): Pair<KeyguardOrbBufferProducerFrame, KeyguardOrbPressureTicket> {
+            fun hide() = instrumentation.runOnMainSync { assertTrue(window.hide()) }
+            fun show(): KeyguardOrbBufferProducerFrame {
+                val request = prepareFirst(PHASE_A)
+                instrumentation.runOnMainSync {
+                    assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                        window.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+                }
+                return submitted(request)
+            }
+            val first = awaitFirstToken(initialLease.attachment)
+            hide()
+            gate.awaitActualReceipt(KeyguardOrbBufferProducerFrame(first.lease, first.slotId,
+                first.useGeneration, 0L, calibratedMaterialTime(PHASE_A)))
+            val second = show()
+            hide()
+            gate.awaitActualReceipt(second)
+            val current = show()
+            val ticket = gate.awaitTicket(current.lease.attachment)
+            assertEquals(current.lease, ticket.lease)
+            return current to ticket
         }
 
         fun awaitReplacementToken(old: KeyguardOrbFirstPublicationToken): KeyguardOrbFirstPublicationToken {
@@ -2058,6 +2540,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
 
         fun releaseGates() {
+            (recoveryHook as? RealReleaseGate)?.let {
+                it.releaseAll()
+                instrumentation.runOnMainSync { it.releaseTickets() }
+            }
             nextGate.set(null)
             gates.forEach { it.release.countDown() }
             firstSteadyGate.set(null)
@@ -2076,6 +2562,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier = NoopKeyguardOrbSteadyPublicationBarrier
             KeyguardOrbBufferRendererTestHooks.ownershipObserver = NoopKeyguardOrbOwnershipObserver
             KeyguardOrbBufferRendererTestHooks.firstPublicationHook = NoopKeyguardOrbFirstPublicationTestHook
+            KeyguardOrbBufferRendererTestHooks.recoveryHook = NoopKeyguardOrbRecoveryTestHook
         }
 
         fun persistOwnershipEvidence() {

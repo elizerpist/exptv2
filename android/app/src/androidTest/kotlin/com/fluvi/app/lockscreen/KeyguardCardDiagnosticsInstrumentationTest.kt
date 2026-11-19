@@ -611,6 +611,17 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                         "isolatedFirstIdentity" to "first/direct:attach=$attach,generation=123456,slot=3,use=123456,child=123456789",
                         "isolatedFirstReady" to "ready=653328111,post=653328112,main=653328113,applyBegin=653328114,applyEnd=653328115",
                         "isolatedFirstCommit" to "receipt=653328116,main=653328117,bootstrapRetired=653328118",
+                        "r08Route" to "PRESSURE_VIEW",
+                        "r08Origin" to "entered:renderer:123456,attach:123456,gen:123456,child:123456789,grant:123456789,cause:NO_SUCCESSOR",
+                        "r08Times" to "start:653328111,offer:653328162,claim:653328163,draw:653328180,restore:UNOBSERVED,n:3",
+                        "r08Anchor" to "elapsed:12345.123,phase:123.25,background:999.75,interior:44.5",
+                        "r08Transition" to false,
+                        "r08Slot0" to "slot:1,use:123456,lease:3/8,state:PUBLISHED,retired:true,receipt:false,fence:false",
+                        "r08Slot1" to "slot:2,use:123457,lease:4/11,state:PUBLISHED,retired:true,receipt:false,fence:false",
+                        "r08Slot2" to "slot:3,use:123458,lease:11/19,state:PUBLISHED,retired:false,receipt:false,fence:false",
+                        "r08Worker" to "seq:123456,age:123,desired:11/19,attached:11/19,reason:noFree",
+                        "r08Grant" to "id:123456789,lease:11/19,active:true,running:true",
+                        "r08Progress" to "completedAt:653328117,inFlight:0,ready:0,owned:3",
                         "shaderCalls" to if (episode == 0) 13 else 0, "phaseAdvances" to 10,
                         "drawGapCount" to 10, "drawGapMaxMs" to 22, "clockRunning" to false,
                         "drawEvidenceMode" to "LIGHT", "drawEvidenceOmitted" to 7,
@@ -747,6 +758,67 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
             assertFalse(next.contains("layerCommit=501"))
         }
+    }
+
+    @Test fun r08LightRecoveryExportRetainsItsOwnerAndBudget() = recoveryExport("LIGHT")
+    @Test fun r08FullRecoveryExportRetainsItsOwnerAndBudget() = recoveryExport("FULL")
+
+    private fun recoveryExport(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r08-$mode", "profile", mode)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 824L, 1L, "wake", 100L))
+        fun emit(stage: String, at: Long, operation: KeyguardDiagnosticOperation,
+                 fields: Map<String, Any?> = emptyMap()) {
+            KeyguardCardDiagnostics.captureEvent(context, stage, "r08-fixture", observedUptimeMs = at,
+                diagnosticContext = owner, operation = operation, fields = fields)
+        }
+        fun episode(attachment: Long, route: String, origin: String, at: Long) {
+            val show = KeyguardCardDiagnostics.newShowOperation(owner, attachment, null)
+            val hide = KeyguardCardDiagnostics.newHideOperation(owner, attachment, null, at + 30)
+            emit("SHOW_FOR_ATTACH", at, show)
+            emit("ADD_VIEW_RETURN", at + 1, show)
+            emit("HIDE_DECIDED", at + 31, hide)
+            emit("LOCAL_HIDE_BEGIN", at + 32, hide, mapOf("attachedBefore" to true))
+            emit("LOCAL_HIDE_APPLIED", at + 33, hide)
+            emit("REMOVE_VIEW_RETURN", at + 34, hide)
+            emit("ATTACHMENT_RENDER_SUMMARY", at + 35, hide, mapOf(
+                "r08Route" to route,
+                "r08Origin" to origin,
+                "r08Times" to "start:653328111,offer:653328162,claim:653328163,draw:653328180,restore:UNOBSERVED,n:3",
+                "r08Anchor" to "elapsed:12345.123,phase:123.25,background:999.75,interior:44.5",
+                "r08Transition" to false,
+                "r08Slot0" to "slot:1,use:123456,lease:3/8,state:PUBLISHED,retired:true,receipt:false,fence:false",
+                "r08Slot1" to "slot:2,use:123457,lease:4/11,state:PUBLISHED,retired:true,receipt:false,fence:false",
+                "r08Slot2" to "slot:3,use:123458,lease:11/19,state:PUBLISHED,retired:false,receipt:false,fence:false",
+                "r08Worker" to "seq:123456,age:123,desired:11/19,attached:11/19,reason:noFree",
+                "r08Grant" to "id:123456789,lease:11/19,active:true,running:true",
+                "r08Progress" to "completedAt:653328117,inFlight:0,ready:0,owned:3",
+                "shaderFrames" to 100, "shaderCalls" to 101, "phaseAdvances" to 99,
+            ))
+        }
+        val firstOrigin = "entered:renderer:7,attach:11,gen:19,child:123456789,grant:123456790,cause:NO_SUCCESSOR"
+        episode(11, "PRESSURE_VIEW", firstOrigin, 110)
+        episode(12, "PRESSURE_VIEW", "inherited:renderer:7,attach:11,gen:19,child:123456789,grant:123456790,cause:NO_SUCCESSOR", 210)
+        episode(13, "ISOLATED", "UNOBSERVED", 310)
+        repeat(200) { index ->
+            KeyguardCardDiagnostics.captureEvent(context, "ACCESSIBILITY_EVENT", "noise", observedUptimeMs = 500L + index,
+                diagnosticContext = owner, fields = mapOf("eventType" to 2048))
+            if (index % 40 == 0) KeyguardCardDiagnostics.captureSnapshot(context)
+        }
+        val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val renders = frozen.lineSequence().filter { it.startsWith(" RENDER ") }.toList()
+        assertEquals(3, renders.size)
+        assertTrue(renders.single { it.contains("attach=11 ") }.contains("r08Origin=$firstOrigin"))
+        assertTrue(renders.single { it.contains("attach=12 ") }.contains("r08Origin=inherited:renderer:7,attach:11"))
+        assertTrue(renders.single { it.contains("attach=13 ") }.contains("r08Origin=UNOBSERVED"))
+        assertTrue(renders.first().contains("receipt:false,fence:false"))
+        assertTrue(frozen.contains("omittedCriticalRecordIds=none"))
+        assertTrue(frozen.toByteArray(Charsets.UTF_8).size <= 32_768)
+        KeyguardCardDiagnostics.startCapture(context, "r08-next-$mode", "profile", mode)
+        KeyguardCardDiagnostics.beginLockAttempt(context, 825L, 2L, "wake", 900L)
+        val oldHide = KeyguardCardDiagnostics.newHideOperation(owner, 11L, null, 950L)
+        emit("ATTACHMENT_RENDER_SUMMARY", 951L, oldHide, mapOf("r08Origin" to "STALE_OLD_CAPTURE"))
+        val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertFalse(next.contains("STALE_OLD_CAPTURE"))
     }
 
     @Test fun oneCompleteEpisodeCannotConcealAMissingSecondOperationBoundary() {

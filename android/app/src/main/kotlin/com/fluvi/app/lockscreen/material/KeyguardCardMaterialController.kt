@@ -37,6 +37,34 @@ internal data class KeyguardIsolatedFirstHandoffSnapshot(
     val bootstrapRetiredAtUptimeMs: Long? = null,
 )
 
+/** Frozen with an attachment and capture owner, never used as authority. */
+internal data class KeyguardOrbRecoveryEpisode(
+    val rendererId: Long,
+    val originAttachment: Long,
+    val originGeneration: Long,
+    val childId: Int,
+    val grantId: Int,
+    val reason: KeyguardOrbPressureReason,
+    val startedAt: Long,
+    val offeredAt: Long,
+    val opportunities: Int,
+    val slots: List<KeyguardOrbOwnershipSlotSnapshot>,
+    val attachment: Long,
+    val inherited: Boolean,
+    val claimedAt: Long?,
+    val firstViewDrawAt: Long? = null,
+    val restoredAt: Long? = null,
+    val anchor: KeyguardMaterialTime? = null,
+    val transitionPreserved: Boolean = false,
+)
+
+private fun KeyguardOrbPressureTicket.episode(
+    attachment: Long, inherited: Boolean, claimedAt: Long?, restoredAt: Long? = null,
+    anchor: KeyguardMaterialTime? = null,
+) = KeyguardOrbRecoveryEpisode(rendererId, lease.attachment, lease.generation,
+    System.identityHashCode(child), System.identityHashCode(grant), reason, startedAt, offeredAt,
+    opportunities, slots, attachment, inherited, claimedAt, restoredAt = restoredAt, anchor = anchor)
+
 /** Owns scene application and one Choreographer clock for both retained
  * decorative views. It deliberately has no WindowManager or financial API. */
 internal class KeyguardCardMaterialController(
@@ -114,6 +142,27 @@ internal class KeyguardCardMaterialController(
      */
     private var isolatedOrbRequested = false
     private var isolatedOrbFailed = false
+    /** Separate from a producer error: old physical uses can remain owned
+     * across visual-key changes and new attachments on this same renderer. */
+    private var pressureLatch: KeyguardOrbPressureTicket? = null
+    private var pressureClaimedAt: Long? = null
+    private var pressureRestoredAt: Long? = null
+    private var pressureRetryAfterAttachment = 0L
+    private var recoveryEpisode: KeyguardOrbRecoveryEpisode? = null
+    private var recoveryEpisodeTicket: KeyguardOrbPressureTicket? = null
+    private var recoveryEpisodeOwner: Any? = null
+    private var withdrawalWorkerSnapshot: KeyguardOrbBufferRendererSnapshot? = null
+    private var withdrawalWorkerOwner: Any? = null
+    private val isolatedOrbEffective: Boolean
+        get() = isolatedOrbRequested && !isolatedOrbFailed && pressureLatch == null
+    private val effectiveRoute: String
+        get() = when {
+            mode == KeyguardCardAnimationMode.OFF || profile == null -> "UNAVAILABLE"
+            isolatedOrbRequested && pressureLatch != null -> "PRESSURE_VIEW"
+            isolatedOrbEffective -> "ISOLATED"
+            isolatedOrbFailedVisualKey != null -> "PRODUCER_ERROR_VIEW"
+            else -> "COMPATIBLE_VIEW"
+        }
     /** True only when the detached retained-root path selected preparation of
      * the persistent isolated producer itself. */
     private var detachedIsolatedBackendSelected = false
@@ -140,6 +189,8 @@ internal class KeyguardCardMaterialController(
             onFirstCommitReceived = ::onIsolatedOrbFirstCommitReceived,
             onFirstCommitted = ::onIsolatedOrbFirstCommitted,
             onFailure = ::onIsolatedOrbFailure,
+            onPressure = ::onIsolatedOrbPressure,
+            onCapacityRestored = ::onIsolatedOrbCapacityRestored,
             onSizeChanged = ::onIsolatedOrbSizeChanged,
             barrier = isolatedOrbRenderBarrier,
             frameObserver = isolatedOrbFrameObserver,
@@ -244,6 +295,9 @@ internal class KeyguardCardMaterialController(
             // gate opened. Remembering this exact semantic scene lets a
             // compatible later attachment retain the established warm path.
             exercisedVisualKey = selectedVisualKey
+            if (pressureLatch != null && recoveryEpisodeOwner != null &&
+                recoveryEpisodeOwner === drawEvidenceOwner() && recoveryEpisode?.firstViewDrawAt == null
+            ) recoveryEpisode = recoveryEpisode?.copy(firstViewDrawAt = observedAtUptimeMs)
             onFirstOrbShaderDraw?.invoke(observedAtUptimeMs)
         }
         orb.onBootstrapGeometryDrawn = {
@@ -352,8 +406,9 @@ internal class KeyguardCardMaterialController(
         // AttachedSurfaceControl parent and therefore continue to exercise
         // the established bootstrap contract. The production isolated route
         // drops this gate only at real attachment.
+        val recoveryView = isolatedOrbRequested && (pressureLatch != null || isolatedOrbFailed)
         val needsBootstrap = canAnimate && scene?.profile?.animated == true &&
-            exercisedVisualKey != sceneVisualKey
+            exercisedVisualKey != sceneVisualKey && !recoveryView
         if (needsBootstrap) {
             if (coldPresentationState == ColdPresentationState.LIVE ||
                 bootstrapVisualKey != sceneVisualKey
@@ -381,8 +436,8 @@ internal class KeyguardCardMaterialController(
         // While the buffer producer obtains its first completed frame the
         // retained View supplies the same palette-correct bootstrap.  It is
         // not a commit dependency for the isolated route.
-        orb.setBootstrapActive(needsBootstrap || isolatedOrbRequested)
-        if (attached && isolatedOrbRequested && !isolatedOrbFailed &&
+        orb.setBootstrapActive(needsBootstrap || isolatedOrbEffective)
+        if (attached && isolatedOrbEffective &&
             (activeOrbLease == null || activeOrbLease?.visualKey != sceneVisualKey)
         ) {
             // The View has already accepted the currently permitted scene.
@@ -402,7 +457,7 @@ internal class KeyguardCardMaterialController(
             animationMode,
             presentationMode,
             isFull,
-            installViewProgram = !needsBootstrap || isolatedOrbRequested,
+            installViewProgram = !needsBootstrap || isolatedOrbEffective,
         )
         reconcileIsolatedOrbTarget()
         reconcileClock(canAnimate)
@@ -411,7 +466,7 @@ internal class KeyguardCardMaterialController(
     /** True means the caller must register its frame-commit observation before
      * the invalidation below can traverse the bootstrap frame. */
     fun requiresBootstrapForNextAttach(): Boolean =
-        !isolatedOrbRequested && coldPresentationState != ColdPresentationState.LIVE
+        !isolatedOrbEffective && coldPresentationState != ColdPresentationState.LIVE
 
     /** Immutable ownership for a single bootstrap/commit/live transition. */
     fun currentBootstrapToken(): KeyguardBootstrapFrameToken? =
@@ -421,6 +476,16 @@ internal class KeyguardCardMaterialController(
         }
 
     fun onAttached(attachment: Long = 0L, root: View? = null) {
+        if (root != null && pressureLatch != null && pressureRestoredAt != null &&
+            attachment > 0 && attachment != pressureRetryAfterAttachment && isolatedOrbRequested
+        ) {
+            // A drained pool can be selected only at a later distinct
+            // authorized attachment, never in the running recovery episode.
+            pressureLatch = null
+            pressureClaimedAt = null
+            pressureRestoredAt = null
+            pressureRetryAfterAttachment = 0L
+        }
         // Controller-only tests and detached compatibility callers do not
         // own an accessibility-overlay root. A child SurfaceControl cannot
         // be safely parented there, so retain the established View route.
@@ -447,6 +512,16 @@ internal class KeyguardCardMaterialController(
             firstHandoffToken = null
             firstHandoffCaptureOwner = null
             firstHandoff = null
+            withdrawalWorkerSnapshot = null
+            withdrawalWorkerOwner = null
+            val inherited = pressureLatch
+            val captureOwner = drawEvidenceOwner()
+            recoveryEpisodeOwner = captureOwner
+            recoveryEpisodeTicket = inherited
+            recoveryEpisode = if (inherited != null && captureOwner != null && isolatedOrbRequested) {
+                inherited.episode(attachment, inherited = true, claimedAt = pressureClaimedAt,
+                    restoredAt = pressureRestoredAt)
+            } else null
         }
         attached = true
         activeAttachment = attachment
@@ -470,14 +545,14 @@ internal class KeyguardCardMaterialController(
             }
             isolatedOrbPausedTime = null
         }
-        if (isolatedOrbRequested && !isolatedOrbFailed) {
+        if (isolatedOrbEffective) {
             // A new layer generation must not expose the legacy shader while
             // its first buffer is still pending. The bootstrap is visually
             // compatible but has no frame-commit/promotion authority here.
             orb.visibility = View.VISIBLE
             orb.setBootstrapActive(true)
         }
-        if (!isolatedOrbRequested && coldPresentationState != ColdPresentationState.LIVE) {
+        if (!isolatedOrbEffective && coldPresentationState != ColdPresentationState.LIVE) {
             bootstrapCommitReceived = false
             orb.setBootstrapActive(true)
             background.setBootstrapActive(selectedBackgroundVisible)
@@ -487,15 +562,26 @@ internal class KeyguardCardMaterialController(
         // required for this traversal.
         orb.invalidate()
         background.invalidate()
-        if (isolatedOrbRequested && root != null) {
+        if (isolatedOrbEffective && root != null) {
             reconcileIsolatedOrbTarget(root)
         }
         reconcileClock()
     }
 
     fun onDetached(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null) {
+        if (attached && isolatedOrbRendererDelegate.isInitialized()) {
+            val owner = drawEvidenceOwner()
+            if (owner != null) {
+                // Freeze the latest coherent Worker observation before the
+                // revoke/reset can relabel a zero-output episode as detached.
+                withdrawalWorkerOwner = owner
+                withdrawalWorkerSnapshot = isolatedOrbRenderer.snapshot()
+            }
+        }
         if (isolatedOrbRequested) {
-            isolatedOrbPausedTime = latestOrbScene?.timeAt(System.nanoTime())
+            val now = System.nanoTime()
+            isolatedOrbPausedTime = if (pressureLatch != null) orb.currentMaterialTime(now)
+                else latestOrbScene?.timeAt(now)
         }
         attached = false
         activeAttachment = 0L
@@ -511,7 +597,7 @@ internal class KeyguardCardMaterialController(
         // The child SurfaceControl is retired before WindowManager removes its
         // parent. Restore the View for a later legacy/fallback attachment.
         orb.visibility = View.VISIBLE
-        if (isolatedOrbRequested && !isolatedOrbFailed) orb.setBootstrapActive(true)
+        if (isolatedOrbEffective) orb.setBootstrapActive(true)
         orb.pause()
         background.pause()
         clock.stop()
@@ -545,12 +631,28 @@ internal class KeyguardCardMaterialController(
         isolatedFirstHandoff = firstHandoff?.takeIf {
             firstHandoffCaptureOwner != null && firstHandoffCaptureOwner === drawEvidenceOwner()
         },
+        recovery = recoveryEpisode?.takeIf {
+            recoveryEpisodeOwner != null && recoveryEpisodeOwner === drawEvidenceOwner()
+        },
+        effectiveRoute = effectiveRoute,
+        worker = withdrawalWorkerSnapshot?.takeIf {
+            withdrawalWorkerOwner != null && withdrawalWorkerOwner === drawEvidenceOwner()
+        } ?: buffer,
+        observedAt = SystemClock.uptimeMillis(),
     )
     }
 
     fun dispose() {
         runCatching { orb.context.contentResolver.unregisterContentObserver(animatorScaleObserver) }
         stop("dispose")
+        pressureLatch = null
+        pressureClaimedAt = null
+        pressureRestoredAt = null
+        recoveryEpisode = null
+        recoveryEpisodeTicket = null
+        recoveryEpisodeOwner = null
+        withdrawalWorkerSnapshot = null
+        withdrawalWorkerOwner = null
         artifacts.dispose()
         gpuPreparer.dispose()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
@@ -593,13 +695,13 @@ internal class KeyguardCardMaterialController(
         requestedRenderer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "RuntimeShader/AGSL" else "static-fallback",
         activeRenderer = when {
             mode == KeyguardCardAnimationMode.OFF -> "STATIC_BY_SETTING"
-            isolatedOrbRequested && !isolatedOrbFailed -> "HardwareBufferRenderer/SurfaceControl"
+            isolatedOrbEffective -> "HardwareBufferRenderer/SurfaceControl"
             coldPresentationState != ColdPresentationState.LIVE -> "BOOTSTRAP_PALETTE"
             orb.rendererFailure() != null -> "COMPILE_OR_UNIFORM_FAILED"
             orb.isRendererReady() -> "RuntimeShader/AGSL"
             else -> "WAITING_FOR_ATTACH_OR_DRAW"
         },
-        hardwareAccelerated = (isolatedOrbRequested && !isolatedOrbFailed &&
+        hardwareAccelerated = (isolatedOrbEffective &&
             (buffer?.framesPublished ?: 0) > 0
             ) || orb.lastCanvasHardwareAcceleratedForDiagnostics(),
         shaderCreationCount = orb.shaderCreationCount() + background.shaderCreationCount(),
@@ -635,6 +737,13 @@ internal class KeyguardCardMaterialController(
         isolatedWorkerAttachedAttachment = buffer?.workerAttachedAttachment ?: -1L,
         isolatedWorkerAttachedGeneration = buffer?.workerAttachedGeneration ?: -1L,
         isolatedCompletionGapMaxMs = buffer?.completionGapMaxMs ?: 0L,
+        effectiveRoute = effectiveRoute,
+        attachment = activeAttachment,
+        recoveryGeneration = pressureLatch?.lease?.generation ?: 0L,
+        recoveryRestoredAt = pressureRestoredAt,
+        attachmentShaderCalls = orb.attachmentShaderCalls(),
+        attachmentShaderTraversals = orb.attachmentDrawCadence().frames,
+        attachmentPhaseAdvances = orb.attachmentPhaseAdvances(),
     )
     }
 
@@ -648,7 +757,7 @@ internal class KeyguardCardMaterialController(
             clock.stop()
             return
         }
-        if (isolatedOrbRequested && !isolatedOrbFailed) {
+        if (isolatedOrbEffective) {
             // The dedicated renderer owns its own Choreographer. Main still
             // owns WindowManager, privacy, interaction and layer lifetime,
             // but never submits recurring ORB frames through this ViewRoot.
@@ -735,6 +844,10 @@ internal class KeyguardCardMaterialController(
         isFull: Boolean,
     ) {
         if (attached) return
+        if (pressureLatch != null) {
+            detachedIsolatedBackendSelected = false
+            return
+        }
         if (profile == null) {
             detachedIsolatedBackendSelected = false
             return
@@ -946,7 +1059,7 @@ internal class KeyguardCardMaterialController(
      * retain the legacy preparer. */
     private fun shouldSkipLegacyOrbGpuPreparation(view: KeyguardHeaderMaterialView): Boolean =
         view === orb && detachedIsolatedBackendSelected &&
-            isolatedOrbRequested && !isolatedOrbFailed
+            isolatedOrbEffective
 
     private fun canUseIsolatedOrb(
         scene: KeyguardMaterialScene?,
@@ -965,7 +1078,7 @@ internal class KeyguardCardMaterialController(
      * to make a hidden root visible.
      */
     private fun reconcileIsolatedOrbTarget(rootOverride: View? = null) {
-        if (!isolatedOrbRequested || isolatedOrbFailed ||
+        if (!isolatedOrbEffective ||
             Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE
         ) return
         val scene = latestOrbScene ?: return
@@ -1013,7 +1126,7 @@ internal class KeyguardCardMaterialController(
 
     private fun onIsolatedOrbFirstPublished(token: KeyguardOrbFirstPublicationToken, times: KeyguardOrbFirstPublicationTimes) {
         val lease = token.lease
-        if (!attached || isolatedOrbFailed || activeOrbLease != lease ||
+        if (!attached || !isolatedOrbEffective || activeOrbLease != lease ||
             activeAttachment != lease.attachment || attachedRoot?.isAttachedToWindow != true
         ) return
         currentFirstPublication = token
@@ -1048,7 +1161,7 @@ internal class KeyguardCardMaterialController(
 
     private fun onIsolatedOrbFirstCommitted(token: KeyguardOrbFirstPublicationToken) {
         val lease = token.lease
-        if (!attached || !isolatedOrbRequested || isolatedOrbFailed || activeOrbLease != lease ||
+        if (!attached || !isolatedOrbEffective || activeOrbLease != lease ||
             activeAttachment != lease.attachment || attachedRoot?.isAttachedToWindow != true ||
             currentFirstPublication !== token || !isolatedOrbRenderer.ownsFirstPublication(token)
         ) return
@@ -1064,7 +1177,7 @@ internal class KeyguardCardMaterialController(
      * layer is retired by the renderer before a differently sized lease can
      * be published, so a late buffer cannot be stretched into new bounds. */
     private fun onIsolatedOrbSizeChanged() {
-        if (!attached || !isolatedOrbRequested || isolatedOrbFailed) return
+        if (!attached || !isolatedOrbEffective) return
         val current = activeOrbLease
         val (width, height) = warmupDimensions(orb)
         if (current != null && current.width == width && current.height == height) return
@@ -1098,6 +1211,71 @@ internal class KeyguardCardMaterialController(
         prepareLegacyOrbFallback()
         orb.invalidate()
         reconcileClock()
+    }
+
+    private fun onIsolatedOrbPressure(ticket: KeyguardOrbPressureTicket) {
+        val scene = latestOrbScene ?: run { ticket.claim.cancel(); return }
+        val artifact = latestOrbArtifact ?: run { ticket.claim.cancel(); return }
+        val lease = ticket.lease
+        val root = attachedRoot
+        if (!attached || root?.isAttachedToWindow != true || !isolatedOrbEffective ||
+            activeAttachment != lease.attachment || activeOrbLease != lease ||
+            !animationsAllowed || mode != KeyguardCardAnimationMode.ORB_ONLY ||
+            presentationMode != KeyguardCardPresentationMode.ORB || !scene.profile.animated ||
+            scene.profile.visualKey != lease.visualKey || scene.visualKey != ticket.sceneKey ||
+            scene.full != ticket.sceneFull || scene.profile.effectId != ticket.effectId ||
+            scene.profile.usesPortal != ticket.usesPortal || artifact.programKey != lease.programKey ||
+            artifact.effectId != scene.profile.effectId || artifact.usesPortal != scene.profile.usesPortal ||
+            orb.width != lease.width || orb.height != lease.height ||
+            !isolatedOrbRenderer.claimPressure(ticket)
+        ) {
+            ticket.claim.cancel()
+            return
+        }
+
+        val claimedAt = SystemClock.uptimeMillis()
+        val now = System.nanoTime()
+        val anchor = scene.timeAt(now)
+        // Publish the route before any View/artifact callback can reenter.
+        pressureLatch = ticket
+        pressureClaimedAt = claimedAt
+        pressureRestoredAt = null
+        pressureRetryAfterAttachment = activeAttachment
+        detachedIsolatedBackendSelected = false
+        activeOrbLease = null
+        currentFirstPublication = null
+        coldPresentationState = ColdPresentationState.LIVE
+        bootstrapVisualKey = null
+        bootstrapCommitReceived = false
+        val captureOwner = drawEvidenceOwner()
+        recoveryEpisodeOwner = captureOwner
+        recoveryEpisodeTicket = ticket
+        if (captureOwner != null) recoveryEpisode = ticket.episode(activeAttachment,
+            inherited = false, claimedAt = claimedAt, anchor = anchor)
+        // Revocation/clear stay asynchronous with respect to buffer release;
+        // Main never waits for Worker, GPU, a commit, or a fence here.
+        isolatedOrbRenderer.retire("retired-use-pressure")
+        isolatedOrbRenderer.acceptPressure(ticket)
+        val keptTransition = orb.adoptRecoveryScene(scene, latestOrbPreviousScene,
+            isolatedTransitionStartedNanos, now)
+        if (recoveryEpisodeOwner != null && recoveryEpisodeOwner === drawEvidenceOwner()) {
+            recoveryEpisode = recoveryEpisode?.copy(transitionPreserved = keptTransition)
+        }
+        orb.visibility = View.VISIBLE
+        orb.setBootstrapActive(false)
+        requestedProgramKeys[orb]?.let { installViewProgram(orb, artifact, it) }
+        prepareLegacyOrbFallback()
+        orb.invalidate()
+        reconcileClock()
+    }
+
+    private fun onIsolatedOrbCapacityRestored(ticket: KeyguardOrbPressureTicket, observedAt: Long) {
+        if (pressureLatch !== ticket) return
+        pressureRestoredAt = observedAt
+        pressureRetryAfterAttachment = if (attached) activeAttachment else 0L
+        if (recoveryEpisodeOwner != null && recoveryEpisodeOwner === drawEvidenceOwner() &&
+            recoveryEpisodeTicket === ticket
+        ) recoveryEpisode = recoveryEpisode?.copy(restoredAt = observedAt)
     }
 
     /** A persistent-producer failure returns to the established View route.
@@ -1142,6 +1320,10 @@ internal data class KeyguardAttachmentRenderSummary(
     val isolatedFramesProduced: Int, val isolatedFramesPublished: Int, val isolatedFramesDropped: Int,
     val isolatedCompletionGapMaxMs: Long,
     val isolatedFirstHandoff: KeyguardIsolatedFirstHandoffSnapshot?,
+    val recovery: KeyguardOrbRecoveryEpisode? = null,
+    val effectiveRoute: String = "UNAVAILABLE",
+    val worker: KeyguardOrbBufferRendererSnapshot? = null,
+    val observedAt: Long = 0L,
 )
 
 internal data class KeyguardMaterialDiagnostics(
@@ -1181,4 +1363,11 @@ internal data class KeyguardMaterialDiagnostics(
     val isolatedWorkerAttachedAttachment: Long,
     val isolatedWorkerAttachedGeneration: Long,
     val isolatedCompletionGapMaxMs: Long,
+    val effectiveRoute: String,
+    val attachment: Long,
+    val recoveryGeneration: Long,
+    val recoveryRestoredAt: Long?,
+    val attachmentShaderCalls: Int,
+    val attachmentShaderTraversals: Long,
+    val attachmentPhaseAdvances: Int,
 )

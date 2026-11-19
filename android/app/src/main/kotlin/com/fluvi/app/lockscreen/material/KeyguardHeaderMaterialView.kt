@@ -176,7 +176,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     private val animationTime: KeyguardAnimationTimeSource = SystemKeyguardAnimationTimeSource,
-    private val materialTimeSource: KeyguardMaterialTimeSource = SystemKeyguardMaterialTimeSource,
+    private var materialTimeSource: KeyguardMaterialTimeSource = SystemKeyguardMaterialTimeSource,
 ) : View(context, attrs) {
     enum class Shape { ORB, CARD_BACKGROUND }
 
@@ -469,6 +469,41 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
      * second clock or changing the scene anchor. */
     fun prepareFirstLiveFrame(frameTimeNanos: Long) {
         frameNanos = frameTimeNanos
+    }
+
+    /** Transfer the permitted isolated scene's current monotonic position to
+     * the retained View. Ordinary resume() would restore an older pause point.
+     * A privacy/effect-incompatible transition is deliberately cut. */
+    fun adoptRecoveryScene(
+        scene: KeyguardMaterialScene,
+        old: KeyguardMaterialScene?,
+        oldTransitionStartedNanos: Long,
+        nowNanos: Long,
+    ): Boolean {
+        val compatible = old != null && old.full == scene.full &&
+            old.profile.effectId == scene.profile.effectId &&
+            old.profile.usesPortal == scene.profile.usesPortal && shaderCurrent != null &&
+            oldTransitionStartedNanos > 0L && nowNanos - oldTransitionStartedNanos < 180_000_000L
+        current = scene.anchoredAt(scene.timeAt(nowNanos), nowNanos)
+        previous = if (compatible) old else null
+        // The only preserved transition above uses the current program; a
+        // shaderPrevious from an older scene is not authority for this one.
+        shaderPrevious = null
+        if (compatible) transitionStartedNanos = oldTransitionStartedNanos
+        frameNanos = nowNanos
+        pausedTime = null
+        invalidate()
+        return compatible
+    }
+
+    fun currentMaterialTime(nowNanos: Long): KeyguardMaterialTime? = pausedTime ?: current?.timeAt(nowNanos)
+
+    /** Test-only deterministic time for the retained real-window View. The
+     * production path retains its constructor source and adds no draw hook. */
+    internal fun setMaterialTimeSourceForTest(source: KeyguardMaterialTimeSource) {
+        check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        materialTimeSource = source
+        invalidate()
     }
 
     fun pause() {
