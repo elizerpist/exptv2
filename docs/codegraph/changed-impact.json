@@ -1,26 +1,25 @@
 {
   "schema_version": 1,
-  "source_head": "1dddbf6f6fbe4b17ec0fdcb033848c8996721529",
-  "base_head": "d0ed8339655a249f3935dfb7ed7c995997882146",
+  "source_head": "7a1ec21b55aeaf69ef56c2b49dcc5114d7271b60",
+  "base_head": "c3b313b8cc27197a3a60110abed9cae9f1194666",
   "changed_files": [
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstDrawObservationInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt",
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardFirstDrawObservation.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbPlacementCacheTest.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbPressurePolicyTest.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbRetirementBarrierTest.kt",
-    "docs/FLUVI_ENGINEERING_JOURNAL.md",
+    "scripts/test-fluvi-fast.sh",
     "scripts/test-keyguard-r09-panel.sh",
-    "scripts/test-keyguard-service-trace.sh"
+    "test/boundary/keyguard_first_render_architecture_boundary_test.dart"
   ],
-  "candidate_changed_symbols": [],
+  "candidate_changed_symbols": [
+    "scip-dart pub fluvi 0.1.0+1 test/boundary/`keyguard_first_render_architecture_boundary_test.dart`/main()."
+  ],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
   "direct_reference_consumers": [],
   "affected_test_locations": [],

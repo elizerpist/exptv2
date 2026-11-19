@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "record_count": 20252,
+  "record_count": 20253,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
@@ -69,15 +69,15 @@
       "path": "symbols/part-009.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/pulse/presentation/`pulse_triage_inspector_page.dart`/_EvidenceGroup#`<constructor>`().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_navigation_zero_io_acceptance_test.dart`/_CountingRuntimeRepository#emitRevision().",
-      "sha256": "d46f2f3448e66297c1f170e2373fb999274eec7c75fcc4c145c389f3469b5e98"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_navigation_zero_io_acceptance_test.dart`/_CountingRuntimeRepository#dispose().",
+      "sha256": "b87c8a5c8cb0df43c59a8c64f443ada3edd178b87df670013c7391386ebda9e3"
     },
     {
       "path": "symbols/part-010.jsonl",
-      "record_count": 252,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_navigation_zero_io_acceptance_test.dart`/_CountingRuntimeRepository#globalRevisionSubscribeCount.",
+      "record_count": 253,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_navigation_zero_io_acceptance_test.dart`/_CountingRuntimeRepository#emitRevision().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "dd875df31a2155ea650b049f31560c63537c3cf3613a313b6601dbfe1d4344f0"
+      "sha256": "9dee978f08830ccb7ee505ad89e531e39cd66d360b77fc34b86d44dc8596401d"
     }
   ]
 }
