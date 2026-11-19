@@ -314,8 +314,8 @@ class KeyguardServiceOverlayInstrumentationTest {
                     awaitLive("r10-warm-current", warm, 2, warmWindow.id)
                     val warmCorrect = classify("warm", warmShots, warmWindow)
                     unlockAndAssertWithdrawn("r10-warm-unlock")
-                    assertTrue("cold has no sampled first correct compositor image", coldCorrect)
-                    assertTrue("warm has no sampled first correct compositor image", warmCorrect)
+                    assertTrue("cold first-correct compositor interval is unbounded or missing", coldCorrect)
+                    assertTrue("warm first-correct compositor interval is unbounded or missing", warmCorrect)
                     successorResult.getOrThrow()
                 } finally { referenceA.recycle() }
             } finally { expectedA.recycle() }
@@ -409,7 +409,10 @@ class KeyguardServiceOverlayInstrumentationTest {
                 check(list.size == 2 && list[0].second.lease == list[1].second.lease)
                 check(list[0].second.slotId != list[1].second.slotId ||
                     list[0].second.useGeneration != list[1].second.useGeneration)
-                val current = requireOverlay()
+                // Remote accessibility metadata can lag the already observed
+                // two submissions. Recheck it after the timed interval; this
+                // does not move or synthesize either submission endpoint.
+                val current = awaitOverlay("r11-$label-after-publications")
                 check(current.bounds.width() == 168 && current.bounds.height() == 168)
                 val material = snapshot("r11-$label-after-two-submissions")
                 check(material.attachment == expectedAttachment && material.route == "ISOLATED")
