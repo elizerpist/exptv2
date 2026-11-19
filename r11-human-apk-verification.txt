@@ -1,0 +1,18 @@
+url=https://media.githubusercontent.com/media/elizerpist/exptv2/68912df4fe97b9f0214d30a12c5cf6902439ffb3/fluvi_HUMAN_DIAGNOSTIC_1d1962475116_R11_REVIEW.apk
+source=1d19624751169e3af0270b151378cdfcdf1a1129
+tracked_status=''
+size=120230098
+sha256=f284f47f8ef4cffb31a866eb7deda33551179e409c6db0dd755a26c164ca9248
+byte_identity=True
+zip_bad_entry=None
+armeabi-v7a: full_sha=True; purpose=True
+arm64-v8a: full_sha=True; purpose=True
+x86_64: full_sha=True; purpose=True
+dex R11_FIRST=True
+dex bothReadyToApplyBeginMs=True
+dex r11ShaderWallNs=True
+Signer #1 certificate DN: C=US, O=Android, CN=Android Debug
+Signer #1 certificate SHA-256 digest: faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb
+Signer #1 certificate SHA-1 digest: ceb0bc4d67d71f6f7af94b7c3ffec84172e577fd
+Signer #1 certificate MD5 digest: b3041ff62c49532d362b7bb25e2068cb
+
