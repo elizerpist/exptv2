@@ -93,105 +93,166 @@ class KeyguardServiceOverlayInstrumentationTest {
         runRecoveryServiceScenario()
     }
 
-    /** Real-service negative control for R12: B is requested under the same
-     * authority while A's complete NO_MAIN_MARKER answer is held before Main
-     * applies it. This probe changes only the test observation, never grants
-     * visibility; B must reacquire the genuine system tree. */
+    /** Stock-compatible observation only: this fixture never synthesizes a positive
+     * permission and never mutates production diagnostics. The A stimulus removes
+     * only the classifier's own affirmative MAIN ids from genuine snapshots. */
     @Test fun r12DetachedNegativeCanReadOneSuccessorBeforeOrderedApply() {
         assertEquals("R12 fixture requires API 35", 35, Build.VERSION.SDK_INT)
         automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         automation.serviceInfo = automation.serviceInfo.apply {
             flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
-        output = File(context.filesDir, "keyguard-service-probe/r12-admission").apply { mkdirs() }
+        val arguments = InstrumentationRegistry.getArguments()
+        val runId = checkNotNull(arguments.getString("runUuid")) { "runUuid missing" }
+        java.util.UUID.fromString(runId)
+        val appSha = checkNotNull(arguments.getString("sourceSha")) { "sourceSha missing" }
+        val harnessSha = checkNotNull(arguments.getString("harnessSha")) { "harnessSha missing" }
+        output = File(context.filesDir, "keyguard-service-probe/r12-admission/$runId")
+        check(!output.exists()) { "run directory already exists" }
+        check(output.mkdirs())
         deadline = SystemClock.uptimeMillis() + 90_000L
+        val rows = mutableListOf<String>()
+        fun trace(stage: String, detail: String = "") = synchronized(rows) {
+            rows.add("R12 stage=$stage seq=${rows.size + 1} up=${SystemClock.uptimeMillis()} tid=${android.os.Process.myTid()} run=$runId capture=$captureId $detail".trim())
+        }
         val resolver = context.contentResolver
         val savedServices = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
         val savedEnabled = Settings.Secure.getString(resolver, Settings.Secure.ACCESSIBILITY_ENABLED)
         val savedLockDisabled = shell("locksettings get-disabled").trim()
         val savedSettings = snapshotPreferences("fluvi_native_keyguard_card")
         val savedMaterial = snapshotPreferences("fluvi_keyguard_header_material")
+        val setupReady = java.util.concurrent.CountDownLatch(1)
         val applyEntered = java.util.concurrent.CountDownLatch(1)
         val releaseApply = java.util.concurrent.CountDownLatch(1)
+        val appliedA = java.util.concurrent.CountDownLatch(1)
+        val appliedB = java.util.concurrent.CountDownLatch(1)
         val successorStarted = java.util.concurrent.CountDownLatch(1)
         val selected = java.util.concurrent.atomic.AtomicReference<KeyguardCardInspectionRequest?>()
         val successor = java.util.concurrent.atomic.AtomicReference<KeyguardCardInspectionRequest?>()
         val probeFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
-        val snapshotsWithoutSystemUi = java.util.concurrent.atomic.AtomicInteger()
-        val snapshotsAlreadyAttached = java.util.concurrent.atomic.AtomicInteger()
-        val snapshotsStale = java.util.concurrent.atomic.AtomicInteger()
-        val successorFreshnessRequired = java.util.concurrent.atomic.AtomicInteger()
-        val candidatesWithPending = java.util.concurrent.atomic.AtomicInteger()
+        val actualDecision = java.util.concurrent.atomic.AtomicReference<KeyguardCardVisibility?>()
+        val readerCount = java.util.concurrent.atomic.AtomicInteger()
+        val maximumReaders = java.util.concurrent.atomic.AtomicInteger()
+        val successorFreshnessRevision = java.util.concurrent.atomic.AtomicLong(-1L)
+        val requestOnWorker = ThreadLocal<KeyguardCardInspectionRequest?>()
+        val sampleCounts = java.util.concurrent.ConcurrentHashMap<Long, java.util.concurrent.atomic.AtomicInteger>()
+        val samples = java.util.concurrent.ConcurrentHashMap<Long, MutableList<KeyguardSystemState>>()
+        val mainIds = @Suppress("UNCHECKED_CAST") (KeyguardSurfaceClassifier::class.java
+            .getDeclaredField("mainIds").apply { isAccessible = true }.get(null) as Set<String>).toSet()
+        check(mainIds.isNotEmpty())
+        val realReader = AndroidKeyguardSystemStateReader(context)
         var service: FluviKeyguardCardService? = null
         var captureStarted = false
         var testFailure: Throwable? = null
+        var specimenValidated = false
+        var aRow: Map<String, String>? = null
+        var bRow: Map<String, String>? = null
         val probe = object : KeyguardInspectionProbeForTest {
             override fun started(request: KeyguardCardInspectionRequest) {
+                requestOnWorker.set(request)
+                if (request.trigger == "r12-admission-a" || request.trigger == "r12-admission-b") {
+                    val active = readerCount.incrementAndGet()
+                    maximumReaders.updateAndGet { previous -> maxOf(previous, active) }
+                    trace("READER_START", "role=${if (request.trigger.endsWith("-a")) "A" else "B"} req=${request.id} session=${request.session} wake=${request.wakeGeneration} epoch=${request.visibilityEpoch} interaction=${request.interactionEpoch} attach=${request.attachGeneration}")
+                }
                 if (request.id == successor.get()?.id) successorStarted.countDown()
             }
 
             override fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> {
-                if (selected.get() != null) return actual
-                if (actual.none { it.packageName == "com.android.systemui" }) {
-                    snapshotsWithoutSystemUi.incrementAndGet()
+                val unmasked = KeyguardSurfaceClassifier.classifyDetailed(actual)
+                val masked = actual.map { window ->
+                    if (window.packageName == "com.android.systemui") window.copy(visibleViewIds = window.visibleViewIds - mainIds) else window
+                }
+                val synthetic = KeyguardSurfaceClassifier.classifyDetailed(masked)
+                val sample = samples[request.id]?.lastOrNull()
+                if (request.trigger == "r12-admission-b") {
+                    trace("B_TREE", "req=${request.id} unmasked=${unmasked.surface} reason=${unmasked.reason}")
                     return actual
                 }
-                val owner = service ?: return actual
-                instrumentation.runOnMainSync {
-                    runCatching {
-                        val state = owner.inspectionStateForTest()
-                        if (state.attached) { snapshotsAlreadyAttached.incrementAndGet(); return@runCatching }
-                        if (!state.authority.matches(request)) { snapshotsStale.incrementAndGet(); return@runCatching }
-                        if (state.pending != null) candidatesWithPending.incrementAndGet()
+                if (request.trigger != "r12-admission-a") {
+                    if (unmasked.surface == KeyguardSurface.MAIN_KEYGUARD && sample?.eligible == true) {
+                        trace("SETUP", "req=${request.id} actual=${unmasked.surface} masked=${synthetic.surface} mask=SYNTHETIC_NEGATIVE")
+                        setupReady.countDown()
+                    }
+                    return masked
+                }
+                if (!selected.compareAndSet(null, request)) {
+                    probeFailure.compareAndSet(null, IllegalStateException("duplicate tagged A"))
+                    applyEntered.countDown()
+                    return masked
+                }
+                trace("A_TREE", "req=${request.id} unmasked=${unmasked.surface} unmaskedReason=${unmasked.reason} masked=${synthetic.surface} maskedReason=${synthetic.reason} mask=SYNTHETIC_NEGATIVE")
+                runCatching {
+                    check(unmasked.surface == KeyguardSurface.MAIN_KEYGUARD && unmasked.reason == KeyguardSurfaceReason.MAIN_CONFIRMED) { "A has no genuine MAIN marker" }
+                    check(synthetic.surface == KeyguardSurface.UNKNOWN && synthetic.reason == KeyguardSurfaceReason.NO_MAIN_MARKER) { "A masked tree has exclusion or no windows" }
+                    check(sample?.eligible == true) { "A initial system sample ineligible" }
+                    val owner = checkNotNull(service)
+                    instrumentation.runOnMainSync {
+                        val before = owner.inspectionStateForTest()
+                        check(!before.attached && before.authority.matches(request)) { "A not detached or authority changed" }
                         val method = FluviKeyguardCardService::class.java.getDeclaredMethod(
                             "scheduleEvaluation", String::class.java, java.lang.Long::class.java,
                             java.lang.Long::class.java, KeyguardWindowFreshness::class.java,
                             KeyguardCardInspectionRequest::class.java,
                         ).apply { isAccessible = true }
-                        method.invoke(owner, "r12-admission-successor", null, SystemClock.uptimeMillis(),
-                            KeyguardWindowFreshness.FRAMEWORK_EVENT, null)
-                        val next = owner.inspectionStateForTest().pending ?: return@runCatching
-                        if (next.windowFreshness.requiresCacheClear) {
-                            successorFreshnessRequired.incrementAndGet()
-                            return@runCatching
-                        }
-                        if (state.authority.matches(next) && selected.compareAndSet(null, request)) {
-                            successor.set(next)
-                        }
-                    }.onFailure { probeFailure.compareAndSet(null, it) }
-                }
-                if (selected.get()?.id != request.id) return actual
-                // Preserve window/type/layer/exclusion data while removing
-                // only SystemUI markers for this test-owned negative A.
-                return actual.map { window ->
-                    if (window.packageName == "com.android.systemui") window.copy(visibleViewIds = emptySet()) else window
-                }
+                        method.invoke(owner, "r12-admission-b", null, SystemClock.uptimeMillis(), KeyguardWindowFreshness.FRAMEWORK_EVENT, null)
+                        val next = checkNotNull(owner.inspectionStateForTest().pending) { "B not pending after offer" }
+                        check(next.trigger == "r12-admission-b" && before.authority.matches(next)) { "B identity or authority differs" }
+                        check(!next.windowFreshness.requiresCacheClear) { "B has freshness escalation" }
+                        val freshness = FluviKeyguardCardService::class.java.getDeclaredField("inspectionFreshness")
+                            .apply { isAccessible = true }.get(owner) as KeyguardInspectionFreshness
+                        val ticket = checkNotNull(freshness.beforeRead(next)) { "B freshness authority missing" }
+                        check(!ticket.reason.requiresCacheClear) { "outstanding freshness escalation" }
+                        successorFreshnessRevision.set(ticket.revision)
+                        successor.set(next)
+                        trace("B_OFFER", "req=${next.id} replaced=${before.pending?.id ?: "none"} session=${next.session} wake=${next.wakeGeneration} epoch=${next.visibilityEpoch} interaction=${next.interactionEpoch} attach=${next.attachGeneration} freshness=${next.windowFreshness} freshnessRevision=${ticket.revision} outstanding=${ticket.reason}")
+                    }
+                }.onFailure { probeFailure.compareAndSet(null, it); trace("INVALID", "where=A_TREE error=${it.javaClass.simpleName}"); applyEntered.countDown() }
+                return masked
             }
 
             override fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
-                if (selected.get()?.id != request.id) return
+                if (request.id != selected.get()?.id && request.id != successor.get()?.id) return
+                val role = if (request.id == selected.get()?.id) "A" else "B"
+                trace("APPLY_ENTER", "role=$role req=${request.id} decision=$decision")
+                if (role != "A") return
+                actualDecision.set(decision)
                 runCatching {
-                    check(decision == KeyguardCardVisibility.HIDDEN_UNKNOWN) { "A did not reach HIDDEN_UNKNOWN" }
                     val owner = checkNotNull(service)
                     val state = owner.inspectionStateForTest()
-                    check(!state.attached) { "A was not detached" }
-                    val queue = FluviKeyguardCardService::class.java.getDeclaredField("inspectionQueue")
-                        .apply { isAccessible = true }.get(owner) as KeyguardCardInspectionQueue
-                    val queueLock = FluviKeyguardCardService::class.java.getDeclaredField("queueLock")
-                        .apply { isAccessible = true }.get(owner)!!
-                    val expectedSuccessor = checkNotNull(successor.get())
-                    check(synchronized(queueLock) {
-                        queue.pendingRequest()?.id == expectedSuccessor.id ||
-                            queue.activeRequest()?.id == expectedSuccessor.id
-                    }) {
-                        "queued B was superseded before A reached ordered application"
-                    }
+                    val expectedB = checkNotNull(successor.get()) { "B was not offered" }
+                    val queue = FluviKeyguardCardService::class.java.getDeclaredField("inspectionQueue").apply { isAccessible = true }.get(owner) as KeyguardCardInspectionQueue
+                    val queueLock = FluviKeyguardCardService::class.java.getDeclaredField("queueLock").apply { isAccessible = true }.get(owner)!!
+                    val pair = synchronized(queueLock) { queue.activeRequest()?.id to queue.pendingRequest()?.id }
+                    trace("A_BOUNDARY", "req=${request.id} decision=$decision detached=${!state.attached} authority=${state.authority.matches(request)} b=${expectedB.id} active=${pair.first ?: "none"} pending=${pair.second ?: "none"} bStarted=${successorStarted.count == 0L}")
+                    check(decision == KeyguardCardVisibility.HIDDEN_UNKNOWN) { "A decision is $decision, not HIDDEN_UNKNOWN" }
+                    check(!state.attached && state.authority.matches(request) && state.authority.matches(expectedB)) { "A or B lost detached authority" }
+                    check(pair.first == expectedB.id || pair.second == expectedB.id) { "tagged B superseded before A application" }
+                    val freshness = FluviKeyguardCardService::class.java.getDeclaredField("inspectionFreshness")
+                        .apply { isAccessible = true }.get(owner) as KeyguardInspectionFreshness
+                    val ticket = checkNotNull(freshness.beforeRead(expectedB)) { "B freshness authority expired" }
+                    trace("A_FRESHNESS", "req=${request.id} b=${expectedB.id} revision=${ticket.revision} outstanding=${ticket.reason}")
+                    check(ticket.revision == successorFreshnessRevision.get() && !ticket.reason.requiresCacheClear) { "B freshness changed before A application" }
                     applyEntered.countDown()
                     check(releaseApply.await(10, TimeUnit.SECONDS)) { "held Main apply was not released" }
-                }.onFailure { probeFailure.compareAndSet(null, it); applyEntered.countDown() }
+                    trace("A_RELEASED", "req=${request.id}")
+                }.onFailure { probeFailure.compareAndSet(null, it); trace("INVALID", "where=A_APPLY error=${it.javaClass.simpleName}"); applyEntered.countDown() }
+            }
+
+            override fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+                when (request.id) {
+                    selected.get()?.id -> {
+                        val state = checkNotNull(service).inspectionStateForTest()
+                        trace("APPLY_EXIT", "role=A req=${request.id} decision=$decision detached=${!state.attached}")
+                        if (state.attached) probeFailure.compareAndSet(null, IllegalStateException("A disclosed while negative"))
+                        appliedA.countDown()
+                    }
+                    successor.get()?.id -> { trace("APPLY_EXIT", "role=B req=${request.id} decision=$decision"); appliedB.countDown() }
+                }
             }
         }
         try {
+            trace("RUN", "appSha=$appSha harnessSha=$harnessSha pid=${android.os.Process.myPid()} mode=FULL")
             assertFalse("fixture requires a fresh service", FluviKeyguardCardServiceRegistry.connected)
             assertFalse("fixture requires an insecure test device", keyguard.isDeviceSecure)
             assertTrue(savedLockDisabled == "true" || savedLockDisabled == "false")
@@ -202,48 +263,104 @@ class KeyguardServiceOverlayInstrumentationTest {
             await("initial unlocked state", 5_000) { power.isInteractive && !keyguard.isKeyguardLocked }
             shell("locksettings set-disabled false")
             instrumentation.runOnMainSync {
-                FluviKeyguardCardSettings.update(context, mapOf("requested" to true,
-                    "showFinancialDetails" to true, "presentationMode" to "orb", "animationMode" to "orbOnly"))
+                FluviKeyguardCardSettings.update(context, mapOf("requested" to true, "showFinancialDetails" to true, "presentationMode" to "orb", "animationMode" to "orbOnly"))
                 val epoch = maxOf(SystemClock.elapsedRealtimeNanos(), (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
                 assertTrue(FluviKeyguardMaterialStore.publish(context, materialProfile(), epoch))
             }
-            val capture = KeyguardCardDiagnostics.startCapture(context,
-                InstrumentationRegistry.getArguments().getString("sourceSha") ?: "source-unprovided", "debug", "FULL")
+            val capture = KeyguardCardDiagnostics.startCapture(context, appSha, "debug", "FULL")
             captureStarted = true
             captureId = capture["captureId"].toString()
+            trace("CAPTURE", "mode=FULL")
             val services = withoutOurService(savedServices).split(':').filter { it.isNotBlank() } + component
             setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, services.joinToString(":"))
             setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
             await("actual service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
             service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             service!!.inspectionProbeForTest = probe
+            service!!.systemStateReaderOverride = KeyguardSystemStateReader { purpose ->
+                val result = realReader.read(purpose)
+                if (purpose == KeyguardSystemReadPurpose.INSPECTION) {
+                    requestOnWorker.get()?.let { req ->
+                        val count = sampleCounts.getOrPut(req.id) { java.util.concurrent.atomic.AtomicInteger() }.incrementAndGet()
+                        samples.getOrPut(req.id) { java.util.Collections.synchronizedList(mutableListOf()) }.add(result)
+                        if (req.trigger == "r12-admission-a" || req.trigger == "r12-admission-b") {
+                            trace("SYSTEM_SAMPLE", "role=${if (req.trigger.endsWith("-a")) "A" else "B"} req=${req.id} ordinal=$count started=${result.startedAt} finished=${result.finishedAt} available=${result.available} primary=${result.primaryDisplay} interactive=${result.interactive} displayOn=${result.displayOn} displayOff=${result.displayOff} locked=${result.keyguardLocked} userUnlocked=${result.userUnlocked}")
+                            if (count == 2) readerCount.decrementAndGet()
+                        }
+                    }
+                }
+                result
+            }
             screenOff(synchronizeInput = true)
             shell("input keyevent KEYCODE_WAKEUP")
+            assertTrue("setup never saw an eligible genuine MAIN marker", setupReady.await(20, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync {
+                val owner = checkNotNull(service)
+                val state = owner.inspectionStateForTest()
+                check(!state.attached) { "already attached before A offer" }
+                val method = FluviKeyguardCardService::class.java.getDeclaredMethod("scheduleEvaluation", String::class.java, java.lang.Long::class.java, java.lang.Long::class.java, KeyguardWindowFreshness::class.java, KeyguardCardInspectionRequest::class.java).apply { isAccessible = true }
+                method.invoke(owner, "r12-admission-a", null, SystemClock.uptimeMillis(), KeyguardWindowFreshness.FRAMEWORK_EVENT, null)
+                trace("A_OFFER", "authority=${state.authority}")
+            }
             val reached = applyEntered.await(20, TimeUnit.SECONDS)
             probeFailure.get()?.let { throw AssertionError("R12 admission fixture invalid", it) }
-            assertTrue("fixture never reached A's actual Main application", reached)
-            assertTrue("no same-authority successor was queued", successor.get() != null)
-            val readAheadObserved = successorStarted.await(4, TimeUnit.SECONDS)
-            releaseApply.countDown()
-            assertTrue("the queued successor must eventually enter its real reader", successorStarted.await(10, TimeUnit.SECONDS))
-            probeFailure.get()?.let { throw AssertionError("R12 held-apply probe failed", it) }
-            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"].toString()
-            File(output, "capture.txt").writeText(report)
+            assertTrue("fixture never reached A actual Main application", reached)
             val a = checkNotNull(selected.get())
-            record("R12_ADMISSION_ORDER", "a=${a.id} b=${successor.get()?.id} bStartedBeforeAApply=$readAheadObserved")
-            assertTrue("fixture A must be complete NO_MAIN_MARKER, not unavailable/truncated",
-                report.lineSequence().any { it.contains("req=${a.id}") && it.contains("NO_MAIN_MARKER") })
+            val b = checkNotNull(successor.get())
+            val readAheadObserved = successorStarted.await(3, TimeUnit.SECONDS)
+            trace("A_RELEASE_SIGNAL", "req=${a.id} b=${b.id} bStarted=$readAheadObserved")
+            releaseApply.countDown()
+            assertTrue("A ordered application did not exit", appliedA.await(10, TimeUnit.SECONDS))
+            assertTrue("the tagged successor must eventually enter its real reader", successorStarted.await(10, TimeUnit.SECONDS))
+            assertTrue("tagged successor did not apply", appliedB.await(10, TimeUnit.SECONDS))
+            probeFailure.get()?.let { throw AssertionError("R12 held-apply probe failed", it) }
+            val end = SystemClock.uptimeMillis() + 8_000L
+            while (SystemClock.uptimeMillis() < end && (aRow == null || bRow == null)) {
+                if (aRow == null) aRow = r12ReadExactInspection(captureId, a)
+                if (bRow == null) bRow = r12ReadExactInspection(captureId, b)
+                if (aRow == null || bRow == null) Thread.sleep(30)
+            }
+            val exactA = checkNotNull(aRow) { "EVIDENCE_MISSING exact A event" }
+            val exactB = checkNotNull(bRow) { "EVIDENCE_MISSING exact B event" }
+            File(output, "exact-events.txt").writeText(listOf(exactA, exactB).joinToString("\n", postfix = "\n") { row -> row.entries.joinToString(" ") { "${it.key}=${it.value}" } })
+            trace("EXACT_A", "req=${a.id} reason=${exactA["reason"]}")
+            trace("EXACT_B", "req=${b.id} reason=${exactB["reason"]}")
+            assertEquals("A actual decision", KeyguardCardVisibility.HIDDEN_UNKNOWN, actualDecision.get())
+            assertEquals("A actual reason", "NO_MAIN_MARKER", exactA["reason"])
+            assertEquals("A classification", "HIDDEN_UNKNOWN", exactA["surfaceClassification"])
+            for (key in listOf("rootUnavailable", "walkTruncated", "abortedStale")) assertEquals("A $key", "false", exactA[key])
+            assertEquals("B genuine positive reason", "MAIN_CONFIRMED", exactB["reason"])
+            for (key in listOf("rootUnavailable", "walkTruncated", "abortedStale")) assertEquals("B $key", "false", exactB[key])
+            for (req in listOf(a, b)) {
+                val observed = samples[req.id]?.toList().orEmpty()
+                assertEquals("both original system samples for ${req.id}", 2, observed.size)
+                assertTrue("each original system sample eligible for ${req.id}", observed.all { it.eligible })
+            }
+            assertEquals("one physical reader maximum", 1, maximumReaders.get())
+            assertEquals("both reads completed", 0, readerCount.get())
+            specimenValidated = true
+            trace("ORDER", "a=${a.id} b=${b.id} bStartedBeforeARelease=$readAheadObserved maximumReaders=${maximumReaders.get()} specimen=VALID")
             assertTrue("compatible B did not start before the held ordered A application", readAheadObserved)
         } catch (error: Throwable) {
             testFailure = error
+            trace("FAILURE", "type=${error.javaClass.simpleName} message=${error.message?.replace(' ', '_') ?: "none"}")
             throw error
         } finally {
+            trace("FINALLY_RELEASE")
             releaseApply.countDown()
             service?.inspectionProbeForTest = null
-            if (captureStarted) runCatching {
-                if (!File(output, "capture.txt").exists()) File(output, "capture.txt").writeText(
-                    KeyguardCardDiagnostics.freezeCapture(context)["report"].toString())
+            service?.systemStateReaderOverride = null
+            if (captureStarted && aRow == null && selected.get() != null) {
+                val until = SystemClock.uptimeMillis() + 2_000L
+                while (SystemClock.uptimeMillis() < until && aRow == null) {
+                    aRow = runCatching { r12ReadExactInspection(captureId, checkNotNull(selected.get())) }.getOrNull()
+                    if (aRow == null) Thread.sleep(30)
+                }
+                trace("A_FINAL_EVIDENCE", "req=${selected.get()?.id} reason=${aRow?.get("reason") ?: "EVIDENCE_MISSING"}")
+                aRow?.let { row -> File(output, "a-exact-partial.txt").writeText(row.entries.joinToString(" ") { "${it.key}=${it.value}" } + "\n") }
             }
+            if (captureStarted) runCatching { File(output, "capture.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"].toString()) }
+                .onFailure { trace("CAPTURE_FAILURE", "type=${it.javaClass.simpleName}") }
             val cleanup = runCatching {
                 setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, withoutOurService(savedServices))
                 await("R12 fixture service disconnected", 5_000) { !FluviKeyguardCardServiceRegistry.connected }
@@ -255,15 +372,44 @@ class KeyguardServiceOverlayInstrumentationTest {
                 setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
                 setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
             }
-            record("R12_ADMISSION_CLEANUP", if (cleanup.isSuccess) "status=PASS" else "status=FAIL")
-            record("R12_ADMISSION_FIXTURE", "noSystemUi=${snapshotsWithoutSystemUi.get()} " +
-                "attached=${snapshotsAlreadyAttached.get()} stale=${snapshotsStale.get()} " +
-                "alreadyPending=${candidatesWithPending.get()} freshnessRequired=${successorFreshnessRequired.get()} " +
-                "selected=${selected.get()?.id ?: "none"} failure=${probeFailure.get()?.javaClass?.simpleName ?: "none"}")
-            File(output, "fixture.txt").writeText(evidence.toString())
+            trace("CLEANUP", "status=${if (cleanup.isSuccess) "PASS" else "FAIL"} specimen=${if (specimenValidated) "VALID" else "INVALID"}")
+            File(output, "fixture.txt").writeText(synchronized(rows) { rows.joinToString("\n", postfix = "\n") })
             cleanup.exceptionOrNull()?.let { error ->
-                if (testFailure != null) testFailure!!.addSuppressed(error)
-                else throw AssertionError("R12 fixture cleanup failed", error)
+                if (testFailure != null) testFailure!!.addSuppressed(error) else throw AssertionError("R12 fixture cleanup failed", error)
+            }
+        }
+    }
+
+    /** Test-only FIFO reducer barrier and immutable, identity-qualified copy.
+     * No waiting happens while captureLock is held and no ring is mutated. */
+    private fun r12ReadExactInspection(captureId: String, request: KeyguardCardInspectionRequest): Map<String, String>? {
+        val diagnostics = KeyguardCardDiagnostics::class.java
+        fun field(owner: Any?, type: Class<*>, name: String): Any? = type.getDeclaredField(name).apply { isAccessible = true }.get(owner)
+        val reducer = field(null, diagnostics, "reduction") as KeyguardDiagnosticQueue
+        val lock = checkNotNull(field(null, diagnostics, "captureLock"))
+        return reducer.read {
+            synchronized(lock) {
+                val active = field(null, diagnostics, "capture") ?: return@synchronized null
+                val activeType = active.javaClass
+                if (field(active, activeType, "id") != captureId) return@synchronized null
+                val process = field(active, activeType, "processInstanceId").toString()
+                val events = field(active, activeType, "events") as Iterable<*>
+                val event = events.filterNotNull().singleOrNull { item ->
+                    val type = item.javaClass
+                    field(item, type, "stage") == "INSPECTION_FINISHED" &&
+                        field(item, type, "captureId") == captureId &&
+                        field(item, type, "processInstanceId") == process &&
+                        field(item, type, "serviceSession") == request.session &&
+                        field(item, type, "wakeEpoch") == request.wakeGeneration &&
+                        field(item, type, "requestId") == request.id
+                } ?: return@synchronized null
+                val type = event.javaClass
+                @Suppress("UNCHECKED_CAST")
+                val values = (field(event, type, "fields") as Map<String, String>).toMap()
+                val wanted = listOf("surfaceClassification", "rootUnavailable", "walkTruncated", "abortedStale", "requestVisibilityEpoch", "requestInteractionEpoch", "requestWakeGeneration")
+                linkedMapOf("capture" to captureId, "process" to process, "session" to request.session.toString(), "wake" to request.wakeGeneration.toString(), "req" to request.id.toString(), "stage" to "INSPECTION_FINISHED", "reason" to field(event, type, "reason").toString()).apply {
+                    wanted.forEach { put(it, values[it] ?: "MISSING") }
+                }
             }
         }
     }

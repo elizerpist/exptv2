@@ -38,6 +38,10 @@ on:
           - r11_cold_candidate
           - r11_panel_candidate
           - r12_contract
+          - r12_admission_baseline
+          - r12_legacy
+          - r12_static
+          - r12_live
 
 permissions:
   contents: read
@@ -178,9 +182,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Fetch exact R11 application for the R12 baseline control
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' }}
-        run: git fetch --no-tags --depth=1 origin 1d19624751169e3af0270b151378cdfcdf1a1129
+      - name: Checkout exact R11 application for the R12 baseline control
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_admission_baseline' }}
+        uses: actions/checkout@v5
+        with:
+          ref: 1d19624751169e3af0270b151378cdfcdf1a1129
+          path: r12-stock
 
       - name: Checkout exact R08 baseline for the focused panel
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r09_panel_baseline' }}
@@ -237,11 +244,25 @@ jobs:
           cd r11-baseline
           flutter pub get
 
+      - name: Prepare stock R11 admission with the audited androidTest-only overlay
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_admission_baseline' }}
+        run: |
+          cp android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt r12-stock/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
+          test "$(git -C r12-stock diff --name-only 1d19624751169e3af0270b151378cdfcdf1a1129)" = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
+          cd r12-stock
+          flutter pub get
+
       - name: Check affected delivery boundary contracts
         run: flutter test test/boundary/dashboard_interaction_performance_boundary_test.dart test/boundary/human_diagnostic_apk_delivery_boundary_test.dart test/boundary/dashboard_avatar_profile_boundary_test.dart --reporter expanded
 
       - name: Check lower screenshot environment wrapper
         run: bash scripts/test-keyguard-lower-environment.sh
+
+      - name: Check exact R12 admission evidence parser
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_admission_baseline' }}
+        run: |
+          bash -n scripts/test-keyguard-r12-admission-baseline.sh
+          python3 scripts/test-keyguard-r12-harness.py
 
       - name: Enable KVM for material runtime
         run: |
@@ -269,12 +290,12 @@ jobs:
             -no-snapshot -noaudio -no-boot-anim -camera-back none
             -partition-size 4096
           pre-emulator-launch-script: >-
-            if [ "$FLUVI_R09_SCOPE" = r09_panel_baseline ]; then cd r09-baseline || exit 1; elif [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ]; then cd r10-baseline || exit 1; elif [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ]; then cd r11-baseline || exit 1; fi; cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+            if [ "$FLUVI_R09_SCOPE" = r12_admission_baseline ]; then cd r12-stock || exit 1; elif [ "$FLUVI_R09_SCOPE" = r09_panel_baseline ]; then cd r09-baseline || exit 1; elif [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ]; then cd r10-baseline || exit 1; elif [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ]; then cd r11-baseline || exit 1; fi; cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
           # android-emulator-runner executes each physical input line through
           # /usr/bin/sh. Keep this as one POSIX command so its conditional and
           # aggregate status are owned by one shell invocation.
           script: >-
-            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_contract ]; then bash scripts/test-keyguard-r12-admission-baseline.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
+            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_admission_baseline ]; then FLUVI_R12_APP_DIR="$PWD/r12-stock" bash scripts/test-keyguard-r12-admission-baseline.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r12_contract ] || [ "$FLUVI_R09_SCOPE" = r12_legacy ] || [ "$FLUVI_R09_SCOPE" = r12_static ] || [ "$FLUVI_R09_SCOPE" = r12_live ]; }; then echo "FAIL: R12 candidate scope $FLUVI_R09_SCOPE not yet wired"; test_result=1; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
 
       - name: Analyze bounded production overlay trace
         if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && hashFiles('android/keyguard-service-evidence/fluvi-keyguard-service.perfetto-trace') != '' }}
