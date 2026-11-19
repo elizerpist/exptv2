@@ -3,8 +3,62 @@ package com.fluvi.app.lockscreen
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.os.Build
 import android.view.View
 import android.view.ViewTreeObserver
+
+/** One cold root observation, registered before addView. Its asynchronous
+ * events retain the operation captured by the caller and never affect UI. */
+internal class KeyguardColdRootObservation(
+    private val root: View,
+    private val publish: (String, Long, Map<String, Any?>) -> Unit,
+) {
+    private val handler = Handler(Looper.getMainLooper())
+    private var cancelled = false
+    private var attached = false
+    private var laidOut = false
+    private val attachListener = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) {
+            if (cancelled || attached) return
+            attached = true
+            val at = SystemClock.uptimeMillis()
+            handler.post { publish("R10_ROOT_ATTACH_DISPATCH", at, emptyMap()) }
+            root.removeOnAttachStateChangeListener(this)
+        }
+        override fun onViewDetachedFromWindow(v: View) = Unit
+    }
+    private val layoutListener = object : View.OnLayoutChangeListener {
+        override fun onLayoutChange(v: View, left: Int, top: Int, right: Int, bottom: Int,
+                                    oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int) {
+            if (cancelled || laidOut || right <= left || bottom <= top) return
+            laidOut = true
+            val at = SystemClock.uptimeMillis()
+            val width = right - left
+            val height = bottom - top
+            handler.post { publish("R10_ROOT_FIRST_LAYOUT", at, mapOf("r10RootSize" to "${width}x$height")) }
+            root.removeOnLayoutChangeListener(this)
+        }
+    }
+
+    fun start() {
+        val alreadyAttached = root.isAttachedToWindow
+        publish("R10_ROOT_REGISTRATION", SystemClock.uptimeMillis(),
+            mapOf("r10AttachState" to if (alreadyAttached) "alreadyAttached" else "pending"))
+        if (!alreadyAttached) root.addOnAttachStateChangeListener(attachListener)
+        root.addOnLayoutChangeListener(layoutListener)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Handler.createAsync(Looper.getMainLooper()).post {
+                if (!cancelled) publish("R10_MAIN_ASYNC_READY", SystemClock.uptimeMillis(), emptyMap())
+            }
+        }
+    }
+
+    fun cancel() {
+        cancelled = true
+        root.removeOnAttachStateChangeListener(attachListener)
+        root.removeOnLayoutChangeListener(layoutListener)
+    }
+}
 
 /** The immutable identity of one draw observation.  It lets the service reject
  * a late diagnostic from an older retained-root attach without treating the

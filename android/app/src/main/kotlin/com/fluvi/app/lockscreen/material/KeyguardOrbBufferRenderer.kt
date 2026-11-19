@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
+import android.os.Trace
 import android.util.Log
 import android.view.AttachedSurfaceControl
 import android.view.Choreographer
@@ -26,6 +27,7 @@ import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.Executor
 import java.util.function.Consumer
 import kotlin.math.min
@@ -118,6 +120,19 @@ internal data class KeyguardOrbFirstWorkSnapshot(
     val secondAt: Long?, val secondSlot: Long?, val secondUse: Long?,
 )
 
+/** At most two detached and two live boundary samples per capture. All times
+ * are worker-observed uptime except frameNs, which is Choreographer's clock. */
+internal data class KeyguardOrbColdWorkSnapshot(
+    val owner: Any, val attachment: Long, val generation: Long,
+    val renderer: Long, val slot: Long, val use: Long, val keyHash: Int, val programHash: Int,
+    val width: Int, val height: Int, val passes: Int, val previousValid: Boolean, val primed: Boolean,
+    val configuredAt: Long, val callbackAt: Long?, val callbackPending: Boolean,
+    val frameAt: Long, val frameNs: Long, val resourcesStart: Long, val resourcesEnd: Long,
+    val shaderStart: Long, val shaderEnd: Long, val submitBegin: Long?, val submitEnd: Long?,
+    val resultAt: Long?, val resultStatus: Int?, val fenceValid: Boolean?,
+    val workerQueueAt: Long?, val disposition: String,
+)
+
 internal data class KeyguardOrbBufferRendererSnapshot(
     val enabled: Boolean,
     val attached: Boolean,
@@ -148,6 +163,7 @@ internal data class KeyguardOrbBufferRendererSnapshot(
     val positionSubmissions: Int = 0,
     val positionSuppressions: Int = 0,
     val firstWork: KeyguardOrbFirstWorkSnapshot? = null,
+    val coldWork: List<KeyguardOrbColdWorkSnapshot> = emptyList(),
 )
 
 private data class KeyguardOrbBufferAttachment(
@@ -537,6 +553,12 @@ internal class KeyguardOrbBufferRenderer(
         delegate().configure(spec)
     }
 
+    /** Revoke only unsubmitted detached demand; submitted work still drains. */
+    fun beginAuthorizedShow() {
+        requireMainThread()
+        api34?.beginAuthorizedShow()
+    }
+
     fun attach(root: View, orb: View, attachment: Long) {
         if (!isSupported()) return
         requireMainThread()
@@ -700,6 +722,8 @@ internal class KeyguardOrbBufferRenderer(
 
         fun acceptPressure(ticket: KeyguardOrbPressureTicket) = worker.acceptPressure(ticket)
 
+        fun beginAuthorizedShow() = worker.suspendDetachedDemand()
+
         fun configure(spec: KeyguardOrbBufferRenderSpec) {
             if (disposed) return
             val old = desired
@@ -793,6 +817,7 @@ internal class KeyguardOrbBufferRenderer(
                 positionSubmissions = positionSubmissions,
                 positionSuppressions = positionSuppressions,
                 firstWork = workerSnapshot.firstWork,
+                coldWork = workerSnapshot.coldWork,
             )
         }
 
@@ -1301,6 +1326,50 @@ internal class KeyguardOrbBufferRenderer(
         private var choreographer: Choreographer? = null
         private var callbackPosted = false
         private var desired: KeyguardOrbBufferRenderSpec? = null
+        private data class PrimeKey(
+            val program: String, val visual: String, val full: Boolean,
+            val effect: String, val portal: Boolean, val width: Int, val height: Int,
+        )
+        private enum class PrimeState { QUEUED, SUBMITTED, PREPARED, FAILED }
+        private var primeKey: PrimeKey? = null
+        private var primeState: PrimeState? = null
+        private val detachedDemandBlocked = AtomicBoolean(false)
+        private val detachedDemandVersion = AtomicLong(0L)
+        private var coldOwner: Any? = null
+        private val coldRecords = mutableListOf<KeyguardOrbColdWorkSnapshot>()
+        @Volatile private var coldSnapshot: List<KeyguardOrbColdWorkSnapshot> = emptyList()
+        private var coldLease: KeyguardOrbBufferLease? = null
+        private var coldConfiguredAt = 0L
+        private var coldCallbackAt: Long? = null
+        private var coldCallbackPending = false
+        private var coldFrameAt = 0L
+        private var coldFrameNs = 0L
+        private var coldWorkerQueueAt: Long? = null
+        private var coldWorkerMarkerPosted = false
+
+        private fun replaceCold(old: KeyguardOrbColdWorkSnapshot, next: KeyguardOrbColdWorkSnapshot): KeyguardOrbColdWorkSnapshot {
+            val index = coldRecords.indexOfFirst {
+                it.owner === old.owner && it.attachment == old.attachment && it.generation == old.generation &&
+                    it.slot == old.slot && it.use == old.use
+            }
+            val updated = if (next.workerQueueAt == null && coldOwner === next.owner)
+                next.copy(workerQueueAt = coldWorkerQueueAt) else next
+            if (index >= 0) {
+                coldRecords[index] = updated
+                coldSnapshot = coldRecords.toList()
+            }
+            return updated
+        }
+        private fun primeKey(spec: KeyguardOrbBufferRenderSpec) = PrimeKey(
+            spec.artifact.programKey, spec.scene.profile.visualKey, spec.scene.full,
+            spec.scene.profile.effectId, spec.scene.profile.usesPortal,
+            spec.lease.width, spec.lease.height,
+        )
+
+        fun suspendDetachedDemand() {
+            detachedDemandBlocked.set(true)
+            detachedDemandVersion.incrementAndGet()
+        }
         private var attachedLease: KeyguardOrbBufferLease? = null
         /**
          * Main installs an immutable grant before posting worker bookkeeping.
@@ -1401,6 +1470,7 @@ internal class KeyguardOrbBufferRenderer(
             val grantActive: Boolean,
             val lastCompletionAt: Long,
             val firstWork: KeyguardOrbFirstWorkSnapshot? = null,
+            val coldWork: List<KeyguardOrbColdWorkSnapshot> = emptyList(),
         )
 
         init {
@@ -1410,14 +1480,63 @@ internal class KeyguardOrbBufferRenderer(
         fun post(command: Runnable) { handler.post(command) }
 
         fun configure(value: KeyguardOrbBufferRenderSpec) {
+            val demandVersion = if (value.lease.attachment == 0L) {
+                detachedDemandBlocked.set(false)
+                detachedDemandVersion.incrementAndGet()
+            } else {
+                suspendDetachedDemand()
+                -1L
+            }
             handler.post {
                 if (disposed) return@post
+                if (value.lease.attachment == 0L &&
+                    (detachedDemandBlocked.get() || detachedDemandVersion.get() != demandVersion)
+                ) return@post
+                if (value.lease.attachment == 0L) {
+                    val key = primeKey(value)
+                    if (primeKey == key && (primeState == PrimeState.QUEUED ||
+                                primeState == PrimeState.SUBMITTED)) return@post
+                    if (primeKey == key && primeState == PrimeState.PREPARED) {
+                        desired = value
+                        publishSlotSnapshot()
+                        return@post
+                    }
+                    primeKey = key
+                    primeState = PrimeState.QUEUED
+                }
                 if (desired?.lease != value.lease || desired?.scene?.visualKey != value.scene.visualKey) {
                     if (desired?.lease != value.lease) resetStarvation("lease-changed")
                     resetPressure()
                 }
                 desired = value
                 val captureOwner = timingOwner()
+                if (captureOwner != null && coldOwner !== captureOwner) {
+                    coldOwner = captureOwner
+                    coldRecords.clear()
+                    coldSnapshot = emptyList()
+                    coldLease = null
+                    coldWorkerQueueAt = null
+                    coldWorkerMarkerPosted = false
+                }
+                if (captureOwner != null && coldLease != value.lease) {
+                    coldLease = value.lease
+                    coldConfiguredAt = SystemClock.uptimeMillis()
+                    coldCallbackAt = null
+                    coldCallbackPending = callbackPosted
+                    if (value.lease.attachment > 0L && !coldWorkerMarkerPosted) {
+                        coldWorkerMarkerPosted = true
+                        val markerOwner = captureOwner
+                        handler.post {
+                            if (coldOwner === markerOwner) {
+                                coldWorkerQueueAt = SystemClock.uptimeMillis()
+                                coldRecords.indices.forEach { index ->
+                                    coldRecords[index] = coldRecords[index].copy(workerQueueAt = coldWorkerQueueAt)
+                                }
+                                coldSnapshot = coldRecords.toList()
+                            }
+                        }
+                    }
+                }
                 if (value.lease.attachment > 0 && captureOwner != null &&
                     (firstWorkAttachment != value.lease.attachment || firstWorkOwner !== captureOwner)
                 ) {
@@ -1444,6 +1563,7 @@ internal class KeyguardOrbBufferRenderer(
                     evaluatePressure(value, false)
                 }
                 if (!ensureResources(value)) {
+                    if (value.lease.attachment == 0L) primeState = PrimeState.FAILED
                     publishSlotSnapshot()
                     if (running) requestFrame()
                     return@post
@@ -1759,7 +1879,7 @@ internal class KeyguardOrbBufferRenderer(
                                 snapshotFirstFrameAt.takeIf { it > 0L }, snapshotFirstFrameSlot.takeIf { it >= 0L },
                                 snapshotFirstFrameUse.takeIf { it >= 0L }, snapshotSecondFrameAt.takeIf { it > 0L },
                                 snapshotSecondFrameSlot.takeIf { it >= 0L }, snapshotSecondFrameUse.takeIf { it >= 0L })
-                        })
+                        }, coldSnapshot)
                     if (before == snapshotSequence) return value
                 }
             }
@@ -1770,6 +1890,14 @@ internal class KeyguardOrbBufferRenderer(
         override fun doFrame(frameTimeNanos: Long) {
             callbackPosted = false
             if (disposed) return
+            val target = desired
+            if (target?.lease?.attachment == 0L &&
+                (detachedDemandBlocked.get() || primeState != PrimeState.QUEUED)
+            ) return
+            if (coldOwner != null && coldLease == target?.lease) {
+                coldFrameAt = SystemClock.uptimeMillis()
+                coldFrameNs = frameTimeNanos
+            }
             render(frameTimeNanos)
             if (running) requestFrame()
         }
@@ -1872,6 +2000,9 @@ internal class KeyguardOrbBufferRenderer(
                 return
             }
             callbackPosted = true
+            if (coldOwner != null && coldLease == desired?.lease && coldCallbackAt == null) {
+                coldCallbackAt = SystemClock.uptimeMillis()
+            }
             c.postFrameCallback(this)
         }
 
@@ -1920,11 +2051,18 @@ internal class KeyguardOrbBufferRenderer(
 
         private fun render(frameTimeNanos: Long) {
             val spec = desired ?: return
+            if (spec.lease.attachment == 0L &&
+                (detachedDemandBlocked.get() || primeState != PrimeState.QUEUED)
+            ) return
             observeStarvation()
             val distinctOpportunity = frameTimeNanos > lastPressureFrameNanos
             if (distinctOpportunity) lastPressureFrameNanos = frameTimeNanos
             evaluatePressure(spec, distinctOpportunity)
+            val recordCold = coldOwner != null && timingOwner() === coldOwner && coldLease == spec.lease &&
+                coldRecords.count { (it.attachment == 0L) == (spec.lease.attachment == 0L) } < 2
+            val resourcesStart = if (recordCold) SystemClock.uptimeMillis() else 0L
             if (!ensureResources(spec)) return
+            val resourcesEnd = if (recordCold) SystemClock.uptimeMillis() else 0L
             // A stale RenderRequest owns only its own slot while its render
             // fence drains. Do not make an otherwise FREE slot unavailable
             // during lease revocation/re-attachment; READY and RENDERING still
@@ -1949,7 +2087,9 @@ internal class KeyguardOrbBufferRenderer(
                 if (!recoveryHook.allowRender(spec.lease)) return
             }
             val slot = slots[index]
+            val shaderStart = if (recordCold) SystemClock.uptimeMillis() else 0L
             prepareSlotShaders(slot, spec)
+            val shaderEnd = if (recordCold) SystemClock.uptimeMillis() else 0L
             val currentShader = slot.shader ?: return
             slot.state = SlotState.RENDERING
             if (firstWorkAttachment == spec.lease.attachment && firstWorkGeneration == spec.lease.generation &&
@@ -1965,12 +2105,22 @@ internal class KeyguardOrbBufferRenderer(
             slot.fencePending = false
             slot.earlyReceiptRetained = false
             val useGeneration = slot.useGeneration
+            var cold = if (recordCold) coldOwner?.let { owner ->
+                KeyguardOrbColdWorkSnapshot(owner, spec.lease.attachment, spec.lease.generation,
+                    rendererId, slot.id, useGeneration, spec.lease.visualKey.hashCode(), spec.artifact.programKey.hashCode(),
+                    spec.lease.width, spec.lease.height, 0, spec.previousScene != null,
+                    primeKey == primeKey(spec) && primeState == PrimeState.PREPARED, coldConfiguredAt, coldCallbackAt,
+                    coldCallbackPending, coldFrameAt, coldFrameNs, resourcesStart, resourcesEnd,
+                    shaderStart, shaderEnd, null, null, null, null, null, coldWorkerQueueAt, "selected")
+                    .also { coldRecords.add(it); coldSnapshot = coldRecords.toList() }
+            } else null
             publishSlotSnapshot()
             try {
                 val old = spec.previousScene
                 val progress = if (old == null || spec.transitionStartedNanos <= 0L) 1f else {
                     ((frameTimeNanos - spec.transitionStartedNanos) / 180_000_000f).coerceIn(0f, 1f)
                 }
+                cold?.let { cold = replaceCold(it, it.copy(passes = if (old != null && progress < 1f) 2 else 1)) }
                 // HardwareBufferRenderer records uniform state at the start
                 // of its RenderNode display list on API 35. Bind the phase
                 // before beginRecording(), rather than during Canvas draws,
@@ -1996,6 +2146,13 @@ internal class KeyguardOrbBufferRenderer(
                     )
                 }
                 barrier.beforeRender(spec.lease)
+                if (spec.lease.attachment == 0L && detachedDemandBlocked.get()) {
+                    cold?.let { cold = replaceCold(it, it.copy(disposition = "superseded")) }
+                    primeState = PrimeState.FAILED
+                    discardRenderResult(slot, null)
+                    publishSlotSnapshot()
+                    return
+                }
                 // HardwareBufferRenderer retains its content root. On API 35,
                 // re-recording the same root can retain the first
                 // RuntimeShader uniform snapshot even though its display list
@@ -2018,14 +2175,36 @@ internal class KeyguardOrbBufferRenderer(
                     slot.node.endRecording()
                 }
                 slot.renderer.setContentRoot(slot.node)
+                if (spec.lease.attachment == 0L && detachedDemandBlocked.get()) {
+                    cold?.let { cold = replaceCold(it, it.copy(disposition = "superseded")) }
+                    primeState = PrimeState.FAILED
+                    discardRenderResult(slot, null)
+                    publishSlotSnapshot()
+                    return
+                }
                 // HardwareBufferRenderer's request owns the output colour
                 // space independently of the Window/View renderer.  Bind the
                 // same sRGB target used by Android's HardwareBufferRenderer
                 // CTS coverage before each synchronized RenderNode draw so
                 // rendering and HardwareBuffer readback use one target.
+                if (spec.lease.attachment == 0L) primeState = PrimeState.SUBMITTED
+                val traceCookie = (rendererId.toInt() * 31) + (slot.id.toInt() * 7) + useGeneration.toInt()
+                cold?.let {
+                    cold = replaceCold(it, it.copy(submitBegin = SystemClock.uptimeMillis(), disposition = "submitted"))
+                    Trace.beginAsyncSection("fluvi-r10-render", traceCookie)
+                }
                 slot.renderer.obtainRenderRequest()
                     .setColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
                     .draw(executor, Consumer { result ->
+                    cold?.let {
+                        cold = replaceCold(it, it.copy(resultAt = SystemClock.uptimeMillis(), resultStatus = result.status,
+                            fenceValid = result.fence?.isValid == true, disposition = "result"))
+                        Trace.endAsyncSection("fluvi-r10-render", traceCookie)
+                    }
+                    if (spec.lease.attachment == 0L && primeKey == primeKey(spec)) {
+                        primeState = if (result.status == HardwareBufferRenderer.RenderResult.SUCCESS)
+                            PrimeState.PREPARED else PrimeState.FAILED
+                    }
                     if (firstWorkAttachment == spec.lease.attachment && firstWorkGeneration == spec.lease.generation &&
                         firstWorkResultAt == 0L && firstWorkStartedAt > 0L) {
                         firstWorkResultAt = SystemClock.uptimeMillis()
@@ -2090,7 +2269,14 @@ internal class KeyguardOrbBufferRenderer(
                         dropped += 1
                     }
                     })
+                cold?.let { cold = replaceCold(it, it.copy(submitEnd = SystemClock.uptimeMillis())) }
             } catch (error: Throwable) {
+                cold?.let {
+                    if (it.submitBegin != null && it.resultAt == null) Trace.endAsyncSection("fluvi-r10-render",
+                        (rendererId.toInt() * 31) + (slot.id.toInt() * 7) + useGeneration.toInt())
+                    cold = replaceCold(it, it.copy(disposition = "failed"))
+                }
+                if (spec.lease.attachment == 0L && primeKey == primeKey(spec)) primeState = PrimeState.FAILED
                 discardRenderResult(slot, null)
                 failures += 1
                 publishSlotSnapshot()
@@ -2099,6 +2285,8 @@ internal class KeyguardOrbBufferRenderer(
         }
 
         private fun closeSlot(slot: Slot) {
+            // Resource destruction invalidates a previously successful prime.
+            if (primeState == PrimeState.PREPARED) primeState = PrimeState.FAILED
             runCatching { slot.renderer.close() }
             runCatching { slot.buffer.close() }
             slot.shader = null
@@ -2273,7 +2461,9 @@ internal class KeyguardOrbBufferRenderer(
             notifyCapacityIfDrained()
             publishSlotSnapshot()
             finishDisposeIfReleased()
-            if (running && !disposed) requestFrame()
+            if (!disposed && (running ||
+                        (desired?.lease?.attachment == 0L && primeState == PrimeState.QUEUED &&
+                            !detachedDemandBlocked.get()))) requestFrame()
         }
 
         private fun maybeNotifyLeaseDrained(lease: KeyguardOrbBufferLease, childIdentity: Int? = null) {

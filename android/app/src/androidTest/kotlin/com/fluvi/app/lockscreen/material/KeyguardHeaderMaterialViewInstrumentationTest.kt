@@ -29,6 +29,7 @@ import com.fluvi.app.lockscreen.KeyguardDrawPublication
 import com.fluvi.app.lockscreen.KeyguardFirstDrawOwner
 import com.fluvi.app.lockscreen.KeyguardFirstDrawEvent
 import com.fluvi.app.lockscreen.KeyguardCardSettings
+import com.fluvi.app.lockscreen.KeyguardCardDiagnostics
 import com.fluvi.app.lockscreen.KeyguardCardPresentationMode
 import com.fluvi.app.lockscreen.KeyguardCardCardPosition
 import com.fluvi.app.lockscreen.KeyguardCardOrbPosition
@@ -82,6 +83,188 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             }
         } finally {
             instrumentation.runOnMainSync { controller?.dispose(); activity.finish() }
+        }
+    }
+
+    @Test fun r10AuthorizedFirstShowDoesNotStartAnotherDetachedRender() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val renderEntries = java.util.concurrent.CopyOnWriteArrayList<Pair<Long, Long>>()
+        val positiveEntered = CountDownLatch(1)
+        val releasePositive = CountDownLatch(1)
+        val firstPositive = java.util.concurrent.atomic.AtomicBoolean(true)
+        val barrier = KeyguardOrbRenderBarrier { lease ->
+            renderEntries.add(lease.attachment to SystemClock.uptimeMillis())
+            if (lease.attachment > 0 && firstPositive.compareAndSet(true, false)) {
+                positiveEntered.countDown()
+                check(releasePositive.await(8, TimeUnit.SECONDS)) { "first positive fixture gate timed out" }
+            }
+        }
+        val produced = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbBufferProducerFrame>()
+        val observer = object : KeyguardOrbBufferFrameObserver {
+            override fun onProduced(frame: KeyguardOrbBufferProducerFrame, buffer: HardwareBuffer, completionFence: SyncFence?) {
+                produced.add(frame)
+            }
+        }
+        val settings = KeyguardCardSettings(requested = true, showFinancialDetails = true,
+            presentationMode = KeyguardCardPresentationMode.ORB, animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+            orbPosition = KeyguardCardOrbPosition(.5f, .5f))
+        var window: KeyguardCardWindow? = null
+        try {
+            KeyguardCardDiagnostics.startCapture(activity, "r10-panel", "debug", "FULL")
+            KeyguardOrbBufferRendererTestHooks.frameObserver = observer
+            instrumentation.runOnMainSync {
+                window = KeyguardCardWindow(serviceContext = activity, onOpen = {}, onToggle = {},
+                    onInteractionStarted = {}, onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> }, manager = TestPanelWindowManager(activity),
+                    isolatedOrbRenderBarrier = barrier)
+                window!!.prepareRetainedView(settings, calibratedOrbProfile())
+            }
+            assertTrue("actual detached prime did not complete", waitForDetachedIsolatedBackend(instrumentation, window!!))
+            val before = renderEntries.count { it.first == 0L }
+            assertEquals("one actual detached warmup must be sufficient", 1, before)
+            var showAt = 0L
+            instrumentation.runOnMainSync {
+                showAt = SystemClock.uptimeMillis()
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window!!.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+            }
+            assertTrue("first authorized render did not reach the Worker seam", positiveEntered.await(8, TimeUnit.SECONDS))
+            assertTrue("the authorized show must not start a lease-0 render",
+                renderEntries.none { it.first == 0L && it.second >= showAt })
+            releasePositive.countDown()
+            assertTrue("first positive output was not published", waitForIsolatedOutput(instrumentation, window!!))
+            val until = SystemClock.uptimeMillis() + 8_000L
+            while (produced.count { it.lease.attachment > 0L } < 2 && SystemClock.uptimeMillis() < until) Thread.sleep(24)
+            assertTrue("two fresh positive uses are required", produced.count { it.lease.attachment > 0L } >= 2)
+            assertTrue("positive frames must have distinct slot/use identities",
+                produced.filter { it.lease.attachment > 0L }.take(2).map { it.slotId to it.useGeneration }.distinct().size == 2)
+            val coldSamples = AtomicReference<List<KeyguardOrbColdWorkSnapshot>>()
+            instrumentation.runOnMainSync { coldSamples.set(window!!.attachmentRenderSummary()?.coldWork ?: emptyList()) }
+            val firstLive = coldSamples.get().firstOrNull { it.attachment > 0L }
+            assertTrue("first current scene must issue exactly one shader pass: $firstLive",
+                firstLive != null && firstLive.passes == 1 && !firstLive.previousValid)
+            assertTrue("a later callback started obsolete detached work",
+                renderEntries.none { it.first == 0L && it.second >= showAt })
+        } finally {
+            releasePositive.countDown()
+            instrumentation.runOnMainSync { window?.dispose(); activity.finish() }
+            KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
+            KeyguardCardDiagnostics.clearCapture(activity)
+        }
+    }
+
+    @Test fun r10UnsubmittedDetachedWorkYieldsToAuthorizedAttach() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val gateOnce = java.util.concurrent.atomic.AtomicBoolean(true)
+        val completed = java.util.concurrent.CopyOnWriteArrayList<KeyguardOrbBufferProducerFrame>()
+        val barrier = KeyguardOrbRenderBarrier { lease ->
+            if (lease.attachment == 0L && gateOnce.compareAndSet(true, false)) {
+                entered.countDown()
+                check(release.await(15, TimeUnit.SECONDS)) { "detached submission gate timed out" }
+            }
+        }
+        val observer = object : KeyguardOrbBufferFrameObserver {
+            override fun onProduced(frame: KeyguardOrbBufferProducerFrame, buffer: HardwareBuffer, completionFence: SyncFence?) {
+                completed.add(frame)
+            }
+        }
+        val settings = KeyguardCardSettings(requested = true, showFinancialDetails = true,
+            presentationMode = KeyguardCardPresentationMode.ORB, animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+            orbPosition = KeyguardCardOrbPosition(.5f, .5f))
+        var window: KeyguardCardWindow? = null
+        try {
+            KeyguardOrbBufferRendererTestHooks.frameObserver = observer
+            instrumentation.runOnMainSync {
+                window = KeyguardCardWindow(serviceContext = activity, onOpen = {}, onToggle = {},
+                    onInteractionStarted = {}, onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> }, manager = TestPanelWindowManager(activity),
+                    isolatedOrbRenderBarrier = barrier)
+                window!!.prepareRetainedView(settings, calibratedOrbProfile())
+            }
+            assertTrue("real detached work never reached the pre-submit boundary", entered.await(10, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window!!.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+            }
+            release.countDown()
+            assertTrue("authorized lease must produce real current output", waitForIsolatedOutput(instrumentation, window!!))
+            val until = SystemClock.uptimeMillis() + 8_000L
+            while (completed.count { it.lease.attachment > 0L } < 2 && SystemClock.uptimeMillis() < until) Thread.sleep(24)
+            assertTrue("superseded detached work must not reach a GPU completion", completed.none { it.lease.attachment == 0L })
+            assertTrue("the current lease needs two fresh results", completed.count { it.lease.attachment > 0L } >= 2)
+        } finally {
+            release.countDown()
+            instrumentation.runOnMainSync { window?.dispose(); activity.finish() }
+            KeyguardOrbBufferRendererTestHooks.frameObserver = NoopKeyguardOrbBufferFrameObserver
+        }
+    }
+
+    @Test fun r10VisiblePaletteChangeKeepsBlendButPrivacyChangeDoesNot() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val settings = KeyguardCardSettings(requested = true, showFinancialDetails = true,
+            presentationMode = KeyguardCardPresentationMode.ORB, animationMode = KeyguardCardAnimationMode.ORB_ONLY,
+            orbPosition = KeyguardCardOrbPosition(.5f, .5f))
+        var window: KeyguardCardWindow? = null
+        try {
+            lateinit var manager: TestPanelWindowManager
+            val profileA = calibratedOrbProfile()
+            val profileB = profileA.copy(colors = intArrayOf(0xff9a3525.toInt(), 0xffe39b23.toInt(), 0xfff0c94d.toInt()))
+            fun controller(): KeyguardCardMaterialController = KeyguardCardWindow::class.java
+                .getDeclaredField("materialController").apply { isAccessible = true }.get(window) as KeyguardCardMaterialController
+            fun previous(): Any? = KeyguardCardMaterialController::class.java
+                .getDeclaredField("latestOrbPreviousScene").apply { isAccessible = true }.get(controller())
+            instrumentation.runOnMainSync {
+                manager = TestPanelWindowManager(activity)
+                window = KeyguardCardWindow(serviceContext = activity, onOpen = {}, onToggle = {},
+                    onInteractionStarted = {}, onPositionCommitted = { _, _, _, _ -> },
+                    onInteractionDiagnostic = { _, _ -> }, manager = manager)
+                window!!.prepareRetainedView(settings, profileA)
+            }
+            assertTrue(waitForDetachedIsolatedBackend(instrumentation, window!!))
+            instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    window!!.showOrUpdate(FluviFinancialCardPresenter.loading(), settings))
+                assertEquals("first authorized scene cannot blend a prime", null, previous())
+            }
+            assertTrue(waitForIsolatedOutput(instrumentation, window!!))
+            assertTrue(waitForPanelOrbScreenBounds(instrumentation, manager))
+            val original = awaitCompositorCrop("r10-palette-before", { copyPanelOrb(instrumentation, manager) },
+                { name, image -> persistPanelEvidence(activity, name, image) }, { hasVisibleMaterial(it) }, {})
+            try {
+                instrumentation.runOnMainSync {
+                    window!!.updateMaterial(profileA, settings)
+                    assertEquals("same visual must not create a previous pass", null, previous())
+                    window!!.updateMaterial(profileB, settings)
+                    assertTrue("a genuinely different visible palette must preserve a blend", previous() != null)
+                }
+                val changed = awaitCompositorCrop("r10-palette-after", { copyPanelOrb(instrumentation, manager) },
+                    { name, image -> persistPanelEvidence(activity, name, image) },
+                    { hasVisibleMaterial(it) && compareMaterialPixels(original, it).meaningful() }, {})
+                changed.recycle()
+                instrumentation.runOnMainSync {
+                    window!!.showOrUpdate(FluviFinancialCardPresenter.discreet(), settings.copy(showFinancialDetails = false))
+                    assertEquals("privacy tightening cannot retain a full previous pass", null, previous())
+                }
+            } finally { original.recycle() }
+        } finally {
+            instrumentation.runOnMainSync { window?.dispose(); activity.finish() }
         }
     }
 
@@ -1141,6 +1324,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             ) as KeyguardMaterialTestActivity
             lateinit var referenceView: KeyguardHeaderMaterialView
+            lateinit var referenceRoot: FrameLayout
+            lateinit var fiducial: View
             lateinit var neutral: Bitmap
             lateinit var empty: Bitmap
             try {
@@ -1150,19 +1335,49 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                         layoutParams = FrameLayout.LayoutParams(168, 168, Gravity.CENTER)
                         setScene(KeyguardMaterialScene(calibratedOrbProfile().neutralized(), false, System.nanoTime()), true)
                         setBootstrapActive(true)
+                        visibility = View.INVISIBLE
                     }
-                    activity.setContentView(FrameLayout(activity).apply {
+                    fiducial = View(activity).apply {
+                        setBackgroundColor(android.graphics.Color.MAGENTA)
+                        layoutParams = FrameLayout.LayoutParams(24, 24, Gravity.TOP or Gravity.START).apply {
+                            leftMargin = 24; topMargin = 24
+                        }
+                    }
+                    referenceRoot = FrameLayout(activity).apply {
                         setBackgroundColor(background)
                         addView(referenceView)
-                    })
+                        addView(fiducial)
+                    }
+                    activity.setContentView(referenceRoot)
                 }
-                assertTrue("independent neutral reference never drew", waitForBootstrap(instrumentation, referenceView))
-                neutral = copyMaterialView(instrumentation, referenceView)
-                persistPanelEvidence(activity, "r09-neutral-reference-$label", neutral)
-                instrumentation.runOnMainSync { referenceView.visibility = View.INVISIBLE }
-                instrumentation.waitForIdleSync()
+                fun awaitReferenceCommit() {
+                    val committed = CountDownLatch(1)
+                    instrumentation.runOnMainSync {
+                        referenceRoot.viewTreeObserver.registerFrameCommitCallback { committed.countDown() }
+                        referenceRoot.invalidate()
+                    }
+                    assertTrue("reference frame commit was not observed", committed.await(8, TimeUnit.SECONDS))
+                }
+                awaitReferenceCommit()
                 empty = copyMaterialView(instrumentation, referenceView)
                 persistPanelEvidence(activity, "r09-empty-reference-$label", empty)
+                instrumentation.runOnMainSync { referenceView.visibility = View.VISIBLE }
+                assertTrue("independent neutral reference never drew", waitForBootstrap(instrumentation, referenceView))
+                awaitReferenceCommit()
+                val marker = IntArray(2)
+                instrumentation.runOnMainSync { fiducial.getLocationOnScreen(marker) }
+                val fullReference = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+                try {
+                    val color = fullReference.getPixel(marker[0] + 12, marker[1] + 12)
+                    assertTrue("external reference fiducial was not presented",
+                        (color ushr 16 and 255) > 180 && (color ushr 8 and 255) < 100 && (color and 255) > 180)
+                    persistPanelEvidence(activity, "r10-neutral-reference-fiducial-$label", fullReference)
+                } finally { fullReference.recycle() }
+                neutral = awaitCompositorCrop("r10-neutral-calibration-$label",
+                    { copyMaterialView(instrumentation, referenceView) },
+                    { name, image -> persistPanelEvidence(activity, name, image) },
+                    { hasVisibleMaterial(it) && compareMaterialPixels(empty, it).meaningful() }, {})
+                persistPanelEvidence(activity, "r09-neutral-reference-$label", neutral)
             } finally { instrumentation.runOnMainSync { activity.finish() } }
             val white = Bitmap.createBitmap(168, 168, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.WHITE) }
             try {
@@ -1189,6 +1404,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                                 fixture.settings.copy(showFinancialDetails = false))
                             assertTrue(result == KeyguardCardWindow.Result.REDACTED || result == KeyguardCardWindow.Result.CONTENT_UPDATED)
                         }
+                        val initialSampleAt = SystemClock.uptimeMillis()
+                        val initialSample = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                        try { persistPanelEvidence(fixture.activity, "r10-neutral-initial-$label", initialSample) }
+                        finally { initialSample.recycle() }
+                        File(fixture.activity.filesDir, "keyguard-material-smoke/r10-neutral-initial-$label-time.txt")
+                            .writeText("uptimeMs=$initialSampleAt boundary=before-ready-classification\n")
                         val ready = fixture.awaitReady(old.lease.attachment)
                         assertEquals(calibratedOrbProfile().neutralized().visualKey, ready.frame.lease.visualKey)
                         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
@@ -1573,8 +1794,39 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             submissions.await(1L)
             assertTrue("positive control did not replace bootstrap", waitForIsolatedBootstrapReplacement(instrumentation, manager))
             assertTrue("positive control bounds missing", waitForPanelOrbScreenBounds(instrumentation, manager))
-            reference = awaitCompositorCrop("r07-first-positive", { copyPanelOrb(instrumentation, manager) },
-                { label, bitmap -> persistPanelEvidence(activity, label, bitmap) }, { hasVisibleMaterial(it) }, {})
+            // Calibrate both controls from separately requested producer
+            // frames on the first attachment. A merely nonempty screenshot
+            // can still be the bootstrap or a different phase (R09).
+            samples.expect(3L, 1L)
+            submissions.expect(3L, PHASE_B, 1L)
+            controlled.submit(3L, calibratedMaterialTime(PHASE_B))
+            val producerB = samples.await(3L)
+            submissions.await(3L)
+            val expectedB = Bitmap.createBitmap(producerB.pixels, producerB.frame.lease.width,
+                producerB.frame.lease.height, Bitmap.Config.ARGB_8888)
+            try {
+                val compositorB = awaitCompositorCrop("r10-first-reference-b", { copyPanelOrb(instrumentation, manager) },
+                    { label, bitmap -> persistPanelEvidence(activity, label, bitmap) },
+                    { compareMaterialPixels(expectedB, it).nearlyEqual() }, {})
+                try {
+                    samples.expect(4L, 1L)
+                    submissions.expect(4L, PHASE_A, 1L)
+                    controlled.submit(4L, calibratedMaterialTime(PHASE_A))
+                    val producerA = samples.await(4L)
+                    submissions.await(4L)
+                    assertTrue("independent producer A/B controls must differ", compareProducerPixels(producerA, producerB).meaningful())
+                    val expectedA = Bitmap.createBitmap(producerA.pixels, producerA.frame.lease.width,
+                        producerA.frame.lease.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        persistPanelEvidence(activity, "r10-first-reference-a-producer", expectedA)
+                        reference = awaitCompositorCrop("r10-first-reference-a-compositor", { copyPanelOrb(instrumentation, manager) },
+                            { label, bitmap -> persistPanelEvidence(activity, label, bitmap) },
+                            { compareMaterialPixels(expectedA, it).nearlyEqual() }, {})
+                        assertTrue("A/B compositor references must differ",
+                            compareMaterialPixels(requireNotNull(reference), compositorB).meaningful())
+                    } finally { expectedA.recycle() }
+                } finally { compositorB.recycle() }
+            } finally { expectedB.recycle() }
 
             var bootstrapCountBefore = 0
             instrumentation.runOnMainSync {

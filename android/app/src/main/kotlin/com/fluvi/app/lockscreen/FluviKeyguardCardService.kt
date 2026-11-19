@@ -22,6 +22,7 @@ import com.fluvi.app.lockscreen.material.KeyguardOrbRetirementEvent
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.lockscreen.material.KeyguardOrbOwnershipSlotSnapshot
+import com.fluvi.app.lockscreen.material.KeyguardOrbColdWorkSnapshot
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
@@ -398,6 +399,16 @@ class FluviKeyguardCardService : AccessibilityService() {
                         operation = capturedOperation,
                         fields = capturedFields,
                     )
+                }
+            },
+            armColdRootDiagnostic = { attach ->
+                val owner = activeWindowDiagnosticOperation
+                if (attach != 1L || owner?.context?.captureId == null) null
+                else { stage, at, fields ->
+                    mainHandler.post {
+                        traceKeyguard(stage, "r10ColdRoot", observedUptimeMs = at,
+                            attachGeneration = attach, operation = owner, fields = fields)
+                    }
                 }
             },
             onFirstRootPreDraw = ::recordFirstRootPreDraw,
@@ -2092,6 +2103,17 @@ class FluviKeyguardCardService : AccessibilityService() {
         "slot:${it.slotId},use:${it.useGeneration},lease:${it.lease?.attachment ?: "NA"}/${it.lease?.generation ?: "NA"},state:${it.state},retired:${it.retired},receipt:${it.callbackReceived},fence:${it.fencePending}"
     } ?: "UNOBSERVED"
 
+    /** Formatted only on the diagnostic consumer from bounded Worker samples. */
+    private fun coldWork(sample: KeyguardOrbColdWorkSnapshot?, part: Int): String {
+        if (sample == null) return "UNOBSERVED"
+        return when (part) {
+            0 -> "renderer:${sample.renderer},lease:${sample.attachment}/${sample.generation},slot:${sample.slot}/${sample.use},key:${sample.keyHash},program:${sample.programHash},size:${sample.width}x${sample.height},passes:${sample.passes},prev:${sample.previousValid},primed:${sample.primed}"
+            1 -> "config:${sample.configuredAt},callback:${sample.callbackAt ?: "UNOBSERVED"},pending:${sample.callbackPending},frame:${sample.frameAt},frameNs:${sample.frameNs},workerQueue:${sample.workerQueueAt ?: "UNOBSERVED"}"
+            2 -> "resources:${sample.resourcesStart}/${sample.resourcesEnd},shader:${sample.shaderStart}/${sample.shaderEnd},submit:${sample.submitBegin ?: "UNOBSERVED"}/${sample.submitEnd ?: "UNOBSERVED"}"
+            else -> "result:${sample.resultAt ?: "UNOBSERVED"},status:${sample.resultStatus ?: "UNOBSERVED"},fence:${sample.fenceValid ?: "UNOBSERVED"},state:${sample.disposition}"
+        }
+    }
+
     private fun hideImmediately(
         reason: String,
         terminalWake: Boolean = true,
@@ -2204,6 +2226,22 @@ class FluviKeyguardCardService : AccessibilityService() {
                         "isolatedFramesDropped" to summary.isolatedFramesDropped,
                         "isolatedCompletionGapMaxMs" to summary.isolatedCompletionGapMaxMs,
                         "r09Placement" to "submitted:${summary.positionSubmissions},suppressed:${summary.positionSuppressions}",
+                        "r10Cold0" to coldWork(summary.coldWork.filter { it.attachment == 0L }.getOrNull(0), 0),
+                        "r10Cold0b" to coldWork(summary.coldWork.filter { it.attachment == 0L }.getOrNull(0), 1),
+                        "r10Cold0c" to coldWork(summary.coldWork.filter { it.attachment == 0L }.getOrNull(0), 2),
+                        "r10Cold0d" to coldWork(summary.coldWork.filter { it.attachment == 0L }.getOrNull(0), 3),
+                        "r10Cold1" to coldWork(summary.coldWork.filter { it.attachment == 0L }.getOrNull(1), 0),
+                        "r10Cold1b" to coldWork(summary.coldWork.filter { it.attachment == 0L }.getOrNull(1), 1),
+                        "r10Cold1c" to coldWork(summary.coldWork.filter { it.attachment == 0L }.getOrNull(1), 2),
+                        "r10Cold1d" to coldWork(summary.coldWork.filter { it.attachment == 0L }.getOrNull(1), 3),
+                        "r10Live0" to coldWork(summary.coldWork.filter { it.attachment > 0L }.getOrNull(0), 0),
+                        "r10Live0b" to coldWork(summary.coldWork.filter { it.attachment > 0L }.getOrNull(0), 1),
+                        "r10Live0c" to coldWork(summary.coldWork.filter { it.attachment > 0L }.getOrNull(0), 2),
+                        "r10Live0d" to coldWork(summary.coldWork.filter { it.attachment > 0L }.getOrNull(0), 3),
+                        "r10Live1" to coldWork(summary.coldWork.filter { it.attachment > 0L }.getOrNull(1), 0),
+                        "r10Live1b" to coldWork(summary.coldWork.filter { it.attachment > 0L }.getOrNull(1), 1),
+                        "r10Live1c" to coldWork(summary.coldWork.filter { it.attachment > 0L }.getOrNull(1), 2),
+                        "r10Live1d" to coldWork(summary.coldWork.filter { it.attachment > 0L }.getOrNull(1), 3),
                         "r09FirstWork" to (summary.firstWork?.let {
                             "attach:${it.attachment},gen:${it.generation},request:${it.requestedAt},start:${it.startedAt ?: "UNOBSERVED"},result:${it.resultAt ?: "UNOBSERVED"},status:${it.resultStatus ?: "UNOBSERVED"}"
                         } ?: "UNOBSERVED"),

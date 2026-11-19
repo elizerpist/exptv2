@@ -45,11 +45,22 @@ if [[ "$scope" == r09_panel_candidate || "$scope" == r10_panel_candidate ]]; the
     r09WorstGapSurvivesLightExportPressure
     firstDirectAndHideCommitEvidenceKeepTheirOriginalOperations)
 fi
+if [[ "$scope" == r10_panel_candidate ]]; then
+  methods+=(r10PreparedOnlySceneCannotSeedVisibleBlend
+    r10AuthorizedFirstShowDoesNotStartAnotherDetachedRender
+    r10UnsubmittedDetachedWorkYieldsToAuthorizedAttach
+    r10ColdRootReportsActualAttachAndLayoutForEachObservation
+    r10VisiblePaletteChangeKeepsBlendButPrivacyChangeDoesNot
+    r10CompactColdAndWorstGapSurviveFullPressure
+    r10CompactColdAndWorstGapSurviveLightPressure)
+fi
 selector=''
 for method in "${methods[@]}"; do
   selected_class=$class
   case "$method" in
-    r09WorstGapSurvivesFullExportPressure|r09WorstGapSurvivesLightExportPressure|firstDirectAndHideCommitEvidenceKeepTheirOriginalOperations)
+    r10ColdRootReportsActualAttachAndLayoutForEachObservation)
+      selected_class=com.fluvi.app.lockscreen.KeyguardFirstDrawObservationInstrumentationTest ;;
+    r09WorstGapSurvivesFullExportPressure|r09WorstGapSurvivesLightExportPressure|firstDirectAndHideCommitEvidenceKeepTheirOriginalOperations|r10CompactColdAndWorstGapSurviveFullPressure|r10CompactColdAndWorstGapSurviveLightPressure)
       selected_class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest ;;
   esac
   selector+="${selector:+,}${selected_class}#${method}"

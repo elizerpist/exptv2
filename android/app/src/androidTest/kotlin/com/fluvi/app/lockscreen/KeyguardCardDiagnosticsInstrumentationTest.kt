@@ -894,6 +894,78 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r09WorstGapSurvivesFullExportPressure() = r09WorstGapSurvivesExportPressure("FULL")
     @Test fun r09WorstGapSurvivesLightExportPressure() = r09WorstGapSurvivesExportPressure("LIGHT")
 
+    @Test fun r10CompactColdAndWorstGapSurviveFullPressure() = r10CompactColdAndWorstGap("FULL")
+    @Test fun r10CompactColdAndWorstGapSurviveLightPressure() = r10CompactColdAndWorstGap("LIGHT")
+
+    private fun r10CompactColdAndWorstGap(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r10-export-$mode", "profile", mode)
+        val hideIds = mutableListOf<Long>()
+        val cleanupIds = mutableListOf<Long>()
+        repeat(4) { index ->
+            val attach = index + 1L
+            val at = 20_000L * attach
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 1010L, attach, "wake", at))
+            val show = KeyguardCardDiagnostics.newShowOperation(owner, attach, null)
+            val hide = KeyguardCardDiagnostics.newHideOperation(owner, attach, null, at + 50)
+            val cleanup = KeyguardCardDiagnostics.newHideOperation(owner, attach, null, at + 70)
+            hideIds += checkNotNull(hide.hideOperationId)
+            cleanupIds += checkNotNull(cleanup.hideOperationId)
+            fun emit(stage: String, time: Long, operation: KeyguardDiagnosticOperation,
+                     fields: Map<String, Any?> = emptyMap()) {
+                KeyguardCardDiagnostics.captureEvent(context, stage, "r10-verbose-é".repeat(20),
+                    observedUptimeMs = time, diagnosticContext = owner, operation = operation, fields = fields)
+            }
+            emit("SHOW_FOR_ATTACH", at + 1, show, mapOf("presentationMode" to "ORB"))
+            emit("ADD_VIEW_BEGIN", at + 2, show)
+            emit("ADD_VIEW_RETURN", at + 3, show)
+            emit("POST_ADD_SETUP_COMPLETE", at + 4, show)
+            emit("FIRST_ROOT_DRAW", at + 5, show)
+            emit("HIDE_DECIDED", at + 51, hide)
+            emit("LOCAL_HIDE_BEGIN", at + 52, hide, mapOf("attachedBefore" to true))
+            emit("LOCAL_HIDE_APPLIED", at + 53, hide)
+            emit("REMOVE_VIEW_RETURN", at + 54, hide)
+            repeat(8) { event ->
+                emit("R09_RETIREMENT", at + 55 + event, hide,
+                    mapOf("r09Stage" to "final-clear-$event", "r09Lease" to "$attach/7",
+                        "r09Child" to 10000 + index, "r09Slot" to event, "r09Use" to event + 10))
+            }
+            emit("HIDE_DECIDED", at + 71, cleanup)
+            emit("LOCAL_HIDE_BEGIN", at + 72, cleanup, mapOf("attachedBefore" to false))
+            emit("HIDE_COMPLETED", at + 73, cleanup, mapOf("attachedAfter" to false))
+            val gaps = when (index) {
+                0 -> listOf(20_000_000L, 19_000_000L, 18_000_000L)
+                1 -> listOf(35_000_000L, 30_000_000L)
+                2 -> listOf(118_000_000L, 40_000_000L)
+                else -> listOf(177_000_000L, 60_000_000L)
+            }.mapIndexed { sample, gap ->
+                "gapNs=$gap cbIn=100 cbOut=200 drawStart=300 drawEnd=400 attach=$attach sample=$sample " + "x=1 ".repeat(240)
+            }.joinToString("\n")
+            emit("ATTACHMENT_RENDER_SUMMARY", at + 74, hide,
+                mapOf("r08Route" to "ISOLATED", "r09FirstWork" to "attach:1,gen:2,request:20001,start:20002,result:20003",
+                    "r10Cold0" to "a:1,g:2,request:20001,submit:20002,result:20003",
+                    "orbDrawGaps" to gaps, "drawGapCount" to gaps.lines().size))
+            repeat(if (index == 3) 549 else 550) { event ->
+                KeyguardCardDiagnostics.captureEvent(context, "R10_FIXTURE_NOISE", "é".repeat(160),
+                    observedUptimeMs = at + 100 + event, diagnosticContext = owner,
+                    fields = mapOf("sample" to event, "long" to "á".repeat(400)))
+                if (event % 100 == 99) KeyguardCardDiagnostics.captureSnapshot(context)
+            }
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val recorded = Regex("eventsRecorded=([0-9]+)").find(report)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+        assertTrue("fixture must exercise at least 2199 real queued records: $recorded", recorded >= 2199L)
+        assertTrue("actual global worst detailed gap must survive", report.lineSequence().any {
+            it.startsWith(" DRAW_GAP ") && it.contains("attempt=4 ") && it.contains("gapNs=177000000 ") &&
+                it.contains("cbIn=100") && it.contains("drawEnd=400")
+        })
+        hideIds.forEach { assertTrue("actual withdrawal $it missing", report.contains("hideOp=$it ")) }
+        cleanupIds.forEach { assertTrue("terminal cleanup $it missing", report.contains("hideOp=$it ")) }
+        assertTrue(report.contains("R10_COMPACT"))
+        assertTrue(report.contains("r10Cold0="))
+        assertTrue(report.contains("omittedEvidenceRecords="))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32 * 1024)
+    }
+
     private fun r09WorstGapSurvivesExportPressure(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r09-gap-$mode", "profile", mode)
         repeat(4) { index ->

@@ -168,6 +168,16 @@ internal class KeyguardCardMaterialController(
     /** True only when the detached retained-root path selected preparation of
      * the persistent isolated producer itself. */
     private var detachedIsolatedBackendSelected = false
+    // An explicit detached preparation is a one-shot request, never a display
+    // grant. In particular, callbacks during an authorized add must not
+    // silently start another detached render.
+    private var detachedPrimeArmed = false
+    private var authorizedShowPending = false
+    private var submittedVisibleScene: KeyguardMaterialScene? = null
+    private var submittedVisibleArtifact: KeyguardShaderArtifact? = null
+    private var submittedVisibleAttachment = 0L
+    private var submittedVisibleRoot: View? = null
+    private var withdrawalAttachment = 0L
     /** A failed visual key stays on the established View route until the
      * semantic material actually changes; this avoids endless GPU retries. */
     private var isolatedOrbFailedVisualKey: String? = null
@@ -305,6 +315,17 @@ internal class KeyguardCardMaterialController(
             ) recoveryEpisode = recoveryEpisode?.copy(firstViewDrawAt = observedAtUptimeMs)
             onFirstOrbShaderDraw?.invoke(observedAtUptimeMs)
         }
+        orb.onCurrentShaderDraw = { scene ->
+            if (attached && activeAttachment > 0L && attachedRoot?.isAttachedToWindow == true &&
+                !isolatedOrbEffective && latestOrbScene?.profile?.visualKey == scene.profile.visualKey &&
+                latestOrbScene?.full == scene.full
+            ) {
+                submittedVisibleScene = latestOrbScene
+                submittedVisibleArtifact = latestOrbArtifact
+                submittedVisibleAttachment = activeAttachment
+                submittedVisibleRoot = attachedRoot
+            }
+        }
         orb.onBootstrapGeometryDrawn = {
             currentBootstrapToken()?.let { token -> onBootstrapGeometryDrawn?.invoke(token) }
         }
@@ -346,7 +367,8 @@ internal class KeyguardCardMaterialController(
             reconcileClock()
             return
         }
-        val restrictiveTransition = appliedConfiguration?.full == true && !isFull
+        val priorConfiguration = appliedConfiguration
+        val restrictiveTransition = priorConfiguration?.full == true && !isFull
         if (restrictiveTransition) restrictiveTransitionActive = true
         var coherentRestrictedView = false
         try {
@@ -374,9 +396,37 @@ internal class KeyguardCardMaterialController(
                 candidate.anchoredAt(at, sceneAppliedAtNanos)
             } else candidate
         }
-        val isolatedPrevious = if (oldIsolatedScene != null && isolatedScene != null &&
-            oldIsolatedScene.full == isolatedScene.full
-        ) oldIsolatedScene else null
+        val visible = submittedVisibleScene?.takeIf {
+            attached && activeAttachment > 0L && submittedVisibleAttachment == activeAttachment &&
+                submittedVisibleRoot === attachedRoot && attachedRoot?.isAttachedToWindow == true &&
+                priorConfiguration?.presentationMode == presentationMode &&
+                priorConfiguration.animationMode == animationMode &&
+                isolatedScene != null && it.full == isolatedScene.full
+        }
+        val sameDesiredVisual = oldIsolatedScene != null && isolatedScene != null &&
+            oldIsolatedScene.full == isolatedScene.full &&
+            oldIsolatedScene.profile.visualKey == isolatedScene.profile.visualKey
+        val keepTransition = visible != null && sameDesiredVisual && latestOrbPreviousScene != null &&
+            isolatedTransitionStartedNanos > 0L
+        val isolatedPrevious = when {
+            keepTransition -> latestOrbPreviousScene
+            visible != null && isolatedScene != null &&
+                visible.profile.visualKey != isolatedScene.profile.visualKey -> visible
+            else -> null
+        }
+        val previousArtifact = when {
+            keepTransition -> latestOrbPreviousArtifact
+            isolatedPrevious != null -> submittedVisibleArtifact ?: oldIsolatedArtifact
+            else -> null
+        }
+        val transitionStart = if (keepTransition) isolatedTransitionStartedNanos
+            else if (isolatedPrevious != null) sceneAppliedAtNanos else 0L
+        if (visible == null) {
+            submittedVisibleScene = null
+            submittedVisibleArtifact = null
+            submittedVisibleAttachment = 0L
+            submittedVisibleRoot = null
+        }
         val canAnimate = scene != null && animationMode != KeyguardCardAnimationMode.OFF && animationsAllowed
         val sceneVisualKey = scene?.profile?.visualKey
         selectedVisualKey = sceneVisualKey
@@ -438,8 +488,8 @@ internal class KeyguardCardMaterialController(
         // child, especially after full-to-discreet retirement.
         latestOrbScene = isolatedScene
         latestOrbPreviousScene = isolatedPrevious
-        latestOrbPreviousArtifact = if (isolatedPrevious != null) oldIsolatedArtifact else null
-        isolatedTransitionStartedNanos = if (isolatedPrevious != null) sceneAppliedAtNanos else 0L
+        latestOrbPreviousArtifact = previousArtifact
+        isolatedTransitionStartedNanos = transitionStart
         orb.setStaticBitmap(staticOrb)
         orb.setScene(scene, enabled = canAnimate)
         // While the buffer producer obtains its first completed frame the
@@ -517,6 +567,7 @@ internal class KeyguardCardMaterialController(
         }
 
     fun onAttached(attachment: Long = 0L, root: View? = null) {
+        detachedPrimeArmed = false
         if (root != null && pressureLatch != null && pressureRestoredAt != null &&
             attachment > 0 && attachment != pressureRetryAfterAttachment && isolatedOrbRequested
         ) {
@@ -538,6 +589,10 @@ internal class KeyguardCardMaterialController(
             orb.setBootstrapActive(false)
         }
         if (!attached) {
+            submittedVisibleScene = null
+            submittedVisibleArtifact = null
+            submittedVisibleAttachment = 0L
+            submittedVisibleRoot = null
             // add/remove can finish before View.onAttachedToWindow dispatch.
             // Such an undrawn attachment must not inherit the prior cadence.
             orb.beginAttachmentDrawEvidence(attachment)
@@ -613,6 +668,13 @@ internal class KeyguardCardMaterialController(
 
     fun onDetached(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null,
                    onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null) {
+        detachedPrimeArmed = false
+        authorizedShowPending = false
+        submittedVisibleScene = null
+        submittedVisibleArtifact = null
+        submittedVisibleAttachment = 0L
+        submittedVisibleRoot = null
+        withdrawalAttachment = activeAttachment
         if (attached && isolatedOrbRendererDelegate.isInitialized()) {
             val owner = drawEvidenceOwner()
             if (owner != null) {
@@ -675,7 +737,15 @@ internal class KeyguardCardMaterialController(
         isolatedCompletionGapMaxMs = buffer?.completionGapMaxMs ?: 0L,
         positionSubmissions = buffer?.let { it.positionSubmissions - attachmentPositionSubmittedStart } ?: 0,
         positionSuppressions = buffer?.let { it.positionSuppressions - attachmentPositionSuppressedStart } ?: 0,
-        firstWork = (withdrawalWorkerSnapshot ?: buffer)?.firstWork?.takeIf { it.captureOwner === drawEvidenceOwner() },
+        firstWork = (withdrawalWorkerSnapshot ?: buffer)?.firstWork?.takeIf {
+            it.captureOwner === drawEvidenceOwner() &&
+                it.attachment == (if (attached) activeAttachment else withdrawalAttachment)
+        },
+        coldWork = (withdrawalWorkerSnapshot ?: buffer)?.coldWork?.filter {
+            it.owner === drawEvidenceOwner() &&
+                (it.attachment == (if (attached) activeAttachment else withdrawalAttachment) ||
+                    (it.attachment == 0L && (if (attached) activeAttachment else withdrawalAttachment) == 1L))
+        } ?: emptyList(),
         isolatedFirstHandoff = firstHandoff?.takeIf {
             firstHandoffCaptureOwner != null && firstHandoffCaptureOwner === drawEvidenceOwner()
         },
@@ -723,6 +793,16 @@ internal class KeyguardCardMaterialController(
         // disposable HardwareRenderer/ImageReader warmup for this same ORB.
         prepareDetachedIsolatedOrbBackend(profile, animationMode, presentationMode, isFull)
         prepareSelectedPrograms(profile, animationMode, presentationMode, isFull, installViewProgram = true)
+    }
+
+    fun beginAuthorizedShow() {
+        authorizedShowPending = true
+        detachedPrimeArmed = false
+        if (isolatedOrbRendererDelegate.isInitialized()) isolatedOrbRenderer.beginAuthorizedShow()
+    }
+
+    fun endAuthorizedShow() {
+        authorizedShowPending = false
     }
 
     /** Called only after a verified bootstrap commit for the current attached
@@ -892,7 +972,8 @@ internal class KeyguardCardMaterialController(
         presentationMode: KeyguardCardPresentationMode,
         isFull: Boolean,
     ) {
-        if (attached) return
+        if (attached || authorizedShowPending) return
+        detachedPrimeArmed = false
         if (pressureLatch != null) {
             detachedIsolatedBackendSelected = false
             return
@@ -924,6 +1005,7 @@ internal class KeyguardCardMaterialController(
 
         isolatedOrbRequested = true
         detachedIsolatedBackendSelected = true
+        detachedPrimeArmed = true
         latestOrbScene = scene
         latestOrbPreviousScene = null
         latestOrbPreviousArtifact = null
@@ -1128,6 +1210,7 @@ internal class KeyguardCardMaterialController(
      */
     private fun reconcileIsolatedOrbTarget(rootOverride: View? = null) {
         if (restrictiveTransitionActive) { restrictiveReconcilePending = true; return }
+        if (!attached && (!detachedPrimeArmed || authorizedShowPending)) return
         if (!isolatedOrbEffective ||
             Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE
         ) return
@@ -1169,6 +1252,7 @@ internal class KeyguardCardMaterialController(
                 transitionStartedNanos = isolatedTransitionStartedNanos,
             ),
         )
+        if (!attached) detachedPrimeArmed = false
         if (attached && root != null && root.isAttachedToWindow && attachment != 0L) {
             isolatedOrbRenderer.attach(root, orb, attachment)
         }
@@ -1180,6 +1264,10 @@ internal class KeyguardCardMaterialController(
             activeAttachment != lease.attachment || attachedRoot?.isAttachedToWindow != true
         ) return
         currentFirstPublication = token
+        submittedVisibleScene = latestOrbScene?.takeIf { it.profile.visualKey == lease.visualKey }
+        submittedVisibleArtifact = latestOrbArtifact
+        submittedVisibleAttachment = activeAttachment
+        submittedVisibleRoot = attachedRoot
         val captureOwner = drawEvidenceOwner()
         if (firstHandoff == null && captureOwner != null) {
             firstHandoffCaptureOwner = captureOwner
@@ -1372,6 +1460,7 @@ internal data class KeyguardAttachmentRenderSummary(
     val positionSubmissions: Int,
     val positionSuppressions: Int,
     val firstWork: KeyguardOrbFirstWorkSnapshot?,
+    val coldWork: List<KeyguardOrbColdWorkSnapshot> = emptyList(),
     val isolatedFirstHandoff: KeyguardIsolatedFirstHandoffSnapshot?,
     val recovery: KeyguardOrbRecoveryEpisode? = null,
     val effectiveRoute: String = "UNAVAILABLE",

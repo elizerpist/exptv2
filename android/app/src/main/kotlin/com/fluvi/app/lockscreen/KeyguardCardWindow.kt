@@ -49,6 +49,9 @@ internal class KeyguardCardWindow(
      * identity before storing a diagnostic event. */
     private val onWindowDiagnostic: (String, String, Long?, Long, Map<String, Any?>) -> Unit =
         { _, _, _, _, _ -> },
+    /** Captures the original show operation before add; returned callback is
+     * observational and cannot grant attachment or change visibility. */
+    private val armColdRootDiagnostic: (Long) -> ((String, Long, Map<String, Any?>) -> Unit)? = { null },
     private val onFirstRootPreDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstRootDraw: (KeyguardFirstDrawEvent) -> Unit = {},
     private val onFirstShaderDraw: (KeyguardFirstDrawEvent) -> Unit = {},
@@ -83,6 +86,7 @@ internal class KeyguardCardWindow(
     private var attachGeneration = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
     private var firstRootDrawObservation: KeyguardFirstDrawObservation? = null
+    private var coldRootObservation: KeyguardColdRootObservation? = null
     private var firstFrameCommitObservation: KeyguardFrameCommitObservation? = null
     /** The most recently accepted functional commit. Diagnostic publication is
      * posted after that transition and must not describe a superseded scene. */
@@ -174,6 +178,9 @@ internal class KeyguardCardWindow(
         val modeChanged = appliedPresentationConfiguration?.mode?.let { it != settings.presentationMode } == true
         materialSettings = settings
         val current = root ?: createRoot().also { root = it }
+        val pendingAttach = !lifecycle.isAttached()
+        if (pendingAttach) materialController?.beginAuthorizedShow()
+        try {
         if (modeChanged) {
             current.cancelInteraction("presentationChanged")
             onInteractionDiagnostic("KG|PRESENTATION_CHANGED", settings.presentationMode.wireValue)
@@ -192,6 +199,10 @@ internal class KeyguardCardWindow(
             // complete before WindowManager.addView and cannot tax first draw.
             updateMaterialForPresentation(presentation)
             val nextAttach = attachGeneration + 1L
+            coldRootObservation?.cancel()
+            coldRootObservation = armColdRootDiagnostic(nextAttach)?.let { publish ->
+                KeyguardColdRootObservation(current, publish).also { it.start() }
+            }
             // Arm before addView. On overlay hosts where attach finishes after
             // addView returns, the observation retains this request through
             // the attach callback and installs pre-draw on the real observer.
@@ -241,6 +252,8 @@ internal class KeyguardCardWindow(
                     Result.ATTACHED
                 },
                 onFailure = {
+                    coldRootObservation?.cancel()
+                    coldRootObservation = null
                     bootstrapToken?.let { token ->
                         firstFrameCommitObservation
                             ?.takeIf { observation -> observation.matches(current, nextAttach, token) }
@@ -283,6 +296,9 @@ internal class KeyguardCardWindow(
             contentChanged -> Result.CONTENT_UPDATED
             else -> Result.LAYOUT_UPDATED
         }
+        } finally {
+            if (pendingAttach) materialController?.endAuthorizedShow()
+        }
     }
 
     /** Called by the narrow layout patch path. It performs a retained-root
@@ -309,6 +325,8 @@ internal class KeyguardCardWindow(
              onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null): Boolean {
         checkMainThread()
         val current = root ?: return false
+        coldRootObservation?.cancel()
+        coldRootObservation = null
         if (lifecycle.isAttached()) {
             current.visibility = View.INVISIBLE
             reportWindowDiagnostic("LOCAL_HIDE_APPLIED", "invisible", attachGeneration)
@@ -342,6 +360,8 @@ internal class KeyguardCardWindow(
     }
 
     fun dispose() {
+        coldRootObservation?.cancel()
+        coldRootObservation = null
         firstRootDrawObservation?.cancel()
         firstRootDrawObservation = null
         firstFrameCommitObservation?.cancel()

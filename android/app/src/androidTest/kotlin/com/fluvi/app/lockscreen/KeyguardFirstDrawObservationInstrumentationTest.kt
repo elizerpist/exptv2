@@ -25,6 +25,62 @@ import org.junit.runner.RunWith
  * dispatch throw on current Android releases. */
 @RunWith(AndroidJUnit4::class)
 class KeyguardFirstDrawObservationInstrumentationTest {
+    @Test fun r10ColdRootReportsActualAttachAndLayoutForEachObservation() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        ) as KeyguardMaterialTestActivity
+        val events = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val firstReady = CountDownLatch(2)
+        val secondReady = CountDownLatch(2)
+        lateinit var root: FrameLayout
+        var first: KeyguardColdRootObservation? = null
+        var second: KeyguardColdRootObservation? = null
+        try {
+            instrumentation.runOnMainSync {
+                root = FrameLayout(activity).apply { layoutParams = FrameLayout.LayoutParams(240, 160) }
+                first = KeyguardColdRootObservation(root) { stage, _, fields ->
+                    events.add("one:$stage:${fields["r10AttachState"] ?: ""}")
+                    if (stage == "R10_ROOT_ATTACH_DISPATCH" || stage == "R10_ROOT_FIRST_LAYOUT") firstReady.countDown()
+                }
+                first!!.start()
+                activity.setContentView(root)
+            }
+            assertTrue("real first attachment/layout missing", firstReady.await(8, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync {
+                val already = KeyguardColdRootObservation(root) { stage, _, fields ->
+                    events.add("already:$stage:${fields["r10AttachState"] ?: ""}")
+                }
+                already.start()
+                already.cancel()
+                first!!.cancel()
+                activity.setContentView(FrameLayout(activity))
+                val cancelled = KeyguardColdRootObservation(root) { stage, _, _ -> events.add("cancelled:$stage") }
+                cancelled.start()
+                cancelled.cancel()
+                second = KeyguardColdRootObservation(root) { stage, _, fields ->
+                    events.add("two:$stage:${fields["r10AttachState"] ?: ""}")
+                    if (stage == "R10_ROOT_ATTACH_DISPATCH" || stage == "R10_ROOT_FIRST_LAYOUT") secondReady.countDown()
+                }
+                second!!.start()
+                root.layoutParams = FrameLayout.LayoutParams(241, 160)
+                activity.setContentView(root)
+            }
+            assertTrue("reattachment/layout missing", secondReady.await(8, TimeUnit.SECONDS))
+            instrumentation.waitForIdleSync()
+            assertTrue(events.contains("one:R10_ROOT_REGISTRATION:pending"))
+            assertTrue(events.contains("two:R10_ROOT_REGISTRATION:pending"))
+            assertTrue(events.contains("already:R10_ROOT_REGISTRATION:alreadyAttached"))
+            assertEquals(1, events.count { it.startsWith("one:R10_ROOT_ATTACH_DISPATCH:") })
+            assertEquals(1, events.count { it.startsWith("two:R10_ROOT_ATTACH_DISPATCH:") })
+            assertTrue(events.none { it.startsWith("already:R10_ROOT_ATTACH_DISPATCH:") })
+            assertTrue(events.none { it.startsWith("cancelled:R10_ROOT_ATTACH_DISPATCH") || it.startsWith("cancelled:R10_MAIN_ASYNC_READY") })
+        } finally {
+            instrumentation.runOnMainSync { second?.cancel(); first?.cancel(); activity.finish() }
+        }
+    }
+
     @Test
     @SdkSuppress(minSdkVersion = 29)
     fun frameCommitPublishesOnceForAnAttachedFrame() {

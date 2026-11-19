@@ -603,6 +603,10 @@ internal object KeyguardCardDiagnostics {
         var addReturnAtUptimeMs: Long? = null,
         var postAddSetupAtUptimeMs: Long? = null,
         var attachStateAtObservation: String? = null,
+        var r10AttachDispatchAt: Long? = null,
+        var r10LayoutAt: Long? = null,
+        var r10LayoutSize: String? = null,
+        var r10MainAsyncAt: Long? = null,
         var firstPreDrawAtUptimeMs: Long? = null,
         var preDrawRootSize: String? = null,
         var preDrawTargetSize: String? = null,
@@ -823,6 +827,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -848,6 +853,8 @@ internal object KeyguardCardDiagnostics {
         "isolatedCompletionGapMaxMs",
         "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit",
         "r09Placement", "r09FirstWork", "r09FirstFrames",
+        "r10Cold0", "r10Cold0b", "r10Cold0c", "r10Cold0d", "r10Cold1", "r10Cold1b", "r10Cold1c", "r10Cold1d",
+        "r10Live0", "r10Live0b", "r10Live0c", "r10Live0d", "r10Live1", "r10Live1b", "r10Live1c", "r10Live1d",
         "r08Route", "r08Origin", "r08Times", "r08Anchor", "r08Transition",
         "r08Slot0", "r08Slot1", "r08Slot2", "r08Worker", "r08Grant", "r08Progress",
         "shaderFrames", "shaderCalls", "phaseAdvances", "firstPhase", "lastPhase",
@@ -904,7 +911,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_MAIN_APPLY_POSTED" -> "FIRST_MAIN_RESULT_POSTED"
         "INSPECTION_MAIN_APPLY_STARTED" -> "FIRST_MAIN_APPLY_STARTED"
         "AWAITING_MAIN_SURFACE" -> "FIRST_AWAITING_MAIN_SURFACE"
-        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED" ->
+        "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW", "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY" ->
             "${event.stage}:${event.showOperationId ?: "none"}"
         "HIDE_DECIDED", "LOCAL_HIDE_APPLIED", "ISOLATED_LAYER_HIDE_SUBMITTED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED" ->
             "${event.stage}:${event.hideOperationId ?: "none"}"
@@ -1456,6 +1463,14 @@ internal object KeyguardCardDiagnostics {
                 }
                 "POST_ADD_SETUP_COMPLETE" -> showEpisode()?.let { if (it.postAddSetupAtUptimeMs == null) it.postAddSetupAtUptimeMs = event.uptimeMs }
                 "VIEW_ATTACH_STATE" -> showEpisode()?.let { if (it.attachStateAtObservation == null) it.attachStateAtObservation = reason }
+                "R10_ROOT_REGISTRATION" -> showEpisode()?.let {
+                    if (it.attachStateAtObservation == null) it.attachStateAtObservation = fields["r10AttachState"]
+                }
+                "R10_ROOT_ATTACH_DISPATCH" -> showEpisode()?.let { if (it.r10AttachDispatchAt == null) it.r10AttachDispatchAt = event.uptimeMs }
+                "R10_ROOT_FIRST_LAYOUT" -> showEpisode()?.let {
+                    if (it.r10LayoutAt == null) { it.r10LayoutAt = event.uptimeMs; it.r10LayoutSize = fields["r10RootSize"] }
+                }
+                "R10_MAIN_ASYNC_READY" -> showEpisode()?.let { if (it.r10MainAsyncAt == null) it.r10MainAsyncAt = event.uptimeMs }
                 "FIRST_ROOT_PREDRAW" -> showEpisode()?.let {
                     if (it.firstPreDrawAtUptimeMs == null) {
                         it.firstPreDrawAtUptimeMs = event.uptimeMs
@@ -1827,17 +1842,32 @@ internal object KeyguardCardDiagnostics {
             bytes += size
             return true
         }
-        // First reserve every selected attempt's short cycle summary. Then
-        // retain whole episode/cause blocks round-robin, so one pathological
-        // attempt cannot silently replace the other wakes' evidence.
+        // Reserve compact owner-qualified records before admitting verbose
+        // inspection histories. Their actual UTF-8 size counts against the
+        // same export limit as every other record.
+        attemptsForCausalEvidence.forEach { attempt ->
+            val first = attempt.shows.firstOrNull()
+            val cold = first?.renderSummary
+            select("a${attempt.id}:compact", buildString {
+                append(" R10_COMPACT attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"}")
+                append(" attach=${first?.attachGeneration ?: "UNOBSERVED"} req=${first?.requestId ?: "UNOBSERVED"}")
+                append(" decision=${first?.decisionAtUptimeMs ?: "UNOBSERVED"} add=${first?.addBeginAtUptimeMs ?: "UNOBSERVED"}/${first?.addReturnAtUptimeMs ?: "UNOBSERVED"}")
+                append(" postAdd=${first?.postAddSetupAtUptimeMs ?: "UNOBSERVED"} attachState=${first?.attachStateAtObservation ?: "UNOBSERVED"}")
+                append(" attachDispatch=${first?.r10AttachDispatchAt ?: "UNOBSERVED"} layout=${first?.r10LayoutAt ?: "UNOBSERVED"}/${first?.r10LayoutSize ?: "UNOBSERVED"} mainAsync=${first?.r10MainAsyncAt ?: "UNOBSERVED"}")
+                append(" preDraw=${first?.firstPreDrawAtUptimeMs ?: "UNOBSERVED"} root=${first?.firstRootDrawAtUptimeMs ?: "UNOBSERVED"} live=${first?.firstLiveDrawAtUptimeMs ?: "UNOBSERVED"}")
+                append(" route=${cold?.get("r08Route") ?: "UNOBSERVED"}")
+                listOf("r10Cold0", "r10Cold0b", "r10Cold0c", "r10Cold0d", "r10Cold1", "r10Cold1b", "r10Cold1c", "r10Cold1d", "r10Live0", "r10Live0b", "r10Live0c", "r10Live0d", "r10Live1", "r10Live1b", "r10Live1c", "r10Live1d", "r09FirstWork", "r09FirstFrames", "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit").forEach { key ->
+                    append(" $key=${cold?.get(key) ?: "UNOBSERVED"}")
+                }
+                appendLine()
+            }, attempt.id)
+            attempt.hides.forEach { hide ->
+                select("a${attempt.id}:compactHide${hide.operationId}",
+                    " R10_COMPACT_HIDE attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} attachedBefore=${hide.attachedBefore ?: "UNOBSERVED"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "UNOBSERVED"} layer=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeReturnAtUptimeMs ?: "UNOBSERVED"}\n", attempt.id)
+            }
+        }
         attemptsForCausalEvidence.forEach { attempt ->
             select("a${attempt.id}:summary", attemptSummary(attempt), attempt.id)
-        }
-        val episodeBlocks = attemptsForCausalEvidence.associateWith(::episodeRecords)
-        repeat(episodeBlocks.values.maxOfOrNull { it.size } ?: 0) { index ->
-            attemptsForCausalEvidence.forEach { attempt ->
-                episodeBlocks.getValue(attempt).getOrNull(index)?.let { (id, text) -> select(id, text, attempt.id) }
-            }
         }
         // Preserve the largest measured detailed gap first, then one worst
         // gap from each remaining attachment before lesser samples. Parsing
@@ -1853,23 +1883,29 @@ internal object KeyguardCardDiagnostics {
                     val surface = if (key == "orbDrawGaps") "orb" else "background"
                     episode.renderSummary[key]?.lineSequence()?.filter(String::isNotBlank)?.forEachIndexed { index, line ->
                         val id = "$episodeId:drawGap:$surface:$index"
-                        if (episodeId !in selected) omittedRecords += id
-                        else {
-                            val duration = line.substringAfter("gapNs=", "").substringBefore(' ').toLongOrNull()
-                                ?: Long.MIN_VALUE
-                            records += GapCandidate(id,
-                                " DRAW_GAP attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} surface=$surface sample=$index $line\n",
-                                duration)
-                        }
+                        val duration = line.substringAfter("gapNs=", "").substringBefore(' ').toLongOrNull()
+                            ?: Long.MIN_VALUE
+                        records += GapCandidate(id,
+                            " DRAW_GAP attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} surface=$surface sample=$index $line\n",
+                            duration)
                     }
                 }
                 gapBlocks += records.sortedByDescending { it.gapNs }
             }
         }
         val rankedGapBlocks = gapBlocks.sortedByDescending { it.firstOrNull()?.gapNs ?: Long.MIN_VALUE }
+        // The global measured maximum remains independently readable even if
+        // its verbose show block cannot fit.
+        rankedGapBlocks.firstOrNull()?.firstOrNull()?.let { select(it.id, it.text) }
+        val episodeBlocks = attemptsForCausalEvidence.associateWith(::episodeRecords)
+        repeat(episodeBlocks.values.maxOfOrNull { it.size } ?: 0) { index ->
+            attemptsForCausalEvidence.forEach { attempt ->
+                episodeBlocks.getValue(attempt).getOrNull(index)?.let { (id, text) -> select(id, text, attempt.id) }
+            }
+        }
         repeat(rankedGapBlocks.maxOfOrNull { it.size } ?: 0) { sampleIndex ->
             rankedGapBlocks.forEach { records ->
-                records.getOrNull(sampleIndex)?.let { select(it.id, it.text) }
+                records.getOrNull(sampleIndex)?.takeIf { it.id !in selected }?.let { select(it.id, it.text) }
             }
         }
         // Original milestone rows are optional because the complete episode

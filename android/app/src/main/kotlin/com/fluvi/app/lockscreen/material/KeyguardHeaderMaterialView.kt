@@ -237,6 +237,9 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     /** One timestamp per physical attach is enough for wake diagnostics; this
      * is not a per-frame observation hook. */
     var onFirstShaderDraw: ((Long) -> Unit)? = null
+    /** Once per actually drawn current scene, used to qualify transitions. */
+    var onCurrentShaderDraw: ((KeyguardMaterialScene) -> Unit)? = null
+    private var lastReportedCurrentScene: KeyguardMaterialScene? = null
     /** Main-thread-only observational hook. Promotion changes no visibility
      * state; the controller uses it solely for truthful diagnostics. */
     var onPreparedProgramPromoted: ((String) -> Unit)? = null
@@ -535,6 +538,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     fun attachmentDrawCadence(): KeyguardDrawCadence.Snapshot = attachmentCadence.snapshot()
     fun attachmentDrawGaps(): KeyguardDrawGapEvidence.Snapshot = drawGaps.snapshot()
     fun beginAttachmentDrawEvidence(attachment: Long = evidenceAttachment) {
+        lastReportedCurrentScene = null
         evidenceAttachment = attachment
         evidenceAttachmentActive = true
         attachmentCadence.reset()
@@ -678,6 +682,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         paint.shader = null
         paint.alpha = 255
         shaderDrawCount += 1
+        if (scene === current && alpha > 0f && lastReportedCurrentScene !== scene) {
+            lastReportedCurrentScene = scene
+            onCurrentShaderDraw?.invoke(scene)
+        }
         if (firstShaderDrawForAttach) {
             firstShaderDrawForAttach = false
             // This callback is only a timestamp capture. Its owner posts any
