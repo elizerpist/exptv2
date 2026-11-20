@@ -1,4 +1,4 @@
-name: R18 API35 panel and unit qualification (orchestration only)
+name: R19 final API35 panel and diagnostic qualification (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      APP_SHA: 8a7186a4144822a25970079f3a2a374bddcfc737
+      APP_SHA: bc41ec11b293923f664b50cd79ed36b5f6fad53b
     steps:
       - uses: actions/checkout@v5
         with:
@@ -91,7 +91,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r18-api35-panel-${{ github.run_id }}
+          name: r19-final-api35-panel-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r18-api35/**
             app/build/app/reports/tests/**
