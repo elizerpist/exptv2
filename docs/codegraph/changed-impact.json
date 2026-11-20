@@ -1,16 +1,13 @@
 {
   "schema_version": 1,
-  "source_head": "96cf20d4f64c2e3a06c10507f919dd133033852b",
-  "base_head": "b372a694dbf1e78e90917b73a75990c599ffc68f",
+  "source_head": "6d03df62af5c0b02fe86efcf2085c5c7916d1149",
+  "base_head": "03677d622f0dd9873b6e1c2d323c3e1f2a7a1b5e",
   "changed_files": [
     ".github/workflows/fluvi-core.yml",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardInspectionQueue.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardSystemState.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardCardInspectionQueueTest.kt",
-    "scripts/test-keyguard-r15-routing.py"
+    "scripts/test-keyguard-apk-install.py",
+    "scripts/test-keyguard-r12-admission-baseline.sh",
+    "scripts/test-keyguard-r12-candidate.sh",
+    "scripts/verify-keyguard-installed-apk.sh"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
