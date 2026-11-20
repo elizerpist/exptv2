@@ -1,35 +1,38 @@
-name: R16 Phone Candidate Builder (orchestration only)
+name: R18 API35 panel and unit qualification (orchestration only)
 on:
   workflow_dispatch:
     inputs:
       native_diagnostic:
-        description: Compatibility with the registered workflow dispatcher.
         type: boolean
-        default: false
-      native_scope:
-        description: Compatibility with the registered workflow dispatcher.
-        type: string
-        default: full
+        default: true
       run_nightly:
-        description: Compatibility with the registered workflow dispatcher.
         type: boolean
         default: false
       run_baseline_profile:
-        description: Compatibility with the registered workflow dispatcher.
         type: boolean
         default: false
 permissions:
   contents: read
+defaults:
+  run:
+    working-directory: app
 jobs:
-  r16-phone-candidate:
+  r18-api35:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
-      FLUVI_R16_APP_SHA: 7c49a22386296ed0285552384c519da87d0bd468
+      APP_SHA: a4b36265ca7f168c964beac67e6ef69db4723a7a
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ env.FLUVI_R16_APP_SHA }}
+          ref: ${{ env.APP_SHA }}
+          path: app
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: harness
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-java@v5
@@ -39,37 +42,48 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
-      - uses: ./.github/actions/setup-fluvi-flutter
-      - name: Verify immutable application source
+      - uses: ./app/.github/actions/setup-fluvi-flutter
+      - name: Verify source and run Gradle JVM suites
         shell: bash
         run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$FLUVI_R16_APP_SHA"
-          test -z "$(git status --porcelain --untracked-files=no)"
-          mkdir -p "$RUNNER_TEMP/r16-phone"
-          printf 'application_sha=%s\norchestration_sha=%s\n' "$FLUVI_R16_APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r16-phone/source.txt"
-          java -version 2>&1 | head -3 > "$RUNNER_TEMP/r16-phone/java.txt"
-          flutter --version > "$RUNNER_TEMP/r16-phone/flutter.txt"
-      - name: Build Human profile using project script
-        shell: bash
-        run: |
-          set -euo pipefail
-          export FLUVI_BUILD_COMMIT="$FLUVI_R16_APP_SHA"
-          bash scripts/build-human-diagnostic-apk.sh 2>&1 | tee "$RUNNER_TEMP/r16-phone/build.log"
-          test -s build/app/outputs/flutter-apk/app-profile.apk
-          cp build/app/outputs/flutter-apk/app-profile.apk "$RUNNER_TEMP/r16-phone/app-profile-runner.apk"
-          unzip -tq "$RUNNER_TEMP/r16-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r16-phone/zip-check.txt"
-          sha256sum "$RUNNER_TEMP/r16-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r16-phone/runner-sha256.txt"
-          aapt_path=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name aapt -type f | sort -V | tail -1)
-          signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
-          "$aapt_path" dump badging "$RUNNER_TEMP/r16-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r16-phone/badging.txt"
-          "$signer" verify --verbose --print-certs "$RUNNER_TEMP/r16-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r16-phone/runner-signer.txt"
-      - name: Retain candidate binary and build evidence
+          set -uo pipefail
+          mkdir -p "$RUNNER_TEMP/r18-api35"
+          test "$(git rev-parse HEAD)" = "$APP_SHA" || exit 1
+          test -z "$(git status --porcelain --untracked-files=no)" || exit 1
+          printf 'application_sha=%s\nharness_sha=%s\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r18-api35/identity.txt"
+          (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r18-api35/unit.log"
+          printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r18-api35/unit.exit"
+      - name: Assemble exact debug and instrumentation pair
+        run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
+      - name: Enable KVM
+        run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
+      - name: Run R18 panel and diagnostic controls on API35
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          emulator-build: 15081367
+          target: default
+          arch: x86_64
+          profile: pixel_7
+          cores: 4
+          ram-size: 2048M
+          disable-animations: false
+          emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
+          working-directory: app
+          script: bash "$GITHUB_WORKSPACE/harness/scripts/r18-api35-panel-qualification.sh"
+      - name: Fail job if any independent unit suite failed
+        if: always()
+        run: test -s "$RUNNER_TEMP/r18-api35/unit.exit" && test "$(cat "$RUNNER_TEMP/r18-api35/unit.exit")" = 0
+      - name: Preserve raw evidence on success or failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r16-human-candidate-7c49a2238629-${{ github.run_id }}
-          path: ${{ runner.temp }}/r16-phone/
+          name: r18-api35-panel-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r18-api35/**
+            app/build/app/reports/tests/**
+            app/build/fluvi-core/reports/tests/**
+            app/build/app/test-results/**
+            app/build/fluvi-core/test-results/**
           if-no-files-found: warn
-          compression-level: 0
-          retention-days: 14
+          retention-days: 30
