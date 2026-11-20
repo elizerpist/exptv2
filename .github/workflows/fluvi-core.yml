@@ -1,4 +1,4 @@
-name: R16 Exact-Source Code Graph (orchestration only)
+name: R18 Exact-Source Code Graph (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -17,12 +17,12 @@ on:
 permissions:
   contents: write
 jobs:
-  r16-exact-source-graph:
+  r18-exact-source-graph:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      APP_SHA: 7c49a22386296ed0285552384c519da87d0bd468
-      TOOLING_BASE: cb2793dd5718344e586a40d4a24e25955d4ec5a1
+      APP_SHA: a4b36265ca7f168c964beac67e6ef69db4723a7a
+      TOOLING_BASE: 534d1e7c1dbce1e7b0c23abdf6c06cba89b1069c
     steps:
       - uses: actions/checkout@v5
         with:
@@ -51,7 +51,7 @@ jobs:
           dart pub global activate scip_dart 1.6.2
           dart pub global run scip_dart ./
           test -s index.scip
-          sha256sum index.scip > "$RUNNER_TEMP/r16-index-sha256.txt"
+          sha256sum index.scip > "$RUNNER_TEMP/r18-index-sha256.txt"
       - name: Test and generate graph
         shell: bash
         run: |
@@ -63,8 +63,8 @@ jobs:
           dart pub get
           dart analyze
           dart test
-          dart run bin/fluvi_codegraph.dart generate --index "$source_dir/index.scip" --graph "$tooling_dir/docs/codegraph" --source-root "$source_dir" --source-head "$APP_SHA" --source-ref "$APP_SHA" | tee "$RUNNER_TEMP/r16-graph-generation.txt"
-          dart run bin/fluvi_codegraph.dart query --graph "$tooling_dir/docs/codegraph" --symbol KeyguardTimingCaptureBridge > "$RUNNER_TEMP/r16-graph-query.txt"
+          dart run bin/fluvi_codegraph.dart generate --index "$source_dir/index.scip" --graph "$tooling_dir/docs/codegraph" --source-root "$source_dir" --source-head "$APP_SHA" --source-ref "$APP_SHA" | tee "$RUNNER_TEMP/r18-graph-generation.txt"
+          dart run bin/fluvi_codegraph.dart query --graph "$tooling_dir/docs/codegraph" --symbol KeyguardTimingCaptureBridge > "$RUNNER_TEMP/r18-graph-query.txt"
           python3 - "$tooling_dir/docs/codegraph" "$APP_SHA" "$source_dir/index.scip" <<'PY'
           import hashlib,json,pathlib,sys
           root=pathlib.Path(sys.argv[1]);m=json.loads((root/'manifest.json').read_text())
@@ -82,14 +82,14 @@ jobs:
                   count+=1
           print('verified_shards=',count,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r16-owned-layer-7c49a223.md"
-          printf '# R16 owned-layer source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
+          report="$tooling_dir/docs/codegraph-r18-presentation-pipeline-a4b36265.md"
+          printf '# R18 presentation-pipeline source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The Dart SCIP manifest is `docs/codegraph/manifest.json`; Kotlin has no SCIP coverage and the following is source navigation, not a generated call graph. The output/host lifecycle is Main-owned and visual presentation remains an independently measured outcome.\n\n' >> "$report"
           printf '```text\n' >> "$report"
-          (cd "$source_dir" && grep -nE 'readSystemWindows\(|selectedRootOnly|revokeCurrent\(|surfaceChanged\(|surfaceDestroyed\(|surfaceRedrawNeededAsync\(|class KeyguardOrbOwnedOutput|fun (borrow|releaseBorrow|retire|disposeIfReady|clearHost|draw|surfaceReady|surfaceDestroyed)|R16_LAYER|r16PinLateOperation|PixelCopy.request' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardWindow,KeyguardCardSettings}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbOwnedOutput,KeyguardOrbSurfacePresenter,KeyguardOrbSurfaceWorker,KeyguardOrbSurfaceMetrics}.kt) >> "$report"
+          (cd "$source_dir" && grep -nE 'reserveBeforeMain|startR18|applyInspection|readSystemWindows|R18_PIPELINE|sealR18|class KeyguardOrbPresentationCoordinator|class KeyguardOrbInertHost|class KeyguardOrbDirectOutput|class KeyguardOrbR18Presenter|fun (stage|reveal|retire|seal|dispose|borrow|releaseBorrow|buildReparentTransaction)|addTransactionCompletedListener|presentFence|draw|surfaceReady' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardWindow,KeyguardCardSettings,KeyguardSystemState,KeyguardWindowSnapshotReader,KeyguardOrbInertHost,KeyguardOrbPresentationCoordinator}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbDirectOutput,KeyguardOrbR18Presenter,KeyguardOrbSurfacePresenter,KeyguardOrbSurfaceWorker,KeyguardOrbSurfaceMetrics}.kt) >> "$report"
           printf '\n```\n' >> "$report"
-          cp "$RUNNER_TEMP/r16-graph-query.txt" "$tooling_dir/docs/codegraph-r16-query-7c49a223.txt"
-          sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r16-manifest-sha256.txt"
+          cp "$RUNNER_TEMP/r18-graph-query.txt" "$tooling_dir/docs/codegraph-r18-query-a4b36265.txt"
+          sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r18-manifest-sha256.txt"
       - name: Publish graph to independent immutable tooling branch
         shell: bash
         run: |
@@ -97,21 +97,21 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r16-owned-layer-7c49a223.md docs/codegraph-r16-query-7c49a223.txt
+          git add docs/codegraph docs/codegraph-r18-presentation-pipeline-a4b36265.md docs/codegraph-r18-query-a4b36265.txt
           git diff --cached --check
-          git commit -m 'graph: index R16 owned-layer application source [skip ci]'
-          git rev-parse HEAD | tee "$RUNNER_TEMP/r16-graph-commit.txt"
-          test -z "$(git ls-remote origin refs/heads/tooling/r16-owned-layer-7c49a2238629)"
-          git push origin HEAD:refs/heads/tooling/r16-owned-layer-7c49a2238629
+          git commit -m 'graph: index R18 presentation-pipeline application source [skip ci]'
+          git rev-parse HEAD | tee "$RUNNER_TEMP/r18-graph-commit.txt"
+          test -z "$(git ls-remote origin refs/heads/tooling/r18-presentation-pipeline-a4b36265ca7f)"
+          git push origin HEAD:refs/heads/tooling/r18-presentation-pipeline-a4b36265ca7f
       - name: Preserve graph and receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r16-graph-7c49a2238629-run-${{ github.run_id }}
+          name: r18-graph-a4b36265ca7f-run-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
-            tooling/docs/codegraph-r16-*.md
-            tooling/docs/codegraph-r16-*.txt
-            ${{ runner.temp }}/r16-*.txt
+            tooling/docs/codegraph-r18-*.md
+            tooling/docs/codegraph-r18-*.txt
+            ${{ runner.temp }}/r18-*.txt
           if-no-files-found: warn
           retention-days: 30
