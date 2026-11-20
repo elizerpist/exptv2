@@ -2335,7 +2335,8 @@ internal object KeyguardCardDiagnostics {
         val callback = hide.triggerReceivedAtUptimeMs
         val event = hide.cause?.eventTimeUptimeMs
         val local = hide.localHideAppliedAtUptimeMs
-        if (work == null || local == null) return " R13_HIDE_WORK attempt=${attempt.id} hideOp=${hide.operationId} coverage=UNOBSERVED\n"
+        val timeline = "queued=${hide.cause?.queuedAtUptimeMs ?: "UNOBSERVED"} readStart=${hide.cause?.startedAtUptimeMs ?: "UNOBSERVED"} readEnd=${hide.cause?.finishedAtUptimeMs ?: "UNOBSERVED"} handoff=${hide.cause?.mainHandoffRequestedAtUptimeMs ?: "UNOBSERVED"} mainEntry=${hide.cause?.mainApplyStartedAtUptimeMs ?: "UNOBSERVED"} decision=${hide.decisionAtUptimeMs} removeReturn=${hide.removeReturnAtUptimeMs ?: "UNOBSERVED"}"
+        if (work == null || local == null) return " R13_HIDE_WORK attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} req=${hide.requestId ?: "UNOBSERVED"} event=${event ?: "UNOBSERVED"} callback=${callback ?: "UNOBSERVED"} local=${local ?: "UNOBSERVED"} $timeline coverage=UNOBSERVED physical=UNOBSERVED\n"
         val samples = work.recent.filter { hide.attachGeneration != null && it.attachGeneration == hide.attachGeneration }
         fun intersection(from: Long?, paintOnly: Boolean): String {
             if (from == null || from > local) return "UNOBSERVED"
@@ -2362,7 +2363,7 @@ internal object KeyguardCardDiagnostics {
             val count = it.fields["r13Paint"]?.toLongOrNull() ?: -1
             count > 1 || (count == 1L && (it.fields["r13PaintStart"] == null || it.fields["r13PaintEnd"] == null))
         }
-        return " R13_HIDE_WORK attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} req=${hide.requestId ?: "UNOBSERVED"} event=${event ?: "UNOBSERVED"} callback=${callback ?: "UNOBSERVED"} local=$local retainedScopes=${samples.size} retainedEvicted=${work.recentEvicted} invalid=${work.invalid} eventToLocalScopeLowerMs=${intersection(event, false)} eventToLocalSinglePaintLowerMs=${intersection(event, true)} callbackToLocalScopeLowerMs=${intersection(callback, false)} callbackToLocalSinglePaintLowerMs=${intersection(callback, true)} missingPaintBounds=$missingPaintBounds coverage=retainedOwnedScopesOnly resolution=uptimeMs physical=UNOBSERVED\n"
+        return " R13_HIDE_WORK attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} req=${hide.requestId ?: "UNOBSERVED"} event=${event ?: "UNOBSERVED"} callback=${callback ?: "UNOBSERVED"} local=$local retainedScopes=${samples.size} retainedEvicted=${work.recentEvicted} invalid=${work.invalid} eventToLocalScopeLowerMs=${intersection(event, false)} eventToLocalSinglePaintLowerMs=${intersection(event, true)} callbackToLocalScopeLowerMs=${intersection(callback, false)} callbackToLocalSinglePaintLowerMs=${intersection(callback, true)} missingPaintBounds=$missingPaintBounds $timeline coverage=retainedOwnedScopesOnly resolution=uptimeMs physical=UNOBSERVED\n"
     }
 
     private fun hideRecord(hide: HideEpisode): String =

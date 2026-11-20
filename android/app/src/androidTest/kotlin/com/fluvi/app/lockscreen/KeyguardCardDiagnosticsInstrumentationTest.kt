@@ -97,6 +97,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("overlap=UNOBSERVED physical=UNOBSERVED"))
         assertTrue(report.contains("hideOp=${hide.hideOperationId} attach=1 req=23 event=UNOBSERVED callback=109 local=112"))
         assertTrue(report.contains("callbackToLocalScopeLowerMs=1"))
+        assertTrue(report.contains("readStart=UNOBSERVED readEnd=UNOBSERVED handoff=UNOBSERVED mainEntry=UNOBSERVED decision=110"))
         assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
         KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "late", operation = first, fields = fields)
         assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
