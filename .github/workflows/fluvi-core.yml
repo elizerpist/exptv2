@@ -1,13 +1,13 @@
-name: R16 Owned Layer Panel Controls (test orchestration only)
+name: R16 Flutter Tests with Original Candidate Workflow
 on:
   workflow_dispatch:
     inputs:
       native_diagnostic:
         type: boolean
-        default: true
+        default: false
       native_scope:
         type: string
-        default: r12_contract
+        default: full
       run_nightly:
         type: boolean
         default: false
@@ -17,107 +17,22 @@ on:
 permissions:
   contents: read
 jobs:
-  r16-owned-layer-panel:
+  r16-flutter-with-real-workflow:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          persist-credentials: false
-      - name: Check immutable runtime source and harness identity
-        shell: bash
+      - name: Verify application source and restore the actual candidate workflow for source-boundary tests
         run: |
           set -euo pipefail
-          git diff --quiet 7c49a22386296ed0285552384c519da87d0bd468 HEAD -- android/app/src/main android/app/src/debug android/app/src/profile android/app/src/release android/app/build.gradle.kts lib shaders pubspec.yaml pubspec.lock
-          printf 'app_source=7c49a22386296ed0285552384c519da87d0bd468\nharness_source=%s\n' "$GITHUB_SHA"
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-      - uses: ./.github/actions/setup-fluvi-flutter
-      - name: Enable KVM
-        run: |
-          test -e /dev/kvm
-          sudo chmod 0666 /dev/kvm
-          test -r /dev/kvm && test -w /dev/kvm
-      - name: Run stock and owned real-panel controls
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          emulator-build: 15081367
-          target: default
-          arch: x86_64
-          profile: pixel_7
-          cores: 4
-          ram-size: 2048M
-          disable-animations: false
-          emulator-options: >-
-            -no-window -gpu swangle -feature -Vulkan -accel on
-            -no-snapshot -noaudio -no-boot-anim -camera-back none
-            -partition-size 4096
-          pre-emulator-launch-script: >-
-            cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
-          script: bash scripts/test-keyguard-r16-panel.sh
-      - name: Preserve panel evidence on success or failure
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: r16-owned-layer-panel-${{ github.sha }}-run-${{ github.run_id }}
-          path: |
-            android/keyguard-r16-panel/**
-            build/app/reports/androidTests/**
-            build/app/outputs/androidTest-results/**
-          if-no-files-found: warn
-          retention-days: 30
-  r16-native-unit:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Verify application runtime identity
-        run: |
-          git diff --quiet 7c49a22386296ed0285552384c519da87d0bd468 HEAD -- android/app/src/main android/app/src/debug android/app/src/profile android/app/src/release android/app/build.gradle.kts lib shaders pubspec.yaml pubspec.lock
-          printf 'app_source=7c49a22386296ed0285552384c519da87d0bd468\nharness_source=%s\n' "$GITHUB_SHA"
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-      - uses: ./.github/actions/setup-fluvi-flutter
-      - name: Run native and core unit tests with updated test contracts
-        working-directory: android
-        run: ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain
-      - name: Preserve test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: r16-corrected-native-${{ github.sha }}-${{ github.run_id }}
-          path: |
-            build/app/test-results/testDebugUnitTest/**
-            build/fluvi-core/test-results/testDebugUnitTest/**
-            build/app/reports/tests/testDebugUnitTest/**
-            build/fluvi-core/reports/tests/testDebugUnitTest/**
-          if-no-files-found: warn
-          retention-days: 30
-  r16-flutter:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Verify application runtime identity
-        run: |
-          git diff --quiet 7c49a22386296ed0285552384c519da87d0bd468 HEAD -- android/app/src/main android/app/src/debug android/app/src/profile android/app/src/release android/app/build.gradle.kts lib shaders pubspec.yaml pubspec.lock
-          printf 'app_source=7c49a22386296ed0285552384c519da87d0bd468\nharness_source=%s\n' "$GITHUB_SHA"
+          app=7c49a22386296ed0285552384c519da87d0bd468
+          git diff --quiet "$app" HEAD -- android/app/src/main android/app/src/debug android/app/src/profile android/app/src/release android/app/build.gradle.kts lib shaders pubspec.yaml pubspec.lock
+          git show "$app:.github/workflows/fluvi-core.yml" > .github/workflows/fluvi-core.yml
+          git diff --exit-code "$app" -- .github/workflows/fluvi-core.yml
+          printf 'app_source=%s\nharness_source=%s\n' "$app" "$GITHUB_SHA"
+          sha256sum .github/workflows/fluvi-core.yml
       - uses: ./.github/actions/setup-fluvi-flutter
       - name: Analyze Flutter
         run: flutter analyze --no-fatal-infos
@@ -127,27 +42,3 @@ jobs:
       - name: Fast Flutter suite
         if: always()
         run: bash scripts/test-fluvi-fast.sh --reporter expanded
-  r15-archival-replay:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install decoder prerequisites
-        run: |
-          command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
-          command -v ffprobe
-          python3 -c 'import PIL' || python3 -m pip install --user Pillow==11.3.0
-      - name: Run metadata and visual classifier controls
-        run: |
-          python3 scripts/test-keyguard-r16-retirement.py
-          python3 scripts/test-keyguard-r15-visual.py
-      - name: Replay four immutable R15 videos
-        run: bash scripts/test-keyguard-r16-archive-replay.sh
-      - name: Preserve replay and failure evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: r16-r15-archival-replay-${{ github.sha }}-${{ github.run_id }}
-          path: android/keyguard-r16-archive-replay/**
-          if-no-files-found: warn
-          retention-days: 30
