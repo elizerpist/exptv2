@@ -30,6 +30,7 @@ import com.fluvi.app.lockscreen.material.KeyguardOrbMaterialTimeSource
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
 import com.fluvi.app.lockscreen.material.KeyguardOrbFirstOfferObservation
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceObservation
+import com.fluvi.app.lockscreen.material.KeyguardR19FirstPaintTicket
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfacePresenter
 import com.fluvi.app.lockscreen.material.KeyguardOrbPresentationLane
@@ -92,6 +93,8 @@ internal class KeyguardCardWindow(
     private val onR18Failure: (Long, Long, String) -> Unit = { _, _, _ -> },
     private val onR18Receipt: (Long, Long, KeyguardOrbPresentationLane.Receipt) -> Unit = { _, _, _ -> },
     private val onR18Drained: (Long, Long, Any) -> Unit = { _, _, _ -> },
+    private val onR19Allocated: (Long, Long, Long) -> Unit = { _, _, _ -> },
+    private val onR19Observation: (KeyguardOrbSurfaceObservation) -> Unit = {},
     private val r18PipelineEnabled: Boolean = false,
 ) {
     enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, PENDING, FAILED }
@@ -126,7 +129,8 @@ internal class KeyguardCardWindow(
     private var materialController: KeyguardCardMaterialController? = null
     @Volatile private var surfacePresenter: KeyguardOrbSurfacePresenter? = null
     internal data class R18Preparation(val attachment: Long, val outputGeneration: Long,
-        val full: Boolean, val visualKey: String, val width: Int, val height: Int, val densityDpi: Int)
+        val full: Boolean, val visualKey: String, val width: Int, val height: Int, val densityDpi: Int,
+        val emptyAwaitingDisclosure: Boolean = false)
     private var r18Preparation: R18Preparation? = null
     private var nextR18OutputGeneration = 0L
     private var r18HostGeneration: Long? = null
@@ -284,6 +288,11 @@ internal class KeyguardCardWindow(
                 },
                 onR18Receipt = onR18Receipt,
                 onR18Drained = onR18Drained,
+                onR18Allocated = { attachment, generation, at ->
+                    if (r18Preparation?.let { it.attachment == attachment && it.outputGeneration == generation } == true)
+                        onR19Allocated(attachment, generation, at)
+                },
+                onR19Observation = onR19Observation,
             )
             orb.visibility = View.GONE
             effectiveRenderMode = selection
@@ -364,29 +373,32 @@ internal class KeyguardCardWindow(
 
     /** Request one private direct output; FULL is legal only after a current
      * positive admission has independently allowed that disclosure. */
-    fun prepareR18(full: Boolean = false, authorizedFull: Boolean = false,
+    fun prepareR18(full: Boolean? = null, authorizedFull: Boolean = false,
                    beforeReplace: (R18Preparation) -> Boolean = { true }): R18Preparation? {
         checkMainThread()
         val profile = materialProfile ?: return null
+        val intent = KeyguardFirstAuthorizedOrb.intent(materialSettings.showFinancialDetails)
+        val wantsFull = full ?: (intent == KeyguardFirstAuthorizedOrb.Intent.EMPTY_AWAITING_DISCLOSURE)
+        val empty = full == null && wantsFull && !authorizedFull
         if (!r18PipelineEnabled || Build.VERSION.SDK_INT != 35 || lifecycle.isAttached() || !materialSettings.requested ||
             effectiveRenderMode != KeyguardOrbRenderMode.SURFACE_LIVE || !surfaceMotionAllowed ||
-            (full && !authorizedFull)) return null
+            (wantsFull && !authorizedFull && !empty)) return null
         val unlocked = runCatching { serviceContext.getSystemService(android.os.UserManager::class.java).isUserUnlocked }
             .getOrDefault(false)
         if (!unlocked) return null
         val presenter = surfacePresenter ?: return null
         val size = surfaceSize()
-        val visual = if (full) profile.visualKey else profile.neutralized().visualKey
+        val visual = if (wantsFull) profile.visualKey else profile.neutralized().visualKey
         val existing = r18Preparation
-        if (existing != null && existing.attachment == attachGeneration + 1L && existing.full == full &&
-            existing.visualKey == visual && existing.width == size && existing.height == size &&
+        if (existing != null && existing.attachment == attachGeneration + 1L && existing.full == wantsFull &&
+            existing.emptyAwaitingDisclosure == empty && existing.visualKey == visual && existing.width == size && existing.height == size &&
             existing.densityDpi == serviceContext.resources.displayMetrics.densityDpi) return existing
-        val next = R18Preparation(attachGeneration + 1L, ++nextR18OutputGeneration, full, visual,
-            size, size, serviceContext.resources.displayMetrics.densityDpi)
+        val next = R18Preparation(attachGeneration + 1L, ++nextR18OutputGeneration, wantsFull, visual,
+            size, size, serviceContext.resources.displayMetrics.densityDpi, empty)
         if (!beforeReplace(next)) return null
         r18Preparation = next
         r18BoundOutputGeneration = null
-        if (!presenter.prepareR18(next.attachment, next.outputGeneration, profile, size, size, full, authorizedFull)) {
+        if (!presenter.prepareR18(next.attachment, next.outputGeneration, profile, size, size, wantsFull, authorizedFull, empty)) {
             r18Preparation = null
             return null
         }
@@ -394,6 +406,22 @@ internal class KeyguardCardWindow(
     }
 
     fun r18Preparation(): R18Preparation? { checkMainThread(); return r18Preparation }
+
+    /** Bindable ownership does not assert that any frame exists. */
+    fun r19AllocatedOutput(preparation: R18Preparation): Any? {
+        checkMainThread()
+        if (r18Preparation != preparation) return null
+        return surfacePresenter?.r18AllocatedOutput(preparation.attachment, preparation.outputGeneration,
+            preparation.full, preparation.width, preparation.height)
+    }
+
+    fun authorizeR19First(preparation: R18Preparation, ticket: KeyguardR19FirstPaintTicket): Boolean {
+        checkMainThread()
+        if (r18Preparation != preparation || !preparation.emptyAwaitingDisclosure || !preparation.full) return false
+        val profile = materialProfile ?: return false
+        if (profile.visualKey != preparation.visualKey) return false
+        return surfacePresenter?.authorizeR19First(preparation.attachment, preparation.outputGeneration, profile, ticket) == true
+    }
 
     fun r18ReadyAt(preparation: R18Preparation): Long? {
         checkMainThread()

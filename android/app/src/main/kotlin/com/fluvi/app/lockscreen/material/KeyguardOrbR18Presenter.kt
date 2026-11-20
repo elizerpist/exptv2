@@ -21,6 +21,8 @@ internal class KeyguardOrbR18Presenter(
     private val onFailure: (Long, Long, String, () -> Unit) -> Unit,
     private val onReceipt: (Long, Long, KeyguardOrbPresentationLane.Receipt) -> Unit = { _, _, _ -> },
     private val onDrained: (Long, Long, Any) -> Unit = { _, _, _ -> },
+    private val onAllocated: (Long, Long, Long) -> Unit = { _, _, _ -> },
+    private val onObservation: (KeyguardOrbSurfaceObservation) -> Unit = {},
 ) {
     private data class Owner(
         val serial: Long,
@@ -83,19 +85,26 @@ internal class KeyguardOrbR18Presenter(
      * precomputed without a fresh disclosure grant. No WMS host is created. */
     fun prepare(attachment: Long, generation: Long, profile: KeyguardMaterialProfile,
                 width: Int, height: Int, densityDpi: Int, full: Boolean = false,
-                authorizedFull: Boolean = false) {
+                authorizedFull: Boolean = false, emptyAwaitingDisclosure: Boolean = false) {
         checkMain()
-        require(!full || authorizedFull)
+        require(!full || authorizedFull || emptyAwaitingDisclosure)
+        require(!emptyAwaitingDisclosure || (full && !authorizedFull))
         seal()
         val ticket = serial.incrementAndGet()
         requestedOwner.set(attachment to generation)
-        worker.prepareHiddenDirect(attachment, generation, width, height, densityDpi, profile, full, lane,
+        worker.prepareHiddenDirect(attachment, generation, width, height, densityDpi,
+            if (emptyAwaitingDisclosure) null else profile, full, lane,
             stillCurrent = { serial.get() == ticket },
             created = { target ->
                 val next = Owner(ticket, attachment, generation, target, SystemClock.uptimeMillis())
                 if (serial.get() != ticket || !owner.compareAndSet(null, next)) {
                     worker.revoke(target, discardFull = true)
                     target.directOutput?.let(lane::retire)
+                } else {
+                    main.post {
+                        if (owner.get() === next && !target.revoked)
+                            onAllocated(attachment, generation, next.preparedAt)
+                    }
                 }
             },
             failed = { reason ->
@@ -103,7 +112,33 @@ internal class KeyguardOrbR18Presenter(
                     if (serial.get() == ticket) onFailure(attachment, generation, reason) {}
                 }
             },
+            emptyAwaitingDisclosure = emptyAwaitingDisclosure,
+            reporter = onObservation,
         )
+    }
+
+    /** A virgin output is bindable without a posted frame. This reference is
+     * an identity only and never constitutes disclosure or image readiness. */
+    fun allocatedOutput(attachment: Long, generation: Long, full: Boolean,
+                        width: Int, height: Int, densityDpi: Int): Any? {
+        checkMain()
+        val current = owner.get() ?: return null
+        val target = current.target
+        return if (current.attachment == attachment && current.generation == generation && !target.revoked &&
+            target.full == full && target.width == width && target.height == height && target.densityDpi == densityDpi)
+            target.directOutput else null
+    }
+
+    fun authorizeFirst(attachment: Long, generation: Long, profile: KeyguardMaterialProfile,
+                       ticket: KeyguardR19FirstPaintTicket): Boolean {
+        checkMain()
+        val current = owner.get() ?: return false
+        if (current.attachment != attachment || current.generation != generation || current.target.revoked ||
+            !current.target.full) return false
+        val existing = current.target.firstDirectAuthorization.get()
+        if (existing != null) return existing.attachment == ticket.attachment && existing.generation == ticket.generation &&
+            existing.dataRevision == ticket.dataRevision && existing.visualKey == ticket.visualKey
+        return worker.authorizeDirectFirst(current.target, profile, ticket)
     }
 
     fun hasReady(attachment: Long, generation: Long): Boolean {

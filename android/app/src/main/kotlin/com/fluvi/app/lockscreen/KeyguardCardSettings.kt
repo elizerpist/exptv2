@@ -800,7 +800,9 @@ internal object KeyguardCardDiagnostics {
      * not Main or the render worker, owns these maps and their formatting. */
     private data class R18Timeline(val host: String, val output: String, val attachment: Long?,
                                    var privacy: String, var child: String = "UNOBSERVED",
-                                   val values: LinkedHashMap<String, String> = linkedMapOf())
+                                   val values: LinkedHashMap<String, String> = linkedMapOf(),
+                                   var r19Metrics: KeyguardOrbSurfaceMetrics? = null,
+                                   var r19MetricSnapshot: KeyguardOrbSurfaceMetrics.Snapshot? = null)
 
     /** Bounded per-attempt reduction, independent of the raw event ring. */
     private data class FinancialWorkSummary(
@@ -989,7 +991,10 @@ internal object KeyguardCardDiagnostics {
             else -> event.reason
         }
         val retained = setOf("WAKE_ADOPTED", "HOST_ADD_BEGIN", "HOST_ADDED", "HOST_ATTACHED", "HOST_READY", "BUFFER_READY", "HIDDEN_BOUND",
-            "GRANT", "INPUT_ARMED", "REVEAL_QUEUED", "REVEAL_APPLIED", "SEALED", "OUTPUT_DRAINED", "FALLBACK")
+            "GRANT", "INPUT_ARMED", "REVEAL_QUEUED", "REVEAL_APPLIED", "SEALED", "OUTPUT_DRAINED", "FALLBACK",
+            "R19_ALLOCATED", "R19_FIRST_POSITIVE", "R19_PROOF_ACCEPTED", "R19_PROOF_EXPIRED", "R19_EXPIRED_SYSTEM",
+            "R19_EXPIRED_INGRESS", "R19_EXPIRED_DISPLAY",
+            "R19_PAINT_REQUEST", "R19_PAINT_ENTER", "R19_POSTER", "R19_PROOF_CONSUMED")
         if (phase in retained) {
             if (phase == "INPUT_ARMED" && !timeline.values.containsKey(phase)) attempt.attachCount += 1
             timeline.values.putIfAbsent(phase, event.uptimeMs.toString())
@@ -998,8 +1003,19 @@ internal object KeyguardCardDiagnostics {
         fun retainField(key: String, destination: String = key) {
             event.fields[key]?.takeIf { it != "UNOBSERVED" }?.let { timeline.values.putIfAbsent(destination, it) }
         }
-        listOf("r18Proof", "r18SampleStart", "r18SampleEnd", "r18Reservation", "r18AlignUptime", "r18AlignNano",
-            "r18AlignUncertaintyNs").forEach { retainField(it) }
+        listOf("r18SampleStart", "r18SampleEnd", "r18Reservation", "r18AlignUptime", "r18AlignNano",
+            "r18AlignUncertaintyNs", "r19Intent", "r19Poster").forEach { retainField(it) }
+        if (event.reason == "GRANT") retainField("r18Proof")
+        if (event.reason == "R19_FIRST_POSITIVE") {
+            timeline.values.putIfAbsent("r19PositiveRequest", event.requestId?.toString() ?: "UNOBSERVED")
+            listOf("r19SceneRead", "r19Freshness", "r19ReadStart", "r19RootMs", "r19RootFlags", "r19ChildFlags")
+                .forEach { retainField(it) }
+        }
+        if (event.reason == "R19_PROOF_CONSUMED") {
+            retainField("r19SceneNow", "r19SceneConsume")
+            timeline.values.putIfAbsent("r19ConsumedRequest", event.requestId?.toString() ?: "UNOBSERVED")
+        }
+        if (timeline.r19Metrics == null && event.surfaceMetrics != null) timeline.r19Metrics = event.surfaceMetrics
         if (event.reason == "REVEAL_RECEIPT" || event.reason == "RETIRE_RECEIPT") {
             val prefix = if (event.reason == "REVEAL_RECEIPT") "reveal" else "retire"
             listOf("r18ApplyBegin", "r18ApplyEnd", "r18Commit", "r18LatchNs", "r18PresentNs", "r18PresentState")
@@ -1989,6 +2005,10 @@ internal object KeyguardCardDiagnostics {
         shows = ArrayDeque(attempt.shows.map { it.copy(cause = it.cause?.copy(), renderSummary = it.renderSummary.toMap(), r11Evidence = it.r11Evidence.toMap(), r12Evidence = it.r12Evidence.toMap(), r12MetricSnapshot = it.r12Metrics?.snapshot() ?: it.r12MetricSnapshot, r12Metrics = null, r12LatestMetricSnapshot = it.r12LatestMetrics?.snapshot() ?: it.r12LatestMetricSnapshot, r12LatestMetrics = null) }),
         hides = ArrayDeque(attempt.hides.map { it.copy(cause = it.cause?.copy(),
             r15MetricSnapshot = it.r15Metrics?.snapshot() ?: it.r15MetricSnapshot, r15Metrics = null) }),
+        r18Generations = LinkedHashMap(attempt.r18Generations.mapValues { (_, timeline) ->
+            timeline.copy(values = LinkedHashMap(timeline.values),
+                r19MetricSnapshot = timeline.r19Metrics?.snapshot() ?: timeline.r19MetricSnapshot, r19Metrics = null)
+        }),
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
         pendingR11 = ArrayDeque(attempt.pendingR11.map { it.copy(fields = it.fields.toMap()) }),
         pendingR12 = ArrayDeque(attempt.pendingR12.map { it.copy(fields = it.fields.toMap()) }),
@@ -2196,6 +2216,7 @@ internal object KeyguardCardDiagnostics {
             attemptsForCausalEvidence.forEach { attempt ->
                 attempt.r18Generations.values.elementAtOrNull(index)?.let { row ->
                     fun value(key: String) = row.values[key] ?: "UNOBSERVED"
+                    val motion = (row.r19MetricSnapshot ?: row.r19Metrics?.snapshot())?.takeIf { it.coherent }
                     val text = buildString {
                         append(" R18_PIPELINE attempt=${attempt.id} attach=${row.attachment ?: "UNOBSERVED"} host=${row.host} output=${row.output} child=${row.child} privacy=${row.privacy}")
                         append(" sample=${value("r18SampleStart")}/${value("r18SampleEnd")} reserve=${value("r18Reservation")} adopt=${value("WAKE_ADOPTED")} hostAdd=${value("HOST_ADD_BEGIN")}/${value("HOST_ADDED")} hostAttach=${value("HOST_ATTACHED")} hostReady=${value("HOST_READY")}")
@@ -2205,6 +2226,9 @@ internal object KeyguardCardDiagnostics {
                         append(" seal=${value("SEALED")}/${value("SEALED_REASON")} retireApply=${value("retire:r18ApplyBegin")}/${value("retire:r18ApplyEnd")} retireCommit=${value("retire:r18Commit")}")
                         append(" retireLatchNs=${value("retire:r18LatchNs")} retirePresentNs=${value("retire:r18PresentNs")}/${value("retire:r18PresentState")} drained=${value("OUTPUT_DRAINED")}")
                         append(" fallback=${value("FALLBACK")}/${value("FALLBACK_REASON")} alignUptimeNano=${value("r18AlignUptime")}/${value("r18AlignNano")} alignUncertaintyNs=${value("r18AlignUncertaintyNs")}")
+                        append(" r19Intent=${value("r19Intent")} alloc=${value("R19_ALLOCATED")} firstPositive=${value("r19PositiveRequest")}@${value("R19_FIRST_POSITIVE")} readStart=${value("r19ReadStart")} rootMs=${value("r19RootMs")} flags=${value("r19RootFlags")}/${value("r19ChildFlags")}")
+                        append(" scene=${value("r19SceneRead")}/${value("r19SceneConsume")} freshness=${value("r19Freshness")} proofAccepted=${value("R19_PROOF_ACCEPTED")} proofExpired=${value("R19_PROOF_EXPIRED")} systemExpired=${value("R19_EXPIRED_SYSTEM")} ingressExpired=${value("R19_EXPIRED_INGRESS")} displayExpired=${value("R19_EXPIRED_DISPLAY")} consumed=${value("R19_PROOF_CONSUMED")} consumedReq=${value("r19ConsumedRequest")}")
+                        append(" paint=${value("R19_PAINT_REQUEST")}/${value("R19_PAINT_ENTER")} poster=${value("r19Poster")}@${value("R19_POSTER")} activeStart=${motion?.activeStartedAtUptimeMs ?: "UNOBSERVED"} firstMotion=${motion?.firstDistinctUptimeMs ?: "UNOBSERVED"} activePosts=${motion?.activeSubmissions ?: "UNOBSERVED"} gaps=${motion?.retainedGaps ?: "UNOBSERVED"}/${motion?.p95GapNs ?: "UNOBSERVED"}/${motion?.worstGapNs ?: "UNOBSERVED"}/${motion?.gapsOver50Ms ?: "UNOBSERVED"}")
                         appendLine(" backend=R18_DIRECT_ATTEMPT omittedGenerations=${attempt.r18GenerationOmitted} physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED")
                     }
                     select("a${attempt.id}:r18$index", text, attempt.id)

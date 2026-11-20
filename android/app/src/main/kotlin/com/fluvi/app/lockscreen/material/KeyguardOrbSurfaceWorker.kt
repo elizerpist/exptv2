@@ -18,6 +18,13 @@ import com.fluvi.app.R
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
+/** Immutable identity for the one authorized first FULL write. It carries
+ * no bitmap, accessibility object or financial payload. */
+internal data class KeyguardR19FirstPaintTicket(
+    val attachment: Long, val generation: Long, val requestId: Long,
+    val sceneSerial: Long, val dataRevision: Long, val visualKey: String,
+)
+
 /** A distinct instance is created for each authorized Surface lifetime. */
 internal class KeyguardOrbSurfaceTarget(
     val attachment: Long,
@@ -46,6 +53,7 @@ internal class KeyguardOrbSurfaceTarget(
     val shellAccess = KeyguardOrbSurfaceAccessGate()
     @Volatile var firstPostedVisualKey: String? = null
     @Volatile var firstPostedWasFull = false
+    val firstDirectAuthorization = AtomicReference<KeyguardR19FirstPaintTicket?>()
     // Worker-owned: transparent host submission happens only on create/redraw.
     var shellNeedsClear = true
 }
@@ -162,11 +170,14 @@ internal class KeyguardOrbSurfaceWorker(
      * A created output remains private and has no animation grant. */
     fun prepareHiddenDirect(
         attachment: Long, generation: Long, width: Int, height: Int, densityDpi: Int,
-        profile: KeyguardMaterialProfile, full: Boolean, lane: KeyguardOrbPresentationLane,
+        profile: KeyguardMaterialProfile?, full: Boolean, lane: KeyguardOrbPresentationLane,
         stillCurrent: () -> Boolean, created: (KeyguardOrbSurfaceTarget) -> Unit,
-        failed: (String) -> Unit,
+        failed: (String) -> Unit, emptyAwaitingDisclosure: Boolean = false,
+        reporter: ((KeyguardOrbSurfaceObservation) -> Unit)? = null,
     ) {
-        val safe = (if (full) profile else profile.neutralized()).copyForSurface()
+        require(!emptyAwaitingDisclosure || (full && profile == null))
+        val safe = profile?.let { (if (full) it else it.neutralized()).copyForSurface() }
+        require(emptyAwaitingDisclosure || safe != null)
         val request = preparationGeneration.incrementAndGet()
         handler.post {
             if (disposed || request != preparationGeneration.get() || authorizedTarget.get() != null ||
@@ -176,7 +187,7 @@ internal class KeyguardOrbSurfaceWorker(
             }
             if (output == null) { runCatching { failed("directCapacity") }; return@post }
             val target = KeyguardOrbSurfaceTarget(attachment, generation, null, width, height, densityDpi,
-                full = full, live = true, directOutput = output)
+                full = full, live = true, reporter = reporter, directOutput = output)
             if (disposed || request != preparationGeneration.get() ||
                 !runCatching { stillCurrent() }.getOrDefault(false) || !authorizedTarget.compareAndSet(null, target)) {
                 lane.retire(output)
@@ -197,8 +208,25 @@ internal class KeyguardOrbSurfaceWorker(
                 lane.retire(output)
                 return@post
             }
-            prepareAuthorized(target, safe, request)
+            if (safe != null) prepareAuthorized(target, safe, request)
         }
+    }
+
+    /** One initial paint on the already allocated virgin target. The caller
+     * holds a current complete disclosure proof; this method grants no show. */
+    fun authorizeDirectFirst(target: KeyguardOrbSurfaceTarget, profile: KeyguardMaterialProfile,
+                             ticket: KeyguardR19FirstPaintTicket): Boolean {
+        if (target.directOutput == null || !target.full || target.revoked || ticket.attachment != target.attachment ||
+            ticket.generation != target.generation || ticket.requestId <= 0 || ticket.visualKey != profile.visualKey ||
+            authorizedTarget.get() !== target || !target.firstDirectAuthorization.compareAndSet(null, ticket)) return false
+        val safe = profile.copyForSurface()
+        val request = preparationGeneration.incrementAndGet()
+        val accepted = handler.post {
+            if (!disposed && !target.revoked && currentTarget === target && authorizedTarget.get() === target &&
+                request == preparationGeneration.get() && target.firstDirectAuthorization.get() === ticket)
+                prepareAuthorized(target, safe, request)
+        }
+        return accepted
     }
 
     /** Main has already granted this exact lifetime; the worker still waits
@@ -223,6 +251,7 @@ internal class KeyguardOrbSurfaceWorker(
     }
 
     private fun prepareAuthorized(target: KeyguardOrbSurfaceTarget, safe: KeyguardMaterialProfile, request: Long) {
+            if (target.directOutput != null) observe(target, "R19_PAINT_ENTER", "worker")
             val phase = if (lastPostedVisual == safe.visualKey && lastPostedFull == target.full) {
                 KeyguardMaterialTime(lastPostedElapsed, lastPostedPhase, lastPostedBackground, lastPostedInterior)
             } else initialPhase(safe)
@@ -319,6 +348,7 @@ internal class KeyguardOrbSurfaceWorker(
         handler.postAtFrontOfQueue {
             if (currentTarget !== target || target.revoked || !target.presentationGranted) return@postAtFrontOfQueue
             val scene = currentScene ?: return@postAtFrontOfQueue
+            target.metrics?.beginDirectPresentation(SystemClock.uptimeMillis())
             if (lastPostedVisual == scene.profile.visualKey && lastPostedFull == scene.full) {
                 val phase = KeyguardMaterialTime(lastPostedElapsed, lastPostedPhase, lastPostedBackground, lastPostedInterior)
                 currentScene = scene.anchoredAt(phase, System.nanoTime())

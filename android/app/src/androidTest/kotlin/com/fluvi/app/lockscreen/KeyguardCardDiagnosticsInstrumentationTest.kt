@@ -92,6 +92,61 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertFalse(next.contains("99999"))
     }
 
+    @Test fun r19FirstAndMotionEvidenceSurvivesLightPressure() = r19Evidence("LIGHT")
+    @Test fun r19FirstAndMotionEvidenceSurvivesFullPressure() = r19Evidence("FULL")
+
+    private fun r19Evidence(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r19-$mode", "profile", mode)
+        var firstOwner: KeyguardDiagnosticContext? = null
+        var firstMetrics: KeyguardOrbSurfaceMetrics? = null
+        repeat(4) { wake ->
+            val base = 100_000L * (wake + 1)
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 901, wake + 1L, "wake", base))
+            if (wake == 0) firstOwner = owner
+            val metrics = KeyguardOrbSurfaceMetrics()
+            if (wake == 0) firstMetrics = metrics
+            metrics.record(base - 44_000, (base - 44_000) * 1_000_000, false, 1, 1, 1, 1, 1, 1)
+            metrics.beginDirectPresentation(base + 20)
+            metrics.record(base + 36, (base + 36) * 1_000_000, true, 1, 1, 1, 1, 1, 1)
+            metrics.record(base + 52, (base + 52) * 1_000_000, true, 1, 1, 1, 1, 1, 1)
+            fun edge(phase: String, at: Long, request: Long, extra: Map<String, Any> = emptyMap(),
+                     metric: KeyguardOrbSurfaceMetrics? = null) {
+                KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", phase,
+                    serviceSession = 901, wakeEpoch = wake + 1L, requestId = request,
+                    attachGeneration = wake + 1L, diagnosticContext = owner, observedUptimeMs = at,
+                    surfaceMetrics = metric, fields = mapOf<String, Any>("r18Host" to wake + 1,
+                        "r18Output" to wake + 10, "r18Privacy" to "full", "r19Intent" to "EMPTY") + extra)
+            }
+            edge("WAKE_ADOPTED", base, base + 1)
+            edge("R19_ALLOCATED", base + 1, base + 1)
+            edge("HIDDEN_BOUND", base + 2, base + 1)
+            edge("R19_FIRST_POSITIVE", base + 8, base + 7, mapOf("r18Proof" to base + 7,
+                "r19SceneRead" to 44, "r19Freshness" to 5, "r19ReadStart" to base + 3,
+                "r19RootMs" to 4, "r19RootFlags" to 4, "r19ChildFlags" to 36))
+            edge("R19_PAINT_REQUEST", base + 9, base + 7)
+            edge("R19_PAINT_ENTER", base + 10, base + 7, metric = metrics)
+            edge("R19_POSTER", base + 11, base + 7, mapOf("r19Poster" to "hit"))
+            edge("BUFFER_READY", base + 12, base + 7)
+            edge("R19_PROOF_CONSUMED", base + 13, base + 7, mapOf("r19SceneNow" to 44))
+            edge("GRANT", base + 14, base + 7)
+            edge("SEALED:test", base + 80, base + 8)
+            repeat(60) { index -> KeyguardCardDiagnostics.captureEvent(context, "ACCESSIBILITY_EVENT", "pressure",
+                diagnosticContext = owner, observedUptimeMs = base + 100 + index, fields = mapOf("eventAgeMs" to index)) }
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        val rows = report.lineSequence().filter { it.startsWith(" R18_PIPELINE ") }.toList()
+        assertEquals(4, rows.size)
+        assertTrue(rows.first().contains("firstPositive=100007@100008"))
+        assertTrue(rows.first().contains("scene=44/44 freshness=5"))
+        assertTrue(rows.first().contains("firstMotion=100036 activePosts=2 gaps=1/16000000/16000000/0"))
+        assertFalse(rows.first().contains("44000000000"))
+        firstMetrics?.record(999_999, 999_999_000_000, true, 1, 1, 1, 1, 1, 1)
+        KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "R19_PROOF_CONSUMED", diagnosticContext = firstOwner,
+            fields = mapOf("r18Host" to 1, "r18Output" to 10, "r19SceneNow" to 99999))
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+    }
+
     @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInLight() = r12SurfaceEvidence("LIGHT")
     @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInFull() = r12SurfaceEvidence("FULL")
 

@@ -34,6 +34,11 @@ internal class KeyguardInspectionFreshness {
         return Ticket(current, revision, required)
     }
 
+    /** A matching number alone is insufficient when a required physical
+     * cache boundary has not actually been established. */
+    @Synchronized fun isEstablished(current: KeyguardInspectionAuthority, expectedRevision: Long): Boolean =
+        authority == current && revision == expectedRevision && !required.requiresCacheClear
+
     /** A revision is an ordering token, never a cached surface decision. */
     @Synchronized fun revisionFor(current: KeyguardInspectionAuthority): Long? =
         revision.takeIf { authority == current }

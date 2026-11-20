@@ -8,6 +8,8 @@ internal class KeyguardOrbSurfaceMetrics {
     private var submissions = 0L
     private var firstPost = 0L
     private var firstDistinct = 0L
+    private var activeStartedAt = 0L
+    private var activeSubmissions = 0L
     private var lastPost = 0L
     private var previousPostNs = 0L
     private var gapCount = 0
@@ -74,6 +76,8 @@ internal class KeyguardOrbSurfaceMetrics {
         val maxPostCpuNs: Long,
         val holderOperation: HolderOperation,
         val ownedLayer: OwnedLayer,
+        val activeStartedAtUptimeMs: Long?,
+        val activeSubmissions: Long,
     )
 
     fun beginHolderOperation(at: Long) {
@@ -121,11 +125,27 @@ internal class KeyguardOrbSurfaceMetrics {
             revokeBegin.takeIf { it > 0 }, revokeReturn.takeIf { it > 0 })
     }
 
+    /** Called by the worker after the direct reveal is submitted, before
+     * starting its clock. Prewake poster age is never an active-frame gap. */
+    fun beginDirectPresentation(at: Long) {
+        sequence += 1L
+        activeStartedAt = at
+        activeSubmissions = 0L
+        firstDistinct = 0L
+        previousPostNs = 0L
+        gapCount = 0
+        gapWrites = 0L
+        worstGap = 0L
+        over50 = 0L
+        sequence += 1L
+    }
+
     fun record(postUptimeMs: Long, postNs: Long, distinct: Boolean,
                lockWallNs: Long, drawWallNs: Long, postWallNs: Long,
                lockCpuNs: Long, drawCpuNs: Long, postCpuNs: Long) {
         sequence += 1L
         submissions += 1L
+        if (activeStartedAt > 0L) activeSubmissions += 1L
         if (firstPost == 0L) firstPost = postUptimeMs
         if (distinct && firstDistinct == 0L) firstDistinct = postUptimeMs
         lastPost = postUptimeMs
@@ -159,12 +179,16 @@ internal class KeyguardOrbSurfaceMetrics {
             val values = gaps.copyOf(retained).sortedArray()
             val worst = worstGap.takeIf { retained > 0 }
             val over = over50
+            val activeStart = activeStartedAt.takeIf { it > 0 }
+            val activeCount = activeSubmissions
             val lockWall = maxLockWall; val drawWall = maxDrawWall; val postWall = maxPostWall
             val lockCpu = maxLockCpu; val drawCpu = maxDrawCpu; val postCpu = maxPostCpu
             if (before == sequence) return Snapshot(true, count, first, distinct, last, retained,
                 values.takeIf { it.isNotEmpty() }?.get(((values.size - 1) * .95).toInt()), worst, over,
-                lockWall, drawWall, postWall, lockCpu, drawCpu, postCpu, holderSnapshot(), ownedLayer())
+                lockWall, drawWall, postWall, lockCpu, drawCpu, postCpu, holderSnapshot(), ownedLayer(),
+                activeStart, activeCount)
         }
-        return Snapshot(false, 0, null, null, null, 0, null, null, 0, 0, 0, 0, 0, 0, 0, holderSnapshot(), ownedLayer())
+        return Snapshot(false, 0, null, null, null, 0, null, null, 0, 0, 0, 0, 0, 0, 0,
+            holderSnapshot(), ownedLayer(), null, 0)
     }
 }

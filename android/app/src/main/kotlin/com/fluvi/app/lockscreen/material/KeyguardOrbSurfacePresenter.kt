@@ -29,6 +29,8 @@ internal class KeyguardOrbSurfacePresenter(
     private val onR18Failure: (Long, Long, String, () -> Unit) -> Unit = { _, _, _, done -> done() },
     private val onR18Receipt: (Long, Long, KeyguardOrbPresentationLane.Receipt) -> Unit = { _, _, _ -> },
     private val onR18Drained: (Long, Long, Any) -> Unit = { _, _, _ -> },
+    private val onR18Allocated: (Long, Long, Long) -> Unit = { _, _, _ -> },
+    private val onR19Observation: (KeyguardOrbSurfaceObservation) -> Unit = {},
 ) {
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var direct: KeyguardOrbR18Presenter? = null
@@ -64,20 +66,28 @@ internal class KeyguardOrbSurfacePresenter(
     private fun directOnMain(): KeyguardOrbR18Presenter {
         checkMain()
         return direct ?: KeyguardOrbR18Presenter(worker, isCaptureActive, onR18Prepared,
-            onR18Failure, onR18Receipt, onR18Drained).also { direct = it }
+            onR18Failure, onR18Receipt, onR18Drained, onR18Allocated, onR19Observation).also { direct = it }
     }
 
     fun prepareR18(attachment: Long, generation: Long, profile: KeyguardMaterialProfile,
-                   width: Int, height: Int, full: Boolean = false, authorizedFull: Boolean = false): Boolean {
+                   width: Int, height: Int, full: Boolean = false, authorizedFull: Boolean = false,
+                   emptyAwaitingDisclosure: Boolean = false): Boolean {
         checkMain()
         // A stock child still draining counts against the native bound.
         if (current != null || retiringOutput != null || overflowOutput != null) return false
         directOnMain().prepare(attachment, generation, profile, width, height,
-            context.resources.displayMetrics.densityDpi, full, authorizedFull)
+            context.resources.displayMetrics.densityDpi, full, authorizedFull, emptyAwaitingDisclosure)
         return true
     }
 
     fun r18ReadyAt(attachment: Long, generation: Long): Long? = direct?.readyAt(attachment, generation)
+
+    fun r18AllocatedOutput(attachment: Long, generation: Long, full: Boolean, width: Int, height: Int): Any? =
+        direct?.allocatedOutput(attachment, generation, full, width, height, context.resources.displayMetrics.densityDpi)
+
+    fun authorizeR19First(attachment: Long, generation: Long, profile: KeyguardMaterialProfile,
+                          ticket: KeyguardR19FirstPaintTicket): Boolean =
+        direct?.authorizeFirst(attachment, generation, profile, ticket) == true
 
     fun r18PreparedOutput(attachment: Long, generation: Long, profile: KeyguardMaterialProfile,
                           full: Boolean, width: Int, height: Int): Any? {

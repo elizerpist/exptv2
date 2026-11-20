@@ -30,6 +30,22 @@ class KeyguardOrbSurfaceMetricsTest {
         assertTrue(metrics.snapshot().retainedGaps <= 720)
     }
 
+    @Test fun prewakePosterDoesNotCountAsAnActiveMotionGap() {
+        val metrics = KeyguardOrbSurfaceMetrics()
+        metrics.record(1_000, 1_000_000_000, false, 1, 1, 1, 1, 1, 1)
+        metrics.beginDirectPresentation(45_000)
+        metrics.record(45_016, 45_016_000_000, true, 1, 1, 1, 1, 1, 1)
+        metrics.record(45_032, 45_032_000_000, true, 1, 1, 1, 1, 1, 1)
+        val result = metrics.snapshot()
+        assertEquals(1_000L, result.firstPostUptimeMs)
+        assertEquals(45_000L, result.activeStartedAtUptimeMs)
+        assertEquals(45_016L, result.firstDistinctUptimeMs)
+        assertEquals(2L, result.activeSubmissions)
+        assertEquals(1, result.retainedGaps)
+        assertEquals(16_000_000L, result.worstGapNs)
+        assertEquals(0L, result.gapsOver50Ms)
+    }
+
     @Test fun holderSnapshotSeparatesRevocationFromAnEnteredOperationFinishingLater() {
         val metrics = KeyguardOrbSurfaceMetrics()
         metrics.beginHolderOperation(100)

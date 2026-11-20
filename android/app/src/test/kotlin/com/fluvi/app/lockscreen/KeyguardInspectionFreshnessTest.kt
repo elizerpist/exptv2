@@ -10,6 +10,18 @@ class KeyguardInspectionFreshnessTest {
         owner.attachGeneration, owner.wakeGeneration, queuedAtUptimeMs = id,
     )
 
+    @Test fun `continuation requires the real boundary to be established at its exact revision`() {
+        val freshness = KeyguardInspectionFreshness().also { it.publish(authority) }
+        freshness.require(authority, KeyguardWindowFreshness.LIFECYCLE_BOUNDARY)
+        val ticket = requireNotNull(freshness.beforeRead(request(1)))
+        assertFalse(freshness.isEstablished(authority, ticket.revision))
+        freshness.boundaryEstablished(ticket)
+        assertTrue(freshness.isEstablished(authority, ticket.revision))
+        freshness.require(authority, KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION)
+        assertFalse(freshness.isEstablished(authority, ticket.revision))
+        assertFalse(freshness.isEstablished(authority.copy(attachGeneration = 6), ticket.revision))
+    }
+
     @Test fun `event replacing retry keeps boundary until reader actually clears cache`() {
         val freshness = KeyguardInspectionFreshness().also { it.publish(authority) }
         val queue = KeyguardCardInspectionQueue()
