@@ -137,7 +137,7 @@ def check_specific(row: str, route: str, result: dict, root: Path) -> list[str]:
     errors: list[str] = []
     if result.get("status") != "PASS":
         errors.append("fixture_not_pass")
-    if row.startswith("r14_") and row != "r14_pressure":
+    if row in {"r14_exclusion", "r14_fresh_main", "r14_late_only"}:
         fields = ("a", "a_read_start", "a_decision_at", "previous_hide", "initial_attach", "final_attach")
         if any(not isinstance(result.get(key), int) or result[key] <= 0 for key in fields):
             errors.append("r14_identity_or_timing_missing")
@@ -174,7 +174,8 @@ def check_specific(row: str, route: str, result: dict, root: Path) -> list[str]:
         if not (result.get("real_occluder") is True and result.get("independent_window_identity") is True
                 and result.get("withdrawn_while_locked") is True and result.get("fresh_main_return_once") is True
                 and isinstance(result.get("visual_samples"), list)
-                and len(result["visual_samples"]) >= 2 and all(visual_file(root, s) for s in result["visual_samples"])):
+                and len(result["visual_samples"]) >= 2 and all(isinstance(s, dict) and visual_file(root, s) for s in result["visual_samples"])
+                and len({s.get("sha256") for s in result["visual_samples"]}) >= 2):
             errors.append("real_occlusion_return_not_established")
     if row == "r14_terminal_stale" and not (result.get("pending_stale_work") is True
             and result.get("terminal_state_observed") is True and result.get("late_adds") == 0):

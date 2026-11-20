@@ -4,22 +4,24 @@ import hashlib
 import importlib.util
 import json
 import struct
+import sys
 import tempfile
 import unittest
 import uuid
 import zlib
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("r14", Path(__file__).with_name("keyguard-r14-aggregate.py"))
 r14 = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r14)
 SOURCE = "a" * 40
 
 
-def png(white=False):
+def png(white=False, green=False):
     def chunk(name, payload):
         return struct.pack(">I", len(payload)) + name + payload + struct.pack(">I", zlib.crc32(name + payload) & 0xffffffff)
-    pixels = b"\xff\xff\xff\xff" * 4 if white else b"\xff\x00\x00\xff" * 4
+    pixels = (b"\xff\xff\xff\xff" if white else b"\x00\xff\x00\xff" if green else b"\xff\x00\x00\xff") * 4
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 6, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(b"\0" + pixels[:8] + b"\0" + pixels[8:])) + chunk(b"IEND", b""))
 
@@ -108,6 +110,23 @@ class AggregateControls(unittest.TestCase):
         self.assertTrue(errors)
         self.assertTrue(all("NOT_ESTABLISHED" in line for line in lines))
         self.assertIn("source_invalid", r14.aggregate("bad", self.root)[0])
+
+    def test_independent_occlusion_and_terminal_are_not_admission_a_b_cases(self):
+        samples = []
+        for name, content in (("before.png", png()), ("after.png", png(green=True))):
+            (self.root / name).write_bytes(content)
+            samples.append(dict(path=name, sha256=hashlib.sha256(content).hexdigest()))
+        occlusion = dict(status="PASS", real_occluder=True, independent_window_identity=True,
+                         withdrawn_while_locked=True, fresh_main_return_once=True, visual_samples=samples)
+        self.assertEqual([], r14.check_specific("r14_real_occlusion", "SURFACE_LIVE", occlusion, self.root))
+        self.assertIn("real_occlusion_return_not_established", r14.check_specific(
+            "r14_real_occlusion", "SURFACE_LIVE", occlusion | {"fresh_main_return_once": False}, self.root))
+        self.assertIn("real_occlusion_return_not_established", r14.check_specific(
+            "r14_real_occlusion", "SURFACE_LIVE", occlusion | {"visual_samples": [samples[0], samples[0]]}, self.root))
+        terminal = dict(status="PASS", pending_stale_work=True, terminal_state_observed=True, late_adds=0)
+        self.assertEqual([], r14.check_specific("r14_terminal_stale", "SURFACE_LIVE", terminal, self.root))
+        self.assertIn("terminal_stale_not_established", r14.check_specific(
+            "r14_terminal_stale", "SURFACE_LIVE", terminal | {"late_adds": 1}, self.root))
 
     def test_bad_timestamps_and_run_provenance_fail(self):
         self.write_records(result=self.result | {"b_callback": 100})

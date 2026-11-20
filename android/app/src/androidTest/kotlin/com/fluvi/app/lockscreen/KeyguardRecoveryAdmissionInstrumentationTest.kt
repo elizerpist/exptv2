@@ -51,8 +51,11 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
     @Test fun supersededExternalEventSuppressesOnlyTheRecoveryAdd() = scenario("exclusion", true, false)
     @Test fun freshMainSuccessorRestoresExactlyOnce() = scenario("fresh-main", false, false)
     @Test fun postAttachOnlyExclusionNeverDefersPriorAdmission() = scenario("late-only", true, true)
+    @Test fun temporaryRealOcclusionReturnsToMain() = scenario("real-return", true, true, realReturn = true)
+    @Test fun terminalWithdrawalDiscardsPendingWork() = scenario("terminal-stale", false, false, terminal = true)
 
-    private fun scenario(name: String, exclude: Boolean, lateOnly: Boolean) {
+    private fun scenario(name: String, exclude: Boolean, lateOnly: Boolean,
+        realReturn: Boolean = false, terminal: Boolean = false) {
         assertEquals("fixture needs API35", 35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -92,6 +95,7 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
         val frameworkCopies = java.util.concurrent.atomic.AtomicInteger()
         val withdrawalDone = java.util.concurrent.atomic.AtomicBoolean()
         val ingressByRequest = java.util.concurrent.ConcurrentHashMap<Long, KeyguardAccessibilityEventMeta>()
+        val frameworkRequest = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
         var service: FluviKeyguardCardService? = null
         var captureStarted = false
         var controlledOccluderStarted = false
@@ -117,6 +121,7 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                 previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
                 startsWorker: Boolean, frameworkEvent: Boolean) {
                 ingressByRequest[request.id] = meta
+                frameworkRequest[request.id] = frameworkEvent
                 record("INGRESS_OFFER", "req=${request.id} before=${previous?.id ?: "none"} after=${pending?.id ?: "none"} started=$startsWorker framework=$frameworkEvent systemui=${meta.packageName == "com.android.systemui"} display=${meta.displayId} window=${meta.windowId}")
             }
             override fun ingress(meta: KeyguardAccessibilityEventMeta, receivedAt: Long, action: KeyguardEventAction, frameworkEvent: Boolean) {
@@ -208,6 +213,50 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             }
             synchronizedKey(KeyEvent.KEYCODE_WAKEUP)
             await("initial real LIVE attachment", 20_000) { sample(service!!).let { it.first.attached && it.second.effective == KeyguardOrbRenderMode.SURFACE_LIVE } }
+            if (realReturn) {
+                val initial = sample(checkNotNull(service)).first
+                check(initial.attached && initial.wake != null)
+                await("initial actual Surface producer output", 15_000) {
+                    var count = 0L
+                    instrumentation.runOnMainSync { count = checkNotNull(service).surfaceMetricsForInstrumentation()?.submissions ?: 0L }
+                    count > 0
+                }
+                instrumentation.runOnMainSync { checkNotNull(service).inspectionProbeForTest = probe }
+                controlledOccluderStarted = true
+                establishOccluder("independent")
+                var actualExclusion = 0L
+                await("real framework exclusion and root withdrawal", 12_000) {
+                    actualExclusion = applied.entries.firstOrNull { (id, value) ->
+                        frameworkRequest[id] == true && value == KeyguardCardVisibility.HIDDEN_OCCLUDED
+                    }?.key ?: 0L
+                    actualExclusion > 0 && !sample(checkNotNull(service)).first.attached
+                }
+                val beforeReturn = sample(checkNotNull(service)).first
+                check(beforeReturn.wake == initial.wake) { "actual occlusion unexpectedly ended the wake" }
+                synchronizedKey(KeyEvent.KEYCODE_BACK)
+                await("foreign occluder removed", 5_000) { testOccluderWindowId() == null }
+                controlledOccluderStarted = false
+                var actualReturn = 0L
+                await("fresh real framework MAIN return", 20_000) {
+                    actualReturn = applied.entries.firstOrNull { (id, value) ->
+                        id > actualExclusion && frameworkRequest[id] == true && value == KeyguardCardVisibility.SHOW_FULL
+                    }?.key ?: 0L
+                    actualReturn > 0 && sample(checkNotNull(service)).first.attached
+                }
+                val afterReturn = sample(checkNotNull(service)).first
+                check(afterReturn.wake == initial.wake)
+                check(afterReturn.authority.attachGeneration == initial.authority.attachGeneration + 1)
+                check(countOverlayRoots() == 1)
+                val returned = checkNotNull(automation.takeScreenshot())
+                try {
+                    check(greenPixels(returned) < 16) { "foreign occluder still appears in returned screenshot" }
+                    File(output, "after-real-return.png").outputStream().use {
+                        returned.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                } finally { returned.recycle() }
+                record("REAL_RETURN", "exclusionReq=$actualExclusion returnReq=$actualReturn origin=framework sameWake=${afterReturn.wake} attach=${afterReturn.authority.attachGeneration} screenshot=after-real-return.png visualOrb=UNOBSERVED")
+                return
+            }
             instrumentation.runOnMainSync {
                 val owner = checkNotNull(service)
                 val state = owner.inspectionStateForTest()
@@ -245,6 +294,24 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             }
             check(frameworkEvents.get() > 0) { "no framework ingress mapping observed" }
             check(frameworkCopies.get() > 0) { "no framework metadata copy checked" }
+            if (terminal) {
+                val pendingBefore = checkNotNull(sample(checkNotNull(service)).first.pending) { "no pending request at terminal input" }
+                check(pendingBefore.id == checkNotNull(b.get()).id) { "controlled B is not pending at terminal input" }
+                shell("wm dismiss-keyguard")
+                await("actual unlocked and detached terminal state", 8_000) {
+                    !keyguard.isKeyguardLocked && !sample(checkNotNull(service)).first.attached
+                }
+                val terminalState = sample(checkNotNull(service)).first
+                check(!terminalState.authority.matches(aRequest)) { "terminal state did not revoke A" }
+                releaseWorker.countDown()
+                assertTrue("stale A did not reach the normal Main gate", aApplied.await(15, TimeUnit.SECONDS))
+                failure.get()?.let { throw AssertionError("terminal fixture failure", it) }
+                val afterStale = sample(checkNotNull(service)).first
+                check(!afterStale.attached && countOverlayRoots() == 0 && !afterStale.authority.matches(aRequest))
+                check(afterStale.pending?.id != pendingBefore.id) { "terminal cleanup kept the old pending B" }
+                record("TERMINAL_STALE", "a=${aRequest.id} b=${pendingBefore.id} locked=${keyguard.isKeyguardLocked} roots=0 oldAuthority=false wake=${afterStale.wake ?: "none"} physicalRemoval=UNOBSERVED")
+                return
+            }
             releaseWorker.countDown()
             assertTrue("A Main apply not reached", aApplied.await(15, TimeUnit.SECONDS))
             failure.get()?.let { throw AssertionError("INVALID fixture at A apply", it) }
@@ -252,7 +319,9 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                 check(aAttached.get()) { "late-only A did not attach" }
                 controlledOccluderStarted = true
                 establishOccluder("after-a")
-                instrumentation.runOnMainSync { sendControlled(checkNotNull(service), "C", aStarted.get(), null, c, systemWindowBefore.get()) }
+                instrumentation.runOnMainSync {
+                    sendControlled(checkNotNull(service), "C", aStarted.get(), null, c, systemWindowBefore.get())
+                }
             }
             val actualSuccessor = if (lateOnly || (exclude && aAttached.get())) c.get()
                 else if (aAttached.get()) replacement.get() else b.get()
