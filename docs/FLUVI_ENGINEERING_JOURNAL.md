@@ -12705,6 +12705,89 @@ A scoped product candidate is implemented when the specified real first acquisit
 ````
 FLUVI_R15_ORB_FIRST_ADMISSION_END
 
+### 2026-11-20 — R15 first-acquisition implementation experiment
+
+The phone rejected R14 `b6c71cfc350819e9a10a33e3e4cb6e078a4198d9` for
+latency. The supplied R15 handoff contains the phone's per-wake values; the
+independent raw file for capture `6fdafefb-36de-4b73-b03f-fbcdc634be0f` was
+not available in this workspace. No raw-file hash or physical display timing
+was inferred.
+
+Experimental source `b372a694dbf1e78e90917b73a75990c599ffc68f` implements the
+review-selected one-use root-only initial acquisition for a prepared standalone
+animated LIVE ORB, with the original accepted-child batching and privacy,
+freshness and later-read gates. It also records bounded acquisition, independent
+sampler and holder/revocation evidence. The source was pushed only to the
+separate `fluvi-r15-first-acquisition-b372a694dbf1` ref. API 35
+[run 44728723205](https://github.com/elizerpist/exptv2/actions/runs/44728723205)
+passed 14 cases and failed both four-attempt phone-shaped exports: recovery
+records were omitted even though the reports stayed within 32 KiB. Its raw
+artifacts and failure are preserved in the linked R15 report.
+
+Warm service inspections 41 and 67 used root/accepted-child flags 0/36 and
+took 666/559 ms, of which child acquisition took 557/332 ms. There is no
+matched stock arm or independently classified initial image; these samples
+do not establish an improvement. In the same capture the first holder edge
+for attachment/generation 1/1 and operation 10 was post entry 60170,
+revocation 60191, local hide 60192, post return 60341 and remove return 61173
+(uptime ms). The content and physical last visible pixel remain unobserved.
+This is evidence for the reviewer, not authorization for another holder fix.
+
+Diagnostics-only correction `96cf20d4f64c2e3a06c10507f919dd133033852b`
+reserves compact mandatory evidence ahead of optional detail and binds
+already-completed sampler observations to their capture and authority. It
+does not initiate another system sample or grant visibility. The local full
+app/core JVM suite passed 341 tests and assembled debug and AndroidTest APKs;
+12 targeted Flutter checks passed. The API 35
+[focused run 44731582159](https://github.com/elizerpist/exptv2/actions/runs/44731582159)
+passed all 10 export/pressure cases, including LIGHT and FULL at 31,057 bytes
+with no omitted critical IDs. The earlier failure remains a failure.
+On the same corrected source,
+[R14 controls 44732664214](https://github.com/elizerpist/exptv2/actions/runs/44732664214)
+passed all 12 individual cases. The independent
+[R12 contract 44732734516](https://github.com/elizerpist/exptv2/actions/runs/44732734516)
+passed the real ordered-read case and 12 panel/bitmap/widget/diagnostic
+tests but returned `FAIL_INCOMPLETE` for five missing real-service cases.
+
+The corrected-source graph is in tooling commit
+`6d055ad7bd07ff28058caca65d6e9d69453058ba`, index SHA-256
+`1e02a14d22073b98c559b01d077f9337a3a4390a1acc2c8d869d1c9d1dff4ff6`,
+manifest SHA-256
+`19fafa8cda7be9b896644929b6f802d4085b99d98ab5d2c123307190db7defc2`.
+SCIP covers Dart; Kotlin locations are a separately checked source inventory.
+
+The 28-row aggregate remains `FAIL_INCOMPLETE` without the required
+per-case JSON and compositor/lifecycle specimens. The balanced two-block
+stock/candidate comparison and independent correct/forbidden-pixel controls
+are not established. Per the R15 advance rule the experiment has not been
+promoted, no Human profile APK is delivered, and no installation is requested.
+Physical acceptance is pending and belongs to the user. See
+`docs/R15_FIRST_ACQUISITION_EXPERIMENT_2026-11-20.md` for the raw links,
+separate retained failures, further run results and exact outstanding gates.
+
+An independent test-source successor
+`03677d622f0dd9873b6e1c2d323c3e1f2a7a1b5e` added a debug-only held-Canvas
+barrier. Its profile Kotlin worker has no hook reference in `javap`; this is
+not an APK build. [API 35 run 44736433739](https://github.com/elizerpist/exptv2/actions/runs/44736433739)
+passed its actual service holder-boundary test. Capture
+`e7e4035b-a48c-4934-87d5-00f18e3f743d`, PID 2441, recorded attachment/
+generation 1/1, operation 14: lock 63020, revoke/local hide 64156,
+test release/draw 66077, post return 66079, remove return 67543 (uptime ms).
+The extra wait was deliberately imposed by the test. Raw screen samples and
+crops were retained but lack independent calibration; they are UNCLASSIFIED,
+and no physical or last-visible-pixel conclusion follows. The separate
+collector successor `6d03df62af5c0b02fe86efcf2085c5c7916d1149` adds
+before/after installed APK identity receipts; its route controls are recorded
+separately from the `96cf20d4` application candidate.
+On that test source, LEGACY, STATIC and LIVE runs 44737514537, 44737515067
+and 44737515219 each passed the four-wake timing-only test and matching
+before/after installed app and test APK hashes. Every full route gate returned
+`FAIL_INCOMPLETE` for five missing service compositor, privacy, lifecycle,
+selector and financial-demand controls. STATIC preflight handled and retained
+an observed Launcher3 ANR before testing. The screenshot calls in the held
+fixture took 430–1,069 ms and its samples were not independently calibrated;
+they cannot resolve or qualify the reported first appearance.
+
 ## 2026-11-20 — Reviewer decision after the R15 experiment and the held-Canvas images
 
 The user returned experimental app 96cf20d4 without a qualified APK. The last handset observation remains the Nothing A142 R14 LIGHT session below. The task continues on the R15 experiment. The new evidence changes the interpretation of the disappearance test and identifies why another run of the old LIVE job cannot decide whether to advance R15.
