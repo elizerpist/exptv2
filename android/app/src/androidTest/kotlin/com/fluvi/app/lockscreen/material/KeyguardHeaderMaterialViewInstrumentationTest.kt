@@ -95,11 +95,14 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val content = com.fluvi.app.runtime.FluviLockScreenCardContent("focus", "amount", "detail",
             "event", "label", android.graphics.Color.rgb(210, 72, 43), true)
         var window: KeyguardCardWindow? = null
+        lateinit var manager: TestPanelWindowManager
+        lateinit var target: KeyguardCardWindow
+        lateinit var expectedRoot: View
         try {
             instrumentation.runOnMainSync {
                 activity.setContentView(FrameLayout(activity))
-                val manager = TestPanelWindowManager(activity)
-                val target = KeyguardCardWindow(activity, onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                manager = TestPanelWindowManager(activity)
+                target = KeyguardCardWindow(activity, onOpen = {}, onToggle = {}, onInteractionStarted = {},
                     onPositionCommitted = { _, _, _, _ -> }, onInteractionDiagnostic = { _, _ -> }, manager = manager)
                 window = target
                 target.prepareRetainedView(settings, calibratedOrbProfile())
@@ -108,12 +111,36 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     assertEquals(KeyguardCardWindow.Result.ATTACHED,
                         target.showOrUpdate(FluviFinancialCardPresenter.full(content, false), settings))
                     assertTrue("test requires the real Surface owner", target.surfaceForTest() != null)
-                    assertTrue("test requires an attached retained root", requireNotNull(manager.currentRoot).isAttachedToWindow)
+                    expectedRoot = requireNotNull(manager.currentRoot)
+                    assertEquals(1L, work.constructions)
+                    assertEquals(0L, work.paints)
+                    assertEquals(0L, work.legacyBinds)
+                } finally { com.fluvi.app.runtime.FluviFinancialOrbWork.end(work) }
+            }
+            // addView can return before Android dispatches the real attach and
+            // creates the holder. Keep Main free, then sample one identity on
+            // Main until that same root and Surface are ready and measured.
+            val deadline = SystemClock.uptimeMillis() + 25_000L
+            var ready = false
+            while (!ready && SystemClock.uptimeMillis() < deadline) {
+                instrumentation.runOnMainSync {
+                    val surface = target.surfaceForTest()
+                    ready = manager.currentRoot === expectedRoot && expectedRoot.isAttachedToWindow &&
+                        expectedRoot.width > 0 && expectedRoot.height > 0 && surface != null &&
+                        surface.isAttachedToWindow && surface.width > 0 && surface.height > 0 && surface.holder.surface.isValid
+                }
+                if (!ready) SystemClock.sleep(25)
+            }
+            assertTrue("fixture must reach the same attached, measured root and valid Surface", ready)
+            instrumentation.runOnMainSync {
+                assertTrue("root identity must survive the readiness sample", manager.currentRoot === expectedRoot)
+                val work = com.fluvi.app.runtime.FluviFinancialOrbWork.begin()
+                try {
                     repeat(32) {
                         assertEquals(KeyguardCardWindow.Result.NO_OP,
                             target.showOrUpdate(FluviFinancialCardPresenter.full(content, false), settings))
                     }
-                    assertEquals(33L, work.constructions)
+                    assertEquals(32L, work.constructions)
                     assertEquals(0L, work.paints)
                     assertEquals(0L, work.legacyBinds)
                 } finally { com.fluvi.app.runtime.FluviFinancialOrbWork.end(work) }
