@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(git rev-parse --show-toplevel)
-source_sha=$(git rev-parse HEAD)
-[[ $source_sha == "${GITHUB_SHA:?missing candidate source}" ]]
+harness_sha=$(git rev-parse HEAD)
+[[ $harness_sha == "${GITHUB_SHA:?missing harness source}" ]]
+source_sha=${FLUVI_R14_APP_SOURCE:-$harness_sha}
+if [[ $source_sha != "$harness_sha" ]]; then
+ git merge-base --is-ancestor "$source_sha" "$harness_sha"
+ # A separately identified wiring-only harness may add the stock test Activity.
+ # No other runtime, test, or build change is permitted under the same app SHA.
+ while IFS= read -r path; do
+  case "$path" in
+   .github/workflows/fluvi-core.yml|scripts/test-keyguard-r14-candidate.sh|android/app/src/androidTest/AndroidManifest.xml|android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR14ControlledOccluderActivity.kt) ;;
+   *) printf 'unexpected harness difference: %s\n' "$path" >&2; exit 1 ;;
+  esac
+ done < <(git diff --name-only "$source_sha" "$harness_sha")
+fi
 [[ -z $(git status --porcelain --untracked-files=no) ]]
 requested=${FLUVI_R14_CASE:?missing isolated case}
 evidence="$root/android/keyguard-r14-candidate/$requested"
@@ -30,7 +42,7 @@ test_apk="$root/build/app/outputs/apk/androidTest/debug/app-debug-androidTest.ap
 test -s "$app" && test -s "$test_apk"
 sha256sum "$app" "$test_apk" > "$evidence/apks.sha256"
 {
- printf 'scope=r14-candidate\nsource_sha=%s\ncase=%s\n' "$source_sha" "$requested"
+ printf 'scope=r14-candidate\nsource_sha=%s\nharness_sha=%s\ncase=%s\n' "$source_sha" "$harness_sha" "$requested"
  adb shell getprop ro.build.fingerprint
  adb shell getprop ro.product.cpu.abi
  adb shell getprop ro.build.version.sdk
@@ -62,10 +74,10 @@ if ! timeout -k 2s 60s bash "$root/scripts/prepare-keyguard-lower-environment.sh
  exit 1
 fi
 id=$(cat /proc/sys/kernel/random/uuid)
-printf 'source=%s\nharness=%s\nrun_uuid=%s\nselector=%s\n' "$source_sha" "$source_sha" "$id" "$selector" > "$evidence/identity.txt"
+printf 'source=%s\nharness=%s\nrun_uuid=%s\nselector=%s\n' "$source_sha" "$harness_sha" "$id" "$selector" > "$evidence/identity.txt"
 adb shell am force-stop com.fluvi.app > "$evidence/force-stop.txt" 2>&1 || true
 rc=0
-timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$source_sha" -e harnessSha "$source_sha" \
+timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$source_sha" -e harnessSha "$harness_sha" \
  -e runUuid "$id" -e r12Mode SURFACE_LIVE -e r14Expected candidate -e class "$selector" \
  com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$evidence/instrumentation.txt" 2>&1 || rc=$?
 printf '%s\n' "$rc" > "$evidence/command-exit.txt"

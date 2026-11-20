@@ -174,7 +174,7 @@ jobs:
   # handed to a physical-device tester.
   test-keyguard-material-runtime:
     needs: test-core
-    if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) || needs.test-core.result == 'success') && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && startsWith(github.ref_name, 'fluvi-r14-candidate-contract-')) }}
+    if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) || needs.test-core.result == 'success') && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && (startsWith(github.ref_name, 'fluvi-r14-candidate-contract-') || startsWith(github.ref_name, 'fluvi-r14-wiring-'))) }}
     name: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && 'Keyguard material runtime (DIAGNOSTIC)' || 'Keyguard material runtime' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -360,16 +360,18 @@ jobs:
   # Ordinary r12_contract runs on a different pinned ref remain unchanged.
   r14-candidate-contract:
     needs: test-core
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && startsWith(github.ref_name, 'fluvi-r14-candidate-contract-') }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && (startsWith(github.ref_name, 'fluvi-r14-candidate-contract-') || startsWith(github.ref_name, 'fluvi-r14-wiring-')) }}
     name: R14 candidate ${{ matrix.case }} (API 35)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        case: [exclusion, fresh-main, late-only, real-return, terminal-stale, pressure-light, pressure-full, pressure-combined, paired-light, paired-full, deferred-light, deferred-full]
+        case: ${{ fromJSON(startsWith(github.ref_name, 'fluvi-r14-wiring-') && '["exclusion","fresh-main","late-only","real-return"]' || '["exclusion","fresh-main","late-only","real-return","terminal-stale","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full"]') }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -392,6 +394,7 @@ jobs:
       - name: Run isolated candidate specimen
         env:
           FLUVI_R14_CASE: ${{ matrix.case }}
+          FLUVI_R14_APP_SOURCE: ${{ startsWith(github.ref_name, 'fluvi-r14-wiring-') && 'b6c71cfc350819e9a10a33e3e4cb6e078a4198d9' || github.sha }}
         uses: reactivecircus/android-emulator-runner@v2
         with: *fluvi_keyguard_api35
       - name: Preserve candidate specimen regardless of verdict
