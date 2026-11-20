@@ -1,0 +1,12 @@
+attempt r14_pressure LIGHT
+r14_pressure LIGHT PASS
+attempt r14_pressure FULL
+r14_pressure FULL PASS
+attempt r12_pressure LIGHT_FULL
+r12_pressure LIGHT_FULL PASS
+attempt r12_natural_timing SURFACE_LIVE
+r12_natural_timing SURFACE_LIVE PASS
+attempt r12_natural_timing SURFACE_STATIC
+r12_natural_timing SURFACE_STATIC PASS
+attempt r12_natural_timing LEGACY_R11
+r12_natural_timing LEGACY_R11 PASS

@@ -1,0 +1,7 @@
+# Independent LIVE privacy video frames
+
+These are the 145 unmodified, presentation-order PNG frames decoded from the original 1080x2400 emulator screenrecord MP4 in `r15-run-44757516332.zip`, `android/keyguard-r12-candidate-r12_live/privacy_fixture/recording.mp4` (SHA-256 `147077aac0b8349472ee9465e145ed2f9d6dc343ea04a39c9f54d7dd99732efa`).
+
+The MP4 container has two actual `mett` metadata streams, which ffmpeg 5 left empty. The separate tooling at `4c3cb3e1f3f7547e4c98cd72ddfc6bee78881415` extracts the real ISO-BMFF sample table and checks one-to-one timestamps before decoding. `frame-index.jsonl` retains each full frame's hash and device elapsed time. The source ZIP contains all raw metadata, clock and service logs. The decoder is separate tooling and was not part of application SHA `536987c2345bf0c0cc2cb297b68c7227a0aed3c8`.
+
+Recorded service bounds are x=[456,624), y=[1905,2073). Old generation 1 was revoked at uptime 115533ms; the unchanged colored crop occurs in frames 45,46,47,48,49 (elapsed 115502.118–116092.498ms) and a different gray crop at frame 50 (116312.507ms). Awake uptime/elapsed clock offset was approximately 0–1ms; do not conflate this with physical screen presentation. G1's held operation posted at uptime 115630ms, so frame 46 predates that post. These selected color descriptions are not calibrated FULL/discreet privacy labels. The restricted shade state is not independently established; frames 64,93,136 show the lockscreen. No claim about unsampled instants or a phone result follows.

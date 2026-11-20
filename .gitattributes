@@ -1,3 +1,5 @@
 r15-evidence/*.tar.gz filter=lfs diff=lfs merge=lfs -text
 
 r15-evidence/*.zip filter=lfs diff=lfs merge=lfs -text
+
+r15-evidence/live-privacy-frames-536987c2/frames/*.png filter=lfs diff=lfs merge=lfs -text
