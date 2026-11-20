@@ -1,0 +1,314 @@
+diff --git a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
+index 4e11f5af..6b3ce7f6 100644
+--- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
++++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
+@@ -17,6 +17,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
+ import androidx.test.platform.app.InstrumentationRegistry
+ import com.fluvi.app.R
+ import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
++import com.fluvi.app.lockscreen.material.AndroidKeyguardShaderArtifactReader
++import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
++import com.fluvi.app.lockscreen.material.KeyguardMaterialScene
++import com.fluvi.app.lockscreen.material.KeyguardMaterialTime
++import com.fluvi.app.lockscreen.material.KeyguardMaterialTimeSource
++import com.fluvi.app.lockscreen.material.KeyguardR19FirstPaintTicket
+ import com.fluvi.app.lockscreen.material.KeyguardMaterialTestActivity
+ import com.fluvi.app.lockscreen.material.KeyguardOrbDirectOutput
+ import com.fluvi.app.lockscreen.material.KeyguardOrbSurfacePresenter
+@@ -308,6 +314,225 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
+         }
+     }
+ 
++    /** Real direct child, authorized by the R19 entry point. The reference is
++     * the independently rendered hardware View, sampled before revealing the
++     * child. This is a panel control, not a keyguard-service privacy pass. */
++    @Test fun r20AuthorizedFullFirstMissDrawsCanonicalPhaseOnExistingChild() {
++        assumeTrue(Build.VERSION.SDK_INT == 35)
++        val context = instrumentation.targetContext
++        val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
++            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
++        val runDir = File(context.filesDir, "keyguard-service-probe/r20/first-${SystemClock.elapsedRealtime()}").apply { mkdirs() }
++        val fixture = File(runDir, "fixture.txt")
++        val phaseA = 1.196795f; val phaseC = 1.5234617f; val phaseB = 3.75f
++        val base = r20CalibratedProfile()
++        val selected = base.copy(phase = phaseA, elapsedSeconds = phaseA,
++            background = base.background.copy(phase = phaseA), interior = base.interior.copy(phase = phaseA))
++        val controlled = AtomicReference(KeyguardMaterialTime(phaseA, phaseA, phaseA, phaseA))
++        val allocated = CountDownLatch(1); val hostReady = CountDownLatch(1); val bound = CountDownLatch(1)
++        val firstPosted = CountDownLatch(1); val reveal = CountDownLatch(1); val drained = CountDownLatch(1)
++        val hostView = AtomicReference<View?>(); val error = AtomicReference<String?>()
++        val cleanup = AtomicReference<(() -> Unit)?>(null)
++        val posterCount = AtomicInteger(); val firstDrawCount = AtomicInteger(); val postCount = AtomicInteger()
++        val drawMethod = AtomicReference<String?>(); val childId = AtomicInteger(-1)
++        val firstEntry = AtomicReference<Long>(); val firstPostAt = AtomicReference<Long>()
++        val refs = mutableListOf<Bitmap>()
++        var panel: KeyguardOrbInertHost? = null
++        var presenter: KeyguardOrbSurfacePresenter? = null
++        try {
++            val size = context.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
++            val green = Color.rgb(11, 177, 67)
++            val artifact = AndroidKeyguardShaderArtifactReader.load(context, selected.effectId, selected.usesPortal)
++            lateinit var root: FrameLayout
++            lateinit var reference: KeyguardHeaderMaterialView
++            instrumentation.runOnMainSync {
++                root = FrameLayout(activity).apply { setBackgroundColor(green) }
++                reference = KeyguardHeaderMaterialView(activity,
++                    materialTimeSource = KeyguardMaterialTimeSource { _, _ -> controlled.get() }).apply {
++                    layoutParams = FrameLayout.LayoutParams(size, size).apply { leftMargin = 100; topMargin = 250 }
++                    setScene(KeyguardMaterialScene(selected, true, 0L), enabled = true)
++                    setBootstrapActive(false)
++                    assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED, installPreparedShader(artifact))
++                }
++                root.addView(reference); activity.setContentView(root); reference.frame(System.nanoTime())
++            }
++            assertTrue("canonical View never drew on a hardware canvas", r20Wait(10_000) {
++                instrumentation.runOnMainValue { reference.diagnostics().lastCanvasHardwareAccelerated == true &&
++                    reference.diagnostics().shaderDrawCount > 0 && reference.width == size && reference.height == size }
++            })
++            fun crop(view: View, screen: Bitmap): Bitmap {
++                val loc = IntArray(2)
++                instrumentation.runOnMainSync { view.getLocationOnScreen(loc) }
++                check(loc[0] >= 0 && loc[1] >= 0 && loc[0] + size <= screen.width && loc[1] + size <= screen.height)
++                return Bitmap.createBitmap(screen, loc[0], loc[1], size, size)
++            }
++            fun referenceAt(phase: Float, index: Int, accept: (Bitmap) -> Boolean): Bitmap {
++                val before = instrumentation.runOnMainValue { reference.diagnostics().shaderDrawCount }
++                instrumentation.runOnMainSync {
++                    controlled.set(KeyguardMaterialTime(phase, phase, phase, phase)); reference.frame(System.nanoTime())
++                }
++                assertTrue("canonical phase $index did not draw", r20Wait(8_000) {
++                    instrumentation.runOnMainValue { reference.diagnostics().shaderDrawCount > before }
++                })
++                val screen = awaitScreenshot(8_000) { screenshot ->
++                    val sample = crop(reference, screenshot)
++                    try { accept(sample) } finally { sample.recycle() }
++                }
++                return crop(reference, screen).also { screen.recycle(); it.save(File(runDir, "reference-$index.png")) }
++            }
++            val refA = referenceAt(phaseA, 0) { colorDistance(green, it.getPixel(size / 2, size / 2)) > 45 }
++            refs += refA
++            val refC = referenceAt(phaseC, 1) { r20Compare(refA, it).nearlyEqual() }; refs += refC
++            val refB = referenceAt(phaseB, 2) { r20Compare(refA, it).meaningful() }; refs += refB
++            val refAgain = referenceAt(phaseA, 3) { r20Compare(refA, it).nearlyEqual() }; refs += refAgain
++            assertTrue("A/C plateau not calibrated", r20Compare(refA, refC).nearlyEqual())
++            assertTrue("A/B motion reference not calibrated", r20Compare(refA, refB).meaningful())
++            assertTrue("return-A reference not calibrated", r20Compare(refA, refAgain).nearlyEqual())
++            assertTrue("reference exterior is not the known underlay", colorDistance(green, refA.getPixel(0, 0)) <= 15)
++            assertTrue("reference center is not distinct from black", colorDistance(Color.BLACK, refA.getPixel(size / 2, size / 2)) > 45)
++            val beforeNeutral = instrumentation.runOnMainValue { reference.diagnostics().shaderDrawCount }
++            instrumentation.runOnMainSync {
++                reference.setScene(KeyguardMaterialScene(selected.neutralized(), false, 0L), enabled = true)
++                reference.frame(System.nanoTime())
++            }
++            assertTrue("neutral canonical View did not draw", r20Wait(8_000) {
++                instrumentation.runOnMainValue { reference.diagnostics().shaderDrawCount > beforeNeutral }
++            })
++            val neutralScreen = awaitScreenshot(8_000) { screenshot ->
++                val sample = crop(reference, screenshot)
++                try { r20Compare(refA, sample).meaningful() } finally { sample.recycle() }
++            }
++            val neutral = crop(reference, neutralScreen); neutralScreen.recycle()
++            neutral.save(File(runDir, "reference-neutral.png"))
++            assertTrue("neutral and FULL references were not distinguishable", r20Compare(refA, neutral).meaningful())
++            refs += neutral
++            instrumentation.runOnMainSync { root.removeView(reference) }
++            val underlay = awaitScreenshot(8_000) { colorDistance(green, it.getPixel(100 + size / 2, 250 + size / 2)) <= 15 }
++            val bounds = KeyguardUsableBounds(0, 0, underlay.width, underlay.height)
++            underlay.save(File(runDir, "underlay.png")); underlay.recycle()
++            val geometry = KeyguardOverlayGeometry(size, size, 100, 250, bounds,
++                KeyguardCardCardPosition(.5f), KeyguardCardOrbPosition(.5f, .5f))
++            lateinit var producer: KeyguardOrbSurfacePresenter
++            lateinit var holder: KeyguardOrbInertHost
++            val content = FrameLayout(activity).apply { setBackgroundColor(Color.TRANSPARENT) }
++            KeyguardOrbSurfaceWorkerTestHooks.afterPosterCreated = { target ->
++                if (target.firstDirectAuthorization.get()?.requestId == 201L) posterCount.incrementAndGet()
++            }
++            KeyguardOrbSurfaceWorkerTestHooks.afterFirstFrameDraw = { target, method ->
++                if (target.firstDirectAuthorization.get()?.requestId == 201L) { firstDrawCount.incrementAndGet(); drawMethod.set(method) }
++            }
++            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = { target ->
++                if (target.firstDirectAuthorization.get()?.requestId == 201L) {
++                    if (postCount.incrementAndGet() == 1) firstPostAt.set(SystemClock.uptimeMillis())
++                }
++            }
++            instrumentation.runOnMainSync {
++                holder = KeyguardOrbInertHost(activity, PanelWindowManager(activity),
++                    onReady = { _, view, _ -> hostView.set(view); hostReady.countDown() },
++                    onFailure = { _, reason -> error.set(reason); hostReady.countDown() })
++                panel = holder
++                producer = KeyguardOrbSurfacePresenter(activity, content, onFirstPosted = { _, _ -> },
++                    onFailure = { error.set(it) }, isCaptureActive = { true },
++                    onR18Allocated = { _, _, _ -> allocated.countDown() },
++                    onR18Prepared = { _, _, _ -> firstPosted.countDown() },
++                    onR18Failure = { _, _, reason, done -> error.set(reason); cleanup.set(done); firstPosted.countDown() },
++                    onR18Drained = { _, _, _ -> drained.countDown() },
++                    onR19Observation = { if (it.stage == "R19_PAINT_ENTER") firstEntry.set(it.observedAtUptimeMs) })
++                presenter = producer
++                assertTrue(producer.prepareR18(21, 34, selected, size, size, full = true, emptyAwaitingDisclosure = true))
++                assertTrue(holder.stage(1, geometry))
++            }
++            assertTrue("actual virgin output was not allocated", allocated.await(20, TimeUnit.SECONDS))
++            assertTrue("measured host was not attached", hostReady.await(20, TimeUnit.SECONDS)); assertNull(error.get())
++            val host = checkNotNull(hostView.get())
++            val output = instrumentation.runOnMainValue { producer.r18AllocatedOutput(21, 34, true, size, size) as? KeyguardOrbDirectOutput }
++            assertNotNull("exact child missing", output); childId.set(output!!.childId)
++            instrumentation.runOnMainSync {
++                producer.setMotionAllowed(false)
++                assertNull("blank target cannot be ready", producer.r18PreparedOutput(21, 34, selected, true, size, size))
++                producer.bindR18(host, 21, 34) { if (!it) error.set("bindFailed"); bound.countDown() }
++            }
++            assertTrue("hidden bind failed", bound.await(10, TimeUnit.SECONDS)); assertNull(error.get())
++            val blank = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
++            val blankCrop = crop(host, blank); blank.recycle(); blankCrop.save(File(runDir, "blank.png"))
++            assertTrue("unapproved FULL changed the underlay", colorDistance(green, blankCrop.getPixel(size / 2, size / 2)) <= 15)
++            blankCrop.recycle()
++            val ticket = KeyguardR19FirstPaintTicket(21, 34, 201, 1, 1, selected.visualKey)
++            instrumentation.runOnMainSync { assertTrue("normal R19 authorization rejected", producer.authorizeR19First(21, 34, selected, ticket)) }
++            assertTrue("actual first post did not complete", firstPosted.await(20, TimeUnit.SECONDS)); assertNull(error.get())
++            assertSame("first post must retain the allocated child", output,
++                instrumentation.runOnMainValue { producer.r18PreparedOutput(21, 34, selected, true, size, size) })
++            instrumentation.runOnMainSync {
++                assertTrue("input panel was not armed", holder.promote(1, content, geometry))
++                producer.revealR18(21, 34, crossGrantBoundary = { true }) { if (!it) error.set("revealFailed"); reveal.countDown() }
++            }
++            assertTrue("real reveal did not complete", reveal.await(10, TimeUnit.SECONDS)); assertNull(error.get())
++            var samples = 0
++            val liveScreen = awaitScreenshot(10_000) { screenshot ->
++                val sample = crop(host, screenshot)
++                try {
++                    if (samples++ < 8) sample.save(File(runDir, "first-sample-${samples}.png"))
++                    r20Compare(refA, sample).nearlyEqual()
++                } finally { sample.recycle() }
++            }
++            val live = crop(host, liveScreen); liveScreen.recycle(); live.save(File(runDir, "first-live.png"))
++            assertTrue("first image differs from independent canonical phase", r20Compare(refA, live).nearlyEqual())
++            assertTrue("first exterior changed from underlay", colorDistance(green, live.getPixel(0, 0)) <= 15)
++            assertTrue("first center matches neutral background", colorDistance(green, live.getPixel(size / 2, size / 2)) > 45)
++            assertTrue("first edge differs from reference", colorDistance(refA.getPixel(size / 2, 1), live.getPixel(size / 2, 1)) <= 15)
++            instrumentation.runOnMainSync { producer.setMotionAllowed(true) }
++            val motionScreen = awaitScreenshot(10_000) { screenshot ->
++                val sample = crop(host, screenshot)
++                try { r20Compare(refA, sample).meaningful() } finally { sample.recycle() }
++            }
++            val moving = crop(host, motionScreen); motionScreen.recycle(); moving.save(File(runDir, "first-motion.png")); moving.recycle()
++            fixture.writeText("ticket=201 attachment=21 generation=34 child=${childId.get()} firstEntry=${firstEntry.get()} firstPost=${firstPostAt.get()} posterCreated=${posterCount.get()} firstDraw=${drawMethod.get()} firstDrawCount=${firstDrawCount.get()} posts=${postCount.get()} samples=$samples\n")
++            assertEquals("ticketed first miss must make no intermediate bitmap", 0, posterCount.get())
++            assertEquals("the actual first draw must use direct miss", "DIRECT_MISS", drawMethod.get())
++            assertEquals("ticket must draw its first frame exactly once", 1, firstDrawCount.get())
++            assertTrue("animated target did not produce later posts", postCount.get() > 1)
++            live.recycle()
++            producer.sealR18(21, 34)
++            assertTrue("actual direct child did not drain", drained.await(10, TimeUnit.SECONDS))
++        } finally {
++            KeyguardOrbSurfaceWorkerTestHooks.afterPosterCreated = null
++            KeyguardOrbSurfaceWorkerTestHooks.afterFirstFrameDraw = null
++            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = null
++            refs.forEach(Bitmap::recycle)
++            instrumentation.runOnMainSync { panel?.remove(1); cleanup.getAndSet(null)?.invoke(); presenter?.dispose(); activity.finish() }
++        }
++    }
++
++    private data class R20PixelComparison(val changed: Int, val total: Long, val max: Int) {
++        fun nearlyEqual() = max <= 2 && total <= 2_048L
++        fun meaningful() = changed >= 64 && total >= 2_048L
++    }
++    private fun r20Compare(a: Bitmap, b: Bitmap): R20PixelComparison {
++        require(a.width == b.width && a.height == b.height)
++        var changed = 0; var total = 0L; var maximum = 0
++        for (y in 0 until a.height) for (x in 0 until a.width) {
++            val dx = x + .5f - a.width / 2f; val dy = y + .5f - a.height / 2f
++            if (dx * dx + dy * dy >= a.width * a.width * .1764f) continue
++            val left = a.getPixel(x, y); val right = b.getPixel(x, y)
++            val delta = maxOf(kotlin.math.abs(Color.red(left) - Color.red(right)),
++                kotlin.math.abs(Color.green(left) - Color.green(right)), kotlin.math.abs(Color.blue(left) - Color.blue(right)))
++            if (delta >= 7) changed += 1
++            total += delta; maximum = maxOf(maximum, delta)
++        }
++        return R20PixelComparison(changed, total, maximum)
++    }
++    private fun r20Wait(timeoutMs: Long, predicate: () -> Boolean): Boolean {
++        val deadline = SystemClock.uptimeMillis() + timeoutMs
++        while (SystemClock.uptimeMillis() < deadline) { if (predicate()) return true; SystemClock.sleep(25) }
++        return false
++    }
++    private fun r20CalibratedProfile(): KeyguardMaterialProfile {
++        val base = profile()
++        return base.copy(background = base.background.copy(enabled = true, phaseSpeed = .2f,
++            settings = FloatArray(12) { .2f }), interior = base.interior.copy(phaseSpeed = .2f,
++            settings = FloatArray(12) { .2f }))
++    }
++
+     private class PanelWindowManager(private val activity: KeyguardMaterialTestActivity) :
+         WindowManager by activity.getSystemService(WindowManager::class.java) {
+         private val delegate = activity.getSystemService(WindowManager::class.java)
+diff --git a/android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt b/android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+index 4c3be5e5..3f153dd3 100644
+--- a/android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
++++ b/android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+@@ -6,6 +6,10 @@ internal object KeyguardOrbSurfaceWorkerTestHooks {
+     const val ENABLED = true
+     @Volatile var afterCanvasLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     @Volatile var afterCanvasPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
++    @Volatile var afterPosterCreated: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
++    @Volatile var afterFirstFrameDraw: ((KeyguardOrbSurfaceTarget, String) -> Unit)? = null
++    @Volatile var beforeFirstLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
++    @Volatile var beforeFirstPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     @Volatile var holderBoundary: ((KeyguardOrbSurfaceTarget, String, Long) -> Unit)? = null
+     private val nextRedraw = java.util.concurrent.atomic.AtomicLong()
+     fun redrawCompletion(target: KeyguardOrbSurfaceTarget, finished: Runnable): KeyguardOrbSurfaceRedrawCompletion {
+diff --git a/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorker.kt b/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorker.kt
+index c0ccbbb3..27555132 100644
+--- a/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorker.kt
++++ b/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorker.kt
+@@ -457,6 +457,11 @@ internal class KeyguardOrbSurfaceWorker(
+         val scene = KeyguardMaterialScene(profile, full, System.nanoTime()).anchoredAt(phase, System.nanoTime())
+         val painter = KeyguardOrbSurfacePainter(context, profile, width, height)
+         val poster = Poster(key, painter.makePoster(phase), painter, scene, phase)
++        if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
++            authorizedTarget.get()?.let { current ->
++                runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterPosterCreated?.invoke(current) }
++            }
++        }
+         if (!valid()) {
+             poster.bitmap.recycle()
+             throw StalePreparation()
+@@ -584,6 +589,9 @@ internal class KeyguardOrbSurfaceWorker(
+                 previousForFrame?.drawPrepared(canvas)
+                 painter.drawPrepared(canvas)
+             }
++            if (first && KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
++                runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterFirstFrameDraw?.invoke(target, "BITMAP") }
++            }
+             if (measure) { drawEnd = System.nanoTime(); cpuDrawEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderDrawReturned(SystemClock.uptimeMillis()) }
+             val submitted = canvas
+             canvas = null
+diff --git a/android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt b/android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+index eabe356d..21b24f96 100644
+--- a/android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
++++ b/android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+@@ -5,6 +5,10 @@ internal object KeyguardOrbSurfaceWorkerTestHooks {
+     const val ENABLED = false
+     val afterCanvasLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     val afterCanvasPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
++    val afterPosterCreated: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
++    val afterFirstFrameDraw: ((KeyguardOrbSurfaceTarget, String) -> Unit)? = null
++    val beforeFirstLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
++    val beforeFirstPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     val holderBoundary: ((KeyguardOrbSurfaceTarget, String, Long) -> Unit)? = null
+     fun redrawCompletion(target: KeyguardOrbSurfaceTarget, finished: Runnable) =
+         KeyguardOrbSurfaceRedrawCompletion { finished.run() }
+diff --git a/android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt b/android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+index 9a251934..7ddccd54 100644
+--- a/android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
++++ b/android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+@@ -5,6 +5,10 @@ internal object KeyguardOrbSurfaceWorkerTestHooks {
+     const val ENABLED = false
+     val afterCanvasLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     val afterCanvasPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
++    val afterPosterCreated: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
++    val afterFirstFrameDraw: ((KeyguardOrbSurfaceTarget, String) -> Unit)? = null
++    val beforeFirstLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
++    val beforeFirstPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     val holderBoundary: ((KeyguardOrbSurfaceTarget, String, Long) -> Unit)? = null
+     fun redrawCompletion(target: KeyguardOrbSurfaceTarget, finished: Runnable) =
+         KeyguardOrbSurfaceRedrawCompletion { finished.run() }

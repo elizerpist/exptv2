@@ -1,4 +1,4 @@
-name: R19 API35 service and panel qualification (orchestration only)
+name: R20 stock first FULL frame witness (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -23,9 +23,7 @@ jobs:
       matrix:
         include:
           - arm: stock
-            source: 8a7186a4144822a25970079f3a2a374bddcfc737
-          - arm: candidate
-            source: 64bf4f7042a77216fb5eddcaeecc85d5bb153aca
+            source: bc41ec11b293923f664b50cd79ed36b5f6fad53b
     runs-on: ubuntu-latest
     timeout-minutes: 70
     env:
@@ -75,12 +73,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          fixture=android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
-          if [[ "$ARM" == stock ]]; then cp "$GITHUB_WORKSPACE/harness/scripts/KeyguardFirstAuthorizedOrbInstrumentationTest.kt" "$fixture"; else cmp "$fixture" "$GITHUB_WORKSPACE/harness/scripts/KeyguardFirstAuthorizedOrbInstrumentationTest.kt"; fi
+          git apply --check "$GITHUB_WORKSPACE/harness/scripts/r20-stock-probes.patch"
+          git apply "$GITHUB_WORKSPACE/harness/scripts/r20-stock-probes.patch"
           python3 "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py"
           git status --short > "$RUNNER_TEMP/r19-api35/fixture-modified-files.txt"
           git diff > "$RUNNER_TEMP/r19-api35/fixture.patch"
-          sha256sum "$fixture" "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r20-stock-probes.patch" "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
       - name: Assemble app and instrumentation APKs
         run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
       - name: Enable KVM
@@ -105,7 +103,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r19-api35-${{ matrix.arm }}-${{ github.run_id }}
+          name: r20-stock-first-frame-${{ matrix.arm }}-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r19-api35/**
             app/build/app/reports/tests/**

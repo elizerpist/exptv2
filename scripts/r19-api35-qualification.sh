@@ -35,12 +35,31 @@ for method in stableInitialFullUsesOneVirginOutputWithoutReadinessRead externalI
   cat "$out/$method.txt"
   if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then failed=1; fi
 done
+# One controlled actual first-FULL panel block. A stock structural failure
+# counts as RED only if the exact child and composed image were reached.
+adb shell am force-stop com.fluvi.app || true
+adb logcat -c || true
+run=$(python3 -c 'import uuid; print(uuid.uuid4())')
+printf '%s\n' "$run" > "$out/r20-first-uuid.txt"
+rc=0
+timeout -k 5s 240s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class 'com.fluvi.app.lockscreen.KeyguardOrbPresentationPipelineInstrumentationTest#r20AuthorizedFullFirstMissDrawsCanonicalPhaseOnExistingChild' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r20-first-panel.txt" 2>&1 || rc=$?
+printf '%s\n' "$rc" > "$out/r20-first-panel.exit"
+adb logcat -b all -d -v monotonic > "$out/r20-first-panel-logcat.txt" 2>&1 || true
+adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-service-probe/r20 > "$out/r20-first-panel-evidence.tar" 2> "$out/r20-first-panel-evidence.stderr" || true
+cat "$out/r20-first-panel.txt"
+if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r20-first-panel.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r20-first-panel.txt"; then failed=1; fi
+adb shell am force-stop com.fluvi.app || true
+rc=0
+timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e class 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r20-canonical.txt" 2>&1 || rc=$?
+printf '%s\n' "$rc" > "$out/r20-canonical.exit"
+cat "$out/r20-canonical.txt"
+if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r20-canonical.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r20-canonical.txt"; then failed=1; fi
 # The calibrated panel and capture-pressure controls are independent of the
 # service-route specimen. Retain their result even if a service case failed.
 adb shell am force-stop com.fluvi.app || true
 adb logcat -c || true
 rc=0
-timeout -k 5s 420s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e class com.fluvi.app.lockscreen.KeyguardOrbPresentationPipelineInstrumentationTest,com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/panel-and-diagnostics.txt" 2>&1 || rc=$?
+timeout -k 5s 420s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e class com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/panel-and-diagnostics.txt" 2>&1 || rc=$?
 printf '%s\n' "$rc" > "$out/panel-and-diagnostics.exit"
 adb logcat -b all -d -v monotonic > "$out/panel-logcat.txt" 2>&1 || true
 adb shell dumpsys window > "$out/window-after.txt" 2>&1 || true
