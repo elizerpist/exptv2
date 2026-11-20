@@ -2052,6 +2052,20 @@ internal object KeyguardCardDiagnostics {
             bytes += size
             return true
         }
+        // Reserve a readable, owner-qualified core for every selected show
+        // and hide before optional long renderer histories can consume space.
+        // Round-robin across attempts keeps a busy wake from starving others.
+        val episodeCores = attemptsForCausalEvidence.associateWith(::compactEpisodeRecords)
+        repeat(episodeCores.values.maxOfOrNull { it.size } ?: 0) { index ->
+            attemptsForCausalEvidence.forEach { attempt ->
+                episodeCores.getValue(attempt).getOrNull(index)?.let { (id, text) -> select(id, text, attempt.id) }
+            }
+        }
+        attemptsForCausalEvidence.forEach { attempt ->
+            select("a${attempt.id}:summary", attemptSummary(attempt), attempt.id)
+        }
+        val optionalDetails = mutableListOf<Pair<String, String>>()
+        fun deferDetail(id: String, text: String) { optionalDetails += "$id:detail" to text }
         // Reserve compact owner-qualified records before admitting verbose
         // inspection histories. Their actual UTF-8 size counts against the
         // same export limit as every other record.
@@ -2079,12 +2093,6 @@ internal object KeyguardCardDiagnostics {
             val first = attempt.shows.firstOrNull()
             val cold = first?.renderSummary
             val offer = first?.r11Evidence ?: emptyMap()
-            val surfaceShows = attempt.shows.filter { it.r12Evidence.isNotEmpty() }
-            val prioritizedSurfaces = listOfNotNull(surfaceShows.firstOrNull(), surfaceShows.lastOrNull(),
-                surfaceShows.maxByOrNull { it.r12MetricSnapshot?.worstGapNs ?: Long.MIN_VALUE }).distinctBy { it.operationId }
-            prioritizedSurfaces.forEach { episode ->
-                select("a${attempt.id}:r12Surface${episode.operationId}", r12SurfaceRecord(attempt, episode), attempt.id)
-            }
             val surfaceRoute = first?.r12Evidence?.get("route")?.startsWith("SURFACE_") == true
             fun v(key: String) = offer[key] ?: "UNOBSERVED"
             val offerAt = offer["offer"]?.toLongOrNull()
@@ -2100,7 +2108,7 @@ internal object KeyguardCardDiagnostics {
             val steadyAt = offer["steady"]?.toLongOrNull()
             val directToSteady = if (applyAt != null && steadyAt != null && steadyAt >= applyAt)
                 steadyAt - applyAt else null
-            if (!surfaceRoute) select("a${attempt.id}:r11First", buildString {
+            if (!surfaceRoute) deferDetail("a${attempt.id}:r11First", buildString {
                 append(" R11_FIRST attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"}")
                 append(" lease=${first?.r11Lease ?: "UNOBSERVED"} renderer=${v("renderer")} child=${v("child")} grantId=${v("grantId")}")
                 append(" first=${v("slot")}/${v("use")} ready=${v("ready")} offer=${v("offer")} grant=${v("grant")} nudge=${v("nudge")}")
@@ -2111,10 +2119,10 @@ internal object KeyguardCardDiagnostics {
                 append(" shader1=${v("shader1Hit")}/${v("shader1Constructed")}/${v("shader1WallNs")}/${v("shader1CpuNs")}")
                 append(" disposition=${v("disposition")}/${v("dispositionAt")}/${v("dispositionReason")} pendingOmitted=${attempt.pendingR11Omitted}")
                 appendLine()
-            }, attempt.id)
+            })
             if (surfaceRoute) {
-                select("a${attempt.id}:compact", " R12_WINDOW attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"} attach=${first?.attachGeneration ?: "UNOBSERVED"} req=${first?.requestId ?: "UNOBSERVED"} configured=${first?.r12Configured ?: "UNOBSERVED"} privacy=${first?.r12Privacy ?: "UNOBSERVED"} displayHz=${first?.r12DisplayHz ?: "UNOBSERVED"} decision=${first?.decisionAtUptimeMs ?: "UNOBSERVED"} add=${first?.addBeginAtUptimeMs ?: "UNOBSERVED"}/${first?.addReturnAtUptimeMs ?: "UNOBSERVED"} layout=${first?.r10LayoutAt ?: "UNOBSERVED"} root=${first?.firstRootDrawAtUptimeMs ?: "UNOBSERVED"}\n", attempt.id)
-            } else select("a${attempt.id}:compact", buildString {
+                deferDetail("a${attempt.id}:compact", " R12_WINDOW attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"} attach=${first?.attachGeneration ?: "UNOBSERVED"} req=${first?.requestId ?: "UNOBSERVED"} configured=${first?.r12Configured ?: "UNOBSERVED"} privacy=${first?.r12Privacy ?: "UNOBSERVED"} displayHz=${first?.r12DisplayHz ?: "UNOBSERVED"} decision=${first?.decisionAtUptimeMs ?: "UNOBSERVED"} add=${first?.addBeginAtUptimeMs ?: "UNOBSERVED"}/${first?.addReturnAtUptimeMs ?: "UNOBSERVED"} layout=${first?.r10LayoutAt ?: "UNOBSERVED"} root=${first?.firstRootDrawAtUptimeMs ?: "UNOBSERVED"}\n")
+            } else deferDetail("a${attempt.id}:compact", buildString {
                 append(" R10_COMPACT attempt=${attempt.id} showOp=${first?.operationId ?: "UNOBSERVED"}")
                 append(" attach=${first?.attachGeneration ?: "UNOBSERVED"} req=${first?.requestId ?: "UNOBSERVED"}")
                 append(" decision=${first?.decisionAtUptimeMs ?: "UNOBSERVED"} add=${first?.addBeginAtUptimeMs ?: "UNOBSERVED"}/${first?.addReturnAtUptimeMs ?: "UNOBSERVED"}")
@@ -2126,17 +2134,14 @@ internal object KeyguardCardDiagnostics {
                     append(" $key=${cold?.get(key) ?: "UNOBSERVED"}")
                 }
                 appendLine()
-            }, attempt.id)
+            })
             attempt.hides.forEach { hide ->
                 val route = attempt.shows.firstOrNull { it.attachGeneration == hide.attachGeneration }
                     ?.renderSummary?.get("r08Route") ?: "UNOBSERVED"
-                select("a${attempt.id}:financialHide${hide.operationId}", financialHideRecord(attempt, hide), attempt.id)
-                select("a${attempt.id}:compactHide${hide.operationId}",
-                    " R10_COMPACT_HIDE attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} attachedBefore=${hide.attachedBefore ?: "UNOBSERVED"} event=${hide.cause?.eventTimeUptimeMs ?: "UNOBSERVED"} callback=${hide.triggerReceivedAtUptimeMs ?: "UNOBSERVED"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "UNOBSERVED"} layer=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeReturnAtUptimeMs ?: "UNOBSERVED"} route=$route\n", attempt.id)
+                deferDetail("a${attempt.id}:financialHide${hide.operationId}", financialHideRecord(attempt, hide))
+                deferDetail("a${attempt.id}:compactHide${hide.operationId}",
+                    " R10_COMPACT_HIDE attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} attachedBefore=${hide.attachedBefore ?: "UNOBSERVED"} event=${hide.cause?.eventTimeUptimeMs ?: "UNOBSERVED"} callback=${hide.triggerReceivedAtUptimeMs ?: "UNOBSERVED"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "UNOBSERVED"} layer=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeReturnAtUptimeMs ?: "UNOBSERVED"} route=$route\n")
             }
-        }
-        attemptsForCausalEvidence.forEach { attempt ->
-            select("a${attempt.id}:summary", attemptSummary(attempt), attempt.id)
         }
         // Preserve the largest measured detailed gap first, then one worst
         // gap from each remaining attachment before lesser samples. Parsing
@@ -2166,10 +2171,23 @@ internal object KeyguardCardDiagnostics {
         // The global measured maximum remains independently readable even if
         // its verbose show block cannot fit.
         rankedGapBlocks.firstOrNull()?.firstOrNull()?.let { select(it.id, it.text) }
+        // Keep one worst sample from every observed attachment before optional
+        // expansion; later samples remain whole-record optional evidence.
+        rankedGapBlocks.forEach { records ->
+            records.firstOrNull()?.takeIf { it.id !in selected }?.let { select(it.id, it.text) }
+        }
+        optionalDetails.forEach { (id, text) -> select(id, text) }
         val episodeBlocks = attemptsForCausalEvidence.associateWith(::episodeRecords)
         repeat(episodeBlocks.values.maxOfOrNull { it.size } ?: 0) { index ->
             attemptsForCausalEvidence.forEach { attempt ->
-                episodeBlocks.getValue(attempt).getOrNull(index)?.let { (id, text) -> select(id, text, attempt.id) }
+                episodeBlocks.getValue(attempt).getOrNull(index)?.let { (id, text) ->
+                    val core = selected[id] ?: return@let
+                    val difference = text.toByteArray(Charsets.UTF_8).size - core.toByteArray(Charsets.UTF_8).size
+                    if (difference <= 0 || KeyguardExportBudget.canAppend(bytes, difference, contentLimit)) {
+                        selected[id] = text
+                        bytes += difference
+                    } else omittedRecords += "$id:detail"
+                }
             }
         }
         repeat(rankedGapBlocks.maxOfOrNull { it.size } ?: 0) { sampleIndex ->
@@ -2198,7 +2216,7 @@ internal object KeyguardCardDiagnostics {
             appendLine("omittedAttemptIds=${omittedAttempts.joinToString(",").ifBlank { "none" }}")
             appendLine("omittedSeqs=${compactSequenceRanges(omittedEvents.map { it.seq }.sorted(), 384)}")
             appendLine("omittedEvidenceRecords=${omittedRecords.size}")
-            val criticalOmissions = omittedRecords.filterNot { it.endsWith(":raw") || it.endsWith(":spineRows") || ":drawGap:" in it }
+            val criticalOmissions = omittedRecords.filterNot { it.endsWith(":raw") || it.endsWith(":spineRows") || it.endsWith(":detail") || ":drawGap:" in it }
             val omittedGaps = omittedRecords.filter { ":drawGap:" in it }
             appendLine("omittedCriticalRecordIds=${compactRecordIds(criticalOmissions, 384)}")
             appendLine("drawGapEvidenceExported=${selected.keys.count { ":drawGap:" in it }} drawGapEvidenceOmitted=${omittedGaps.size}")
@@ -2290,6 +2308,58 @@ internal object KeyguardCardDiagnostics {
         appendLine(" slowCalls=${cause.slowWindowCalls ?: "NA"} rejected=${cause.rejectionReason ?: "NA"} followup=${cause.followupAction ?: "NA"}")
     }
 
+    private fun compactInspectionCause(label: String, cause: InspectionTimeline?): String = buildString {
+        append(" $label req=${cause?.requestId ?: "NA"}")
+        if (cause == null) { appendLine(" evidence=MISSING_REQUEST"); return@buildString }
+        append(" trigger=${cause.trigger ?: "NA"} callbackReceived=${cause.triggerReceivedUptimeMs ?: "NA(missingTrigger)"} eventTime=${cause.eventTimeUptimeMs ?: "NA(sourceUnavailable)"}")
+        append(" queued=${cause.queuedAtUptimeMs ?: "NA"} started=${cause.startedAtUptimeMs ?: "NA"} finished=${cause.finishedAtUptimeMs ?: "NA"}")
+        append(" authorityAtStart=${cause.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${cause.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${cause.visibilityEpochAtApply ?: "NA"} pendingAtApply=${cause.pendingRequestIdAtApply ?: "NA"}")
+        append(" classification=${cause.surfaceClassification ?: "NA"} reason=${cause.surfaceReason ?: "NA"} markers=${cause.surfaceMarkers ?: "NA"}")
+        append(" rootUnavailable=${cause.rootUnavailable ?: "NA"} walkTruncated=${cause.walkTruncated ?: "NA"} truncationReasons=${cause.walkTruncationReasons ?: "UNOBSERVED"}")
+        appendLine(" freshness=${cause.freshnessPolicy ?: "NA"} cacheClear=${cause.cacheClearResult ?: "NA"} rejected=${cause.rejectionReason ?: "NA"} followup=${cause.followupAction ?: "NA"}")
+    }
+
+    private fun compactHideRecord(hide: HideEpisode): String =
+        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} layerSubmit=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${hide.isolatedLayerTransactionApplied ?: "NA"} layerApplyReturn=${hide.isolatedLayerApplyReturnedAtUptimeMs ?: "UNOBSERVED"} layerCommit=${hide.isolatedLayerCommitReceivedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
+
+    private val compactRenderKeys = setOf(
+        "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
+        "isolatedCompletionGapMaxMs", "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit",
+        "r09FirstWork", "r09FirstFrames", "r08Route", "r08Origin",
+        "shaderFrames", "shaderCalls", "phaseAdvances", "drawGapCount", "drawGapTotalMs", "drawGapMaxMs",
+        "clockRunning", "liveState", "drawEvidenceMode", "drawEvidenceOmitted", "drawObservedFrames",
+        "drawObserverNs", "drawGapCaptureOmitted",
+    )
+
+    /** Required core belongs to exactly this operation; missing data stays
+     * missing. Long histories are only an optional same-owner expansion. */
+    private fun compactEpisodeRecords(attempt: TimingAttempt): List<Pair<String, String>> {
+        val first = firstPresentation(attempt)
+        val pairedHides = mutableSetOf<Long>()
+        val records = attempt.shows.map { episode ->
+            val withdrawal = actualWithdrawal(attempt, episode)
+            withdrawal?.let { pairedHides += it.operationId }
+            "a${attempt.id}:show${episode.operationId}" to buildString {
+                appendLine(" EPISODE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "NA"} req=${episode.requestId ?: "NA"} decision=${episode.decisionAtUptimeMs} add=${episode.addBeginAtUptimeMs ?: "NA"}/${episode.addReturnAtUptimeMs ?: "NA"} root=${episode.firstRootDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} shader=${episode.firstShaderDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} currentMaterial=${episode.firstCurrentMaterialDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} live=${episode.firstLiveDrawAtUptimeMs ?: "NO_DRAW_OBSERVED"} bootstrapDrawAt=${episode.bootstrapDrawAtUptimeMs ?: "NO_BOOTSTRAP_DRAW_OBSERVED"} bootstrapCommit=${episode.bootstrapCommitCallbackAtUptimeMs ?: "UNOBSERVED"} promoted=${episode.livePromotedAtUptimeMs ?: "UNOBSERVED"} frameCommit=${episode.frameCommitCallbackAtUptimeMs ?: "UNOBSERVED"} withdrawal=${withdrawal?.operationId ?: "NA"} localHide=${withdrawal?.localHideAppliedAtUptimeMs ?: "NA"} layerHideSubmit=${withdrawal?.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${withdrawal?.isolatedLayerTransactionApplied ?: "NA"} removeReturn=${withdrawal?.removeReturnAtUptimeMs ?: "NA"}")
+                append(compactInspectionCause(if (episode == first) "SHOWING_INSPECTION" else "SHOW_CAUSE", episode.cause))
+                if (withdrawal != null) {
+                    append(compactHideRecord(withdrawal))
+                    append(compactInspectionCause(if (episode == first) "ACTUAL_WITHDRAWAL_INSPECTION" else "WITHDRAWAL_CAUSE", withdrawal.cause))
+                }
+                append(" RENDER attach=${episode.attachGeneration ?: "NA"} showOp=${episode.operationId}")
+                if (episode.renderSummary.isEmpty()) append(" evidence=UNOBSERVED")
+                else episode.renderSummary.filterKeys { it in compactRenderKeys }.forEach { (key, value) -> append(" $key=$value") }
+                appendLine()
+                if (episode.r12Evidence.isNotEmpty()) append(r12SurfaceRecord(attempt, episode))
+            }
+        }.toMutableList()
+        attempt.hides.filter { it.operationId !in pairedHides }.forEach { hide ->
+            records += "a${attempt.id}:hide${hide.operationId}" to
+                (compactHideRecord(hide) + compactInspectionCause("HIDE_CAUSE", hide.cause))
+        }
+        return records
+    }
+
     private fun episodeRecords(attempt: TimingAttempt): List<Pair<String, String>> {
         val first = firstPresentation(attempt)
         val pairedHides = mutableSetOf<Long>()
@@ -2307,6 +2377,7 @@ internal object KeyguardCardDiagnostics {
                 if (episode.renderSummary.isEmpty()) append(" evidence=UNOBSERVED")
                 else episode.renderSummary.filterKeys { it !in DRAW_GAP_KEYS }.forEach { (key, value) -> append(" $key=$value") }
                 appendLine()
+                if (episode.r12Evidence.isNotEmpty()) append(r12SurfaceRecord(attempt, episode))
             }
         }.toMutableList()
         attempt.hides.filter { it.operationId !in pairedHides }.forEach { hide ->
