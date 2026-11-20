@@ -587,12 +587,28 @@ class FluviKeyguardCardService : AccessibilityService() {
             packageName = event.packageName?.toString(),
             eventTimeUptimeMs = event.eventTime,
         )
+        acceptAccessibilityMetadata(meta, callbackReceivedAt, frameworkEvent = true)
+    }
+
+    /** A controlled fixture enters through the same metadata adapter as the
+     * real framework callback. It never supplies a classification/decision. */
+    internal fun acceptAccessibilityMetadataForTest(meta: KeyguardAccessibilityEventMeta) {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        acceptAccessibilityMetadata(meta, SystemClock.uptimeMillis(), frameworkEvent = false)
+    }
+
+    private fun acceptAccessibilityMetadata(
+        meta: KeyguardAccessibilityEventMeta,
+        callbackReceivedAt: Long,
+        frameworkEvent: Boolean,
+    ) {
         if (!KeyguardCardEventGate.isSurfaceEvent(meta.eventType)) return
         val eventAge = meta.eventTimeUptimeMs
             ?.takeIf { it in 1..callbackReceivedAt }
             ?.let { callbackReceivedAt - it }
         val own = ::overlay.isInitialized && overlay.isOwnAccessibilityWindow(meta.windowId, meta.displayId)
         val action = KeyguardCardEventGate.decide(meta, own)
+        inspectionProbeForTest?.ingress(meta, callbackReceivedAt, action, frameworkEvent)
         if (KeyguardCardDiagnostics.wantsEvent("ACCESSIBILITY_EVENT")) traceKeyguard(
             "ACCESSIBILITY_EVENT",
             if (action == KeyguardEventAction.IGNORE_OWN) "ownIgnored" else "surface",
@@ -1129,7 +1145,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                     "authorityCurrentAtStart" to authorityIsCurrent(request)))
             inspectSurface(request)
         } finally { activeInspectionCount.decrementAndGet() }
-        return CompletedInspection(request, result, started, SystemClock.uptimeMillis())
+        val finished = SystemClock.uptimeMillis()
+        inspectionProbeForTest?.readCompleted(request, result.decision, result.surfaceReason,
+            result.rootUnavailable, result.walkTruncated, result.abortedStale, started, finished)
+        return CompletedInspection(request, result, started, finished)
     }
 
     private fun newInspectionHandoff(): InspectionHandoff {
