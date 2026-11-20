@@ -700,51 +700,112 @@ class KeyguardCardDiagnosticsInstrumentationTest {
 
     @Test fun r14PairedEpisodesWithFinancialPressureLight() = pairedEpisodesWithFinancialPressure("LIGHT")
     @Test fun r14PairedEpisodesWithFinancialPressureFull() = pairedEpisodesWithFinancialPressure("FULL")
+    @Test fun r14DeferredRecoveryWithoutShowLight() = deferredRecoveryWithoutShow("LIGHT")
+    @Test fun r14DeferredRecoveryWithoutShowFull() = deferredRecoveryWithoutShow("FULL")
+
+    private fun deferredRecoveryWithoutShow(mode: String) {
+        KeyguardCardDiagnostics.clearCapture(context)
+        val source = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("sourceSha") ?: "r14-deferred"
+        KeyguardCardDiagnostics.startCapture(context, source, "profile", mode)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 917, 2, "wake", 100))
+        val hide = KeyguardCardDiagnostics.newHideOperation(owner, 4, 10, 110)
+        KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "previous", operation = hide, observedUptimeMs = 111)
+        KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "previous", operation = hide,
+            observedUptimeMs = 112, fields = mapOf("attachedBefore" to true))
+        val base = mapOf("r14Recovery" to 7, "r14PreviousHide" to hide.hideOperationId,
+            "r14PreviousAttach" to 4, "r14Authority" to "917/2/3/4/4", "r14DeferredA" to 20,
+            "r14OriginalB" to 21, "r14Pending" to 21, "r14Ingress" to 8,
+            "r14Origin" to "systemUi", "r14Event" to 130, "r14Callback" to 131,
+            "r14ReadStart" to 120, "r14ReadEnd" to 125, "r14Physical" to "UNOBSERVED")
+        KeyguardCardDiagnostics.captureEvent(context, "R14_RECOVERY", "DEFERRED", requestId = 20,
+            diagnosticContext = owner, observedUptimeMs = 135, fields = base)
+        KeyguardCardDiagnostics.captureEvent(context, "R14_RECOVERY", "REPLACED", requestId = 22,
+            diagnosticContext = owner, observedUptimeMs = 136, fields = base + mapOf("r14Pending" to 22, "r14Displaced" to 21))
+        KeyguardCardDiagnostics.captureEvent(context, "R14_RECOVERY", "REPLACED", requestId = 23,
+            diagnosticContext = owner, observedUptimeMs = 137, fields = base + mapOf("r14Pending" to 23, "r14Displaced" to 22))
+        repeat(1_200) { index ->
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure", requestId = 100L + index,
+                diagnosticContext = owner, observedUptimeMs = 200L + index)
+            if (index % 100 == 99) KeyguardCardDiagnostics.captureSnapshot(context)
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("runUuid")?.let { runId ->
+            val directory = java.io.File(context.filesDir, "keyguard-service-probe/r14/$runId/deferred-pressure")
+            check(directory.mkdirs() || directory.isDirectory)
+            java.io.File(directory, "$mode-report.txt").writeText(report)
+        }
+        val bytes = report.toByteArray(Charsets.UTF_8).size
+        assertTrue(bytes <= 32_768 && report.contains("exportBytes=$bytes\n"))
+        assertTrue(report.contains("omittedCriticalRecordIds=none"))
+        assertTrue(report.contains("phase=DEFERRED r14Recovery=7 r14PreviousHide=${hide.hideOperationId}"))
+        assertTrue(report.contains("r14DeferredA=20") && report.contains("r14OriginalB=21"))
+        val replacements = report.lineSequence().filter { it.startsWith(" R14_RECOVERY ") && it.contains("phase=REPLACED") }.toList()
+        assertTrue(replacements.any { it.contains("r14Pending=22") && it.contains("r14Displaced=21") })
+        assertTrue(replacements.any { it.contains("r14Pending=23") && it.contains("r14Displaced=22") })
+        assertEquals(0, report.lineSequence().count { it.startsWith(" EPISODE ") })
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+        KeyguardCardDiagnostics.clearCapture(context)
+        KeyguardCardDiagnostics.startCapture(context, "$source-rotated", "profile", mode)
+        KeyguardCardDiagnostics.beginLockAttempt(context, 917, 3, "wake", 3_000)
+        KeyguardCardDiagnostics.captureEvent(context, "R14_RECOVERY", "stale", diagnosticContext = owner, fields = base)
+        val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertFalse(next.contains("r14Recovery=7"))
+    }
 
     private fun pairedEpisodesWithFinancialPressure(mode: String) {
         val source = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("sourceSha") ?: "r14-paired"
         KeyguardCardDiagnostics.startCapture(context, source, "profile", mode)
-        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 814, 2, "wake", 1_000))
-        val shows = mutableListOf<KeyguardDiagnosticOperation>()
-        val hides = mutableListOf<KeyguardDiagnosticOperation>()
-        repeat(2) { index ->
-            val attachment = index + 1L
-            val at = 1_100L + index * 400
-            val show = KeyguardCardDiagnostics.newShowOperation(owner, attachment, 40L + index)
-            shows += show
-            fun emit(stage: String, whenMs: Long, operation: KeyguardDiagnosticOperation, fields: Map<String, Any?> = emptyMap()) =
-                KeyguardCardDiagnostics.captureEvent(context, stage, "paired", operation = operation,
-                    observedUptimeMs = whenMs, fields = fields)
-            emit("SHOW_FOR_ATTACH", at, show)
-            emit("ADD_VIEW_RETURN", at + 1, show)
-            val metrics = KeyguardOrbSurfaceMetrics()
-            if (index == 0) repeat(4) { frame ->
-                val time = at + 10 + frame * 16
-                metrics.record(time, time * 1_000_000, frame > 0, 1, 2, 3, 4, 5, 6)
+        val allShows = mutableListOf<KeyguardDiagnosticOperation>()
+        val allHides = mutableListOf<KeyguardDiagnosticOperation>()
+        repeat(2) { wake ->
+            val base = 1_000L + wake * 10_000L
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 814, wake + 2L, "wake", base))
+            repeat(2) { index ->
+                val attachment = wake * 2L + index + 1L
+                val at = base + 100 + index * 400
+                val showRequest = base + 40 + index
+                val show = KeyguardCardDiagnostics.newShowOperation(owner, attachment, showRequest)
+                allShows += show
+                fun emit(stage: String, whenMs: Long, operation: KeyguardDiagnosticOperation, fields: Map<String, Any?> = emptyMap()) =
+                    KeyguardCardDiagnostics.captureEvent(context, stage, "paired", operation = operation,
+                        observedUptimeMs = whenMs, fields = fields)
+                KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_FINISHED", "MAIN_CONFIRMED", requestId = showRequest,
+                    diagnosticContext = owner, observedUptimeMs = at - 1, fields = readerFields(main = true))
+                emit("SHOW_FOR_ATTACH", at, show)
+                emit("ADD_VIEW_RETURN", at + 1, show)
+                val metrics = KeyguardOrbSurfaceMetrics()
+                if (index == 0) repeat(4) { frame ->
+                    val time = at + 10 + frame * 16
+                    metrics.record(time, time * 1_000_000, frame > 0, 1, 2, 3, 4, 5, 6)
+                }
+                KeyguardCardDiagnostics.captureEvent(context, "R12_SURFACE", "ROUTE_SELECTED", operation = show,
+                    observedUptimeMs = at + 2, fields = mapOf("r12Generation" to attachment, "r12Detail" to "SURFACE_LIVE"), surfaceMetrics = metrics)
+                val hideRequest = base + 60 + index
+                KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_FINISHED", "FOREIGN_ABOVE", requestId = hideRequest,
+                    diagnosticContext = owner, observedUptimeMs = at + 99, fields = readerFields())
+                val hide = KeyguardCardDiagnostics.newHideOperation(owner, attachment, hideRequest, at + 100)
+                allHides += hide
+                emit("HIDE_DECIDED", at + 101, hide)
+                emit("LOCAL_HIDE_BEGIN", at + 102, hide, mapOf("attachedBefore" to true))
+                emit("LOCAL_HIDE_APPLIED", at + 103, hide)
+                emit("REMOVE_VIEW_RETURN", at + 104, hide)
             }
-            KeyguardCardDiagnostics.captureEvent(context, "R12_SURFACE", "ROUTE_SELECTED", operation = show,
-                observedUptimeMs = at + 2, fields = mapOf("r12Generation" to attachment, "r12Detail" to "SURFACE_LIVE"), surfaceMetrics = metrics)
-            val hide = KeyguardCardDiagnostics.newHideOperation(owner, attachment, 60L + index, at + 100)
-            hides += hide
-            emit("HIDE_DECIDED", at + 101, hide)
-            emit("LOCAL_HIDE_BEGIN", at + 102, hide, mapOf("attachedBefore" to true))
-            emit("LOCAL_HIDE_APPLIED", at + 103, hide)
-            emit("REMOVE_VIEW_RETURN", at + 104, hide)
-        }
-        val cleanup = KeyguardCardDiagnostics.newHideOperation(owner, 2L, null, 1_999L)
-        hides += cleanup
-        KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "cleanup", operation = cleanup, observedUptimeMs = 2_000)
-        KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "cleanup", operation = cleanup,
-            observedUptimeMs = 2_001, fields = mapOf("attachedBefore" to false))
-        repeat(40) { index ->
-            val at = 2_100L + index
-            KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "scoped", requestId = 100L + index,
-                attachGeneration = 2, diagnosticContext = owner, observedUptimeMs = at + 1,
-                fields = mapOf("r13Start" to at, "r13End" to at + 1, "r13WallNs" to 10,
-                    "r13CpuNs" to 5, "r13Construct" to 1, "r13Demand" to 0, "r13Paint" to 0,
-                    "r13PaintDone" to 0, "r13Bind" to 0, "r13Returned" to true, "r13Noop" to true,
-                    "r13Success" to true, "r13Route" to 0))
-            if (index % 10 == 0) KeyguardCardDiagnostics.captureSnapshot(context)
+            val cleanup = KeyguardCardDiagnostics.newHideOperation(owner, wake * 2L + 2L, null, base + 999)
+            allHides += cleanup
+            KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "cleanup", operation = cleanup, observedUptimeMs = base + 1_000)
+            KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "cleanup", operation = cleanup,
+                observedUptimeMs = base + 1_001, fields = mapOf("attachedBefore" to false))
+            repeat(40) { index ->
+                val at = base + 1_100 + index
+                KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "scoped", requestId = base + 100 + index,
+                    attachGeneration = wake * 2L + 2L, diagnosticContext = owner, observedUptimeMs = at + 1,
+                    fields = mapOf("r13Start" to at, "r13End" to at + 1, "r13WallNs" to 10,
+                        "r13CpuNs" to 5, "r13Construct" to 1, "r13Demand" to 0, "r13Paint" to 0,
+                        "r13PaintDone" to 0, "r13Bind" to 0, "r13PaintWallNs" to 0, "r13PaintCpuNs" to 0,
+                        "r13PaintMaxWallNs" to 0, "r13PaintMaxCpuNs" to 0, "r13Returned" to true, "r13Noop" to true,
+                        "r13Success" to true, "r13Route" to 0))
+                if (index % 10 == 0) KeyguardCardDiagnostics.captureSnapshot(context)
+            }
         }
         val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
         val bytes = report.toByteArray(Charsets.UTF_8).size
@@ -755,22 +816,25 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         }
         assertTrue(bytes <= 32_768 && report.contains("exportBytes=$bytes\n"))
         assertTrue(report.contains("omittedCriticalRecordIds=none"))
-        assertEquals(2, report.lineSequence().count { it.startsWith(" EPISODE ") })
+        assertEquals(4, report.lineSequence().count { it.startsWith(" EPISODE ") })
         val withdrawals = report.lineSequence().filter { it.startsWith(" WITHDRAWAL ") }.toList()
-        assertEquals(3, withdrawals.size)
-        for (hide in hides) assertEquals(1, withdrawals.count { it.contains("hideOp=${hide.hideOperationId} ") })
+        assertEquals(6, withdrawals.size)
+        for (hide in allHides) assertEquals(1, withdrawals.count { it.contains("hideOp=${hide.hideOperationId} ") })
         val cadence = report.lineSequence().filter { it.startsWith(" R12_CADENCE ") }.toList()
-        assertTrue(cadence.any { it.contains("showOp=${shows[0].showOperationId} ") && it.contains("submissions=4 ") })
-        assertTrue(cadence.any { it.contains("showOp=${shows[1].showOperationId} ") && it.contains("submissions=0 ") })
-        assertTrue(report.contains("R13_FINANCIAL attempt=1 coverage=keyguardScopesOnly scopes=40"))
+        allShows.forEachIndexed { index, show ->
+            assertTrue(cadence.any { it.contains("showOp=${show.showOperationId} ") && it.contains("submissions=${if (index % 2 == 0) 4 else 0} ") })
+        }
+        for (attempt in 1..2) assertTrue(report.contains("R13_FINANCIAL attempt=$attempt coverage=keyguardScopesOnly scopes=40 invalid=0"))
+        for (show in allShows) assertTrue(report.lineSequence().any { (it.startsWith(" SHOWING_INSPECTION ") || it.startsWith(" SHOW_CAUSE ")) && it.contains("req=${show.causingInspectionRequestId} ") })
+        for (hide in allHides.filter { it.causingInspectionRequestId != null }) assertTrue(report.lineSequence().any { (it.startsWith(" ACTUAL_WITHDRAWAL_INSPECTION ") || it.startsWith(" WITHDRAWAL_CAUSE ")) && it.contains("req=${hide.causingInspectionRequestId} ") })
         assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
         KeyguardCardDiagnostics.clearCapture(context)
-        KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "off", operation = shows[0], fields = mapOf("r13Start" to 9999))
+        KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "off", operation = allShows[0], fields = mapOf("r13Start" to 9999))
         KeyguardCardDiagnostics.startCapture(context, "$source-rotated", "profile", mode)
-        KeyguardCardDiagnostics.beginLockAttempt(context, 815, 3, "wake", 3_000)
-        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "stale", operation = shows[0], observedUptimeMs = 9_999)
+        KeyguardCardDiagnostics.beginLockAttempt(context, 815, 3, "wake", 30_000)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "stale", operation = allShows[0], observedUptimeMs = 99_999)
         val rotated = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
-        assertFalse(rotated.contains("decision=9999"))
+        assertFalse(rotated.contains("decision=99999"))
     }
 
     private fun pressureRetainsEverySelectedEpisode(mode: String) {

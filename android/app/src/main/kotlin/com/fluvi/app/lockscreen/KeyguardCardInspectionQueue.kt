@@ -19,6 +19,8 @@ internal data class KeyguardCardInspectionRequest(
      * relabelled with the wake/attempt that happens to be current later. */
     val diagnosticContext: KeyguardDiagnosticContext? = null,
     val triggerReceivedUptimeMs: Long? = null,
+    /** Original scalar ingress identity; copies retain it across reacquisition. */
+    val r14Ingress: KeyguardR14Ingress? = null,
 ) {
     /** Carry an unserved event, never an acquired answer, across a local
      * withdrawal in the SAME service/wake. The new request must reacquire
@@ -69,7 +71,27 @@ internal data class KeyguardInspectionAuthority(
 internal interface KeyguardInspectionProbeForTest {
     fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> = actual
     fun started(request: KeyguardCardInspectionRequest) {}
+    /** The physical read has completed; this callback runs on the reader,
+     * before its Main handoff. A test may hold this worker without blocking
+     * the event-ingress thread. The classifier and authority are unchanged. */
+    fun readCompleted(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
+        reason: KeyguardSurfaceReason, rootUnavailable: Boolean, walkTruncated: Boolean,
+        abortedStale: Boolean, startedAt: Long, finishedAt: Long) {}
+    fun ingress(meta: KeyguardAccessibilityEventMeta, receivedAt: Long,
+        action: KeyguardEventAction, frameworkEvent: Boolean) {}
+    fun frameworkCopy(meta: KeyguardAccessibilityEventMeta, type: Int, window: Int, display: Int,
+        changes: Int, packageName: String?, eventTime: Long) {}
+    fun ingressOffered(meta: KeyguardAccessibilityEventMeta, request: KeyguardCardInspectionRequest,
+        previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
+        startsWorker: Boolean, frameworkEvent: Boolean) {}
+    fun queueOffered(request: KeyguardCardInspectionRequest, previous: KeyguardCardInspectionRequest?,
+        pending: KeyguardCardInspectionRequest?, startsWorker: Boolean) {}
     fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
+    fun beforeDecision(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
+        pending: KeyguardCardInspectionRequest?, authority: KeyguardInspectionAuthority) {}
+    fun readAheadDecision(request: KeyguardCardInspectionRequest, pendingId: Long?, reservedId: Long?,
+        reason: String, snapshot: KeyguardReadAheadSnapshot?, currentFreshnessRevision: Long?,
+        outstandingFreshness: KeyguardWindowFreshness?, negativeFreshnessRevision: Long?) {}
     fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
 }
 

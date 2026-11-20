@@ -141,6 +141,8 @@ internal class KeyguardCardWindow(
     val isDragActive: Boolean get() = root?.isDragging == true
     val hasPreparedRoot: Boolean get() = root != null
     val currentAttachGeneration: Long get() = attachGeneration
+    fun visibleRootForReadmission(): Boolean = lifecycle.isAttached() && root?.visibility == View.VISIBLE
+    fun currentPresentationFull(): Boolean? = appliedPresentation?.full
     fun attachmentRenderSummary() = materialController?.attachmentRenderSummary()
     fun displayRefreshRate(): Float? = root?.display?.refreshRate
 
@@ -151,14 +153,26 @@ internal class KeyguardCardWindow(
         attachedSelection = attachedConfiguredMode,
     )
 
-    private fun usesSurface(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?,
-                            selection: KeyguardOrbRenderMode): Boolean =
+    private fun surfaceConfigurationEligible(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?,
+                                             selection: KeyguardOrbRenderMode): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
             settings.presentationMode == KeyguardCardPresentationMode.ORB &&
             settings.animationMode == KeyguardCardAnimationMode.ORB_ONLY &&
-            profile?.animated == true && selection != KeyguardOrbRenderMode.LEGACY_R11 &&
+            profile?.animated == true && selection != KeyguardOrbRenderMode.LEGACY_R11
+
+    private fun usesSurface(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?,
+                            selection: KeyguardOrbRenderMode): Boolean =
+        surfaceConfigurationEligible(settings, profile, selection) &&
             android.provider.Settings.Global.getFloat(serviceContext.contentResolver,
                 android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+
+    /** Reuse the actual route rule; the previous effective route is captured
+     * separately while the old root still owns its presentation. */
+    fun eligibleLiveReadmission(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?): Boolean {
+        val selection = KeyguardOrbRenderModeStore.read(serviceContext)
+        return selection == KeyguardOrbRenderMode.SURFACE_LIVE &&
+            surfaceConfigurationEligible(settings, profile, selection) && android.animation.ValueAnimator.areAnimatorsEnabled()
+    }
 
     private fun selectRenderRoute(current: KeyguardCardInteractionLayout, settings: KeyguardCardSettings,
                                   selection: KeyguardOrbRenderMode): Boolean {
@@ -452,11 +466,13 @@ internal class KeyguardCardWindow(
              onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null): Boolean {
         checkMainThread()
         val current = root ?: return false
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REVOKE, attachment = attachGeneration)
         // Revoke the worker first, then change the root's visibility before
         // any child-destruction callback can wait for an entered holder call.
         surfacePresenter?.revokeCurrent(hideChild = false)
         if (lifecycle.isAttached()) {
             current.visibility = View.INVISIBLE
+            KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.INVISIBLE, attachment = attachGeneration)
             reportWindowDiagnostic("LOCAL_HIDE_APPLIED", "invisible", attachGeneration)
         }
         coldRootObservation?.cancel()
@@ -473,7 +489,9 @@ internal class KeyguardCardWindow(
         materialController?.stop("hide", onIsolatedLayerHideCommitted, onRetirementEvent)
         if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
         reportWindowDiagnostic("REMOVE_VIEW_BEGIN", "windowManager", attachGeneration)
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REMOVE_BEGIN, attachment = attachGeneration)
         val removed = runCatching { manager.removeViewImmediate(current) }
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REMOVE_RETURN, attachment = attachGeneration, extra = if (removed.isSuccess) 1 else 0)
         val stillAttached = current.isAttachedToWindow
         if (removed.isSuccess || !stillAttached) {
             lifecycle.onDetached()

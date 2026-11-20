@@ -174,7 +174,7 @@ jobs:
   # handed to a physical-device tester.
   test-keyguard-material-runtime:
     needs: test-core
-    if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) || needs.test-core.result == 'success') }}
+    if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) || needs.test-core.result == 'success') && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && startsWith(github.ref_name, 'fluvi-r14-candidate-contract-')) }}
     name: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && 'Keyguard material runtime (DIAGNOSTIC)' || 'Keyguard material runtime' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -273,7 +273,7 @@ jobs:
           python3 scripts/test-keyguard-r12-harness.py
 
       - name: Enable KVM for material runtime
-        run: |
+        run: &fluvi_enable_kvm |
           test -e /dev/kvm
           sudo chmod 0666 /dev/kvm
           test -r /dev/kvm
@@ -284,7 +284,7 @@ jobs:
           FLUVI_KEYGUARD_EXECUTION_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && 'diagnostic' || 'normal' }}
           FLUVI_R09_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope || 'full' }}
         uses: reactivecircus/android-emulator-runner@v2
-        with:
+        with: &fluvi_keyguard_api35
           api-level: 35
           emulator-build: 15081367
           target: default
@@ -293,7 +293,7 @@ jobs:
           cores: 4
           ram-size: 2048M
           disable-animations: false
-          emulator-options: >-
+          emulator-options: &fluvi_keyguard_api35_options >-
             -no-window -gpu swangle -feature -Vulkan -accel on
             -no-snapshot -noaudio -no-boot-anim -camera-back none
             -partition-size 4096
@@ -303,7 +303,7 @@ jobs:
           # /usr/bin/sh. Keep this as one POSIX command so its conditional and
           # aggregate status are owned by one shell invocation.
           script: >-
-            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_contract ] && [ -f scripts/r14-export-pressure ] && [ "${GITHUB_REF_NAME#fluvi-r14-export-pressure-}" != "$GITHUB_REF_NAME" ]; then bash scripts/test-keyguard-r14-export.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_admission_baseline ]; then FLUVI_R12_APP_DIR="$PWD/r12-stock" bash scripts/test-keyguard-r12-admission-baseline.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r12_contract ] || [ "$FLUVI_R09_SCOPE" = r12_legacy ] || [ "$FLUVI_R09_SCOPE" = r12_static ] || [ "$FLUVI_R09_SCOPE" = r12_live ]; }; then if [ "$FLUVI_R09_SCOPE" = r12_contract ]; then FLUVI_R12_EXPECTED_APP_SHA="$GITHUB_SHA" bash scripts/test-keyguard-r12-admission-candidate.sh || test_result=$?; fi; FLUVI_R12_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r12-candidate.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
+            if [ -n "${FLUVI_R14_CASE:-}" ]; then bash scripts/test-keyguard-r14-candidate.sh; else test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_contract ] && [ -f scripts/r14-export-pressure ] && [ "${GITHUB_REF_NAME#fluvi-r14-export-pressure-}" != "$GITHUB_REF_NAME" ]; then bash scripts/test-keyguard-r14-export.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_admission_baseline ]; then FLUVI_R12_APP_DIR="$PWD/r12-stock" bash scripts/test-keyguard-r12-admission-baseline.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r12_contract ] || [ "$FLUVI_R09_SCOPE" = r12_legacy ] || [ "$FLUVI_R09_SCOPE" = r12_static ] || [ "$FLUVI_R09_SCOPE" = r12_live ]; }; then if [ "$FLUVI_R09_SCOPE" = r12_contract ]; then FLUVI_R12_EXPECTED_APP_SHA="$GITHUB_SHA" bash scripts/test-keyguard-r12-admission-candidate.sh || test_result=$?; fi; FLUVI_R12_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r12-candidate.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"; fi
 
       - name: Analyze bounded production overlay trace
         if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && hashFiles('android/keyguard-service-evidence/fluvi-keyguard-service.perfetto-trace') != '' }}
@@ -351,6 +351,56 @@ jobs:
             android/keyguard-material-smoke.tar
             android/keyguard-material-smoke-pull.log
             android/keyguard-lower-environment/**
+            build/app/reports/androidTests/connected/**
+            build/app/outputs/androidTest-results/connected/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Each controlled candidate specimen has its own disposable emulator.
+  # Ordinary r12_contract runs on a different pinned ref remain unchanged.
+  r14-candidate-contract:
+    needs: test-core
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && startsWith(github.ref_name, 'fluvi-r14-candidate-contract-') }}
+    name: R14 candidate ${{ matrix.case }} (API 35)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [exclusion, fresh-main, late-only, real-return, terminal-stale, pressure-light, pressure-full, pressure-combined, paired-light, paired-full, deferred-light, deferred-full]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: ./.github/actions/setup-fluvi-flutter
+      - name: Check candidate collector and fail-closed oracles
+        run: |
+          bash -n scripts/test-keyguard-r14-candidate.sh
+          python3 scripts/test-r14-stock-oracle.py
+          python3 scripts/test-r14-candidate-oracle.py
+          python3 scripts/test-keyguard-r14-aggregate.py
+          python3 scripts/test-keyguard-r12-harness.py
+          python3 scripts/test-keyguard-r12-candidate-oracle.py
+          bash scripts/test-keyguard-lower-environment.sh
+      - name: Prepare VM acceleration
+        run: *fluvi_enable_kvm
+      - name: Run isolated candidate specimen
+        env:
+          FLUVI_R14_CASE: ${{ matrix.case }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with: *fluvi_keyguard_api35
+      - name: Preserve candidate specimen regardless of verdict
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyguard-r14-candidate-${{ matrix.case }}-${{ github.sha }}-run-${{ github.run_id }}
+          path: |
+            android/keyguard-r14-candidate/**
             build/app/reports/androidTests/connected/**
             build/app/outputs/androidTest-results/connected/**
           if-no-files-found: warn

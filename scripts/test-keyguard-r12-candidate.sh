@@ -61,6 +61,7 @@ run_test() {
   local label=$1 method=$2 run_id=$3 test_mode=$4
   local dir="$evidence/$label" rc=0
   mkdir -p "$dir"
+  printf 'source=%s\nrun_uuid=%s\nselector=%s\nmode=%s\n' "$source_sha" "$run_id" "$method" "$test_mode" > "$dir/identity.txt"
   adb shell am force-stop com.fluvi.app > "$dir/force-stop.txt" 2>&1 || rc=1
   timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$source_sha" -e harnessSha "$source_sha" -e runUuid "$run_id" \
     -e r12Mode "$test_mode" -e class "$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \
@@ -114,15 +115,15 @@ if [[ "$scope" == r12_contract ]]; then
     echo 'R13_T1=FAIL_OR_INCOMPLETE; inspect raw assertion and actual paint count' > "$financial_dir/status.txt"
     result=1
   fi
-  run_test financial_panel 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r13FinancialDemandAndPrivacyAcrossRetainedRouteChanges' "$run_id" SURFACE_STATIC || result=1
-  run_test financial_widget 'com.fluvi.app.lockscreen.KeyguardFinancialSnapshotRemoteViewsInstrumentationTest#remoteViewsAndNotificationDelegateKeepRealPixelsAndText' "$run_id" SURFACE_LIVE || result=1
-  run_test financial_light 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r13FinancialWorkRetainsOwnedCountsInLight' "$run_id" SURFACE_LIVE || result=1
-  run_test financial_full 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r13FinancialWorkRetainsOwnedCountsInFull' "$run_id" SURFACE_LIVE || result=1
-  run_test financial_pressure 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r13FinancialWorkSurvivesPressureAndRemainsCaptureBounded' "$run_id" SURFACE_LIVE || result=1
-  run_test poster 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases' "$run_id" SURFACE_LIVE || result=1
-  run_test static_panel 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel' "$run_id" SURFACE_STATIC || result=1
-  run_test diagnostic_light 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r12SurfaceEvidenceRetainsItsShowOwnerInLight' "$run_id" SURFACE_LIVE || result=1
-  run_test diagnostic_full 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r12SurfaceEvidenceRetainsItsShowOwnerInFull' "$run_id" SURFACE_LIVE || result=1
+  run_test financial_panel 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r13FinancialDemandAndPrivacyAcrossRetainedRouteChanges' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_STATIC || result=1
+  run_test financial_widget 'com.fluvi.app.lockscreen.KeyguardFinancialSnapshotRemoteViewsInstrumentationTest#remoteViewsAndNotificationDelegateKeepRealPixelsAndText' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_LIVE || result=1
+  run_test financial_light 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r13FinancialWorkRetainsOwnedCountsInLight' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_LIVE || result=1
+  run_test financial_full 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r13FinancialWorkRetainsOwnedCountsInFull' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_LIVE || result=1
+  run_test financial_pressure 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r13FinancialWorkSurvivesPressureAndRemainsCaptureBounded' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_LIVE || result=1
+  run_test poster 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_LIVE || result=1
+  run_test static_panel 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_STATIC || result=1
+  run_test diagnostic_light 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r12SurfaceEvidenceRetainsItsShowOwnerInLight' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_LIVE || result=1
+  run_test diagnostic_full 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r12SurfaceEvidenceRetainsItsShowOwnerInFull' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_LIVE || result=1
   echo 'NOT ESTABLISHED: complete T1-T7 admission, lifecycle, privacy and independent real-service compositor oracle' >> "$evidence/status.txt"
 else
   method='com.fluvi.app.lockscreen.KeyguardR12ServiceTimingInstrumentationTest#fourRealWakeCyclesUseRequestedRoute'

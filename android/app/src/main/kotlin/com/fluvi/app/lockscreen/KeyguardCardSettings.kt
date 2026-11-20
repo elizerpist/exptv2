@@ -761,6 +761,8 @@ internal object KeyguardCardDiagnostics {
         val pendingR12: ArrayDeque<TimingEvent> = ArrayDeque(),
         var pendingR12Omitted: Int = 0,
         var r13Work: FinancialWorkSummary? = null,
+        val r14RecoveryEvents: ArrayDeque<TimingEvent> = ArrayDeque(),
+        var r14RecoveryOmitted: Int = 0,
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         /** This compact causal spine is independent of the raw event ring.
          * A later hidden-state storm cannot evict an earlier wake/attach/hide
@@ -874,7 +876,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -1471,6 +1473,10 @@ internal object KeyguardCardDiagnostics {
                     it.readAheadRevision = fields["r12FreshnessRevision"]
                     it.readAheadPriorApplyQueued = fields["r12PriorApplyQueued"]
                 }
+                "R14_RECOVERY" -> {
+                    if (attempt.r14RecoveryEvents.size < 16) attempt.r14RecoveryEvents.addLast(event)
+                    else attempt.r14RecoveryOmitted += 1
+                }
                 "SCREEN_ON_RECEIVED" -> if (attempt.screenOnReceivedAtUptimeMs == null) attempt.screenOnReceivedAtUptimeMs = event.uptimeMs
                 "INSPECTION_QUEUED" -> {
                     attempt.requestsReceived += 1
@@ -1883,6 +1889,7 @@ internal object KeyguardCardDiagnostics {
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
         pendingR11 = ArrayDeque(attempt.pendingR11.map { it.copy(fields = it.fields.toMap()) }),
         pendingR12 = ArrayDeque(attempt.pendingR12.map { it.copy(fields = it.fields.toMap()) }),
+        r14RecoveryEvents = ArrayDeque(attempt.r14RecoveryEvents.map { it.copy(fields = it.fields.toMap()) }),
         inspections = LinkedHashMap(attempt.inspections.mapValues { (_, timeline) -> timeline.copy() }),
         causalSpine = ArrayDeque(attempt.causalSpine.map { it.copy(fields = it.fields.toMap()) }),
     )
@@ -2063,6 +2070,18 @@ internal object KeyguardCardDiagnostics {
         }
         attemptsForCausalEvidence.forEach { attempt ->
             select("a${attempt.id}:summary", attemptSummary(attempt), attempt.id)
+        }
+        attemptsForCausalEvidence.forEach { attempt ->
+            if (attempt.r14RecoveryEvents.isNotEmpty() || attempt.r14RecoveryOmitted > 0) {
+                select("a${attempt.id}:r14Meta", " R14_RECOVERY_META attempt=${attempt.id} retained=${attempt.r14RecoveryEvents.size} omitted=${attempt.r14RecoveryOmitted}\n", attempt.id)
+                attempt.r14RecoveryEvents.forEachIndexed { index, event ->
+                    select("a${attempt.id}:r14Recovery$index", buildString {
+                        append(" R14_RECOVERY attempt=${attempt.id} seq=${event.seq} up=${event.uptimeMs} phase=${event.reason}")
+                        event.fields.forEach { (key, value) -> append(" $key=$value") }
+                        appendLine()
+                    }, attempt.id)
+                }
+            }
         }
         val optionalDetails = mutableListOf<Pair<String, String>>()
         fun deferDetail(id: String, text: String) { optionalDetails += "$id:detail" to text }

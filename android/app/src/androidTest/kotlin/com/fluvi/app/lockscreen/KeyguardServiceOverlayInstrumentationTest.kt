@@ -257,6 +257,17 @@ class KeyguardServiceOverlayInstrumentationTest {
                 }.onFailure { probeFailure.compareAndSet(null, it); trace("INVALID", "where=A_APPLY error=${it.javaClass.simpleName}"); applyEntered.countDown() }
             }
 
+            override fun readAheadDecision(request: KeyguardCardInspectionRequest, pendingId: Long?, reservedId: Long?,
+                reason: String, snapshot: KeyguardReadAheadSnapshot?, currentFreshnessRevision: Long?,
+                outstandingFreshness: KeyguardWindowFreshness?, negativeFreshnessRevision: Long?) {
+                if (request.id != selected.get()?.id) return
+                val expected = successor.get()
+                trace("RESERVATION", "a=${request.id} pending=${pendingId ?: "none"} reserved=${reservedId ?: "none"} reason=$reason " +
+                    "snapshotRevision=${snapshot?.freshnessRevision ?: "UNOBSERVED"} currentRevision=${currentFreshnessRevision ?: "UNOBSERVED"} negativeRevision=${negativeFreshnessRevision ?: "UNOBSERVED"} outstanding=${outstandingFreshness ?: "UNOBSERVED"} " +
+                    "detached=${snapshot?.detached ?: "UNOBSERVED"} showing=${snapshot?.showInProgress ?: "UNOBSERVED"} surface=${snapshot?.surfaceState ?: "UNOBSERVED"} " +
+                    "aAuthority=${snapshot?.authority?.matches(request) ?: false} bAuthority=${expected?.let { snapshot?.authority?.matches(it) } ?: false} b=${expected?.id ?: "none"}")
+            }
+
             override fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
                 when (request.id) {
                     selected.get()?.id -> {
@@ -2003,6 +2014,25 @@ class KeyguardServiceOverlayInstrumentationTest {
         assertEquals("Actually drawn effect identity", "dualTide", material.effect)
         assertEquals("Actually retained Portal program must match the known phone program",
             EXPECTED_PORTAL_HASH, material.generatedAgslHash)
+        var r14Route: KeyguardOrbRenderModeStatus? = null
+        var r14Diagnostics: Map<String, Any?> = emptyMap()
+        instrumentation.runOnMainSync {
+            FluviKeyguardCardServiceRegistry.serviceForInstrumentation()?.let { owner ->
+                r14Route = owner.renderModeStatus()
+                r14Diagnostics = owner.materialDiagnostics()
+            }
+        }
+        val r14Keys = listOf("requestedRenderer", "activeRenderer", "r08EffectiveRoute", "r08Attachment", "r08RecoveryGeneration",
+            "shaderPreparationRequests", "shaderPreparationCompletions", "shaderPreparationFailures", "gpuPreparationRequests",
+            "gpuPreparationCompletions", "gpuPreparationFailures", "isolatedOrbFramesPublished", "isolatedOrbWorkerRunning",
+            "isolatedOrbWorkerDesiredAttachment", "isolatedOrbWorkerDesiredGeneration", "isolatedOrbWorkerAttachedAttachment",
+            "isolatedOrbWorkerAttachedGeneration", "lastRendererFailure", "coldPresentationState")
+        val bufferClass = runCatching { Class.forName("android.graphics.HardwareBufferRenderer") }.isSuccess
+        val surfaceClass = runCatching { Class.forName("android.view.SurfaceControl") }.isSuccess
+        val r14Detail = "window=${window.id} api=${Build.VERSION.SDK_INT} hardwareCanvas=${material.hardware} hardwareBufferRendererClass=$bufferClass surfaceControlClass=$surfaceClass configured=${r14Route?.configured ?: "UNOBSERVED"} effective=${r14Route?.effective ?: "UNOBSERVED"} selected=${r14Route?.attachedSelection ?: "UNOBSERVED"} " +
+            r14Keys.joinToString(" ") { "$it=${r14Diagnostics[it] ?: "UNOBSERVED"}" }
+        record("R14_LEGACY_BOUNDARY", r14Detail)
+        Log.i("FluviR14Legacy", r14Detail)
         assertEquals("API-35 real accessibility overlay must select the isolated ORB backend",
             "HardwareBufferRenderer/SurfaceControl", material.activeRenderer)
         assertTrue("Actual accessibility-overlay attachment published no current buffer output",
