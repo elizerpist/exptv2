@@ -8,12 +8,14 @@ internal object KeyguardR15AcquisitionTestHooks {
     const val ENABLED = true
     @Volatile var stockArm = false
     @Volatile var observer: ((Observation) -> Unit)? = null
+    @Volatile var observeIneligible = false
     @Volatile var motionObserver: ((Boolean) -> Unit)? = null
 
     data class Observation(
         val request: KeyguardCardInspectionRequest,
         val ticket: KeyguardInspectionFreshness.Ticket,
         val stock: Boolean,
+        val eligible: Boolean,
         val started: Long,
         val finished: Long,
         val candidate: KeyguardWindowReaderWindowMetadata?,
@@ -33,6 +35,7 @@ internal object KeyguardR15AcquisitionTestHooks {
         val request: KeyguardCardInspectionRequest,
         val ticket: KeyguardInspectionFreshness.Ticket,
         val stock: Boolean,
+        val eligible: Boolean,
         val started: Long,
         var candidate: KeyguardWindowReaderWindowMetadata? = null,
         var childCalled: Boolean = false,
@@ -50,10 +53,12 @@ internal object KeyguardR15AcquisitionTestHooks {
     /** Called only after the normal queue-locked opportunity was consumed. */
     fun begin(request: KeyguardCardInspectionRequest, ticket: KeyguardInspectionFreshness.Ticket?, eligible: Boolean): Boolean {
         active.remove()
-        if (!eligible || ticket == null) return eligible
+        if (ticket == null) return eligible
         val stock = stockArm
-        if (observer != null) active.set(Pending(request, ticket, stock, SystemClock.uptimeMillis()))
-        return !stock
+        if (observer != null && (eligible || observeIneligible)) {
+            active.set(Pending(request, ticket, stock, eligible, SystemClock.uptimeMillis()))
+        }
+        return eligible && !stock
     }
 
     fun candidate(metadata: KeyguardWindowReaderWindowMetadata) {
@@ -83,7 +88,7 @@ internal object KeyguardR15AcquisitionTestHooks {
         active.remove()
         val result = pending?.result ?: return
         if (pending.request.id == requestId) runCatching {
-            observer?.invoke(Observation(pending.request, pending.ticket, pending.stock, pending.started,
+            observer?.invoke(Observation(pending.request, pending.ticket, pending.stock, pending.eligible, pending.started,
                 pending.finished, pending.candidate, pending.childCalled, pending.childWindow,
                 pending.childIndex, pending.childFlags, result, decision, reason, authorityCurrent, started, finished))
         }

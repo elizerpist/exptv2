@@ -46,6 +46,9 @@ class KeyguardR12ServiceTimingInstrumentationTest {
     private lateinit var output: File
     private val evidence = StringBuilder()
     private var naturalComparison = false
+    /** Optional test-only control at the first real authorized attachment. */
+    internal var firstVisibleControl: ((KeyguardOrbRenderMode) -> Unit)? = null
+    internal var serviceConnectedControl: ((FluviKeyguardCardService) -> Unit)? = null
 
     /** One process/arm only. The host must run both reverse-order blocks on
      * one device and collect independent video; this method is not a visual
@@ -90,7 +93,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                     put("authorityAtCompletion", item.authorityAtCompletion)
                     put("queued", request.queuedAtUptimeMs); put("inspectionStart", item.inspectionStarted)
                     put("readStart", item.started); put("readEnd", item.finished); put("inspectionEnd", item.inspectionFinished)
-                    put("rootCalled", timing.activeRootCallCount > 0)
+                    put("eligible", item.eligible); put("rootCalled", timing.activeRootCallCount > 0)
                     put("rootFlags", timing.activeRootPrefetchFlags ?: org.json.JSONObject.NULL)
                     put("windowId", item.candidate?.id ?: org.json.JSONObject.NULL)
                     put("windowType", item.candidate?.type ?: org.json.JSONObject.NULL)
@@ -202,6 +205,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
             setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, services)
             setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
             await("real accessibility service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
+            serviceConnectedControl?.invoke(checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation()))
             repeat(4) { index ->
                 val name = if (index == 0) "cold" else "warm$index"
                 try {
@@ -211,11 +215,11 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                         !power.isInteractive && display?.state == Display.STATE_OFF && keyguard.isKeyguardLocked
                     }
                     await("$name previous service window withdrawn", 5_000) { sample().first?.visible != true }
-                    if (naturalComparison) recordClock(name, "preWake")
+                    if (naturalComparison || firstVisibleControl != null) recordClock(name, "preWake")
                     val wake = SystemClock.uptimeMillis()
                     synchronizedKey(KeyEvent.KEYCODE_WAKEUP)
                     await("$name public wake eligibility", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
-                    if (naturalComparison) recordClock(name, "awake")
+                    if (naturalComparison || firstVisibleControl != null) recordClock(name, "awake")
                     // The injected input is synchronous. Global accessibility
                     // idle is not the service's admission or visibility gate.
                     check(power.isInteractive && keyguard.isKeyguardLocked) { "$name public wake lost eligibility after input" }
@@ -260,16 +264,17 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                         }
                         record("WAKE", "name=$name wake=$wake attached=$attached firstPost=UNOBSERVED distinct=UNOBSERVED route=LEGACY_R11")
                     }
+                    if (index == 0) firstVisibleControl?.invoke(mode)
                 } catch (error: Throwable) {
                     failures += "$name:${error.javaClass.simpleName}:${error.message}"
                     record("FAILURE", "${failures.last()} interactive=${power.isInteractive} locked=${keyguard.isKeyguardLocked} route=${sample().first}")
                 } finally {
                     runCatching {
-                        if (naturalComparison) recordClock(name, "preUnlock")
+                        if (naturalComparison || firstVisibleControl != null) recordClock(name, "preUnlock")
                         val hide = SystemClock.uptimeMillis()
                         shell("wm dismiss-keyguard")
                         await("$name unlocked and detached", 8_000) { !keyguard.isKeyguardLocked && sample().first?.visible != true }
-                        if (naturalComparison) recordClock(name, "postUnlock")
+                        if (naturalComparison || firstVisibleControl != null) recordClock(name, "postUnlock")
                         record("WITHDRAWN", "name=$name trigger=$hide detached=${SystemClock.uptimeMillis()} physicalRemoval=UNOBSERVED")
                     }.onFailure { failures += "$name-cleanup:${it.javaClass.simpleName}:${it.message}" }
                 }
