@@ -69,12 +69,14 @@ class KeyguardFirstAcquisitionTest {
 
             val candidate = KeyguardFirstAcquisition().also { it.begin(owner, true) }
             KeyguardR15AcquisitionTestHooks.stockArm = false
+            KeyguardR15AcquisitionTestHooks.historicalRootOnlyOptIn = true
             val candidateFirst = candidate.take(request(3), ticket())
             assertTrue(candidateFirst)
             assertTrue(KeyguardR15AcquisitionTestHooks.begin(request(3), ticket(), candidateFirst))
             assertFalse(KeyguardR15AcquisitionTestHooks.begin(request(4), ticket(), candidate.take(request(4), ticket())))
         } finally {
-            KeyguardR15AcquisitionTestHooks.stockArm = false
+            KeyguardR15AcquisitionTestHooks.stockArm = true
+            KeyguardR15AcquisitionTestHooks.historicalRootOnlyOptIn = false
             KeyguardR15AcquisitionTestHooks.observer = null
         }
     }

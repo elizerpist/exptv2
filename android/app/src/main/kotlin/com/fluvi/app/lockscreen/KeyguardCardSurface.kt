@@ -83,6 +83,12 @@ internal object KeyguardSurfaceClassifier {
         "com.android.systemui:id/camera_preview",
     )
 
+    /** Same decisive predicates as the complete classifier, usable only for
+     * a verified visible node in a primary SystemUI-owned window. */
+    fun isDecisiveExclusionMarker(id: String): Boolean = id in credentialIds ||
+        id.contains("bouncer", ignoreCase = true) || id in occludedIds ||
+        id.contains("global_actions", ignoreCase = true) || id in shadeIds
+
     fun classify(windows: List<KeyguardWindowSnapshot>, primaryDisplayId: Int = 0): KeyguardSurface =
         classifyDetailed(windows, primaryDisplayId).surface
 
@@ -91,6 +97,7 @@ internal object KeyguardSurfaceClassifier {
         primaryDisplayId: Int = 0,
         unavailableRoot: Boolean = false,
         walkTruncated: Boolean = false,
+        strictOwnAttribution: Boolean = false,
     ): KeyguardSurfaceClassification {
         val visible = windows.filter { it.displayId == primaryDisplayId && !it.ownOverlay }
         if (visible.isEmpty()) return KeyguardSurfaceClassification(
@@ -117,7 +124,7 @@ internal object KeyguardSurfaceClassifier {
         val foreignAboveSystem = visible.any { window ->
             window.packageName != null &&
                 window.packageName !in systemPackages &&
-                window.packageName != "com.fluvi.app" &&
+                (strictOwnAttribution || window.packageName != "com.fluvi.app") &&
                 window.layer >= (system.maxOfOrNull { it.layer } ?: Int.MAX_VALUE)
         }
         if (foreignAboveSystem) return KeyguardSurfaceClassification(KeyguardSurface.OCCLUDED, KeyguardSurfaceReason.FOREIGN_ABOVE, markers)

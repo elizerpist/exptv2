@@ -25,6 +25,71 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.clearCapture(context)
     }
 
+    @Test fun r18PipelineEvidenceRemainsBoundedAndOwnedInLight() = r18PipelineEvidence("LIGHT")
+    @Test fun r18PipelineEvidenceRemainsBoundedAndOwnedInFull() = r18PipelineEvidence("FULL")
+
+    private fun r18PipelineEvidence(mode: String) {
+        KeyguardCardDiagnostics.clearCapture(context)
+        assertFalse(KeyguardCardDiagnostics.wantsEvent("R18_PIPELINE"))
+        KeyguardCardDiagnostics.startCapture(context, "r18-$mode", "profile", mode)
+        var oldOwner: KeyguardDiagnosticContext? = null
+        repeat(4) { wake ->
+            val base = 10_000L * (wake + 1)
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 51, wake + 1L, "wake", base))
+            if (wake == 0) oldOwner = owner
+            fun edge(phase: String, at: Long, host: Int = wake + 1, output: Int = wake + 20,
+                     extra: Map<String, Any> = emptyMap()) {
+                KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", phase,
+                    serviceSession = 51, wakeEpoch = wake + 1L, requestId = base + 1,
+                    attachGeneration = wake + 1L, diagnosticContext = owner, observedUptimeMs = at,
+                    fields = mapOf<String, Any>("r18Host" to host, "r18Output" to output,
+                        "r18Child" to (900 + output), "r18Privacy" to "discreet") + extra)
+            }
+            edge("WAKE_ADOPTED", base, extra = mapOf("r18SampleStart" to base - 2, "r18SampleEnd" to base - 1,
+                "r18AlignUptime" to base, "r18AlignNano" to base * 1_000_000, "r18AlignUncertaintyNs" to 1_000_100))
+            edge("HOST_ADDED", base + 1); edge("HOST_READY", base + 2); edge("BUFFER_READY", base + 3)
+            edge("HIDDEN_BOUND", base + 4); edge("GRANT", base + 5, extra = mapOf("r18Proof" to base + 77))
+            val show = KeyguardCardDiagnostics.newShowOperation(owner, wake + 1L, base + 77)
+            KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "r18", operation = show,
+                observedUptimeMs = base + 5)
+            edge("INPUT_ARMED", base + 6); edge("REVEAL_QUEUED", base + 7)
+            // Receipt delivery may be out of order; it must not overwrite the
+            // observed apply endpoints or synthesize a pixel presentation.
+            edge("REVEAL_RECEIPT", base + 12, extra = mapOf("r18Commit" to base + 12))
+            edge("REVEAL_RECEIPT", base + 10, extra = mapOf("r18ApplyBegin" to base + 8, "r18ApplyEnd" to base + 10))
+            edge("SEALED:window", base + 20)
+            edge("RETIRE_RECEIPT", base + 23, extra = mapOf("r18Commit" to base + 23))
+            edge("RETIRE_RECEIPT", base + 22, extra = mapOf("r18ApplyBegin" to base + 21, "r18ApplyEnd" to base + 22,
+                "r18LatchNs" to 234567890123L, "r18PresentState" to "PENDING"))
+            edge("OUTPUT_DRAINED", base + 24)
+            if (wake == 0) {
+                edge("HOST_ADDED", base + 30, host = 99, output = 99)
+                edge("BUFFER_READY", base + 31, host = 99, output = 99)
+            }
+            repeat(80) { index ->
+                KeyguardCardDiagnostics.captureEvent(context, "ACCESSIBILITY_EVENT", "pressure", diagnosticContext = owner,
+                    observedUptimeMs = base + 100 + index, fields = mapOf("eventAgeMs" to index))
+            }
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        for (attempt in 1..4) assertTrue("missing R18 attempt $attempt in $mode", report.contains("R18_PIPELINE attempt=$attempt"))
+        assertTrue(report.contains("proof=10077"))
+        assertTrue(report.contains("revealApply=10008/10010 revealCommit=10012"))
+        assertTrue(report.contains("retireApply=10021/10022 retireCommit=10023"))
+        assertTrue(report.contains("physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED"))
+        assertTrue(report.contains("omittedCriticalRecordIds="))
+        KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "REVEAL_RECEIPT", diagnosticContext = oldOwner,
+            fields = mapOf("r18Host" to 1, "r18Output" to 20, "r18Commit" to 99999))
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+        KeyguardCardDiagnostics.startCapture(context, "r18-new", "profile", mode)
+        KeyguardCardDiagnostics.beginLockAttempt(context, 52, 1, "wake", 100)
+        KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "REVEAL_RECEIPT", diagnosticContext = oldOwner,
+            fields = mapOf("r18Host" to 1, "r18Output" to 20, "r18Commit" to 99999))
+        val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertFalse(next.contains("99999"))
+    }
+
     @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInLight() = r12SurfaceEvidence("LIGHT")
     @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInFull() = r12SurfaceEvidence("FULL")
 

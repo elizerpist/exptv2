@@ -32,6 +32,7 @@ import com.fluvi.app.lockscreen.material.KeyguardOrbFirstOfferObservation
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceObservation
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfacePresenter
+import com.fluvi.app.lockscreen.material.KeyguardOrbPresentationLane
 
 /** Main-thread owner of one, and only one, accessibility overlay root. Drag
  * changes only call updateViewLayout; they never remove/re-add this root,
@@ -85,8 +86,15 @@ internal class KeyguardCardWindow(
     /** Main notifies the service when an already-issued first-read hint can
      * no longer describe the prepared animated route. */
     private val onSurfaceMotionIneligible: () -> Unit = {},
+    private val onR18HostReady: (Long, View, Int) -> Unit = { _, _, _ -> },
+    private val onR18HostAttached: (Long, Long) -> Unit = { _, _ -> },
+    private val onR18BufferReady: (Long, Long, Long) -> Unit = { _, _, _ -> },
+    private val onR18Failure: (Long, Long, String) -> Unit = { _, _, _ -> },
+    private val onR18Receipt: (Long, Long, KeyguardOrbPresentationLane.Receipt) -> Unit = { _, _, _ -> },
+    private val onR18Drained: (Long, Long, Any) -> Unit = { _, _, _ -> },
+    private val r18PipelineEnabled: Boolean = false,
 ) {
-    enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
+    enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, PENDING, FAILED }
 
     private var root: KeyguardCardInteractionLayout? = null
     private val lifecycle = KeyguardCardWindowLifecycle()
@@ -116,7 +124,15 @@ internal class KeyguardCardWindow(
     private var acceptedBootstrapToken: KeyguardBootstrapFrameToken? = null
     private var firstShaderDrawAttachGeneration: Long? = null
     private var materialController: KeyguardCardMaterialController? = null
-    private var surfacePresenter: KeyguardOrbSurfacePresenter? = null
+    @Volatile private var surfacePresenter: KeyguardOrbSurfacePresenter? = null
+    internal data class R18Preparation(val attachment: Long, val outputGeneration: Long,
+        val full: Boolean, val visualKey: String, val width: Int, val height: Int, val densityDpi: Int)
+    private var r18Preparation: R18Preparation? = null
+    private var nextR18OutputGeneration = 0L
+    private var r18HostGeneration: Long? = null
+    private var r18BoundOutputGeneration: Long? = null
+    private var r18RemovedOutputGeneration: Long? = null
+    private var r18Host: KeyguardOrbInertHost? = null
     private var surfaceDiagnostic: ((KeyguardOrbSurfaceObservation) -> Unit)? = null
     private var attachedConfiguredMode = KeyguardOrbRenderMode.SURFACE_LIVE
     private var effectiveRenderMode = KeyguardOrbRenderMode.LEGACY_R11
@@ -252,6 +268,22 @@ internal class KeyguardCardWindow(
                 },
                 onFailure = onSurfaceFailure,
                 isCaptureActive = { KeyguardCardDiagnostics.wantsEvent("R12_SURFACE") },
+                onR18Prepared = { attachment, generation, at ->
+                    if (r18Preparation?.let { it.attachment == attachment && it.outputGeneration == generation } == true) {
+                        onR18BufferReady(attachment, generation, at)
+                    }
+                },
+                onR18Failure = { attachment, generation, reason, releaseAfterRemoval ->
+                    val bound = r18BoundOutputGeneration == generation
+                    val hostGeneration = r18HostGeneration
+                    val removed = if (bound && hostGeneration != null) removeR18Host(hostGeneration) else
+                        r18RemovedOutputGeneration == generation || !bound
+                    if (removed) releaseAfterRemoval()
+                    if (r18Preparation?.outputGeneration == generation) r18Preparation = null
+                    onR18Failure(attachment, generation, reason)
+                },
+                onR18Receipt = onR18Receipt,
+                onR18Drained = onR18Drained,
             )
             orb.visibility = View.GONE
             effectiveRenderMode = selection
@@ -290,7 +322,10 @@ internal class KeyguardCardWindow(
 
     fun isOwnAccessibilityWindow(windowId: Int, displayId: Int): Boolean {
         checkMainThread()
-        return lifecycle.isAttached() && displayId == android.view.Display.DEFAULT_DISPLAY && accessibilityWindowId == windowId
+        if (displayId != android.view.Display.DEFAULT_DISPLAY) return false
+        val stagedGeneration = r18HostGeneration
+        return (lifecycle.isAttached() && accessibilityWindowId == windowId) ||
+            (stagedGeneration != null && r18Host?.windowId(stagedGeneration) == windowId)
     }
 
     /** A completed inspection may name an overlay only if that exact attach is
@@ -321,16 +356,154 @@ internal class KeyguardCardWindow(
             settings.presentationMode,
             isFull = settings.showFinancialDetails,
         )
-        surfacePresenter?.prepare(profile, surfaceSize(), surfaceSize(), settings.showFinancialDetails)
+        if (r18PipelineEnabled && Build.VERSION.SDK_INT == 35 && effectiveRenderMode == KeyguardOrbRenderMode.SURFACE_LIVE && surfaceMotionAllowed) {
+            prepareR18()
+        } else surfacePresenter?.prepare(profile, surfaceSize(), surfaceSize(), settings.showFinancialDetails)
         current.visibility = View.VISIBLE
     }
 
-    fun showOrUpdate(presentation: FluviFinancialCardPresentation, settings: KeyguardCardSettings): Result {
+    /** Request one private direct output; FULL is legal only after a current
+     * positive admission has independently allowed that disclosure. */
+    fun prepareR18(full: Boolean = false, authorizedFull: Boolean = false,
+                   beforeReplace: (R18Preparation) -> Boolean = { true }): R18Preparation? {
+        checkMainThread()
+        val profile = materialProfile ?: return null
+        if (!r18PipelineEnabled || Build.VERSION.SDK_INT != 35 || lifecycle.isAttached() || !materialSettings.requested ||
+            effectiveRenderMode != KeyguardOrbRenderMode.SURFACE_LIVE || !surfaceMotionAllowed ||
+            (full && !authorizedFull)) return null
+        val unlocked = runCatching { serviceContext.getSystemService(android.os.UserManager::class.java).isUserUnlocked }
+            .getOrDefault(false)
+        if (!unlocked) return null
+        val presenter = surfacePresenter ?: return null
+        val size = surfaceSize()
+        val visual = if (full) profile.visualKey else profile.neutralized().visualKey
+        val existing = r18Preparation
+        if (existing != null && existing.attachment == attachGeneration + 1L && existing.full == full &&
+            existing.visualKey == visual && existing.width == size && existing.height == size &&
+            existing.densityDpi == serviceContext.resources.displayMetrics.densityDpi) return existing
+        val next = R18Preparation(attachGeneration + 1L, ++nextR18OutputGeneration, full, visual,
+            size, size, serviceContext.resources.displayMetrics.densityDpi)
+        if (!beforeReplace(next)) return null
+        r18Preparation = next
+        r18BoundOutputGeneration = null
+        if (!presenter.prepareR18(next.attachment, next.outputGeneration, profile, size, size, full, authorizedFull)) {
+            r18Preparation = null
+            return null
+        }
+        return next
+    }
+
+    fun r18Preparation(): R18Preparation? { checkMainThread(); return r18Preparation }
+
+    fun r18ReadyAt(preparation: R18Preparation): Long? {
+        checkMainThread()
+        return if (r18Preparation == preparation) surfacePresenter?.r18ReadyAt(preparation.attachment, preparation.outputGeneration) else null
+    }
+
+    fun r18PreparedOutput(preparation: R18Preparation): Any? {
+        checkMainThread()
+        if (r18Preparation != preparation) return null
+        val profile = materialProfile ?: return null
+        return surfacePresenter?.r18PreparedOutput(preparation.attachment, preparation.outputGeneration,
+            profile, preparation.full, preparation.width, preparation.height)
+    }
+
+    fun stageR18Host(generation: Long, settings: KeyguardCardSettings): Boolean {
+        checkMainThread()
+        if (lifecycle.isAttached() || r18HostGeneration != null || r18Preparation == null) return false
+        val currentRoot = root ?: return false
+        val host = r18Host ?: KeyguardOrbInertHost(serviceContext, manager,
+            onReady = { actual, view, id ->
+                mainHandler.post { if (r18HostGeneration == actual) onR18HostReady(actual, view, id) }
+            },
+            onFailure = { actual, reason ->
+                if (r18HostGeneration == actual) {
+                    val removed = removeR18Host(actual)
+                    if (!removed && r18Host?.stagedView(actual) == null) r18HostGeneration = null
+                    onR18Failure(attachGeneration + 1L, r18Preparation?.outputGeneration ?: 0L, reason)
+                }
+            }, onAttached = { actual, at ->
+                if (r18HostGeneration == actual) onR18HostAttached(actual, at)
+            }).also { r18Host = it }
+        r18HostGeneration = generation
+        if (!host.stage(generation, geometry(settings, currentRoot))) {
+            r18HostGeneration = null
+            return false
+        }
+        return true
+    }
+
+    fun hasR18Host(generation: Long): Boolean { checkMainThread(); return r18HostGeneration == generation }
+
+    fun stagedR18Host(generation: Long): View? {
+        checkMainThread()
+        return if (r18HostGeneration == generation) r18Host?.stagedView(generation) else null
+    }
+
+    fun bindR18Host(hostGeneration: Long, preparation: R18Preparation, done: (Boolean) -> Unit) {
+        checkMainThread()
+        val host = r18Host?.readyView(hostGeneration)
+        if (r18HostGeneration != hostGeneration || r18Preparation != preparation || host == null) {
+            done(false); return
+        }
+        surfacePresenter?.bindR18(host, preparation.attachment, preparation.outputGeneration) { success ->
+            if (success && r18HostGeneration == hostGeneration && r18Preparation == preparation)
+                r18BoundOutputGeneration = preparation.outputGeneration
+            done(success && r18HostGeneration == hostGeneration && r18Preparation == preparation)
+        } ?: done(false)
+    }
+
+    fun isR18Bound(hostGeneration: Long, preparation: R18Preparation): Boolean {
+        checkMainThread()
+        return r18HostGeneration == hostGeneration && r18Preparation == preparation &&
+            r18BoundOutputGeneration == preparation.outputGeneration && r18Host?.readyView(hostGeneration) != null
+    }
+
+    fun removeR18Host(generation: Long): Boolean {
+        checkMainThread()
+        if (r18HostGeneration != generation) return false
+        val hostView = r18Host?.stagedView(generation)
+        val removed = r18Host?.remove(generation) == true
+        if (removed) {
+            val content = root
+            if (content != null && content.parent === hostView) (hostView as? ViewGroup)?.removeView(content)
+            r18RemovedOutputGeneration = r18BoundOutputGeneration
+            r18BoundOutputGeneration = null
+            r18HostGeneration = null
+        }
+        return removed
+    }
+
+    fun revealR18(preparation: R18Preparation, boundary: () -> Boolean, done: (Boolean) -> Unit) {
+        checkMainThread()
+        if (r18Preparation != preparation || !lifecycle.isAttached()) { done(false); return }
+        surfacePresenter?.revealR18(preparation.attachment, preparation.outputGeneration, boundary, done) ?: done(false)
+    }
+
+    /** Called under exact coordinator authority; safe even with Main held. */
+    fun sealR18FromAnyThread(attachment: Long, outputGeneration: Long) {
+        surfacePresenter?.sealR18(attachment, outputGeneration)
+    }
+
+    fun showOrUpdate(presentation: FluviFinancialCardPresentation, settings: KeyguardCardSettings,
+                     directHostGeneration: Long? = null): Result {
         checkMainThread()
         val modeChanged = appliedPresentationConfiguration?.mode?.let { it != settings.presentationMode } == true
         materialSettings = settings
         val current = root ?: createRoot().also { root = it }
         val pendingAttach = !lifecycle.isAttached()
+        val directPreparation = r18Preparation
+        val useR18 = pendingAttach && directHostGeneration != null && directPreparation != null &&
+            isR18Bound(directHostGeneration, directPreparation) && directPreparation.full == presentation.full &&
+            r18PreparedOutput(directPreparation) != null
+        if (pendingAttach && directHostGeneration != null && !useR18) return Result.PENDING
+        if (pendingAttach && directHostGeneration == null && r18HostGeneration != null) return Result.PENDING
+        if (pendingAttach && directHostGeneration == null && surfacePresenter?.r18OutputsOutstanding() == true) {
+            surfacePresenter?.sealR18()
+            return Result.PENDING
+        }
+        if (useR18 && (KeyguardOrbRenderModeStore.read(serviceContext) != KeyguardOrbRenderMode.SURFACE_LIVE ||
+                !eligibleLiveReadmission(settings, materialProfile))) return Result.FAILED
         if (pendingAttach) attachedConfiguredMode = KeyguardOrbRenderModeStore.read(serviceContext)
         val routeChanged = selectRenderRoute(current, settings, attachedConfiguredMode)
         if (pendingAttach && surfacePresenter != null) {
@@ -360,7 +533,7 @@ internal class KeyguardCardWindow(
             // Configure the retained scene while detached. If the bounded
             // artifact lane is already ready, RuntimeShader construction is
             // complete before WindowManager.addView and cannot tax first draw.
-            updateMaterialForPresentation(presentation)
+            if (!useR18) updateMaterialForPresentation(presentation)
             val nextAttach = attachGeneration + 1L
             materialController?.bindFirstOfferReporter(armFirstOfferDiagnostic(nextAttach))
             coldRootObservation?.cancel()
@@ -376,13 +549,15 @@ internal class KeyguardCardWindow(
             if (bootstrapToken != null) {
                 ensureFrameCommitObservation(current, nextAttach, bootstrapToken).startBeforeNextDraw()
             }
-            reportWindowDiagnostic("ADD_VIEW_BEGIN", "windowManager", nextAttach)
+            if (!useR18) reportWindowDiagnostic("ADD_VIEW_BEGIN", "windowManager", nextAttach)
             return runCatching {
-                manager.addView(current, parameters(resolvedGeometry))
-                // This boundary deliberately excludes lifecycle/material and
-                // first-draw observer setup. The timing report must not label
-                // those post-add operations as WindowManager.addView time.
-                reportWindowDiagnostic("ADD_VIEW_RETURN", "success", nextAttach)
+                if (useR18) {
+                    check(r18Host?.promote(requireNotNull(directHostGeneration), current, resolvedGeometry) == true)
+                } else {
+                    manager.addView(current, parameters(resolvedGeometry))
+                    // This marks the real WindowManager.addView return.
+                    reportWindowDiagnostic("ADD_VIEW_RETURN", "success", nextAttach)
+                }
             }.fold(
                 onSuccess = {
                     lifecycle.onAttachSucceeded()
@@ -500,6 +675,9 @@ internal class KeyguardCardWindow(
         checkMainThread()
         val current = root ?: return false
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REVOKE, attachment = attachGeneration)
+        // Both routes seal their exact worker/output before root removal.
+        surfacePresenter?.sealR18()
+        r18Preparation = null
         // Revoke the worker first, then change the root's visibility before
         // any child-destruction callback can wait for an entered holder call.
         surfacePresenter?.revokeCurrent(hideChild = false, onRevoked = onSurfaceRevoked)
@@ -520,10 +698,16 @@ internal class KeyguardCardWindow(
         current.cancelInteraction("detach", restorePosition = false)
         clearDragFrame()
         materialController?.stop("hide", onIsolatedLayerHideCommitted, onRetirementEvent)
-        if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
+        if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) {
+            r18HostGeneration?.let(::removeR18Host)
+            return false
+        }
         reportWindowDiagnostic("REMOVE_VIEW_BEGIN", "windowManager", attachGeneration)
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REMOVE_BEGIN, attachment = attachGeneration)
-        val removed = runCatching { manager.removeViewImmediate(current) }
+        val directHost = r18HostGeneration
+        val removed = runCatching {
+            if (directHost != null) check(removeR18Host(directHost)) else manager.removeViewImmediate(current)
+        }
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REMOVE_RETURN, attachment = attachGeneration, extra = if (removed.isSuccess) 1 else 0)
         val stillAttached = current.isAttachedToWindow
         if (removed.isSuccess || !stillAttached) {
@@ -583,7 +767,9 @@ internal class KeyguardCardWindow(
             settings.presentationMode,
             isFull = settings.showFinancialDetails,
         )
-        surfacePresenter?.prepare(profile, surfaceSize(), surfaceSize(), settings.showFinancialDetails)
+        if (r18PipelineEnabled && Build.VERSION.SDK_INT == 35 && effectiveRenderMode == KeyguardOrbRenderMode.SURFACE_LIVE &&
+            surfaceMotionAllowed && !lifecycle.isAttached()) prepareR18()
+        else surfacePresenter?.prepare(profile, surfaceSize(), surfaceSize(), settings.showFinancialDetails)
         appliedPresentation?.let {
             updateMaterialForPresentation(it)
             observeBootstrapBeforeNextDraw()
@@ -892,7 +1078,11 @@ internal class KeyguardCardWindow(
         keyguardCardWindowParameters(geometry)
 
     private fun updateLayout(root: View, geometry: KeyguardOverlayGeometry): Boolean {
-        val updated = runCatching { manager.updateViewLayout(root, parameters(geometry)) }
+        val directHost = r18HostGeneration
+        val updated = runCatching {
+            if (directHost != null) check(r18Host?.updateGeometry(directHost, geometry) == true)
+            else manager.updateViewLayout(root, parameters(geometry))
+        }
         if (updated.isFailure) {
             val stillAttached = root.isAttachedToWindow
             lifecycle.onUpdateFailed(stillAttached)
@@ -1074,6 +1264,7 @@ internal class KeyguardCardWindow(
         val presenter = surfacePresenter
         val profile = materialProfile
         if (presenter != null && profile != null) {
+            if (lifecycle.isAttached() && r18HostGeneration != null) return
             val attachment = if (lifecycle.isAttached()) attachGeneration else attachGeneration + 1L
             val size = surfaceSize()
             presenter.show(attachment, profile, presentation.full,

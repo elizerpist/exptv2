@@ -25,12 +25,23 @@ internal class KeyguardOrbSurfacePresenter(
     private val onFirstPosted: (Long, Long) -> Unit,
     private val onFailure: (String) -> Unit,
     private val isCaptureActive: () -> Boolean,
+    private val onR18Prepared: (Long, Long, Long) -> Unit = { _, _, _ -> },
+    private val onR18Failure: (Long, Long, String, () -> Unit) -> Unit = { _, _, _, done -> done() },
+    private val onR18Receipt: (Long, Long, KeyguardOrbPresentationLane.Receipt) -> Unit = { _, _, _ -> },
+    private val onR18Drained: (Long, Long, Any) -> Unit = { _, _, _ -> },
 ) {
     private val main = Handler(Looper.getMainLooper())
+    @Volatile private var direct: KeyguardOrbR18Presenter? = null
     private val worker = KeyguardOrbSurfaceWorker(
         context = context.applicationContext,
-        onFirstPosted = { target, at -> main.post { firstPosted(target, at) } },
-        onFailure = { target, reason -> main.post { failIfCurrent(target, reason) } },
+        onFirstPosted = { target, at ->
+            if (target.directOutput != null) direct?.onWorkerFirstPosted(target, at)
+            else main.post { firstPosted(target, at) }
+        },
+        onFailure = { target, reason ->
+            if (target.directOutput != null) direct?.onWorkerFailure(target, reason)
+            else main.post { failIfCurrent(target, reason) }
+        },
         isCaptureActive = isCaptureActive,
     )
     private var current: KeyguardOrbSurfaceTarget? = null
@@ -48,6 +59,50 @@ internal class KeyguardOrbSurfacePresenter(
         if (profile != null) worker.prepare(profile, width, height, context.resources.displayMetrics.densityDpi, allowFull)
     }
 
+    /** These methods expose the R18 path through the same render worker.
+     * The caller remains responsible for fresh privacy/input authority. */
+    private fun directOnMain(): KeyguardOrbR18Presenter {
+        checkMain()
+        return direct ?: KeyguardOrbR18Presenter(worker, isCaptureActive, onR18Prepared,
+            onR18Failure, onR18Receipt, onR18Drained).also { direct = it }
+    }
+
+    fun prepareR18(attachment: Long, generation: Long, profile: KeyguardMaterialProfile,
+                   width: Int, height: Int, full: Boolean = false, authorizedFull: Boolean = false): Boolean {
+        checkMain()
+        // A stock child still draining counts against the native bound.
+        if (current != null || retiringOutput != null || overflowOutput != null) return false
+        directOnMain().prepare(attachment, generation, profile, width, height,
+            context.resources.displayMetrics.densityDpi, full, authorizedFull)
+        return true
+    }
+
+    fun r18ReadyAt(attachment: Long, generation: Long): Long? = direct?.readyAt(attachment, generation)
+
+    fun r18PreparedOutput(attachment: Long, generation: Long, profile: KeyguardMaterialProfile,
+                          full: Boolean, width: Int, height: Int): Any? {
+        checkMain()
+        return direct?.preparedOutput(attachment, generation, profile, full, width, height,
+            context.resources.displayMetrics.densityDpi)
+    }
+
+    fun bindR18(host: View, attachment: Long, generation: Long, done: (Boolean) -> Unit) {
+        checkMain()
+        val presenter = direct ?: run { done(false); return }
+        presenter.bind(host, attachment, generation, done)
+    }
+
+    fun revealR18(attachment: Long, generation: Long, crossGrantBoundary: () -> Boolean, done: (Boolean) -> Unit) {
+        checkMain()
+        val presenter = direct ?: run { done(false); return }
+        presenter.reveal(attachment, generation, crossGrantBoundary, done)
+    }
+
+    /** This seal is thread-safe and uses the exact currently-owned target. */
+    fun r18OutputsOutstanding(): Boolean = direct?.hasLiveOutputs() == true
+    fun sealR18() { direct?.seal() }
+    fun sealR18(attachment: Long, generation: Long) { direct?.sealMatching(attachment, generation) }
+
     fun targetSize(): Pair<Int, Int> {
         checkMain()
         return (surface?.width ?: 0) to (surface?.height ?: 0)
@@ -59,12 +114,14 @@ internal class KeyguardOrbSurfacePresenter(
     fun setMotionAllowed(allowed: Boolean) {
         checkMain()
         current?.let { worker.setMotionAllowed(it, allowed) }
+        direct?.setMotionAllowed(allowed)
     }
 
     /** Authorization comes only from the real service show/update path. */
     fun show(attachment: Long, profile: KeyguardMaterialProfile, full: Boolean, live: Boolean,
              width: Int, height: Int, reporter: ((KeyguardOrbSurfaceObservation) -> Unit)?) {
         checkMain()
+        sealR18()
         val old = current
         if (old != null && !old.revoked && old.attachment == attachment && old.full == full &&
             old.live == live && old.width == width && old.height == height
@@ -213,6 +270,7 @@ internal class KeyguardOrbSurfacePresenter(
 
     fun detached() {
         checkMain()
+        sealR18()
         revokeCurrent()
         removeSurface()
         guard?.let(root::removeView)
@@ -224,6 +282,8 @@ internal class KeyguardOrbSurfacePresenter(
     fun dispose() {
         checkMain()
         detached()
+        direct?.dispose()
+        direct = null
         worker.dispose()
     }
 

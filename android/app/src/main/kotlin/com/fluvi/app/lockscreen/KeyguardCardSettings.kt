@@ -691,6 +691,7 @@ internal object KeyguardCardDiagnostics {
         var returnedRootWindowId: String? = null,
         var activeRootAccepted: String? = null,
         var fallbackReason: String? = null,
+        var ownAttributionAmbiguous: String? = null,
         var activeRootCallCount: Long? = null,
         var activeRootTotalMs: Long? = null,
         var perWindowRootCallCount: Long? = null,
@@ -785,6 +786,8 @@ internal object KeyguardCardDiagnostics {
         var r13Work: FinancialWorkSummary? = null,
         val r14RecoveryEvents: ArrayDeque<TimingEvent> = ArrayDeque(),
         var r14RecoveryOmitted: Int = 0,
+        val r18Generations: LinkedHashMap<String, R18Timeline> = linkedMapOf(),
+        var r18GenerationOmitted: Int = 0,
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         /** This compact causal spine is independent of the raw event ring.
          * A later hidden-state storm cannot evict an earlier wake/attach/hide
@@ -792,6 +795,12 @@ internal object KeyguardCardDiagnostics {
         val causalSpine: ArrayDeque<CausalSpineEvent> = ArrayDeque(),
         var finalState: String = "INCOMPLETE",
     )
+
+    /** At most four fixed-key generation summaries per wake. The consumer,
+     * not Main or the render worker, owns these maps and their formatting. */
+    private data class R18Timeline(val host: String, val output: String, val attachment: Long?,
+                                   var privacy: String, var child: String = "UNOBSERVED",
+                                   val values: LinkedHashMap<String, String> = linkedMapOf())
 
     /** Bounded per-attempt reduction, independent of the raw event ring. */
     private data class FinancialWorkSummary(
@@ -898,7 +907,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "R15_SURFACE_REVOKED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -957,6 +966,45 @@ internal object KeyguardCardDiagnostics {
         }
         if (stage == "ATTACHMENT_RENDER_SUMMARY") result["drawGapCaptureOmitted"] = gapRecordsOmitted.toString()
         return result
+    }
+
+    private fun reduceR18(attempt: TimingAttempt, event: TimingEvent) {
+        val host = event.fields["r18Host"] ?: return
+        val output = event.fields["r18Output"] ?: return
+        val key = "$host/$output/${event.attachGeneration ?: "UNOBSERVED"}"
+        val timeline = attempt.r18Generations[key] ?: run {
+            if (attempt.r18Generations.size >= 4) {
+                val discard = attempt.r18Generations.keys.drop(1).firstOrNull() ?: attempt.r18Generations.keys.first()
+                attempt.r18Generations.remove(discard)
+                attempt.r18GenerationOmitted += 1
+            }
+            R18Timeline(host, output, event.attachGeneration, event.fields["r18Privacy"] ?: "UNOBSERVED")
+                .also { attempt.r18Generations[key] = it }
+        }
+        event.fields["r18Privacy"]?.takeIf { it != "UNOBSERVED" }?.let { timeline.privacy = it }
+        event.fields["r18Child"]?.takeIf { it != "UNOBSERVED" }?.let { timeline.child = it }
+        val phase = when {
+            event.reason.startsWith("SEALED:") -> "SEALED"
+            event.reason.startsWith("FALLBACK:") -> "FALLBACK"
+            else -> event.reason
+        }
+        val retained = setOf("WAKE_ADOPTED", "HOST_ADD_BEGIN", "HOST_ADDED", "HOST_ATTACHED", "HOST_READY", "BUFFER_READY", "HIDDEN_BOUND",
+            "GRANT", "INPUT_ARMED", "REVEAL_QUEUED", "REVEAL_APPLIED", "SEALED", "OUTPUT_DRAINED", "FALLBACK")
+        if (phase in retained) {
+            if (phase == "INPUT_ARMED" && !timeline.values.containsKey(phase)) attempt.attachCount += 1
+            timeline.values.putIfAbsent(phase, event.uptimeMs.toString())
+            if (phase == "FALLBACK" || phase == "SEALED") timeline.values.putIfAbsent("${phase}_REASON", event.reason)
+        }
+        fun retainField(key: String, destination: String = key) {
+            event.fields[key]?.takeIf { it != "UNOBSERVED" }?.let { timeline.values.putIfAbsent(destination, it) }
+        }
+        listOf("r18Proof", "r18SampleStart", "r18SampleEnd", "r18Reservation", "r18AlignUptime", "r18AlignNano",
+            "r18AlignUncertaintyNs").forEach { retainField(it) }
+        if (event.reason == "REVEAL_RECEIPT" || event.reason == "RETIRE_RECEIPT") {
+            val prefix = if (event.reason == "REVEAL_RECEIPT") "reveal" else "retire"
+            listOf("r18ApplyBegin", "r18ApplyEnd", "r18Commit", "r18LatchNs", "r18PresentNs", "r18PresentState")
+                .forEach { field -> retainField(field, "$prefix:$field") }
+        }
     }
 
     fun recordColdPreparation(serviceSession: Long, stage: String, observedUptimeMs: Long = SystemClock.uptimeMillis()) {
@@ -1573,6 +1621,7 @@ internal object KeyguardCardDiagnostics {
                     returnedRootWindowId = fields["returnedRootWindowId"]
                     activeRootAccepted = fields["activeRootAccepted"]
                     fallbackReason = fields["fallbackReason"]
+                    ownAttributionAmbiguous = fields["ownAttributionAmbiguous"]
                     activeRootCallCount = fields["activeRootCallCount"]?.toLongOrNull()
                     activeRootTotalMs = fields["activeRootTotalMs"]?.toLongOrNull()
                     perWindowRootCallCount = fields["perWindowRootCallCount"]?.toLongOrNull()
@@ -1723,6 +1772,7 @@ internal object KeyguardCardDiagnostics {
                         else attempt.pendingR11Omitted += 1
                     }
                 }
+                "R18_PIPELINE" -> reduceR18(attempt, event)
                 "R12_SURFACE" -> {
                     val show = showEpisode()
                     if (show != null) reduceSurface(show, event)
@@ -2050,6 +2100,7 @@ internal object KeyguardCardDiagnostics {
             appendLine("frameCommitMeaning=callback_receipt_not_physical_presentation liveFrameCommit=UNOBSERVED")
             appendLine("drawObservationMeaning=NO_DRAW_OBSERVED_is_not_proof_of_no_rendering")
             appendLine("drawGapClock=System.nanoTime frameNs=Choreographer cpuNs=threadCPU cbOut=ownedCallbackWorkEndBeforeProbe submit=CPUCanvasCall")
+            appendLine("r18Clock=uptimeMs lifecycle; System.nanoTime transactionLatchAndFence; alignmentAndUncertaintyPerGeneration physicalPixels=UNOBSERVED")
             appendLine("workKinds=1:systemGate,2:inspectionApply,3:diagnosticProducer nestedWorkNotAdditive=true workCoverage=ownedScopesOnly drawObserverNs=bookkeepingOnly")
             appendLine("COLD_PREPARATION")
             val cold = active.coldPreparation
@@ -2138,6 +2189,27 @@ internal object KeyguardCardDiagnostics {
                     appendLine(" intervalClock=uptimeMs durationClock=System.nanoTime cpuClock=threadCPU overlap=UNOBSERVED physical=UNOBSERVED")
                 }
             }, attempt.id)
+        }
+        // R18 owners share the same real UTF-8 budget as existing records.
+        // Round-robin keeps one busy wake from starving another wake's row.
+        repeat(attemptsForCausalEvidence.maxOfOrNull { it.r18Generations.size } ?: 0) { index ->
+            attemptsForCausalEvidence.forEach { attempt ->
+                attempt.r18Generations.values.elementAtOrNull(index)?.let { row ->
+                    fun value(key: String) = row.values[key] ?: "UNOBSERVED"
+                    val text = buildString {
+                        append(" R18_PIPELINE attempt=${attempt.id} attach=${row.attachment ?: "UNOBSERVED"} host=${row.host} output=${row.output} child=${row.child} privacy=${row.privacy}")
+                        append(" sample=${value("r18SampleStart")}/${value("r18SampleEnd")} reserve=${value("r18Reservation")} adopt=${value("WAKE_ADOPTED")} hostAdd=${value("HOST_ADD_BEGIN")}/${value("HOST_ADDED")} hostAttach=${value("HOST_ATTACHED")} hostReady=${value("HOST_READY")}")
+                        append(" bufferReady=${value("BUFFER_READY")} bound=${value("HIDDEN_BOUND")} grant=${value("GRANT")} proof=${value("r18Proof")} input=${value("INPUT_ARMED")}")
+                        append(" revealQueued=${value("REVEAL_QUEUED")} revealApply=${value("reveal:r18ApplyBegin")}/${value("reveal:r18ApplyEnd")} revealCommit=${value("reveal:r18Commit")}")
+                        append(" revealLatchNs=${value("reveal:r18LatchNs")} revealPresentNs=${value("reveal:r18PresentNs")}/${value("reveal:r18PresentState")}")
+                        append(" seal=${value("SEALED")}/${value("SEALED_REASON")} retireApply=${value("retire:r18ApplyBegin")}/${value("retire:r18ApplyEnd")} retireCommit=${value("retire:r18Commit")}")
+                        append(" retireLatchNs=${value("retire:r18LatchNs")} retirePresentNs=${value("retire:r18PresentNs")}/${value("retire:r18PresentState")} drained=${value("OUTPUT_DRAINED")}")
+                        append(" fallback=${value("FALLBACK")}/${value("FALLBACK_REASON")} alignUptimeNano=${value("r18AlignUptime")}/${value("r18AlignNano")} alignUncertaintyNs=${value("r18AlignUncertaintyNs")}")
+                        appendLine(" backend=R18_DIRECT_ATTEMPT omittedGenerations=${attempt.r18GenerationOmitted} physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED")
+                    }
+                    select("a${attempt.id}:r18$index", text, attempt.id)
+                }
+            }
         }
         attemptsForCausalEvidence.forEach { attempt ->
             select("a${attempt.id}:summary", compactAttemptSummary(attempt), attempt.id)
@@ -2429,7 +2501,7 @@ internal object KeyguardCardDiagnostics {
         append(" queued=${cause.queuedAtUptimeMs ?: "NA"} started=${cause.startedAtUptimeMs ?: "NA"} finished=${cause.finishedAtUptimeMs ?: "NA"} handoff=${cause.mainHandoffRequestedAtUptimeMs ?: "NA"} mainApply=${cause.mainApplyStartedAtUptimeMs ?: "NA"} applied=${cause.appliedAtUptimeMs ?: "NA"}")
         append(" authorityAtStart=${cause.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${cause.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${cause.visibilityEpochAtApply ?: "NA"} pendingAtApply=${cause.pendingRequestIdAtApply ?: "NA"}")
         append(" classification=${cause.surfaceClassification ?: "NA"} reason=${cause.surfaceReason ?: "NA"} markers=${cause.surfaceMarkers ?: "NA"} rootUnavailable=${cause.rootUnavailable ?: "NA"} walkTruncated=${cause.walkTruncated ?: "NA"} truncationReasons=${cause.walkTruncationReasons ?: "UNOBSERVED"} visited=${cause.visitedNodeCount ?: "NA"}")
-        append(" reader=${cause.readerStrategy ?: "NA"} freshness=${cause.freshnessPolicy ?: "NA"} cacheClear=${cause.cacheClearResult ?: "NA"} fallback=${cause.fallbackReason ?: "NA"}")
+        append(" reader=${cause.readerStrategy ?: "NA"} freshness=${cause.freshnessPolicy ?: "NA"} cacheClear=${cause.cacheClearResult ?: "NA"} fallback=${cause.fallbackReason ?: "NA"} ownAmbiguous=${cause.ownAttributionAmbiguous ?: "UNOBSERVED"}")
         append(" readAhead=${cause.readAheadReason ?: "UNOBSERVED"}:${cause.readAheadPending ?: "UNOBSERVED"}/${cause.readAheadReserved ?: "UNOBSERVED"}:rev${cause.readAheadRevision ?: "UNOBSERVED"}:applyQueued${cause.readAheadPriorApplyQueued ?: "UNOBSERVED"}")
         append(" activeCandidate=${cause.activeCandidateWindowId ?: "NA"} returnedRoot=${cause.returnedRootWindowId ?: "NA"} activeAccepted=${cause.activeRootAccepted ?: "NA"} activeRootMs=${cause.activeRootTotalMs ?: "NA"} perWindowRootMs=${cause.perWindowRootTotalMs ?: "NA"} childCalls=${cause.childAcquisitionCount ?: "NA"} childMs=${cause.childAcquisitionTotalMs ?: "NA"} childMaxMs=${cause.childAcquisitionMaxMs ?: "NA"} localMs=${cause.localProcessingMs ?: "NA"}")
         append(" rootFlags=${cause.activeRootFlags ?: "UNOBSERVED"} acceptedChildFlags=${cause.acceptedChildFlags ?: "UNOBSERVED"} firstChildMs=${cause.firstChildAcquisitionMs ?: "UNOBSERVED"}")

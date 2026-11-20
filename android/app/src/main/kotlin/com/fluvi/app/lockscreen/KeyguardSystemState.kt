@@ -58,12 +58,15 @@ internal class KeyguardSystemStateSampler(
     private val main: ((() -> Unit) -> Unit),
     private val current: () -> KeyguardInspectionAuthority,
     private val receive: (KeyguardSystemGateRequest, KeyguardSystemState) -> Unit,
+    // The result can reserve work but never grants presentation. The returned
+    // starter runs only after the corresponding Main delivery was posted.
+    private val reserveBeforeMain: (KeyguardSystemGateRequest, KeyguardSystemState) -> (() -> Unit)? = { _, _ -> null },
 ) {
     private var active: KeyguardSystemGateRequest? = null
     private var pending: KeyguardSystemGateRequest? = null
-    private var disposed = false
+    @Volatile private var disposed = false
     private var delivering = false
-    private var revocation = 0L
+    @Volatile private var revocation = 0L
     private var activeRevocation = 0L
     var maximumActive = 0; private set
     var maximumPending = 0; private set
@@ -106,6 +109,9 @@ internal class KeyguardSystemStateSampler(
         worker {
             val state = runCatching { reader().read(KeyguardSystemReadPurpose.RECURRING) }
                 .getOrElse { KeyguardSystemState(-1L, -1L, available = false) }
+            val starter = if (!disposed && readRevocation == revocation && request.authority == current()) {
+                runCatching { reserveBeforeMain(request, state) }.getOrNull()
+            } else null
             main {
                 try {
                     delivering = true
@@ -124,6 +130,11 @@ internal class KeyguardSystemStateSampler(
                     }
                 }
             }
+            // Launch after posting adoption to Main. A fast tree read can
+            // then wait for that adoption without overtaking it on Main.
+            // The starter owns its own exact-token cancellation check; Main
+            // may already have adopted this request and advanced authority.
+            runCatching { starter?.invoke() }
         }
     }
 }

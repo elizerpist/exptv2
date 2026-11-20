@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicReference
 internal class KeyguardOrbSurfaceTarget(
     val attachment: Long,
     val generation: Long,
-    val holder: SurfaceHolder,
+    val holder: SurfaceHolder?,
     val width: Int,
     val height: Int,
     val densityDpi: Int,
@@ -31,13 +31,17 @@ internal class KeyguardOrbSurfaceTarget(
     val reporter: ((KeyguardOrbSurfaceObservation) -> Unit)? = null,
     val access: KeyguardOrbSurfaceAccessGate = KeyguardOrbSurfaceAccessGate(),
     val metrics: KeyguardOrbSurfaceMetrics? = if (reporter == null) null else KeyguardOrbSurfaceMetrics(),
+    val directOutput: KeyguardOrbDirectOutput? = null,
 ) {
     @Volatile var revoked = false
     @Volatile var surfaceReady = false
     @Volatile var discardFullOnRetire = false
     @Volatile var motionAllowed = true
-    val ownsOutput = live && Build.VERSION.SDK_INT == 35 &&
-        (!KeyguardR16LayerTestHooks.ENABLED || !KeyguardR16LayerTestHooks.stockHolder)
+    val ownsOutput = directOutput != null || (live && Build.VERSION.SDK_INT == 35 &&
+        (!KeyguardR16LayerTestHooks.ENABLED || !KeyguardR16LayerTestHooks.stockHolder))
+    // A staged direct output may receive one poster, but cannot animate until
+    // the exact presentation grant is armed by the host.
+    @Volatile var presentationGranted = directOutput == null
     @Volatile var ownedOutput: KeyguardOrbOwnedOutput? = null
     val shellAccess = KeyguardOrbSurfaceAccessGate()
     @Volatile var firstPostedVisualKey: String? = null
@@ -153,6 +157,50 @@ internal class KeyguardOrbSurfaceWorker(
         }
     }
 
+    /** Prepare exactly one neutral image in an unparented hidden output.
+     * The eligibility callback is a scalar/token check and cannot use Views.
+     * A created output remains private and has no animation grant. */
+    fun prepareHiddenDirect(
+        attachment: Long, generation: Long, width: Int, height: Int, densityDpi: Int,
+        profile: KeyguardMaterialProfile, full: Boolean, lane: KeyguardOrbPresentationLane,
+        stillCurrent: () -> Boolean, created: (KeyguardOrbSurfaceTarget) -> Unit,
+        failed: (String) -> Unit,
+    ) {
+        val safe = (if (full) profile else profile.neutralized()).copyForSurface()
+        val request = preparationGeneration.incrementAndGet()
+        handler.post {
+            if (disposed || request != preparationGeneration.get() || authorizedTarget.get() != null ||
+                !runCatching { stillCurrent() }.getOrDefault(false)) return@post
+            val output = try { lane.createDetached(attachment, width, height, generation) } catch (error: Throwable) {
+                runCatching { failed("directCreate:${error.javaClass.simpleName}") }; return@post
+            }
+            if (output == null) { runCatching { failed("directCapacity") }; return@post }
+            val target = KeyguardOrbSurfaceTarget(attachment, generation, null, width, height, densityDpi,
+                full = full, live = true, directOutput = output)
+            if (disposed || request != preparationGeneration.get() ||
+                !runCatching { stillCurrent() }.getOrDefault(false) || !authorizedTarget.compareAndSet(null, target)) {
+                lane.retire(output)
+                return@post
+            }
+            stopClock()
+            cancelRedraw()
+            currentTarget = target
+            currentScene = null
+            currentPainter = null
+            previousScene = null
+            previousPainter = null
+            currentPoster = null
+            firstPosted = false
+            target.surfaceReady = true
+            if (runCatching { created(target) }.isFailure) {
+                revoke(target)
+                lane.retire(output)
+                return@post
+            }
+            prepareAuthorized(target, safe, request)
+        }
+    }
+
     /** Main has already granted this exact lifetime; the worker still waits
      * for its real SurfaceHolder callback and verifies size before drawing. */
     fun authorize(target: KeyguardOrbSurfaceTarget, profile: KeyguardMaterialProfile) {
@@ -260,6 +308,22 @@ internal class KeyguardOrbSurfaceWorker(
                 }
                 scheduleFrame()
             }
+        }
+    }
+
+    /** The detached first frame is only a preparation. This separate call
+     * starts motion after the current host and disclosure have been granted. */
+    fun grantPresentation(target: KeyguardOrbSurfaceTarget) {
+        if (target.revoked || target.directOutput == null) return
+        target.presentationGranted = true
+        handler.postAtFrontOfQueue {
+            if (currentTarget !== target || target.revoked || !target.presentationGranted) return@postAtFrontOfQueue
+            val scene = currentScene ?: return@postAtFrontOfQueue
+            if (lastPostedVisual == scene.profile.visualKey && lastPostedFull == scene.full) {
+                val phase = KeyguardMaterialTime(lastPostedElapsed, lastPostedPhase, lastPostedBackground, lastPostedInterior)
+                currentScene = scene.anchoredAt(phase, System.nanoTime())
+            }
+            if (target.live && target.motionAllowed && firstPosted) scheduleFrame()
         }
     }
 
@@ -374,13 +438,14 @@ internal class KeyguardOrbSurfaceWorker(
 
     private fun drawIfReady(target: KeyguardOrbSurfaceTarget) {
         if (currentTarget !== target || target.revoked || !target.surfaceReady) return
-        if (target.ownsOutput && target.shellNeedsClear && !clearHost(target)) return
+        if (target.directOutput == null && target.ownsOutput && target.shellNeedsClear && !clearHost(target)) return
         if (currentPoster == null) return
         if (!firstPosted) draw(target, System.nanoTime())
         if (target.live && target.motionAllowed && firstPosted && !target.revoked) scheduleFrame()
     }
 
     private fun scheduleFrame() {
+        if (currentTarget?.let { it.directOutput != null && !it.presentationGranted } == true) return
         if (framePending || disposed) return
         val choreographer = clock ?: return
         framePending = true
@@ -403,24 +468,24 @@ internal class KeyguardOrbSurfaceWorker(
         if (!target.shellAccess.tryEnter()) return false
         var canvas: Canvas? = null
         try {
-            canvas = target.holder.lockHardwareCanvas()
+            canvas = checkNotNull(target.holder).lockHardwareCanvas()
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
             val posted = canvas
             canvas = null
-            target.holder.unlockCanvasAndPost(posted)
+            checkNotNull(target.holder).unlockCanvasAndPost(posted)
             target.shellNeedsClear = false
             return true
         } catch (error: Throwable) {
             fail(target, "hostClear:${error.javaClass.simpleName}")
             return false
         } finally {
-            if (canvas != null) runCatching { target.holder.unlockCanvasAndPost(canvas) }
+            if (canvas != null) runCatching { checkNotNull(target.holder).unlockCanvasAndPost(canvas) }
             target.shellAccess.leave()
         }
     }
 
     private fun draw(target: KeyguardOrbSurfaceTarget, frameNanos: Long) {
-        if (target.ownsOutput && target.shellNeedsClear && !clearHost(target)) return
+        if (target.directOutput == null && target.ownsOutput && target.shellNeedsClear && !clearHost(target)) return
         val scene = currentScene ?: return
         val painter = currentPainter ?: return
         if (currentTarget !== target || target.revoked || !target.surfaceReady) return
@@ -458,7 +523,12 @@ internal class KeyguardOrbSurfaceWorker(
         }
         if (currentTarget !== target || target.revoked || !target.surfaceReady || !target.access.tryEnter()) return
         val owned = target.ownedOutput
-        val outputSurface: Surface? = if (target.ownsOutput) owned?.borrow() else null
+        val direct = target.directOutput
+        val outputSurface: Surface? = when {
+            direct != null -> direct.borrow()
+            target.ownsOutput -> owned?.borrow()
+            else -> null
+        }
         if (target.ownsOutput && outputSurface == null) {
             target.access.leave()
             return
@@ -472,7 +542,7 @@ internal class KeyguardOrbSurfaceWorker(
         var lockEnd = 0L; var drawEnd = 0L; var postEnd = 0L
         var cpuLockEnd = 0L; var cpuDrawEnd = 0L; var cpuPostEnd = 0L
         try {
-            canvas = if (outputSurface != null) outputSurface.lockHardwareCanvas() else target.holder.lockHardwareCanvas()
+            canvas = if (outputSurface != null) outputSurface.lockHardwareCanvas() else checkNotNull(target.holder).lockHardwareCanvas()
             if (measure) { lockEnd = System.nanoTime(); cpuLockEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderLockReturned(SystemClock.uptimeMillis()) }
             if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
                 KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock?.invoke(target)
@@ -489,17 +559,22 @@ internal class KeyguardOrbSurfaceWorker(
             canvas = null
             if (measure) target.metrics?.holderPostEntered(SystemClock.uptimeMillis())
             if (outputSurface != null) outputSurface.unlockCanvasAndPost(submitted)
-            else target.holder.unlockCanvasAndPost(submitted)
+            else checkNotNull(target.holder).unlockCanvasAndPost(submitted)
             posted = true
+            if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost?.invoke(target) }
+            }
             if (measure) { postEnd = System.nanoTime(); cpuPostEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderPostReturned(SystemClock.uptimeMillis()) }
         } catch (error: Throwable) {
             fail(target, "draw:${error.javaClass.simpleName}")
         } finally {
             if (canvas != null) runCatching {
                 if (outputSurface != null) outputSurface.unlockCanvasAndPost(canvas)
-                else target.holder.unlockCanvasAndPost(canvas)
+                else checkNotNull(target.holder).unlockCanvasAndPost(canvas)
             }
-            if (outputSurface != null) owned?.releaseBorrow()
+            if (outputSurface != null) {
+                if (direct != null) direct.releaseBorrow() else owned?.releaseBorrow()
+            }
             target.access.leave()
         }
         if (posted && measure) {

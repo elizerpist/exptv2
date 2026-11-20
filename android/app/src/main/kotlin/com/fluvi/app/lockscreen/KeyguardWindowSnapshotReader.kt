@@ -40,6 +40,10 @@ internal enum class KeyguardWindowFreshness {
         get() = this != FRAMEWORK_EVENT
 }
 
+/** The historical R15 zero-flag experiment remains test-only; normal R18
+ * uses interruptible hybrid prefetch on a single eligible API-35 root. */
+internal enum class KeyguardActiveRootStrategy { STOCK, R18_INITIAL_HYBRID, R15_HISTORICAL_ZERO }
+
 internal object KeyguardWindowSnapshotReaderPolicy {
     /** Restore the measured 47002e5 batching configuration. A root may wait
      * for its batch; the tradeoff is fewer subsequent remote child waits.
@@ -53,7 +57,16 @@ internal object KeyguardWindowSnapshotReaderPolicy {
     /** Only the separately authorized initial active-root call changes.
      * Child traversal and per-window fallback keep their existing strategy. */
     fun activeRootPrefetchFlags(initialRootOnly: Boolean, apiLevel: Int = Build.VERSION.SDK_INT): Int =
-        if (initialRootOnly && apiLevel >= Build.VERSION_CODES.TIRAMISU) 0 else batchedPrefetchFlags(apiLevel)
+        activeRootPrefetchFlags(if (initialRootOnly) KeyguardActiveRootStrategy.R15_HISTORICAL_ZERO
+            else KeyguardActiveRootStrategy.STOCK, apiLevel)
+
+    fun activeRootPrefetchFlags(strategy: KeyguardActiveRootStrategy, apiLevel: Int = Build.VERSION.SDK_INT): Int =
+        when {
+            strategy == KeyguardActiveRootStrategy.R15_HISTORICAL_ZERO && apiLevel >= Build.VERSION_CODES.TIRAMISU -> 0
+            strategy == KeyguardActiveRootStrategy.R18_INITIAL_HYBRID && apiLevel == 35 ->
+                AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_HYBRID
+            else -> batchedPrefetchFlags(apiLevel)
+        }
 
     fun shouldClearCache(freshness: KeyguardWindowFreshness): Boolean =
         freshness.requiresCacheClear
@@ -104,6 +117,9 @@ internal object KeyguardWindowSnapshotReaderPolicy {
         }
         .singleOrNull()
 
+    fun canUseCandidateWithStrictOwnAttribution(strict: Boolean, candidate: KeyguardWindowReaderWindowMetadata?): Boolean =
+        !strict || candidate?.type != AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
+
     fun acceptsActiveRoot(
         candidate: KeyguardWindowReaderWindowMetadata,
         returnedWindowId: Int?,
@@ -131,6 +147,9 @@ internal object KeyguardWindowAcquisitionCalls {
     inline fun <T> activeRoot(initialRootOnly: Boolean, apiLevel: Int, call: (Int) -> T): T =
         call(KeyguardWindowSnapshotReaderPolicy.activeRootPrefetchFlags(initialRootOnly, apiLevel))
 
+    inline fun <T> activeRoot(strategy: KeyguardActiveRootStrategy, apiLevel: Int, call: (Int) -> T): T =
+        call(KeyguardWindowSnapshotReaderPolicy.activeRootPrefetchFlags(strategy, apiLevel))
+
     inline fun <T> child(prefetchFlags: Int?, apiLevel: Int, batched: (Int) -> T, legacy: () -> T): T =
         if (prefetchFlags != null && apiLevel >= Build.VERSION_CODES.TIRAMISU) batched(prefetchFlags) else legacy()
 }
@@ -150,6 +169,12 @@ internal class KeyguardWindowSnapshotReader(
         val attachGeneration: Long,
         val freshness: KeyguardWindowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT,
         val initialRootOnly: Boolean = false,
+        /** Invoked only at an eligible physical active-root call, after the
+         * cache/freshness/window checks; no View or Binder call under its lock. */
+        val activeRootStrategyAtCall: (() -> KeyguardActiveRootStrategy)? = null,
+        val knownOwnAtInventory: (() -> KeyguardOwnOverlayIdentity?)? = null,
+        val strictOwnAttribution: Boolean = false,
+        val onDecisiveSystemMarker: (() -> Unit)? = null,
     )
 
     data class Timing(
@@ -166,6 +191,7 @@ internal class KeyguardWindowSnapshotReader(
         val returnedRootWindowId: Int? = null,
         val activeRootAccepted: Boolean = false,
         val fallbackReason: String? = null,
+        val ownAttributionAmbiguous: Boolean = false,
         val getWindowsMs: Long = 0L,
         val relevantWindowCount: Int = 0,
         val activeRootCallCount: Int = 0,
@@ -219,6 +245,7 @@ internal class KeyguardWindowSnapshotReader(
         var returnedRootWindowId: Int? = null
         var activeRootAccepted = false
         var fallbackReason: String? = null
+        var ownAttributionAmbiguous = false
         var relevantWindows = 0
         var activeRootCount = 0
         var activeRootTotal = 0L
@@ -279,6 +306,7 @@ internal class KeyguardWindowSnapshotReader(
             returnedRootWindowId = returnedRootWindowId,
             activeRootAccepted = activeRootAccepted,
             fallbackReason = fallbackReason,
+            ownAttributionAmbiguous = ownAttributionAmbiguous,
             getWindowsMs = getWindowsMs,
             relevantWindowCount = relevantWindows,
             activeRootCallCount = activeRootCount,
@@ -351,8 +379,10 @@ internal class KeyguardWindowSnapshotReader(
 
         val primary = currentWindows.filter { displayId(it) == Display.DEFAULT_DISPLAY }
         val metadata = primary.map(::metadata)
+        val observedOwn = request.knownOwnAtInventory?.invoke() ?: request.knownOwn
+        val scopedRequest = request.copy(knownOwn = observedOwn)
         val activeCandidate = KeyguardWindowSnapshotReaderPolicy.activeCandidate(
-            metadata, request.knownOwn, request.attachGeneration,
+            metadata, observedOwn, request.attachGeneration,
         )
         val activeLayer = primary.firstOrNull { it.id == activeCandidate?.id }?.layer
         // The active-root route is an acquisition strategy, not a reward for
@@ -366,17 +396,22 @@ internal class KeyguardWindowSnapshotReader(
             cacheEnabled = cacheEnabled,
             hasUnambiguousCandidate = activeCandidate != null,
             freshnessBoundaryEstablished = freshnessBoundaryEstablished,
+        ) && KeyguardWindowSnapshotReaderPolicy.canUseCandidateWithStrictOwnAttribution(
+            request.strictOwnAttribution, activeCandidate,
         )
         var activeRoot: AccessibilityNodeInfo? = null
         var activeWindowId: Int? = null
 
         if (canBatch && authorityIsCurrent()) {
             val candidate = requireNotNull(activeCandidate)
-            if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.candidate(candidate)
             timing.activeCandidateWindowId = candidate.id
             val startedAt = SystemClock.uptimeMillis()
             activeRoot = runCatching {
-                KeyguardWindowAcquisitionCalls.activeRoot(request.initialRootOnly, Build.VERSION.SDK_INT) { flags ->
+                val strategy = request.activeRootStrategyAtCall?.invoke()
+                    ?: if (request.initialRootOnly) KeyguardActiveRootStrategy.R15_HISTORICAL_ZERO
+                    else KeyguardActiveRootStrategy.STOCK
+                if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.candidate(candidate)
+                KeyguardWindowAcquisitionCalls.activeRoot(strategy, Build.VERSION.SDK_INT) { flags ->
                     timing.activeRootPrefetchFlags = flags
                     service.getRootInActiveWindow(flags)
                 }
@@ -408,8 +443,10 @@ internal class KeyguardWindowSnapshotReader(
         } else if (timing.fallbackReason == null) {
             timing.fallbackReason = when {
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU -> "apiBelow33"
-                activeCandidate == null && metadata.none { it.active && !KeyguardWindowSnapshotReaderPolicy.isExactKnownOwn(it, request.knownOwn, request.attachGeneration) } -> "noActiveCandidate"
+                activeCandidate == null && metadata.none { it.active && !KeyguardWindowSnapshotReaderPolicy.isExactKnownOwn(it, observedOwn, request.attachGeneration) } -> "noActiveCandidate"
                 activeCandidate == null -> "ambiguousActiveCandidates"
+                !KeyguardWindowSnapshotReaderPolicy.canUseCandidateWithStrictOwnAttribution(
+                    request.strictOwnAttribution, activeCandidate) -> "unattributedActiveOverlay"
                 cacheEnabled == false -> "cacheDisabled"
                 cacheEnabled == null -> "cacheUnavailable"
                 !freshnessBoundaryEstablished -> "freshnessBoundary:$cacheClearResult"
@@ -430,7 +467,13 @@ internal class KeyguardWindowSnapshotReader(
                     timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), true, readsAfterInvalidation)
             }
             timing.relevantWindows += 1
-            if (isExactKnownOwn(window, request)) {
+            if (isExactKnownOwn(window, scopedRequest)) {
+                if (request.strictOwnAttribution && request.knownOwnAtInventory?.invoke() != observedOwn) {
+                    activeRoot?.recycle()
+                    return Result(snapshots, unavailableRoot, walkTruncated, windowsReadMs,
+                        SystemClock.uptimeMillis() - treeStartedAt, visited,
+                        timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), true, readsAfterInvalidation)
+                }
                 snapshots += KeyguardWindowSnapshot(
                     windowId = window.id, packageName = ownPackageName, type = window.type,
                     layer = window.layer, displayId = displayId(window), ownOverlay = true,
@@ -460,9 +503,19 @@ internal class KeyguardWindowSnapshotReader(
                     activeLayer?.let { window.layer.toLong() - it.toLong() }, "perWindow")
             }
             val rootPackage = root?.packageName?.toString()
-            val own = rootPackage == ownPackageName && window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
+            val potentialOwn = window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY &&
+                (rootPackage == ownPackageName || root == null)
+            if (request.strictOwnAttribution && potentialOwn) {
+                // An unresolved or same-package window is never proof of our
+                // exact host. A complete positive is refused until fallback.
+                unavailableRoot = true
+                timing.ownAttributionAmbiguous = true
+            }
+            val own = !request.strictOwnAttribution && rootPackage == ownPackageName &&
+                window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
             val visible = if (rootPackage in SYSTEM_PACKAGES && root != null) {
-                visibleIds(root, window.id, prefetch.takeIf { timing.activeRootAccepted }, authorityIsCurrent, timing).also {
+                visibleIds(root, window.id, prefetch.takeIf { timing.activeRootAccepted }, authorityIsCurrent, timing,
+                    request.onDecisiveSystemMarker).also {
                     walkTruncated = walkTruncated || it.truncated
                     visited += it.visited
                     readsAfterInvalidation += it.readsAfterInvalidation
@@ -488,8 +541,18 @@ internal class KeyguardWindowSnapshotReader(
         prefetchFlags: Int?,
         authorityIsCurrent: () -> Boolean,
         timing: Accumulator,
+        onDecisiveSystemMarker: (() -> Unit)?,
     ): VisibleIds {
         val ids = linkedSetOf<String>()
+        var decisiveReported = false
+        fun recordId(id: String) {
+            ids.add(id)
+            if (!decisiveReported && onDecisiveSystemMarker != null &&
+                KeyguardSurfaceClassifier.isDecisiveExclusionMarker(id) && authorityIsCurrent()) {
+                decisiveReported = true
+                runCatching { onDecisiveSystemMarker() }
+            }
+        }
         var visited = 0
         var truncated = false
         var aborted = false
@@ -505,8 +568,8 @@ internal class KeyguardWindowSnapshotReader(
             visited += 1
             try {
                 if (!node.isVisibleToUser) return
-                node.viewIdResourceName?.let(ids::add)
-                node.className?.toString()?.takeIf { it.contains("BouncerContent") }?.let { ids.add("element:BouncerContent") }
+                node.viewIdResourceName?.let(::recordId)
+                node.className?.toString()?.takeIf { it.contains("BouncerContent") }?.let { recordId("element:BouncerContent") }
                 for (index in 0 until node.childCount) {
                     if (!authorityIsCurrent()) { aborted = true; return }
                     val startedAt = SystemClock.uptimeMillis()
