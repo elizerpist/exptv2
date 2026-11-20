@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 import struct
+import uuid
 from pathlib import Path
 from typing import Iterable
 
@@ -72,6 +74,22 @@ def encoded_roi(roi: tuple[int, int, int, int], logical: tuple[int, int],
 
 def validate_frame_records(records: list[dict], expected: dict, presentation_ns: list[int], root: Path) -> None:
     """Check decoded-frame identity; extraction from the MP4 is a separate gate."""
+    try:
+        if (not re.fullmatch(r"[0-9a-f]{40}", expected.get("source", ""))
+                or not re.fullmatch(r"[0-9a-f]{64}", expected.get("video_sha256", ""))
+                or str(uuid.UUID(expected.get("capture", ""))) != expected.get("capture")
+                or expected.get("display") != 0
+                or not all(isinstance(expected.get(k), int) and expected[k] > 0 for k in ("window_id", "attachment", "generation"))
+                or not isinstance(expected.get("roi"), list) or len(expected["roi"]) != 4
+                or not isinstance(expected.get("size"), list) or len(expected["size"]) != 2):
+            raise ValueError("expected_frame_owner_missing")
+        left, top, right, bottom = expected["roi"]
+        width, height = expected["size"]
+        if not all(isinstance(value, int) for value in (left, top, right, bottom, width, height)) or not (
+                0 <= left < right <= width and 0 <= top < bottom <= height):
+            raise ValueError("expected_frame_geometry_invalid")
+    except (TypeError, AttributeError) as exc:
+        raise ValueError("expected_frame_owner_missing") from exc
     if not records or len(records) != len(presentation_ns):
         raise ValueError("frame_records_missing")
     base = root.resolve()
@@ -80,7 +98,7 @@ def validate_frame_records(records: list[dict], expected: dict, presentation_ns:
         if not isinstance(record, dict) or record.get("index") != index or record.get("presentation_ns") != stamp:
             raise ValueError("frame_order_or_timestamp_mismatch")
         if any(record.get(key) != expected.get(key) for key in
-               ("source", "capture", "video_sha256", "display", "attachment", "generation", "roi", "size")):
+               ("source", "capture", "video_sha256", "display", "window_id", "attachment", "generation", "roi", "size")):
             raise ValueError("frame_owner_or_geometry_mismatch")
         name = record.get("path")
         if not isinstance(name, str) or not name:
@@ -198,6 +216,8 @@ def classify(image: Image.Image, calibration: dict) -> str:
     matches = []
     tolerance = calibration["tolerance"]
     for label, references in calibration["samples"].items():
+        if not references or image.size != references[0].size:
+            return "UNKNOWN"
         if any(all(_difference(image, reference, mask) <= tolerance
                        and _outlier_fraction(image, reference, mask, max(24, tolerance * 3)) <= 0.01
                        for mask in calibration["masks"])

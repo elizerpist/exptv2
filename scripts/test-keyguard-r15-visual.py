@@ -6,6 +6,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -90,8 +91,8 @@ class VisualControls(unittest.TestCase):
 
     def test_frame_identity_geometry_corruption_and_order(self):
         import copy
-        expected = dict(source="a" * 40, capture="test-capture", video_sha256="b" * 64,
-                        display=0, attachment=1, generation=3, roi=[0, 0, 64, 64], size=[64, 64])
+        expected = dict(source="a" * 40, capture=str(uuid.uuid4()), video_sha256="b" * 64,
+                        display=0, window_id=123, attachment=1, generation=3, roi=[0, 0, 64, 64], size=[64, 64])
         paths = [self.frame("FULL"), self.frame("FULL")]
         records = [expected | dict(index=i, presentation_ns=(i + 1) * 10, path=p.name,
                     sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for i, p in enumerate(paths)]
