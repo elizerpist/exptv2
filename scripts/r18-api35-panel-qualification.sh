@@ -4,7 +4,7 @@ out="$RUNNER_TEMP/r18-api35"
 app=build/app/outputs/apk/debug/app-debug.apk
 test_apk=build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 test "$(git rev-parse HEAD)" = "$APP_SHA"
-test -z "$(git status --porcelain --untracked-files=no)"
+test "$(git diff --name-only)" = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
 test -s "$app" && test -s "$test_apk"
 sha256sum "$app" "$test_apk" > "$out/apk-sha256.txt"
 { adb devices -l; adb shell getprop ro.build.version.sdk; adb shell getprop ro.product.cpu.abi; adb shell getprop ro.build.fingerprint; adb shell wm size; adb shell wm density; adb shell dumpsys display; } > "$out/device.txt" 2>&1

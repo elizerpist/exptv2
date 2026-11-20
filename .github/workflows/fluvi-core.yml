@@ -59,6 +59,14 @@ jobs:
           printf 'application_sha=%s\nharness_sha=%s\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r18-api35/identity.txt"
           (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r18-api35/unit.log"
           printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r18-api35/unit.exit"
+      - name: Overlay only the calibrated panel test fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py"
+          git diff --name-only > "$RUNNER_TEMP/r18-api35/fixture-modified-files.txt"
+          test "$(cat "$RUNNER_TEMP/r18-api35/fixture-modified-files.txt")" = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
+          git diff > "$RUNNER_TEMP/r18-api35/fixture.patch"
       - name: Assemble exact debug and instrumentation pair
         run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
       - name: Enable KVM
