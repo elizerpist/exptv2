@@ -82,6 +82,8 @@ internal class KeyguardOrbSurfacePresenter(
 
     fun r18ReadyAt(attachment: Long, generation: Long): Long? = direct?.readyAt(attachment, generation)
 
+    fun r19AllocatedAt(attachment: Long, generation: Long): Long? = direct?.allocatedAt(attachment, generation)
+
     fun r18AllocatedOutput(attachment: Long, generation: Long, full: Boolean, width: Int, height: Int): Any? =
         direct?.allocatedOutput(attachment, generation, full, width, height, context.resources.displayMetrics.densityDpi)
 

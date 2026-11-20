@@ -563,6 +563,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
             if (!accepted) { failR18Stage(owner, "outputCapacityOrIdentity"); return }
             owner.output = output
+            // The allocation callback may have preceded wake adoption. Preserve
+            // the original timestamp for this exact still-current output.
+            overlay.r19AllocatedAt(prep)?.let { recordR18(owner, "R19_ALLOCATED", it) }
             overlay.r18ReadyAt(prep)?.let { recordR18(owner, "BUFFER_READY", it) }
         }
         // A blank resource is not an image. Only a matching real posted frame

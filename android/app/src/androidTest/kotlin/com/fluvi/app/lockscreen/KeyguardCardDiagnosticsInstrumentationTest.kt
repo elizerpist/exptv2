@@ -118,7 +118,16 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                         "r18Output" to wake + 10, "r18Privacy" to "full", "r19Intent" to "EMPTY") + extra)
             }
             edge("WAKE_ADOPTED", base, base + 1)
-            edge("R19_ALLOCATED", base + 1, base + 1)
+            // Reducer delivery order need not equal the physical reader order.
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_COALESCED", "newer", requestId = base + 3,
+                diagnosticContext = owner, observedUptimeMs = base + 4)
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_STARTED", "wake", requestId = base + 2,
+                diagnosticContext = owner, observedUptimeMs = base + 3, fields = mapOf("authorityCurrentAtStart" to true))
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_FINISHED", "NO_MAIN_MARKER", requestId = base + 2,
+                diagnosticContext = owner, observedUptimeMs = base + 6,
+                fields = mapOf("surfaceClassification" to "HIDDEN_UNKNOWN", "rootUnavailable" to false,
+                    "walkTruncated" to false, "activeRootTotalMs" to 2, "activeRootFlags" to 4, "acceptedChildFlags" to 36))
+            edge("R19_ALLOCATED", base - 10, base + 1)
             edge("HIDDEN_BOUND", base + 2, base + 1)
             edge("R19_FIRST_POSITIVE", base + 8, base + 7, mapOf("r18Proof" to base + 7,
                 "r19SceneRead" to 44, "r19Freshness" to 5, "r19ReadStart" to base + 3,
@@ -137,6 +146,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
         val rows = report.lineSequence().filter { it.startsWith(" R18_PIPELINE ") }.toList()
         assertEquals(4, rows.size)
+        assertTrue(rows.first().contains("alloc=99990 reservedReq=100001"))
+        assertTrue(rows.first().contains("firstRead=100002@100003/100006:HIDDEN_UNKNOWN/NO_MAIN_MARKER"))
+        assertTrue(rows.first().contains("firstReadRootMs=2 firstReadChildMs=UNOBSERVED firstReadFlags=4/36 firstReadIncomplete=false/false"))
         assertTrue(rows.first().contains("firstPositive=100007@100008"))
         assertTrue(rows.first().contains("scene=44/44 freshness=5"))
         assertTrue(rows.first().contains("firstMotion=100036 activePosts=2 gaps=1/16000000/16000000/0"))

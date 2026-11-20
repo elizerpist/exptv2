@@ -76,6 +76,45 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
         }
     }
 
+    @Test fun r19PrewakeAllocationRetainsExactTimeWithoutPostingFullPixels() {
+        assumeTrue(Build.VERSION.SDK_INT == 35)
+        val context = instrumentation.targetContext
+        val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
+        val allocated = CountDownLatch(1)
+        val observed = AtomicReference<Long>()
+        val failure = AtomicReference<String?>()
+        var presenter: KeyguardOrbSurfacePresenter? = null
+        try {
+            val size = context.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+            instrumentation.runOnMainSync {
+                val root = FrameLayout(activity)
+                activity.setContentView(root)
+                presenter = KeyguardOrbSurfacePresenter(activity, root, onFirstPosted = { _, _ -> },
+                    onFailure = { failure.set(it) }, isCaptureActive = { true },
+                    onR18Allocated = { attachment, generation, at ->
+                        if (attachment == 21L && generation == 34L) { observed.set(at); allocated.countDown() }
+                    }, onR18Failure = { _, _, reason, cleanup -> failure.set(reason); cleanup() })
+                assertTrue(checkNotNull(presenter).prepareR18(21, 34, profile(), size, size,
+                    full = true, emptyAwaitingDisclosure = true))
+            }
+            assertTrue("virgin native output was not allocated", allocated.await(20, TimeUnit.SECONDS))
+            assertNull(failure.get())
+            instrumentation.runOnMainSync {
+                val current = checkNotNull(presenter)
+                assertEquals(observed.get(), current.r19AllocatedAt(21, 34))
+                assertNull(current.r19AllocatedAt(21, 35))
+                assertNotNull(current.r18AllocatedOutput(21, 34, true, size, size))
+                assertNull("allocation alone must not post an authorized image",
+                    current.r18PreparedOutput(21, 34, profile(), true, size, size))
+                current.sealR18(21, 34)
+                assertNull(current.r19AllocatedAt(21, 34))
+            }
+        } finally {
+            instrumentation.runOnMainSync { presenter?.dispose(); activity.finish() }
+        }
+    }
+
     @Test fun r18RealPanelHiddenBufferTouchAndHeldBorrowerRetirement() {
         assumeTrue(Build.VERSION.SDK_INT == 35)
         val context = instrumentation.targetContext

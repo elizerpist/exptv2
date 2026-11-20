@@ -751,6 +751,8 @@ internal object KeyguardCardDiagnostics {
         var firstExclusionSignalAtUptimeMs: Long? = null,
         var firstExclusionSignalSource: String? = null,
         var firstInspectionRequestId: Long? = null,
+        var firstPhysicalRequestId: Long? = null,
+        var firstPhysicalStartedAtUptimeMs: Long? = null,
         var showingInspectionRequestId: Long? = null,
         var requestsReceived: Int = 0,
         var requestsReplaced: Int = 0,
@@ -1005,6 +1007,9 @@ internal object KeyguardCardDiagnostics {
         }
         listOf("r18SampleStart", "r18SampleEnd", "r18Reservation", "r18AlignUptime", "r18AlignNano",
             "r18AlignUncertaintyNs", "r19Intent", "r19Poster").forEach { retainField(it) }
+        if (event.reason == "WAKE_ADOPTED") {
+            event.requestId?.let { timeline.values.putIfAbsent("r19ReservedRequest", it.toString()) }
+        }
         if (event.reason == "GRANT") retainField("r18Proof")
         if (event.reason == "R19_FIRST_POSITIVE") {
             timeline.values.putIfAbsent("r19PositiveRequest", event.requestId?.toString() ?: "UNOBSERVED")
@@ -1427,7 +1432,9 @@ internal object KeyguardCardDiagnostics {
                     ?: attempt.hides.firstOrNull { it.cause?.requestId == request }?.cause
                 if (owned != null) return@let owned
                 if (request !in attempt.inspections && attempt.inspections.size >= MAX_INSPECTION_LEDGER) {
-                    attempt.inspections.keys.firstOrNull { it != attempt.firstInspectionRequestId }
+                    attempt.inspections.keys.firstOrNull {
+                        it != attempt.firstInspectionRequestId && it != attempt.firstPhysicalRequestId
+                    }
                         ?.let(attempt.inspections::remove)
                 }
                 attempt.inspections.getOrPut(request) { InspectionTimeline(request) }.also { timeline ->
@@ -1595,6 +1602,11 @@ internal object KeyguardCardDiagnostics {
                 }
                 "INSPECTION_STARTED" -> {
                     attempt.inspectionsStarted += 1
+                    if (requestId != null && (attempt.firstPhysicalStartedAtUptimeMs == null ||
+                            event.uptimeMs < attempt.firstPhysicalStartedAtUptimeMs!!)) {
+                        attempt.firstPhysicalRequestId = requestId
+                        attempt.firstPhysicalStartedAtUptimeMs = event.uptimeMs
+                    }
                     inspectionTimeline()?.apply {
                         startedAtUptimeMs = event.uptimeMs
                         authorityCurrentAtStart = when (fields["authorityCurrentAtStart"]) {
@@ -2217,6 +2229,7 @@ internal object KeyguardCardDiagnostics {
                 attempt.r18Generations.values.elementAtOrNull(index)?.let { row ->
                     fun value(key: String) = row.values[key] ?: "UNOBSERVED"
                     val motion = (row.r19MetricSnapshot ?: row.r19Metrics?.snapshot())?.takeIf { it.coherent }
+                    val firstPhysical = attempt.firstPhysicalRequestId?.let(attempt.inspections::get)
                     val text = buildString {
                         append(" R18_PIPELINE attempt=${attempt.id} attach=${row.attachment ?: "UNOBSERVED"} host=${row.host} output=${row.output} child=${row.child} privacy=${row.privacy}")
                         append(" sample=${value("r18SampleStart")}/${value("r18SampleEnd")} reserve=${value("r18Reservation")} adopt=${value("WAKE_ADOPTED")} hostAdd=${value("HOST_ADD_BEGIN")}/${value("HOST_ADDED")} hostAttach=${value("HOST_ATTACHED")} hostReady=${value("HOST_READY")}")
@@ -2226,7 +2239,11 @@ internal object KeyguardCardDiagnostics {
                         append(" seal=${value("SEALED")}/${value("SEALED_REASON")} retireApply=${value("retire:r18ApplyBegin")}/${value("retire:r18ApplyEnd")} retireCommit=${value("retire:r18Commit")}")
                         append(" retireLatchNs=${value("retire:r18LatchNs")} retirePresentNs=${value("retire:r18PresentNs")}/${value("retire:r18PresentState")} drained=${value("OUTPUT_DRAINED")}")
                         append(" fallback=${value("FALLBACK")}/${value("FALLBACK_REASON")} alignUptimeNano=${value("r18AlignUptime")}/${value("r18AlignNano")} alignUncertaintyNs=${value("r18AlignUncertaintyNs")}")
-                        append(" r19Intent=${value("r19Intent")} alloc=${value("R19_ALLOCATED")} firstPositive=${value("r19PositiveRequest")}@${value("R19_FIRST_POSITIVE")} readStart=${value("r19ReadStart")} rootMs=${value("r19RootMs")} flags=${value("r19RootFlags")}/${value("r19ChildFlags")}")
+                        append(" r19Intent=${value("r19Intent")} alloc=${value("R19_ALLOCATED")} reservedReq=${value("r19ReservedRequest")}")
+                        append(" firstRead=${attempt.firstPhysicalRequestId ?: "UNOBSERVED"}@${attempt.firstPhysicalStartedAtUptimeMs ?: "UNOBSERVED"}/${firstPhysical?.finishedAtUptimeMs ?: "UNOBSERVED"}:${firstPhysical?.surfaceClassification ?: "UNOBSERVED"}/${firstPhysical?.surfaceReason ?: "UNOBSERVED"}")
+                        append(" firstReadQueued=${firstPhysical?.queuedAtUptimeMs ?: "UNOBSERVED"} firstReadAuthority=${firstPhysical?.authorityCurrentAtStart ?: "UNOBSERVED"}")
+                        append(" firstReadRootMs=${firstPhysical?.activeRootTotalMs ?: "UNOBSERVED"} firstReadChildMs=${firstPhysical?.childAcquisitionTotalMs ?: "UNOBSERVED"} firstReadFlags=${firstPhysical?.activeRootFlags ?: "UNOBSERVED"}/${firstPhysical?.acceptedChildFlags ?: "UNOBSERVED"} firstReadIncomplete=${firstPhysical?.rootUnavailable ?: "UNOBSERVED"}/${firstPhysical?.walkTruncated ?: "UNOBSERVED"}")
+                        append(" firstPositive=${value("r19PositiveRequest")}@${value("R19_FIRST_POSITIVE")} readStart=${value("r19ReadStart")} rootMs=${value("r19RootMs")} flags=${value("r19RootFlags")}/${value("r19ChildFlags")}")
                         append(" scene=${value("r19SceneRead")}/${value("r19SceneConsume")} freshness=${value("r19Freshness")} proofAccepted=${value("R19_PROOF_ACCEPTED")} proofExpired=${value("R19_PROOF_EXPIRED")} systemExpired=${value("R19_EXPIRED_SYSTEM")} ingressExpired=${value("R19_EXPIRED_INGRESS")} displayExpired=${value("R19_EXPIRED_DISPLAY")} consumed=${value("R19_PROOF_CONSUMED")} consumedReq=${value("r19ConsumedRequest")}")
                         append(" paint=${value("R19_PAINT_REQUEST")}/${value("R19_PAINT_ENTER")} poster=${value("r19Poster")}@${value("R19_POSTER")} activeStart=${motion?.activeStartedAtUptimeMs ?: "UNOBSERVED"} firstMotion=${motion?.firstDistinctUptimeMs ?: "UNOBSERVED"} activePosts=${motion?.activeSubmissions ?: "UNOBSERVED"} gaps=${motion?.retainedGaps ?: "UNOBSERVED"}/${motion?.p95GapNs ?: "UNOBSERVED"}/${motion?.worstGapNs ?: "UNOBSERVED"}/${motion?.gapsOver50Ms ?: "UNOBSERVED"}")
                         appendLine(" backend=R18_DIRECT_ATTEMPT omittedGenerations=${attempt.r18GenerationOmitted} physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED")

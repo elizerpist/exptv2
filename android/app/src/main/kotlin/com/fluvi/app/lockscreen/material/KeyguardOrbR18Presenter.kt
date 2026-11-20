@@ -129,6 +129,15 @@ internal class KeyguardOrbR18Presenter(
             target.directOutput else null
     }
 
+    /** Original allocation time, including an output created before wake adoption. */
+    fun allocatedAt(attachment: Long, generation: Long): Long? {
+        checkMain()
+        val current = owner.get() ?: return null
+        return current.preparedAt.takeIf {
+            current.attachment == attachment && current.generation == generation && !current.target.revoked
+        }
+    }
+
     fun authorizeFirst(attachment: Long, generation: Long, profile: KeyguardMaterialProfile,
                        ticket: KeyguardR19FirstPaintTicket): Boolean {
         checkMain()

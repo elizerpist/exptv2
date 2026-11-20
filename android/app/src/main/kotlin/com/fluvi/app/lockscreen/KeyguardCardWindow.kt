@@ -423,6 +423,11 @@ internal class KeyguardCardWindow(
         return surfacePresenter?.authorizeR19First(preparation.attachment, preparation.outputGeneration, profile, ticket) == true
     }
 
+    fun r19AllocatedAt(preparation: R18Preparation): Long? {
+        checkMainThread()
+        return if (r18Preparation == preparation) surfacePresenter?.r19AllocatedAt(preparation.attachment, preparation.outputGeneration) else null
+    }
+
     fun r18ReadyAt(preparation: R18Preparation): Long? {
         checkMainThread()
         return if (r18Preparation == preparation) surfacePresenter?.r18ReadyAt(preparation.attachment, preparation.outputGeneration) else null
