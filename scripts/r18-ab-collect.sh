@@ -20,14 +20,16 @@ app="$candidate_app"
 test_apk="$candidate_test"
 test -s "$app" && test -s "$test_apk"
 sha256sum "$candidate_app" "$candidate_test" "$stock_app" "$stock_test" > "$evidence/apks.sha256"
-command -v ffmpeg > "$evidence/ffmpeg-path.txt"
-command -v ffprobe > "$evidence/ffprobe-path.txt"
-ffmpeg -version > "$evidence/ffmpeg-version.txt"
-ffprobe -version > "$evidence/ffprobe-version.txt"
-python3 -c 'import PIL; print(PIL.__version__)' > "$evidence/pillow-version.txt"
-python3 "$root/scripts/test-keyguard-r15-visual.py" > "$evidence/visual-host.txt" 2>&1
-python3 "$root/scripts/test-keyguard-r15-comparison.py" > "$evidence/comparison-host.txt" 2>&1
-python3 "$root/scripts/test-keyguard-r15-slot-evidence.py" > "$evidence/slot-host.txt" 2>&1
+decoder_ready=0
+if command -v ffmpeg > "$evidence/ffmpeg-path.txt" && command -v ffprobe > "$evidence/ffprobe-path.txt" && python3 -c 'import PIL; print(PIL.__version__)' > "$evidence/pillow-version.txt" 2>&1; then
+ decoder_ready=1
+ ffmpeg -version > "$evidence/ffmpeg-version.txt"
+ ffprobe -version > "$evidence/ffprobe-version.txt"
+ python3 "$root/scripts/test-keyguard-r15-visual.py" > "$evidence/visual-host.txt" 2>&1 || decoder_ready=0
+ python3 "$root/scripts/test-keyguard-r15-comparison.py" > "$evidence/comparison-host.txt" 2>&1 || decoder_ready=0
+ python3 "$root/scripts/test-keyguard-r15-slot-evidence.py" > "$evidence/slot-host.txt" 2>&1 || decoder_ready=0
+fi
+printf 'host_decoder_ready=%s\n' "$decoder_ready" > "$evidence/decoder-status.txt"
 adb shell screenrecord --help > "$evidence/screenrecord-help.txt" 2>&1
 grep -Fq -- '--time-limit' "$evidence/screenrecord-help.txt"
 {
@@ -100,6 +102,7 @@ if ! timeout -k 2s 60s bash "$root/scripts/prepare-keyguard-lower-environment.sh
  exit 1
 fi
 result=0
+[[ $decoder_ready == 1 ]] || result=1
 for spec in 1:stock 1:candidate 2:candidate 2:stock; do
  IFS=: read -r block arm <<< "$spec"
  if [[ "$arm" == stock ]]; then app="$stock_app"; test_apk="$stock_test"; arm_source="$BASE_SHA"; direct=false
@@ -167,9 +170,12 @@ cmp -s "$evidence/boot-before.txt" "$evidence/boot-after.txt" || result=1
 # Decode only after all timed slots to avoid host decoding load contaminating
 # a later arm. Missing metadata/space remains an explicit failed boundary.
 for dir in "$evidence"/block-*; do
- if [[ -s $dir/recording.mp4 ]]; then
+ if [[ -s $dir/recording.mp4 && $decoder_ready == 1 ]]; then
   python3 "$root/scripts/keyguard-r15-video.py" --video "$dir/recording.mp4" --out "$dir/decoded" \
    > "$dir/decode.txt" 2>&1 || result=1
+ elif [[ -s $dir/recording.mp4 ]]; then
+  printf 'decode=DEFERRED_TO_EXISTING_VM\n' > "$dir/decode.txt"
+  result=1
  fi
 done
 sha256sum --check "$evidence/apks.sha256" > "$evidence/apks-after-check.txt" 2>&1 || result=1
