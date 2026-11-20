@@ -813,6 +813,106 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         }
     }
 
+    /** Two independent same-wake pairs, including a held decision with no
+     * fabricated show, must survive the real bounded export in both modes. */
+    @Test fun r14PairedRecoveryEdgesRemainOwnedUnderPressureAndRotation() {
+        for (mode in listOf("LIGHT", "FULL")) {
+            KeyguardCardDiagnostics.clearCapture(context)
+            val source = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("sourceSha")
+                ?: "r14-pressure-$mode"
+            KeyguardCardDiagnostics.startCapture(context, source, "profile", mode)
+            var oldOwner: KeyguardDiagnosticContext? = null
+            repeat(4) { wake ->
+                val base = 1_000_000L + wake * 10_000L
+                val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 93, wake + 1L, "wake", base))
+                if (wake == 0) oldOwner = owner
+                fun emit(stage: String, reason: String, at: Long, req: Long? = null,
+                    operation: KeyguardDiagnosticOperation? = null, fields: Map<String, Any?> = emptyMap()) {
+                    KeyguardCardDiagnostics.captureEvent(context, stage, reason, requestId = req,
+                        diagnosticContext = owner, operation = operation, observedUptimeMs = at, fields = fields)
+                }
+                val first = KeyguardCardDiagnostics.newShowOperation(owner, wake * 2L + 1, base + 1)
+                emit("SHOW_FOR_ATTACH", "first", base + 1, operation = first)
+                val hide = KeyguardCardDiagnostics.newHideOperation(owner, first.attachGeneration, base + 2, base + 10)
+                emit("HIDE_DECIDED", "recoverable", base + 11, operation = hide)
+                emit("LOCAL_HIDE_BEGIN", "recoverable", base + 12, operation = hide, fields = mapOf("attachedBefore" to true))
+                emit("LOCAL_HIDE_APPLIED", "recoverable", base + 13, operation = hide)
+                emit("REMOVE_VIEW_RETURN", "recoverable", base + 14, operation = hide)
+                val recovery = base + 101
+                emit("R14_RECOVERY", "WITHDRAWN", base + 15, fields = mapOf("r14Recovery" to recovery,
+                    "r14Hide" to hide.hideOperationId, "r14HideReq" to base + 2, "r14Attach" to first.attachGeneration,
+                    "r14Authority" to "93/${wake + 1}/2/3/4"))
+                val decision = if (wake == 0) "DEFERRED" else "ADMITTED"
+                emit("R14_DECISION", decision, base + 21, req = base + 3,
+                    fields = mapOf("r14Recovery" to recovery, "r14A" to base + 3, "r14AOrigin" to base + 31,
+                        "r14ReadStart" to base + 16, "r14Pending" to base + 4, "r14PendingOrigin" to base + 32,
+                        "r14PendingEvent" to base + 17, "r14PendingCallback" to base + 18,
+                        "r14OutcomeShow" to "UNOBSERVED"))
+                if (wake < 2) {
+                    if (wake == 1) {
+                        // Separate admitted episode: B is displaced by an
+                        // attach reconciliation and C later displaces R.
+                        emit("R14_REPLACEMENT", "attachReconcile", base + 23,
+                            fields = mapOf("r14Recovery" to recovery, "r14Old" to base + 4,
+                                "r14OldOrigin" to base + 32, "r14New" to base + 5, "r14NewOrigin" to "SYNTHETIC"))
+                        emit("R14_REPLACEMENT", "externalEvent", base + 24,
+                            fields = mapOf("r14Recovery" to recovery, "r14Old" to base + 5,
+                                "r14OldOrigin" to "SYNTHETIC", "r14New" to base + 6, "r14NewOrigin" to base + 33))
+                    }
+                    val second = KeyguardCardDiagnostics.newShowOperation(owner, wake * 2L + 2, base + 6)
+                    emit("SHOW_FOR_ATTACH", "later", base + 30, operation = second)
+                    val metrics = KeyguardOrbSurfaceMetrics()
+                    if (wake == 0) repeat(4) { n ->
+                        metrics.record(base + 31 + n, (base + 31 + n) * 1_000_000L, n > 0,
+                            1, 1, 1, 1, 1, 1)
+                    }
+                    KeyguardCardDiagnostics.captureEvent(context, "R12_SURFACE", "ROUTE_SELECTED",
+                        operation = second, observedUptimeMs = base + 31,
+                        fields = mapOf("r12Generation" to wake + 100, "r12Detail" to "SURFACE_LIVE"), surfaceMetrics = metrics)
+                    val laterHide = KeyguardCardDiagnostics.newHideOperation(owner, second.attachGeneration, base + 7, base + 40)
+                    emit("HIDE_DECIDED", "later", base + 41, operation = laterHide)
+                    emit("LOCAL_HIDE_BEGIN", "later", base + 42, operation = laterHide, fields = mapOf("attachedBefore" to true))
+                    emit("LOCAL_HIDE_APPLIED", "later", base + 43, operation = laterHide)
+                    emit("REMOVE_VIEW_RETURN", "later", base + 44, operation = laterHide)
+                    val cleanup = KeyguardCardDiagnostics.newHideOperation(owner, second.attachGeneration, null, base + 45)
+                    emit("HIDE_DECIDED", "cleanup", base + 46, operation = cleanup)
+                    emit("R14_OUTCOME", "WITHDRAWN", base + 44, fields = mapOf("r14Recovery" to recovery,
+                        "r14OutcomeReq" to base + 6, "r14OutcomeClass" to "HIDDEN_SHADE", "r14OutcomeShow" to second.showOperationId,
+                        "r14OutcomeAttach" to second.attachGeneration, "r14OutcomeHide" to laterHide.hideOperationId))
+                }
+                repeat(90) { n ->
+                    emit("INSPECTION_QUEUED", "pressure", base + 100 + n, req = base + 1000 + n,
+                        fields = mapOf("queuedAtUptimeMs" to base + 100 + n))
+                    if (n % 20 == 0) KeyguardCardDiagnostics.captureSnapshot(context)
+                }
+            }
+            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            val size = report.toByteArray(Charsets.UTF_8).size
+            assertTrue("whole UTF-8 report including footer exceeds budget: $size", size <= 32_768)
+            assertTrue(report.endsWith("END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n"))
+            assertTrue(report.contains("R14_DECISION attempt=1 recovery=1000101 a=1000003"))
+            assertTrue(report.contains("decision=DEFERRED"))
+            assertTrue(report.contains("show=UNOBSERVED"))
+            assertTrue(report.contains("old=1010004") && report.contains("new=1010005"))
+            assertTrue(report.contains("old=1010005") && report.contains("new=1010006"))
+            assertTrue(report.contains("R14_RECOVERY attempt=2 recovery=1010101"))
+            assertTrue(report.contains("r14Omitted="))
+            assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+            KeyguardCardDiagnostics.captureEvent(context, "R14_DECISION", "late", diagnosticContext = oldOwner,
+                fields = mapOf("r14Recovery" to 1000101L, "r14A" to 9999999L))
+            assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+            KeyguardCardDiagnostics.startCapture(context, "r14-rotation", "profile", mode)
+            KeyguardCardDiagnostics.beginLockAttempt(context, 94, 1, "wake", 2_000_000)
+            KeyguardCardDiagnostics.captureEvent(context, "R14_DECISION", "old", diagnosticContext = oldOwner,
+                fields = mapOf("r14Recovery" to 1000101L, "r14A" to 9999999L))
+            val rotated = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertFalse(rotated.contains("9999999"))
+        }
+        KeyguardCardDiagnostics.clearCapture(context)
+        KeyguardCardDiagnostics.captureEvent(context, "R14_DECISION", "off", fields = mapOf("r14A" to 8888888L))
+        assertFalse((KeyguardCardDiagnostics.captureSnapshot(context)["report"] as? String).orEmpty().contains("8888888"))
+    }
+
     /** The reducer may see the commit before the delayed HIDE_DECIDED record.
      * Keep it on the original capture/attempt/hide owner, including after B
      * attaches, and never let a late A callback enter a new frozen capture. */
