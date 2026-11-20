@@ -1116,6 +1116,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
             Triple(startsWorker, replacedPending, inspectionQueue.pendingRequest())
         }
+        inspectionProbeForTest?.queueOffered(request, queueOffer.second, queueOffer.third, queueOffer.first)
         if (meta != null) inspectionProbeForTest?.ingressOffered(meta, request, queueOffer.second,
             queueOffer.third, queueOffer.first, frameworkEvent)
         traceKeyguard(
@@ -1154,12 +1155,16 @@ class FluviKeyguardCardService : AccessibilityService() {
         val successor: KeyguardCardInspectionRequest?,
         val pendingId: Long?,
         val reason: String,
+        val currentFreshnessRevision: Long?,
+        val outstandingFreshness: KeyguardWindowFreshness?,
+        val negativeFreshnessRevision: Long?,
     )
 
     private fun readInspection(request: KeyguardCardInspectionRequest): CompletedInspection {
         val concurrent = activeInspectionCount.incrementAndGet()
         recordMaximum(maximumConcurrentInspections, concurrent)
         val started = SystemClock.uptimeMillis()
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.READ_START, request.id, request.attachGeneration)
         val result = try {
             inspectionProbeForTest?.started(request)
             traceKeyguard("INSPECTION_STARTED", request.trigger, request, observedUptimeMs = started,
@@ -1169,6 +1174,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             inspectSurface(request)
         } finally { activeInspectionCount.decrementAndGet() }
         val finished = SystemClock.uptimeMillis()
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.READ_END, request.id, request.attachGeneration)
         inspectionProbeForTest?.readCompleted(request, result.decision, result.surfaceReason,
             result.rootUnavailable, result.walkTruncated, result.abortedStale, started, finished)
         return CompletedInspection(request, result, started, finished)
@@ -1190,11 +1196,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         val entered = SystemClock.uptimeMillis()
         val enteredNs = System.nanoTime()
         val request = read.request
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.MAIN_ENTER, request.id, request.attachGeneration)
         inspectionProbeForTest?.beforeApply(request, read.result.decision)
         val reservationMatches = reservedSuccessor == null || synchronized(queueLock) {
             inspectionQueue.successorForPreceding(request) == reservedSuccessor
         }
         if (readAhead != null && (!reservationMatches || !readAheadStillCurrent(readAhead))) {
+            KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REJECT, request.id, request.attachGeneration, extra = 1)
             traceKeyguard("INSPECTION_REJECTED", "readAheadAuthorityChanged", request,
                 fields = mapOf("rejectionReason" to "readAheadAuthorityChanged"))
             preservePendingReconciliation("readAheadAuthorityChanged", requirePending = false)
@@ -1212,6 +1220,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             mainApplyEnteredAtNs = enteredNs,
         )
         inspectionProbeForTest?.afterApply(request, read.result.decision)
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.MAIN_EXIT, request.id, request.attachGeneration)
         return true
     }
 
@@ -1275,9 +1284,14 @@ class FluviKeyguardCardService : AccessibilityService() {
                             freshness.revision, freshness.reason)
                     }
                 ReadAheadDecision(snapshot, successor, pending?.id,
-                    if (reason == "eligible" && successor == null) "reservationLost" else reason)
+                    if (reason == "eligible" && successor == null) "reservationLost" else reason,
+                    freshness?.revision, freshness?.reason, negative.freshnessRevision)
             }
+            inspectionProbeForTest?.readAheadDecision(active, decision.pendingId, decision.successor?.id,
+                decision.reason, decision.snapshot, decision.currentFreshnessRevision,
+                decision.outstandingFreshness, decision.negativeFreshnessRevision)
             val handoff = newInspectionHandoff()
+            KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.HANDOFF, active.id, active.attachGeneration)
             if (decision.successor == null || decision.snapshot == null) {
                 withContext(Dispatchers.Main.immediate) { applyCompletedInspection(read, handoff) }
                 request = synchronized(queueLock) { inspectionQueue.complete(active) }
@@ -1798,6 +1812,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             keyguardLockedNow = !inspection.signals.systemStateAvailable || inspection.signals.keyguardLocked,
         )) {
             KeyguardInspectionAction.DROP_STALE -> {
+                KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REJECT, request.id, request.attachGeneration, extra = 2)
                 // Reject the old surface answer, but independently acquire a
                 // CURRENT exclusion check. It cannot hide using old authority.
                 requestSystemCheck("staleInspection:${request.id}")
@@ -1809,6 +1824,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 return
             }
             KeyguardInspectionAction.HIDE_CURRENT_GATE -> {
+                KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REJECT, request.id, request.attachGeneration, extra = 3)
                 hideImmediately(
                     "currentGate",
                     triggerReceivedUptimeMs = request.triggerReceivedUptimeMs,
@@ -1843,7 +1859,12 @@ class FluviKeyguardCardService : AccessibilityService() {
             signals = signalsFromSystemState(settings, signals.surface, admission)
             decision = KeyguardCardVisibilityPolicy.decide(signals)
         }
+        inspectionProbeForTest?.let { probe ->
+            val pendingAtDecision = synchronized(queueLock) { inspectionQueue.pendingRequest() }
+            probe.beforeDecision(request, decision, pendingAtDecision, inspectionAuthority)
+        }
         decisionObservedAt = SystemClock.uptimeMillis()
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.DECISION, request.id, request.attachGeneration, extra = decision.ordinal)
         appliedDecision = decision
         when (decision) {
             KeyguardCardVisibility.SHOW_DISCREET -> {
@@ -2492,6 +2513,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         diagnosticContext: KeyguardDiagnosticContext? = currentDiagnosticAttempt,
         causingInspectionRequestId: Long? = null,
     ) {
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.HIDE_ENTER, causingInspectionRequestId ?: 0L, overlayAttachGeneration)
         publishReadAheadState(invalidate = true)
         val wasAttachedBefore = ::overlay.isInitialized && overlay.isAttached
         // Also revoke checks created since an already-idempotent terminal
@@ -2509,6 +2531,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             // authority. Repeating it would only churn epochs, diagnostics and
             // material cleanup while the root is known detached.
             KeyguardCardDiagnostics.recordHiddenNoop(this)
+            KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.HIDE_RETURN, causingInspectionRequestId ?: 0L, overlayAttachGeneration, extra = 1)
             return
         }
         val exclusionAt = SystemClock.uptimeMillis()
@@ -2760,6 +2783,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "dragActive" to dragWasActive,
             ),
         )
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.HIDE_RETURN, causingInspectionRequestId ?: 0L, overlayAttachGeneration)
     }
 
     /** Both callbacks arrive after their draw stacks have unwound. The event
@@ -3035,6 +3059,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     private fun cleanup(reason: String) {
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.CLEANUP_ENTER, attachment = overlayAttachGeneration)
         traceKeyguard(if (reason == "destroy") "SERVICE_DESTROYED" else "SERVICE_UNBOUND", reason)
         hideImmediately(reason)
         systemSampler.dispose()
@@ -3053,6 +3078,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         FluviKeyguardCardServiceRegistry.disconnected(this)
         KeyguardCardDiagnostics.record(this, "KG|SERVICE_DISCONNECTED", reason, false)
         serviceJob.cancel()
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.CLEANUP_EXIT, attachment = overlayAttachGeneration)
     }
 
     companion object {

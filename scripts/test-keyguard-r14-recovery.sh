@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ ${FLUVI_R14_RESUME:-0} == 1 ]]; then
+  exec bash "$(git rev-parse --show-toplevel)/scripts/test-keyguard-r14-stock-resume.sh"
+fi
 root=$(git rev-parse --show-toplevel)
 scope=${FLUVI_R14_SCOPE:?missing R14 stock/candidate scope}
 case "$scope" in r14_recovery_stock|r14_recovery_candidate) ;; *) echo 'invalid R14 scope' >&2; exit 64;; esac

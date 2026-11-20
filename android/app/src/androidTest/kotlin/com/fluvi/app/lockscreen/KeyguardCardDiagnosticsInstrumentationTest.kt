@@ -691,9 +691,17 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     }
 
     @Test fun lightAndFullPressureRetainEverySelectedEpisodeCauseAndFitTheWholeUtf8Budget() {
-        for (mode in listOf("LIGHT", "FULL")) {
+        for (mode in listOf("LIGHT", "FULL")) pressureRetainsEverySelectedEpisode(mode)
+    }
+
+    @Test fun r14LightPressureRetainsEverySelectedEpisode() = pressureRetainsEverySelectedEpisode("LIGHT")
+
+    @Test fun r14FullPressureRetainsEverySelectedEpisode() = pressureRetainsEverySelectedEpisode("FULL")
+
+    private fun pressureRetainsEverySelectedEpisode(mode: String) {
         KeyguardCardDiagnostics.clearCapture(context)
-        KeyguardCardDiagnostics.startCapture(context, "episode-pressure-sha", "profile", mode)
+        val source = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("sourceSha") ?: "episode-pressure-sha"
+        KeyguardCardDiagnostics.startCapture(context, source, "profile", mode)
         val showRequests = mutableListOf<Long>()
         val withdrawalRequests = mutableListOf<Long>()
         repeat(4) { wake ->
@@ -817,7 +825,6 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             it.startsWith(" RENDER ") && it.contains("shaderFrames=11") && it.contains("shaderCalls=13")
         })
         assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
-        }
     }
 
     /** The reducer may see the commit before the delayed HIDE_DECIDED record.

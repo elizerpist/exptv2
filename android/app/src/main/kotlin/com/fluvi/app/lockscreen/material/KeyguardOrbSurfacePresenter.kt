@@ -15,6 +15,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
 import android.widget.FrameLayout
+import com.fluvi.app.lockscreen.KeyguardR14ForensicProbe
 
 /** Main-owned bounded child of the existing accessibility root. The worker
  * cannot show a window or change this View's disclosure authority. */
@@ -103,7 +104,9 @@ internal class KeyguardOrbSurfacePresenter(
             override fun surfaceDestroyed(holder: SurfaceHolder) {
                 val started = SystemClock.uptimeMillis()
                 val unexpected = current === target && !target.revoked
+                KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.DESTROY_ENTER, attachment = target.attachment, generation = target.generation, holder = System.identityHashCode(holder))
                 worker.surfaceDestroyed(target)
+                KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.DESTROY_EXIT, attachment = target.attachment, generation = target.generation, holder = System.identityHashCode(holder))
                 observe(target, "HOLDER_DESTROYED", "drainMs:${SystemClock.uptimeMillis() - started}")
                 if (unexpected) failIfCurrent(target, "surfaceDestroyedUnexpectedly")
             }

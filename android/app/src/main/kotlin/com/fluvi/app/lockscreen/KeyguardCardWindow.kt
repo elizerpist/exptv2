@@ -452,11 +452,13 @@ internal class KeyguardCardWindow(
              onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null): Boolean {
         checkMainThread()
         val current = root ?: return false
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REVOKE, attachment = attachGeneration)
         // Revoke the worker first, then change the root's visibility before
         // any child-destruction callback can wait for an entered holder call.
         surfacePresenter?.revokeCurrent(hideChild = false)
         if (lifecycle.isAttached()) {
             current.visibility = View.INVISIBLE
+            KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.INVISIBLE, attachment = attachGeneration)
             reportWindowDiagnostic("LOCAL_HIDE_APPLIED", "invisible", attachGeneration)
         }
         coldRootObservation?.cancel()
@@ -473,7 +475,9 @@ internal class KeyguardCardWindow(
         materialController?.stop("hide", onIsolatedLayerHideCommitted, onRetirementEvent)
         if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) return false
         reportWindowDiagnostic("REMOVE_VIEW_BEGIN", "windowManager", attachGeneration)
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REMOVE_BEGIN, attachment = attachGeneration)
         val removed = runCatching { manager.removeViewImmediate(current) }
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REMOVE_RETURN, attachment = attachGeneration, extra = if (removed.isSuccess) 1 else 0)
         val stillAttached = current.isAttachedToWindow
         if (removed.isSuccess || !stillAttached) {
             lifecycle.onDetached()

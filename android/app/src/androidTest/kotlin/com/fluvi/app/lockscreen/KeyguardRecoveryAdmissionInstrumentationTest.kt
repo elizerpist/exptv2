@@ -48,14 +48,17 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
     private lateinit var output: File
     private val records = StringBuilder()
 
-    @Test fun supersededExternalEventSuppressesOnlyTheRecoveryAdd() = scenario("exclusion", true, false)
-    @Test fun freshMainSuccessorRestoresExactlyOnce() = scenario("fresh-main", false, false)
-    @Test fun postAttachOnlyExclusionNeverDefersPriorAdmission() = scenario("late-only", true, true)
+    @Test fun supersededExternalEventSuppressesOnlyTheRecoveryAdd() = scenario("exclusion", true, false, resume = true)
+    @Test fun freshMainSuccessorRestoresExactlyOnce() = scenario("fresh-main", false, false, resume = true)
+    @Test fun postAttachOnlyExclusionNeverDefersPriorAdmission() = scenario("late-only", true, true, resume = true)
     @Test fun temporaryRealOcclusionReturnsToMain() = scenario("real-return", true, true, realReturn = true)
     @Test fun terminalWithdrawalDiscardsPendingWork() = scenario("terminal-stale", false, false, terminal = true)
+    @Test fun matchedNegativeForensicStages() = scenario("matched-negative", true, false, forensic = true)
+    @Test fun matchedNegativeProbeDisabledControl() = scenario("matched-negative-disabled", true, false, forensic = true, probeDisabled = true)
 
     private fun scenario(name: String, exclude: Boolean, lateOnly: Boolean,
-        realReturn: Boolean = false, terminal: Boolean = false) {
+        realReturn: Boolean = false, terminal: Boolean = false, forensic: Boolean = false, resume: Boolean = false,
+        probeDisabled: Boolean = false) {
         assertEquals("fixture needs API35", 35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -95,12 +98,35 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
         val frameworkCopies = java.util.concurrent.atomic.AtomicInteger()
         val withdrawalDone = java.util.concurrent.atomic.AtomicBoolean()
         val holdTerminalRead = java.util.concurrent.atomic.AtomicBoolean()
+        val negativeRead = java.util.concurrent.atomic.AtomicLong()
+        val negativeFinished = java.util.concurrent.atomic.AtomicLong()
+        val samplerStop = java.util.concurrent.atomic.AtomicBoolean()
         val ingressByRequest = java.util.concurrent.ConcurrentHashMap<Long, KeyguardAccessibilityEventMeta>()
         val frameworkRequest = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+        data class Selection(val authority: KeyguardInspectionAuthority, val closeRequested: Long)
+        data class ReadSample(val request: KeyguardCardInspectionRequest, val decision: KeyguardCardVisibility,
+            val reason: KeyguardSurfaceReason, val unavailable: Boolean, val truncated: Boolean,
+            val stale: Boolean, val start: Long, val end: Long)
+        data class Boundary(val request: KeyguardCardInspectionRequest, val decision: KeyguardCardVisibility,
+            val pending: KeyguardCardInspectionRequest?, val authority: KeyguardInspectionAuthority, val at: Long)
+        val selection = AtomicReference<Selection?>()
+        val boundary = AtomicReference<Boundary?>()
+        val afterAState = AtomicReference<KeyguardInspectionStateForTest?>()
+        val readSamples = java.util.concurrent.ConcurrentHashMap<Long, ReadSample>()
+        val decided = java.util.concurrent.ConcurrentHashMap<Long, KeyguardCardVisibility>()
+        val parents = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+        val offeredRequests = java.util.concurrent.ConcurrentHashMap<Long, KeyguardCardInspectionRequest>()
+        val offerOverflow = java.util.concurrent.atomic.AtomicInteger()
+        val readOverflow = java.util.concurrent.atomic.AtomicInteger()
+        val genuineSystemUi = java.util.concurrent.atomic.AtomicBoolean()
+        val genuineExample = AtomicReference<Pair<KeyguardAccessibilityEventMeta, KeyguardCardInspectionRequest>?>()
+        val forensicAfter = java.util.concurrent.atomic.AtomicLong()
         var service: FluviKeyguardCardService? = null
         var captureStarted = false
         var controlledOccluderStarted = false
         var captureId = "UNOBSERVED"
+        var primaryFailure: Throwable? = null
+        var sampler: Thread? = null
         fun schedule(owner: FluviKeyguardCardService, trigger: String) {
             val method = FluviKeyguardCardService::class.java.getDeclaredMethod(
                 "scheduleEvaluation", String::class.java, java.lang.Long::class.java,
@@ -121,13 +147,31 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             override fun ingressOffered(meta: KeyguardAccessibilityEventMeta, request: KeyguardCardInspectionRequest,
                 previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
                 startsWorker: Boolean, frameworkEvent: Boolean) {
-                ingressByRequest[request.id] = meta
-                frameworkRequest[request.id] = frameworkEvent
-                record("INGRESS_OFFER", "req=${request.id} before=${previous?.id ?: "none"} after=${pending?.id ?: "none"} started=$startsWorker framework=$frameworkEvent systemui=${meta.packageName == "com.android.systemui"} display=${meta.displayId} window=${meta.windowId}")
+                if (!resume || ingressByRequest.size < 1_024) {
+                    ingressByRequest[request.id] = meta
+                    frameworkRequest[request.id] = frameworkEvent
+                } else offerOverflow.incrementAndGet()
+                if (frameworkEvent && meta.packageName == "com.android.systemui" && meta.displayId == Display.DEFAULT_DISPLAY &&
+                    meta.windowId >= 0 && meta.eventTimeUptimeMs != null && meta.eventTimeUptimeMs > 0 &&
+                    meta.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+                    request.trigger == "window" &&
+                    meta.eventTimeUptimeMs <= (request.triggerReceivedUptimeMs ?: -1L) && request.eventTimeUptimeMs == meta.eventTimeUptimeMs &&
+                    KeyguardCardEventGate.decide(meta, false) == KeyguardEventAction.INSPECT) {
+                    genuineSystemUi.set(true)
+                    genuineExample.compareAndSet(null, meta to request)
+                }
+                if (!resume && !forensic) record("INGRESS_OFFER", "req=${request.id} before=${previous?.id ?: "none"} after=${pending?.id ?: "none"} started=$startsWorker framework=$frameworkEvent systemui=${meta.packageName == "com.android.systemui"} display=${meta.displayId} window=${meta.windowId}")
+            }
+            override fun queueOffered(request: KeyguardCardInspectionRequest, previous: KeyguardCardInspectionRequest?,
+                pending: KeyguardCardInspectionRequest?, startsWorker: Boolean) {
+                if (!resume) return
+                if (offeredRequests.size >= 1_024) { offerOverflow.incrementAndGet(); return }
+                offeredRequests[request.id] = request
+                parents[request.id] = previous?.id ?: 0L
             }
             override fun ingress(meta: KeyguardAccessibilityEventMeta, receivedAt: Long, action: KeyguardEventAction, frameworkEvent: Boolean) {
                 if (frameworkEvent) frameworkEvents.incrementAndGet()
-                record("INGRESS", "framework=$frameworkEvent type=${meta.eventType} window=${meta.windowId} display=${meta.displayId} systemui=${meta.packageName == "com.android.systemui"} event=${meta.eventTimeUptimeMs} callback=$receivedAt action=$action")
+                if (!resume && !forensic) record("INGRESS", "framework=$frameworkEvent type=${meta.eventType} window=${meta.windowId} display=${meta.displayId} systemui=${meta.packageName == "com.android.systemui"} event=${meta.eventTimeUptimeMs} callback=$receivedAt action=$action")
             }
             override fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> =
                 if (request.trigger == "r14-controlled-withdraw") actual + KeyguardWindowSnapshot(
@@ -137,8 +181,25 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             override fun readCompleted(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
                 reason: KeyguardSurfaceReason, rootUnavailable: Boolean, walkTruncated: Boolean,
                 abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
-                record("READ", "req=${request.id} trigger=${request.trigger} decision=$decision reason=$reason rootUnavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale start=$startedAt end=$finishedAt")
+                if (resume || forensic) {
+                    if (readSamples.size < 1_024) readSamples[request.id] = ReadSample(request, decision, reason, rootUnavailable, walkTruncated, abortedStale, startedAt, finishedAt)
+                    else readOverflow.incrementAndGet()
+                } else record("READ", "req=${request.id} trigger=${request.trigger} decision=$decision reason=$reason rootUnavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale start=$startedAt end=$finishedAt")
                 reads.add(request.id)
+                if (forensic && request.trigger == "r14-controlled-withdraw") {
+                    negativeRead.set(request.id)
+                    negativeFinished.set(finishedAt)
+                    return
+                }
+                if (resume) {
+                    val token = selection.get() ?: return
+                    if (!KeyguardR14SelectionGate.eligible(token.authority, request, token.closeRequested, startedAt,
+                            decision, reason, rootUnavailable, walkTruncated, abortedStale) || !a.compareAndSet(null, request)) return
+                    aStarted.set(startedAt)
+                    workerHeld.countDown()
+                    if (!releaseWorker.await(20, TimeUnit.SECONDS)) failure.compareAndSet(null, IllegalStateException("eligible A barrier timed out"))
+                    return
+                }
                 // An actual framework callback may coalesce the tagged intent
                 // before its read begins. Select the first real post-withdrawal
                 // read and validate its complete classification and authority.
@@ -151,9 +212,30 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                     check(releaseWorker.await(25, TimeUnit.SECONDS)) { "A worker barrier timed out" }
                 }.onFailure { failure.compareAndSet(null, it); workerHeld.countDown() }
             }
+            override fun beforeDecision(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
+                pending: KeyguardCardInspectionRequest?, authority: KeyguardInspectionAuthority) {
+                if (!resume) return
+                decided[request.id] = decision
+                if (request.id == a.get()?.id) boundary.compareAndSet(null, Boundary(request, decision, pending, authority, SystemClock.uptimeMillis()))
+            }
             override fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+                if (forensic) {
+                    forensicAfter.set(request.id)
+                    return
+                }
                 val owner = service ?: return
                 val state = owner.inspectionStateForTest()
+                if (resume) {
+                    decided[request.id]?.let { applied[request.id] = it }
+                    if (request.id == a.get()?.id) {
+                        aAttached.set(state.attached)
+                        aGeneration.set(state.authority.attachGeneration)
+                        afterAState.set(state)
+                        if (state.pending?.trigger == "authorityReconcile:attach") replacement.set(state.pending)
+                        aApplied.countDown()
+                    }
+                    return
+                }
                 applied[request.id] = decision
                 val roots = WindowInspector.getGlobalWindowViews().count {
                     (it.layoutParams as? WindowManager.LayoutParams)?.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -214,6 +296,215 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             }
             synchronizedKey(KeyEvent.KEYCODE_WAKEUP)
             await("initial real LIVE attachment", 20_000) { sample(service!!).let { it.first.attached && it.second.effective == KeyguardOrbRenderMode.SURFACE_LIVE } }
+            if (forensic) {
+                val owner = checkNotNull(service)
+                val initial = sample(owner).first
+                check(initial.attached && initial.wake != null)
+                await("initial actual Surface producer output", 15_000) {
+                    (mainWithinDeadline { owner.surfaceMetricsForInstrumentation()?.submissions } ?: 0L) > 0
+                }
+                if (!probeDisabled) {
+                    KeyguardR14ForensicProbe.arm(initial.authority.attachGeneration)
+                    await("prearmed holder observation", 8_000) { KeyguardR14ForensicProbe.workerStage != 0 }
+                }
+                sampler = Thread({
+                    val start = SystemClock.uptimeMillis()
+                    while (!samplerStop.get() && negativeFinished.get() == 0L && SystemClock.uptimeMillis() - start < 20_000) SystemClock.sleep(10)
+                    val readAt = negativeFinished.get()
+                    if (readAt > 0) for (index in 1..2) {
+                        val targetAt = readAt + index * 4_000L
+                        while (!samplerStop.get() && SystemClock.uptimeMillis() < targetAt) SystemClock.sleep(10)
+                        if (samplerStop.get()) break
+                        val req = negativeRead.get()
+                        val marks = KeyguardR14ForensicProbe.snapshot()
+                        val complete = forensicAfter.get() == req || marks.any { it.request == req && (it.stage == KeyguardR14ForensicProbe.MAIN_EXIT || it.stage == KeyguardR14ForensicProbe.REJECT || it.stage == KeyguardR14ForensicProbe.HIDE_RETURN) }
+                        if (!complete) {
+                            val begin = SystemClock.uptimeMillis()
+                            val stacks = runCatching { Thread.getAllStackTraces() }
+                            val rows = buildString {
+                                appendLine("run=$runId pid=${android.os.Process.myPid()} request=$req target=$targetAt begin=$begin collectionDelayMs=${begin - targetAt} readEnd=$readAt")
+                                appendLine("holderStage=${KeyguardR14ForensicProbe.workerStage} holderAt=${KeyguardR14ForensicProbe.workerAt} holderTid=${KeyguardR14ForensicProbe.workerThreadId} attach=${KeyguardR14ForensicProbe.workerAttachment} generation=${KeyguardR14ForensicProbe.workerGeneration} holder=${KeyguardR14ForensicProbe.workerHolder} snapshot=latestVolatile")
+                                marks.forEach { appendLine(it.toString()) }
+                                stacks.exceptionOrNull()?.let { appendLine("stackCollectionUnavailable=${it.javaClass.name}:${it.message}") }
+                                stacks.getOrDefault(emptyMap()).entries.filter { (thread, _) -> thread.name == "main" || thread.name.contains("keyguard", true) || thread.name.contains("binder", true) || thread.name.contains("instrument", true) || thread.name.contains("render", true) || thread.name.contains("dispatcher", true) || thread.name.contains("surface", true) || thread.name.contains("fluvi", true) }
+                                    .sortedBy { it.key.name }.take(48).forEach { (thread, frames) ->
+                                        appendLine("thread=${thread.name} javaId=${thread.id} state=${thread.state}")
+                                        frames.take(64).forEach { appendLine("  $it") }
+                                    }
+                                appendLine("end=${SystemClock.uptimeMillis()} clock=uptimeMs")
+                            }
+                            java.io.File(output, "forensic-snapshot-$index.txt").writeText(rows)
+                        }
+                    }
+                }, "r14-independent-stack-sampler").apply { isDaemon = true; start() }
+                mainWithinDeadline { owner.inspectionProbeForTest = probe; schedule(owner, "r14-controlled-withdraw") }
+                await("controlled negative read", 20_000) { negativeFinished.get() > 0 }
+                val negative = checkNotNull(readSamples[negativeRead.get()])
+                record("FORENSIC_READ", "req=${negative.request.id} decision=${negative.decision} reason=${negative.reason} start=${negative.start} end=${negative.end} unavailable=${negative.unavailable} truncated=${negative.truncated} stale=${negative.stale}")
+                await("negative terminal application boundary", 20_000) {
+                    val req = negativeRead.get()
+                    (probeDisabled && forensicAfter.get() == req) || KeyguardR14ForensicProbe.snapshot().any { it.request == req &&
+                        (it.stage == KeyguardR14ForensicProbe.MAIN_EXIT || it.stage == KeyguardR14ForensicProbe.REJECT || it.stage == KeyguardR14ForensicProbe.HIDE_RETURN) }
+                }
+                record("FORENSIC_COMPLETED", "req=${negativeRead.get()} readEnd=${negativeFinished.get()} afterApplyRaw=${forensicAfter.get()} elapsed=${SystemClock.uptimeMillis() - negativeFinished.get()} probeEnabled=${!probeDisabled} dispositionRequiresMarks=${!probeDisabled} physical=UNOBSERVED")
+                return
+            }
+            if (resume) {
+                val owner = checkNotNull(service)
+                val initial = sample(owner).first
+                check(initial.attached && initial.wake != null && initial.authority.attachGeneration > 0)
+                await("initial actual Surface producer output", 15_000) {
+                    (mainWithinDeadline { owner.surfaceMetricsForInstrumentation()?.submissions } ?: 0L) > 0
+                }
+                val initialMetrics = checkNotNull(mainWithinDeadline { owner.surfaceMetricsForInstrumentation() })
+                record("G1_LIVE", "session=${initial.authority.serviceSession} wake=${initial.wake} attach=${initial.authority.attachGeneration} firstPost=${initialMetrics.firstPostUptimeMs ?: "UNOBSERVED"} submissions=${initialMetrics.submissions}")
+                systemWindowBefore.set(systemUiWindowId())
+                KeyguardR14ForensicProbe.arm(initial.authority.attachGeneration)
+                await("prearmed holder observation", 8_000) { KeyguardR14ForensicProbe.workerStage != 0 }
+                mainWithinDeadline { owner.inspectionProbeForTest = probe }
+                controlledOccluderStarted = true
+                establishOccluder("g1-cover")
+                await("actual recoverable G1 root withdrawal", 20_000) { !sample(owner).first.attached }
+                val withdrawn = sample(owner).first
+                check(withdrawn.wake == initial.wake && withdrawn.authority.attachGeneration == initial.authority.attachGeneration)
+                val withdrawalMarks = KeyguardR14ForensicProbe.snapshot()
+                val actualHide = withdrawalMarks.lastOrNull { it.stage == KeyguardR14ForensicProbe.HIDE_ENTER && it.request > 0 }
+                val actualRemoval = withdrawalMarks.firstOrNull { actualHide != null && it.stage == KeyguardR14ForensicProbe.REMOVE_RETURN && it.attachment == initial.authority.attachGeneration && it.sequence > actualHide.sequence && it.extra == 1 }
+                check(actualHide != null && actualRemoval != null) {
+                    "actual G1 inspection withdrawal/remove not observed"
+                }
+                File(output, "g1-withdrawal-marks.txt").writeText(withdrawalMarks.joinToString("\n", postfix = "\n"))
+                await("G1 withdrawal decision returned", 5_000) { applied.containsKey(actualHide.request) }
+                val g1Read = checkNotNull(readSamples[actualHide.request]) { "actual G1 hide read not retained" }
+                record("G1_WITHDRAWN", "request=${actualHide.request} decision=${applied[actualHide.request] ?: "UNOBSERVED"} reason=${g1Read.reason} remove=${actualRemoval.uptimeMs} session=${withdrawn.authority.serviceSession} wake=${withdrawn.wake} attach=${withdrawn.authority.attachGeneration} authority=${withdrawn.authority}")
+                val closeAt = SystemClock.uptimeMillis()
+                selection.set(Selection(withdrawn.authority, closeAt))
+                record("RETURN_ARMED", "closeRequested=$closeAt authority=${withdrawn.authority}")
+                synchronizedKey(KeyEvent.KEYCODE_BACK)
+                assertTrue("eligible complete current A was not observed", workerHeld.await(20, TimeUnit.SECONDS))
+                failure.get()?.let { throw AssertionError("INVALID eligible A barrier", it) }
+                await("first foreign window removed", 8_000) { testOccluderWindowId() == null }
+                controlledOccluderStarted = false
+                val held = checkNotNull(a.get())
+                val heldState = sample(owner).first
+                check(!heldState.attached && withdrawn.authority == heldState.authority && heldState.authority.matches(held)) {
+                    "eligible A lost detached current authority"
+                }
+                record("A_HELD", "req=${held.id} start=${aStarted.get()} decision=SHOW_FULL reason=MAIN_CONFIRMED session=${heldState.authority.serviceSession} visibility=${heldState.authority.visibilityEpoch} wake=${heldState.authority.wakeGeneration} interaction=${heldState.authority.interactionEpoch} attach=${heldState.authority.attachGeneration}")
+                if (exclude && !lateOnly) {
+                    controlledOccluderStarted = true
+                    establishOccluder("before-a")
+                }
+                val preDecisionOccluder = if (exclude && !lateOnly) checkNotNull(testOccluderIdentity()) else null
+                if (!lateOnly) {
+                    check(SystemClock.uptimeMillis() > aStarted.get())
+                    mainWithinDeadline { sendControlled(owner, "B", aStarted.get(), null, b, systemWindowBefore.get()) }
+                    val sent = checkNotNull(b.get())
+                    record("CONTROLLED_B", "req=${sent.id} origin=controlled_framework_metadata window=${systemWindowBefore.get()} event=${sent.eventTimeUptimeMs} callback=${sent.triggerReceivedUptimeMs}")
+                }
+                check(genuineSystemUi.get()) { "genuine framework SystemUI ingress/offer equivalence not observed" }
+                val (frameworkMeta, frameworkReq) = checkNotNull(genuineExample.get())
+                record("FRAMEWORK_EQUIVALENCE", "req=${frameworkReq.id} framework=true type=${frameworkMeta.eventType} window=${frameworkMeta.windowId} display=${frameworkMeta.displayId} package=systemui event=${frameworkMeta.eventTimeUptimeMs} callback=${frameworkReq.triggerReceivedUptimeMs} trigger=${frameworkReq.trigger}")
+                check(offerOverflow.get() == 0 && readOverflow.get() == 0) { "queue/read observation overflow" }
+                releaseWorker.countDown()
+                assertTrue("A did not reach the normal Main path", aApplied.await(20, TimeUnit.SECONDS))
+                failure.get()?.let { throw AssertionError("A handoff fixture failed", it) }
+                val snapshot = checkNotNull(boundary.get()) { "A was rejected before actual decision; raw classification is not admission" }
+                check(snapshot.decision == KeyguardCardVisibility.SHOW_FULL && snapshot.authority.matches(held)) { "A lost current positive authority" }
+                val actualA = checkNotNull(afterAState.get())
+                if (preDecisionOccluder != null) {
+                    check(preDecisionOccluder.second == Display.DEFAULT_DISPLAY)
+                    val shotBegin = SystemClock.uptimeMillis()
+                    val shot = checkNotNull(automation.takeScreenshot())
+                    val shotEnd = SystemClock.uptimeMillis()
+                    try {
+                        check(greenPixels(shot) >= 900 && keyguard.isKeyguardLocked)
+                        check(testOccluderIdentity() == preDecisionOccluder) { "excluding window changed across A" }
+                        File(output, "after-a-occluder.png").outputStream().use { shot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    } finally { shot.recycle() }
+                    record("POST_A_WITNESS", "window=${preDecisionOccluder.first} display=${preDecisionOccluder.second} start=$shotBegin end=$shotEnd screenshot=after-a-occluder.png physicalOrb=UNOBSERVED")
+                }
+                fun qualifies(request: KeyguardCardInspectionRequest?): Boolean {
+                    if (request == null) return false
+                    val meta = ingressByRequest[request.id] ?: return false
+                    val event = request.eventTimeUptimeMs ?: return false
+                    val callback = request.triggerReceivedUptimeMs ?: return false
+                    return request.id != held.id && snapshot.authority.matches(request) && request.trigger == "window" &&
+                        meta.packageName == "com.android.systemui" && meta.displayId == Display.DEFAULT_DISPLAY && meta.windowId >= 0 &&
+                        (meta.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || meta.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) &&
+                        event > 0 && event <= callback && event >= aStarted.get() && callback > aStarted.get() && callback <= snapshot.at
+                }
+                val pending = snapshot.pending
+                if (lateOnly) {
+                    if (pending != null && pending.trigger == "window") check(ingressByRequest.containsKey(pending.id)) { "late-only pending origin unknown" }
+                    check(!qualifies(pending)) { "late-only contaminated by qualifying pre-A event" }
+                } else check(qualifies(pending)) { "qualifying B not physically pending at A decision" }
+                val expectedCandidate = args.getString("r14Expected") == "candidate"
+                if (!expectedCandidate || lateOnly) check(actualA.attached && actualA.authority.attachGeneration == initial.authority.attachGeneration + 1) {
+                    "stock/late A did not perform a real G2 add"
+                } else check(!actualA.attached) { "candidate did not defer A" }
+                record("A_DECISION", "a=${held.id} decision=${snapshot.decision} pending=${pending?.id ?: "none"} pendingOrigin=${pending?.let { if (frameworkRequest[it.id] == true) "framework" else "controlled" } ?: "none"} event=${pending?.eventTimeUptimeMs ?: "none"} callback=${pending?.triggerReceivedUptimeMs ?: "none"} at=${snapshot.at} session=${snapshot.authority.serviceSession} visibility=${snapshot.authority.visibilityEpoch} wake=${snapshot.authority.wakeGeneration} interaction=${snapshot.authority.interactionEpoch} authorityAttach=${snapshot.authority.attachGeneration} actualAttached=${actualA.attached} attach=${actualA.authority.attachGeneration} replacement=${replacement.get()?.id ?: "none"}")
+                if (lateOnly) {
+                    controlledOccluderStarted = true
+                    val lateCoverAt = SystemClock.uptimeMillis()
+                    establishOccluder("after-a")
+                    var lateRequest = 0L
+                    await("late actual exclusion read and withdrawal", 20_000) {
+                        lateRequest = applied.entries.sortedBy { it.key }.firstOrNull { (id, value) ->
+                            id != held.id && (readSamples[id]?.start ?: Long.MIN_VALUE) >= lateCoverAt &&
+                                (value == KeyguardCardVisibility.HIDDEN_OCCLUDED || value == KeyguardCardVisibility.HIDDEN_UNKNOWN)
+                        }?.key ?: 0L
+                        lateRequest > 0 && !sample(owner).first.attached
+                    }
+                    val lateRead = checkNotNull(readSamples[lateRequest])
+                    record("LATE_WITHDRAWN", "a=${held.id} request=$lateRequest decision=${applied[lateRequest]} reason=${lateRead.reason} start=${lateRead.start} lateCover=actual_foreign_window physical=UNOBSERVED")
+                    return
+                }
+                fun descendsFrom(requestId: Long, ancestor: Long): Boolean {
+                    var cursor = requestId
+                    repeat(1_024) {
+                        if (cursor == ancestor) return true
+                        cursor = parents[cursor] ?: return false
+                        if (cursor == 0L) return false
+                    }
+                    return false
+                }
+                val ancestor = checkNotNull(pending).id
+                var successor = 0L
+                await("actual coalesced successor read and applied", 20_000) {
+                    successor = applied.entries.sortedBy { it.key }.firstOrNull { (id, value) ->
+                        id != held.id && readSamples.containsKey(id) && descendsFrom(id, ancestor) &&
+                            if (exclude) value == KeyguardCardVisibility.HIDDEN_OCCLUDED && readSamples[id]?.reason == KeyguardSurfaceReason.FOREIGN_ABOVE
+                            else value == KeyguardCardVisibility.SHOW_FULL && readSamples[id]?.reason == KeyguardSurfaceReason.MAIN_CONFIRMED
+                    }?.key ?: 0L
+                    successor > 0 && (if (exclude) !sample(owner).first.attached else sample(owner).first.attached)
+                }
+                val successorRead = checkNotNull(readSamples[successor])
+                val final = sample(owner).first
+                check(final.wake == initial.wake)
+                if (exclude) {
+                    val successorMarks = KeyguardR14ForensicProbe.snapshot()
+                    val hide = successorMarks.lastOrNull { it.stage == KeyguardR14ForensicProbe.HIDE_ENTER && it.request == successor }
+                    val removal = successorMarks.firstOrNull { hide != null && it.stage == KeyguardR14ForensicProbe.REMOVE_RETURN &&
+                        it.attachment == initial.authority.attachGeneration + 1 && it.sequence > hide.sequence && it.extra == 1 }
+                    check(hide != null && removal != null) { "successor did not remove the actual G2 root" }
+                    File(output, "successor-withdrawal-marks.txt").writeText(successorMarks.joinToString("\n", postfix = "\n"))
+                    val identity = checkNotNull(preDecisionOccluder)
+                    check(testOccluderIdentity() == identity && keyguard.isKeyguardLocked) { "exclusion changed before successor outcome" }
+                    val begin = SystemClock.uptimeMillis()
+                    val shot = checkNotNull(automation.takeScreenshot())
+                    val end = SystemClock.uptimeMillis()
+                    try {
+                        check(greenPixels(shot) >= 900)
+                        File(output, "after-successor-occluder.png").outputStream().use { shot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    } finally { shot.recycle() }
+                    record("POST_SUCCESSOR_WITNESS", "window=${identity.first} display=${identity.second} start=$begin end=$end screenshot=after-successor-occluder.png successor=$successor locked=${keyguard.isKeyguardLocked}")
+                }
+                if (!exclude) check(final.authority.attachGeneration == initial.authority.attachGeneration + 1 && countOverlayRoots() == 1)
+                record("RESULT", "a=${held.id} b=$ancestor r=${replacement.get()?.id ?: "none"} successor=$successor successorTrigger=${successorRead.request.trigger} successorDecision=${applied[successor]} successorReason=${successorRead.reason} lineage=true aAttached=${actualA.attached} aGeneration=${actualA.authority.attachGeneration} finalAttached=${final.attached} finalGeneration=${final.authority.attachGeneration} physical=UNOBSERVED")
+                if (exclude && !expectedCandidate) assertFalse("R14 candidate assertion: pending B must suppress the excess A add", actualA.attached)
+                return
+            }
             if (realReturn) {
                 val initial = sample(checkNotNull(service)).first
                 check(initial.attached && initial.wake != null)
@@ -366,29 +657,67 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                 assertEquals(1, roots)
             } else assertEquals("late-only A attaches once", originalGeneration.get() + 1, aGeneration.get())
         } catch (error: Throwable) {
+            primaryFailure = error
             record("FAILURE", "type=${error.javaClass.simpleName} message=${error.message?.replace(' ', '_') ?: "none"}")
             throw error
         } finally {
             releaseWorker.countDown()
             service?.inspectionProbeForTest = null
-            var cleanupFailure: Throwable? = null
-            if (captureStarted) runCatching { File(output, "capture.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"].toString()) }
-                .onFailure { cleanupFailure = it; record("FREEZE_FAILURE", it.javaClass.simpleName) }
-            runCatching {
-                if (controlledOccluderStarted) {
-                    synchronizedKey(KeyEvent.KEYCODE_BACK)
-                    await("controlled occluder removed", 5_000) { testOccluderWindowId() == null }
+            samplerStop.set(true)
+            val cleanup = KeyguardR14FixtureCleanup(primaryFailure) { label, error ->
+                if (error == null) record("CLEANUP_OK", label)
+                else record("CLEANUP_FAILURE", "$label:${error.javaClass.simpleName}:${error.message}")
+            }
+            fun cleanupStep(label: String, action: () -> Unit) = cleanup.attempt(label, action)
+            cleanupStep("sampler_join") { sampler?.join(1_000) }
+            if (captureStarted) cleanupStep("freeze") {
+                File(output, "capture.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"].toString())
+            }
+            if (controlledOccluderStarted) cleanupStep("occluder") {
+                synchronizedKey(KeyEvent.KEYCODE_BACK)
+                await("controlled occluder removed", 5_000) { testOccluderWindowId() == null }
+            }
+            cleanupStep("disconnect_request") { setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, otherServices()) }
+            cleanupStep("disconnect_wait") { await("service disconnect", 8_000) { !FluviKeyguardCardServiceRegistry.connected } }
+            cleanupStep("settings") { restore(savedSettings) }
+            cleanupStep("material") { restore(savedMaterial) }
+            cleanupStep("route") { restore(savedMode) }
+            cleanupStep("unlock") { shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard") }
+            cleanupStep("lock") { if (savedLock == "true" || savedLock == "false") shell("locksettings set-disabled $savedLock") }
+            cleanupStep("services") { setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices) }
+            cleanupStep("enabled") { setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled) }
+            cleanupStep("verify_secure_settings") {
+                check(Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) == savedServices)
+                check(Settings.Secure.getString(resolver, Settings.Secure.ACCESSIBILITY_ENABLED) == savedEnabled)
+            }
+            cleanupStep("verify_preferences") {
+                check(HashMap(savedSettings.first.all) == savedSettings.second)
+                check(HashMap(savedMaterial.first.all) == savedMaterial.second)
+                check(HashMap(savedMode.first.all) == savedMode.second)
+            }
+            cleanupStep("verify_lock") {
+                if (savedLock == "true" || savedLock == "false") check(shell("locksettings get-disabled").trim() == savedLock)
+            }
+            if (resume) cleanupStep("resume_evidence") {
+                File(output, "queue-and-reads.txt").writeText(buildString {
+                    appendLine("run=$runId pid=${android.os.Process.myPid()} offerOverflow=${offerOverflow.get()} readOverflow=${readOverflow.get()}")
+                    offeredRequests.values.sortedBy { it.id }.forEach { request ->
+                        val meta = ingressByRequest[request.id]
+                        appendLine("offer=${request.id} parent=${parents[request.id] ?: "UNOBSERVED"} trigger=${request.trigger} session=${request.session} visibility=${request.visibilityEpoch} wake=${request.wakeGeneration} interaction=${request.interactionEpoch} attach=${request.attachGeneration} framework=${frameworkRequest[request.id] ?: "UNOBSERVED"} systemui=${meta?.packageName == "com.android.systemui"} type=${meta?.eventType ?: "UNOBSERVED"} window=${meta?.windowId ?: "UNOBSERVED"} display=${meta?.displayId ?: "UNOBSERVED"} event=${request.eventTimeUptimeMs ?: "UNOBSERVED"} callback=${request.triggerReceivedUptimeMs ?: "UNOBSERVED"}")
+                    }
+                    readSamples.values.sortedBy { it.request.id }.forEach { sample ->
+                        appendLine("read=${sample.request.id} decision=${sample.decision} reason=${sample.reason} unavailable=${sample.unavailable} truncated=${sample.truncated} stale=${sample.stale} start=${sample.start} end=${sample.end} applied=${applied[sample.request.id] ?: "UNOBSERVED"}")
+                    }
+                })
+            }
+            if (forensic || resume) {
+                cleanupStep("forensic_final") {
+                    File(output, "forensic-final-marks.txt").writeText(KeyguardR14ForensicProbe.snapshot().joinToString("\n", postfix = "\n"))
                 }
-                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, otherServices())
-                await("service disconnect", 8_000) { !FluviKeyguardCardServiceRegistry.connected }
-                restore(savedSettings); restore(savedMaterial); restore(savedMode)
-                shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
-                if (savedLock == "true" || savedLock == "false") shell("locksettings set-disabled $savedLock")
-                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
-                setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
-            }.onFailure { cleanupFailure = cleanupFailure ?: it; record("CLEANUP_FAILURE", "${it.javaClass.simpleName}:${it.message}") }
-            File(output, "fixture.txt").writeText(records.toString())
-            cleanupFailure?.let { throw AssertionError("R14 freeze or cleanup failed", it) }
+                KeyguardR14ForensicProbe.disarm()
+            }
+            cleanupStep("fixture") { File(output, "fixture.txt").writeText(records.toString()) }
+            cleanup.finish()
         }
     }
 
@@ -396,7 +725,7 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
      * controlled metadata, explicitly distinct from observed framework rows. */
     private fun sendControlled(owner: FluviKeyguardCardService, role: String, aStart: Long,
         expectedPrevious: Long?, target: AtomicReference<KeyguardCardInspectionRequest?>, systemWindowId: Int) {
-        while (SystemClock.uptimeMillis() <= aStart) SystemClock.sleep(1)
+        check(SystemClock.uptimeMillis() > aStart) { "controlled event is not later than A read start" }
         val before = owner.inspectionStateForTest()
         if (expectedPrevious != null) check(before.pending?.id == expectedPrevious)
         val window = systemWindowId
@@ -410,10 +739,16 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
         val next = checkNotNull(after.pending) { "$role not physically pending" }
         check(next.trigger == "window" && next.eventTimeUptimeMs == eventAt && after.authority.matches(next))
         target.set(next)
-        record("OFFER", "role=$role origin=controlled_framework_metadata window=$window event=$eventAt callback=${next.triggerReceivedUptimeMs} before=${before.pending?.id ?: "none"} after=${next.id} authority=${after.authority}")
     }
 
     private fun establishOccluder(label: String) {
+        val reference = android.graphics.Bitmap.createBitmap(32, 32, android.graphics.Bitmap.Config.ARGB_8888)
+        try {
+            reference.eraseColor(android.graphics.Color.rgb(20, 180, 74))
+            File(output, "$label-green-reference.png").outputStream().use {
+                reference.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        } finally { reference.recycle() }
         val before = checkNotNull(automation.takeScreenshot())
         try {
             check(greenPixels(before) < 16) { "baseline region already matches controlled green" }
@@ -428,13 +763,16 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             val shot = automation.takeScreenshot() ?: return@await false
             try { visible = greenPixels(shot) >= 900; visible } finally { shot.recycle() }
         }
+        val screenshotStart = SystemClock.uptimeMillis()
         val bitmap = checkNotNull(automation.takeScreenshot())
+        val screenshotEnd = SystemClock.uptimeMillis()
         try {
             check(greenPixels(bitmap) >= 900)
             File(output, "$label-occluder.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         } finally { bitmap.recycle() }
-        check(visible && keyguard.isKeyguardLocked)
-        record("INDEPENDENT_EXCLUSION", "kind=actual_foreign_test_window visual=true started=$started screenshot=$label-occluder.png before=$label-before.png window=${testOccluderWindowId()} locked=${keyguard.isKeyguardLocked}")
+        val identity = checkNotNull(testOccluderIdentity())
+        check(visible && keyguard.isKeyguardLocked && identity.second == Display.DEFAULT_DISPLAY)
+        record("INDEPENDENT_EXCLUSION", "kind=actual_foreign_test_window visual=true started=$started screenshotStart=$screenshotStart screenshotEnd=$screenshotEnd screenshot=$label-occluder.png before=$label-before.png reference=$label-green-reference.png roi=center32 window=${identity.first} display=${identity.second} locked=${keyguard.isKeyguardLocked}")
     }
     private fun greenPixels(bitmap: android.graphics.Bitmap): Int {
         val cx = bitmap.width / 2
@@ -449,23 +787,29 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
         }
         return count
     }
-    private fun testOccluderWindowId(): Int? = automation.windows.firstOrNull { window ->
+    private fun testOccluderIdentity(): Pair<Int, Int>? = automation.windows.firstOrNull { window ->
         val root: AccessibilityNodeInfo = window.root ?: return@firstOrNull false
         try { root.packageName?.toString() == "com.fluvi.app.test" } finally { root.recycle() }
-    }?.id
+    }?.let { it.id to it.displayId }
+    private fun testOccluderWindowId(): Int? = testOccluderIdentity()?.first
     private fun systemUiWindowId(): Int = automation.windows.firstOrNull { window ->
         val root = window.root ?: return@firstOrNull false
         try { root.packageName?.toString() == "com.android.systemui" } finally { root.recycle() }
     }?.id ?: error("actual SystemUI window not observed")
     private fun sample(owner: FluviKeyguardCardService): Pair<KeyguardInspectionStateForTest, KeyguardOrbRenderModeStatus> {
-        lateinit var result: Pair<KeyguardInspectionStateForTest, KeyguardOrbRenderModeStatus>
-        instrumentation.runOnMainSync { result = owner.inspectionStateForTest() to owner.renderModeStatus() }
-        return result
+        return mainWithinDeadline { owner.inspectionStateForTest() to owner.renderModeStatus() }
     }
     private fun countOverlayRoots(): Int {
-        var count = 0
-        instrumentation.runOnMainSync { count = WindowInspector.getGlobalWindowViews().count { (it.layoutParams as? WindowManager.LayoutParams)?.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY } }
-        return count
+        return mainWithinDeadline { WindowInspector.getGlobalWindowViews().count { (it.layoutParams as? WindowManager.LayoutParams)?.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY } }
+    }
+    private fun <T> mainWithinDeadline(action: () -> T): T {
+        val result = AtomicReference<Result<T>>()
+        val done = CountDownLatch(1)
+        check(android.os.Handler(android.os.Looper.getMainLooper()).post {
+            result.set(runCatching(action)); done.countDown()
+        })
+        check(done.await(4, TimeUnit.SECONDS)) { "Main observation timed out" }
+        return checkNotNull(result.get()).getOrThrow()
     }
     private fun record(stage: String, detail: String) = synchronized(records) { records.appendLine("R14 stage=$stage up=${SystemClock.uptimeMillis()} $detail") }
     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command)).bufferedReader().use { it.readText() }

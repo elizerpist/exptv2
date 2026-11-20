@@ -13,6 +13,7 @@ import android.os.Debug
 import android.view.Choreographer
 import android.view.SurfaceHolder
 import com.fluvi.app.R
+import com.fluvi.app.lockscreen.KeyguardR14ForensicProbe
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -305,7 +306,9 @@ internal class KeyguardOrbSurfaceWorker(
     fun surfaceDestroyed(target: KeyguardOrbSurfaceTarget) {
         target.surfaceReady = false
         revoke(target)
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.DRAIN_ENTER, attachment = target.attachment, generation = target.generation, holder = System.identityHashCode(target.holder))
         target.access.destroyAndAwait()
+        KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.DRAIN_EXIT, attachment = target.attachment, generation = target.generation, holder = System.identityHashCode(target.holder))
     }
 
     fun dispose() {
@@ -416,6 +419,9 @@ internal class KeyguardOrbSurfaceWorker(
             return
         }
         if (currentTarget !== target || target.revoked || !target.surfaceReady || !target.access.tryEnter()) return
+        val traceHolder = KeyguardR14ForensicProbe.observes(target.attachment)
+        val traceHolderId = if (traceHolder) System.identityHashCode(target.holder) else 0
+        if (traceHolder) KeyguardR14ForensicProbe.holder(KeyguardR14ForensicProbe.WORKER_ENTERED, target.attachment, target.generation, traceHolderId)
         var canvas: Canvas? = null
         var posted = false
         val measure = target.metrics != null && isCaptureActive()
@@ -424,7 +430,9 @@ internal class KeyguardOrbSurfaceWorker(
         var lockEnd = 0L; var drawEnd = 0L; var postEnd = 0L
         var cpuLockEnd = 0L; var cpuDrawEnd = 0L; var cpuPostEnd = 0L
         try {
+            if (traceHolder) KeyguardR14ForensicProbe.holder(KeyguardR14ForensicProbe.CANVAS_LOCK_BEGIN, target.attachment, target.generation, traceHolderId)
             canvas = target.holder.lockHardwareCanvas()
+            if (traceHolder) KeyguardR14ForensicProbe.holder(KeyguardR14ForensicProbe.CANVAS_LOCK_RETURN, target.attachment, target.generation, traceHolderId)
             if (measure) { lockEnd = System.nanoTime(); cpuLockEnd = Debug.threadCpuTimeNanos() }
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
             if (!firstPosted || !target.live) {
@@ -436,7 +444,9 @@ internal class KeyguardOrbSurfaceWorker(
             if (measure) { drawEnd = System.nanoTime(); cpuDrawEnd = Debug.threadCpuTimeNanos() }
             val submitted = canvas
             canvas = null
+            if (traceHolder) KeyguardR14ForensicProbe.holder(KeyguardR14ForensicProbe.POST_BEGIN, target.attachment, target.generation, traceHolderId)
             target.holder.unlockCanvasAndPost(submitted)
+            if (traceHolder) KeyguardR14ForensicProbe.holder(KeyguardR14ForensicProbe.POST_RETURN, target.attachment, target.generation, traceHolderId)
             posted = true
             if (measure) { postEnd = System.nanoTime(); cpuPostEnd = Debug.threadCpuTimeNanos() }
         } catch (error: Throwable) {
@@ -444,6 +454,7 @@ internal class KeyguardOrbSurfaceWorker(
         } finally {
             if (canvas != null) runCatching { target.holder.unlockCanvasAndPost(canvas) }
             target.access.leave()
+            if (traceHolder) KeyguardR14ForensicProbe.holder(KeyguardR14ForensicProbe.WORKER_LEFT, target.attachment, target.generation, traceHolderId)
         }
         if (posted && measure) target.metrics?.record(SystemClock.uptimeMillis(), postEnd, !first && distinct,
             (lockEnd - lockStart).coerceAtLeast(0L), (drawEnd - lockEnd).coerceAtLeast(0L),

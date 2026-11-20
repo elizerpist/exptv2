@@ -176,7 +176,7 @@ jobs:
   # handed to a physical-device tester.
   test-keyguard-material-runtime:
     needs: test-core
-    if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) || needs.test-core.result == 'success') }}
+    if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) || needs.test-core.result == 'success') && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && startsWith(github.ref_name, 'fluvi-r14-stock-resume-')) }}
     name: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && 'Keyguard material runtime (DIAGNOSTIC)' || 'Keyguard material runtime' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -309,7 +309,7 @@ jobs:
           # /usr/bin/sh. Keep this as one POSIX command so its conditional and
           # aggregate status are owned by one shell invocation.
           script: >-
-            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r14_recovery_stock ] || { [ "$FLUVI_R09_SCOPE" = r12_contract ] && { [ "$(cat scripts/r14-contract-kind)" = stock ] || [ "$(cat scripts/r14-contract-kind)" = stock-controls ] || [ "$(cat scripts/r14-contract-kind)" = stock-t3 ] || [ "$(cat scripts/r14-contract-kind)" = stock-terminal ]; }; }; }; then if [ "$(cat scripts/r14-contract-kind)" = stock-terminal ]; then FLUVI_R14_TERMINAL_ONLY=1 FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; elif [ "$(cat scripts/r14-contract-kind)" = stock-t3 ]; then FLUVI_R14_T3_ONLY=1 FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; elif [ "$(cat scripts/r14-contract-kind)" = stock-controls ]; then FLUVI_R14_CONTROLS_ONLY=1 FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; else FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; fi; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r14_recovery_candidate ]; then FLUVI_R14_SCOPE=r14_recovery_candidate bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_admission_baseline ]; then FLUVI_R12_APP_DIR="$PWD/r12-stock" bash scripts/test-keyguard-r12-admission-baseline.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r12_contract ] || [ "$FLUVI_R09_SCOPE" = r12_legacy ] || [ "$FLUVI_R09_SCOPE" = r12_static ] || [ "$FLUVI_R09_SCOPE" = r12_live ]; }; then if [ "$FLUVI_R09_SCOPE" = r12_contract ]; then FLUVI_R12_EXPECTED_APP_SHA="$GITHUB_SHA" bash scripts/test-keyguard-r12-admission-candidate.sh || test_result=$?; fi; FLUVI_R12_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r12-candidate.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
+            test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r14_recovery_stock ] || { [ "$FLUVI_R09_SCOPE" = r12_contract ] && { [ "$(cat scripts/r14-contract-kind)" = stock ] || [ "$(cat scripts/r14-contract-kind)" = stock-controls ] || [ "$(cat scripts/r14-contract-kind)" = stock-t3 ] || [ "$(cat scripts/r14-contract-kind)" = stock-terminal ] || [ "$(cat scripts/r14-contract-kind)" = stock-resume ]; }; }; }; then if [ "$(cat scripts/r14-contract-kind)" = stock-resume ]; then FLUVI_R14_RESUME=1 FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; elif [ "$(cat scripts/r14-contract-kind)" = stock-terminal ]; then FLUVI_R14_TERMINAL_ONLY=1 FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; elif [ "$(cat scripts/r14-contract-kind)" = stock-t3 ]; then FLUVI_R14_T3_ONLY=1 FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; elif [ "$(cat scripts/r14-contract-kind)" = stock-controls ]; then FLUVI_R14_CONTROLS_ONLY=1 FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; else FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; fi; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r14_recovery_candidate ]; then FLUVI_R14_SCOPE=r14_recovery_candidate bash scripts/test-keyguard-r14-recovery.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_admission_baseline ]; then FLUVI_R12_APP_DIR="$PWD/r12-stock" bash scripts/test-keyguard-r12-admission-baseline.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r12_contract ] || [ "$FLUVI_R09_SCOPE" = r12_legacy ] || [ "$FLUVI_R09_SCOPE" = r12_static ] || [ "$FLUVI_R09_SCOPE" = r12_live ]; }; then if [ "$FLUVI_R09_SCOPE" = r12_contract ]; then FLUVI_R12_EXPECTED_APP_SHA="$GITHUB_SHA" bash scripts/test-keyguard-r12-admission-candidate.sh || test_result=$?; fi; FLUVI_R12_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r12-candidate.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"
 
       - name: Analyze bounded production overlay trace
         if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && hashFiles('android/keyguard-service-evidence/fluvi-keyguard-service.perfetto-trace') != '' }}
@@ -357,6 +357,75 @@ jobs:
             android/keyguard-material-smoke.tar
             android/keyguard-material-smoke-pull.log
             android/keyguard-lower-environment/**
+            build/app/reports/androidTests/connected/**
+            build/app/outputs/androidTest-results/connected/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  # A hung service must not contaminate the next stock control. One pinned
+  # dispatch owns the declared cases; each matrix item is a disposable AVD.
+  r14-stock-resume:
+    needs: test-core
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && startsWith(github.ref_name, 'fluvi-r14-stock-resume-') }}
+    name: R14 stock ${{ matrix.case }} (API 35)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [matched-negative, matched-negative-disabled, exclusion, fresh-main, late-only, baseline-full, r12-ordered, legacy]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: ./.github/actions/setup-fluvi-flutter
+      - name: Verify declared stock collector and negative controls
+        run: |
+          test "$(cat scripts/r14-contract-kind)" = stock-resume
+          bash -n scripts/test-keyguard-r14-recovery.sh scripts/test-keyguard-r14-stock-resume.sh
+          python3 scripts/test-r14-stock-oracle.py
+          python3 scripts/test-keyguard-r14-aggregate.py
+          python3 scripts/test-keyguard-r12-harness.py
+          python3 scripts/test-keyguard-r12-candidate-oracle.py
+          bash scripts/test-keyguard-lower-environment.sh
+      - name: Enable KVM
+        run: |
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Run isolated stock specimen
+        env:
+          FLUVI_R14_CASE: ${{ matrix.case }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          emulator-build: 15081367
+          target: default
+          arch: x86_64
+          profile: pixel_7
+          cores: 4
+          ram-size: 2048M
+          disable-animations: false
+          emulator-options: >-
+            -no-window -gpu swangle -feature -Vulkan -accel on
+            -no-snapshot -noaudio -no-boot-anim -camera-back none
+            -partition-size 4096
+          pre-emulator-launch-script: >-
+            cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+          script: >-
+            FLUVI_R14_RESUME=1 FLUVI_R14_SCOPE=r14_recovery_stock bash scripts/test-keyguard-r14-recovery.sh
+      - name: Preserve stock specimen regardless of verdict
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyguard-r14-stock-${{ matrix.case }}-${{ github.sha }}-run-${{ github.run_id }}
+          path: |
+            android/keyguard-r14-r14_recovery_stock/**
             build/app/reports/androidTests/connected/**
             build/app/outputs/androidTest-results/connected/**
           if-no-files-found: warn

@@ -82,7 +82,14 @@ internal interface KeyguardInspectionProbeForTest {
     fun ingressOffered(meta: KeyguardAccessibilityEventMeta, request: KeyguardCardInspectionRequest,
         previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
         startsWorker: Boolean, frameworkEvent: Boolean) {}
+    fun queueOffered(request: KeyguardCardInspectionRequest, previous: KeyguardCardInspectionRequest?,
+        pending: KeyguardCardInspectionRequest?, startsWorker: Boolean) {}
     fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
+    fun beforeDecision(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
+        pending: KeyguardCardInspectionRequest?, authority: KeyguardInspectionAuthority) {}
+    fun readAheadDecision(request: KeyguardCardInspectionRequest, pendingId: Long?, reservedId: Long?,
+        reason: String, snapshot: KeyguardReadAheadSnapshot?, currentFreshnessRevision: Long?,
+        outstandingFreshness: KeyguardWindowFreshness?, negativeFreshnessRevision: Long?) {}
     fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
 }
 
