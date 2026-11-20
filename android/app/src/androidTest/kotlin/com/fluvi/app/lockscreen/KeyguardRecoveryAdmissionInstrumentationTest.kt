@@ -94,6 +94,7 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
         val frameworkEvents = java.util.concurrent.atomic.AtomicInteger()
         val frameworkCopies = java.util.concurrent.atomic.AtomicInteger()
         val withdrawalDone = java.util.concurrent.atomic.AtomicBoolean()
+        val holdTerminalRead = java.util.concurrent.atomic.AtomicBoolean()
         val ingressByRequest = java.util.concurrent.ConcurrentHashMap<Long, KeyguardAccessibilityEventMeta>()
         val frameworkRequest = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
         var service: FluviKeyguardCardService? = null
@@ -141,7 +142,7 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                 // An actual framework callback may coalesce the tagged intent
                 // before its read begins. Select the first real post-withdrawal
                 // read and validate its complete classification and authority.
-                if (!withdrawalDone.get() || !a.compareAndSet(null, request)) return
+                if ((!withdrawalDone.get() && !holdTerminalRead.get()) || !a.compareAndSet(null, request)) return
                 runCatching {
                     check(decision == KeyguardCardVisibility.SHOW_FULL && reason == KeyguardSurfaceReason.MAIN_CONFIRMED &&
                         !rootUnavailable && !walkTruncated && !abortedStale) { "A incomplete/non-MAIN: $decision/$reason" }
@@ -257,6 +258,43 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                 record("REAL_RETURN", "exclusionReq=$actualExclusion returnReq=$actualReturn origin=framework sameWake=${afterReturn.wake} attach=${afterReturn.authority.attachGeneration} screenshot=after-real-return.png visualOrb=UNOBSERVED")
                 return
             }
+            if (terminal) {
+                val owner = checkNotNull(service)
+                val initial = sample(owner).first
+                check(initial.attached && initial.wake != null)
+                systemWindowBefore.set(systemUiWindowId())
+                instrumentation.runOnMainSync {
+                    owner.inspectionProbeForTest = probe
+                    holdTerminalRead.set(true)
+                    schedule(owner, "r14-terminal-held-a")
+                }
+                assertTrue("terminal A acquisition barrier not reached", workerHeld.await(20, TimeUnit.SECONDS))
+                failure.get()?.let { throw AssertionError("INVALID terminal A fixture", it) }
+                val aRequest = checkNotNull(a.get())
+                val pendingBefore = AtomicReference<KeyguardCardInspectionRequest?>()
+                instrumentation.runOnMainSync {
+                    val before = owner.inspectionStateForTest()
+                    check(before.attached && before.authority.matches(aRequest)) { "terminal A lost its live authority" }
+                    sendControlled(owner, "B", aStarted.get(), null, b, systemWindowBefore.get())
+                    pendingBefore.set(owner.inspectionStateForTest().pending)
+                    check(pendingBefore.get()?.id == b.get()?.id) { "terminal B is not physically pending" }
+                    record("TERMINAL_ARMED", "a=${aRequest.id} b=${b.get()?.id} wake=${before.wake} authority=${before.authority}")
+                }
+                shell("wm dismiss-keyguard")
+                await("actual unlocked and detached terminal state", 8_000) {
+                    !keyguard.isKeyguardLocked && !sample(owner).first.attached
+                }
+                val terminalState = sample(owner).first
+                check(!terminalState.authority.matches(aRequest)) { "terminal state did not revoke A" }
+                releaseWorker.countDown()
+                assertTrue("stale A did not reach the normal Main gate", aApplied.await(15, TimeUnit.SECONDS))
+                failure.get()?.let { throw AssertionError("terminal fixture failure", it) }
+                val afterStale = sample(owner).first
+                check(!afterStale.attached && countOverlayRoots() == 0 && !afterStale.authority.matches(aRequest))
+                check(afterStale.pending?.id != pendingBefore.get()?.id) { "terminal cleanup kept the old pending B" }
+                record("TERMINAL_STALE", "a=${aRequest.id} b=${pendingBefore.get()?.id} locked=${keyguard.isKeyguardLocked} roots=0 oldAuthority=false wake=${afterStale.wake ?: "none"} physicalRemoval=UNOBSERVED")
+                return
+            }
             instrumentation.runOnMainSync {
                 val owner = checkNotNull(service)
                 val state = owner.inspectionStateForTest()
@@ -294,24 +332,6 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             }
             check(frameworkEvents.get() > 0) { "no framework ingress mapping observed" }
             check(frameworkCopies.get() > 0) { "no framework metadata copy checked" }
-            if (terminal) {
-                val pendingBefore = checkNotNull(sample(checkNotNull(service)).first.pending) { "no pending request at terminal input" }
-                check(pendingBefore.id == checkNotNull(b.get()).id) { "controlled B is not pending at terminal input" }
-                shell("wm dismiss-keyguard")
-                await("actual unlocked and detached terminal state", 8_000) {
-                    !keyguard.isKeyguardLocked && !sample(checkNotNull(service)).first.attached
-                }
-                val terminalState = sample(checkNotNull(service)).first
-                check(!terminalState.authority.matches(aRequest)) { "terminal state did not revoke A" }
-                releaseWorker.countDown()
-                assertTrue("stale A did not reach the normal Main gate", aApplied.await(15, TimeUnit.SECONDS))
-                failure.get()?.let { throw AssertionError("terminal fixture failure", it) }
-                val afterStale = sample(checkNotNull(service)).first
-                check(!afterStale.attached && countOverlayRoots() == 0 && !afterStale.authority.matches(aRequest))
-                check(afterStale.pending?.id != pendingBefore.id) { "terminal cleanup kept the old pending B" }
-                record("TERMINAL_STALE", "a=${aRequest.id} b=${pendingBefore.id} locked=${keyguard.isKeyguardLocked} roots=0 oldAuthority=false wake=${afterStale.wake ?: "none"} physicalRemoval=UNOBSERVED")
-                return
-            }
             releaseWorker.countDown()
             assertTrue("A Main apply not reached", aApplied.await(15, TimeUnit.SECONDS))
             failure.get()?.let { throw AssertionError("INVALID fixture at A apply", it) }

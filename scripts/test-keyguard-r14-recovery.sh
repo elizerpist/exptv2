@@ -68,7 +68,9 @@ run_case() {
   tar -xf "$dir/service-probe.tar" -C "$dir/probe" 2> "$dir/untar.stderr" || true
   sha256sum --check "$evidence/apks.sha256" > "$dir/apks-after-check.txt" 2>&1 || true
 }
-if [[ ${FLUVI_R14_T3_ONLY:-0} == 1 ]]; then
+if [[ ${FLUVI_R14_TERMINAL_ONLY:-0} == 1 ]]; then
+  run_case terminal-stale 'com.fluvi.app.lockscreen.KeyguardRecoveryAdmissionInstrumentationTest#terminalWithdrawalDiscardsPendingWork'
+elif [[ ${FLUVI_R14_T3_ONLY:-0} == 1 ]]; then
   run_case real-return 'com.fluvi.app.lockscreen.KeyguardRecoveryAdmissionInstrumentationTest#temporaryRealOcclusionReturnsToMain'
 else
 run_case exclusion 'com.fluvi.app.lockscreen.KeyguardRecoveryAdmissionInstrumentationTest#supersededExternalEventSuppressesOnlyTheRecoveryAdd'
@@ -85,10 +87,12 @@ result=0
 labels=(exclusion fresh-main late-only pressure ordered service-occlusion natural)
 if [[ ${FLUVI_R14_CONTROLS_ONLY:-0} == 1 ]]; then labels=(exclusion fresh-main late-only pressure); fi
 if [[ ${FLUVI_R14_T3_ONLY:-0} == 1 ]]; then labels=(real-return); fi
+if [[ ${FLUVI_R14_TERMINAL_ONLY:-0} == 1 ]]; then labels=(terminal-stale); fi
 for label in "${labels[@]}"; do
   transcript="$evidence/$label/instrumentation.txt"
   id=$(sed -n 's/^run_uuid=//p' "$evidence/$label/identity.txt")
   case "$label" in
+    terminal-stale) method=terminalWithdrawalDiscardsPendingWork ;;
     real-return) method=temporaryRealOcclusionReturnsToMain ;;
     exclusion) method=supersededExternalEventSuppressesOnlyTheRecoveryAdd ;;
     fresh-main) method=freshMainSuccessorRestoresExactlyOnce ;;
