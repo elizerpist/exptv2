@@ -6,7 +6,10 @@ import android.os.SystemClock
  * read. The instrumentation owner sets its arm before service connection. */
 internal object KeyguardR15AcquisitionTestHooks {
     const val ENABLED = true
-    @Volatile var stockArm = false
+    // Historical R15 instrumentation may opt in explicitly; a normal debug
+    // service, like profile/release, keeps the established root argument.
+    @Volatile var stockArm = true
+    @Volatile var historicalRootOnlyOptIn = false
     @Volatile var observer: ((Observation) -> Unit)? = null
     @Volatile var observeIneligible = false
     @Volatile var motionObserver: ((Boolean) -> Unit)? = null
@@ -63,7 +66,7 @@ internal object KeyguardR15AcquisitionTestHooks {
         if (observer != null && (eligible || observeIneligible)) {
             active.set(Pending(request, ticket, stock, eligible, SystemClock.uptimeMillis()))
         }
-        return eligible && !stock
+        return eligible && historicalRootOnlyOptIn && !stock
     }
 
     fun candidate(metadata: KeyguardWindowReaderWindowMetadata) {

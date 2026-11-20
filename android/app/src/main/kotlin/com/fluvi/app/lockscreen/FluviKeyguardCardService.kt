@@ -1734,7 +1734,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         val selectedRootOnly = if (KeyguardR15AcquisitionTestHooks.ENABLED) {
             KeyguardR15AcquisitionTestHooks.begin(request, freshness, initialRootOnly)
-        } else initialRootOnly
+        } else false // R16 keeps the established stock root prefetch on the phone.
         val result = windowSnapshotReader.read(
             request = KeyguardWindowSnapshotReader.Request(
                 knownOwn = knownOwnOverlayIdentity,

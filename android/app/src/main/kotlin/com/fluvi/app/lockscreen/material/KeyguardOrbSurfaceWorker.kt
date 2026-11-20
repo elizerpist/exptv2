@@ -10,7 +10,9 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
 import android.os.Debug
+import android.os.Build
 import android.view.Choreographer
+import android.view.Surface
 import android.view.SurfaceHolder
 import com.fluvi.app.R
 import java.util.concurrent.atomic.AtomicLong
@@ -34,6 +36,14 @@ internal class KeyguardOrbSurfaceTarget(
     @Volatile var surfaceReady = false
     @Volatile var discardFullOnRetire = false
     @Volatile var motionAllowed = true
+    val ownsOutput = live && Build.VERSION.SDK_INT == 35 &&
+        (!KeyguardR16LayerTestHooks.ENABLED || !KeyguardR16LayerTestHooks.stockHolder)
+    @Volatile var ownedOutput: KeyguardOrbOwnedOutput? = null
+    val shellAccess = KeyguardOrbSurfaceAccessGate()
+    @Volatile var firstPostedVisualKey: String? = null
+    @Volatile var firstPostedWasFull = false
+    // Worker-owned: transparent host submission happens only on create/redraw.
+    var shellNeedsClear = true
 }
 
 /** Immutable, once-per-boundary observations. A post is not a physical
@@ -261,7 +271,8 @@ internal class KeyguardOrbSurfaceWorker(
             }
             cancelRedraw()
             pendingRedraw = completion
-            if (target.surfaceReady) scheduleFrame() else cancelRedraw()
+            if (target.ownsOutput) target.shellNeedsClear = true
+            if (target.surfaceReady) scheduleFrame()
         }
     }
 
@@ -272,6 +283,7 @@ internal class KeyguardOrbSurfaceWorker(
         if (measuredRevoke) target.metrics?.revokeStarted(SystemClock.uptimeMillis())
         target.revoked = true
         target.access.revoke()
+        if (target.ownsOutput) target.shellAccess.revoke()
         if (measuredRevoke) target.metrics?.revokeReturned(SystemClock.uptimeMillis())
         if (authorizedTarget.compareAndSet(target, null)) preparationGeneration.incrementAndGet()
         handler.postAtFrontOfQueue {
@@ -308,7 +320,9 @@ internal class KeyguardOrbSurfaceWorker(
     fun surfaceDestroyed(target: KeyguardOrbSurfaceTarget) {
         target.surfaceReady = false
         revoke(target)
-        target.access.destroyAndAwait()
+        // The system may destroy its holder only after shell operations end.
+        // A draw on the separately owned child must not block this callback.
+        if (target.ownsOutput) target.shellAccess.destroyAndAwait() else target.access.destroyAndAwait()
     }
 
     fun dispose() {
@@ -359,7 +373,9 @@ internal class KeyguardOrbSurfaceWorker(
     }
 
     private fun drawIfReady(target: KeyguardOrbSurfaceTarget) {
-        if (currentTarget !== target || target.revoked || !target.surfaceReady || currentPoster == null) return
+        if (currentTarget !== target || target.revoked || !target.surfaceReady) return
+        if (target.ownsOutput && target.shellNeedsClear && !clearHost(target)) return
+        if (currentPoster == null) return
         if (!firstPosted) draw(target, System.nanoTime())
         if (target.live && target.motionAllowed && firstPosted && !target.revoked) scheduleFrame()
     }
@@ -382,7 +398,29 @@ internal class KeyguardOrbSurfaceWorker(
         completion?.complete()
     }
 
+    /** The framework host gets only a transparent buffer, never ORB pixels. */
+    private fun clearHost(target: KeyguardOrbSurfaceTarget): Boolean {
+        if (!target.shellAccess.tryEnter()) return false
+        var canvas: Canvas? = null
+        try {
+            canvas = target.holder.lockHardwareCanvas()
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+            val posted = canvas
+            canvas = null
+            target.holder.unlockCanvasAndPost(posted)
+            target.shellNeedsClear = false
+            return true
+        } catch (error: Throwable) {
+            fail(target, "hostClear:${error.javaClass.simpleName}")
+            return false
+        } finally {
+            if (canvas != null) runCatching { target.holder.unlockCanvasAndPost(canvas) }
+            target.shellAccess.leave()
+        }
+    }
+
     private fun draw(target: KeyguardOrbSurfaceTarget, frameNanos: Long) {
+        if (target.ownsOutput && target.shellNeedsClear && !clearHost(target)) return
         val scene = currentScene ?: return
         val painter = currentPainter ?: return
         if (currentTarget !== target || target.revoked || !target.surfaceReady) return
@@ -419,6 +457,12 @@ internal class KeyguardOrbSurfaceWorker(
             return
         }
         if (currentTarget !== target || target.revoked || !target.surfaceReady || !target.access.tryEnter()) return
+        val owned = target.ownedOutput
+        val outputSurface: Surface? = if (target.ownsOutput) owned?.borrow() else null
+        if (target.ownsOutput && outputSurface == null) {
+            target.access.leave()
+            return
+        }
         var canvas: Canvas? = null
         var posted = false
         val measure = target.metrics != null && isCaptureActive()
@@ -428,7 +472,7 @@ internal class KeyguardOrbSurfaceWorker(
         var lockEnd = 0L; var drawEnd = 0L; var postEnd = 0L
         var cpuLockEnd = 0L; var cpuDrawEnd = 0L; var cpuPostEnd = 0L
         try {
-            canvas = target.holder.lockHardwareCanvas()
+            canvas = if (outputSurface != null) outputSurface.lockHardwareCanvas() else target.holder.lockHardwareCanvas()
             if (measure) { lockEnd = System.nanoTime(); cpuLockEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderLockReturned(SystemClock.uptimeMillis()) }
             if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
                 KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock?.invoke(target)
@@ -444,13 +488,18 @@ internal class KeyguardOrbSurfaceWorker(
             val submitted = canvas
             canvas = null
             if (measure) target.metrics?.holderPostEntered(SystemClock.uptimeMillis())
-            target.holder.unlockCanvasAndPost(submitted)
+            if (outputSurface != null) outputSurface.unlockCanvasAndPost(submitted)
+            else target.holder.unlockCanvasAndPost(submitted)
             posted = true
             if (measure) { postEnd = System.nanoTime(); cpuPostEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderPostReturned(SystemClock.uptimeMillis()) }
         } catch (error: Throwable) {
             fail(target, "draw:${error.javaClass.simpleName}")
         } finally {
-            if (canvas != null) runCatching { target.holder.unlockCanvasAndPost(canvas) }
+            if (canvas != null) runCatching {
+                if (outputSurface != null) outputSurface.unlockCanvasAndPost(canvas)
+                else target.holder.unlockCanvasAndPost(canvas)
+            }
+            if (outputSurface != null) owned?.releaseBorrow()
             target.access.leave()
         }
         if (posted && measure) {
@@ -459,10 +508,13 @@ internal class KeyguardOrbSurfaceWorker(
                 (postEnd - drawEnd).coerceAtLeast(0L), (cpuLockEnd - cpuStart).coerceAtLeast(0L),
                 (cpuDrawEnd - cpuLockEnd).coerceAtLeast(0L), (cpuPostEnd - cpuDrawEnd).coerceAtLeast(0L))
             target.metrics?.holderRecordObserved(SystemClock.uptimeMillis())
+            if (target.revoked) target.metrics?.r16PinLateOperation()
         }
         if (!posted || currentTarget !== target || target.revoked) return
         if (!firstPosted) {
             firstPosted = true
+            target.firstPostedVisualKey = scene.profile.visualKey
+            target.firstPostedWasFull = scene.full
             val phase = checkNotNull(currentPoster).phase
             currentScene = scene.anchoredAt(phase, System.nanoTime())
             lastPostedElapsed = phase.elapsedSeconds

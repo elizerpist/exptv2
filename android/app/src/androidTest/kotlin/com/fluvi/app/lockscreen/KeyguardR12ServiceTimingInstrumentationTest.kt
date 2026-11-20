@@ -75,6 +75,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
         val overflow = java.util.concurrent.atomic.AtomicInteger()
         check(!FluviKeyguardCardServiceRegistry.connected)
         KeyguardR15AcquisitionTestHooks.stockArm = arm == "stock"
+        KeyguardR15AcquisitionTestHooks.historicalRootOnlyOptIn = arm == "candidate"
         KeyguardR15AcquisitionTestHooks.observeIneligible = true
         KeyguardR15AcquisitionTestHooks.observer = { item ->
             synchronized(observations) {
@@ -110,6 +111,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
         } finally {
             KeyguardR15AcquisitionTestHooks.observer = null
             KeyguardR15AcquisitionTestHooks.stockArm = false
+            KeyguardR15AcquisitionTestHooks.historicalRootOnlyOptIn = false
             KeyguardR15AcquisitionTestHooks.observeIneligible = false
             serviceConnectedControl = null
             naturalComparison = false

@@ -33,6 +33,22 @@ internal class KeyguardOrbSurfaceMetrics {
     // Main's revocation bracket has a separate writer from the worker.
     @Volatile private var revokeBegin = 0L
     @Volatile private var revokeReturn = 0L
+    @Volatile private var r16HostId = 0
+    @Volatile private var r16ChildId = 0
+    @Volatile private var r16CreatedAt = 0L
+    @Volatile private var r16RetireBegin = 0L
+    @Volatile private var r16RetireEnd = 0L
+    @Volatile private var r16RetireSucceeded = false
+    @Volatile private var r16CommitReceipt = 0L
+    @Volatile private var r16CommitMain = 0L
+    @Volatile private var r16DisposedAt = 0L
+    @Volatile private var r16LateOperation: HolderOperation? = null
+
+    data class OwnedLayer(
+        val hostId: Int, val childId: Int, val createdAt: Long?, val retireBegin: Long?,
+        val retireEnd: Long?, val retireSucceeded: Boolean, val commitReceipt: Long?,
+        val commitMain: Long?, val disposedAt: Long?, val lateOperation: HolderOperation?,
+    )
 
     data class HolderOperation(
         val coherent: Boolean, val id: Long, val lockEnter: Long?, val lockReturn: Long?,
@@ -57,6 +73,7 @@ internal class KeyguardOrbSurfaceMetrics {
         val maxDrawCpuNs: Long,
         val maxPostCpuNs: Long,
         val holderOperation: HolderOperation,
+        val ownedLayer: OwnedLayer,
     )
 
     fun beginHolderOperation(at: Long) {
@@ -74,6 +91,18 @@ internal class KeyguardOrbSurfaceMetrics {
     fun holderRecordObserved(at: Long) { operationVersion += 1L; recordAt = at; operationVersion += 1L }
     fun revokeStarted(at: Long) { if (revokeBegin == 0L) revokeBegin = at }
     fun revokeReturned(at: Long) { if (revokeReturn == 0L) revokeReturn = at }
+    fun r16Created(hostId: Int, childId: Int, at: Long) {
+        r16HostId = hostId; r16ChildId = childId; r16CreatedAt = at
+    }
+    fun r16RetireStarted(at: Long) { if (r16RetireBegin == 0L) r16RetireBegin = at }
+    fun r16RetireReturned(at: Long, success: Boolean) { r16RetireSucceeded = success; r16RetireEnd = at }
+    fun r16RetireCommitted(receipt: Long, delivered: Long) { r16CommitReceipt = receipt; r16CommitMain = delivered }
+    fun r16Disposed(at: Long) { if (r16DisposedAt == 0L) r16DisposedAt = at }
+    fun r16PinLateOperation() { if (r16LateOperation == null) r16LateOperation = holderSnapshot() }
+    private fun ownedLayer() = OwnedLayer(r16HostId, r16ChildId, r16CreatedAt.takeIf { it > 0 },
+        r16RetireBegin.takeIf { it > 0 }, r16RetireEnd.takeIf { it > 0 }, r16RetireSucceeded,
+        r16CommitReceipt.takeIf { it > 0 }, r16CommitMain.takeIf { it > 0 },
+        r16DisposedAt.takeIf { it > 0 }, r16LateOperation)
 
     fun holderSnapshot(): HolderOperation {
         repeat(3) {
@@ -134,8 +163,8 @@ internal class KeyguardOrbSurfaceMetrics {
             val lockCpu = maxLockCpu; val drawCpu = maxDrawCpu; val postCpu = maxPostCpu
             if (before == sequence) return Snapshot(true, count, first, distinct, last, retained,
                 values.takeIf { it.isNotEmpty() }?.get(((values.size - 1) * .95).toInt()), worst, over,
-                lockWall, drawWall, postWall, lockCpu, drawCpu, postCpu, holderSnapshot())
+                lockWall, drawWall, postWall, lockCpu, drawCpu, postCpu, holderSnapshot(), ownedLayer())
         }
-        return Snapshot(false, 0, null, null, null, 0, null, null, 0, 0, 0, 0, 0, 0, 0, holderSnapshot())
+        return Snapshot(false, 0, null, null, null, 0, null, null, 0, 0, 0, 0, 0, 0, 0, holderSnapshot(), ownedLayer())
     }
 }

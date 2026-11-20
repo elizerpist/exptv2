@@ -9,6 +9,7 @@ import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.Display
 import android.view.Gravity
 import android.view.PixelCopy
 import android.view.SurfaceHolder
@@ -37,6 +38,10 @@ internal class KeyguardOrbSurfacePresenter(
     private var guard: PrivacyGuard? = null
     private var currentProfile: KeyguardMaterialProfile? = null
     private var nextGeneration = 0L
+    // One draining predecessor is allowed while G2 runs. A second draining
+    // predecessor closes admission until both native owners have drained.
+    private var retiringOutput: KeyguardOrbOwnedOutput? = null
+    private var overflowOutput: KeyguardOrbOwnedOutput? = null
 
     fun prepare(profile: KeyguardMaterialProfile?, width: Int, height: Int, allowFull: Boolean) {
         checkMain()
@@ -69,7 +74,14 @@ internal class KeyguardOrbSurfacePresenter(
             return
         }
         val privacyTightening = old?.full == true && !full
-        if (old != null) revokeCurrent(privacyTightening)
+        if (old != null && !revokeCurrent(privacyTightening)) {
+            main.post { onFailure("r16RetirementFailedOrBusy") }
+            return
+        }
+        if (overflowOutput != null) {
+            main.post { onFailure("r16RetirementCapacity") }
+            return
+        }
         if (privacyTightening) installGuard(profile, width, height)
         removeSurface()
         nextGeneration += 1L
@@ -103,12 +115,39 @@ internal class KeyguardOrbSurfacePresenter(
                     failIfCurrent(target, "surfaceSizeOrValidity")
                     return
                 }
+                if (target.ownsOutput && target.ownedOutput == null) {
+                    val prepared = runCatching {
+                        check(child.display?.displayId == Display.DEFAULT_DISPLAY)
+                        check(current === target && !target.revoked && child.holder === holder)
+                        val parent = child.surfaceControl
+                        check(parent.isValid)
+                        KeyguardOrbOwnedOutput.create(parent, width, height, target.generation, main) { output ->
+                            if (output.disposeIfReady()) {
+                                target.metrics?.r16Disposed(SystemClock.uptimeMillis())
+                                if (retiringOutput === output) retiringOutput = null
+                                if (overflowOutput === output) overflowOutput = null
+                            }
+                        }
+                    }.getOrElse {
+                        failIfCurrent(target, "r16OutputCreate:${it.javaClass.simpleName}")
+                        return
+                    }
+                    if (current !== target || target.revoked) {
+                        prepared.retire(target.metrics)
+                        prepared.disposeIfReady()
+                        return
+                    }
+                    target.ownedOutput = prepared
+                    target.metrics?.r16Created(System.identityHashCode(child), prepared.childId, SystemClock.uptimeMillis())
+                    observe(target, "R16_OUTPUT_CREATED", "host:${System.identityHashCode(child)},child:${prepared.childId}")
+                }
                 worker.surfaceReady(target)
             }
 
             override fun surfaceDestroyed(holder: SurfaceHolder) {
                 val started = SystemClock.uptimeMillis()
                 val unexpected = current === target && !target.revoked
+                if (unexpected) revokeCurrent(hideChild = false)
                 if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
                     KeyguardOrbSurfaceWorkerTestHooks.holderBoundary?.invoke(target, "DESTROY_BEGIN", 0L)
                 }
@@ -141,16 +180,35 @@ internal class KeyguardOrbSurfacePresenter(
 
     /** Called before root hide/remove. It never joins the render worker. */
     fun revokeCurrent(discardFull: Boolean = false, hideChild: Boolean = true,
-                      onRevoked: ((Long, Long, KeyguardOrbSurfaceMetrics, KeyguardOrbSurfaceMetrics.HolderOperation) -> Unit)? = null) {
+                      onRevoked: ((Long, Long, KeyguardOrbSurfaceMetrics, KeyguardOrbSurfaceMetrics.HolderOperation) -> Unit)? = null): Boolean {
         checkMain()
-        val old = current ?: return
+        val old = current ?: return true
         worker.revoke(old, discardFull)
+        val output = old.ownedOutput
+        var retired = true
+        if (output != null) {
+            val alreadyRetired = output.isRetired()
+            retired = runCatching { output.retire(old.metrics) }.getOrDefault(false)
+            if (!alreadyRetired) observe(old, "R16_OUTPUT_RETIRE", "child:${output.childId},submitted:$retired")
+            if (!alreadyRetired && output.disposeIfReady()) {
+                old.metrics?.r16Disposed(SystemClock.uptimeMillis())
+            } else if (!alreadyRetired && retiringOutput == null) {
+                retiringOutput = output
+            } else if (!alreadyRetired && retiringOutput !== output && overflowOutput == null) {
+                overflowOutput = output
+                retired = false
+            } else if (!alreadyRetired && retiringOutput !== output && overflowOutput !== output) {
+                // Admission is already closed when overflow is occupied.
+                retired = false
+            }
+        }
         if (onRevoked != null) old.metrics?.let { metrics ->
             // Diagnostics must never prevent the already-revoked root from
             // becoming invisible or being removed.
             runCatching { onRevoked(old.attachment, old.generation, metrics, metrics.holderSnapshot()) }
         }
-        if (hideChild) surface?.visibility = View.INVISIBLE
+        if (hideChild || !retired) surface?.visibility = View.INVISIBLE
+        return retired
     }
 
     fun detached() {
@@ -191,17 +249,28 @@ internal class KeyguardOrbSurfacePresenter(
         onFirstPosted(target.attachment, at)
         val heldGuard = guard ?: return
         val child = surface ?: return
+        val sample = runCatching { Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888) }
+            .getOrElse { failIfCurrent(target, "privacySampleAllocation:${it.javaClass.simpleName}"); return }
+        val owned = target.ownedOutput
+        val ownedSource = if (target.ownsOutput) owned?.borrow() else null
+        if (target.ownsOutput && ownedSource == null) {
+            sample.recycle()
+            failIfCurrent(target, "r16PrivacyOutputUnavailable")
+            return
+        }
         // This is a producer-content check only. Compositor presentation and
         // physical removal are independently measured by the device suite.
-        val sample = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
         runCatching {
-            PixelCopy.request(child, sample, { result ->
+            val completed = PixelCopy.OnPixelCopyFinishedListener completed@{ result ->
                 try {
-                    if (!isCurrent(target) || guard !== heldGuard) return@request
+                    if (!isCurrent(target) || guard !== heldGuard) return@completed
                     val center = Color.alpha(sample.getPixel(sample.width / 2, sample.height / 2))
                     val corners = intArrayOf(sample.getPixel(0, 0), sample.getPixel(sample.width - 1, 0),
                         sample.getPixel(0, sample.height - 1), sample.getPixel(sample.width - 1, sample.height - 1))
-                    val valid = result == PixelCopy.SUCCESS && center >= 240 && corners.all { Color.alpha(it) <= 16 }
+                    val expectedNeutral = currentProfile?.neutralized()?.visualKey
+                    val valid = result == PixelCopy.SUCCESS && center >= 240 && corners.all { Color.alpha(it) <= 16 } &&
+                        !target.full && !target.firstPostedWasFull && target.firstPostedVisualKey == expectedNeutral &&
+                        (!target.ownsOutput || owned != null && target.ownedOutput === owned && !owned.isRetired())
                     if (!valid) {
                         failIfCurrent(target, "privacyProducerUnconfirmed:$result")
                     } else {
@@ -210,10 +279,14 @@ internal class KeyguardOrbSurfacePresenter(
                         guard = null
                     }
                 } finally {
+                    if (ownedSource != null) owned?.releaseBorrow()
                     sample.recycle()
                 }
-            }, main)
+            }
+            if (ownedSource != null) PixelCopy.request(ownedSource, sample, completed, main)
+            else PixelCopy.request(child, sample, completed, main)
         }.onFailure {
+            if (ownedSource != null) owned?.releaseBorrow()
             sample.recycle()
             failIfCurrent(target, "privacyProducerSample:${it.javaClass.simpleName}")
         }
@@ -224,16 +297,15 @@ internal class KeyguardOrbSurfacePresenter(
 
     private fun failIfCurrent(target: KeyguardOrbSurfaceTarget, reason: String) {
         if (current !== target) return
-        worker.revoke(target, discardFull = target.full)
-        surface?.visibility = View.INVISIBLE
+        revokeCurrent(discardFull = target.full, hideChild = true)
         observe(target, "DEGRADED", reason)
         onFailure(reason)
     }
 
     private fun observe(target: KeyguardOrbSurfaceTarget, stage: String, detail: String,
                         observedAtUptimeMs: Long = SystemClock.uptimeMillis()) {
-        if (isCaptureActive()) target.reporter?.invoke(KeyguardOrbSurfaceObservation(target.attachment, target.generation,
-            stage, observedAtUptimeMs, detail, target.full, target.metrics))
+        if (isCaptureActive()) runCatching { target.reporter?.invoke(KeyguardOrbSurfaceObservation(target.attachment, target.generation,
+            stage, observedAtUptimeMs, detail, target.full, target.metrics)) }
     }
 
     private fun checkMain() = check(Looper.myLooper() == Looper.getMainLooper())

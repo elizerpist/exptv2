@@ -2532,13 +2532,21 @@ internal object KeyguardCardDiagnostics {
             val op = metrics.holderOperation
             appendLine(" R15_HOLDER attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "UNOBSERVED"} generation=$generation owner=$which clock=uptimeMs coherent=${op.coherent} op=${op.id} lock=${op.lockEnter ?: "UNOBSERVED"}/${op.lockReturn ?: "UNOBSERVED"} drawReturn=${op.drawReturn ?: "UNOBSERVED"} post=${op.postEnter ?: "UNOBSERVED"}/${op.postReturn ?: "UNOBSERVED"} record=${op.recordAt ?: "UNOBSERVED"} revoke=${op.revokeBegin ?: "UNOBSERVED"}/${op.revokeReturn ?: "UNOBSERVED"} screenPresentation=UNOBSERVED")
         }
+        fun ownedLayer(metrics: KeyguardOrbSurfaceMetrics.Snapshot, generation: String, which: String) {
+            val layer = metrics.ownedLayer
+            if (layer.childId == 0) return
+            val late = layer.lateOperation
+            appendLine(" R16_LAYER attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "UNOBSERVED"} generation=$generation owner=$which host=${layer.hostId} child=${layer.childId} clock=uptimeMs created=${layer.createdAt ?: "UNOBSERVED"} retire=${layer.retireBegin ?: "UNOBSERVED"}/${layer.retireEnd ?: "UNOBSERVED"}/${layer.retireSucceeded} commitReceipt=${layer.commitReceipt ?: "UNOBSERVED"} commitMain=${layer.commitMain ?: "UNOBSERVED"} disposed=${layer.disposedAt ?: "UNOBSERVED"} lateOp=${late?.id ?: "UNOBSERVED"} latePost=${late?.postEnter ?: "UNOBSERVED"}/${late?.postReturn ?: "UNOBSERVED"} physical=UNOBSERVED")
+        }
         appendLine(" R12_SURFACE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "UNOBSERVED"} route=${value("route")} privacy=${value("privacy")} generation=${value("generation")} created=${value("created")} changed=${value("changed")}/${value("size")} poster=${value("poster")}@${value("posterAt")} firstPost=${value("firstPost")} firstPostMainDelivery=${value("firstPostMain")} guardRetired=${value("guardRetired")} revoked=${value("revoked")} destroyed=${value("destroyed")} destroyDetail=${value("destroyDetail")} degraded=${value("degraded")} latest=${value("latestGeneration")}/${value("latestPrivacy")}/${value("latestStage")}@${value("latestAt")} pendingOmitted=${attempt.pendingR12Omitted} physical=UNOBSERVED")
         episode.r12MetricSnapshot?.let { metrics ->
             appendLine(" R12_CADENCE attempt=${attempt.id} showOp=${episode.operationId} clock=System.nanoTime cpu=threadCPU coherent=${metrics.coherent} submissions=${metrics.submissions} firstPost=${metrics.firstPostUptimeMs ?: "UNOBSERVED"} distinct=${metrics.firstDistinctUptimeMs ?: "UNOBSERVED"} lastPost=${metrics.lastPostUptimeMs ?: "UNOBSERVED"} retainedGaps=${metrics.retainedGaps} p95GapNs=${metrics.p95GapNs ?: "UNOBSERVED"} worstGapNs=${metrics.worstGapNs ?: "UNOBSERVED"} over50ms=${metrics.gapsOver50Ms} maxLockWallCpuNs=${metrics.maxLockWallNs}/${metrics.maxLockCpuNs} maxDrawWallCpuNs=${metrics.maxDrawWallNs}/${metrics.maxDrawCpuNs} maxPostWallCpuNs=${metrics.maxPostWallNs}/${metrics.maxPostCpuNs} presentation=UNOBSERVED")
+            ownedLayer(metrics, value("generation"), "first")
             if (needHolderRow) holder(metrics, value("generation"), "first")
         }
         episode.r12LatestMetricSnapshot?.let { metrics ->
             appendLine(" R12_CADENCE_LATEST attempt=${attempt.id} showOp=${episode.operationId} generation=${value("latestGeneration")} coherent=${metrics.coherent} submissions=${metrics.submissions} firstPost=${metrics.firstPostUptimeMs ?: "UNOBSERVED"} distinct=${metrics.firstDistinctUptimeMs ?: "UNOBSERVED"} lastPost=${metrics.lastPostUptimeMs ?: "UNOBSERVED"} worstGapNs=${metrics.worstGapNs ?: "UNOBSERVED"} presentation=UNOBSERVED")
+            ownedLayer(metrics, value("latestGeneration"), "latest")
             if (needHolderRow) holder(metrics, value("latestGeneration"), "latest")
         }
     }
