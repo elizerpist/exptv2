@@ -1,0 +1,6 @@
+r13_service_demand_burst SURFACE_LIVE PASS
+r13_service_demand_burst SURFACE_STATIC PASS
+r13_service_demand_burst LEGACY_R11 PASS
+r12_selector_persistence SURFACE_LIVE PASS
+r12_selector_persistence SURFACE_STATIC PASS
+r12_selector_persistence LEGACY_R11 PASS
